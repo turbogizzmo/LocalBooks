@@ -93,6 +93,8 @@ export const api = {
 
   getStorageStatus: () => invoke('get_storage_status'),
   openCompanyFile: (path) => invoke('open_company_file', { path }),
+  getClosingStatus: () => invoke('get_closing_status'),
+  setClosingDate: (input) => invoke('set_closing_date', { input }),
   getMcpStatus: () => invoke('get_mcp_status'),
   setMcpEnabled: (enabled) => invoke('set_mcp_enabled', { enabled }),
   regenerateMcpToken: () => invoke('regenerate_mcp_token'),

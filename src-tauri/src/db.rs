@@ -160,7 +160,6 @@ impl Db {
 
     /// Records a problem to show in the app's banner (used when a file handed over by the operating
     /// system after launch cannot be opened).
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub fn set_warning(&self, warning: String) {
         *self.startup_warning.lock().expect("warning mutex") = Some(warning);
     }
@@ -372,7 +371,8 @@ mod migrate_tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(latest, "ledger audit");
+        let newest = MIGRATOR.iter().map(|m| (m.version, m.description.to_string())).max().unwrap().1;
+        assert_eq!(latest, newest, "the newest migration is recorded with its description");
     }
 }
 

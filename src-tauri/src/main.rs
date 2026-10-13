@@ -3,11 +3,13 @@
 mod backup;
 mod bank;
 mod banking;
+mod closing;
 mod commands;
 mod db;
 mod estimates;
 mod expenses;
 mod export_engine;
+mod instance;
 mod invoices;
 mod ledger;
 mod mcp_server;
@@ -21,8 +23,6 @@ mod storage;
 mod timesheet;
 
 use tauri::Manager;
-#[cfg(target_os = "macos")]
-use tauri::Emitter;
 
 fn main() {
     tauri::Builder::default()
@@ -34,10 +34,15 @@ fn main() {
                 default_path: data_dir.join(storage::DB_FILE_NAME),
                 backups_dir: data_dir.join("backups"),
             };
-            // A double-clicked .localbooks file arrives as a launch argument on Windows and Linux and
-            // opens in place. Otherwise config.json is honoured, falling back to the local file (with
-            // a warning) if that location is unavailable.
+            // A double-clicked .localbooks file arrives as a launch argument on Windows and Linux.
+            // If LocalBooks is already running, hand the file (or a plain launch) to it and quit.
             let launch_file = storage::company_file_from_args(std::env::args_os());
+            let config_dir = app.path().app_config_dir()?;
+            if instance::hand_off(&config_dir, &instance::request_for(launch_file.as_deref())) {
+                std::process::exit(0);
+            }
+            // Otherwise the file opens in place; without one, config.json is honoured, falling back
+            // to the local file (with a warning) if that location is unavailable.
             let database = tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file))?;
             app.manage(database);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
@@ -50,6 +55,19 @@ fn main() {
             app.manage(mcp_server::McpService::new(app.path().app_config_dir()?, pools));
             let mcp_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { mcp_handle.state::<mcp_server::McpService>().start_if_enabled().await });
+
+            // Accept hand-offs from later launches.
+            let handoff_handle = app.handle().clone();
+            let guard = tauri::async_runtime::block_on(instance::listen(&config_dir, move |request| {
+                let app = handoff_handle.clone();
+                tauri::async_runtime::spawn(async move { commands::handle_hand_off(&app, request).await });
+            }));
+            match guard {
+                Ok(guard) => {
+                    app.manage(std::sync::Mutex::new(Some(guard)));
+                }
+                Err(err) => eprintln!("single-instance hand-off unavailable: {err}"),
+            }
 
             let title_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { commands::refresh_window_title(&title_handle).await });
@@ -109,6 +127,8 @@ fn main() {
             commands::list_audit_log,
             commands::verify_ledger_integrity,
             commands::open_company_file,
+            commands::get_closing_status,
+            commands::set_closing_date,
             commands::get_mcp_status,
             commands::set_mcp_enabled,
             commands::regenerate_mcp_token,
@@ -162,16 +182,14 @@ fn main() {
                 let file = urls.iter().filter_map(|url| url.to_file_path().ok()).find(|path| storage::is_company_file(path));
                 if let Some(path) = file {
                     let app = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(err) = commands::mount_company_file(&app, &path).await {
-                            app.state::<db::Db>().set_warning(format!("Could not open {}: {err}.", path.display()));
-                            let _ = app.emit(commands::COMPANY_FILE_CHANGED, ());
-                        }
-                    });
+                    tauri::async_runtime::spawn(async move { commands::handle_hand_off(&app, instance::HandOff::Open { path }).await });
                 }
             }
             // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
             tauri::RunEvent::Exit => tauri::async_runtime::block_on(async {
+                if let Some(state) = app.try_state::<std::sync::Mutex<Option<instance::InstanceGuard>>>() {
+                    drop(state.lock().ok().and_then(|mut guard| guard.take()));
+                }
                 app.state::<mcp_server::McpService>().shutdown().await;
                 app.state::<db::Db>().shutdown().await;
             }),

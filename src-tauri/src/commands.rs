@@ -8,6 +8,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
 use crate::bank::{self, BankCsvRow, BankTransactionView, ImportSummary};
+use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::db::{Db, RelocateMode, StorageStatus};
 use crate::storage::{self, StorageInfo};
 use crate::export_engine;
@@ -602,6 +603,22 @@ pub async fn mount_company_file(app: &AppHandle, path: &Path) -> Result<StorageS
     Ok(status)
 }
 
+/// Carries out a request handed over by the operating system or a second launch: open the file
+/// (reporting any problem in the app's banner) and bring the window forward.
+pub async fn handle_hand_off(app: &AppHandle, request: crate::instance::HandOff) {
+    if let crate::instance::HandOff::Open { path } = request {
+        if let Err(err) = mount_company_file(app, &path).await {
+            app.state::<Db>().set_warning(format!("Could not open {}: {err}.", path.display()));
+            let _ = app.emit(COMPANY_FILE_CHANGED, ());
+        }
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 /// File › Open: opens a company file (a `.localbooks` file or a LocalBooks backup) in place.
 #[tauri::command]
 pub async fn open_company_file(app: AppHandle, path: String) -> Result<StorageStatus, String> {
@@ -802,4 +819,20 @@ pub async fn set_mcp_enabled(mcp: State<'_, McpService>, enabled: bool) -> Resul
 #[tauri::command]
 pub async fn regenerate_mcp_token(mcp: State<'_, McpService>) -> Result<McpStatus, String> {
     mcp.regenerate_token().await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Closing date
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn get_closing_status(db: State<'_, Db>) -> Result<ClosingStatus, String> {
+    closing::status(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn set_closing_date(app: AppHandle, db: State<'_, Db>, input: ClosingInput) -> Result<ClosingStatus, String> {
+    let status = closing::set_closing_date(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(status)
 }

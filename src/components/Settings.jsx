@@ -75,6 +75,90 @@ function Group({ title, children }) {
   );
 }
 
+const SET_AT = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
+/** Closing date: entries on or before it cannot be posted or voided; changes need the passcode. */
+function ClosingDate() {
+  const { data, error, reload } = useLedgerQuery(api.getClosingStatus);
+  const [date, setDate] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [state, setState] = useState(null);
+
+  useEffect(() => setDate(data?.lockDate ?? ''), [data?.lockDate]);
+
+  const save = async (lockDate) => {
+    setState({ busy: true });
+    try {
+      await api.setClosingDate({ lockDate: lockDate || null, currentPasscode: current || null, newPasscode: next === '' ? null : next });
+      setCurrent('');
+      setNext('');
+      setState({ kind: 'success', text: lockDate ? `Books closed through ${formatDate(lockDate)}.` : 'All periods reopened.' });
+      reload();
+    } catch (err) {
+      setState({ kind: 'error', text: errorText(err) });
+    }
+  };
+
+  if (error) return <Notice kind="error" text={error} />;
+  if (!data) return null;
+  return (
+    <Group title="Closing date">
+      <div className="flex flex-wrap items-end gap-3 px-2 py-1.5 text-sm">
+        <div className="min-w-[200px]">
+          <div className="text-2xs uppercase tracking-wide text-qb-ink-faint">In force</div>
+          <div className="font-semibold">
+            {data.lockDate ? `Closed through ${formatDate(data.lockDate)}` : 'No closing date: every period is open'}
+            {data.passcodeProtected && <span className="ml-1 text-xs font-normal text-qb-ink-muted">· passcode protected</span>}
+          </div>
+        </div>
+        <label className="flex flex-col gap-0.5 text-xs">
+          <span className="font-semibold text-qb-ink-muted">Closing date</span>
+          <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        {data.passcodeProtected && (
+          <label className="flex flex-col gap-0.5 text-xs">
+            <span className="font-semibold text-qb-ink-muted">Current passcode</span>
+            <input type="password" className="qb-input w-[150px]" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="off" />
+          </label>
+        )}
+        <label className="flex flex-col gap-0.5 text-xs">
+          <span className="font-semibold text-qb-ink-muted">{data.passcodeProtected ? 'New passcode (optional)' : 'Passcode (optional)'}</span>
+          <input type="password" className="qb-input w-[150px]" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+        </label>
+        <button type="button" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={state?.busy || !date} onClick={() => save(date)}>
+          Close books
+        </button>
+        {data.lockDate && (
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" disabled={state?.busy} onClick={() => save('')}>
+            Reopen all periods
+          </button>
+        )}
+      </div>
+      <p className="border-t border-qb-border px-2 py-1 text-xs text-qb-ink-muted">
+        Entries dated on or before the closing date cannot be posted or voided, from any screen. Changing or removing the date needs
+        the passcode. Every change is kept in the history below.
+      </p>
+      {state?.text && (
+        <div className="px-2 pb-1">
+          <Notice kind={state.kind} text={state.text} onDismiss={() => setState(null)} />
+        </div>
+      )}
+      {data.history.length > 0 && (
+        <ul className="max-h-[96px] overflow-auto border-t border-qb-border px-2 py-1 text-xs scrollbar-thin">
+          {data.history.map((h) => (
+            <li key={h.id} className="flex gap-2">
+              <span className="w-[150px] text-qb-ink-muted">{SET_AT.format(new Date(h.setAt))}</span>
+              <span>{h.lockDate ? `Closed through ${formatDate(h.lockDate)}` : 'Reopened all periods'}</span>
+              {h.passcodeProtected && <span className="text-qb-ink-muted">· passcode</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Group>
+  );
+}
+
 function TaxCalendar() {
   const { data, error } = useLedgerQuery(api.getTaxCalendar);
   const today = todayIso();
@@ -268,6 +352,7 @@ function PreferencesConsole() {
           {field({ label: 'Keep', prefKey: 'auto_backup_keep', hint: 'Number of daily backups to keep (1–60)', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
         </Group>
       </div>
+      <ClosingDate />
       <TaxCalendar />
     </div>
   );

@@ -81,7 +81,7 @@ pub fn new_token() -> String {
         .collect()
 }
 
-fn tokens_match(given: &str, expected: &str) -> bool {
+pub(crate) fn tokens_match(given: &str, expected: &str) -> bool {
     // Constant time in the token length, so response timing does not reveal a matching prefix.
     given.len() == expected.len() && given.bytes().zip(expected.bytes()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0
 }

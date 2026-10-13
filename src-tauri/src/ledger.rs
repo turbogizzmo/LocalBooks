@@ -313,6 +313,7 @@ pub async fn post_entry_in_tx(
     source: EntrySource,
 ) -> Result<i64, String> {
     validate_entry(entry)?;
+    crate::closing::check_open(tx, entry.date).await?;
     if let Some(currency) = &entry.currency {
         currency.validate()?;
         let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'")

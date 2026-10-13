@@ -11,12 +11,14 @@ tauri-build = { version = "2", features = [] }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
+hmac = "=0.12.1"
 libc = "0.2"
 openqbw = "=0.1.5"
 opensqlany = "=0.2.0"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "=0.10.9"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "migrate", "macros", "derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

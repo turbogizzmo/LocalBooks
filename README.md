@@ -110,6 +110,15 @@ don't balance, that were deleted, that lack a snapshot, or that were voided with
 reversal. This catches tampering even by someone who edits the file with an outside tool after
 removing the protecting triggers.
 
+### Closing date
+
+*Settings › Preferences Console › Closing date* locks the books through a date. Entries dated on or
+before it cannot be posted, from any screen. Voids are blocked too, because a reversal carries the
+original date. The ledger checks this before every post, and a database trigger enforces it as a
+backstop. Moving or removing the date requires the passcode, which is stored as a salted
+PBKDF2-HMAC-SHA256 hash. Every change is appended to `closing_locks`, whose rows can't be edited or
+deleted.
+
 ### Online snapshots with `VACUUM INTO`
 
 Backups use SQLite's `VACUUM INTO`: a consistent snapshot taken while you keep working, written to a
@@ -306,6 +315,11 @@ Caveats:
   The window title and toolbar show which file is open, and your usual company file location is
   unchanged. Windows and Linux pass the file as a launch argument; macOS hands it to the running
   app.
+- **One LocalBooks at a time.** If a second launch finds LocalBooks already running, it hands over
+  its `.localbooks` file (or just a request to come forward) and exits. The running app opens the
+  file and brings its window forward. The handoff uses its own channel: a random loopback port and
+  a per-user secret in `instance.json`, readable by the owner only. It is separate from the
+  read-only MCP server.
 
 ## Local AI access (MCP)
 
@@ -372,7 +386,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (78 tests) runs against real SQLite databases with every migration applied, on macOS,
+The suite (82 tests) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -380,7 +394,8 @@ statement tie-outs across fiscal years, CSV round-trips, backup/restore rejectio
 relocation, lock files, fractional-quantity rounding, foreign-currency conversion, and realized
 exchange gains and losses, and the QuickBooks import (mapping rules, duplicate prevention,
 re-posting after a void, and rollback when a batch fails partway through), the forensic audit
-trail (tamper detection with the triggers removed), opening `.localbooks` files, and the MCP server
+trail (tamper detection with the triggers removed), opening `.localbooks` files, closing-date locks (including the RFC 7914 PBKDF2 test vector),
+the single-instance handoff, and the MCP server
 (protocol lifecycle, tool output, and every transport guard over real sockets).
 
 ---
@@ -394,9 +409,7 @@ trail (tamper detection with the triggers removed), opening `.localbooks` files,
   receipts, and estimates are home-currency only, and bank accounts are always home currency. There is
   no unrealized gain/loss revaluation of open balances at period end.
 - **Single user.** One person at a time per company file, including on shared folders.
-- On Windows and Linux, double-clicking a `.localbooks` file while LocalBooks is already running
-  starts a second window for that file instead of switching the open one. Whether the file type
-  is registered on Linux depends on the desktop environment.
+- Whether the `.localbooks` file type is registered on Linux depends on the desktop environment.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
