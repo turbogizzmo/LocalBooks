@@ -54,6 +54,7 @@ export const NAV = [
     children: [
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/audit', label: 'Audit Log' },
+      { id: 'accounting/qbw-import', label: 'QuickBooks Import' },
     ],
   },
   { id: 'reports', label: 'Reports', icon: icon('M4 1.5h6l3 3v10H4zM10 1.5v3h3M6 12V9M8.5 12V7M11 12v-2') },

@@ -17,6 +17,7 @@ use crate::estimates::{self, EstimateInput, EstimateSummary};
 use crate::expenses::{self, BillInput, BillPaymentInput, BillPaymentView, BillSummary, ExpenseInput, ExpenseView};
 use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary, PaymentInput, PaymentView};
 use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView};
+use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult};
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
 use crate::reports::{self, AccountView, Dashboard};
@@ -673,4 +674,73 @@ pub async fn save_report_to_disk(app: AppHandle, report_html_or_matrix: String, 
 #[tauri::command]
 pub async fn print_report(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|e| format!("PRINT_FAILED: {e}"))
+}
+
+// ------------------------------------------------------------------------------------------------
+// QuickBooks Desktop import (staging sandbox)
+// ------------------------------------------------------------------------------------------------
+
+pub const QBW_PROGRESS: &str = "qbw-import-progress";
+
+/// Reads a QuickBooks Desktop file into a new staging batch, reporting progress as
+/// `qbw-import-progress` events. Nothing is posted to the ledger.
+#[tauri::command]
+pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<BatchSummary, String> {
+    let path = PathBuf::from(&file_path);
+    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) {
+        return Err("QBW_BAD_EXTENSION: choose a QuickBooks Desktop company file (.qbw)".into());
+    }
+    let emitter = app.clone();
+    let source = path.clone();
+    // A panic inside the parser surfaces here as a join error instead of taking the app down.
+    let extraction = tauri::async_runtime::spawn_blocking(move || {
+        qbw_import::extract(&source, &mut |p| {
+            let _ = emitter.emit(QBW_PROGRESS, p);
+        })
+    })
+    .await
+    .map_err(|e| format!("QBW_PARSE_FAILED: the QuickBooks file could not be parsed ({e})"))??;
+
+    let staged = (extraction.lines.len() as u64).max(1);
+    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: 0, total: staged });
+    let pool = db.pool().await;
+    let batch_id = qbw_import::stage(&pool, &path, &extraction).await?;
+    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: staged, total: staged });
+    qbw_import::batch_summary(&pool, batch_id).await
+}
+
+#[tauri::command]
+pub async fn list_qbw_batches(db: State<'_, Db>) -> Result<Vec<BatchListItem>, String> {
+    qbw_import::list_batches(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn get_qbw_batch(db: State<'_, Db>, batch_id: i64) -> Result<BatchSummary, String> {
+    qbw_import::batch_summary(&db.pool().await, batch_id).await
+}
+
+#[tauri::command]
+pub async fn set_qbw_mapping(db: State<'_, Db>, batch_id: i64, raw_label: String, account_id: Option<i64>) -> Result<(), String> {
+    qbw_import::set_mapping(&db.pool().await, batch_id, &raw_label, account_id).await
+}
+
+/// Creates income accounts for unmapped labels; emits `ledger-changed` so account lists refresh.
+#[tauri::command]
+pub async fn auto_create_qbw_accounts(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<i64, String> {
+    let created = qbw_import::auto_create_accounts(&db.pool().await, batch_id).await?;
+    notify(&app);
+    Ok(created)
+}
+
+#[tauri::command]
+pub async fn post_qbw_batch(app: AppHandle, db: State<'_, Db>, input: PostBatchInput) -> Result<PostBatchResult, String> {
+    let result = qbw_import::post_batch(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn discard_qbw_batch(db: State<'_, Db>, batch_id: i64) -> Result<(), String> {
+    qbw_import::discard_batch(&db.pool().await, batch_id).await
 }

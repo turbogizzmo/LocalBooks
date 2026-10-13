@@ -11,6 +11,7 @@ mod export_engine;
 mod invoices;
 mod ledger;
 mod preferences;
+mod qbw_import;
 mod reconcile;
 mod reports;
 mod sales;
@@ -119,6 +120,13 @@ fn main() {
             commands::clear_company_logo,
             commands::get_company_logo,
             commands::get_invoice_detail,
+            commands::ingest_raw_qbw,
+            commands::list_qbw_batches,
+            commands::get_qbw_batch,
+            commands::set_qbw_mapping,
+            commands::auto_create_qbw_accounts,
+            commands::post_qbw_batch,
+            commands::discard_qbw_batch,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")

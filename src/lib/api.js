@@ -95,6 +95,14 @@ export const api = {
   clearCompanyLogo: () => invoke('clear_company_logo'),
   getCompanyLogo: () => invoke('get_company_logo'),
   getInvoiceDetail: (invoiceId) => invoke('get_invoice_detail', { invoiceId }),
+
+  ingestRawQbw: (filePath) => invoke('ingest_raw_qbw', { filePath }),
+  listQbwBatches: () => invoke('list_qbw_batches'),
+  getQbwBatch: (batchId) => invoke('get_qbw_batch', { batchId }),
+  setQbwMapping: (batchId, rawLabel, accountId) => invoke('set_qbw_mapping', { batchId, rawLabel, accountId }),
+  autoCreateQbwAccounts: (batchId) => invoke('auto_create_qbw_accounts', { batchId }),
+  postQbwBatch: (input) => invoke('post_qbw_batch', { input }),
+  discardQbwBatch: (batchId) => invoke('discard_qbw_batch', { batchId }),
 };
 
 /** Opens the system print dialog (Print / Save as PDF), falling back to the browser's. */

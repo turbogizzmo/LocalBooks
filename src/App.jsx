@@ -17,6 +17,7 @@ import JournalEntries from './components/JournalEntries.jsx';
 import AuditLog from './components/AuditLog.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
+import QbwImporter from './components/QbwImporter.jsx';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
 import { api, useLedgerQuery } from './lib/api.js';
@@ -114,6 +115,7 @@ export default function App() {
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/audit' && <AuditLog />}
+          {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
           {view === 'reports' && <Reports />}
           {view === 'settings' && <Settings companyName={companyName} />}
         </div>

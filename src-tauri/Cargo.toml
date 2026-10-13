@@ -12,6 +12,8 @@ base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
 libc = "0.2"
+openqbw = "=0.1.5"
+opensqlany = "=0.2.0"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

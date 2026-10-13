@@ -1955,6 +1955,8 @@ dependencies = [
  "chrono",
  "csv",
  "libc",
+ "openqbw",
+ "opensqlany",
  "regex",
  "serde",
  "serde_json",
@@ -2386,6 +2388,26 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "openqbw"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e98e401102bfdf06b1c3953e57c5862e4ffe592316eba2f5b1f278a48caaaa3"
+dependencies = [
+ "opensqlany",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "opensqlany"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36869522bffdf2e26868c71ab5a22b73dcb58cb84ce3a8040ea4a7ab0334b765"
+dependencies = [
+ "crc32fast",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "option-ext"

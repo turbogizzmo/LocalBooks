@@ -110,6 +110,22 @@ schema off to the side before it is swapped in. Daily automatic backups run on l
 Statement reconciliation ticks lines until **Difference = $0.00**, then locks them. Reconciled lines
 are frozen and their entries can no longer be voided, so a reconciled balance can never drift.
 
+### QuickBooks Desktop import through a staging sandbox
+
+**Accounting › QuickBooks Import** reads a QuickBooks Desktop company file (`.qbw`) directly using the
+open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file is opened read-only.
+
+1. **Extract.** Invoice line items (QuickBooks invoice ID, date, signed cents, source table) go into
+   `staging_raw_transactions`. These staging tables have no ties to the ledger.
+2. **Map.** Each source table found in the file is mapped to a LocalBooks income account.
+   **Auto-Generate Missing Accounts** creates any accounts that are missing, numbered 4500 and up.
+3. **Post.** Each QuickBooks invoice becomes one balanced journal entry: credits to the mapped income
+   accounts, with the balancing debit to an offset account you choose (default: Opening Balance
+   Equity). Every entry goes through the same `post_entry_in_tx` checks as everything else. The
+   whole batch posts in one transaction, so it lands completely or not at all. A register keyed by
+   QuickBooks invoice ID stops the same invoice being posted twice. Voiding an imported entry
+   releases its invoice so it can be posted again.
+
 ---
 
 ## Architecture
@@ -147,7 +163,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV bank import with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
-| **Accounting** | Journal Entries · Audit Log | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail |
+| **Accounting** | Journal Entries · Audit Log · QuickBooks Import | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
 | **Settings** | Preferences Console · File & Data Controls | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, company file location |
 
@@ -179,6 +195,7 @@ its entry form with focus in the first field.
 | Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
 | Transfer | To-account | From-account |
 | Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |
+| Imported QuickBooks invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
 | Void | Exact reversal of the original entry, same date | |
 | Estimate / time activity | *Non-posting* | |
 
@@ -300,13 +317,14 @@ cd src-tauri
 cargo test
 ```
 
-The suite (64 tests) runs against real SQLite databases with every migration applied, on macOS,
+The suite (68 tests) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
 statement tie-outs across fiscal years, CSV round-trips, backup/restore rejection cases,
 relocation, lock files, fractional-quantity rounding, foreign-currency conversion, and realized
-exchange gains and losses.
+exchange gains and losses, and the QuickBooks import (mapping rules, duplicate prevention,
+re-posting after a void, and rollback when a batch fails partway through).
 
 ---
 
@@ -322,6 +340,11 @@ exchange gains and losses.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
+- **QuickBooks Desktop import is partial.** OpenQBW 0.1 decodes invoice line items only. It does not
+  read account names, customers, vendors, bills, checks, payments, or memos. Some amount encodings
+  are still undecoded; those lines are counted and shown, not guessed. Compressed backups (`.qbb`)
+  and portable files (`.qbm`) must be restored in QuickBooks first. Review imported totals against
+  your QuickBooks reports.
 - Currency amounts use two decimal places (zero-decimal currencies such as JPY display with `.00`).
 
 ---
