@@ -99,6 +99,7 @@ rejected. No code path can skip it.
 | `VOID` | trigger, when an entry is voided | The original entry and the reversing entry that corrected it |
 | `MIGRATION` | `db::migrate`, once per schema migration | Version, description, checksum, install time |
 | `ACCOUNT_CHANGE` | trigger, on rename, renumber, retype, move, or (de)activation | Before and after values |
+| `FORENSIC_HEAL` | a reviewed correction, when approved | The altered entry, the correcting entry, and its lines |
 
 Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
 the original by its `VOID` record. Changing an account's type once it has posted activity is also
@@ -109,6 +110,21 @@ it with the snapshot taken when it was posted. It reports entries that changed a
 don't balance, that were deleted, that lack a snapshot, or that were voided without a recorded
 reversal. This catches tampering even by someone who edits the file with an outside tool after
 removing the protecting triggers.
+
+**Review corrections…** proposes a fix for each finding, and nothing posts until you approve it:
+
+- **Correctable:** amounts were moved between accounts, or a whole balanced entry was deleted. A new
+  balanced entry restores every account to the amount recorded at posting. It is checked again
+  against what you reviewed, posts through the normal ledger rules (including the closing date),
+  and is logged as `FORENSIC_HEAL`. The altered rows stay in place as evidence.
+- **Restore a backup:** the change left debits and credits unequal. No balanced entry can repair
+  that, so the fix is a backup taken before the change. Nothing is ever plugged to a suspense
+  account to make the totals look right.
+- **Review entry:** only a detail such as the date or memo changed, so the account totals are
+  unaffected.
+
+The snapshots live in the same file as the ledger and could be altered too. That's why
+corrections are reviewed rather than automatic.
 
 ### Closing date
 
@@ -386,7 +402,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (82 tests) runs against real SQLite databases with every migration applied, on macOS,
+The suite (84 tests) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -395,7 +411,7 @@ relocation, lock files, fractional-quantity rounding, foreign-currency conversio
 exchange gains and losses, and the QuickBooks import (mapping rules, duplicate prevention,
 re-posting after a void, and rollback when a batch fails partway through), the forensic audit
 trail (tamper detection with the triggers removed), opening `.localbooks` files, closing-date locks (including the RFC 7914 PBKDF2 test vector),
-the single-instance handoff, and the MCP server
+the single-instance handoff, reviewed forensic corrections, and the MCP server
 (protocol lifecycle, tool output, and every transport guard over real sockets).
 
 ---

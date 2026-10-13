@@ -8,6 +8,7 @@ mod commands;
 mod db;
 mod estimates;
 mod expenses;
+mod forensic;
 mod export_engine;
 mod instance;
 mod invoices;
@@ -126,6 +127,8 @@ fn main() {
             commands::get_journal_entry_lines,
             commands::list_audit_log,
             commands::verify_ledger_integrity,
+            commands::propose_forensic_corrections,
+            commands::apply_forensic_correction,
             commands::open_company_file,
             commands::get_closing_status,
             commands::set_closing_date,

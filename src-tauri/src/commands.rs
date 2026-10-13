@@ -9,6 +9,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
 use crate::bank::{self, BankCsvRow, BankTransactionView, ImportSummary};
 use crate::closing::{self, ClosingInput, ClosingStatus};
+use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
 use crate::storage::{self, StorageInfo};
 use crate::export_engine;
@@ -365,6 +366,21 @@ pub async fn list_audit_log(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec
 #[tauri::command]
 pub async fn verify_ledger_integrity(db: State<'_, Db>) -> Result<LedgerVerification, String> {
     ledger::verify_ledger_audit(&db.pool().await).await
+}
+
+/// For each entry that no longer matches its posting snapshot: the correcting entry that would
+/// restore it, or why none can.
+#[tauri::command]
+pub async fn propose_forensic_corrections(db: State<'_, Db>) -> Result<Vec<CorrectionProposal>, String> {
+    forensic::propose_corrections(&db.pool().await).await
+}
+
+/// Posts one reviewed correction (only if it still matches what was reviewed).
+#[tauri::command]
+pub async fn apply_forensic_correction(app: AppHandle, db: State<'_, Db>, input: ApplyCorrectionInput) -> Result<AppliedCorrection, String> {
+    let applied = forensic::apply_correction(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(applied)
 }
 
 // ------------------------------------------------------------------------------------------------

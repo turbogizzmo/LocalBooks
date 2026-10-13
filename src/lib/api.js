@@ -56,6 +56,8 @@ export const api = {
   getJournalEntryLines: (journalEntryId) => invoke('get_journal_entry_lines', { journalEntryId }),
   listAuditLog: () => invoke('list_audit_log', { limit: 1000 }),
   verifyLedgerIntegrity: () => invoke('verify_ledger_integrity'),
+  proposeForensicCorrections: () => invoke('propose_forensic_corrections'),
+  applyForensicCorrection: (input) => invoke('apply_forensic_correction', { input }),
   postJournalEntry: (entry) => invoke('post_journal_entry', { entry }),
 
   listUndeposited: () => invoke('list_undeposited'),
