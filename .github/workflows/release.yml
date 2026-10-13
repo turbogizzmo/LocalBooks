@@ -1,0 +1,169 @@
+# LocalBooks CI/CD
+#
+# push to main   → run the Rust test suite on macOS, Windows and Linux, then build every installer
+#                  and attach it to the workflow run as an artifact (no release is created).
+# push tag v*    → same gates, then build and upload the installers to a DRAFT GitHub Release
+#                  named after the tag. Review the draft and click "Publish" to ship it.
+#
+# Cut a release:   bump "version" in src-tauri/tauri.conf.json (and package.json / Cargo.toml),
+#                  commit, then:  git tag v0.2.0 && git push origin v0.2.0
+#
+# Code signing is not configured: macOS Gatekeeper and Windows SmartScreen will warn on the
+# resulting installers until Apple Developer ID / Windows signing secrets are added.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # A newer push to main supersedes an older run; tag builds always run to completion.
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Tauri v2 Linux build dependencies (webkit2gtk 4.1 pulls in libsoup 3.0).
+  LINUX_DEPS: >-
+    libwebkit2gtk-4.1-dev
+    build-essential
+    curl
+    wget
+    file
+    libxdo-dev
+    libssl-dev
+    libayatana-appindicator3-dev
+    librsvg2-dev
+    patchelf
+
+jobs:
+  test:
+    name: Test (${{ matrix.platform }})
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: test-${{ matrix.platform }}
+
+      - name: Run ledger test suite
+        working-directory: src-tauri
+        run: cargo test --locked
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS universal
+            platform: macos-latest
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
+          - name: Windows
+            platform: windows-latest
+            rust-targets: ''
+            args: ''
+          - name: Linux
+            platform: ubuntu-latest
+            rust-targets: ''
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches app version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          app_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${app_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match tauri.conf.json version ${app_version} (expected v${app_version})."
+            exit 1
+          fi
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: build-${{ matrix.platform }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build and package with Tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Only tag builds create a release; main builds upload workflow artifacts instead.
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: LocalBooks v__VERSION__
+          releaseBody: |
+            LocalBooks v__VERSION__: local-first, double-entry accounting.
+
+            **Downloads**
+            - macOS (Apple Silicon and Intel): `.dmg`
+            - Windows: `.msi` or `-setup.exe`
+            - Linux: `.deb`, `.rpm` or `.AppImage`
+
+            These builds are not code-signed yet: macOS may require right-click → Open the first
+            time, and Windows SmartScreen may ask you to confirm. Your company file stays on your
+            computer; back it up from Settings › File & Data Controls before upgrading.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          uploadUpdaterJson: false
+          uploadWorkflowArtifacts: ${{ github.ref_type != 'tag' }}
+          workflowArtifactNamePattern: LocalBooks-[platform]-[arch]-[bundle]
+          retryAttempts: 1
+          args: ${{ matrix.args }} --verbose
