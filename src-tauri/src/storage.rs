@@ -14,6 +14,27 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 pub const DB_FILE_NAME: &str = "localbooks.db";
+/// Extension of a company file the operating system opens with LocalBooks (double-click, Open With).
+pub const COMPANY_FILE_EXTENSION: &str = "localbooks";
+
+/// Whether `path` names a `.localbooks` company file (extension compared case-insensitively).
+pub fn is_company_file(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case(COMPANY_FILE_EXTENSION))
+}
+
+/// The company file the app was launched to open, if any. Windows passes the file as a plain path
+/// argument; Linux desktops may pass a `file://` URL. The first argument (the executable) is skipped.
+pub fn company_file_from_args<I: IntoIterator<Item = std::ffi::OsString>>(args: I) -> Option<PathBuf> {
+    args.into_iter().skip(1).find_map(|arg| {
+        let text = arg.to_string_lossy();
+        let path = if text.starts_with("file://") {
+            tauri::Url::parse(&text).ok()?.to_file_path().ok()?
+        } else {
+            PathBuf::from(arg)
+        };
+        is_company_file(&path).then_some(path)
+    })
+}
 /// A lock whose heartbeat is older than this is considered abandoned (crash, power loss).
 const STALE_AFTER: Duration = Duration::from_secs(180);
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(60);
@@ -340,6 +361,19 @@ impl Drop for FileLock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_arguments_name_the_company_file_to_open() {
+        let args = |list: &[&str]| company_file_from_args(list.iter().map(std::ffi::OsString::from));
+        assert_eq!(args(&["localbooks"]), None);
+        assert_eq!(args(&["/Applications/LocalBooks.localbooks", "--verbose"]), None, "the executable itself is never the file");
+        assert_eq!(args(&["localbooks", "--flag", "/books/Acme Ltd.LocalBooks"]), Some(PathBuf::from("/books/Acme Ltd.LocalBooks")));
+        assert_eq!(args(&["localbooks", "/books/notes.db"]), None);
+        #[cfg(unix)]
+        assert_eq!(args(&["localbooks", "file:///books/Acme%20Ltd.localbooks"]), Some(PathBuf::from("/books/Acme Ltd.localbooks")));
+        assert!(is_company_file(Path::new("x.LOCALBOOKS")));
+        assert!(!is_company_file(Path::new("localbooks")));
+    }
 
     #[test]
     fn classifies_network_synced_and_local_locations() {

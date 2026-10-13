@@ -723,6 +723,86 @@ pub async fn list_audit_log(pool: &SqlitePool, limit: i64) -> Result<Vec<AuditEn
     .map_err(db_err)
 }
 
+// ------------------------------------------------------------------------------------------------
+// Forensic verification against the ledger audit trail
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditFinding {
+    pub entry_id: i64,
+    pub entry_number: Option<i64>,
+    pub problem: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerVerification {
+    /// True when there are no findings.
+    pub intact: bool,
+    pub entries_checked: i64,
+    pub voids_checked: i64,
+    pub migrations_recorded: i64,
+    pub findings: Vec<AuditFinding>,
+}
+
+/// Rebuilds every posted entry from the live tables and compares it with the snapshot written when
+/// it was posted. The ledger is intact when every posted entry has an identical snapshot, balances,
+/// every void links to its reversal, and no snapshotted entry has disappeared.
+pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification, String> {
+    let checks: [(&str, &str); 5] = [
+        (
+            "Posted without a posting snapshot",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             WHERE e.status <> 'DRAFT'
+               AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'POST' AND a.target_entity_id = e.id)",
+        ),
+        (
+            "Differs from its posting snapshot (changed after posting)",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             JOIN ledger_audit_log a ON a.action_type = 'POST' AND a.target_entity_id = e.id
+             JOIN v_entry_snapshot s ON s.entry_id = e.id
+             WHERE json_remove(a.payload_snapshot, '$.backfilled') <> s.snapshot",
+        ),
+        (
+            "Debits do not equal credits",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             WHERE e.status <> 'DRAFT'
+               AND (SELECT COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0)
+                    FROM journal_lines WHERE journal_entry_id = e.id) <> 0",
+        ),
+        (
+            "Voided without a recorded reversal",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             WHERE e.is_voided = 1
+               AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'VOID' AND a.target_entity_id = e.id)",
+        ),
+        (
+            "Snapshotted at posting but no longer in the ledger (deleted)",
+            "SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
+             FROM ledger_audit_log a
+             WHERE a.action_type = 'POST' AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.id = a.target_entity_id)",
+        ),
+    ];
+
+    let mut findings = Vec::new();
+    for (problem, sql) in checks {
+        let rows: Vec<(i64, Option<i64>)> = sqlx::query_as(sql).fetch_all(pool).await.map_err(db_err)?;
+        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding { entry_id, entry_number, problem: problem.into() }));
+    }
+    findings.sort_by_key(|f| (f.entry_id, f.problem.clone()));
+
+    let (entries_checked, voids_checked, migrations_recorded): (i64, i64, i64) = sqlx::query_as(
+        "SELECT (SELECT COUNT(*) FROM journal_entries WHERE status <> 'DRAFT'),
+                (SELECT COUNT(*) FROM journal_entries WHERE is_voided = 1),
+                (SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION')",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(LedgerVerification { intact: findings.is_empty(), entries_checked, voids_checked, migrations_recorded, findings })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1033,5 +1113,125 @@ mod tests {
         // The home currency is locked once foreign transactions exist.
         assert!(crate::preferences::set(&fx.pool, "home_currency_code", "CAD").await.unwrap_err().starts_with("PREF_HOME_CURRENCY_LOCKED"));
         assert_eq!(crate::preferences::set(&fx.pool, "home_currency_code", "usd").await.unwrap(), "USD");
+    }
+
+    async fn post_sale(fx: &Fixture, cents: i64, memo: &str) -> i64 {
+        post_journal_entry(
+            &fx.pool,
+            JournalEntry {
+                id: None,
+                date: date(),
+                description: memo.into(),
+                lines: vec![JournalLine::debit(fx.checking, cents).with_memo(Some("deposit")), JournalLine::credit(fx.sales, cents)],
+                currency: None,
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    async fn sql_err(pool: &SqlitePool, sql: &str) -> String {
+        sqlx::query(sql).execute(pool).await.map(|_| String::new()).unwrap_or_else(db_err)
+    }
+
+    #[tokio::test]
+    async fn posting_and_voiding_write_immutable_snapshots() {
+        let fx = setup().await;
+        let kept = post_sale(&fx, 12_345, "Cash sale").await;
+        let voided = post_sale(&fx, 500, "Wrong amount").await;
+        void_transaction(&fx.pool, voided).await.unwrap();
+
+        let snapshot: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1")
+            .bind(kept)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        let snapshot: serde_json::Value = serde_json::from_str(&snapshot).unwrap();
+        assert_eq!(snapshot["memo"], "Cash sale");
+        assert_eq!(snapshot["totalDebitCents"], 12_345);
+        assert_eq!(snapshot["lines"][0]["accountId"], fx.checking);
+        assert_eq!(snapshot["lines"][0]["memo"], "deposit");
+        assert_eq!(snapshot["lines"][1]["creditCents"], 12_345);
+
+        let void: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'VOID' AND target_entity_id = ?1")
+            .bind(voided)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        let void: serde_json::Value = serde_json::from_str(&void).unwrap();
+        let reversal: i64 = sqlx::query_scalar("SELECT id FROM journal_entries WHERE reverses_entry_id = ?1").bind(voided).fetch_one(&fx.pool).await.unwrap();
+        assert_eq!(void["reversalEntryId"], reversal, "the void links to the correcting entry");
+        assert_eq!(void["amountCents"], 500);
+
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        assert!(verification.intact, "{:?}", verification.findings);
+        assert_eq!((verification.entries_checked, verification.voids_checked), (3, 1));
+
+        assert!(sql_err(&fx.pool, "UPDATE ledger_audit_log SET payload_snapshot = '{}'").await.starts_with("AUDIT_IMMUTABLE"));
+        assert!(sql_err(&fx.pool, "DELETE FROM ledger_audit_log").await.starts_with("AUDIT_IMMUTABLE"));
+    }
+
+    #[tokio::test]
+    async fn posted_memos_and_account_types_with_history_are_locked() {
+        let fx = setup().await;
+        let entry = post_sale(&fx, 1_000, "Original memo").await;
+        let err = sql_err(&fx.pool, &format!("UPDATE journal_entries SET memo = 'Edited' WHERE id = {entry}")).await;
+        assert!(err.starts_with("JE_IMMUTABLE"), "{err}");
+
+        let err = sql_err(&fx.pool, &format!("UPDATE chart_of_accounts SET account_type = 'EXPENSE' WHERE id = {}", fx.checking)).await;
+        assert!(err.starts_with("COA_TYPE_LOCKED"), "{err}");
+
+        // Renaming is allowed, and recorded with before/after values.
+        sqlx::query("UPDATE chart_of_accounts SET name = 'Operating Checking' WHERE id = ?1").bind(fx.checking).execute(&fx.pool).await.unwrap();
+        let change: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'ACCOUNT_CHANGE' AND target_entity_id = ?1")
+            .bind(fx.checking)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        let change: serde_json::Value = serde_json::from_str(&change).unwrap();
+        assert_eq!(change["before"]["name"], "Checking");
+        assert_eq!(change["after"]["name"], "Operating Checking");
+
+        // An account with no posted history can still change type.
+        let unused = account_id(&fx.pool, "4100").await;
+        sqlx::query("UPDATE chart_of_accounts SET account_type = 'OTHER_INCOME' WHERE id = ?1").bind(unused).execute(&fx.pool).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn verification_detects_tampering_that_bypasses_the_triggers() {
+        let fx = setup().await;
+        let altered = post_sale(&fx, 1_000, "Altered").await;
+        let deleted = post_sale(&fx, 2_000, "Deleted").await;
+        let untouched = post_sale(&fx, 3_000, "Untouched").await;
+        assert!(verify_ledger_audit(&fx.pool).await.unwrap().intact);
+
+        // Simulate someone editing the file with an outside tool (the sqlite3 shell runs with
+        // foreign keys off) after removing the protecting triggers.
+        for sql in [
+            "PRAGMA foreign_keys = OFF",
+            "DROP TRIGGER trg_jl_update_draft_only",
+            "DROP TRIGGER trg_jl_delete_draft_only",
+            "DROP TRIGGER trg_je_no_delete_posted",
+            "DROP TRIGGER trg_ledger_audit_no_delete",
+        ] {
+            sqlx::query(sql).execute(&fx.pool).await.unwrap();
+        }
+        sqlx::query("UPDATE journal_lines SET debit_cents = 9000 WHERE journal_entry_id = ?1 AND debit_cents > 0").bind(altered).execute(&fx.pool).await.unwrap();
+        sqlx::query("DELETE FROM journal_lines WHERE journal_entry_id = ?1").bind(deleted).execute(&fx.pool).await.unwrap();
+        sqlx::query("DELETE FROM journal_entries WHERE id = ?1").bind(deleted).execute(&fx.pool).await.unwrap();
+
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        let problems: Vec<(i64, &str)> = verification.findings.iter().map(|f| (f.entry_id, f.problem.as_str())).collect();
+        assert!(problems.contains(&(altered, "Differs from its posting snapshot (changed after posting)")), "{problems:?}");
+        assert!(problems.contains(&(altered, "Debits do not equal credits")), "{problems:?}");
+        assert!(problems.contains(&(deleted, "Snapshotted at posting but no longer in the ledger (deleted)")), "{problems:?}");
+        assert!(!problems.iter().any(|(id, _)| *id == untouched));
+        let deleted_number = verification.findings.iter().find(|f| f.entry_id == deleted).unwrap().entry_number;
+        assert_eq!(deleted_number, Some(2), "the snapshot still knows the deleted entry's number");
+
+        // Erasing the snapshot itself is caught as an entry posted without one.
+        sqlx::query("DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1").bind(untouched).execute(&fx.pool).await.unwrap();
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        assert!(verification.findings.iter().any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
     }
 }

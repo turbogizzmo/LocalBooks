@@ -455,8 +455,8 @@ function FileAndData({ companyName }) {
   const backupTo = async () => {
     try {
       const path = await save({
-        defaultPath: `${safeName}-${todayIso()}.db`,
-        filters: [{ name: 'LocalBooks company file', extensions: ['db'] }],
+        defaultPath: `${safeName}-${todayIso()}.localbooks`,
+        filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }],
       });
       if (!path) return;
       setBusy(true);
@@ -494,8 +494,22 @@ function FileAndData({ companyName }) {
   };
 
   const chooseRestore = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['db'] }] });
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
     if (path) prepareRestore(path);
+  };
+
+  // Opens another company file in place for this session (the same as double-clicking it).
+  const openCompanyFile = async () => {
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
+    if (!path) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api.openCompanyFile(path);
+    } catch (err) {
+      setNotice({ kind: 'error', text: `This file can't be opened: ${errorText(err)}` });
+      setBusy(false);
+    }
   };
 
   const restore = async () => {
@@ -527,9 +541,13 @@ function FileAndData({ companyName }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={chooseRestore} disabled={busy}>
             Restore from Backup…
           </button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={openCompanyFile} disabled={busy}>
+            Open Company File…
+          </button>
           <span className="text-xs text-qb-ink-muted">
             Backups are taken live: keep working while they run. Restores are checked for integrity, schema version, broken links and
-            unbalanced entries before anything is replaced.
+            unbalanced entries before anything is replaced. Backups are saved as .localbooks files, which open in LocalBooks with a
+            double-click; an opened file is used in place for this session.
           </span>
         </div>
         {pending && <RestoreConfirm info={pending.info} busy={busy} onConfirm={restore} onCancel={() => setPending(null)} />}
@@ -587,6 +605,132 @@ function FileAndData({ companyName }) {
   );
 }
 
+function CopyButton({ text, label = 'Copy' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <button type="button" className="qb-btn qb-btn-secondary h-row flex-none px-2 text-xs" onClick={copy}>
+      {copied ? '✓ Copied' : label}
+    </button>
+  );
+}
+
+/** Turns the read-only local MCP server on or off and shows how to connect an AI assistant to it. */
+function LocalAiAccess() {
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [reveal, setReveal] = useState(false);
+
+  useEffect(() => {
+    api.getMcpStatus().then(setStatus, (err) => setError(errorText(err)));
+  }, []);
+
+  const run = async (fn) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setStatus(await fn());
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!status) return error ? <Notice kind="error" text={error} /> : null;
+  const token = status.token ?? '';
+  const shown = reveal ? token : '•'.repeat(Math.min(token.length, 24));
+  const cli = (t) => `claude mcp add --transport http localbooks ${status.url} --header "Authorization: Bearer ${t}"`;
+  const json = (t) =>
+    JSON.stringify({ mcpServers: { localbooks: { type: 'http', url: status.url, headers: { Authorization: `Bearer ${t}` } } } }, null, 2);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Group title="Local AI access (Model Context Protocol)">
+        <div className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+          <button
+            type="button"
+            className={`qb-btn h-row-lg px-3 ${status.enabled ? 'qb-btn-secondary' : 'qb-btn-primary'}`}
+            onClick={() => run(() => api.setMcpEnabled(!status.enabled))}
+            disabled={busy}
+          >
+            {status.enabled ? 'Turn off' : 'Turn on'}
+          </button>
+          <span className="text-sm">
+            {status.running ? (
+              <span className="font-semibold text-qb-green-active">● Running at {status.url}</span>
+            ) : status.enabled ? (
+              <span className="font-semibold text-qb-negative">▲ Not running</span>
+            ) : (
+              <span className="text-qb-ink-muted">Off</span>
+            )}
+          </span>
+        </div>
+        <p className="border-t border-qb-border px-2 py-1 text-xs text-qb-ink-muted">
+          Lets an AI assistant on this computer, such as Claude Code or Claude Desktop, read three summaries: the trial balance, a
+          profit and loss summary, and overdue receivables aging. It cannot post, void or change anything. The server answers only on
+          this computer (127.0.0.1), refuses requests from web pages, and requires the access token below. Your books never leave this
+          computer through LocalBooks, but the assistant you connect may send what it reads to its AI provider.
+        </p>
+      </Group>
+      {status.error && <Notice kind="error" text={status.error.replace(/^[A-Z_]+: /, '')} />}
+      {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+      {status.enabled && token && (
+        <Group title="Connect an assistant">
+          <div className="grid grid-cols-[110px_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm">
+            <span className="font-semibold text-qb-ink-muted">Server URL</span>
+            <code className="truncate font-mono text-xs">{status.url}</code>
+            <CopyButton text={status.url} />
+            <span className="font-semibold text-qb-ink-muted">Access token</span>
+            <code className="truncate font-mono text-xs" aria-label="Access token">{shown}</code>
+            <div className="flex gap-1">
+              <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" onClick={() => setReveal((r) => !r)}>
+                {reveal ? 'Hide' : 'Show'}
+              </button>
+              <CopyButton text={token} />
+              <button
+                type="button"
+                className="qb-btn qb-btn-secondary h-row px-2 text-xs"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm('Issue a new access token? Assistants using the current token will stop working until you update them.')) {
+                    run(api.regenerateMcpToken);
+                  }
+                }}
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 border-t border-qb-border px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-qb-ink-muted">Claude Code (run in a terminal)</span>
+              <span className="ml-auto" />
+              <CopyButton text={cli(token)} label="Copy command" />
+            </div>
+            <pre className="overflow-x-auto bg-qb-canvas px-2 py-1 font-mono text-2xs scrollbar-thin">{cli(shown)}</pre>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-qb-ink-muted">Other MCP clients (JSON configuration)</span>
+              <span className="ml-auto" />
+              <CopyButton text={json(token)} label="Copy JSON" />
+            </div>
+            <pre className="overflow-x-auto bg-qb-canvas px-2 py-1 font-mono text-2xs scrollbar-thin">{json(shown)}</pre>
+          </div>
+        </Group>
+      )}
+    </div>
+  );
+}
+
 export default function Settings({ companyName }) {
   const [tab, setTab] = useState('preferences');
   return (
@@ -595,6 +739,7 @@ export default function Settings({ companyName }) {
         {[
           ['preferences', 'Preferences Console'],
           ['data', 'File & Data Controls'],
+          ['ai', 'AI Access (MCP)'],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -608,7 +753,9 @@ export default function Settings({ companyName }) {
           </button>
         ))}
       </div>
-      {tab === 'preferences' ? <PreferencesConsole /> : <FileAndData companyName={companyName} />}
+      {tab === 'preferences' && <PreferencesConsole />}
+      {tab === 'data' && <FileAndData companyName={companyName} />}
+      {tab === 'ai' && <LocalAiAccess />}
     </div>
   );
 }

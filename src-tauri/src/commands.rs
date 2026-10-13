@@ -1,6 +1,6 @@
 //! Tauri command surface. Every successful write emits `ledger-changed` so open views refresh live.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use chrono::{Local, NaiveDate};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -16,7 +16,8 @@ use crate::banking::{self, BankingActivity, DepositInput, TransferInput, Undepos
 use crate::estimates::{self, EstimateInput, EstimateSummary};
 use crate::expenses::{self, BillInput, BillPaymentInput, BillPaymentView, BillSummary, ExpenseInput, ExpenseView};
 use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary, PaymentInput, PaymentView};
-use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView};
+use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView, LedgerVerification};
+use crate::mcp_server::{McpService, McpStatus};
 use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult};
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
@@ -359,6 +360,12 @@ pub async fn list_audit_log(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec
     ledger::list_audit_log(&db.pool().await, limit.unwrap_or(1000)).await
 }
 
+/// Compares every posted entry with the snapshot recorded when it was posted.
+#[tauri::command]
+pub async fn verify_ledger_integrity(db: State<'_, Db>) -> Result<LedgerVerification, String> {
+    ledger::verify_ledger_audit(&db.pool().await).await
+}
+
 // ------------------------------------------------------------------------------------------------
 // Deposits & transfers
 // ------------------------------------------------------------------------------------------------
@@ -564,8 +571,41 @@ pub async fn update_database_directory(app: AppHandle, db: State<'_, Db>, new_pa
     let dir = storage::resolve_network_path(&PathBuf::from(new_path));
     let mode = RelocateMode::parse(mode.as_deref(), dir.join(storage::DB_FILE_NAME).is_file())?;
     let status = db.relocate(&dir, mode).await?;
+    refresh_window_title(&app).await;
     notify(&app);
     Ok(status)
+}
+
+/// Emitted when a different company file becomes the live one; the window reloads its state.
+pub const COMPANY_FILE_CHANGED: &str = "company-file-changed";
+
+/// Titles the main window after the open company file ("Acme Ltd.localbooks — LocalBooks"), or
+/// plain "LocalBooks" for the usual company file.
+pub async fn refresh_window_title(app: &AppHandle) {
+    let status = app.state::<Db>().status().await;
+    let title = if status.opened_from_file || !status.is_default {
+        format!("{} — LocalBooks", status.file_name)
+    } else {
+        "LocalBooks".to_string()
+    };
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&title);
+    }
+}
+
+/// Makes `path` the live company file for this session and tells the window to reload.
+pub async fn mount_company_file(app: &AppHandle, path: &Path) -> Result<StorageStatus, String> {
+    let status = app.state::<Db>().mount(path).await?;
+    refresh_window_title(app).await;
+    let _ = app.emit(COMPANY_FILE_CHANGED, ());
+    notify(app);
+    Ok(status)
+}
+
+/// File › Open: opens a company file (a `.localbooks` file or a LocalBooks backup) in place.
+#[tauri::command]
+pub async fn open_company_file(app: AppHandle, path: String) -> Result<StorageStatus, String> {
+    mount_company_file(&app, &storage::resolve_network_path(&PathBuf::from(path))).await
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -743,4 +783,23 @@ pub async fn post_qbw_batch(app: AppHandle, db: State<'_, Db>, input: PostBatchI
 #[tauri::command]
 pub async fn discard_qbw_batch(db: State<'_, Db>, batch_id: i64) -> Result<(), String> {
     qbw_import::discard_batch(&db.pool().await, batch_id).await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Local MCP server (read-only AI access)
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn get_mcp_status(mcp: State<'_, McpService>) -> Result<McpStatus, String> {
+    Ok(mcp.status().await)
+}
+
+#[tauri::command]
+pub async fn set_mcp_enabled(mcp: State<'_, McpService>, enabled: bool) -> Result<McpStatus, String> {
+    mcp.set_enabled(enabled).await
+}
+
+#[tauri::command]
+pub async fn regenerate_mcp_token(mcp: State<'_, McpService>) -> Result<McpStatus, String> {
+    mcp.regenerate_token().await
 }

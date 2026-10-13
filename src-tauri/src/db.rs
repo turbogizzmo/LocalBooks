@@ -23,6 +23,9 @@ struct Live {
     pool: SqlitePool,
     storage: StorageInfo,
     lock: Option<FileLock>,
+    /// Opened directly (a double-clicked `.localbooks` file or File › Open) rather than from the
+    /// configured location. Lasts for this session; `config.json` is not changed.
+    opened_from_file: bool,
 }
 
 /// The live company file. Commands borrow a pool clone per call; a restore or relocation swaps the
@@ -37,6 +40,8 @@ pub struct Db {
 #[serde(rename_all = "camelCase")]
 pub struct StorageStatus {
     pub path: String,
+    pub file_name: String,
+    pub opened_from_file: bool,
     pub directory: String,
     pub storage: StorageInfo,
     pub is_default: bool,
@@ -78,7 +83,7 @@ async fn open_live(path: &Path) -> Result<Live, String> {
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
     let pool = open_for(path, &storage).await?;
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock })
+    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false })
 }
 
 impl Db {
@@ -113,6 +118,53 @@ impl Db {
         Ok(db)
     }
 
+    /// Startup when the operating system launched LocalBooks to open `file`: that file is opened in
+    /// place. If it cannot be (missing, not a company file, damaged), the usual company file opens
+    /// instead and the reason is shown.
+    pub async fn startup_with_file(config: DbConfig, file: Option<PathBuf>) -> Result<Db, String> {
+        let Some(file) = file else { return Db::startup(config).await };
+        match open_company_file(&file).await {
+            Ok(live) => Ok(Db { live: tokio::sync::RwLock::new(live), config, startup_warning: std::sync::Mutex::new(None) }),
+            Err(err) => {
+                let db = Db::startup(config).await?;
+                let mut warning = db.startup_warning.lock().expect("warning mutex");
+                let reason = format!("Could not open {}: {err}.", file.display());
+                *warning = Some(match warning.take() {
+                    Some(previous) => format!("{reason} {previous}"),
+                    None => format!("{reason} Showing your usual company file instead."),
+                });
+                drop(warning);
+                Ok(db)
+            }
+        }
+    }
+
+    /// Switches the live company file to `path` in place, for this session. The file must pass the
+    /// same checks as a restore; it is fully opened before the current file is closed, so a failure
+    /// leaves the current books in use.
+    pub async fn mount(&self, path: &Path) -> Result<StorageStatus, String> {
+        let current = self.path().await;
+        let same = path.canonicalize().ok().zip(current.canonicalize().ok()).is_some_and(|(a, b)| a == b);
+        if same {
+            return Ok(self.status().await);
+        }
+        let next = open_company_file(path).await?;
+        {
+            let mut live = self.live.write().await;
+            live.pool.close().await;
+            *live = next;
+        }
+        *self.startup_warning.lock().expect("warning mutex") = None;
+        Ok(self.status().await)
+    }
+
+    /// Records a problem to show in the app's banner (used when a file handed over by the operating
+    /// system after launch cannot be opened).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub fn set_warning(&self, warning: String) {
+        *self.startup_warning.lock().expect("warning mutex") = Some(warning);
+    }
+
     pub async fn pool(&self) -> SqlitePool {
         self.live.read().await.pool.clone()
     }
@@ -130,6 +182,8 @@ impl Db {
         let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&live.pool).await.unwrap_or_else(|_| "unknown".into());
         StorageStatus {
             path: live.path.display().to_string(),
+            file_name: live.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            opened_from_file: live.opened_from_file,
             directory: live.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
             storage: live.storage.clone(),
             is_default: live.path == self.config.default_path,
@@ -219,6 +273,17 @@ impl Db {
     }
 }
 
+/// Opens an existing company file chosen by the user, after the same checks a restore applies.
+async fn open_company_file(path: &Path) -> Result<Live, String> {
+    if !path.is_file() {
+        return Err(format!("OPEN_NOT_FOUND: {} does not exist", path.display()));
+    }
+    crate::backup::inspect(path).await?;
+    let mut live = open_live(path).await?;
+    live.opened_from_file = true;
+    Ok(live)
+}
+
 /// Embedded schema migrations from `src-tauri/migrations`.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -273,17 +338,61 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), String> {
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string());
-    let restored = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await.map_err(|e| e.to_string());
-    if restored.is_err() {
+    if let Err(e) = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await {
         // Never hand a connection without enforcement back to the pool.
         let _ = conn.detach().close().await;
+        migrated?;
+        return Err(e.to_string());
     }
     migrated?;
-    restored?;
     if violations?.is_some() {
         return Err("foreign key check failed after migration".into());
     }
-    Ok(())
+    record_migrations(&mut conn).await
+}
+
+#[cfg(test)]
+mod migrate_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn every_migration_is_recorded_once_in_the_audit_trail() {
+        let pool = test_pool().await;
+        let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1").fetch_one(&pool).await.unwrap();
+        let logged = || async {
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION'").fetch_one(&pool).await.unwrap()
+        };
+        assert_eq!(logged().await, applied);
+        migrate(&pool).await.unwrap();
+        assert_eq!(logged().await, applied, "re-running migrations adds no duplicate events");
+        let latest: String = sqlx::query_scalar(
+            "SELECT json_extract(payload_snapshot, '$.description') FROM ledger_audit_log
+             WHERE action_type = 'MIGRATION' ORDER BY target_entity_id DESC LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(latest, "ledger audit");
+    }
+}
+
+/// Adds a MIGRATION event to the ledger audit trail for every applied schema migration not yet
+/// recorded there, so the trail shows which schema each part of the history was written under.
+async fn record_migrations(conn: &mut sqlx::SqliteConnection) -> Result<(), String> {
+    sqlx::query(
+        "INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot)
+         SELECT 'MIGRATION', m.version, json_object(
+                    'version', m.version, 'description', m.description, 'checksum', lower(hex(m.checksum)),
+                    'installedOn', m.installed_on, 'executionTimeNs', m.execution_time)
+         FROM _sqlx_migrations m
+         WHERE m.success = 1
+           AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'MIGRATION' AND a.target_entity_id = m.version)
+         ORDER BY m.version",
+    )
+    .execute(conn)
+    .await
+    .map(|_| ())
+    .map_err(|e| format!("cannot record migrations in the audit trail: {e}"))
 }
 
 #[cfg(test)]
@@ -407,6 +516,53 @@ mod tests {
         db.relocate(cfg.default_path.parent().unwrap(), RelocateMode::OpenExisting).await.unwrap();
         assert!(db.status().await.is_default);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
+    }
+
+    #[tokio::test]
+    async fn localbooks_files_open_in_place_for_the_session() {
+        let tmp = TempDir::new("mount");
+        let cfg = test_config(&tmp.0);
+
+        // A company file saved elsewhere, e.g. an export the user double-clicks.
+        let acme = tmp.0.join("clients").join("Acme Ltd.localbooks");
+        let maker = Db::open_at(acme.clone(), cfg.clone()).await.unwrap();
+        post_one(&maker).await;
+        post_one(&maker).await;
+        maker.shutdown().await;
+        drop(maker);
+
+        // Launched with the file: it opens in place, and the saved location is untouched.
+        let db = Db::startup_with_file(cfg.clone(), Some(acme.clone())).await.unwrap();
+        let status = db.status().await;
+        assert!(status.opened_from_file && !status.is_default);
+        assert_eq!(status.file_name, "Acme Ltd.localbooks");
+        assert_eq!(entries(&db).await, 2);
+        assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
+
+        // Opening another file after launch (macOS hands files over this way) swaps the books.
+        db.mount(&cfg.default_path).await.unwrap_err(); // the default file does not exist yet
+        let beta = tmp.0.join("Beta.localbooks");
+        let maker = Db::open_at(beta.clone(), cfg.clone()).await.unwrap();
+        maker.shutdown().await;
+        drop(maker);
+        let status = db.mount(&beta).await.unwrap();
+        assert_eq!(status.file_name, "Beta.localbooks");
+        assert_eq!(entries(&db).await, 0);
+
+        // A file that is not a company file is refused and the open books stay in use.
+        let fake = tmp.0.join("Fake.localbooks");
+        std::fs::write(&fake, b"definitely not sqlite").unwrap();
+        assert!(db.mount(&fake).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
+        assert_eq!(db.status().await.file_name, "Beta.localbooks");
+        db.shutdown().await;
+        drop(db);
+
+        // A launch file that cannot be opened falls back to the usual books and says why.
+        let db = Db::startup_with_file(cfg.clone(), Some(tmp.0.join("Gone.localbooks"))).await.unwrap();
+        let status = db.status().await;
+        assert!(status.is_default && !status.opened_from_file);
+        let warning = status.startup_warning.unwrap();
+        assert!(warning.contains("Gone.localbooks") && warning.contains("does not exist"), "{warning}");
     }
 
     #[tokio::test]

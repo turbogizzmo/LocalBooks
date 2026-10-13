@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Notice from './Notice.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
-import { api, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 
 const ACTION_STYLE = {
@@ -12,15 +12,56 @@ const ACTION_STYLE = {
 
 const TIMESTAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'medium' });
 
+/** Result of comparing every posted entry with the snapshot recorded when it was posted. */
+function Verification({ result, onDismiss }) {
+  if (result.error) return <Notice kind="error" text={`Verification could not run: ${result.error}`} onDismiss={onDismiss} />;
+  const { entriesChecked, voidsChecked, migrationsRecorded, findings } = result.data;
+  if (findings.length === 0) {
+    return (
+      <Notice
+        kind="success"
+        text={`✓ Ledger intact: all ${entriesChecked.toLocaleString()} posted entries match their posting snapshots, ${voidsChecked.toLocaleString()} voids link to their reversals, ${migrationsRecorded} schema migrations recorded.`}
+        onDismiss={onDismiss}
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <Notice kind="error" text={`${findings.length} integrity problem${findings.length === 1 ? '' : 's'} found in ${entriesChecked.toLocaleString()} posted entries. Restore from a backup taken before the change.`} onDismiss={onDismiss} />
+      <ul className="max-h-[120px] overflow-auto border border-qb-negative/30 bg-white px-2 py-1 text-xs scrollbar-thin">
+        {findings.map((f) => (
+          <li key={`${f.entryId}-${f.problem}`}>
+            <span className="font-semibold">Entry #{f.entryNumber ?? `id ${f.entryId}`}</span>: {f.problem}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Read-only, database-enforced history of every post, void and reconciliation lock. */
 export default function AuditLog() {
   const { data, error } = useLedgerQuery(api.listAuditLog);
   const [action, setAction] = useState('ALL');
+  const [verification, setVerification] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+
+  const verify = async () => {
+    setVerifying(true);
+    try {
+      setVerification({ data: await api.verifyLedgerIntegrity() });
+    } catch (err) {
+      setVerification({ error: errorText(err) });
+    } finally {
+      setVerifying(false);
+    }
+  };
   const rows = (data ?? []).filter((a) => action === 'ALL' || a.action === action);
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {error && <Notice kind="error" text={`Could not load the audit log: ${error}`} />}
+      {verification && <Verification result={verification} onDismiss={() => setVerification(null)} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Audit log</h2>
@@ -31,6 +72,9 @@ export default function AuditLog() {
             <option value="LOCK_RECONCILIATION">Reconciliations</option>
           </select>
           <span className="ml-auto text-xs text-qb-ink-muted">Recorded by the database itself · cannot be edited or deleted</span>
+          <button type="button" className="qb-btn-secondary" onClick={verify} disabled={verifying}>
+            {verifying ? 'Verifying…' : 'Verify ledger integrity'}
+          </button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <table className="qb-grid">

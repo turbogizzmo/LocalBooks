@@ -10,6 +10,7 @@ mod expenses;
 mod export_engine;
 mod invoices;
 mod ledger;
+mod mcp_server;
 mod preferences;
 mod qbw_import;
 mod reconcile;
@@ -20,6 +21,8 @@ mod storage;
 mod timesheet;
 
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 
 fn main() {
     tauri::Builder::default()
@@ -31,9 +34,25 @@ fn main() {
                 default_path: data_dir.join(storage::DB_FILE_NAME),
                 backups_dir: data_dir.join("backups"),
             };
-            // Honours config.json; falls back to the local file (with a warning) if that location is unavailable.
-            let database = tauri::async_runtime::block_on(db::Db::startup(config))?;
+            // A double-clicked .localbooks file arrives as a launch argument on Windows and Linux and
+            // opens in place. Otherwise config.json is honoured, falling back to the local file (with
+            // a warning) if that location is unavailable.
+            let launch_file = storage::company_file_from_args(std::env::args_os());
+            let database = tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file))?;
             app.manage(database);
+            // The local MCP server (off unless turned on in Settings) reads whichever company file is
+            // live at the time of each request.
+            let pool_handle = app.handle().clone();
+            let pools: mcp_server::PoolSource = std::sync::Arc::new(move || {
+                let handle = pool_handle.clone();
+                Box::pin(async move { handle.state::<db::Db>().pool().await })
+            });
+            app.manage(mcp_server::McpService::new(app.path().app_config_dir()?, pools));
+            let mcp_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { mcp_handle.state::<mcp_server::McpService>().start_if_enabled().await });
+
+            let title_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { commands::refresh_window_title(&title_handle).await });
 
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();
@@ -88,6 +107,11 @@ fn main() {
             commands::list_journal_entries,
             commands::get_journal_entry_lines,
             commands::list_audit_log,
+            commands::verify_ledger_integrity,
+            commands::open_company_file,
+            commands::get_mcp_status,
+            commands::set_mcp_enabled,
+            commands::regenerate_mcp_token,
             commands::list_undeposited,
             commands::post_bank_deposit,
             commands::post_transfer,
@@ -130,10 +154,27 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")
-        .run(|app, event| {
-            // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
-            if let tauri::RunEvent::Exit = event {
-                tauri::async_runtime::block_on(app.state::<db::Db>().shutdown());
+        .run(|app, event| match event {
+            // macOS hands double-clicked .localbooks files to the running app as an Opened event,
+            // including the file that launched it.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Opened { urls } => {
+                let file = urls.iter().filter_map(|url| url.to_file_path().ok()).find(|path| storage::is_company_file(path));
+                if let Some(path) = file {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(err) = commands::mount_company_file(&app, &path).await {
+                            app.state::<db::Db>().set_warning(format!("Could not open {}: {err}.", path.display()));
+                            let _ = app.emit(commands::COMPANY_FILE_CHANGED, ());
+                        }
+                    });
+                }
             }
+            // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
+            tauri::RunEvent::Exit => tauri::async_runtime::block_on(async {
+                app.state::<mcp_server::McpService>().shutdown().await;
+                app.state::<db::Db>().shutdown().await;
+            }),
+            _ => {}
         });
 }

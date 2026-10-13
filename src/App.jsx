@@ -20,7 +20,8 @@ import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
-import { api, useLedgerQuery } from './lib/api.js';
+import { listen } from '@tauri-apps/api/event';
+import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
 import { setCurrencySymbol } from './lib/money.js';
 
 const STORAGE_KEY = 'localbooks.view';
@@ -69,6 +70,19 @@ export default function App() {
     }
   }, []);
 
+  // Another company file was opened: every view's state belongs to the old books, so start fresh.
+  useEffect(() => {
+    let unlisten;
+    let cancelled = false;
+    listen(COMPANY_FILE_CHANGED, () => window.location.reload())
+      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere.
   useEffect(() => {
     const onKey = (e) => {
@@ -92,6 +106,21 @@ export default function App() {
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
           <h1 className="text-lg font-semibold">{item.label}</h1>
+          {storage.data && (
+            <span
+              className="ml-auto flex min-w-0 max-w-[420px] items-center gap-1.5 text-xs text-qb-ink-muted"
+              title={storage.data.path}
+              aria-label={`Company file: ${storage.data.fileName}`}
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 flex-none" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                <path d="M4 1.5h5.5l3 3v10H4zM9.5 1.5v3h3" />
+              </svg>
+              <span className="truncate font-semibold text-qb-ink">{storage.data.fileName}</span>
+              {storage.data.openedFromFile && (
+                <span className="flex-none rounded-sm border border-qb-border px-1 text-2xs uppercase tracking-wide">Opened file</span>
+              )}
+            </span>
+          )}
         </header>
         {storage.data?.startupWarning && (
           <div className="no-print">

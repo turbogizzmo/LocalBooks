@@ -89,6 +89,27 @@ The `audit_log` table is written **by database triggers**, not by application co
 void, and reconciliation lock is recorded automatically, and `UPDATE`/`DELETE` on the log are
 rejected. No code path can skip it.
 
+### Forensic ledger snapshots and integrity verification
+
+`ledger_audit_log` is a second, append-only trail that holds the actual data, not just events:
+
+| Event | Recorded by | Payload |
+|---|---|---|
+| `POST` | trigger, when an entry is posted | Full JSON snapshot: header, currency, and every line (account, debit, credit, memo) |
+| `VOID` | trigger, when an entry is voided | The original entry and the reversing entry that corrected it |
+| `MIGRATION` | `db::migrate`, once per schema migration | Version, description, checksum, install time |
+| `ACCOUNT_CHANGE` | trigger, on rename, renumber, retype, move, or (de)activation | Before and after values |
+
+Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
+the original by its `VOID` record. Changing an account's type once it has posted activity is also
+refused, because that would silently move its history between the Balance Sheet and the P&L.
+
+**Audit Log › Verify ledger integrity** rebuilds every posted entry from the live tables and compares
+it with the snapshot taken when it was posted. It reports entries that changed after posting, that
+don't balance, that were deleted, that lack a snapshot, or that were voided without a recorded
+reversal. This catches tampering even by someone who edits the file with an outside tool after
+removing the protecting triggers.
+
 ### Online snapshots with `VACUUM INTO`
 
 Backups use SQLite's `VACUUM INTO`: a consistent snapshot taken while you keep working, written to a
@@ -165,7 +186,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV bank import with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · QuickBooks Import | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
-| **Settings** | Preferences Console · File & Data Controls | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, company file location |
+| **Settings** | Preferences Console · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, open company file, company file location, local read-only AI access |
 
 ### `+ New` quick-create matrix
 
@@ -279,6 +300,40 @@ Caveats:
   LocalBooks switches SQLite to rollback-journal mode with
   exclusive locking there and keeps a heartbeat lock file, so a second computer is told the books
   are in use instead of corrupting them. Never open the same company file on two computers at once.
+- **`.localbooks` files:** backups are saved as `.localbooks` files, and installed builds register
+  that extension. Double-clicking one, or choosing *Settings › File & Data Controls › Open Company
+  File…*, checks it the same way a restore does and then opens it **in place** for the session.
+  The window title and toolbar show which file is open, and your usual company file location is
+  unchanged. Windows and Linux pass the file as a launch argument; macOS hands it to the running
+  app.
+
+## Local AI access (MCP)
+
+*Settings › AI Access (MCP)* starts a small [Model Context Protocol](https://modelcontextprotocol.io)
+server at `http://127.0.0.1:8321/mcp`. Through it, an AI assistant on the same computer (Claude
+Code, Claude Desktop, or any MCP client with Streamable HTTP) can call three **read-only** tools:
+
+| Tool | Returns |
+|---|---|
+| `get_trial_balance` | Debit/credit balance of every account as of a date |
+| `get_profit_and_loss_summary` | Revenue, gross profit, expenses, net income, and per-account amounts for a range (default: fiscal year to date) |
+| `get_overdue_aging_metrics` | Receivables by days past due, overdue share, and the most overdue invoices |
+
+- **Off by default.** It uses tokio's own networking (no web framework) and opens no outbound
+  connections.
+- **Loopback only.** It binds to `127.0.0.1` and drops non-loopback peers.
+- **Token required.** Every request needs a 256-bit bearer token generated on this machine. The
+  token is stored in `mcp.json` in the app config folder, not in the company file.
+- **Browsers refused.** It rejects requests that carry an `Origin` header (web pages) or a foreign
+  `Host` header (DNS rebinding), as the MCP specification requires.
+- **No write path.** The tools run SELECT queries only; nothing can post, void, or edit.
+
+LocalBooks itself sends nothing anywhere, but the assistant you connect may send what it reads to
+its AI provider. Connect with:
+
+```bash
+claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "Authorization: Bearer <token from Settings>"
+```
 
 ---
 
@@ -317,14 +372,16 @@ cd src-tauri
 cargo test
 ```
 
-The suite (68 tests) runs against real SQLite databases with every migration applied, on macOS,
+The suite (78 tests) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
 statement tie-outs across fiscal years, CSV round-trips, backup/restore rejection cases,
 relocation, lock files, fractional-quantity rounding, foreign-currency conversion, and realized
 exchange gains and losses, and the QuickBooks import (mapping rules, duplicate prevention,
-re-posting after a void, and rollback when a batch fails partway through).
+re-posting after a void, and rollback when a batch fails partway through), the forensic audit
+trail (tamper detection with the triggers removed), opening `.localbooks` files, and the MCP server
+(protocol lifecycle, tool output, and every transport guard over real sockets).
 
 ---
 
@@ -337,6 +394,9 @@ re-posting after a void, and rollback when a batch fails partway through).
   receipts, and estimates are home-currency only, and bank accounts are always home currency. There is
   no unrealized gain/loss revaluation of open balances at period end.
 - **Single user.** One person at a time per company file, including on shared folders.
+- On Windows and Linux, double-clicking a `.localbooks` file while LocalBooks is already running
+  starts a second window for that file instead of switching the open one. Whether the file type
+  is registered on Linux depends on the desktop environment.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.

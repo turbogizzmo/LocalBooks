@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 export const LEDGER_CHANGED = 'ledger-changed';
+/** A different company file became the live one (double-click, File › Open). */
+export const COMPANY_FILE_CHANGED = 'company-file-changed';
 
 export const api = {
   listAccounts: () => invoke('list_accounts'),
@@ -53,6 +55,7 @@ export const api = {
   listJournalEntries: () => invoke('list_journal_entries', { limit: 500 }),
   getJournalEntryLines: (journalEntryId) => invoke('get_journal_entry_lines', { journalEntryId }),
   listAuditLog: () => invoke('list_audit_log', { limit: 1000 }),
+  verifyLedgerIntegrity: () => invoke('verify_ledger_integrity'),
   postJournalEntry: (entry) => invoke('post_journal_entry', { entry }),
 
   listUndeposited: () => invoke('list_undeposited'),
@@ -89,6 +92,10 @@ export const api = {
   printReport: () => invoke('print_report'),
 
   getStorageStatus: () => invoke('get_storage_status'),
+  openCompanyFile: (path) => invoke('open_company_file', { path }),
+  getMcpStatus: () => invoke('get_mcp_status'),
+  setMcpEnabled: (enabled) => invoke('set_mcp_enabled', { enabled }),
+  regenerateMcpToken: () => invoke('regenerate_mcp_token'),
   inspectDatabaseDirectory: (newPath) => invoke('inspect_database_directory', { newPath }),
   updateDatabaseDirectory: (newPath, mode) => invoke('update_database_directory', { newPath, mode: mode ?? null }),
   setCompanyLogo: (sourcePath) => invoke('set_company_logo', { sourcePath }),
