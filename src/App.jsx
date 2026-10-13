@@ -55,6 +55,7 @@ export default function App() {
     phone: prefs.data?.company_phone ?? '',
     ein: prefs.data?.company_ein ?? '',
     logo: logo.data ?? null,
+    homeCurrency: prefs.data?.home_currency_code ?? 'USD',
   };
 
   const select = useCallback((id, action = null) => {

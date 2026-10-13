@@ -222,6 +222,22 @@ function PreferencesConsole() {
             ),
           })}
           {field({
+            label: 'Home currency',
+            prefKey: 'home_currency_code',
+            hint: 'Every report and balance is in this currency; it locks once foreign-currency transactions exist',
+            children: ({ id, value, setValue, commit, invalid }) => (
+              <input
+                id={id}
+                className="qb-input w-[70px] uppercase"
+                value={value}
+                maxLength={3}
+                onChange={(e) => setValue(e.target.value.toUpperCase())}
+                onBlur={() => commit()}
+                aria-invalid={invalid}
+              />
+            ),
+          })}
+          {field({
             label: 'Currency symbol',
             prefKey: 'currency_symbol',
             hint: 'Display only; amounts are stored in cents and never converted',

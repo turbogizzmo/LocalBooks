@@ -70,6 +70,9 @@ impl RelocateMode {
 }
 
 async fn open_live(path: &Path) -> Result<Live, String> {
+    // A mapped network drive (Z:\...) is opened through its UNC path so it is recognized as shared
+    // and keeps working if the drive letter changes.
+    let path = &storage::resolve_network_path(path);
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     let storage = storage::classify(dir);
@@ -91,6 +94,7 @@ impl Db {
         let warning = match storage::read_config(&config.config_dir).database_directory {
             None => None,
             Some(dir) => {
+                let dir = storage::resolve_network_path(&dir);
                 let target = dir.join(DB_FILE_NAME);
                 if !dir.is_dir() {
                     Some(format!("The company file location {} is not available (is the drive connected?). Showing the local company file instead.", dir.display()))
@@ -170,6 +174,8 @@ impl Db {
     /// An existing file there must pass the same checks as a restore; the new file is fully opened
     /// before the old one is closed, so a failure leaves the current books in use.
     pub async fn relocate(&self, new_dir: &Path, mode: RelocateMode) -> Result<StorageStatus, String> {
+        let resolved = storage::resolve_network_path(new_dir);
+        let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;
         let target = new_dir.join(DB_FILE_NAME);
         let current = self.path().await;
@@ -342,6 +348,7 @@ mod tests {
                 date: chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
                 description: String::new(),
                 lines: vec![crate::ledger::JournalLine::debit(checking, 100), crate::ledger::JournalLine::credit(services, 100)],
+                currency: None,
             },
         )
         .await

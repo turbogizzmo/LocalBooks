@@ -16,6 +16,88 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 /// Per-line ceiling ($1 trillion), mirrored by the `journal_lines` CHECK constraints.
 pub const MAX_LINE_CENTS: i64 = 100_000_000_000_000;
+/// Line quantities are integers scaled by 10,000 (1.5 → 15_000).
+pub const QUANTITY_SCALE: i64 = 10_000;
+/// Exchange rates are integers scaled by 1,000,000 (home units per 1 foreign unit; 1.0875 → 1_087_500).
+pub const RATE_SCALE: i64 = 1_000_000;
+
+/// `a × b ÷ divisor`, rounded half away from zero, computed in 128 bits so it cannot overflow.
+/// Returns `None` if the result does not fit in an `i64`.
+pub fn mul_div_round(a: i64, b: i64, divisor: i64) -> Option<i64> {
+    let product = a as i128 * b as i128;
+    let d = divisor as i128;
+    let half = d / 2;
+    let rounded = if product >= 0 { (product + half) / d } else { (product - half) / d };
+    i64::try_from(rounded).ok()
+}
+
+/// Line amount for a scaled quantity: round_half_up(quantity_e4 × rate_cents / 10,000).
+pub fn quantity_amount(quantity_e4: i64, rate_cents: i64) -> Option<i64> {
+    mul_div_round(quantity_e4, rate_cents, QUANTITY_SCALE)
+}
+
+/// Converts a foreign-currency amount to home currency at `rate_e6`, rounding half away from zero.
+pub fn to_home_cents(foreign_cents: i64, rate_e6: i64) -> Option<i64> {
+    mul_div_round(foreign_cents, rate_e6, RATE_SCALE)
+}
+
+/// The currency a document or journal entry was written in, when it is not the home currency.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForeignCurrency {
+    /// ISO 4217 code, e.g. "EUR".
+    pub code: String,
+    /// Home-currency units per one foreign unit, scaled by 1,000,000.
+    pub exchange_rate_e6: i64,
+}
+
+impl ForeignCurrency {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.code.len() != 3 || !self.code.chars().all(|c| c.is_ascii_uppercase()) {
+            return Err(format!("FX_BAD_CODE: '{}' is not a three-letter currency code", self.code));
+        }
+        if !(1..=1_000_000_000_000).contains(&self.exchange_rate_e6) {
+            return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
+        }
+        Ok(())
+    }
+}
+
+/// Converts balanced foreign-currency lines to home currency. Each line is converted on its own;
+/// any rounding difference between the two sides (a few cents at most) is absorbed by the largest
+/// line on the short side, so the home-currency entry balances exactly. Deterministic, so callers
+/// can predict the posted amounts.
+pub fn convert_lines(lines: &[JournalLine], rate_e6: i64) -> Result<Vec<(i64, i64)>, String> {
+    let overflow = || "FX_OVERFLOW: converted amount is out of range".to_string();
+    let mut home: Vec<(i64, i64)> = Vec::with_capacity(lines.len());
+    for line in lines {
+        let d = to_home_cents(line.debit, rate_e6).ok_or_else(overflow)?;
+        let c = to_home_cents(line.credit, rate_e6).ok_or_else(overflow)?;
+        if (line.debit > 0 && d == 0) || (line.credit > 0 && c == 0) {
+            return Err("FX_ROUNDS_TO_ZERO: a line converts to 0.00 in the home currency".into());
+        }
+        home.push((d, c));
+    }
+    let debits: i64 = home.iter().map(|l| l.0).sum();
+    let credits: i64 = home.iter().map(|l| l.1).sum();
+    let diff = debits - credits;
+    if diff != 0 {
+        let (side_is_credit, delta) = if diff > 0 { (true, diff) } else { (false, -diff) };
+        let idx = home
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| if side_is_credit { l.1 > 0 } else { l.0 > 0 })
+            .max_by_key(|(i, l)| (if side_is_credit { l.1 } else { l.0 }, std::cmp::Reverse(*i)))
+            .map(|(i, _)| i)
+            .ok_or_else(|| "FX_UNBALANCED: cannot balance the converted entry".to_string())?;
+        if side_is_credit {
+            home[idx].1 += delta;
+        } else {
+            home[idx].0 += delta;
+        }
+    }
+    Ok(home)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JournalLine {
@@ -48,6 +130,9 @@ pub struct JournalEntry {
     pub date: NaiveDate,
     pub description: String,
     pub lines: Vec<JournalLine>,
+    /// When set, `lines` are in this foreign currency and are converted to home currency on posting.
+    #[serde(default)]
+    pub currency: Option<ForeignCurrency>,
 }
 
 /// The business document that produced an entry. Manual journal entries have no source document.
@@ -228,6 +313,17 @@ pub async fn post_entry_in_tx(
     source: EntrySource,
 ) -> Result<i64, String> {
     validate_entry(entry)?;
+    if let Some(currency) = &entry.currency {
+        currency.validate()?;
+        let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'")
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?
+            .unwrap_or_else(|| "USD".into());
+        if currency.code == home {
+            return Err(format!("FX_IS_HOME: {} is the home currency; record it without an exchange rate", currency.code));
+        }
+    }
     write_entry(tx, entry, source).await
 }
 
@@ -240,9 +336,16 @@ async fn write_entry(
 
     // For standalone posts the header insert is the transaction's first statement, so the write
     // lock is taken up front instead of upgrading from a read lock later (SQLITE_BUSY under WAL).
+    // Journal lines always hold home-currency amounts; foreign amounts are kept alongside.
+    let home_amounts: Vec<(i64, i64)> = match &entry.currency {
+        Some(currency) => convert_lines(&entry.lines, currency.exchange_rate_e6)?,
+        None => entry.lines.iter().map(|l| (l.debit, l.credit)).collect(),
+    };
+
     let entry_id: i64 = sqlx::query_scalar(
-        "INSERT INTO journal_entries (id, entry_number, entry_date, memo, source_type, source_id, reverses_entry_id, status)
-         VALUES (?1, (SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries), ?2, ?3, ?4, ?5, ?6, 'DRAFT')
+        "INSERT INTO journal_entries
+            (id, entry_number, entry_date, memo, source_type, source_id, reverses_entry_id, foreign_currency_code, exchange_rate_e6, status)
+         VALUES (?1, (SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries), ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'DRAFT')
          RETURNING id",
     )
     .bind(entry.id)
@@ -251,6 +354,8 @@ async fn write_entry(
     .bind(source.type_code())
     .bind(source.source_id())
     .bind(source.reverses())
+    .bind(entry.currency.as_ref().map(|c| c.code.as_str()))
+    .bind(entry.currency.as_ref().map(|c| c.exchange_rate_e6))
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -282,16 +387,21 @@ async fn write_entry(
             }
         }
 
+        let (home_debit, home_credit) = home_amounts[idx];
+        let foreign = entry.currency.is_some();
         sqlx::query(
-            "INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents, credit_cents, memo)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO journal_lines
+                (journal_entry_id, line_number, account_id, debit_cents, credit_cents, memo, foreign_debit_cents, foreign_credit_cents)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(entry_id)
         .bind(n as i64)
         .bind(line.account_id)
-        .bind(line.debit)
-        .bind(line.credit)
+        .bind(home_debit)
+        .bind(home_credit)
         .bind(line.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()))
+        .bind(foreign.then_some(line.debit))
+        .bind(foreign.then_some(line.credit))
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -443,6 +553,8 @@ async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> 
     .fetch_all(&mut **tx)
     .await
     .map_err(db_err)?;
+    // The reversal swaps the posted home-currency amounts exactly, so the void nets to zero even
+    // for entries that were converted from a foreign currency.
     let reversal = JournalEntry {
         id: None,
         date,
@@ -451,6 +563,7 @@ async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> 
             .into_iter()
             .map(|(account_id, debit, credit, memo)| JournalLine { account_id, debit: credit, credit: debit, memo })
             .collect(),
+        currency: None,
     };
     post_entry_in_tx(tx, &reversal, EntrySource::Reversal(journal_entry_id)).await?;
 
@@ -660,6 +773,7 @@ mod tests {
             date: date(),
             description: "Cash sale".into(),
             lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            currency: None,
         };
 
         post_transaction(&fx.pool, entry).await.expect("balanced entry posts");
@@ -706,6 +820,7 @@ mod tests {
             date: date(),
             description: "Unbalanced".into(),
             lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 9_900)],
+            currency: None,
         };
 
         let err = post_transaction(&fx.pool, entry).await.expect_err("unbalanced entry must be rejected");
@@ -727,6 +842,7 @@ mod tests {
                 JournalLine::debit(fx.sales, 5_000),
                 JournalLine::credit(fx.sales, 5_000),
             ],
+            currency: None,
         };
 
         let err = post_transaction(&fx.pool, entry).await.expect_err("two-sided line must be rejected");
@@ -748,6 +864,7 @@ mod tests {
             date: date(),
             description: "Posts to inactive account".into(),
             lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            currency: None,
         };
 
         let err = post_transaction(&fx.pool, entry).await.expect_err("inactive account must be rejected");
@@ -788,14 +905,15 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: date(),
                 due_date: date(),
-                lines: vec![InvoiceLineInput { description: "Work".into(), quantity: 1, rate_cents: 50_000, income_account_id: services }],
+                lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services }],
+                currency: None,
             },
         )
         .await
         .unwrap();
         let paid = record_payment(
             &fx.pool,
-            PaymentInput { invoice_id: invoice.id, deposit_account_id: fx.checking, payment_date: date(), amount_cents: 50_000, payment_method: "ACH".into(), reference: None },
+            PaymentInput { invoice_id: invoice.id, deposit_account_id: fx.checking, payment_date: date(), amount_cents: 50_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
         )
         .await
         .unwrap();
@@ -849,7 +967,7 @@ mod tests {
         let fx = setup().await;
         let entry = post_journal_entry(
             &fx.pool,
-            JournalEntry { id: None, date: date(), description: "Sale".into(), lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)] },
+            JournalEntry { id: None, date: date(), description: "Sale".into(), lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)], currency: None },
         )
         .await
         .unwrap();
@@ -862,5 +980,58 @@ mod tests {
         assert!(void_transaction(&fx.pool, entry).await.unwrap_err().starts_with("VOID_RECONCILED"));
         let still_posted: bool = sqlx::query_scalar("SELECT is_voided FROM journal_entries WHERE id = ?1").bind(entry).fetch_one(&fx.pool).await.unwrap();
         assert!(!still_posted);
+    }
+
+    #[test]
+    fn conversion_balances_rounding_on_the_short_side() {
+        // 3 × 33.33 EUR = 99.99 EUR at 1.085: each line rounds separately (36.16 × 3 = 108.48),
+        // the total rounds to 108.49; the 0.01 lands on the largest line of the short side.
+        let lines = vec![
+            JournalLine::debit(1, 3_333),
+            JournalLine::debit(2, 3_333),
+            JournalLine::debit(3, 3_333),
+            JournalLine::credit(4, 9_999),
+        ];
+        let home = convert_lines(&lines, 1_085_000).unwrap();
+        let debits: i64 = home.iter().map(|l| l.0).sum();
+        let credits: i64 = home.iter().map(|l| l.1).sum();
+        assert_eq!(debits, credits);
+        assert_eq!(home[3].1, 10_849);
+        assert_eq!(home.iter().map(|l| l.0).collect::<Vec<_>>(), vec![3_617, 3_616, 3_616, 0]);
+        assert!(convert_lines(&[JournalLine::debit(1, 1), JournalLine::credit(2, 1)], 100_000).unwrap_err().starts_with("FX_ROUNDS_TO_ZERO"));
+    }
+
+    #[tokio::test]
+    async fn foreign_journal_entry_posts_home_amounts_and_keeps_foreign_detail() {
+        let fx = setup().await;
+        let eur = |rate| Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate });
+        let entry = |currency| JournalEntry {
+            id: None,
+            date: date(),
+            description: "Euro sale".into(),
+            lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            currency,
+        };
+        let id = post_journal_entry(&fx.pool, entry(eur(1_087_500))).await.expect("posts");
+        let rows: Vec<(i64, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
+            "SELECT debit_cents, credit_cents, foreign_debit_cents, foreign_credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
+        )
+        .bind(id)
+        .fetch_all(&fx.pool)
+        .await
+        .unwrap();
+        assert_eq!(rows, vec![(10_875, 0, Some(10_000), Some(0)), (0, 10_875, Some(0), Some(10_000))]);
+        let (code, rate): (Option<String>, Option<i64>) =
+            sqlx::query_as("SELECT foreign_currency_code, exchange_rate_e6 FROM journal_entries WHERE id = ?1").bind(id).fetch_one(&fx.pool).await.unwrap();
+        assert_eq!((code.as_deref(), rate), (Some("EUR"), Some(1_087_500)));
+
+        let usd = Some(ForeignCurrency { code: "USD".into(), exchange_rate_e6: 1_000_000 });
+        assert!(post_journal_entry(&fx.pool, entry(usd)).await.unwrap_err().starts_with("FX_IS_HOME"));
+        assert!(post_journal_entry(&fx.pool, entry(Some(ForeignCurrency { code: "eur".into(), exchange_rate_e6: 1 }))).await.unwrap_err().starts_with("FX_BAD_CODE"));
+        assert!(post_journal_entry(&fx.pool, entry(eur(0))).await.unwrap_err().starts_with("FX_BAD_RATE"));
+
+        // The home currency is locked once foreign transactions exist.
+        assert!(crate::preferences::set(&fx.pool, "home_currency_code", "CAD").await.unwrap_err().starts_with("PREF_HOME_CURRENCY_LOCKED"));
+        assert_eq!(crate::preferences::set(&fx.pool, "home_currency_code", "usd").await.unwrap(), "USD");
     }
 }

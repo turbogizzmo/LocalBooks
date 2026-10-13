@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorText, printDocument } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatMoney, formatQuantity } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 /** Company identity for printed documents: name, contact lines and logo (data URL or null). */
-export const CompanyContext = createContext({ name: 'LocalBooks', legalName: '', address: '', email: '', phone: '', ein: '', logo: null });
+export const CompanyContext = createContext({ name: 'LocalBooks', legalName: '', address: '', email: '', phone: '', ein: '', logo: null, homeCurrency: 'USD' });
 
 export function useCompany() {
   return useContext(CompanyContext);
@@ -42,6 +42,8 @@ function DocHeader({ company, title, subtitle }) {
 
 export function InvoiceDocument({ detail, company }) {
   const { invoice, items, payments } = detail;
+  // A foreign-currency invoice prints in the customer's currency, with its ISO code.
+  const formatCents = (cents) => formatMoney(cents, invoice.currencyCode);
   const paid = payments.reduce((s, p) => s + p.amountCents, 0);
   const termsDays = Math.round((Date.parse(invoice.dueDate) - Date.parse(invoice.issueDate)) / 86_400_000);
   const terms = termsDays === 0 ? 'Due on receipt' : `Net ${termsDays}`;
@@ -74,6 +76,12 @@ export function InvoiceDocument({ detail, company }) {
                 <strong>{formatCents(invoice.isVoided ? 0 : invoice.balanceCents)}</strong>
               </td>
             </tr>
+            {invoice.currencyCode && (
+              <tr>
+                <td>Currency</td>
+                <td>{invoice.currencyCode}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -100,7 +108,7 @@ export function InvoiceDocument({ detail, company }) {
             <tr key={item.lineNumber}>
               <td className="doc-num">{item.lineNumber}</td>
               <td>{item.description || '—'}</td>
-              <td className="doc-num">{item.quantity}</td>
+              <td className="doc-num">{formatQuantity(item.quantityE4)}</td>
               <td className="doc-num">{formatCents(item.rateCents)}</td>
               <td className="doc-num">{formatCents(item.amountCents)}</td>
             </tr>
@@ -139,6 +147,7 @@ export function InvoiceDocument({ detail, company }) {
 const LINE_CLASS = { section: 'doc-line-section', account: '', subtotal: 'doc-line-subtotal', total: 'doc-line-total', net: 'doc-line-net' };
 
 export function StatementDocument({ company, title, subtitle, lines, footer }) {
+  const formatCents = (cents) => formatMoney(cents, null);
   return (
     <article className="doc">
       <DocHeader company={company} title={title} subtitle={subtitle} />

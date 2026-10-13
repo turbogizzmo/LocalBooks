@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import { centsToInput, formatCents, multiplyCents, parseMoneyToCents, parseQuantity } from '../lib/money.js';
+import { centsToInput, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
 export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, qty: '', rate: '' });
@@ -9,9 +9,10 @@ export const blankLine = (accountId) => ({ key: nextKey++, productId: null, desc
 export function evaluateLine(line) {
   const blank = line.productId === null && line.description.trim() === '' && line.qty.trim() === '' && line.rate.trim() === '';
   if (blank) return { blank: true, amount: 0 };
-  const qty = parseQuantity(line.qty);
+  // Quantities may be fractional (up to 4 decimals) and are carried as integers scaled by 10,000.
+  const qty = parseQuantityE4(line.qty);
   const rate = parseMoneyToCents(line.rate);
-  const amount = qty !== null && rate !== null && rate > 0 ? multiplyCents(qty, rate) : null;
+  const amount = qty !== null && rate !== null && rate > 0 ? quantityAmount(qty, rate) : null;
   return {
     blank: false,
     qty,
@@ -33,7 +34,7 @@ export function summarizeLines(lines) {
     .map(({ line, state }) => ({
       productServiceId: line.productId,
       description: line.description.trim(),
-      quantity: state.qty,
+      quantityE4: state.qty,
       rateCents: state.rate,
       incomeAccountId: line.accountId,
     }));
@@ -46,7 +47,8 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * Inline-editable line items. Clicking any cell turns that row into inputs immediately, focused on
  * the clicked column; Enter moves to the next row (adding one at the end), Escape leaves edit mode.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null }) {
+  const money = (cents) => formatMoney(cents, currency);
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
   const tableRef = useRef(null);
@@ -173,7 +175,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                   <td className="qb-grid-cell-edit">
                     <input
                       data-col="qty"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       className="num"
                       value={line.qty}
                       onChange={(e) => update(i, { qty: e.target.value })}
@@ -210,12 +212,12 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                     {line.qty}
                   </td>
                   <td className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
-                    {state.rate !== null && state.rate !== undefined && !bad('rate') ? formatCents(state.rate) : line.rate}
+                    {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
                   </td>
                 </>
               )}
               <td className="qb-grid-cell num font-semibold">
-                {state.blank ? '' : state.amount !== null ? formatCents(state.amount) : '—'}
+                {state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
               </td>
               <td className="qb-grid-cell cell-flush text-center">
                 <button

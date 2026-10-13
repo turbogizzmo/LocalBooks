@@ -179,7 +179,7 @@ mod tests {
             account_id(&pool, "3100").await,
             account_id(&pool, "6300").await,
         );
-        let post = |date, lines| post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines });
+        let post = |date, lines| post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines, currency: None });
 
         post(ymd(2025, 6, 1), vec![JournalLine::debit(checking, 500_000), JournalLine::credit(owner, 500_000)])
             .await

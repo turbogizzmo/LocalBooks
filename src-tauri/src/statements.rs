@@ -351,7 +351,7 @@ mod tests {
     async fn post(pool: &SqlitePool, date: NaiveDate, debit: i64, credit: i64, cents: i64) {
         post_journal_entry(
             pool,
-            JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(debit, cents), JournalLine::credit(credit, cents)] },
+            JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(debit, cents), JournalLine::credit(credit, cents)], currency: None },
         )
         .await
         .expect("posts");

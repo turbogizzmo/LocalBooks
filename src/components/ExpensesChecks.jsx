@@ -4,7 +4,9 @@ import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
+import CurrencyFields from './CurrencyFields.jsx';
+import { useCompany } from './PrintDocuments.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
@@ -25,6 +27,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [checkNumber, setCheckNumber] = useState(nextCheck);
   const [method, setMethod] = useState('CREDIT_CARD');
   const [memo, setMemo] = useState('');
+  const { homeCurrency } = useCompany();
+  const [currency, setCurrency] = useState('');
+  const [rate, setRate] = useState('');
+  const rateE6 = currency ? parseRateE6(rate) : null;
   const [rows, setRows] = useState(() => [blankSplit(defaultCategory), blankSplit(defaultCategory)]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -52,6 +58,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
     if (lines.some((l) => l.accountId === accountId)) return setError('A split row cannot use the payment account itself.');
+    if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
     setBusy(true);
     try {
       const posted = await api.postExpense({
@@ -63,9 +70,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         paymentMethod: kind === 'EXPENSE' ? method : null,
         memo: memo.trim() || null,
         lines,
+        currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
       });
       onPosted(
-        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : 'Expense'} of ${formatCents(posted.totalCents)} posted: ` +
+        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : 'Expense'} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
           `Cr ${accountLabel(accounts, accountId)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`,
       );
       setPayee('');
@@ -132,12 +140,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             </select>
           </label>
         )}
+        <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
         <div className="ml-auto text-right">
           <div className="qb-label">Total</div>
-          <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
+          {currency && rateE6 !== null && total > 0 && <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(total, rateE6))} in {homeCurrency}</div>}
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} currency={currency || null} />
       <div className="flex items-center gap-2 px-2 py-1">
         <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}
@@ -243,14 +253,19 @@ export default function ExpensesChecks({ accounts, intent }) {
                     {accountLabel(accounts, x.paymentAccountId)}
                     {x.memo ? ` · ${x.memo}` : ''}
                   </td>
-                  <td className={`qb-grid-cell num ${x.isVoided ? 'line-through' : ''}`}>{formatCents(x.totalCents)}</td>
+                  <td
+                    className={`qb-grid-cell num ${x.isVoided ? 'line-through' : ''}`}
+                    title={x.currencyCode ? `${formatCents(x.homeTotalCents)} at ${formatRate(x.exchangeRateE6)}` : undefined}
+                  >
+                    {formatMoney(x.totalCents, x.currencyCode)}
+                  </td>
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
                       items={[
                         voidItem({
                           journalEntryId: x.journalEntryId,
                           voided: x.isVoided,
-                          description: `${x.kind === 'CHECK' ? `Check${x.checkNumber ? ` #${x.checkNumber}` : ''}` : 'Expense'} of ${formatCents(x.totalCents)}${x.payeeName ? ` to ${x.payeeName}` : ''}. If it came from the bank feed, the bank line returns to "For review".`,
+                          description: `${x.kind === 'CHECK' ? `Check${x.checkNumber ? ` #${x.checkNumber}` : ''}` : 'Expense'} of ${formatMoney(x.totalCents, x.currencyCode)}${x.payeeName ? ` to ${x.payeeName}` : ''}. If it came from the bank feed, the bank line returns to "For review".`,
                           onVoid: voidEntry,
                         }),
                       ]}

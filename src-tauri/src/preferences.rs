@@ -55,6 +55,13 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             parse_fiscal_start(v)?;
             Ok(v.to_string())
         }
+        "home_currency_code" => {
+            let code = v.to_ascii_uppercase();
+            if code.len() != 3 || !code.chars().all(|c| c.is_ascii_uppercase()) {
+                return Err("PREF_BAD_CURRENCY_CODE: use a three-letter ISO currency code such as USD".into());
+            }
+            Ok(code)
+        }
         "currency_symbol" => {
             if v.is_empty() || v.chars().count() > 4 {
                 return Err("PREF_BAD_CURRENCY: use a currency symbol of 1 to 4 characters".into());
@@ -113,6 +120,16 @@ pub async fn get(pool: &SqlitePool, key: &str) -> Result<String, String> {
 /// Validates and saves one preference immediately; returns the stored (normalized) value.
 pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, String> {
     let normalized = validate(key, value)?;
+    if key == "home_currency_code" && normalized != get(pool, key).await? {
+        // Every posted amount is stored in the home currency; it cannot be relabelled afterwards.
+        let has_foreign: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE foreign_currency_code IS NOT NULL)")
+            .fetch_one(pool)
+            .await
+            .map_err(db_err)?;
+        if has_foreign {
+            return Err("PREF_HOME_CURRENCY_LOCKED: the home currency cannot change once foreign-currency transactions exist".into());
+        }
+    }
     sqlx::query(
         "INSERT INTO system_preferences (key, value) VALUES (?1, ?2)
          ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",

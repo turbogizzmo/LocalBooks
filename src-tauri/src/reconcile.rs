@@ -342,6 +342,7 @@ mod tests {
                 date,
                 description: String::new(),
                 lines: vec![JournalLine::debit(debit, cents), JournalLine::credit(credit, cents)],
+                currency: None,
             },
         )
         .await

@@ -81,3 +81,70 @@ export function parseHoursToMinutes(text) {
 export function formatMinutes(minutes) {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Scaled quantities and exchange rates (integer math only, mirroring the Rust ledger)
+// ---------------------------------------------------------------------------------------------
+
+export const QUANTITY_SCALE = 10_000;
+export const RATE_SCALE = 1_000_000;
+const MAX_QUANTITY_E4 = 1_000_000_000 * QUANTITY_SCALE;
+
+/** Parses "1.5" / "2.75" / "3" (up to 4 decimals) to a quantity scaled by 10,000; null if invalid. */
+export function parseQuantityE4(text) {
+  const match = /^(\d{0,10})(?:\.(\d{0,4}))?$/.exec(String(text).trim().replace(/,/g, ''));
+  if (!match || (match[1] === '' && (match[2] ?? '') === '')) return null;
+  const e4 = Number(match[1] || '0') * QUANTITY_SCALE + Number((match[2] ?? '').padEnd(4, '0'));
+  return e4 >= 1 && e4 <= MAX_QUANTITY_E4 ? e4 : null;
+}
+
+/** 27_500 → "2.75", 10_000 → "1". */
+export function formatQuantity(e4) {
+  const whole = Math.floor(e4 / QUANTITY_SCALE);
+  const frac = String(e4 % QUANTITY_SCALE).padStart(4, '0').replace(/0+$/, '');
+  return frac ? `${whole.toLocaleString('en-US')}.${frac}` : whole.toLocaleString('en-US');
+}
+
+/** round_half_up(a × b ÷ divisor) with BigInt, so it is exact for any safe-integer inputs. */
+export function mulDivRound(a, b, divisor) {
+  const product = BigInt(a) * BigInt(b);
+  const d = BigInt(divisor);
+  const rounded = product >= 0n ? (product + d / 2n) / d : (product - d / 2n) / d;
+  const n = Number(rounded);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/** Line amount in cents for a scaled quantity, rounded half-up exactly as the ledger does. */
+export function quantityAmount(quantityE4, rateCents) {
+  const amount = mulDivRound(quantityE4, rateCents, QUANTITY_SCALE);
+  return amount !== null && amount >= 1 && amount <= MAX_CENTS ? amount : null;
+}
+
+/** Parses an exchange rate such as "1.0875" (up to 6 decimals) to an integer scaled by 1,000,000. */
+export function parseRateE6(text) {
+  const match = /^(\d{0,6})(?:\.(\d{0,6}))?$/.exec(String(text).trim());
+  if (!match || (match[1] === '' && (match[2] ?? '') === '')) return null;
+  const e6 = Number(match[1] || '0') * RATE_SCALE + Number((match[2] ?? '').padEnd(6, '0'));
+  return e6 >= 1 ? e6 : null;
+}
+
+/** 1_087_500 → "1.0875". */
+export function formatRate(e6) {
+  const whole = Math.floor(e6 / RATE_SCALE);
+  const frac = String(e6 % RATE_SCALE).padStart(6, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+/** Foreign cents → home cents at a scaled rate (half away from zero, same as the ledger). */
+export function toHomeCents(foreignCents, rateE6) {
+  return mulDivRound(foreignCents, rateE6, RATE_SCALE);
+}
+
+/** Formats an amount in a document currency: home amounts use the symbol, foreign ones the ISO code. */
+export function formatMoney(cents, currencyCode) {
+  if (!currencyCode) return formatCents(cents);
+  const { negative, dollars, remainder } = splitCents(cents);
+  return `${negative ? '-' : ''}${currencyCode} ${dollars.toLocaleString('en-US')}.${String(remainder).padStart(2, '0')}`;
+}
+
+export const COMMON_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY', 'CHF', 'MXN', 'BRL', 'INR', 'CNY', 'HKD', 'SGD', 'SEK', 'NOK', 'DKK', 'ZAR'];

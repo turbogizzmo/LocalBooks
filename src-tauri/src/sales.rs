@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::invoices::{line_amount, MAX_QUANTITY, PAYMENT_METHODS};
+use crate::invoices::{line_amount, validate_line, PAYMENT_METHODS};
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
 
 #[derive(Debug, Clone, Copy)]
@@ -77,7 +77,8 @@ pub struct ProductInput {
 pub struct SalesLineInput {
     pub product_service_id: Option<i64>,
     pub description: String,
-    pub quantity: i64,
+    /// Quantity scaled by 10,000 (1.5 → 15_000).
+    pub quantity_e4: i64,
     pub rate_cents: i64,
     pub income_account_id: i64,
 }
@@ -122,6 +123,11 @@ pub struct SalesTransaction {
     pub status: String,
     pub journal_entry_id: Option<i64>,
     pub is_voided: bool,
+    /// Document currency (`None` = home). Totals above are in this currency.
+    pub currency_code: Option<String>,
+    /// Home-currency equivalents, for totals across documents in different currencies.
+    pub home_total_cents: i64,
+    pub home_balance_cents: i64,
 }
 
 fn clean(text: Option<&str>) -> Option<&str> {
@@ -135,8 +141,8 @@ fn clean(text: Option<&str>) -> Option<&str> {
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT c.id, c.name, c.email, c.is_active,
-                COALESCE((SELECT SUM(total_cents - amount_paid_cents) FROM invoices
-                          WHERE customer_id = c.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0) AS open_balance_cents
+                COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
+                          WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0) AS open_balance_cents
          FROM customers c ORDER BY c.name COLLATE NOCASE",
     )
     .fetch_all(pool)
@@ -220,14 +226,7 @@ pub fn validate_sales_receipt(input: &SalesReceiptInput) -> Result<i64, String> 
     }
     let mut total: i64 = 0;
     for (idx, line) in input.lines.iter().enumerate() {
-        let n = idx + 1;
-        if !(1..=MAX_QUANTITY).contains(&line.quantity) {
-            return Err(format!("SR_BAD_QUANTITY: line {n} quantity must be a whole number from 1 to {MAX_QUANTITY}"));
-        }
-        if line.rate_cents <= 0 {
-            return Err(format!("SR_BAD_RATE: line {n} rate must be greater than zero"));
-        }
-        let amount = line_amount(line.quantity, line.rate_cents).map_err(|e| format!("{e} (line {n})"))?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "SR")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -290,17 +289,17 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("SR_NOT_INCOME_ACCOUNT: line {n} must use an Income account"));
         }
-        let amount = line_amount(line.quantity, line.rate_cents)?;
+        let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO sales_receipt_lines
-                (sales_receipt_id, line_number, product_service_id, description, quantity, rate_cents, amount_cents, income_account_id)
+                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(receipt_id)
         .bind(n as i64)
         .bind(line.product_service_id)
         .bind(line.description.trim())
-        .bind(line.quantity)
+        .bind(line.quantity_e4)
         .bind(line.rate_cents)
         .bind(amount)
         .bind(line.income_account_id)
@@ -321,6 +320,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         date: input.receipt_date,
         description: format!("Sales Receipt #{receipt_number}{customer_label}"),
         lines,
+        currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::SalesReceipt(receipt_id)).await?;
 
@@ -338,16 +338,18 @@ pub async fn list_all_sales(pool: &SqlitePool) -> Result<Vec<SalesTransaction>, 
     sqlx::query_as::<_, SalesTransaction>(
         "SELECT 'INVOICE' AS kind, i.id, i.invoice_number AS number, i.issue_date AS date, i.customer_name,
                 i.due_date, CASE WHEN i.is_voided = 1 THEN 0 ELSE i.total_cents - i.amount_paid_cents END AS balance_cents,
-                i.total_cents, i.status, i.journal_entry_id, i.is_voided
-         FROM invoices i WHERE i.status <> 'DRAFT'
+                i.total_cents, i.status, i.journal_entry_id, i.is_voided, i.currency_code,
+                b.home_total_cents, CASE WHEN i.is_voided = 1 THEN 0 ELSE b.home_open_cents END AS home_balance_cents
+         FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id WHERE i.status <> 'DRAFT'
          UNION ALL
          SELECT 'PAYMENT', p.id, i.invoice_number, p.payment_date, i.customer_name,
-                NULL, 0, p.amount_cents, 'CLOSED', p.journal_entry_id, p.is_voided
+                NULL, 0, p.amount_cents, 'CLOSED', p.journal_entry_id, p.is_voided, i.currency_code,
+                COALESCE(p.home_amount_cents, p.amount_cents), 0
          FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
          WHERE p.journal_entry_id IS NOT NULL
          UNION ALL
          SELECT 'SALES_RECEIPT', r.id, r.receipt_number, r.receipt_date, COALESCE(c.name, ''),
-                NULL, 0, r.total_cents, 'PAID', r.journal_entry_id, r.is_voided
+                NULL, 0, r.total_cents, 'PAID', r.journal_entry_id, r.is_voided, NULL, r.total_cents, 0
          FROM sales_receipts r LEFT JOIN customers c ON c.id = r.customer_id
          WHERE r.journal_entry_id IS NOT NULL
          ORDER BY date DESC, kind, id DESC",
@@ -384,7 +386,7 @@ mod tests {
     }
 
     fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-        SalesLineInput { product_service_id: product, description: "Item".into(), quantity: qty, rate_cents: rate, income_account_id: account }
+        SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account }
     }
 
     #[tokio::test]
@@ -464,7 +466,8 @@ mod tests {
                 customer_name: "acme corp".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput { description: "Work".into(), quantity: 1, rate_cents: 40_000, income_account_id: services }],
+                lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services }],
+                currency: None,
             },
         )
         .await
@@ -472,7 +475,7 @@ mod tests {
         create_customer(&pool, "Acme Corp", None).await.expect_err("duplicate (case-insensitive) customer");
         record_payment(
             &pool,
-            PaymentInput { invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None },
+            PaymentInput { invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
         )
         .await
         .unwrap();

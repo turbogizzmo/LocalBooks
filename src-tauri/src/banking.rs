@@ -85,7 +85,7 @@ pub struct BankingActivity {
 pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>, String> {
     sqlx::query_as::<_, UndepositedItem>(
         "SELECT 'PAYMENT' AS kind, p.id AS id, p.payment_date AS date, i.customer_name, p.payment_method, p.reference,
-                p.amount_cents, p.deposit_account_id AS undeposited_account_id
+                COALESCE(p.home_amount_cents, p.amount_cents) AS amount_cents, p.deposit_account_id AS undeposited_account_id
          FROM invoice_payments p
          JOIN invoices i ON i.id = p.invoice_id
          JOIN chart_of_accounts a ON a.id = p.deposit_account_id
@@ -131,7 +131,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     for item in &input.items {
         let row: Option<(i64, i64, Option<String>)> = match item.kind.as_str() {
             "PAYMENT" => sqlx::query_as(
-                "SELECT p.deposit_account_id, p.amount_cents, i.customer_name
+                "SELECT p.deposit_account_id, COALESCE(p.home_amount_cents, p.amount_cents), i.customer_name
                  FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
                  WHERE p.id = ?1 AND p.is_voided = 0 AND p.journal_entry_id IS NOT NULL",
             ),
@@ -217,7 +217,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     let mut lines = vec![JournalLine::debit(input.bank_account_id, total)];
     lines.extend(credits);
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));
-    let entry = JournalEntry { id: None, date: input.deposit_date, description, lines };
+    let entry = JournalEntry { id: None, date: input.deposit_date, description, lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Deposit(deposit_id)).await?;
     sqlx::query("UPDATE deposits SET journal_entry_id = ?1 WHERE id = ?2")
         .bind(entry_id)
@@ -258,6 +258,7 @@ pub async fn post_transfer(pool: &SqlitePool, input: TransferInput) -> Result<i6
                 JournalLine::debit(input.to_account_id, input.amount_cents),
                 JournalLine::credit(input.from_account_id, input.amount_cents),
             ],
+            currency: None,
         };
         let entry_id = post_entry_in_tx(&mut tx, &entry, EntrySource::Transfer(transfer_id)).await?;
         sqlx::query("UPDATE transfers SET journal_entry_id = ?1 WHERE id = ?2")
@@ -334,7 +335,8 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput { description: "Work".into(), quantity: 1, rate_cents: 80_000, income_account_id: services }],
+                lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10000, rate_cents: 80_000, income_account_id: services }],
+                currency: None,
             },
         )
         .await
@@ -346,6 +348,7 @@ mod tests {
             amount_cents: cents,
             payment_method: "CHECK".into(),
             reference: None,
+            exchange_rate_e6: None,
         };
         record_payment(&pool, pay(50_000)).await.unwrap();
         record_payment(&pool, pay(30_000)).await.unwrap();

@@ -530,7 +530,7 @@ pub struct DirectoryInspection {
 /// Looks at a candidate folder without changing anything, so the UI can explain the choice.
 #[tauri::command]
 pub async fn inspect_database_directory(new_path: String) -> Result<DirectoryInspection, String> {
-    let dir = PathBuf::from(&new_path);
+    let dir = storage::resolve_network_path(&PathBuf::from(&new_path));
     let target = dir.join(storage::DB_FILE_NAME);
     let has_company_file = target.is_file();
     let mut problem = storage::check_writable_dir(&dir).err();
@@ -560,7 +560,7 @@ pub async fn inspect_database_directory(new_path: String) -> Result<DirectoryIns
 /// (copy the current books there). The choice is saved to config.json.
 #[tauri::command]
 pub async fn update_database_directory(app: AppHandle, db: State<'_, Db>, new_path: String, mode: Option<String>) -> Result<StorageStatus, String> {
-    let dir = PathBuf::from(new_path);
+    let dir = storage::resolve_network_path(&PathBuf::from(new_path));
     let mode = RelocateMode::parse(mode.as_deref(), dir.join(storage::DB_FILE_NAME).is_file())?;
     let status = db.relocate(&dir, mode).await?;
     notify(&app);

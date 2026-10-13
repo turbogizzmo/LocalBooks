@@ -125,7 +125,7 @@ mod tests {
         };
         let (checking, services) = (id("1010").await, id("4100").await);
         let date = NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
-        post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)] })
+        post_journal_entry(&pool, JournalEntry { id: None, date, description: String::new(), lines: vec![JournalLine::debit(checking, 123_456), JournalLine::credit(services, 123_456)], currency: None })
             .await
             .unwrap();
         crate::preferences::set(&pool, "company_name", "Acme, \"Widgets\" & Co").await.unwrap();

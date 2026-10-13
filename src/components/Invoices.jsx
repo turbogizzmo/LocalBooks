@@ -3,9 +3,11 @@ import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import { useInvoicePrinter } from './PrintDocuments.jsx';
+import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
+import { foreignPaymentEffect } from '../lib/fx.js';
+import CurrencyFields from './CurrencyFields.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const TERMS = [
@@ -31,6 +33,10 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const [accountId, setAccountId] = useState(undeposited?.id ?? null);
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(invoice.balanceCents));
+  const foreign = invoice.currencyCode;
+  const money = (c) => formatMoney(c, foreign);
+  const [rate, setRate] = useState(foreign ? formatRate(invoice.exchangeRateE6) : '');
+  const rateE6 = foreign ? parseRateE6(rate) : null;
   const [method, setMethod] = useState('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,9 +44,11 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const cents = parseMoneyToCents(amount);
   const amountError = cents === null || cents <= 0 ? 'Enter an amount' : cents > invoice.balanceCents ? 'More than the open balance' : null;
   const remaining = cents !== null && !amountError ? invoice.balanceCents - cents : null;
+  const effect = foreign && !amountError ? foreignPaymentEffect(invoice, cents, rateE6) : null;
+  const rateError = foreign && rateE6 === null ? 'Enter the exchange rate' : null;
 
   const record = async () => {
-    if (accountId === null || amountError) return;
+    if (accountId === null || amountError || rateError) return;
     setBusy(true);
     try {
       const updated = await api.recordInvoicePayment({
@@ -50,13 +58,14 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
         amountCents: cents,
         paymentMethod: method,
         reference: reference || null,
+        exchangeRateE6: foreign ? rateE6 : null,
       });
       onDone({
         kind: 'success',
         text:
           updated.status === 'PAID'
             ? `Invoice #${updated.invoiceNumber} is paid in full.`
-            : `Recorded ${formatCents(cents)} on invoice #${updated.invoiceNumber}; ${formatCents(updated.balanceCents)} remains open.`,
+            : `Recorded ${money(cents)} on invoice #${updated.invoiceNumber}; ${money(updated.balanceCents)} remains open.`,
       });
     } catch (err) {
       onDone({ kind: 'error', text: errorText(err) });
@@ -81,6 +90,12 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
               autoFocus
             />
           </label>
+          {foreign && (
+            <label>
+              <span className="qb-label">1 {foreign} = ? {invoice.homeCurrency}</span>
+              <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(rateError)} />
+            </label>
+          )}
           <label>
             <span className="qb-label">Method</span>
             <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -102,14 +117,25 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
             <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="ml-auto flex items-center gap-3 self-center text-sm">
-            {amountError ? (
-              <span className="text-qb-negative">{amountError}</span>
+            {amountError || rateError ? (
+              <span className="text-qb-negative">{amountError || rateError}</span>
             ) : (
               <span className="text-qb-ink-muted">
-                Remaining after payment <span className="num font-semibold text-qb-ink">{formatCents(remaining)}</span>
+                Remaining <span className="num font-semibold text-qb-ink">{money(remaining)}</span>
+                {effect && (
+                  <>
+                    {' · '}received <span className="num font-semibold text-qb-ink">{formatCents(effect.homeReceived)}</span>
+                    {effect.gain !== 0 && (
+                      <span className={effect.gain > 0 ? 'text-qb-green-active' : 'text-qb-negative'}>
+                        {' · '}
+                        {effect.gain > 0 ? 'exchange gain' : 'exchange loss'} {formatCents(Math.abs(effect.gain))}
+                      </span>
+                    )}
+                  </>
+                )}
               </span>
             )}
-            <button type="button" className="qb-btn qb-btn-primary" disabled={busy || accountId === null || Boolean(amountError) || !date} onClick={record}>
+            <button type="button" className="qb-btn qb-btn-primary" disabled={busy || accountId === null || Boolean(amountError) || Boolean(rateError) || !date} onClick={record}>
               {busy ? 'Recording…' : 'Record payment'}
             </button>
           </div>
@@ -121,10 +147,14 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
 
 /** Receive Payment: one customer payment applied across that customer's open invoices, oldest first. */
 function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
+  const { homeCurrency } = useCompany();
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
   const undeposited = accounts.find((a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
   const [customer, setCustomer] = useState('');
+  // One payment is in one currency; the customer's open invoices are filtered to it.
+  const [currency, setCurrency] = useState('');
+  const [rate, setRate] = useState('');
   const [received, setReceived] = useState('');
   const [applied, setApplied] = useState({});
   const [accountId, setAccountId] = useState(undeposited?.id ?? null);
@@ -137,7 +167,22 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
 
   useEffect(() => customerRef.current?.focus(), []);
 
-  const rows = open.filter((i) => i.customerName === customer).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.invoiceNumber - b.invoiceNumber);
+  const customerInvoices = open.filter((i) => i.customerName === customer);
+  const currencies = [...new Set(customerInvoices.map((i) => i.currencyCode ?? ''))];
+  const rows = customerInvoices
+    .filter((i) => (i.currencyCode ?? '') === currency)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.invoiceNumber - b.invoiceNumber);
+  const money = (c) => formatMoney(c, currency || null);
+  const rateE6 = currency ? parseRateE6(rate) : null;
+  const pickCustomer = (name) => {
+    setCustomer(name);
+    const first = open.find((i) => i.customerName === name);
+    const code = first?.currencyCode ?? '';
+    setCurrency(code);
+    setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+    setApplied({});
+    setReceived('');
+  };
   const appliedCents = (inv) => parseMoneyToCents(applied[inv.id] ?? '') ?? 0;
   const totalApplied = rows.reduce((s, inv) => s + Math.max(0, appliedCents(inv)), 0);
   const receivedCents = parseMoneyToCents(received);
@@ -169,16 +214,18 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
         amountCents: appliedCents(inv),
         paymentMethod: method,
         reference: reference || null,
+        exchangeRateE6: currency ? rateE6 : null,
       }));
     if (inputs.length === 0) return setError('Enter a payment amount for at least one invoice.');
+    if (currency && rateE6 === null) return setError('Enter the exchange rate for this payment.');
     if (badRows.length > 0) return setError('A payment amount is more than that invoice\'s open balance.');
     if (receivedCents !== null && received.trim() !== '' && receivedCents !== totalApplied) {
-      return setError(`Amount received ${formatCents(receivedCents)} does not match the ${formatCents(totalApplied)} applied to invoices.`);
+      return setError(`Amount received ${money(receivedCents)} does not match the ${money(totalApplied)} applied to invoices.`);
     }
     setBusy(true);
     try {
       await api.recordInvoicePayments(inputs);
-      onDone(`Received ${formatCents(totalApplied)} from ${customer} across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}.`);
+      onDone(`Received ${money(totalApplied)} from ${customer} across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}.`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -192,22 +239,39 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
         <h2 className="mr-2 self-center text-md font-semibold">Receive payment</h2>
         <label>
           <span className="qb-label">Customer</span>
-          <select
-            ref={customerRef}
-            className="qb-input w-[220px]"
-            value={customer}
-            onChange={(e) => {
-              setCustomer(e.target.value);
-              setApplied({});
-              setReceived('');
-            }}
-          >
+          <select ref={customerRef} className="qb-input w-[220px]" value={customer} onChange={(e) => pickCustomer(e.target.value)}>
             <option value="">Choose a customer…</option>
             {customers.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </label>
+        {currencies.length > 1 && (
+          <label>
+            <span className="qb-label">Currency</span>
+            <select
+              className="qb-input w-[86px]"
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                const first = customerInvoices.find((i) => (i.currencyCode ?? '') === e.target.value);
+                setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+                setApplied({});
+                setReceived('');
+              }}
+            >
+              {currencies.map((c) => (
+                <option key={c || 'home'} value={c}>{c || homeCurrency}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {currency && (
+          <label>
+            <span className="qb-label">1 {currency} = ? {homeCurrency}</span>
+            <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rate !== '' && rateE6 === null} />
+          </label>
+        )}
         <label>
           <span className="qb-label">Payment date</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -234,7 +298,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
         </label>
         <div className="ml-auto text-right">
           <div className="qb-label">Amount to apply</div>
-          <div className="num text-3xl font-semibold leading-none">{formatCents(totalApplied)}</div>
+          <div className="num text-3xl font-semibold leading-none">{money(totalApplied)}</div>
+          {currency && rateE6 !== null && totalApplied > 0 && (
+            <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(totalApplied, rateE6))} received</div>
+          )}
         </div>
       </div>
       <table className="qb-grid">
@@ -274,8 +341,8 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
                 <td className="qb-grid-cell" />
-                <td className="qb-grid-cell num">{formatCents(inv.totalCents)}</td>
-                <td className="qb-grid-cell num">{formatCents(inv.balanceCents)}</td>
+                <td className="qb-grid-cell num">{money(inv.totalCents)}</td>
+                <td className="qb-grid-cell num">{money(inv.balanceCents)}</td>
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"
@@ -308,6 +375,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
 }
 
 function InvoiceList({ accounts, onNotice, data, error }) {
+  const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
   const COLS = 9;
@@ -371,9 +439,13 @@ function InvoiceList({ accounts, onNotice, data, error }) {
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
                     <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                     <td className={`qb-grid-cell ${overdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
-                    <td className="qb-grid-cell num">{formatCents(inv.totalCents)}</td>
-                    <td className="qb-grid-cell num">{inv.amountPaidCents ? formatCents(inv.amountPaidCents) : ''}</td>
-                    <td className="qb-grid-cell num font-semibold">{!inv.isVoided && inv.balanceCents ? formatCents(inv.balanceCents) : ''}</td>
+                    <td className="qb-grid-cell num" title={inv.currencyCode ? `${formatCents(inv.homeTotalCents)} booked at ${formatRate(inv.exchangeRateE6)}` : undefined}>
+                      {formatMoney(inv.totalCents, inv.currencyCode)}
+                    </td>
+                    <td className="qb-grid-cell num">{inv.amountPaidCents ? formatMoney(inv.amountPaidCents, inv.currencyCode) : ''}</td>
+                    <td className="qb-grid-cell num font-semibold" title={inv.currencyCode ? `${formatCents(inv.homeBalanceCents)} open in home currency` : undefined}>
+                      {!inv.isVoided && inv.balanceCents ? formatMoney(inv.balanceCents, inv.currencyCode) : ''}
+                    </td>
                     <td className="qb-grid-cell">
                       <StatusBadge status={inv.status} overdue={overdue} voided={inv.isVoided} />
                     </td>
@@ -384,7 +456,7 @@ function InvoiceList({ accounts, onNotice, data, error }) {
                           voidItem({
                             journalEntryId: inv.journalEntryId,
                             voided: inv.isVoided,
-                            description: `Invoice #${inv.invoiceNumber} for ${inv.customerName} (${formatCents(inv.totalCents)}).`,
+                            description: `Invoice #${inv.invoiceNumber} for ${inv.customerName} (${formatMoney(inv.totalCents, inv.currencyCode)}).`,
                             onVoid: voidInvoice,
                           }),
                         ]}
@@ -393,7 +465,7 @@ function InvoiceList({ accounts, onNotice, data, error }) {
                   </tr>
                   {isActive && (
                     <PaymentRow
-                      invoice={inv}
+                      invoice={{ ...inv, homeCurrency }}
                       accounts={accounts}
                       colSpan={COLS}
                       onDone={(notice) => {
@@ -413,6 +485,9 @@ function InvoiceList({ accounts, onNotice, data, error }) {
 }
 
 export default function Invoices({ accounts, intent }) {
+  const { homeCurrency } = useCompany();
+  const [currency, setCurrency] = useState('');
+  const [rate, setRate] = useState('');
   const invoices = useLedgerQuery(api.listInvoices);
   const [receiving, setReceiving] = useState(false);
   const customerRef = useRef(null);
@@ -467,6 +542,7 @@ export default function Invoices({ accounts, intent }) {
       return setNotice({ kind: 'error', text: `${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.` });
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
+    if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
 
     setBusy(true);
     try {
@@ -474,11 +550,14 @@ export default function Invoices({ accounts, intent }) {
         customerName: customer.trim(),
         issueDate,
         dueDate,
-        lines: payload.map(({ description, quantity, rateCents, incomeAccountId }) => ({ description, quantity, rateCents, incomeAccountId })),
+        lines: payload.map(({ description, quantityE4, rateCents, incomeAccountId }) => ({ description, quantityE4, rateCents, incomeAccountId })),
+        currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
       });
       setNotice({
         kind: 'success',
-        text: `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.`,
+        text: inv.currencyCode
+          ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
+          : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.`,
       });
       reset();
     } catch (err) {
@@ -564,13 +643,17 @@ export default function Invoices({ accounts, intent }) {
               Receive payment
             </button>
           )}
+          <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
-            <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+            <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
+            {currency && parseRateE6(rate) !== null && total > 0 && (
+              <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(total, parseRateE6(rate)))} in {homeCurrency}</div>
+            )}
           </div>
         </div>
 
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} />
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} />
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>
@@ -583,7 +666,7 @@ export default function Invoices({ accounts, intent }) {
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm">
               <span className="text-qb-ink-muted">Total </span>
-              <span className="num font-semibold">{formatCents(total)}</span>
+              <span className="num font-semibold">{formatMoney(total, currency || null)}</span>
             </span>
             <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
               Cancel

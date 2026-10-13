@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::invoices::{line_amount, write_invoice, InvoiceInput, InvoiceLineInput, MAX_QUANTITY};
+use crate::invoices::{validate_line, write_invoice, InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
@@ -78,11 +78,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let mut total: i64 = 0;
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
-        let n = idx + 1;
-        if !(1..=MAX_QUANTITY).contains(&line.quantity) || line.rate_cents <= 0 {
-            return Err(format!("EST_BAD_LINE: line {n} needs a whole-number quantity and a rate above zero"));
-        }
-        let amount = line_amount(line.quantity, line.rate_cents)?;
+        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -117,14 +113,14 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         }
         sqlx::query(
             "INSERT INTO estimate_lines
-                (estimate_id, line_number, product_service_id, description, quantity, rate_cents, amount_cents, income_account_id)
+                (estimate_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(estimate_id)
         .bind(idx as i64 + 1)
         .bind(line.product_service_id)
         .bind(line.description.trim())
-        .bind(line.quantity)
+        .bind(line.quantity_e4)
         .bind(line.rate_cents)
         .bind(amount)
         .bind(line.income_account_id)
@@ -176,7 +172,7 @@ pub async fn convert_to_invoice(
             return Err("EST_REJECTED: a rejected estimate cannot be invoiced; mark it pending or accepted first".to_string());
         }
         let lines: Vec<(String, i64, i64, i64)> = sqlx::query_as(
-            "SELECT description, quantity, rate_cents, income_account_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+            "SELECT description, quantity_e4, rate_cents, income_account_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
@@ -188,8 +184,9 @@ pub async fn convert_to_invoice(
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity, rate_cents, income_account_id)| InvoiceLineInput { description, quantity, rate_cents, income_account_id })
+                .map(|(description, quantity_e4, rate_cents, income_account_id)| InvoiceLineInput { description, quantity_e4, rate_cents, income_account_id })
                 .collect(),
+            currency: None,
         };
         let invoice_id = write_invoice(&mut tx, &invoice).await?;
         sqlx::query("UPDATE estimates SET status = 'CLOSED', invoice_id = ?1 WHERE id = ?2")
@@ -231,7 +228,7 @@ mod tests {
     async fn estimate_does_not_post_until_converted() {
         let pool = test_pool().await;
         let (services, ar) = (account_id(&pool, "4100").await, account_id(&pool, "1200").await);
-        let line = |qty, rate| SalesLineInput { product_service_id: None, description: "Design".into(), quantity: qty, rate_cents: rate, income_account_id: services };
+        let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services };
         let estimate = create_estimate(
             &pool,
             EstimateInput { customer_name: "Initech".into(), estimate_date: d(1), expiration_date: Some(d(31)), memo: None, lines: vec![line(10, 12_500), line(1, 5_000)] },

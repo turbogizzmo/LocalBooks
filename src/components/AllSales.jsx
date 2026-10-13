@@ -7,7 +7,7 @@ import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useInvoicePrinter } from './PrintDocuments.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
@@ -141,6 +141,7 @@ export default function AllSales({ accounts, intent }) {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Transaction voided: a reversing journal entry now offsets it.' });
   };
+  // Documents can be in different currencies, so the money bar totals home-currency equivalents.
   const sum = (list, key) => list.reduce((s, r) => s + r[key], 0);
   const visible = filter === 'ALL' ? rows : rows.filter((r) => r.kind === filter);
 
@@ -149,9 +150,9 @@ export default function AllSales({ accounts, intent }) {
       {printPortal}
       <MoneyBar
         items={[
-          { label: 'Open invoices', icon: '○', color: '#0077c5', cents: sum(openInvoices, 'balanceCents'), count: openInvoices.length },
-          { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'balanceCents'), count: overdue.length },
-          { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'totalCents'), count: paidRecent.length },
+          { label: 'Open invoices', icon: '○', color: '#0077c5', cents: sum(openInvoices, 'homeBalanceCents'), count: openInvoices.length },
+          { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'homeBalanceCents'), count: overdue.length },
+          { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'homeTotalCents'), count: paidRecent.length },
         ]}
       />
 
@@ -219,7 +220,7 @@ export default function AllSales({ accounts, intent }) {
               )}
               {visible.map((r) => {
                 const isOverdue = !r.isVoided && r.kind === 'INVOICE' && r.balanceCents > 0 && r.dueDate < today;
-                const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatCents(r.totalCents)}).`;
+                const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatMoney(r.totalCents, r.currencyCode)}).`;
                 return (
                   <tr key={`${r.kind}-${r.id}`} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
                     <td className="qb-grid-cell">{formatDate(r.date)}</td>
@@ -227,8 +228,10 @@ export default function AllSales({ accounts, intent }) {
                     <td className="qb-grid-cell">{r.number}</td>
                     <td className="qb-grid-cell" title={r.customerName}>{r.customerName || <span className="text-qb-ink-faint">—</span>}</td>
                     <td className={`qb-grid-cell ${isOverdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(r.dueDate)}</td>
-                    <td className="qb-grid-cell num">{r.kind === 'INVOICE' ? formatCents(r.balanceCents) : ''}</td>
-                    <td className="qb-grid-cell num">{formatCents(r.totalCents)}</td>
+                    <td className="qb-grid-cell num">{r.kind === 'INVOICE' ? formatMoney(r.balanceCents, r.currencyCode) : ''}</td>
+                    <td className="qb-grid-cell num" title={r.currencyCode ? `${formatCents(r.homeTotalCents)} in home currency` : undefined}>
+                      {formatMoney(r.totalCents, r.currencyCode)}
+                    </td>
                     <td className="qb-grid-cell">
                       {r.kind === 'INVOICE' || r.isVoided ? (
                         <StatusBadge status={r.status} overdue={isOverdue} voided={r.isVoided} />

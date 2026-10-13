@@ -124,6 +124,74 @@ fn filesystem_type(_dir: &Path) -> Option<String> {
     None
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
+/// Splits a drive-letter path (`Z:\\Accounting`) into its drive (`Z:`) and remainder (`\\Accounting`).
+pub fn split_drive_letter(path: &str) -> Option<(&str, &str)> {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes.len() == 2 || matches!(bytes[2], b'\\' | b'/')) {
+        Some((&path[..2], &path[2..]))
+    } else {
+        None
+    }
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+/// Joins a network share (`\\\\nas\\books`) with the rest of a mapped-drive path (`\\2026\\q1`).
+pub fn join_unc(remote: &str, rest: &str) -> String {
+    let remote = remote.trim_end_matches(['\\', '/']);
+    let rest = rest.replace('/', "\\");
+    if rest.is_empty() || rest == "\\" {
+        remote.to_string()
+    } else if rest.starts_with('\\') {
+        format!("{remote}{rest}")
+    } else {
+        format!("{remote}\\{rest}")
+    }
+}
+
+/// Resolves a path on a mapped network drive (`Z:\\Accounting`) to its UNC form
+/// (`\\\\nas\\share\\Accounting`), so the company file keeps working even if the drive letter is
+/// unmapped or mapped differently, and so the location is recognized as a network share. Paths on
+/// local drives, and every path on other platforms, are returned unchanged.
+pub fn resolve_network_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(text) = path.to_str() {
+            if let Some((drive, rest)) = split_drive_letter(text) {
+                if let Some(remote) = mapped_drive_remote(drive) {
+                    return PathBuf::from(join_unc(&remote, rest));
+                }
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
+/// The UNC share behind a mapped drive letter (`Z:` → `\\\\nas\\share`), via `WNetGetConnectionW`.
+/// `None` for local drives, disconnected mappings, or any API failure.
+#[cfg(windows)]
+pub fn mapped_drive_remote(drive: &str) -> Option<String> {
+    use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, NO_ERROR};
+    use windows_sys::Win32::NetworkManagement::WNet::WNetGetConnectionW;
+
+    let local: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut len: u32 = 260;
+    let mut buf: Vec<u16> = vec![0; len as usize];
+    // SAFETY: `local` is NUL-terminated; `buf` has `len` writable u16 slots and `len` is updated in place.
+    let mut rc = unsafe { WNetGetConnectionW(local.as_ptr(), buf.as_mut_ptr(), &mut len) };
+    if rc == ERROR_MORE_DATA {
+        buf = vec![0; len as usize];
+        // SAFETY: as above, with the buffer resized to the length the API asked for.
+        rc = unsafe { WNetGetConnectionW(local.as_ptr(), buf.as_mut_ptr(), &mut len) };
+    }
+    if rc != NO_ERROR {
+        return None;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    let remote = String::from_utf16_lossy(&buf[..end]);
+    (!remote.is_empty()).then_some(remote)
+}
+
 /// Confirms `dir` exists, is a directory, and accepts new files.
 pub fn check_writable_dir(dir: &Path) -> Result<(), String> {
     let meta = std::fs::metadata(dir).map_err(|_| format!("STORAGE_MISSING: {} is not available", dir.display()))?;
@@ -289,6 +357,32 @@ mod tests {
         let local = k("/Users/ana/Documents/Books", Some("apfs"));
         assert_eq!((local.kind, local.detail.as_str()), (StorageKind::Local, "Local disk (apfs)"));
         assert_eq!(k("/Users/ana/Documents/Boxing Club", Some("apfs")).kind, StorageKind::Local, "'Boxing' is not Box");
+    }
+
+    #[test]
+    fn mapped_drive_paths_split_and_join_to_unc() {
+        assert_eq!(split_drive_letter(r"Z:\Accounting\localbooks.db"), Some(("Z:", r"\Accounting\localbooks.db")));
+        assert_eq!(split_drive_letter("z:"), Some(("z:", "")));
+        assert_eq!(split_drive_letter(r"\\nas\books"), None);
+        assert_eq!(split_drive_letter("/Users/ana"), None);
+        assert_eq!(split_drive_letter("Zz:/x"), None);
+        assert_eq!(join_unc(r"\\nas\books", r"\2026\q1"), r"\\nas\books\2026\q1");
+        assert_eq!(join_unc(r"\\nas\books\", r"\2026"), r"\\nas\books\2026");
+        assert_eq!(join_unc(r"\\nas\books", "/2026/q1"), r"\\nas\books\2026\q1");
+        assert_eq!(join_unc(r"\\nas\books", ""), r"\\nas\books");
+        // The joined path is then recognized as a network share.
+        assert_eq!(classify_parts(&join_unc(r"\\nas\books", r"\2026"), None).kind, StorageKind::Network);
+        // Non-Windows paths pass through unchanged.
+        assert_eq!(resolve_network_path(Path::new("/tmp/books")), PathBuf::from("/tmp/books"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn local_windows_drives_are_not_rewritten() {
+        let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        assert_eq!(mapped_drive_remote(&system), None, "a local drive has no network connection");
+        let path = PathBuf::from(format!(r"{system}\Windows"));
+        assert_eq!(resolve_network_path(&path), path);
     }
 
     #[test]

@@ -58,7 +58,13 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
         dueDate,
         memo: null,
         totalCents,
-        lines: lines.map((l) => ({ accountId: l.accountId, amountCents: l.amountCents, memo: l.memo })),
+        lines: lines.map((l) => ({
+          accountId: l.accountId,
+          amountCents: l.amountCents,
+          memo: l.memo,
+          quantityE4: l.quantityE4 ?? null,
+          rateCents: l.rateCents ?? null,
+        })),
       });
       onPosted(`Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`);
       setVendor('');
@@ -128,7 +134,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
           </button>
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing />
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
     </section>
   );

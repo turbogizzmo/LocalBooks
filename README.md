@@ -46,6 +46,23 @@ Rust, in SQLite, and in the React UI:
   never `parseFloat`; `0.29` is exactly `29` cents.
 - Sums use checked arithmetic (`checked_add`, `checked_mul`) with a per-line ceiling, so overflow
   is an error, not a wrap-around.
+- **Fractional quantities** (e.g. 1.5 hours) are integers scaled by 10,000. A line amount is
+  `round_half_up(quantity_e4 × rate_cents / 10,000)`, computed in 128-bit integers and enforced by a
+  `CHECK` constraint. The UI uses the same rule with `BigInt`, so on-screen totals match what posts.
+
+### Multi-currency with realized gains and losses
+
+Invoices and expenses/checks can be issued in a foreign currency at an exchange rate (home units per
+foreign unit, stored as an integer scaled by 1,000,000).
+
+- **Journal lines always hold home-currency amounts**, so the trial balance, P&L, and Balance Sheet
+  stay in one currency. The original foreign amounts and rate are kept alongside for display.
+- Each line converts on its own. Any rounding difference (a cent or two) goes to the largest line on
+  the short side, so the converted entry balances exactly.
+- **Payments convert at the payment-date rate.** A/R is relieved at the invoice's booked rate,
+  cumulatively, so the final payment clears it to the cent. The difference posts to the system
+  account **Exchange Gain or Loss**.
+- The home currency is a preference and locks once foreign transactions exist.
 
 ### Double-entry enforced at two layers
 
@@ -156,6 +173,7 @@ its entry form with focus in the first field.
 | Receive payment | Bank or Undeposited Funds | Accounts Receivable |
 | Sales receipt | Bank or Undeposited Funds | Income |
 | Bill | Expense / asset (one debit per distinct split account) | Accounts Payable |
+| Payment on a foreign invoice | Bank (at payment rate) + Exchange **loss** | A/R (at booked rate) + Exchange **gain** |
 | Pay bill | Accounts Payable | Bank or Credit Card |
 | Expense / Check | Expense / asset (per split) | Bank (or Credit Card for expenses) |
 | Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
@@ -239,7 +257,9 @@ Caveats:
 - **Custom location:** *Settings › File & Data Controls › Change Company File Location…* points
   LocalBooks at another folder (recorded in `config.json` in the app config directory).
 - **Network drives and synced folders** (SMB/NFS, Dropbox, iCloud Drive, OneDrive, Google Drive)
-  are supported for **one user at a time**. LocalBooks switches SQLite to rollback-journal mode with
+  are supported for **one user at a time**. On Windows, mapped drive letters (`Z:\Accounting`) are
+  resolved to their UNC share (`\\server\share\Accounting`) with `WNetGetConnectionW`.
+  LocalBooks switches SQLite to rollback-journal mode with
   exclusive locking there and keeps a heartbeat lock file, so a second computer is told the books
   are in use instead of corrupting them. Never open the same company file on two computers at once.
 
@@ -280,11 +300,13 @@ cd src-tauri
 cargo test
 ```
 
-The suite (56 tests) runs against real SQLite databases with every migration applied. It covers
+The suite (64 tests) runs against real SQLite databases with every migration applied, on macOS,
+Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
 statement tie-outs across fiscal years, CSV round-trips, backup/restore rejection cases,
-relocation, and lock files.
+relocation, lock files, fractional-quantity rounding, foreign-currency conversion, and realized
+exchange gains and losses.
 
 ---
 
@@ -292,13 +314,15 @@ relocation, and lock files.
 
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
-- **No sales tax** on invoices or receipts, and **single currency** (the currency symbol is display-only).
+- **No sales tax** on invoices or receipts.
+- **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
+  receipts, and estimates are home-currency only, and bank accounts are always home currency. There is
+  no unrealized gain/loss revaluation of open balances at period end.
 - **Single user.** One person at a time per company file, including on shared folders.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
-- Network-drive detection on Windows recognizes UNC (`\\server\share`) paths but not mapped drive letters.
-- Invoice quantities are whole numbers.
+- Currency amounts use two decimal places (zero-decimal currencies such as JPY display with `.00`).
 
 ---
 

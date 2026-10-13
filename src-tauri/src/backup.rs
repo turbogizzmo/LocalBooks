@@ -363,6 +363,7 @@ mod tests {
                 date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
                 description: "Sale".into(),
                 lines: vec![JournalLine::debit(checking, cents), JournalLine::credit(services, cents)],
+                currency: None,
             },
         )
         .await

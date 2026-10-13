@@ -20,6 +20,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WNet"] }
+
 [profile.release]
 codegen-units = 1
 lto = true
