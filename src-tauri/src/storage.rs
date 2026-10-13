@@ -47,7 +47,14 @@ pub fn classify_parts(path: &str, fs_type: Option<&str>) -> StorageInfo {
     if let Some(fs) = fs_type.filter(|fs| NETWORK_FS.contains(&fs.to_ascii_lowercase().as_str())) {
         return StorageInfo { kind: StorageKind::Network, detail: format!("Network drive ({fs})") };
     }
-    if path.starts_with(r"\\") || path.starts_with("//") {
+    // UNC shares (\\server\share, //server/share). Windows verbatim paths (\\?\C:\...) are local
+    // unless they are verbatim UNC paths (\\?\UNC\server\share).
+    let verbatim = path.strip_prefix(r"\\?\");
+    let unc = match verbatim {
+        Some(rest) => rest.get(..4).is_some_and(|p| p.eq_ignore_ascii_case(r"UNC\")),
+        None => path.starts_with(r"\\") || path.starts_with("//"),
+    };
+    if unc {
         return StorageInfo { kind: StorageKind::Network, detail: "Network share (UNC path)".into() };
     }
 
@@ -272,6 +279,8 @@ mod tests {
         assert_eq!(k("/Volumes/Accounting", Some("smbfs")).kind, StorageKind::Network);
         assert_eq!(k("/mnt/books", Some("nfs")).detail, "Network drive (nfs)");
         assert_eq!(k(r"\\nas\books", None).kind, StorageKind::Network);
+        assert_eq!(k(r"\\?\UNC\nas\books", None).kind, StorageKind::Network);
+        assert_eq!(k(r"\\?\C:\Users\ana\Books", None).kind, StorageKind::Local, "verbatim local path");
         assert_eq!(k("/Users/ana/Library/CloudStorage/Dropbox/Books", Some("apfs")).detail, "Synced folder (Dropbox)");
         assert_eq!(k("/Users/ana/Library/CloudStorage/OneDrive-Personal/Books", Some("apfs")).detail, "Synced folder (OneDrive)");
         assert_eq!(k("/Users/ana/Library/Mobile Documents/com~apple~CloudDocs/Books", Some("apfs")).detail, "Synced folder (iCloud Drive)");
@@ -301,9 +310,15 @@ mod tests {
         let err = FileLock::acquire(&db).err().expect("held elsewhere");
         assert!(err.starts_with("STORAGE_IN_USE: this company file is open on accounting-pc"), "{err}");
 
-        // An abandoned lock from a process that no longer exists on this host is taken over.
-        let stale = format!(r#"{{"host":"{}","pid":999999,"acquired_at":"2026-10-13 08:00"}}"#, host_name());
-        std::fs::write(lock_path(&db), stale).unwrap();
+        // An abandoned lock from a process that no longer exists on this host is taken over at once
+        // (Unix can check the PID; elsewhere the lock is taken over once its heartbeat goes stale).
+        #[cfg(unix)]
+        {
+            let stale = format!(r#"{{"host":"{}","pid":999999,"acquired_at":"2026-10-13 08:00"}}"#, host_name());
+            std::fs::write(lock_path(&db), stale).unwrap();
+        }
+        #[cfg(not(unix))]
+        std::fs::remove_file(lock_path(&db)).unwrap();
         let lock = FileLock::acquire(&db).expect("takes over");
         assert!(lock_path(&db).exists());
         drop(lock);
