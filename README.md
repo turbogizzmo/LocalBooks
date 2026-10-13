@@ -1,0 +1,306 @@
+# LocalBooks
+
+**Local-first, double-entry accounting for small businesses.** A QuickBooks-style desktop app whose
+books live in a single SQLite file on your own machine: no account, no cloud, no telemetry.
+
+Built with **Rust + SQLite (SQLx)** for the accounting engine and **Tauri v2 + React + Tailwind CSS**
+for a high-density, keyboard-friendly interface.
+
+---
+
+## Contents
+
+- [Why LocalBooks](#why-localbooks)
+- [Technical highlights](#technical-highlights)
+- [Architecture](#architecture)
+- [Feature blueprint](#feature-blueprint)
+- [Posting rules](#posting-rules)
+- [Getting started](#getting-started)
+- [Building for release](#building-for-release)
+- [Where your data lives](#where-your-data-lives)
+- [Project layout](#project-layout)
+- [Testing](#testing)
+- [Known limitations](#known-limitations)
+
+---
+
+## Why LocalBooks
+
+- **Your books are a file you own.** Back it up, copy it, archive it; nothing leaves your computer.
+- **The ledger cannot be corrupted by the UI.** Double-entry rules are enforced in Rust *and*
+  again by database triggers, so even a bug in a screen cannot persist an unbalanced entry.
+- **Familiar workflow.** Invoices, receive payment, bills, pay bills, expenses, checks, deposits,
+  transfers, bank feeds, reconciliation, and financial statements in a compact, QuickBooks-style layout.
+
+---
+
+## Technical highlights
+
+### Float-free money (`i64` cents)
+
+Every monetary value is stored and computed as an `i64` count of cents (`$10.50` → `1050`), in
+Rust, in SQLite, and in the React UI:
+
+- All tables are `STRICT`, so a `REAL` can never be written into a `*_cents` column.
+- Text such as `"1,234.56"`, `"(45.00)"`, or `"$0.29"` is parsed to cents with **string arithmetic**,
+  never `parseFloat`; `0.29` is exactly `29` cents.
+- Sums use checked arithmetic (`checked_add`, `checked_mul`) with a per-line ceiling, so overflow
+  is an error, not a wrap-around.
+
+### Double-entry enforced at two layers
+
+- **Rust** validates every entry before it is written: at least two lines, each line exactly one of
+  debit or credit, and `Σ debits = Σ credits`.
+- **SQLite triggers** re-check the balance when an entry flips from `DRAFT` to `POSTED`, and make
+  posted entries, their lines, and their source documents **immutable**.
+- Each business document (invoice, bill, payment, deposit…) and its journal entry are written in
+  **one transaction**. If any step fails, the whole thing rolls back.
+
+### Voiding by reversal, never deletion
+
+`void_transaction` never deletes data. It posts an exact **reversing entry** (debits and credits
+swapped, same date), flags the original `is_voided`, and unwinds the source document:
+
+- Voiding a payment reopens its invoice or bill as *Partial* or *Unpaid*.
+- Voiding a bank-feed transaction returns the bank line to **For review**.
+- A void is refused when a line is reconciled (or ticked in a reconciliation in progress), when an
+  invoice or bill still has payments, or when a payment has already been banked in a deposit.
+
+### Trigger-maintained audit log
+
+The `audit_log` table is written **by database triggers**, not by application code: every post,
+void, and reconciliation lock is recorded automatically, and `UPDATE`/`DELETE` on the log are
+rejected. No code path can skip it.
+
+### Online snapshots with `VACUUM INTO`
+
+Backups use SQLite's `VACUUM INTO`: a consistent snapshot taken while you keep working, written to a
+temp file, integrity-checked, then atomically renamed into place. Restores are verified before
+anything is replaced:
+
+| Check | Rejects |
+|---|---|
+| SQLite header & `integrity_check` | non-SQLite or damaged files |
+| `_sqlx_migrations` versions & checksums | files from a newer LocalBooks build, or edited schemas |
+| `foreign_key_check` | broken links between records |
+| Per-entry `Σ debits = Σ credits` | unbalanced books |
+
+The current books are snapshotted first (`pre-restore-…`), and the backup is upgraded to the current
+schema off to the side before it is swapped in. Daily automatic backups run on launch.
+
+### Bank reconciliation that locks history
+
+Statement reconciliation ticks lines until **Difference = $0.00**, then locks them. Reconciled lines
+are frozen and their entries can no longer be voided, so a reconciled balance can never drift.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph UI["React + Tailwind (Tauri webview)"]
+        V[Views & forms] --> A[lib/api.js]
+    end
+    A -- "invoke()" --> C[commands.rs<br/>74 Tauri commands]
+    subgraph Engine["Rust engine"]
+        C --> D[Document modules<br/>invoices · sales · expenses · banking<br/>estimates · bank · reconcile · timesheet]
+        D --> L[ledger.rs<br/>validate · post · void]
+        C --> R[statements · reports · export_engine]
+        C --> B[backup · preferences · storage]
+    end
+    L --> DB[(SQLite company file<br/>STRICT tables · triggers · audit log)]
+    R --> DB
+    B --> DB
+    DB -. "ledger-changed event" .-> V
+```
+
+Every successful write emits a `ledger-changed` event, so open screens refresh live.
+
+---
+
+## Feature blueprint
+
+### Navigation
+
+| Group | Screens | What you can do |
+|---|---|---|
+| **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
+| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services | Invoices with inline line-item grid, full & partial payments, sales receipts, estimates → invoice conversion, printable invoices |
+| **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
+| **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
+| **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV bank import with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
+| **Accounting** | Journal Entries · Audit Log | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail |
+| **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
+| **Settings** | Preferences Console · File & Data Controls | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, company file location |
+
+### `+ New` quick-create matrix
+
+Open with the **+ New** button or <kbd>Ctrl/Cmd</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd>. Each item opens
+its entry form with focus in the first field.
+
+| Customers | Vendors | Employees | Other |
+|---|---|---|---|
+| Invoice | Expense | Single Time Activity | Journal Entry |
+| Receive Payment | Check | Weekly Timesheet | Bank Deposit |
+| Estimate | Bill | | Transfer |
+| Sales Receipt | Pay Bills | | |
+
+---
+
+## Posting rules
+
+| Transaction | Debit | Credit |
+|---|---|---|
+| Invoice | Accounts Receivable | Income (per line's account) |
+| Receive payment | Bank or Undeposited Funds | Accounts Receivable |
+| Sales receipt | Bank or Undeposited Funds | Income |
+| Bill | Expense / asset (one debit per distinct split account) | Accounts Payable |
+| Pay bill | Accounts Payable | Bank or Credit Card |
+| Expense / Check | Expense / asset (per split) | Bank (or Credit Card for expenses) |
+| Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
+| Transfer | To-account | From-account |
+| Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |
+| Void | Exact reversal of the original entry, same date | |
+| Estimate / time activity | *Non-posting* | |
+
+Statements: **Balance Sheet** closes prior fiscal years' profit into Retained Earnings and shows the
+current fiscal year as Net Income. The fiscal year start month is a preference.
+
+---
+
+## Getting started
+
+### Prerequisites
+
+| Tool | Version |
+|---|---|
+| [Rust](https://rustup.rs) | stable (developed on 1.98) |
+| [Node.js](https://nodejs.org) | 20 LTS or newer |
+| Platform dependencies | See the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) |
+
+Platform notes:
+
+- **macOS:** Xcode Command Line Tools (`xcode-select --install`).
+- **Windows:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10/11).
+- **Linux:** `webkit2gtk-4.1`, `libssl`, `librsvg` and build essentials (package names per distro in the Tauri guide).
+
+### Run in development
+
+```bash
+npm install
+npm run tauri dev
+```
+
+This starts the Vite dev server on port 1420 and launches the desktop window with hot reload. The
+company file is created and migrated automatically on first launch.
+
+---
+
+## Building for release
+
+```bash
+npm run tauri build
+```
+
+This builds the frontend, compiles Rust in release mode (with LTO), embeds the UI in the binary, and
+produces platform bundles under `src-tauri/target/release/bundle/`:
+
+| Platform | Output |
+|---|---|
+| macOS | `macos/LocalBooks.app`, `dmg/LocalBooks_<version>_<arch>.dmg` |
+| Windows | `msi/*.msi`, `nsis/*-setup.exe` |
+| Linux | `deb/*.deb`, `appimage/*.AppImage`, `rpm/*.rpm` |
+
+Caveats:
+
+- **Build on the target OS.** Tauri bundles are produced natively; cross-compiling installers (for
+  example a Windows `.msi` from macOS) is not supported in practice. Use CI runners per platform.
+- `cargo build --release` alone does **not** embed the frontend; use `npm run tauri build`.
+- **Code signing:** unsigned macOS builds are blocked by Gatekeeper on other machines. Sign and
+  notarize with an Apple Developer ID (and sign Windows installers) before distributing.
+- **Headless macOS builds:** the DMG step scripts Finder to lay out the window. In CI or over SSH,
+  build with `CI=true npm run tauri build` to skip that styling.
+- Apple Silicon and Intel produce separate binaries; add `--target universal-apple-darwin` for a
+  universal build (requires both Rust targets).
+
+---
+
+## Where your data lives
+
+| Platform | Company file (default) |
+|---|---|
+| macOS | `~/Library/Application Support/com.localbooks.desktop/localbooks.db` |
+| Windows | `%APPDATA%\com.localbooks.desktop\localbooks.db` |
+| Linux | `~/.local/share/com.localbooks.desktop/localbooks.db` |
+
+- **Automatic and pre-restore backups** go to a `backups/` folder beside the default company file.
+  They stay on the local disk even when the company file lives elsewhere.
+- **Custom location:** *Settings › File & Data Controls › Change Company File Location…* points
+  LocalBooks at another folder (recorded in `config.json` in the app config directory).
+- **Network drives and synced folders** (SMB/NFS, Dropbox, iCloud Drive, OneDrive, Google Drive)
+  are supported for **one user at a time**. LocalBooks switches SQLite to rollback-journal mode with
+  exclusive locking there and keeps a heartbeat lock file, so a second computer is told the books
+  are in use instead of corrupting them. Never open the same company file on two computers at once.
+
+---
+
+## Project layout
+
+```
+.
+├── index.html                  # #root (app) and #print-root (printable documents)
+├── src/                        # React frontend
+│   ├── App.jsx                 # routing, + New intents, company context
+│   ├── components/             # one file per screen plus shared grids, menus and print documents
+│   ├── lib/                    # api.js (Tauri bindings), money.js (cents math), dates.js
+│   └── styles/print.css        # US Letter print designer
+├── tailwind.config.js          # QuickBooks color tokens and dense components
+└── src-tauri/
+    ├── migrations/             # 0001–0010 SQL migrations (schema, triggers, seed data)
+    ├── capabilities/           # Tauri permission set
+    ├── tauri.conf.json
+    └── src/
+        ├── main.rs             # app setup, command registration, clean shutdown
+        ├── commands.rs         # Tauri command layer
+        ├── db.rs               # connection handling, migrations, hot-swap & relocation
+        ├── ledger.rs           # validation, posting, voiding, journal register, audit queries
+        ├── invoices.rs, sales.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
+        ├── reconcile.rs, timesheet.rs       # business documents
+        ├── statements.rs, reports.rs, export_engine.rs   # P&L, Balance Sheet, dashboard, CSV
+        └── backup.rs, preferences.rs, storage.rs         # backups, settings, tax calendar, storage
+```
+
+---
+
+## Testing
+
+```bash
+cd src-tauri
+cargo test
+```
+
+The suite (56 tests) runs against real SQLite databases with every migration applied. It covers
+balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
+locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
+statement tie-outs across fiscal years, CSV round-trips, backup/restore rejection cases,
+relocation, and lock files.
+
+---
+
+## Known limitations
+
+- **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
+  payroll tax filings.
+- **No sales tax** on invoices or receipts, and **single currency** (the currency symbol is display-only).
+- **Single user.** One person at a time per company file, including on shared folders.
+- **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
+  Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
+  with the IRS or your tax advisor.
+- Network-drive detection on Windows recognizes UNC (`\\server\share`) paths but not mapped drive letters.
+- Invoice quantities are whole numbers.
+
+---
+
+*LocalBooks stores and computes everything locally. Review your financial statements with a
+qualified accountant before filing.*
