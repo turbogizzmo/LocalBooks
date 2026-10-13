@@ -1,0 +1,17 @@
+# Dependencies and build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Local tooling and OS files
+.claude/
+.DS_Store
+*.log
+
+# Never commit company files or their backups
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.db.lock
