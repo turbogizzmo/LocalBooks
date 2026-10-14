@@ -66,9 +66,9 @@ const textInput = (extra = {}) =>
     );
   };
 
-function Group({ title, children }) {
+function Group({ title, id, children }) {
   return (
-    <section className="qb-panel">
+    <section className="qb-panel" id={id}>
       <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{title}</h2>
       {children}
     </section>
@@ -103,7 +103,7 @@ function ClosingDate() {
   if (error) return <Notice kind="error" text={error} />;
   if (!data) return null;
   return (
-    <Group title="Closing date">
+    <Group title="Closing date" id="closing-date">
       <div className="flex flex-wrap items-end gap-3 px-2 py-1.5 text-sm">
         <div className="min-w-[200px]">
           <div className="text-2xs uppercase tracking-wide text-qb-ink-faint">In force</div>
@@ -816,8 +816,21 @@ function LocalAiAccess() {
   );
 }
 
-export default function Settings({ companyName }) {
-  const [tab, setTab] = useState('preferences');
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', data: 'data', ai: 'ai' };
+
+export default function Settings({ companyName, intent }) {
+  const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
+
+  // Help shortcuts open a specific tab (and, for the closing date, scroll to it).
+  useEffect(() => {
+    const target = SETTINGS_TABS[intent?.action];
+    if (!target) return;
+    setTab(target);
+    if (intent.action === 'closing') {
+      const timer = setTimeout(() => document.getElementById('closing-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [intent]);
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       <div className="flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">

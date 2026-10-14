@@ -23,3 +23,21 @@ input[type='date']::-webkit-calendar-picker-indicator {
 select.qb-input {
   padding-right: 18px;
 }
+
+/* Help panel slides in from the right edge. */
+@keyframes lb-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[lb-slide-in_160ms_ease-out\] {
+    animation: none;
+  }
+}

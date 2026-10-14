@@ -1,18 +1,14 @@
 import { useState } from 'react';
 
-const icon = (d) => (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-    <path d={d} strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+import { Icon } from '../lib/icons.js';
 
 /** Navigation tree: top-level links and accordion groups, QuickBooks Online classic layout. */
 export const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: icon('M2 14V8M6 14V4M10 14V9M14 14V2') },
+  { id: 'dashboard', label: 'Dashboard', icon: <Icon name="Dashboard" /> },
   {
     id: 'sales',
     label: 'Sales',
-    icon: icon('M2 12l4-4 3 3 5-6M10 5h4v4'),
+    icon: <Icon name="Sales" />,
     children: [
       { id: 'sales/all', label: 'All Sales' },
       { id: 'sales/invoices', label: 'Invoices' },
@@ -24,7 +20,7 @@ export const NAV = [
   {
     id: 'expenses',
     label: 'Expenses',
-    icon: icon('M4 1.5h8v13l-2-1.2-2 1.2-2-1.2-2 1.2zM6 5h4M6 8h4'),
+    icon: <Icon name="Expenses" />,
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
@@ -34,13 +30,13 @@ export const NAV = [
   {
     id: 'employees',
     label: 'Employees',
-    icon: icon('M8 7.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3 14c.5-2.8 2.5-4.5 5-4.5s4.5 1.7 5 4.5'),
+    icon: <Icon name="Employees" />,
     children: [{ id: 'employees/time', label: 'Time Tracking' }],
   },
   {
     id: 'banking',
     label: 'Banking',
-    icon: icon('M1.5 6L8 2l6.5 4M3 6.5v6M6.3 6.5v6M9.7 6.5v6M13 6.5v6M1.5 14.5h13'),
+    icon: <Icon name="Banking" />,
     children: [
       { id: 'banking/feeds', label: 'Bank Feeds' },
       { id: 'banking/transfers', label: 'Deposits & Transfers' },
@@ -50,15 +46,15 @@ export const NAV = [
   {
     id: 'accounting',
     label: 'Accounting',
-    icon: icon('M3 2.5h10v11H3zM5.5 5.5h5M5.5 8h5M5.5 10.5h3'),
+    icon: <Icon name="Accounting" />,
     children: [
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/qbw-import', label: 'QuickBooks Import' },
     ],
   },
-  { id: 'reports', label: 'Reports', icon: icon('M4 1.5h6l3 3v10H4zM10 1.5v3h3M6 12V9M8.5 12V7M11 12v-2') },
-  { id: 'settings', label: 'Settings', icon: icon('M8 10a2 2 0 100-4 2 2 0 000 4zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4') },
+  { id: 'reports', label: 'Reports', icon: <Icon name="Reports" /> },
+  { id: 'settings', label: 'Settings', icon: <Icon name="Settings" /> },
 ];
 
 export function findNav(id) {
@@ -88,7 +84,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
       </div>
       <div className="px-2 py-1.5">
         <button type="button" onClick={onNew} className="qb-btn w-full justify-start gap-1.5 rounded-full border-white/40 bg-transparent text-white hover:bg-white/10" aria-haspopup="dialog">
-          <span className="text-md leading-none">＋</span> New
+          <Icon name="NewTransaction" /> New
         </button>
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto py-1 scrollbar-thin">

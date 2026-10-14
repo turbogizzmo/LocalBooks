@@ -18,6 +18,8 @@ import AuditLog from './components/AuditLog.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
+import HelpCenter from './components/HelpCenter.jsx';
+import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
 import { listen } from '@tauri-apps/api/event';
@@ -41,6 +43,7 @@ export default function App() {
   // An intent asks the destination view to open a specific entry form ({ action, nonce }).
   const [intent, setIntent] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const accounts = useLedgerQuery(api.listAccounts);
   const prefs = useLedgerQuery(api.getPreferences);
   const logo = useLedgerQuery(api.getCompanyLogo);
@@ -83,9 +86,14 @@ export default function App() {
     };
   }, []);
 
-  // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere.
+  // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere; F1 toggles Help.
   useEffect(() => {
     const onKey = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setHelpOpen((o) => !o);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         setCreating(true);
@@ -106,9 +114,10 @@ export default function App() {
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
           <h1 className="text-lg font-semibold">{item.label}</h1>
+          <div className="ml-auto flex min-w-0 items-center gap-3">
           {storage.data && (
             <span
-              className="ml-auto flex min-w-0 max-w-[420px] items-center gap-1.5 text-xs text-qb-ink-muted"
+              className="flex min-w-0 max-w-[420px] items-center gap-1.5 text-xs text-qb-ink-muted"
               title={storage.data.path}
               aria-label={`Company file: ${storage.data.fileName}`}
             >
@@ -121,6 +130,19 @@ export default function App() {
               )}
             </span>
           )}
+            <button
+              type="button"
+              onClick={() => setHelpOpen((o) => !o)}
+              aria-pressed={helpOpen}
+              title="Help (F1)"
+              className={`flex flex-none items-center gap-1 rounded-xs px-2 py-0.5 text-sm font-semibold ${
+                helpOpen ? 'bg-qb-green-tint text-qb-green-active' : 'text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink'
+              }`}
+            >
+              <Icon name="HelpCenter" />
+              Help
+            </button>
+          </div>
         </header>
         {storage.data?.startupWarning && (
           <div className="no-print">
@@ -146,9 +168,16 @@ export default function App() {
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
           {view === 'reports' && <Reports />}
-          {view === 'settings' && <Settings companyName={companyName} />}
+          {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
         </div>
       </main>
+      {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}
+      {helpOpen && (
+        <HelpCenter
+          onClose={() => setHelpOpen(false)}
+          onNavigate={(viewId, action) => select(viewId, action)}
+        />
+      )}
       {creating && (
         <QuickCreateModal
           onClose={() => setCreating(false)}
