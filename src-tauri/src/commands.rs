@@ -756,19 +756,19 @@ pub async fn print_report(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 // ------------------------------------------------------------------------------------------------
-// QuickBooks Desktop import (staging sandbox)
+// Desktop Migration Wizard: .qbw import (staging sandbox)
 // ------------------------------------------------------------------------------------------------
 
 pub const QBW_PROGRESS: &str = "qbw-import-progress";
 
-/// Reads a QuickBooks Desktop file into a new staging batch, reporting progress as
+/// Reads a .qbw company file into a new staging batch, reporting progress as
 /// `qbw-import-progress` events. Nothing is posted to the ledger.
 #[tauri::command]
 pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<BatchSummary, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) {
-        return Err("QBW_BAD_EXTENSION: choose a QuickBooks Desktop company file (.qbw)".into());
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file".into());
     }
     let emitter = app.clone();
     let source = path.clone();
@@ -779,7 +779,7 @@ pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String
         })
     })
     .await
-    .map_err(|e| format!("QBW_PARSE_FAILED: the QuickBooks file could not be parsed ({e})"))??;
+    .map_err(|e| format!("QBW_PARSE_FAILED: the .qbw file could not be read ({e})"))??;
 
     let staged = (extraction.lines.len() as u64).max(1);
     let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: 0, total: staged });

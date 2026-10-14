@@ -1,8 +1,7 @@
 # Import bank transactions (bank feeds)
 
 Download a statement from your bank, import it, and approve each transaction into your books.
-LocalBooks reads **OFX**, **QFX** and **QBO** files (often labelled "Quicken" or "Money" on bank
-websites) and **CSV** files.
+LocalBooks reads **OFX**, **QFX** and **QBO** statement downloads and **CSV** files.
 
 ## Import a statement
 

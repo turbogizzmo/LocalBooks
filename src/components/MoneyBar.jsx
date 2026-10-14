@@ -1,7 +1,7 @@
 import { formatCents } from '../lib/money.js';
 
 /**
- * QuickBooks-style money bar: a few labelled totals, each with a status icon, label and count so
+ * Money bar: a few labelled totals, each with a status icon, label and count so
  * the color stripe is never the only carrier of meaning.
  */
 export default function MoneyBar({ items }) {

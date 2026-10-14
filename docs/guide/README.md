@@ -36,7 +36,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Journal entries and voiding](journal-entries-and-voids.md)
 - [Verify and correct the ledger](ledger-integrity.md)
 - [Close a period](closing-the-books.md)
-- [Import from QuickBooks Desktop](quickbooks-import.md)
+- [Desktop Migration Wizard (.qbw import)](desktop-migration.md)
 - [Revalue foreign-currency invoices](currency-revaluation.md)
 
 ## Reports and more

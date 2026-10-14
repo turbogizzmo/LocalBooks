@@ -26,6 +26,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Finance",
+    "shortDescription": "LocalBooks Desktop: local-first double-entry accounting",
+    "longDescription": "LocalBooks Desktop keeps a small business's books in a single file on its own computer: invoices, bills, banking, inventory, reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.",
     "fileAssociations": [
       {
         "ext": ["localbooks"],

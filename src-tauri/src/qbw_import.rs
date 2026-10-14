@@ -1,13 +1,13 @@
-//! QuickBooks Desktop (.qbw) import through a staging sandbox.
+//! Desktop Migration Wizard: .qbw company-file import through a staging sandbox.
 //!
 //! 1. [`extract`] reads the company file with the `openqbw` parser (read-only) and returns flat
-//!    invoice line items: the parent invoice's QuickBooks id, a date, signed cents, and the internal
+//!    invoice line items: the parent invoice's id in the file, a date, signed cents, and the internal
 //!    table the line came from. openqbw 0.1 does not decode account names, customers, or memos, so
 //!    the source table is the only label the file offers for mapping.
 //! 2. [`stage`] stores those lines in `staging_raw_transactions`, outside the ledger.
 //! 3. The user maps each label to a LocalBooks income account ([`set_mapping`]), or lets
 //!    [`auto_create_accounts`] add one per unmapped label.
-//! 4. [`post_batch`] turns each QuickBooks invoice into one balanced journal entry — credits to the
+//! 4. [`post_batch`] turns each source invoice into one balanced journal entry — credits to the
 //!    mapped income accounts, offset to an account the user chooses — and posts every entry through
 //!    [`ledger::post_entry_in_tx`] in a single transaction, so either the whole batch lands with every
 //!    ledger rule enforced, or nothing does.
@@ -26,10 +26,13 @@ use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 /// Label for line items whose page the parser could not attribute to a table.
 pub const UNATTRIBUTED: &str = "(unattributed)";
 
-/// QuickBooks tables that hold invoice line items. openqbw's line-item pattern also matches bytes
+/// The .qbw tables that hold invoice line items. openqbw's line-item pattern also matches bytes
 /// on pages of many unrelated tables (payroll, audit, budgets, internal catalogs), so only lines
 /// attributed to these tables are imported; everything else is counted as ignored.
 pub const INVOICE_LINE_TABLES: [&str; 2] = ["abmc_invoice_lineitem", "abmc_invoice_inventory_lineitem"];
+
+/// Description given to income accounts the importer creates (also how a reversal finds them).
+const IMPORTER_ACCOUNT_NOTE: &str = "Created by the desktop migration wizard for";
 
 /// Extensions the importer accepts from the file picker and drop zone.
 pub const ACCEPTED_EXTENSIONS: [&str; 3] = ["qbw", "qbb", "qbm"];
@@ -88,7 +91,7 @@ fn amount_type_code(t: AmountType) -> &'static str {
     }
 }
 
-/// Reads invoice line items out of a QuickBooks company file. Blocking and CPU-bound: call it from
+/// Reads invoice line items out of a .qbw company file. Blocking and CPU-bound: call it from
 /// a blocking thread. The file is only read, never written.
 pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extraction, String> {
     progress(Progress { stage: "Reading file", done: 0, total: 1 });
@@ -173,11 +176,11 @@ fn not_a_company_file(path: &Path) -> String {
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if ext == "qbb" || ext == "qbm" {
         format!(
-            "QBW_COMPRESSED_BACKUP: {} is a compressed QuickBooks backup. Restore it in QuickBooks Desktop (File › Open or Restore Company), then import the restored .qbw file",
+            "QBW_COMPRESSED_BACKUP: {} is a compressed backup, not a company file. Restore it in the program that created it, then import the restored .qbw file",
             path.display()
         )
     } else {
-        format!("QBW_NOT_COMPANY_FILE: {} is not a QuickBooks Desktop company file", path.display())
+        format!("QBW_NOT_COMPANY_FILE: {} is not a .qbw company file", path.display())
     }
 }
 
@@ -224,8 +227,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extractio
 
     for line in &extraction.lines {
         let description = match &line.qb_item_id {
-            Some(item) => format!("QuickBooks invoice {} · item {item}", line.qb_invoice_id),
-            None => format!("QuickBooks invoice {}", line.qb_invoice_id),
+            Some(item) => format!("Imported invoice {} · item {item}", line.qb_invoice_id),
+            None => format!("Imported invoice {}", line.qb_invoice_id),
         };
         sqlx::query(
             "INSERT INTO staging_raw_transactions
@@ -299,7 +302,7 @@ pub struct LabelMapping {
     pub account_name: Option<String>,
 }
 
-/// Live postings already made for a QuickBooks invoice id. A voided entry stays POSTED with
+/// Live postings already made for a source invoice id. A voided entry stays POSTED with
 /// `is_voided = 1` (its reversal offsets it), which frees the invoice to be posted again.
 const LIVE_POSTED: &str = "SELECT p.qb_invoice_id FROM qbw_posted_invoices p
                            JOIN journal_entries e ON e.id = p.journal_entry_id
@@ -447,7 +450,7 @@ async fn require_income_account(pool: &SqlitePool, account_id: i64) -> Result<()
     match row {
         None => Err(format!("QBW_BAD_ACCOUNT: account #{account_id} does not exist")),
         Some((class, _)) if class != "INCOME" => {
-            Err("QBW_BAD_ACCOUNT: QuickBooks invoice lines can only map to an Income or Other Income account".into())
+            Err("QBW_BAD_ACCOUNT: imported invoice lines can only map to an Income or Other Income account".into())
         }
         Some((_, 0)) => Err("QBW_BAD_ACCOUNT: that account is inactive".into()),
         Some(_) => Ok(()),
@@ -487,7 +490,7 @@ pub async fn auto_create_accounts(pool: &SqlitePool, batch_id: i64) -> Result<i6
 
     let mut created = 0i64;
     for raw in unmapped {
-        let name = format!("QuickBooks {}", display_label(&raw).to_lowercase());
+        let name = format!("Imported {}", display_label(&raw).to_lowercase());
         let existing: Option<i64> = sqlx::query_scalar(
             "SELECT a.id FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type
              WHERE a.parent_id IS NULL AND a.name = ?1 COLLATE NOCASE AND t.classification = 'INCOME' AND a.is_active = 1",
@@ -516,7 +519,7 @@ pub async fn auto_create_accounts(pool: &SqlitePool, batch_id: i64) -> Result<i6
                 )
                 .bind(number)
                 .bind(&name)
-                .bind(format!("Created by the QuickBooks Desktop importer for {raw}"))
+                .bind(format!("{IMPORTER_ACCOUNT_NOTE} {raw}"))
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(db_err)?
@@ -674,13 +677,13 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
         let entry = JournalEntry {
             id: None,
             date,
-            description: format!("QuickBooks Desktop import · invoice {qb_id}"),
+            description: format!("Desktop migration · invoice {qb_id}"),
             lines,
             currency: None,
         };
         let entry_id = match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
             Ok(id) => id,
-            Err(err) => return Err(ledger::rollback(tx, format!("{err} (QuickBooks invoice {qb_id})")).await),
+            Err(err) => return Err(ledger::rollback(tx, format!("{err} (imported invoice {qb_id})")).await),
         };
         // A register row left by a voided posting is replaced; a live one cannot exist here.
         if let Err(e) = sqlx::query(
@@ -744,12 +747,14 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseBa
     let accounts: Vec<i64> = sqlx::query_scalar(
         "SELECT DISTINCT a.id FROM staging_account_map m JOIN chart_of_accounts a ON a.id = m.account_id
          WHERE m.batch_id = ?1 AND a.is_active = 1 AND a.is_system = 0
-           AND a.description LIKE 'Created by the QuickBooks Desktop importer%'
+           AND (a.description LIKE ?2 || '%'
+                OR a.description LIKE 'Created by the QuickBooks Desktop importer%') -- wording used before 2026-10-14
            AND NOT EXISTS (
                SELECT 1 FROM journal_lines l JOIN journal_entries e ON e.id = l.journal_entry_id
                WHERE l.account_id = a.id AND e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL)",
     )
     .bind(batch_id)
+    .bind(IMPORTER_ACCOUNT_NOTE)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -817,11 +822,11 @@ mod tests {
     const INVENTORY: &str = "abmc_invoice_inventory_lineitem";
     const SERVICE: &str = "abmc_invoice_service_lineitem";
 
-    /// Extraction check for a real QuickBooks file (read-only): set LOCALBOOKS_QBW_CHECK to its
+    /// Extraction check for a real .qbw file (read-only): set LOCALBOOKS_QBW_CHECK to its
     /// path and run `cargo test -- --ignored extracts_a_real --nocapture`.
     #[test]
     #[ignore]
-    fn extracts_a_real_quickbooks_file() {
+    fn extracts_a_real_qbw_file() {
         let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK to a .qbw file");
         let mut stages = Vec::new();
         let started = std::time::Instant::now();
@@ -858,7 +863,7 @@ mod tests {
     }
 
     #[test]
-    fn labels_read_like_quickbooks_line_types() {
+    fn labels_read_like_source_line_types() {
         assert_eq!(display_label(INVENTORY), "Invoice inventory line items");
         assert_eq!(display_label(UNATTRIBUTED), "Unattributed invoice lines");
         assert_eq!(unix_day_to_date(0), NaiveDate::from_ymd_opt(1970, 1, 1));
@@ -915,7 +920,7 @@ mod tests {
         assert_eq!(auto_create_accounts(&pool, batch).await.unwrap(), 1, "only the unmapped label gets an account");
         let summary = batch_summary(&pool, batch).await.unwrap();
         let service = summary.labels.iter().find(|l| l.raw_label == SERVICE).unwrap();
-        assert_eq!(service.account_name.as_deref(), Some("QuickBooks invoice service line items"));
+        assert_eq!(service.account_name.as_deref(), Some("Imported invoice service line items"));
         let services_acct = service.account_id.unwrap();
         let number: String = sqlx::query_scalar("SELECT account_number FROM chart_of_accounts WHERE id = ?1").bind(services_acct).fetch_one(&pool).await.unwrap();
         assert_eq!(number, "4500");

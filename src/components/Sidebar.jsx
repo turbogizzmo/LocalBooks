@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Icon } from '../lib/icons.js';
 
-/** Navigation tree: top-level links and accordion groups, QuickBooks Online classic layout. */
+/** Navigation tree: top-level links and accordion groups, in a classic accounting-software layout. */
 export const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: <Icon name="Dashboard" /> },
   {
@@ -51,7 +51,7 @@ export const NAV = [
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
-      { id: 'accounting/qbw-import', label: 'QuickBooks Import' },
+      { id: 'accounting/qbw-import', label: 'Desktop Migration Wizard' },
     ],
   },
   { id: 'reports', label: 'Reports', icon: <Icon name="Reports" /> },

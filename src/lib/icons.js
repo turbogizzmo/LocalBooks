@@ -49,7 +49,7 @@ export const ICONS = {
   Guide: BookOpenText,
 };
 
-/** The single size and stroke weight for every icon: compact, thin-line QuickBooks density. */
+/** The single size and stroke weight for every icon: compact, thin-line, high-density. */
 export const ICON_SIZE = 16;
 export const ICON_STROKE = 1.75;
 

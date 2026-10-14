@@ -32,7 +32,7 @@ export const SCREEN_HELP = {
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
-  'accounting/qbw-import': 'Bring invoice amounts across from a QuickBooks Desktop company file, review them, and post them as balanced entries.',
+  'accounting/qbw-import': 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
   reports: 'Profit and Loss for any date range and the Balance Sheet as of any date, following your fiscal year. Export to CSV, print, or save as PDF.',
   settings: 'Company details and preferences, the closing date, backups and company files, and local AI access.',
 };
@@ -146,7 +146,7 @@ export const HELP_ARTICLES = [
     id: 'bank-feed', area: 'banking', views: ['banking/feeds'],
     title: 'Import and categorize bank transactions',
     body: 'Import a CSV, OFX or QFX statement from your bank (overlapping statements are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and LocalBooks learns from your choices to suggest a category next time.',
-    keywords: 'bank feed csv ofx qfx qbo quicken import statement categorize approve exclude rule download duplicate columns mapping',
+    keywords: 'bank feed csv ofx qfx qbo import statement categorize approve exclude rule download duplicate columns mapping',
     go: { label: 'Go to Bank Feeds', view: 'banking/feeds' },
   },
   {
@@ -209,17 +209,17 @@ export const HELP_ARTICLES = [
   },
   {
     id: 'qbw-import', area: 'accounting', views: ['accounting/qbw-import'],
-    title: 'Import a QuickBooks Desktop (.qbw) file',
-    body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from QuickBooks files yet. Map each line type to an income account, compare the total with QuickBooks, then post.',
-    keywords: 'qbw qbb migrate migration intuit desktop convert move import',
-    go: { label: 'Go to QuickBooks Import', view: 'accounting/qbw-import' },
+    title: 'Import a desktop company file (.qbw)',
+    body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from .qbw files yet. Map each line type to an income account, compare the total with the original program, then post.',
+    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
   },
   {
     id: 'qbw-undo', area: 'accounting', views: ['accounting/qbw-import'],
-    title: 'Undo or delete a QuickBooks import',
+    title: 'Undo or delete a desktop migration import',
     body: 'Reverse posted entries voids everything an import posted and deactivates the accounts it created, returning your balances to where they were. Delete import removes only the staged lines and never touches your books.',
     keywords: 'undo reverse delete import qbw remove staged',
-    go: { label: 'Go to QuickBooks Import', view: 'accounting/qbw-import' },
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
   },
 
   // Reports
@@ -307,7 +307,7 @@ const ARTICLE_GUIDES = {
   'bank-feed': 'bank-feeds', deposit: 'deposits-and-transfers', transfer: 'deposits-and-transfers', reconcile: 'reconciling',
   'journal-entry': 'journal-entries-and-voids', void: 'journal-entries-and-voids',
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
-  'qbw-import': 'quickbooks-import', 'qbw-undo': 'quickbooks-import',
+  'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
   preferences: 'getting-started', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
@@ -320,7 +320,7 @@ const SCREEN_GUIDES = {
   'sales/products': 'inventory', 'expenses/expenses': 'expenses-and-checks', 'expenses/bills': 'bills',
   'expenses/vendors': 'customers-and-products', 'employees/time': 'time-tracking', 'banking/feeds': 'bank-feeds',
   'banking/transfers': 'deposits-and-transfers', 'banking/reconcile': 'reconciling', 'accounting/journal': 'journal-entries-and-voids',
-  'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'quickbooks-import', reports: 'reports',
+  'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'desktop-migration', reports: 'reports',
   'accounting/fx-revaluation': 'currency-revaluation',
   settings: 'getting-started',
 };

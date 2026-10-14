@@ -829,7 +829,7 @@ async fn write_approval(
         return Err("BANK_SAME_ACCOUNT: choose a category other than the bank account itself".into());
     }
 
-    // Approval creates a real document, as in QuickBooks: money out becomes an Expense
+    // Approval creates a real document, as in classic desktop accounting: money out becomes an Expense
     // (Dr category / Cr bank), money in becomes a Deposit (Dr bank / Cr category).
     let amount = amount_cents.abs();
     let (entry_id, direction) = if amount_cents < 0 {

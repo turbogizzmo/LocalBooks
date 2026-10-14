@@ -2,7 +2,7 @@
 //!
 //! Each statement is returned as a flat list of typed lines (section heading, account, subtotal,
 //! total, net) carrying an indent depth, so the UI only applies typography. Subaccounts nest under
-//! their parent with a "Total <parent>" line, as in QuickBooks. The fiscal year boundary (which
+//! their parent with a "Total <parent>" line, as classic accounting software does. The fiscal year boundary (which
 //! splits current-year Net Income from Retained Earnings) comes from the `fiscal_year_start`
 //! preference.
 

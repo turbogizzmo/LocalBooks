@@ -1,6 +1,6 @@
 # LocalBooks
 
-**Local-first, double-entry accounting for small businesses.** A QuickBooks-style desktop app whose
+**Local-first, double-entry accounting for small businesses.** A classic-style desktop accounting app whose
 books live in a single SQLite file on your own machine: no account, no cloud, no telemetry.
 
 Built with **Rust + SQLite (SQLx)** for the accounting engine and **Tauri v2 + React + Tailwind CSS**
@@ -34,7 +34,7 @@ for a high-density, keyboard-friendly interface.
 - **The ledger cannot be corrupted by the UI.** Double-entry rules are enforced in Rust *and*
   again by database triggers, so even a bug in a screen cannot persist an unbalanced entry.
 - **Familiar workflow.** Invoices, receive payment, bills, pay bills, expenses, checks, deposits,
-  transfers, bank feeds, reconciliation, and financial statements in a compact, QuickBooks-style layout.
+  transfers, bank feeds, reconciliation, and financial statements in a compact, classic accounting layout.
 
 ---
 
@@ -160,20 +160,20 @@ schema off to the side before it is swapped in. Daily automatic backups run on l
 Statement reconciliation ticks lines until **Difference = $0.00**, then locks them. Reconciled lines
 are frozen and their entries can no longer be voided, so a reconciled balance can never drift.
 
-### QuickBooks Desktop import through a staging sandbox
+### Desktop Migration Wizard: .qbw import through a staging sandbox
 
-**Accounting › QuickBooks Import** reads a QuickBooks Desktop company file (`.qbw`) directly using the
+**Accounting › Desktop Migration Wizard** reads a desktop accounting company file (`.qbw`) directly using the
 open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file is opened read-only.
 
-1. **Extract.** Invoice line items (QuickBooks invoice ID, date, signed cents, source table) go into
+1. **Extract.** Invoice line items (source invoice ID, date, signed cents, source table) go into
    `staging_raw_transactions`. These staging tables have no ties to the ledger.
 2. **Map.** Each source table found in the file is mapped to a LocalBooks income account.
    **Auto-Generate Missing Accounts** creates any accounts that are missing, numbered 4500 and up.
-3. **Post.** Each QuickBooks invoice becomes one balanced journal entry: credits to the mapped income
+3. **Post.** Each source invoice becomes one balanced journal entry: credits to the mapped income
    accounts, with the balancing debit to an offset account you choose (default: Opening Balance
    Equity). Every entry goes through the same `post_entry_in_tx` checks as everything else. The
    whole batch posts in one transaction, so it lands completely or not at all. A register keyed by
-   QuickBooks invoice ID stops the same invoice being posted twice. Voiding an imported entry
+   source invoice ID stops the same invoice being posted twice. Voiding an imported entry
    releases its invoice so it can be posted again.
 
 ---
@@ -213,7 +213,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV bank import with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
-| **Accounting** | Journal Entries · Audit Log · QuickBooks Import | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
+| **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
 | **Settings** | Preferences Console · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, open company file, company file location, local read-only AI access |
 
@@ -245,7 +245,7 @@ its entry form with focus in the first field.
 | Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
 | Transfer | To-account | From-account |
 | Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |
-| Imported QuickBooks invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
+| Imported (.qbw) invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
 | Sale of a tracked product (added to the invoice or sales receipt entry) | Cost of Goods Sold, at moving average cost | Inventory Asset |
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
@@ -385,7 +385,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
 │   ├── components/             # one file per screen plus shared grids, menus and print documents
 │   ├── lib/                    # api.js (Tauri bindings), money.js (cents math), dates.js
 │   └── styles/print.css        # US Letter print designer
-├── tailwind.config.js          # QuickBooks color tokens and dense components
+├── tailwind.config.js          # color tokens and dense components
 └── src-tauri/
     ├── migrations/             # 0001–0010 SQL migrations (schema, triggers, seed data)
     ├── capabilities/           # Tauri permission set
@@ -416,7 +416,7 @@ balanced and unbalanced posting, rollback on failure, partial payments and aging
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
 statement tie-outs across fiscal years, CSV round-trips, backup/restore rejection cases,
 relocation, lock files, fractional-quantity rounding, foreign-currency conversion, and realized
-exchange gains and losses, and the QuickBooks import (mapping rules, duplicate prevention,
+exchange gains and losses, and the .qbw import (mapping rules, duplicate prevention,
 re-posting after a void, and rollback when a batch fails partway through), the forensic audit
 trail (tamper detection with the triggers removed), opening `.localbooks` files, closing-date locks (including the RFC 7914 PBKDF2 test vector),
 the single-instance handoff, reviewed forensic corrections, and the MCP server
@@ -437,11 +437,11 @@ the single-instance handoff, reviewed forensic corrections, and the MCP server
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
-- **QuickBooks Desktop import is partial.** OpenQBW 0.1 decodes invoice line items only. It does not
+- **The .qbw import is partial.** OpenQBW 0.1 decodes invoice line items only. It does not
   read account names, customers, vendors, bills, checks, payments, or memos. Some amount encodings
   are still undecoded; those lines are counted and shown, not guessed. Compressed backups (`.qbb`)
-  and portable files (`.qbm`) must be restored in QuickBooks first. Review imported totals against
-  your QuickBooks reports.
+  and portable files (`.qbm`) must be restored to a `.qbw` in the program that created them first.
+  Review imported totals against that program's reports.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.

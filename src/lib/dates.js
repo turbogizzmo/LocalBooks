@@ -21,7 +21,7 @@ export function addDays(iso, days) {
   return toIso(new Date(y, m - 1, d + days));
 }
 
-/** "2026-10-13" -> "10/13/2026" (QuickBooks US display). */
+/** "2026-10-13" -> "10/13/2026" (US display). */
 export function formatDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');

@@ -1,17 +1,18 @@
-# Import from QuickBooks Desktop
+# Desktop Migration Wizard: import a .qbw company file
 
-LocalBooks can read invoice amounts from a QuickBooks Desktop company file (`.qbw`) with the
+LocalBooks can read invoice amounts from a desktop accounting company file (`.qbw`) with the
 open-source OpenQBW reader.
 
-> **Read this first:** only invoice line amounts can be read from QuickBooks files today, not
+> **Read this first:** only invoice line amounts can be read from `.qbw` files today, not
 > customers, payments, bills or account names. Imported invoices post as income against an offset
-> account you choose. Always compare the total with an invoice report in QuickBooks before posting.
+> account you choose. Always compare the total with an invoice report from the original program before posting.
 
 ## 1. Choose the file
 
-1. Go to **Accounting › QuickBooks Import**.
-2. Click **Choose QuickBooks file (.qbw)…**, or drag the file onto the box. Compressed backups
-   (`.qbb`) and portable files (`.qbm`) must first be restored in QuickBooks to a `.qbw`.
+1. Go to **Accounting › Desktop Migration Wizard**.
+2. Click **Choose a .qbw company file…**, or drag the file onto the box. Compressed backups
+   (`.qbb`) and portable files (`.qbm`) must first be restored to a `.qbw` in the program that
+   created them.
 3. Wait while the progress bar works through the file; large files take a minute or more. The file
    is only read, never changed, and nothing is added to your books yet.
 

@@ -99,7 +99,7 @@ function ChooseFile({ busy, onFile }) {
   }, [busy, onFile]);
 
   const browse = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'QuickBooks Desktop company file', extensions: EXTENSIONS }] });
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Desktop company file (.qbw)', extensions: EXTENSIONS }] });
     if (typeof path === 'string') onFile(path);
   };
 
@@ -111,7 +111,7 @@ function ChooseFile({ busy, onFile }) {
         }`}
       >
         <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4 text-md" onClick={browse} disabled={busy}>
-          Choose QuickBooks file (.qbw)…
+          Choose a .qbw company file…
         </button>
         <div className="text-xs text-qb-ink-muted">or drag the file here. It is only read, never changed, and nothing is added to your books yet.</div>
       </div>
@@ -188,7 +188,7 @@ function MappingGrid({ summary, accounts, onMap, busy }) {
       </colgroup>
       <thead>
         <tr>
-          <th className="qb-grid-head">Found in the QuickBooks file</th>
+          <th className="qb-grid-head">Found in the .qbw file</th>
           <th className="qb-grid-head text-right">Lines</th>
           <th className="qb-grid-head text-right">Total</th>
           <th className="qb-grid-head">Post to this LocalBooks income account</th>
@@ -221,7 +221,7 @@ function MappingGrid({ summary, accounts, onMap, busy }) {
   );
 }
 
-/** Reads a QuickBooks Desktop file into a holding area, maps what it found, then posts balanced entries. */
+/** Reads a .qbw desktop company file into a holding area, maps what it found, then posts balanced entries. */
 export default function QbwImporter({ accounts }) {
   const [batches, setBatches] = useState([]);
   const [batchId, setBatchId] = useState(null);
@@ -282,7 +282,7 @@ export default function QbwImporter({ accounts }) {
     async (path) => {
       const ext = path.split('.').pop()?.toLowerCase();
       if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a QuickBooks Desktop file (.qbw).' });
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file.' });
         return;
       }
       setBusy(true);
@@ -359,7 +359,7 @@ export default function QbwImporter({ accounts }) {
     const total = formatCents(summary.totalCents);
     if (
       !window.confirm(
-        `Post ${postable.toLocaleString()} journal entries (${total} in total) to your books?\n\nCheck this total against QuickBooks first. You can undo it later with "Reverse posted entries".`,
+        `Post ${postable.toLocaleString()} journal entries (${total} in total) to your books?\n\nCheck this total against the original program’s reports first. You can undo it later with "Reverse posted entries".`,
       )
     )
       return;
@@ -377,13 +377,13 @@ export default function QbwImporter({ accounts }) {
     <div className="flex h-full flex-col gap-2 overflow-auto p-2 scrollbar-thin">
       <section className="qb-panel">
         <div className="flex items-center gap-2 px-3 py-2">
-          <h2 className="text-lg font-semibold">Import from QuickBooks Desktop</h2>
-          <span className="ml-auto text-xs text-qb-ink-muted">Uses the open-source OpenQBW reader</span>
+          <h2 className="text-lg font-semibold">Desktop Migration Wizard</h2>
+          <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · uses the open-source OpenQBW reader</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Brings in <strong>invoice line amounts only</strong>. QuickBooks files cannot yet be read for customers, payments, bills or
+          Brings in <strong>invoice line amounts only</strong> from desktop company files (.qbw). They cannot yet be read for customers, payments, bills or
           account names, so imported invoices post as income against an offset account you choose. Compare the totals with your
-          QuickBooks reports before posting; anything posted can be reversed below.
+          original program’s reports before posting; anything posted can be reversed below.
         </p>
       </section>
 
@@ -401,7 +401,7 @@ export default function QbwImporter({ accounts }) {
 
       <Step
         number={1}
-        title="Choose a QuickBooks file"
+        title="Choose a company file"
         state={progress ? 'active' : step1}
         aside={
           summary &&

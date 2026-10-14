@@ -22,7 +22,7 @@ Controls**.
    "Before restore" snapshot first.
 
 > **Important:** a restore replaces the whole company file with the backup. Anything entered after
-> the backup was taken isn't kept. To undo just one QuickBooks import, use **Reverse posted
+> the backup was taken isn't kept. To undo just one desktop migration import, use **Reverse posted
 > entries** on the import screen instead.
 
 ## Open another company file
