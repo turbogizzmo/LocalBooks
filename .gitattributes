@@ -1,0 +1,4 @@
+# Migration SQL is compiled into the app and checksummed by sqlx. Keep LF line endings on every
+# platform: a Windows checkout converting to CRLF would give Windows builds different checksums, and
+# a company file shared between operating systems would then refuse to open.
+*.sql text eol=lf
