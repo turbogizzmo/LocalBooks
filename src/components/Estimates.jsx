@@ -10,7 +10,7 @@ const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
   ACCEPTED: { label: '✓ Accepted', className: 'font-semibold text-qb-green-active' },
   REJECTED: { label: '✕ Rejected', className: 'text-qb-ink-faint' },
-  CLOSED: { label: '● Converted · invoice', className: 'text-qb-info' },
+  CONVERTED: { label: '● Converted · invoice', className: 'text-qb-info' },
 };
 
 function EstimateForm({ accounts, onSaved, onCancel }) {
@@ -174,8 +174,8 @@ export default function Estimates({ accounts, intent, navigate }) {
                 </tr>
               )}
               {rows.map((e) => {
-                const expired = e.status !== 'CLOSED' && e.expirationDate && e.expirationDate < today;
-                const open = e.status !== 'CLOSED';
+                const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
+                const open = e.status !== 'CONVERTED';
                 return (
                   <tr key={e.id} className="qb-grid-row">
                     <td className="qb-grid-cell">{e.estimateNumber}</td>
@@ -185,7 +185,7 @@ export default function Estimates({ accounts, intent, navigate }) {
                     <td className="qb-grid-cell num">{formatCents(e.totalCents)}</td>
                     <td className={`qb-grid-cell ${STATUS[e.status].className}`}>
                       {STATUS[e.status].label}
-                      {e.status === 'CLOSED' && e.invoiceNumber ? ` #${e.invoiceNumber}` : ''}
+                      {e.status === 'CONVERTED' && e.invoiceNumber ? ` #${e.invoiceNumber}` : ''}
                       {expired ? ' · expired' : ''}
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">

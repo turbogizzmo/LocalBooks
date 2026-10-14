@@ -32,7 +32,10 @@ accounts.
 Sell it on an invoice or sales receipt as usual, choosing the product on the line (the list shows
 how many are on hand). Posting also records the cost of the units sold in **Cost of Goods Sold**.
 
-- LocalBooks won't sell more than you have on hand. Receive stock or adjust the quantity first.
+- You can sell before the bill is entered. Stock then shows below zero (in red), and the units are
+  costed at the last purchase cost per unit (or nothing, if never bought yet). When the bill
+  arrives, the difference between that provisional cost and the real cost goes to **Cost of Goods
+  Sold** automatically (shown as **Cost true-up** in the stock history).
 - Products with tracked stock can only be sold on home-currency invoices for now.
 
 ## Count and correct stock
@@ -44,5 +47,7 @@ how many are on hand). Posting also records the cost of the units sold in **Cost
 
 The **Stock history** in the same window lists every purchase, sale, adjustment and void.
 
-> **Tip:** Voiding a sale returns its units at the cost they left at. A bill can't be voided once
-> its units have been sold. Void the sales first, or adjust the quantity instead.
+> **Tip:** Voiding a sale returns its units at the cost they left at. A void that would leave stock
+> valued inconsistently (for example a positive value with stock below zero) is refused; void the
+> later transactions first, or adjust the quantity instead. Write-offs can only remove stock you
+> have on hand.

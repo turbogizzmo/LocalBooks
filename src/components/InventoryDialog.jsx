@@ -5,7 +5,7 @@ import { api, errorText } from '../lib/api.js';
 import { formatCents, formatQuantity, mulDivRound, parseMoneyToCents, parseQuantityE4 } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
-const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', VOID: 'Void' };
+const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
 function Dialog({ title, children, onClose }) {
   const ref = useRef(null);
@@ -111,7 +111,7 @@ export function AdjustDialog({ item, accounts, onClose, onDone }) {
     <Dialog title={`Adjust stock · ${item.name}`} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-2 px-3 py-2 text-xs">
         <div className="flex flex-wrap gap-x-4 text-sm">
-          <span>On hand <strong className="num">{formatQuantity(item.qtyOnHandE4)}</strong></span>
+          <span>On hand <strong className={`num ${item.qtyOnHandE4 < 0 ? 'text-qb-negative' : ''}`}>{formatQuantity(item.qtyOnHandE4)}</strong></span>
           <span>Value <strong className="num">{formatCents(item.valueCents)}</strong></span>
           <span>Average cost <strong className="num">{item.averageCostCents !== null ? formatCents(item.averageCostCents) : '—'}</strong></span>
         </div>

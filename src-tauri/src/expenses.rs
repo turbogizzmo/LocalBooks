@@ -261,12 +261,12 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
     let ap_account = system_account(tx, "ACCOUNTS_PAYABLE").await?;
     let mut lines: Vec<JournalLine> = debits.into_iter().map(|(account, cents)| JournalLine::debit(account, cents)).collect();
     lines.push(JournalLine::credit(ap_account, total));
+    let receipt = crate::inventory::plan_receipt(tx, &received).await?;
+    lines.extend(receipt.lines.iter().cloned());
     let reference = clean(input.bill_number.as_deref()).map(|n| format!(" #{n}")).unwrap_or_default();
     let entry = JournalEntry { id: None, date: input.bill_date, description: format!("Bill{reference} - {vendor_name}"), lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Bill(bill_id)).await?;
-    for (item, qty, cost) in received {
-        crate::inventory::record_purchase(tx, item, input.bill_date, qty, cost, entry_id).await?;
-    }
+    receipt.record(tx, input.bill_date, entry_id).await?;
 
     sqlx::query("UPDATE bills SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2")
         .bind(entry_id)

@@ -137,7 +137,12 @@ export default function Products({ accounts }) {
                     <td className="qb-grid-cell">{accountLabel(accounts, p.incomeAccountId)}</td>
                     {items.has(p.id) ? (
                       <>
-                        <td className="qb-grid-cell num">{formatQuantity(items.get(p.id).qtyOnHandE4)}</td>
+                        <td
+                          className={`qb-grid-cell num ${items.get(p.id).qtyOnHandE4 < 0 ? 'font-semibold text-qb-negative' : ''}`}
+                          title={items.get(p.id).qtyOnHandE4 < 0 ? 'Sold before it was bought: the cost is trued up when the bill is entered' : undefined}
+                        >
+                          {formatQuantity(items.get(p.id).qtyOnHandE4)}
+                        </td>
                         <td className="qb-grid-cell num">{items.get(p.id).averageCostCents !== null ? formatCents(items.get(p.id).averageCostCents) : '—'}</td>
                         <td className="qb-grid-cell num">{formatCents(items.get(p.id).valueCents)}</td>
                         <td className="qb-grid-cell cell-tight">

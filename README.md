@@ -410,7 +410,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (99 tests, plus 3 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
+The suite (101 tests, plus 3 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -443,7 +443,8 @@ the single-instance handoff, reviewed forensic corrections, and the MCP server
   and portable files (`.qbm`) must be restored in QuickBooks first. Review imported totals against
   your QuickBooks reports.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
-  checks), can't be sold on foreign-currency invoices, and can't go below zero on hand.
+  checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
+  are costed at the last purchase cost and trued up to actual cost when the stock is bought.
 - Currency amounts use two decimal places (zero-decimal currencies such as JPY display with `.00`).
 
 ---

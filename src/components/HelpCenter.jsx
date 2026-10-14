@@ -97,7 +97,7 @@ export const HELP_ARTICLES = [
   {
     id: 'inventory', area: 'sales', views: ['sales/products', 'expenses/bills', 'sales/invoices'],
     title: 'Track inventory and cost of goods sold',
-    body: 'Choose Track stock on a product, record opening stock with Adjust stock, and buy more on bills by picking it as the Stock item. Selling it on an invoice or sales receipt records its moving average cost in Cost of Goods Sold, and LocalBooks will not sell more than is on hand.',
+    body: 'Choose Track stock on a product, record opening stock with Adjust stock, and buy more on bills by picking it as the Stock item. Selling it on an invoice or sales receipt records its moving average cost in Cost of Goods Sold; you can sell before the bill arrives, and the cost is trued up when it does.',
     keywords: 'inventory stock quantity on hand cogs cost of goods sold average cost sku count adjust',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
   },

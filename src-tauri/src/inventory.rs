@@ -6,6 +6,12 @@
 //! debit COGS, credit Inventory Asset, at round(value × qty sold / qty on hand). Every movement is
 //! appended to `stock_ledger_entries` with the journal entry that carries its money side; voiding that
 //! entry reverses the movement, so stock and the Inventory Asset account always agree.
+//!
+//! Stock may be sold before its purchase is recorded. Units sold beyond what is on hand are costed
+//! at the item's last purchase cost per unit, leaving a negative quantity with a negative value.
+//! When stock arrives while below zero, the difference between the actual and provisional cost of
+//! the units already sold is moved to COGS in the purchase's own entry (a COST_TRUE_UP movement).
+//! No cost is ever worked out by dividing by a quantity of zero or less.
 
 use std::collections::BTreeMap;
 
@@ -23,22 +29,36 @@ struct Item {
     cogs_account_id: i64,
     qty_e4: i64,
     value_cents: i64,
+    last_unit_cost_cents: Option<i64>,
 }
 
 async fn item_for_product(tx: &mut Transaction<'_, Sqlite>, product_id: i64) -> Result<Option<Item>, String> {
-    let row: Option<(i64, String, i64, i64, i64, i64)> = sqlx::query_as(
-        "SELECT i.id, p.name, i.asset_account_id, i.cogs_account_id, i.qty_on_hand_e4, i.value_cents
+    let row: Option<(i64, String, i64, i64, i64, i64, Option<i64>)> = sqlx::query_as(
+        "SELECT i.id, p.name, i.asset_account_id, i.cogs_account_id, i.qty_on_hand_e4, i.value_cents, i.last_unit_cost_cents
          FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.product_id = ?1",
     )
     .bind(product_id)
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    Ok(row.map(|(id, name, asset_account_id, cogs_account_id, qty_e4, value_cents)| Item { id, name, asset_account_id, cogs_account_id, qty_e4, value_cents }))
+    Ok(row.map(|(id, name, asset_account_id, cogs_account_id, qty_e4, value_cents, last_unit_cost_cents)| Item {
+        id,
+        name,
+        asset_account_id,
+        cogs_account_id,
+        qty_e4,
+        value_cents,
+        last_unit_cost_cents,
+    }))
 }
 
+/// 15_000 → "1.5", -20_000 → "-2".
 fn format_qty(qty_e4: i64) -> String {
-    crate::ledger::format_cents(qty_e4 / 100).trim_end_matches(".00").to_string()
+    let sign = if qty_e4 < 0 { "-" } else { "" };
+    let abs = qty_e4.unsigned_abs();
+    let frac = format!("{:04}", abs % 10_000);
+    let frac = frac.trim_end_matches('0');
+    if frac.is_empty() { format!("{sign}{}", abs / 10_000) } else { format!("{sign}{}.{frac}", abs / 10_000) }
 }
 
 /// Appends a movement continuing from the item's current quantity and value.
@@ -61,12 +81,11 @@ async fn record_movement(
     .map_err(db_err)?;
     let qty_after = qty.checked_add(qty_change_e4).ok_or("STOCK_OVERFLOW: quantity out of range")?;
     let value_after = value.checked_add(value_change_cents).ok_or("STOCK_OVERFLOW: value out of range")?;
-    if qty_after < 0 {
-        return Err(format!("STOCK_SHORT: only {} of {name} on hand", format_qty(qty)));
-    }
-    if value_after < 0 || (qty_after == 0 && value_after != 0) {
+    // Quantity and value must agree in sign (also enforced by the table's CHECK constraint).
+    let consistent = (qty_after > 0 && value_after >= 0) || (qty_after == 0 && value_after == 0) || (qty_after < 0 && value_after <= 0);
+    if !consistent {
         return Err(format!(
-            "STOCK_VALUE: this would leave {name} with {} units valued at {}; reverse later sales or adjustments first",
+            "STOCK_VALUE: this would leave {name} with {} on hand valued at {}; reverse later sales or adjustments first",
             format_qty(qty_after),
             crate::ledger::format_cents(value_after)
         ));
@@ -90,15 +109,59 @@ async fn record_movement(
     .map_err(db_err)
 }
 
-/// Cost of `qty_e4` units at moving average: the whole remaining value when they are the last units.
+/// Cost of `qty_e4` units taken out of what is on hand, at moving average: the whole remaining
+/// value when they are the last units. Refuses more than is on hand (used for write-offs).
 fn average_cost(item: &Item, qty_e4: i64) -> Result<i64, String> {
-    if qty_e4 > item.qty_e4 {
-        return Err(format!("STOCK_SHORT: only {} of {} on hand; receive stock or adjust the quantity first", format_qty(item.qty_e4), item.name));
+    if qty_e4 <= 0 || qty_e4 > item.qty_e4 {
+        return Err(format!("STOCK_SHORT: only {} of {} on hand", format_qty(item.qty_e4.max(0)), item.name));
     }
     if qty_e4 == item.qty_e4 {
         return Ok(item.value_cents);
     }
+    // Here 0 < qty_e4 < item.qty_e4, so the divisor is positive.
     mul_div_round(item.value_cents, qty_e4, item.qty_e4).ok_or_else(|| "STOCK_OVERFLOW: cost out of range".to_string())
+}
+
+/// Cost of selling `qty_e4` units. Units covered by stock on hand cost moving average; any units
+/// beyond that (stock goes below zero) cost the last purchase cost per unit, or nothing if the item
+/// has never been bought, to be trued up when stock arrives.
+fn sale_cost(item: &Item, qty_e4: i64) -> Result<i64, String> {
+    if qty_e4 <= item.qty_e4 {
+        return average_cost(item, qty_e4);
+    }
+    // Guard: no division by a quantity of zero or less. Units on hand (if any) take their whole value.
+    let covered = item.qty_e4.max(0);
+    let covered_cost = if covered > 0 { item.value_cents } else { 0 };
+    let short = qty_e4 - covered;
+    let unit = item.last_unit_cost_cents.unwrap_or(0);
+    let short_cost = mul_div_round(unit, short, crate::ledger::QUANTITY_SCALE).ok_or("STOCK_OVERFLOW: cost out of range")?;
+    covered_cost.checked_add(short_cost).ok_or_else(|| "STOCK_OVERFLOW: cost out of range".to_string())
+}
+
+/// When stock arrives while below zero: the actual cost of the units already sold minus the
+/// provisional cost they were sold at. Positive means COGS was understated. Zero when stock is not
+/// below zero. Divides only by the positive purchase quantity and positive shortfall.
+fn true_up(qty_before: i64, value_before: i64, qty_e4: i64, cost_cents: i64) -> Result<i64, String> {
+    if qty_before >= 0 || qty_e4 <= 0 {
+        return Ok(0);
+    }
+    let shortfall = -qty_before;
+    let covered = shortfall.min(qty_e4);
+    let actual = if covered == qty_e4 { Some(cost_cents) } else { mul_div_round(cost_cents, covered, qty_e4) };
+    let provisional = if covered == shortfall { Some(-value_before) } else { mul_div_round(-value_before, covered, shortfall) };
+    match (actual, provisional) {
+        (Some(a), Some(p)) => Ok(a - p),
+        _ => Err("STOCK_OVERFLOW: cost out of range".into()),
+    }
+}
+
+/// Journal lines moving `variance` between Cost of Goods Sold and Inventory Asset.
+fn true_up_lines(item: &Item, variance: i64) -> Vec<JournalLine> {
+    match variance.signum() {
+        1 => vec![JournalLine::debit(item.cogs_account_id, variance), JournalLine::credit(item.asset_account_id, variance)],
+        -1 => vec![JournalLine::debit(item.asset_account_id, -variance), JournalLine::credit(item.cogs_account_id, -variance)],
+        _ => Vec::new(),
+    }
 }
 
 /// Cost of goods sold for a sale, worked out before its journal entry is posted.
@@ -123,7 +186,7 @@ pub(crate) async fn cost_of_sale(tx: &mut Transaction<'_, Sqlite>, lines: &[(Opt
     let mut movements = Vec::new();
     for (product, qty) in per_product {
         let Some(item) = item_for_product(tx, product).await? else { continue };
-        let cost = average_cost(&item, qty)?;
+        let cost = sale_cost(&item, qty)?;
         if cost > 0 {
             *debits.entry(item.cogs_account_id).or_insert(0) += cost;
             *credits.entry(item.asset_account_id).or_insert(0) += cost;
@@ -162,8 +225,61 @@ pub(crate) async fn check_purchase_line(tx: &mut Transaction<'_, Sqlite>, produc
     Ok(Some(item.id))
 }
 
-pub(crate) async fn record_purchase(tx: &mut Transaction<'_, Sqlite>, item_id: i64, date: NaiveDate, qty_e4: i64, cost_cents: i64, journal_entry_id: i64) -> Result<(), String> {
-    record_movement(tx, item_id, date, "PURCHASE", qty_e4, cost_cents, journal_entry_id, None).await.map(|_| ())
+async fn item_by_id(tx: &mut Transaction<'_, Sqlite>, item_id: i64) -> Result<Item, String> {
+    let product: i64 = sqlx::query_scalar("SELECT product_id FROM inventory_items WHERE id = ?1").bind(item_id).fetch_one(&mut **tx).await.map_err(db_err)?;
+    item_for_product(tx, product).await?.ok_or_else(|| "STOCK_NOT_FOUND: that item is not tracked".into())
+}
+
+/// Stock arriving on a bill, worked out before the bill's journal entry is posted.
+pub(crate) struct Receipt {
+    /// True-up lines for stock that arrives while below zero (added to the bill's entry).
+    pub lines: Vec<JournalLine>,
+    /// (item, quantity, cost, true-up) per bill line, in order.
+    plan: Vec<(i64, i64, i64, i64)>,
+}
+
+/// Plans stock received on a bill's lines (`(item, quantity, cost)`), applying each in turn.
+pub(crate) async fn plan_receipt(tx: &mut Transaction<'_, Sqlite>, received: &[(i64, i64, i64)]) -> Result<Receipt, String> {
+    let mut state: BTreeMap<i64, (i64, i64)> = BTreeMap::new();
+    let mut lines = Vec::new();
+    let mut plan = Vec::new();
+    for &(item_id, qty, cost) in received {
+        let item = item_by_id(tx, item_id).await?;
+        let (q, v) = *state.entry(item_id).or_insert((item.qty_e4, item.value_cents));
+        let variance = true_up(q, v, qty, cost)?;
+        lines.extend(true_up_lines(&item, variance));
+        state.insert(item_id, (q + qty, v + cost - variance));
+        plan.push((item_id, qty, cost, variance));
+    }
+    Ok(Receipt { lines, plan })
+}
+
+impl Receipt {
+    /// Records the stock and any true-up against the bill's posted entry, and the last unit cost.
+    pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
+        for &(item, qty, cost, variance) in &self.plan {
+            // The true-up comes first: recorded alone, a purchase into negative stock could leave a
+            // moment where quantity is still below zero but value is above it.
+            if variance != 0 {
+                record_movement(tx, item, date, "COST_TRUE_UP", 0, -variance, journal_entry_id, None).await?;
+            }
+            record_movement(tx, item, date, "PURCHASE", qty, cost, journal_entry_id, None).await?;
+            remember_unit_cost(tx, item, qty, cost).await?;
+        }
+        Ok(())
+    }
+}
+
+/// Keeps the latest cost per unit for costing sales beyond what is on hand.
+async fn remember_unit_cost(tx: &mut Transaction<'_, Sqlite>, item_id: i64, qty_e4: i64, cost_cents: i64) -> Result<(), String> {
+    let unit = mul_div_round(cost_cents, crate::ledger::QUANTITY_SCALE, qty_e4).ok_or("STOCK_OVERFLOW: cost out of range")?;
+    sqlx::query("UPDATE inventory_items SET last_unit_cost_cents = ?1 WHERE id = ?2")
+        .bind(unit)
+        .bind(item_id)
+        .execute(&mut **tx)
+        .await
+        .map(|_| ())
+        .map_err(db_err)
 }
 
 /// Reverses every stock movement carried by a journal entry being voided.
@@ -315,21 +431,30 @@ pub async fn adjust(pool: &SqlitePool, input: &AdjustInput) -> Result<InventoryI
         };
         let memo = input.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).unwrap_or("Inventory adjustment");
         let description = format!("{memo}: {} {} {}", item.name, if input.qty_change_e4 > 0 { "+" } else { "-" }, format_qty(input.qty_change_e4.abs()));
+        // Stock added while below zero trues up the cost of units already sold.
+        let variance = if value > 0 { true_up(item.qty_e4, item.value_cents, input.qty_change_e4, value)? } else { 0 };
         let entry_id = if value == 0 {
             None
         } else {
-            let lines = if value > 0 {
+            let mut lines = if value > 0 {
                 vec![JournalLine::debit(item.asset_account_id, value), JournalLine::credit(input.offset_account_id, value)]
             } else {
                 vec![JournalLine::debit(input.offset_account_id, -value), JournalLine::credit(item.asset_account_id, -value)]
             };
+            lines.extend(true_up_lines(&item, variance));
             let entry = JournalEntry { id: None, date: input.date, description: description.clone(), lines, currency: None };
             Some(ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await?)
         };
         let Some(entry_id) = entry_id else {
             return Err("STOCK_ADJUST_FREE: adding stock at no cost needs a cost of at least 0.01, so the books record it".to_string());
         };
+        if variance != 0 {
+            record_movement(&mut tx, item.id, input.date, "COST_TRUE_UP", 0, -variance, entry_id, None).await?;
+        }
         record_movement(&mut tx, item.id, input.date, "ADJUSTMENT", input.qty_change_e4, value, entry_id, None).await?;
+        if value > 0 {
+            remember_unit_cost(&mut tx, item.id, input.qty_change_e4, value).await?;
+        }
         Ok(())
     }
     .await;
@@ -452,7 +577,7 @@ mod tests {
             .await
             .unwrap();
         // Bought 10 more at $7.00: 20 on hand worth $120.00, average $6.00.
-        let bought = bill(&s, 10, 700, s.inventory).await.unwrap();
+        bill(&s, 10, 700, s.inventory).await.unwrap();
         let w = item(&s.pool, s.item).await;
         assert_eq!((w.qty_on_hand_e4, w.value_cents, w.average_cost_cents), (200_000, 12_000, Some(600)));
         assert_reconciled(&s).await;
@@ -474,16 +599,6 @@ mod tests {
         assert_eq!((w.qty_on_hand_e4, w.value_cents, w.average_cost_cents), (0, 0, None));
         assert_eq!(gl(&s.pool, s.cogs).await, 12_000);
 
-        // Nothing left: the sale is refused and nothing is posted.
-        let invoices_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&s.pool).await.unwrap();
-        assert!(invoice(&s, 10_000, None).await.unwrap_err().starts_with("STOCK_SHORT"));
-        let invoices_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM invoices").fetch_one(&s.pool).await.unwrap();
-        assert_eq!(invoices_before, invoices_after);
-
-        // The bill's 10 units have been sold, so voiding the bill is refused.
-        let bill_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bills WHERE id = ?1").bind(bought.id).fetch_one(&s.pool).await.unwrap();
-        assert!(ledger::void_transaction(&s.pool, bill_entry).await.unwrap_err().starts_with("STOCK_SHORT"));
-
         // Voiding the sales receipt puts its 15 units back at the cost they left at.
         ledger::void_transaction(&s.pool, sold_out.journal_entry_id.unwrap()).await.unwrap();
         let w = item(&s.pool, s.item).await;
@@ -501,6 +616,103 @@ mod tests {
 
         let history = movements(&s.pool, s.item).await.unwrap();
         assert_eq!(history.iter().map(|m| m.kind.as_str()).collect::<Vec<_>>(), ["ADJUSTMENT", "VOID", "SALE", "SALE", "PURCHASE", "ADJUSTMENT"]);
+
+        // A write-off can't remove stock that isn't there.
+        let shrink = account(&s.pool, "5000").await;
+        let err = adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-30".parse().unwrap(), qty_change_e4: -1_000_000, total_cost_cents: None, offset_account_id: shrink, memo: None })
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("STOCK_SHORT"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn selling_before_the_bill_costs_at_the_last_purchase_cost_and_trues_up_on_arrival() {
+        let s = shop().await;
+        // Never bought, nothing on hand: the sale goes through at a provisional cost of zero.
+        invoice(&s, 20_000, None).await.unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents, w.average_cost_cents), (-20_000, 0, None));
+        assert_eq!(gl(&s.pool, s.cogs).await, 0);
+
+        // The bill arrives: 5 at $12.00. The 2 already sold really cost $24.00, moved to COGS in the
+        // bill's own entry; the 3 left are worth $36.00.
+        let b = bill(&s, 5, 1_200, s.inventory).await.unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents), (30_000, 3_600));
+        assert_eq!(gl(&s.pool, s.cogs).await, 2_400);
+        assert_reconciled(&s).await;
+        let bill_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bills WHERE id = ?1").bind(b.id).fetch_one(&s.pool).await.unwrap();
+        let entry_lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1").bind(bill_entry).fetch_all(&s.pool).await.unwrap();
+        assert!(entry_lines.contains(&(s.cogs, 2_400, 0)) && entry_lines.contains(&(s.inventory, 0, 2_400)), "{entry_lines:?}");
+
+        // Selling past zero again: 3 covered by stock ($36.00), 2 more at the last cost of $12.00.
+        receipt(&s, 50_000).await.unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents), (-20_000, -2_400));
+        assert_eq!(gl(&s.pool, s.cogs).await, 2_400 + 3_600 + 2_400);
+        assert_reconciled(&s).await;
+
+        // A smaller bill covers only part of the shortfall: 1 at $13.00, $1.00 more than its
+        // provisional cost, so COGS rises by $1.00 and 1 unit is still owed at $12.00.
+        bill(&s, 1, 1_300, s.inventory).await.unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents), (-10_000, -1_200));
+        assert_eq!(gl(&s.pool, s.cogs).await, 8_400 + 100);
+
+        // Voiding that bill puts everything back exactly, true-up included.
+        let last_bill: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM bills ORDER BY id DESC LIMIT 1").fetch_one(&s.pool).await.unwrap();
+        ledger::void_transaction(&s.pool, last_bill).await.unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents), (-20_000, -2_400));
+        assert_eq!(gl(&s.pool, s.cogs).await, 8_400);
+        assert_reconciled(&s).await;
+
+        // Opening stock added by adjustment while below zero trues up too: 4 for $40.00.
+        let obe: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Opening Balance Equity'").fetch_one(&s.pool).await.unwrap();
+        adjust(&s.pool, &AdjustInput { item_id: s.item, date: "2026-04-20".parse().unwrap(), qty_change_e4: 40_000, total_cost_cents: Some(4_000), offset_account_id: obe, memo: None })
+            .await
+            .unwrap();
+        let w = item(&s.pool, s.item).await;
+        assert_eq!((w.qty_on_hand_e4, w.value_cents), (20_000, 2_000), "2 left at $10.00 each");
+        assert_eq!(gl(&s.pool, s.cogs).await, 8_400 - 400, "the 2 sold at $12.00 provisional really cost $10.00");
+        assert_reconciled(&s).await;
+    }
+
+    /// Random sequences of sales, purchases and voids never fail on arithmetic, never leave quantity
+    /// and value disagreeing in sign, and always keep the stock value equal to the inventory account.
+    #[tokio::test]
+    async fn random_sequences_never_divide_by_zero_and_stay_reconciled() {
+        let s = shop().await;
+        let mut seed: u64 = 0x5eed;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed % n
+        };
+        let mut sales: Vec<i64> = Vec::new();
+        for _ in 0..120 {
+            match next(4) {
+                0 | 1 => {
+                    let qty = (next(6) as i64 + 1) * 5_000; // 0.5 to 3 units
+                    let inv = invoice(&s, qty, None).await.expect("selling never fails on arithmetic");
+                    sales.push(inv.journal_entry_id.unwrap());
+                }
+                2 => {
+                    bill(&s, next(4) as i64 + 1, 500 + next(1_000) as i64, s.inventory).await.expect("buying never fails");
+                }
+                _ => {
+                    if let Some(entry) = sales.pop() {
+                        // A void may be refused if later movements depend on it; it must never break the books.
+                        let _ = ledger::void_transaction(&s.pool, entry).await;
+                    }
+                }
+            }
+            let w = item(&s.pool, s.item).await;
+            let consistent = (w.qty_on_hand_e4 > 0 && w.value_cents >= 0) || (w.qty_on_hand_e4 == 0 && w.value_cents == 0) || (w.qty_on_hand_e4 < 0 && w.value_cents <= 0);
+            assert!(consistent, "{} on hand valued at {}", w.qty_on_hand_e4, w.value_cents);
+            assert_reconciled(&s).await;
+        }
     }
 
     #[tokio::test]

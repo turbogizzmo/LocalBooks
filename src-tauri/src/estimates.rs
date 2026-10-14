@@ -30,18 +30,19 @@ pub struct EstimateSummary {
     pub status: String,
     pub memo: Option<String>,
     pub total_cents: i64,
-    pub invoice_id: Option<i64>,
+    /// The invoice this estimate became (kept as a permanent link).
+    pub converted_to_invoice_id: Option<i64>,
     pub invoice_number: Option<i64>,
     pub line_count: i64,
 }
 
 const SUMMARY_SELECT: &str = "
     SELECT e.id, e.estimate_number, c.name AS customer_name, e.estimate_date, e.expiration_date, e.status, e.memo,
-           e.total_cents, e.invoice_id, i.invoice_number,
+           e.total_cents, e.converted_to_invoice_id, i.invoice_number,
            (SELECT COUNT(*) FROM estimate_lines WHERE estimate_id = e.id) AS line_count
     FROM estimates e
     JOIN customers c ON c.id = e.customer_id
-    LEFT JOIN invoices i ON i.id = e.invoice_id";
+    LEFT JOIN invoices i ON i.id = e.converted_to_invoice_id";
 
 pub async fn list_estimates(pool: &SqlitePool) -> Result<Vec<EstimateSummary>, String> {
     sqlx::query_as::<_, EstimateSummary>(&format!("{SUMMARY_SELECT} ORDER BY e.estimate_number DESC"))
@@ -136,14 +137,14 @@ pub async fn set_estimate_status(pool: &SqlitePool, estimate_id: i64, status: &s
     if !matches!(status, "PENDING" | "ACCEPTED" | "REJECTED") {
         return Err(format!("EST_BAD_STATUS: '{status}' is not a status you can set; convert to invoice to close"));
     }
-    let result = sqlx::query("UPDATE estimates SET status = ?1 WHERE id = ?2 AND status <> 'CLOSED'")
+    let result = sqlx::query("UPDATE estimates SET status = ?1 WHERE id = ?2 AND status <> 'CONVERTED'")
         .bind(status)
         .bind(estimate_id)
         .execute(pool)
         .await
         .map_err(db_err)?;
     if result.rows_affected() != 1 {
-        return Err("EST_CLOSED: this estimate is already converted or does not exist".into());
+        return Err("EST_CONVERTED: this estimate is already converted or does not exist".into());
     }
     get_estimate(pool, estimate_id).await
 }
@@ -182,7 +183,7 @@ pub async fn convert_to_invoice(
             currency: None,
         };
         let invoice_id = write_invoice(&mut tx, &invoice).await?;
-        sqlx::query("UPDATE estimates SET status = 'CLOSED', invoice_id = ?1 WHERE id = ?2")
+        sqlx::query("UPDATE estimates SET status = 'CONVERTED', converted_to_invoice_id = ?1 WHERE id = ?2")
             .bind(invoice_id)
             .bind(estimate_id)
             .execute(&mut *tx)
@@ -241,7 +242,7 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
     .map_err(db_err)?;
     let (customer_name, status) = header.ok_or_else(|| format!("EST_NOT_FOUND: estimate {estimate_id} does not exist"))?;
     match status.as_str() {
-        "CLOSED" => Err("EST_CLOSED: this estimate has already been converted to an invoice".to_string()),
+        "CONVERTED" => Err("EST_CONVERTED: this estimate has already been converted to an invoice".to_string()),
         "REJECTED" => Err("EST_REJECTED: a rejected estimate cannot be invoiced; mark it pending or accepted first".to_string()),
         _ => Ok(customer_name),
     }
@@ -255,7 +256,7 @@ pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: I
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;
         let invoice_id = write_invoice(&mut tx, &input).await?;
-        sqlx::query("UPDATE estimates SET status = 'CLOSED', invoice_id = ?1 WHERE id = ?2")
+        sqlx::query("UPDATE estimates SET status = 'CONVERTED', converted_to_invoice_id = ?1 WHERE id = ?2")
             .bind(invoice_id)
             .bind(estimate_id)
             .execute(&mut *tx)
@@ -311,7 +312,7 @@ mod tests {
         set_estimate_status(&pool, estimate.id, "ACCEPTED").await.unwrap();
 
         let closed = convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.expect("converts");
-        assert_eq!(closed.status, "CLOSED");
+        assert_eq!(closed.status, "CONVERTED");
         assert!(closed.invoice_number.is_some());
         let ar_balance: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
             .bind(ar)
@@ -319,7 +320,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(ar_balance, 130_000);
-        assert!(convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap_err().starts_with("EST_CLOSED"));
+        assert!(convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap_err().starts_with("EST_CONVERTED"));
         assert!(set_estimate_status(&pool, estimate.id, "PENDING").await.is_err());
     }
 
@@ -362,8 +363,8 @@ mod tests {
         let invoice = invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap();
         assert_eq!(invoice.total_cents, 100_000, "the edited quantity was posted");
         let closed = get_estimate(&pool, estimate.id).await.unwrap();
-        assert_eq!((closed.status.as_str(), closed.invoice_number), ("CLOSED", Some(invoice.invoice_number)));
-        assert!(invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap_err().starts_with("EST_CLOSED"));
+        assert_eq!((closed.status.as_str(), closed.invoice_number), ("CONVERTED", Some(invoice.invoice_number)));
+        assert!(invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap_err().starts_with("EST_CONVERTED"));
 
         // The invoice must still be for the estimate's customer.
         let other = create_estimate(
@@ -372,6 +373,16 @@ mod tests {
         )
         .await
         .unwrap();
+        // The converted estimate is kept exactly as quoted, linked to its invoice, and can't be removed.
+        let kept = estimate_detail(&pool, estimate.id).await.unwrap();
+        assert_eq!(kept.estimate.converted_to_invoice_id, Some(invoice.id));
+        assert_eq!((kept.estimate.total_cents, kept.lines[0].quantity_e4), (125_000, 100_000), "the quote, not the edited invoice");
+        let err = |r: Result<sqlx::sqlite::SqliteQueryResult, sqlx::Error>| r.map_err(db_err).unwrap_err();
+        assert!(err(sqlx::query("DELETE FROM estimate_lines WHERE estimate_id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));
+        assert!(err(sqlx::query("DELETE FROM estimates WHERE id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));
+        assert!(err(sqlx::query("UPDATE estimates SET memo = 'x' WHERE id = ?1").bind(estimate.id).execute(&pool).await).starts_with("EST_CONVERTED"));
+        assert!(set_estimate_status(&pool, estimate.id, "PENDING").await.is_err());
+
         let elsewhere = InvoiceInput { customer_name: "Someone Else".into(), ..form(services) };
         assert!(invoice_from_estimate(&pool, other.id, elsewhere).await.unwrap_err().starts_with("EST_INVOICE_MISMATCH"));
         assert_eq!(get_estimate(&pool, other.id).await.unwrap().status, "PENDING");
