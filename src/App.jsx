@@ -174,6 +174,7 @@ export default function App() {
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}
       {helpOpen && (
         <HelpCenter
+          view={view}
           onClose={() => setHelpOpen(false)}
           onNavigate={(viewId, action) => select(viewId, action)}
         />
