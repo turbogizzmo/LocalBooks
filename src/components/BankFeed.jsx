@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
+import BankColumnMapping from './BankColumnMapping.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
@@ -23,6 +24,8 @@ export default function BankFeed({ accounts }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [flashId, setFlashId] = useState(null);
+  // A file waiting for the user to confirm its columns: { path, inspection }.
+  const [mappingFile, setMappingFile] = useState(null);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -49,21 +52,37 @@ export default function BankFeed({ accounts }) {
   const selected = selectedIndex >= 0 ? pending[selectedIndex] : null;
   const categoryId = selected ? (overrides[selected.id] ?? selected.suggestion?.accountId ?? null) : null;
 
-  const importCsv = async () => {
+  const reportImport = (r, path) => {
+    const extras = [
+      r.duplicates ? `${r.duplicates} already imported` : null,
+      r.skippedZero ? `${r.skippedZero} zero-amount skipped` : null,
+    ].filter(Boolean);
+    setNotice({
+      kind: 'success',
+      text: `Imported ${r.imported} transaction${r.imported === 1 ? '' : 's'} from ${path.split(/[\\/]/).pop()} into ${accountLabel(accounts, bankAccountId)}${extras.length ? ` (${extras.join(', ')})` : ''}.`,
+    });
+  };
+
+  // OFX/QFX and recognized CSV layouts import straight away; otherwise the user maps the columns.
+  const importStatement = async () => {
     if (bankAccountId === null) return;
     try {
-      const path = await open({ multiple: false, directory: false, filters: [{ name: 'Bank CSV', extensions: ['csv', 'CSV'] }] });
+      const path = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'Bank statement (CSV, OFX, QFX)', extensions: ['csv', 'CSV', 'ofx', 'OFX', 'qfx', 'QFX', 'qbo', 'QBO'] }],
+      });
       if (!path) return;
       setBusy(true);
-      const r = await api.importBankCsv(path, bankAccountId);
-      const extras = [
-        r.duplicates ? `${r.duplicates} already imported` : null,
-        r.skippedZero ? `${r.skippedZero} zero-amount skipped` : null,
-      ].filter(Boolean);
-      setNotice({
-        kind: 'success',
-        text: `Imported ${r.imported} transaction${r.imported === 1 ? '' : 's'} into ${accountLabel(accounts, bankAccountId)}${extras.length ? ` (${extras.join(', ')})` : ''}.`,
-      });
+      setNotice(null);
+      const inspection = await api.inspectBankFile(path);
+      const confident = inspection.format === 'OFX' || (inspection.mapping && inspection.dateOrderCertain);
+      if (inspection.format === 'OFX' && inspection.problem) throw new Error(inspection.problem);
+      if (!confident) {
+        setMappingFile({ path, inspection });
+        return;
+      }
+      reportImport(await api.importBankFile(path, bankAccountId), path);
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -130,6 +149,19 @@ export default function BankFeed({ accounts }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {mappingFile && (
+        <BankColumnMapping
+          path={mappingFile.path}
+          inspection={mappingFile.inspection}
+          accountName={accountLabel(accounts, bankAccountId)}
+          onCancel={() => setMappingFile(null)}
+          onImport={async (mapping) => {
+            const r = await api.importBankFile(mappingFile.path, bankAccountId, mapping);
+            reportImport(r, mappingFile.path);
+            setMappingFile(null);
+          }}
+        />
+      )}
       <div className="qb-panel flex flex-none flex-wrap items-center gap-2 px-2 py-1">
         <label className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-qb-ink-muted">Account</span>
@@ -141,10 +173,10 @@ export default function BankFeed({ accounts }) {
             className="qb-input w-[240px]"
           />
         </label>
-        <button type="button" className="qb-btn qb-btn-secondary" onClick={importCsv} disabled={busy || bankAccountId === null}>
-          Import CSV…
+        <button type="button" className="qb-btn qb-btn-secondary" onClick={importStatement} disabled={busy || bankAccountId === null}>
+          Import statement…
         </button>
-        <span className="text-xs text-qb-ink-muted">Columns: Date, Description, Amount (negative = money out) or Debit/Credit</span>
+        <span className="text-xs text-qb-ink-muted">CSV, OFX or QFX from your bank · already-imported transactions are skipped</span>
         <div className="ml-auto flex gap-3 text-sm">
           {feedAccounts.map((a) => (
             <span key={a.id} className={a.id === bankAccountId ? 'font-semibold' : 'text-qb-ink-muted'}>

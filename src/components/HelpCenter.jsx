@@ -26,7 +26,7 @@ export const SCREEN_HELP = {
   'expenses/bills': 'Bills you owe vendors, tracked in Accounts Payable until paid. Pay several at once with Pay bills.',
   'expenses/vendors': 'Everyone you buy from, with what you still owe each of them.',
   'employees/time': 'Hours worked by employees, entered one activity at a time or as a weekly timesheet. Time does not post to your books; billable hours can be invoiced.',
-  'banking/feeds': 'Import your bank’s CSV statement, then approve each transaction into a category. LocalBooks learns from what you approve and suggests categories next time.',
+  'banking/feeds': 'Import your bank’s CSV, OFX or QFX statement, then approve each transaction into a category. LocalBooks skips anything already imported and learns from what you approve.',
   'banking/transfers': 'Bank deposits (including customer payments held in Undeposited Funds) and transfers between your own accounts.',
   'banking/reconcile': 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
@@ -136,8 +136,8 @@ export const HELP_ARTICLES = [
   {
     id: 'bank-feed', area: 'banking', views: ['banking/feeds'],
     title: 'Import and categorize bank transactions',
-    body: 'Import the CSV statement from your bank, then approve each transaction into a category, or exclude it; approved lines become real expenses or deposits. LocalBooks learns from your choices and suggests a category next time.',
-    keywords: 'bank feed csv import statement categorize approve exclude rule download',
+    body: 'Import a CSV, OFX or QFX statement from your bank (overlapping statements are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and LocalBooks learns from your choices to suggest a category next time.',
+    keywords: 'bank feed csv ofx qfx qbo quicken import statement categorize approve exclude rule download duplicate columns mapping',
     go: { label: 'Go to Bank Feeds', view: 'banking/feeds' },
   },
   {

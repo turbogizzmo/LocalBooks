@@ -102,7 +102,7 @@ fn main() {
             commands::record_invoice_payment,
             commands::list_invoice_payments,
             commands::get_ar_aging,
-            commands::parse_bank_csv,
+            commands::inspect_bank_file,
             commands::import_bank_csv,
             commands::list_bank_transactions,
             commands::approve_bank_transaction,

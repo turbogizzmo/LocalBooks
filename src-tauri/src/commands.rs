@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
-use crate::bank::{self, BankCsvRow, BankTransactionView, ImportSummary};
+use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
 use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
@@ -92,11 +92,10 @@ pub async fn get_ar_aging(db: State<'_, Db>, as_of: Option<NaiveDate>) -> Result
     invoices::ar_aging(&db.pool().await, as_of.unwrap_or_else(|| Local::now().date_naive())).await
 }
 
+/// Reads a bank file (CSV, OFX, QFX) and reports how it would be imported, importing nothing.
 #[tauri::command]
-pub async fn parse_bank_csv(path: PathBuf) -> Result<Vec<BankCsvRow>, String> {
-    tauri::async_runtime::spawn_blocking(move || bank::parse_bank_csv(&path))
-        .await
-        .map_err(|e| format!("BANK_CSV_READ: {e}"))?
+pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>) -> Result<BankFileInspection, String> {
+    bank::inspect_file(&db.pool().await, &path, mapping).await
 }
 
 #[tauri::command]
@@ -105,8 +104,9 @@ pub async fn import_bank_csv(
     db: State<'_, Db>,
     path: PathBuf,
     bank_account_id: i64,
+    mapping: Option<ColumnMapping>,
 ) -> Result<ImportSummary, String> {
-    let summary = bank::import_csv(&db.pool().await, &path, bank_account_id).await?;
+    let summary = bank::import_file(&db.pool().await, &path, bank_account_id, mapping).await?;
     notify(&app);
     Ok(summary)
 }

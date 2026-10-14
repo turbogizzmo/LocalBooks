@@ -14,7 +14,8 @@ export const api = {
   recordInvoicePayment: (input) => invoke('record_invoice_payment', { input }),
   listInvoicePayments: (invoiceId) => invoke('list_invoice_payments', { invoiceId }),
   getArAging: () => invoke('get_ar_aging', { asOf: null }),
-  importBankCsv: (path, bankAccountId) => invoke('import_bank_csv', { path, bankAccountId }),
+  importBankFile: (path, bankAccountId, mapping = null) => invoke('import_bank_csv', { path, bankAccountId, mapping }),
+  inspectBankFile: (path, mapping = null) => invoke('inspect_bank_file', { path, mapping }),
   listBankTransactions: () => invoke('list_bank_transactions'),
   approveBankTransaction: (transactionId, categoryAccountId) =>
     invoke('approve_bank_transaction', { transactionId, categoryAccountId }),

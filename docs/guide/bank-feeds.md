@@ -1,17 +1,37 @@
 # Import bank transactions (bank feeds)
 
-Download a statement from your bank as a CSV file, import it, and approve each transaction into
-your books.
+Download a statement from your bank, import it, and approve each transaction into your books.
+LocalBooks reads **OFX**, **QFX** and **QBO** files (often labelled "Quicken" or "Money" on bank
+websites) and **CSV** files.
 
 ## Import a statement
 
-1. Download a CSV statement from your bank's website.
+1. Download a statement from your bank's website. Choose OFX, QFX or QBO if offered: those files
+   carry the bank's own ID for each transaction.
 2. In LocalBooks go to **Banking › Bank Feeds** and choose the **Account** the statement is for.
-3. Click **Import CSV…** and choose the file. The new transactions appear under **For review**.
+3. Click **Import statement…** and choose the file. The new transactions appear under **For review**.
 
-LocalBooks reads files that have a header row with a **Date**, a **Description** (or Memo, Payee or
-Name) and either one **Amount** column or separate **Debit**/**Credit** (Withdrawal/Deposit)
-columns. Dates such as `2026-03-07`, `03/07/2026`, `3/7/26` and `Mar 7, 2026` are recognized.
+You can import overlapping statements safely. Transactions already imported are skipped and
+counted as "already imported", while two genuinely identical purchases on the same day are both
+kept.
+
+## When LocalBooks asks which columns are which
+
+Most bank CSV files are recognized automatically: a date, a description, and either one amount
+column (negative = money out) or separate money-in and money-out columns such as Credit/Debit,
+Deposits/Withdrawals or Paid in/Paid out. Otherwise a window opens:
+
+1. Choose the **Date** column and how **Dates are written**: month first (MM/DD, as US banks do)
+   or day first (DD/MM, as UK and European banks do).
+2. Choose the **Description** column.
+3. Under **Amounts are in**, choose **One column** and the **Amount** column, or **Two columns**
+   and the **Money in** and **Money out** columns.
+4. Check the **Preview**: dates should be right and money out should show as negative (red).
+5. Click **Import … transactions**.
+
+LocalBooks remembers your choices, so the next file with the same columns imports directly. The
+window also opens when every date in a file could be read either way (such as 03/07), so you can
+confirm the day/month order once.
 
 ## Approve or exclude each transaction
 
