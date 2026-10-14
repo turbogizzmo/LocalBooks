@@ -26,6 +26,11 @@ use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 /// Label for line items whose page the parser could not attribute to a table.
 pub const UNATTRIBUTED: &str = "(unattributed)";
 
+/// QuickBooks tables that hold invoice line items. openqbw's line-item pattern also matches bytes
+/// on pages of many unrelated tables (payroll, audit, budgets, internal catalogs), so only lines
+/// attributed to these tables are imported; everything else is counted as ignored.
+pub const INVOICE_LINE_TABLES: [&str; 2] = ["abmc_invoice_lineitem", "abmc_invoice_inventory_lineitem"];
+
 /// Extensions the importer accepts from the file picker and drop zone.
 pub const ACCEPTED_EXTENSIONS: [&str; 3] = ["qbw", "qbb", "qbm"];
 
@@ -50,6 +55,8 @@ pub struct Extraction {
     pub attributed_tables: i64,
     pub header_count: i64,
     pub skipped_line_count: i64,
+    /// Line-item matches on pages that do not belong to an invoice line table.
+    pub ignored_line_count: i64,
     pub lines: Vec<RawLine>,
 }
 
@@ -113,12 +120,20 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
 
     let mut lines = Vec::new();
     let mut skipped = 0i64;
+    let mut ignored = 0i64;
     let mut last_report = 0u64;
-    for item in iter_lineitems_with_attribution(&store, &model, &attribution) {
+    for mut item in iter_lineitems_with_attribution(&store, &model, &attribution) {
         if item.page_number >= last_report + 64 {
             last_report = item.page_number;
             progress(Progress { stage: "Extracting line items", done: item.page_number, total: pages });
         }
+        let label = match item.source_table.take() {
+            Some(table) if INVOICE_LINE_TABLES.contains(&table.as_str()) => table,
+            _ => {
+                ignored += 1;
+                continue;
+            }
+        };
         let cents = match item.amount_cents_signed {
             Some(c) if c != 0 => i64::from(c),
             _ => {
@@ -135,7 +150,7 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
             qb_item_id: item.item_qb_id,
             date,
             amount_cents: cents,
-            label: item.source_table.unwrap_or_else(|| UNATTRIBUTED.to_string()),
+            label,
             amount_type: amount_type_code(item.amount_type),
             page_number: item.page_number as i64,
             page_offset: item.page_offset as i64,
@@ -149,6 +164,7 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
         attributed_tables: attribution.len() as i64,
         header_count,
         skipped_line_count: skipped,
+        ignored_line_count: ignored,
         lines,
     })
 }
@@ -191,8 +207,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extractio
     let file_name = source_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO staging_import_batches
-            (source_path, file_name, file_size_bytes, page_count, attributed_tables, header_count, skipped_line_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+            (source_path, file_name, file_size_bytes, page_count, attributed_tables, header_count, skipped_line_count, ignored_line_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
     )
     .bind(source_path.display().to_string())
     .bind(&file_name)
@@ -201,6 +217,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extractio
     .bind(extraction.attributed_tables)
     .bind(extraction.header_count)
     .bind(extraction.skipped_line_count)
+    .bind(extraction.ignored_line_count)
     .fetch_one(&mut *tx)
     .await
     .map_err(db_err)?;
@@ -247,6 +264,10 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extractio
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchSummary {
+    pub ignored_line_count: i64,
+    /// Entries from this import still in effect (posted and not voided).
+    pub live_entry_count: i64,
+    pub total_cents: i64,
     pub id: i64,
     pub file_name: String,
     pub source_path: String,
@@ -295,12 +316,13 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<BatchSumm
         attributed_tables: i64,
         header_count: i64,
         skipped_line_count: i64,
+        ignored_line_count: i64,
         imported_at: String,
         posted_at: Option<String>,
     }
     let head: Head = sqlx::query_as(
         "SELECT id, file_name, source_path, file_size_bytes, page_count, attributed_tables, header_count,
-                skipped_line_count, imported_at, posted_at
+                skipped_line_count, ignored_line_count, imported_at, posted_at
          FROM staging_import_batches WHERE id = ?1",
     )
     .bind(batch_id)
@@ -309,8 +331,8 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<BatchSumm
     .map_err(db_err)?
     .ok_or_else(|| format!("QBW_NO_BATCH: import #{batch_id} does not exist"))?;
 
-    let (line_count, invoice_count, first_date, last_date): (i64, i64, Option<String>, Option<String>) = sqlx::query_as(
-        "SELECT COUNT(*), COUNT(DISTINCT qb_invoice_id), MIN(date), MAX(date)
+    let (line_count, invoice_count, first_date, last_date, total_cents): (i64, i64, Option<String>, Option<String>, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COUNT(DISTINCT qb_invoice_id), MIN(date), MAX(date), COALESCE(SUM(raw_amount_cents), 0)
          FROM staging_raw_transactions WHERE batch_id = ?1",
     )
     .bind(batch_id)
@@ -329,6 +351,15 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<BatchSumm
         "SELECT COUNT(DISTINCT qb_invoice_id) FROM staging_raw_transactions
          WHERE batch_id = ?1 AND qb_invoice_id IN ({LIVE_POSTED})"
     ))
+    .bind(batch_id)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+
+    let live_entry_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM qbw_posted_invoices p JOIN journal_entries e ON e.id = p.journal_entry_id
+         WHERE p.batch_id = ?1 AND e.is_voided = 0",
+    )
     .bind(batch_id)
     .fetch_one(pool)
     .await
@@ -356,6 +387,9 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<BatchSumm
     }
 
     Ok(BatchSummary {
+        ignored_line_count: head.ignored_line_count,
+        live_entry_count,
+        total_cents,
         id: head.id,
         file_name: head.file_name,
         source_path: head.source_path,
@@ -384,12 +418,15 @@ pub struct BatchListItem {
     pub imported_at: String,
     pub posted_at: Option<String>,
     pub line_count: i64,
+    pub live_entry_count: i64,
 }
 
 pub async fn list_batches(pool: &SqlitePool) -> Result<Vec<BatchListItem>, String> {
     sqlx::query_as(
         "SELECT b.id, b.file_name, b.imported_at, b.posted_at,
-                (SELECT COUNT(*) FROM staging_raw_transactions r WHERE r.batch_id = b.id) AS line_count
+                (SELECT COUNT(*) FROM staging_raw_transactions r WHERE r.batch_id = b.id) AS line_count,
+                (SELECT COUNT(*) FROM qbw_posted_invoices p JOIN journal_entries e ON e.id = p.journal_entry_id
+                 WHERE p.batch_id = b.id AND e.is_voided = 0) AS live_entry_count
          FROM staging_import_batches b ORDER BY b.id DESC",
     )
     .fetch_all(pool)
@@ -676,6 +713,53 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
     Ok(result)
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReverseBatchResult {
+    pub entries_voided: i64,
+    pub accounts_deactivated: i64,
+}
+
+/// Undoes a posted import: voids every entry it posted (each gets a reversing entry, as with any
+/// void) and deactivates the income accounts the importer created for it once they are back to a
+/// zero balance with no other activity. Posted history cannot be deleted; this is the undo.
+pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseBatchResult, String> {
+    let entries: Vec<i64> = sqlx::query_scalar(
+        "SELECT p.journal_entry_id FROM qbw_posted_invoices p JOIN journal_entries e ON e.id = p.journal_entry_id
+         WHERE p.batch_id = ?1 AND e.is_voided = 0 ORDER BY p.journal_entry_id",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    if entries.is_empty() {
+        return Err("QBW_NOTHING_TO_REVERSE: this import has no posted entries in effect".into());
+    }
+    let mut result = ReverseBatchResult::default();
+    for entry in entries {
+        ledger::void_transaction(pool, entry).await?;
+        result.entries_voided += 1;
+    }
+    // Importer-created accounts mapped in this batch whose only activity is entries now voided.
+    let accounts: Vec<i64> = sqlx::query_scalar(
+        "SELECT DISTINCT a.id FROM staging_account_map m JOIN chart_of_accounts a ON a.id = m.account_id
+         WHERE m.batch_id = ?1 AND a.is_active = 1 AND a.is_system = 0
+           AND a.description LIKE 'Created by the QuickBooks Desktop importer%'
+           AND NOT EXISTS (
+               SELECT 1 FROM journal_lines l JOIN journal_entries e ON e.id = l.journal_entry_id
+               WHERE l.account_id = a.id AND e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL)",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    for account in accounts {
+        sqlx::query("UPDATE chart_of_accounts SET is_active = 0 WHERE id = ?1").bind(account).execute(pool).await.map_err(db_err)?;
+        result.accounts_deactivated += 1;
+    }
+    Ok(result)
+}
+
 /// Deletes a batch's staged rows. Posted journal entries are unaffected (void them in the ledger).
 pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
     let mut tx = pool.begin().await.map_err(db_err)?;
@@ -727,11 +811,51 @@ mod tests {
     }
 
     fn extraction(lines: Vec<RawLine>) -> Extraction {
-        Extraction { file_size_bytes: 4096 * 8, page_count: 8, attributed_tables: 2, header_count: 3, skipped_line_count: 1, lines }
+        Extraction { file_size_bytes: 4096 * 8, page_count: 8, attributed_tables: 2, header_count: 3, skipped_line_count: 1, ignored_line_count: 4, lines }
     }
 
     const INVENTORY: &str = "abmc_invoice_inventory_lineitem";
     const SERVICE: &str = "abmc_invoice_service_lineitem";
+
+    /// Extraction check for a real QuickBooks file (read-only): set LOCALBOOKS_QBW_CHECK to its
+    /// path and run `cargo test -- --ignored extracts_a_real --nocapture`.
+    #[test]
+    #[ignore]
+    fn extracts_a_real_quickbooks_file() {
+        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK to a .qbw file");
+        let mut stages = Vec::new();
+        let started = std::time::Instant::now();
+        let x = extract(Path::new(&path), &mut |p| {
+            if stages.last() != Some(&p.stage) {
+                stages.push(p.stage);
+            }
+        })
+        .expect("extracts");
+        let mut by_label: BTreeMap<&str, (usize, i64)> = BTreeMap::new();
+        let mut invoices = std::collections::HashSet::new();
+        let (mut dated, mut first, mut last) = (0, None::<NaiveDate>, None::<NaiveDate>);
+        for l in &x.lines {
+            let e = by_label.entry(l.label.as_str()).or_default();
+            e.0 += 1;
+            e.1 += l.amount_cents;
+            invoices.insert(l.qb_invoice_id.as_str());
+            if let Some(d) = l.date {
+                dated += 1;
+                first = Some(first.map_or(d, |f| f.min(d)));
+                last = Some(last.map_or(d, |v| v.max(d)));
+            }
+        }
+        println!("file: {path}");
+        println!("read in {:.1}s; stages: {stages:?}", started.elapsed().as_secs_f64());
+        println!(
+            "pages {}, attributed tables {}, headers {}, lines {}, invoices {}, undecodable {}, ignored (not invoice tables) {}",
+            x.page_count, x.attributed_tables, x.header_count, x.lines.len(), invoices.len(), x.skipped_line_count, x.ignored_line_count
+        );
+        println!("dated lines {dated}, range {first:?} .. {last:?}");
+        for (label, (n, cents)) in &by_label {
+            println!("  {:<45} {:>6} lines  {:>16}", display_label(label), n, crate::ledger::format_cents(*cents));
+        }
+    }
 
     #[test]
     fn labels_read_like_quickbooks_line_types() {
@@ -835,9 +959,22 @@ mod tests {
         assert_eq!(repost.entries_posted, 1);
         assert_eq!(balance(&pool, offset).await, 169_999 + 1_000);
 
+        // Reversing the import voids what it posted and retires the account it created.
+        assert_eq!(batch_summary(&pool, batch).await.unwrap().live_entry_count, 2, "invoice 2 now lives in the second import");
+        assert_eq!(batch_summary(&pool, batch).await.unwrap().ignored_line_count, 4);
+        let reversed = reverse_batch(&pool, batch).await.unwrap();
+        assert_eq!(reversed, ReverseBatchResult { entries_voided: 2, accounts_deactivated: 0 }, "the second batch still has a live entry on the created account");
+        assert_eq!(batch_summary(&pool, batch).await.unwrap().live_entry_count, 0);
+        assert!(reverse_batch(&pool, batch).await.unwrap_err().starts_with("QBW_NOTHING_TO_REVERSE"));
+        assert_eq!(reverse_batch(&pool, second).await.unwrap(), ReverseBatchResult { entries_voided: 1, accounts_deactivated: 1 });
+        assert_eq!(balance(&pool, offset).await, 0, "the books are back where they started");
+        assert_eq!(balance(&pool, services_acct).await, 0);
+        let active: i64 = sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1").bind(services_acct).fetch_one(&pool).await.unwrap();
+        assert_eq!(active, 0);
+
         discard_batch(&pool, batch).await.unwrap();
         assert!(batch_summary(&pool, batch).await.unwrap_err().starts_with("QBW_NO_BATCH"));
-        assert_eq!(balance(&pool, offset).await, 169_999 + 1_000, "discarding staging never touches the ledger");
+        assert_eq!(balance(&pool, offset).await, 0, "discarding staging never touches the ledger");
     }
 
     #[tokio::test]

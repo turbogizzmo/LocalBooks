@@ -20,7 +20,7 @@ use crate::expenses::{self, BillInput, BillPaymentInput, BillPaymentView, BillSu
 use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary, PaymentInput, PaymentView};
 use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView, LedgerVerification};
 use crate::mcp_server::{McpService, McpStatus};
-use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult};
+use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult, ReverseBatchResult};
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
 use crate::reports::{self, AccountView, Dashboard};
@@ -812,6 +812,14 @@ pub async fn auto_create_qbw_accounts(app: AppHandle, db: State<'_, Db>, batch_i
 #[tauri::command]
 pub async fn post_qbw_batch(app: AppHandle, db: State<'_, Db>, input: PostBatchInput) -> Result<PostBatchResult, String> {
     let result = qbw_import::post_batch(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(result)
+}
+
+/// Undoes a posted import by voiding everything it posted.
+#[tauri::command]
+pub async fn reverse_qbw_batch(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<ReverseBatchResult, String> {
+    let result = qbw_import::reverse_batch(&db.pool().await, batch_id).await?;
     notify(&app);
     Ok(result)
 }

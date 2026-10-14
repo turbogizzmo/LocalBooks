@@ -185,6 +185,7 @@ fn main() {
             commands::auto_create_qbw_accounts,
             commands::post_qbw_batch,
             commands::discard_qbw_batch,
+            commands::reverse_qbw_batch,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")

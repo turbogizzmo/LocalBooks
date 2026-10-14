@@ -115,6 +115,7 @@ export const api = {
   autoCreateQbwAccounts: (batchId) => invoke('auto_create_qbw_accounts', { batchId }),
   postQbwBatch: (input) => invoke('post_qbw_batch', { input }),
   discardQbwBatch: (batchId) => invoke('discard_qbw_batch', { batchId }),
+  reverseQbwBatch: (batchId) => invoke('reverse_qbw_batch', { batchId }),
 };
 
 /** Opens the system print dialog (Print / Save as PDF), falling back to the browser's. */
