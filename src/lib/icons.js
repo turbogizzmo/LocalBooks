@@ -1,7 +1,9 @@
 import { createElement } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
   BookOpen,
+  BookOpenText,
   Bot,
   ChartColumn,
   CircleHelp,
@@ -43,6 +45,8 @@ export const ICONS = {
   Search,
   Close: X,
   Go: ArrowRight,
+  Back: ArrowLeft,
+  Guide: BookOpenText,
 };
 
 /** The single size and stroke weight for every icon: compact, thin-line QuickBooks density. */

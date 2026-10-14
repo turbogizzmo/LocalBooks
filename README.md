@@ -8,6 +8,10 @@ for a high-density, keyboard-friendly interface.
 
 ---
 
+> **Using LocalBooks?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
+> for invoices, payments, bills, banking, reconciling, reports, closing the books, backups and more.
+> The same guides are built into the app's Help (press F1).
+
 ## Contents
 
 - [Why LocalBooks](#why-localbooks)

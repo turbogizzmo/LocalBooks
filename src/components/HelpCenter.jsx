@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNav } from './Sidebar.jsx';
+import GuideView, { GUIDES, GUIDE_ORDER } from './GuideView.jsx';
 import { Icon } from '../lib/icons.js';
 
 /** Help areas, in the order they are listed under "All topics". */
@@ -45,7 +46,7 @@ export const HELP_ARTICLES = [
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',
-    body: 'Choose New invoice, pick or type the customer, and add lines with a quantity, rate and income account; decimals such as 1.5 hours are fine. Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF.',
+    body: 'Fill in the invoice form at the top of Sales › Invoices: type the customer, then add lines with a quantity, rate and income account (decimals such as 1.5 hours are fine). Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF.',
     keywords: 'bill customer charge billing new print pdf',
     go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
   },
@@ -280,6 +281,32 @@ export const HELP_ARTICLES = [
   },
 ];
 
+/** The step-by-step guide (docs/guide/<id>.md) behind each topic. */
+const ARTICLE_GUIDES = {
+  invoice: 'invoices', 'foreign-currency': 'invoices', 'receive-payment': 'customer-payments',
+  'sales-receipt': 'sales-receipts-and-estimates', estimate: 'sales-receipts-and-estimates',
+  customers: 'customers-and-products', products: 'customers-and-products', vendors: 'customers-and-products',
+  'expense-check': 'expenses-and-checks', bill: 'bills', 'pay-bills': 'bills', time: 'time-tracking',
+  'bank-feed': 'bank-feeds', deposit: 'deposits-and-transfers', transfer: 'deposits-and-transfers', reconcile: 'reconciling',
+  'journal-entry': 'journal-entries-and-voids', void: 'journal-entries-and-voids',
+  'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
+  'qbw-import': 'quickbooks-import', 'qbw-undo': 'quickbooks-import',
+  'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
+  preferences: 'getting-started', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
+};
+
+/** The main guide for each screen, offered at the top of Help. */
+const SCREEN_GUIDES = {
+  dashboard: 'getting-started', 'sales/all': 'sales-receipts-and-estimates', 'sales/invoices': 'invoices',
+  'sales/estimates': 'sales-receipts-and-estimates', 'sales/customers': 'customers-and-products',
+  'sales/products': 'customers-and-products', 'expenses/expenses': 'expenses-and-checks', 'expenses/bills': 'bills',
+  'expenses/vendors': 'customers-and-products', 'employees/time': 'time-tracking', 'banking/feeds': 'bank-feeds',
+  'banking/transfers': 'deposits-and-transfers', 'banking/reconcile': 'reconciling', 'accounting/journal': 'journal-entries-and-voids',
+  'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'quickbooks-import', reports: 'reports',
+  settings: 'getting-started',
+};
+
 /** True when every word of the query appears in the article (title, text or keywords). */
 export function matchesQuery(article, query) {
   const haystack = `${article.title} ${article.body} ${article.keywords}`.toLowerCase();
@@ -290,8 +317,9 @@ export function matchesQuery(article, query) {
     .every((word) => haystack.includes(word));
 }
 
-/** One topic: the title toggles the two-sentence answer and its shortcut. */
-function Article({ article, view, expanded, onToggle, onNavigate }) {
+/** One topic: the title toggles the two-sentence answer, its shortcut and its full guide. */
+function Article({ article, view, expanded, onToggle, onNavigate, onOpenGuide }) {
+  const guide = ARTICLE_GUIDES[article.id];
   // A plain "Go to" this very screen is noise; a shortcut that opens a form here is still useful.
   const go = article.go && !(article.go.view === view && !article.go.action) ? article.go : null;
   return (
@@ -320,6 +348,16 @@ function Article({ article, view, expanded, onToggle, onNavigate }) {
               <Icon name="Go" />
             </button>
           )}
+          {guide && GUIDES[guide] && (
+            <button
+              type="button"
+              onClick={() => onOpenGuide(guide)}
+              className={`mt-1.5 inline-flex items-center gap-1 font-semibold text-qb-info hover:underline ${go ? 'ml-3' : ''}`}
+            >
+              <Icon name="Guide" />
+              Step-by-step guide
+            </button>
+          )}
         </div>
       )}
     </li>
@@ -334,11 +372,24 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
   const [openAreas, setOpenAreas] = useState(() => new Set());
+  // The guide being read, with the trail of guides opened from it (for Back).
+  const [reading, setReading] = useState([]);
+  const guideId = reading[reading.length - 1] ?? null;
+  const openGuide = (id) => setReading((r) => [...r, id]);
+  const body = useRef(null);
+  // Braces matter: newer engines return a Promise from scrollTo, which React would call as cleanup.
+  useEffect(() => {
+    body.current?.scrollTo?.(0, 0);
+  }, [guideId]);
   const search = useRef(null);
   const screen = findNav(view);
   const screenTitle = screen?.item.label ?? 'This screen';
   const here = useMemo(() => HELP_ARTICLES.filter((a) => a.views.includes(view)), [view]);
   const results = useMemo(() => (query.trim() ? HELP_ARTICLES.filter((a) => matchesQuery(a, query)) : []), [query]);
+  const guideResults = useMemo(
+    () => (query.trim() ? GUIDE_ORDER.filter((id) => matchesQuery({ title: GUIDES[id].title, body: GUIDES[id].text, keywords: '' }, query)) : []),
+    [query],
+  );
 
   // A new screen starts with its first task open, so the answer is one click away at most.
   useEffect(() => {
@@ -364,12 +415,12 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
   const toggleArticle = toggle(setExpanded);
   const toggleArea = toggle(setOpenAreas);
   const article = (a) => (
-    <Article key={a.id} article={a} view={view} expanded={expanded.has(a.id)} onToggle={() => toggleArticle(a.id)} onNavigate={onNavigate} />
+    <Article key={a.id} article={a} view={view} expanded={expanded.has(a.id)} onToggle={() => toggleArticle(a.id)} onNavigate={onNavigate} onOpenGuide={openGuide} />
   );
 
   return (
     <aside
-      className="no-print flex w-80 flex-none animate-[lb-slide-in_160ms_ease-out] flex-col border-l border-qb-border bg-white text-xs"
+      className={`no-print flex ${guideId ? 'w-[440px]' : 'w-80'} flex-none animate-[lb-slide-in_160ms_ease-out] flex-col border-l border-qb-border bg-white text-xs transition-[width] duration-150`}
       aria-label="Help"
     >
       <div className="flex h-toolbar flex-none items-center gap-2 border-b border-qb-border px-3">
@@ -379,6 +430,19 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
           <Icon name="Close" />
         </button>
       </div>
+      {guideId ? (
+        <div className="flex flex-none items-center gap-2 border-b border-qb-border px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => setReading((r) => r.slice(0, -1))}
+            className="inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+          >
+            <Icon name="Back" />
+            {reading.length > 1 ? GUIDES[reading[reading.length - 2]]?.title : 'Back to help'}
+          </button>
+          <span className="ml-auto text-2xs text-qb-ink-faint">Also in docs/guide on GitHub</span>
+        </div>
+      ) : (
       <div className="flex-none border-b border-qb-border p-2">
         <label className="flex items-center gap-1.5 rounded-xs border border-qb-border-strong px-2 focus-within:border-qb-green focus-within:shadow-focus">
           <Icon name="Search" className="text-qb-ink-muted" />
@@ -393,17 +457,35 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
           />
         </label>
       </div>
+      )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        {query.trim() ? (
+      <div ref={body} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        {guideId ? (
+          <GuideView id={guideId} onOpenGuide={openGuide} />
+        ) : query.trim() ? (
           <section aria-label="Search results">
             <h3 className="bg-qb-row-header px-3 py-1 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted" aria-live="polite">
-              {results.length} result{results.length === 1 ? '' : 's'}
+              {results.length} topic{results.length === 1 ? '' : 's'}
             </h3>
-            {results.length === 0 ? (
-              <p className="px-3 py-3 text-qb-ink-muted">No topics match “{query}”. Try fewer or different words.</p>
+            {results.length === 0 && guideResults.length === 0 ? (
+              <p className="px-3 py-3 text-qb-ink-muted">Nothing matches “{query}”. Try fewer or different words.</p>
             ) : (
               <ul>{results.map(article)}</ul>
+            )}
+            {guideResults.length > 0 && (
+              <>
+                <h3 className="bg-qb-row-header px-3 py-1 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">Guides that mention it</h3>
+                <ul>
+                  {guideResults.map((id) => (
+                    <li key={id}>
+                      <button type="button" onClick={() => openGuide(id)} className="flex w-full items-center gap-2 px-3 py-1 text-left text-sm hover:bg-qb-row-hover">
+                        <Icon name="Guide" className="text-qb-ink-muted" />
+                        {GUIDES[id].title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </section>
         ) : (
@@ -413,6 +495,16 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
                 <div className="text-2xs font-semibold uppercase tracking-wide text-qb-green-active">On this screen</div>
                 <h3 className="text-md font-semibold">{screenTitle}</h3>
                 {SCREEN_HELP[view] && <p className="mt-0.5 leading-snug text-qb-ink">{SCREEN_HELP[view]}</p>}
+                {GUIDES[SCREEN_GUIDES[view]] && (
+                  <button
+                    type="button"
+                    onClick={() => openGuide(SCREEN_GUIDES[view])}
+                    className="mt-1.5 inline-flex items-center gap-1 font-semibold text-qb-green-active hover:underline"
+                  >
+                    <Icon name="Guide" />
+                    Step-by-step: {GUIDES[SCREEN_GUIDES[view]].title}
+                  </button>
+                )}
               </div>
               {here.length > 0 && (
                 <>
@@ -443,6 +535,19 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
                     </li>
                   );
                 })}
+              </ul>
+            </section>
+            <section aria-label="Step-by-step guides" className="border-t border-qb-border pb-2">
+              <h3 className="px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">Step-by-step guides</h3>
+              <ul>
+                {GUIDE_ORDER.map((id) => (
+                  <li key={id}>
+                    <button type="button" onClick={() => openGuide(id)} className="flex w-full items-center gap-2 px-3 py-1 text-left text-sm hover:bg-qb-row-hover">
+                      <Icon name="Guide" className="text-qb-ink-muted" />
+                      {GUIDES[id].title}
+                    </button>
+                  </li>
+                ))}
               </ul>
             </section>
           </>

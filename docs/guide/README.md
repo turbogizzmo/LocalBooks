@@ -1,0 +1,44 @@
+# LocalBooks user guide
+
+Step-by-step guides for everyday bookkeeping in LocalBooks. The same guides are built into the app:
+press **F1** (or click **Help** at the top right), open a topic and choose **Step-by-step guide**.
+
+## Getting started
+
+- [Set up your company](getting-started.md)
+- [Back up, restore and open company files](backups-and-company-files.md)
+
+## Sales and customers
+
+- [Create and send an invoice](invoices.md)
+- [Record customer payments](customer-payments.md)
+- [Sales receipts and estimates](sales-receipts-and-estimates.md)
+- [Customers, products and services](customers-and-products.md)
+
+## Expenses and vendors
+
+- [Record expenses and write checks](expenses-and-checks.md)
+- [Enter and pay bills](bills.md)
+
+## Employees
+
+- [Track time](time-tracking.md)
+
+## Banking
+
+- [Import bank transactions (bank feeds)](bank-feeds.md)
+- [Bank deposits and transfers](deposits-and-transfers.md)
+- [Reconcile an account](reconciling.md)
+
+## Accounting
+
+- [Journal entries and voiding](journal-entries-and-voids.md)
+- [Verify and correct the ledger](ledger-integrity.md)
+- [Close a period](closing-the-books.md)
+- [Import from QuickBooks Desktop](quickbooks-import.md)
+
+## Reports and more
+
+- [Run, export and print reports](reports.md)
+- [Connect an AI assistant (MCP)](ai-assistant.md)
+- [Troubleshooting](troubleshooting.md)
