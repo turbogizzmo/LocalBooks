@@ -1,7 +1,7 @@
 # LocalBooks CI/CD
 #
-# push to main   → run the Rust test suite on macOS, Windows and Linux, then build every installer
-#                  and attach it to the workflow run as an artifact (no release is created).
+# push to main   → run the Rust test suite on macOS, Windows and Linux.
+# manual run     → run tests, then build installers; keep workflow artifacts for 7 days.
 # push tag v*    → same gates, then build and upload the installers to a DRAFT GitHub Release
 #                  named after the tag. Review the draft and click "Publish" to ship it.
 #
@@ -80,6 +80,7 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
       matrix:
@@ -142,11 +143,12 @@ jobs:
         run: npm run build
 
       - name: Build and package with Tauri
+        id: tauri
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Only tag builds create a release; main builds upload workflow artifacts instead.
+          # Only tag builds create a release; manual branch builds upload workflow artifacts below.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: LocalBooks v__VERSION__
           releaseBody: |
@@ -163,7 +165,28 @@ jobs:
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           uploadUpdaterJson: false
-          uploadWorkflowArtifacts: ${{ github.ref_type != 'tag' }}
-          workflowArtifactNamePattern: LocalBooks-[platform]-[arch]-[bundle]
+          uploadWorkflowArtifacts: false
           retryAttempts: 1
           args: ${{ matrix.args }} --verbose
+
+      - name: Collect installer paths
+        if: github.ref_type != 'tag'
+        id: installers
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const paths = JSON.parse(process.env.ARTIFACT_PATHS);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `paths<<INSTALLERS\n${paths.join('\n')}\nINSTALLERS\n`);
+          JS
+
+      - name: Upload installers (7 days)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalBooks-${{ matrix.platform }}
+          path: ${{ steps.installers.outputs.paths }}
+          retention-days: 7
+          if-no-files-found: error
