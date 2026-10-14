@@ -11,6 +11,7 @@ mod expenses;
 mod forensic;
 mod export_engine;
 mod instance;
+mod inventory;
 mod invoices;
 mod ledger;
 mod mcp_server;
@@ -18,6 +19,7 @@ mod preferences;
 mod qbw_import;
 mod reconcile;
 mod reports;
+mod revaluation;
 mod sales;
 mod statements;
 mod storage;
@@ -103,6 +105,16 @@ fn main() {
             commands::list_invoice_payments,
             commands::get_ar_aging,
             commands::inspect_bank_file,
+            commands::list_inventory_items,
+            commands::track_inventory,
+            commands::adjust_inventory,
+            commands::list_stock_movements,
+            commands::preview_fx_revaluation,
+            commands::post_fx_revaluation,
+            commands::list_fx_revaluations,
+            commands::void_fx_revaluation,
+            commands::get_estimate_detail,
+            commands::invoice_from_estimate,
             commands::import_bank_csv,
             commands::list_bank_transactions,
             commands::approve_bank_transaction,

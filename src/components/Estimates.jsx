@@ -10,7 +10,7 @@ const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
   ACCEPTED: { label: '✓ Accepted', className: 'font-semibold text-qb-green-active' },
   REJECTED: { label: '✕ Rejected', className: 'text-qb-ink-faint' },
-  CLOSED: { label: '● Invoiced', className: 'text-qb-info' },
+  CLOSED: { label: '● Converted · invoice', className: 'text-qb-info' },
 };
 
 function EstimateForm({ accounts, onSaved, onCancel }) {
@@ -107,7 +107,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   );
 }
 
-export default function Estimates({ accounts, intent }) {
+export default function Estimates({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);
@@ -138,7 +138,7 @@ export default function Estimates({ accounts, intent }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Estimates</h2>
-          <span className="text-xs text-qb-ink-muted">Non-posting quotes · ▾ to accept, reject or convert to an invoice</span>
+          <span className="text-xs text-qb-ink-muted">Non-posting quotes · ▾ to accept, reject, or turn into an invoice</span>
           {!composing && (
             <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setComposing(true)}>
               New estimate
@@ -192,7 +192,13 @@ export default function Estimates({ accounts, intent }) {
                       <RowMenu
                         items={[
                           {
-                            label: 'Convert to invoice',
+                            label: 'Edit as invoice…',
+                            disabled: !open || e.status === 'REJECTED',
+                            hint: e.status === 'REJECTED' ? 'Mark it pending or accepted first' : 'Load its lines into the invoice form to review before posting',
+                            onSelect: () => navigate('sales/invoices', 'from-estimate', { estimateId: e.id }),
+                          },
+                          {
+                            label: 'Convert to invoice now',
                             disabled: !open || e.status === 'REJECTED',
                             hint: e.status === 'REJECTED' ? 'Mark it pending or accepted first' : undefined,
                             confirm: {

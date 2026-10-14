@@ -19,6 +19,7 @@ import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
+import FxRevaluation from './components/FxRevaluation.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
@@ -63,9 +64,10 @@ export default function App() {
     homeCurrency: prefs.data?.home_currency_code ?? 'USD',
   };
 
-  const select = useCallback((id, action = null) => {
+  // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
+  const select = useCallback((id, action = null, data = null) => {
     setView(id);
-    setIntent(action ? { action, nonce: Date.now() } : null);
+    setIntent(action ? { action, data, nonce: Date.now() } : null);
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch {
@@ -104,7 +106,7 @@ export default function App() {
   }, []);
 
   const { item, parent } = findNav(view);
-  const props = { accounts: list, intent };
+  const props = { accounts: list, intent, navigate: select };
 
   return (
     <CompanyContext.Provider value={company}>
@@ -167,6 +169,7 @@ export default function App() {
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
+          {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports />}
           {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
         </div>

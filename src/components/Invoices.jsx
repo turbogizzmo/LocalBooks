@@ -5,7 +5,7 @@ import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { centsToInput, formatCents, formatMoney, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -504,6 +504,8 @@ export default function Invoices({ accounts, intent }) {
   const [lines, setLines] = useState(() => Array.from({ length: INITIAL_ROWS }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  // Set while the form holds an estimate's lines: posting then marks that estimate converted.
+  const [fromEstimate, setFromEstimate] = useState(null);
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -517,7 +519,30 @@ export default function Invoices({ accounts, intent }) {
       customerRef.current?.focus();
     } else if (intent?.action === 'receive-payment') {
       setReceiving(true);
+    } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
+      setReceiving(false);
+      api.getEstimateDetail(intent.data.estimateId).then(
+        ({ estimate, lines: estimateLines }) => {
+          setCustomer(estimate.customerName);
+          setLines([
+            ...estimateLines.map((l) => ({
+              ...blankLine(l.incomeAccountId),
+              productId: l.productServiceId,
+              description: l.description,
+              qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
+              rate: centsToInput(l.rateCents),
+            })),
+            blankLine(defaultAccountId),
+          ]);
+          setFromEstimate({ id: estimate.id, number: estimate.estimateNumber });
+          setNotice(null);
+          customerRef.current?.focus();
+        },
+        (err) => setNotice({ kind: 'error', text: errorText(err) }),
+      );
     }
+    // Only a new intent loads anything; the default account is read when it does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
   const applyTerms = (termId, fromDate) => {
@@ -533,31 +558,41 @@ export default function Invoices({ accounts, intent }) {
     setTerms('net30');
     setDueDate(addDays(todayIso(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
+    setFromEstimate(null);
   };
 
   const save = async () => {
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
     if (invalidCount > 0) {
-      return setNotice({ kind: 'error', text: `${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.` });
+      return setNotice({ kind: 'error', text: `${invalidCount} line(s) need an income account, a quantity and a rate above zero.` });
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
 
     setBusy(true);
     try {
-      const inv = await api.createInvoice({
+      const input = {
         customerName: customer.trim(),
         issueDate,
         dueDate,
-        lines: payload.map(({ description, quantityE4, rateCents, incomeAccountId }) => ({ description, quantityE4, rateCents, incomeAccountId })),
+        // The product travels with each line: tracked stock records its cost of goods sold.
+        lines: payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId }) => ({
+          productServiceId,
+          description,
+          quantityE4,
+          rateCents,
+          incomeAccountId,
+        })),
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
-      });
+      };
+      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
       setNotice({
         kind: 'success',
         text: inv.currencyCode
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
-          : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.`,
+          : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
+            (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : ''),
       });
       reset();
     } catch (err) {
@@ -578,6 +613,13 @@ export default function Invoices({ accounts, intent }) {
             setReceiving(false);
             setNotice({ kind: 'success', text });
           }}
+        />
+      )}
+      {fromEstimate && (
+        <Notice
+          kind="info"
+          text={`Invoicing estimate #${fromEstimate.number}: edit anything below, then post. The estimate is marked converted only when this invoice posts.`}
+          onDismiss={reset}
         />
       )}
       <section className="qb-panel flex-none">

@@ -14,4 +14,12 @@ export default defineConfig({
     watch: { ignored: ['**/src-tauri/**'] },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
+  build: {
+    rollupOptions: {
+      output: {
+        // Libraries (React, Tauri API, icons) change rarely: keep them in their own chunk.
+        manualChunks: (id) => (id.includes('node_modules') ? 'vendor' : undefined),
+      },
+    },
+  },
 });

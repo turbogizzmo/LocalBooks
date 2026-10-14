@@ -1,13 +1,18 @@
 import { useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
+import { AdjustDialog, TrackDialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents, parseMoneyToCents } from '../lib/money.js';
+import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
 export default function Products({ accounts }) {
   const { data, error } = useLedgerQuery(api.listProducts);
+  const stock = useLedgerQuery(api.listInventoryItems);
+  const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
+  // { mode: 'track', product } or { mode: 'adjust', item }
+  const [dialog, setDialog] = useState(null);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && incomeOnly(a))?.id ?? null, [accounts]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -45,10 +50,31 @@ export default function Products({ accounts }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {dialog?.mode === 'track' && (
+        <TrackDialog
+          product={dialog.product}
+          onClose={() => setDialog(null)}
+          onDone={(text) => {
+            setDialog(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
+      {dialog?.mode === 'adjust' && (
+        <AdjustDialog
+          item={dialog.item}
+          accounts={accounts}
+          onClose={() => setDialog(null)}
+          onDone={(text) => {
+            setDialog(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
-          <span className="ml-2 text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account</span>
+          <span className="ml-2 text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
@@ -59,8 +85,11 @@ export default function Products({ accounts }) {
                 <col className="w-[220px]" />
                 <col />
                 <col className="w-[112px]" />
-                <col className="w-[240px]" />
-                <col className="w-[96px]" />
+                <col className="w-[220px]" />
+                <col className="w-[90px]" />
+                <col className="w-[100px]" />
+                <col className="w-[110px]" />
+                <col className="w-[120px]" />
               </colgroup>
               <thead>
                 <tr>
@@ -68,6 +97,9 @@ export default function Products({ accounts }) {
                   <th className="qb-grid-head">Description</th>
                   <th className="qb-grid-head text-right">Rate</th>
                   <th className="qb-grid-head">Income account</th>
+                  <th className="qb-grid-head text-right">On hand</th>
+                  <th className="qb-grid-head text-right">Avg cost</th>
+                  <th className="qb-grid-head text-right">Stock value</th>
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
@@ -85,6 +117,7 @@ export default function Products({ accounts }) {
                   <td className="qb-grid-cell-edit">
                     <AccountSelect className="" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
                   </td>
+                  <td className="qb-grid-cell" colSpan={3} />
                   <td className="qb-grid-cell cell-tight">
                     <button type="submit" className="qb-btn qb-btn-primary h-[20px] w-full" disabled={busy}>
                       Add
@@ -93,7 +126,7 @@ export default function Products({ accounts }) {
                 </tr>
                 {data && data.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
+                    <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
                   </tr>
                 )}
                 {(data ?? []).map((p) => (
@@ -102,7 +135,27 @@ export default function Products({ accounts }) {
                     <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
                     <td className="qb-grid-cell num">{p.rateCents ? formatCents(p.rateCents) : ''}</td>
                     <td className="qb-grid-cell">{accountLabel(accounts, p.incomeAccountId)}</td>
-                    <td className="qb-grid-cell" />
+                    {items.has(p.id) ? (
+                      <>
+                        <td className="qb-grid-cell num">{formatQuantity(items.get(p.id).qtyOnHandE4)}</td>
+                        <td className="qb-grid-cell num">{items.get(p.id).averageCostCents !== null ? formatCents(items.get(p.id).averageCostCents) : '—'}</td>
+                        <td className="qb-grid-cell num">{formatCents(items.get(p.id).valueCents)}</td>
+                        <td className="qb-grid-cell cell-tight">
+                          <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'adjust', item: items.get(p.id) })}>
+                            Adjust stock…
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="qb-grid-cell text-qb-ink-faint" colSpan={3}>Not tracked</td>
+                        <td className="qb-grid-cell cell-tight">
+                          <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
+                            Track stock…
+                          </button>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

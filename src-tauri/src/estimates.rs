@@ -157,22 +157,9 @@ pub async fn convert_to_invoice(
 ) -> Result<EstimateSummary, String> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let result = async {
-        let header: Option<(String, String)> = sqlx::query_as(
-            "SELECT c.name, e.status FROM estimates e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?1",
-        )
-        .bind(estimate_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_err)?;
-        let (customer_name, status) = header.ok_or_else(|| format!("EST_NOT_FOUND: estimate {estimate_id} does not exist"))?;
-        if status == "CLOSED" {
-            return Err("EST_CLOSED: this estimate has already been converted to an invoice".to_string());
-        }
-        if status == "REJECTED" {
-            return Err("EST_REJECTED: a rejected estimate cannot be invoiced; mark it pending or accepted first".to_string());
-        }
-        let lines: Vec<(String, i64, i64, i64)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+        let customer_name = check_convertible(&mut tx, estimate_id).await?;
+        let lines: Vec<(String, i64, i64, i64, Option<i64>)> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
@@ -184,7 +171,13 @@ pub async fn convert_to_invoice(
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id)| InvoiceLineInput { description, quantity_e4, rate_cents, income_account_id })
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id)| InvoiceLineInput {
+                    description,
+                    quantity_e4,
+                    rate_cents,
+                    income_account_id,
+                    product_service_id,
+                })
                 .collect(),
             currency: None,
         };
@@ -202,6 +195,79 @@ pub async fn convert_to_invoice(
         Ok(()) => {
             tx.commit().await.map_err(db_err)?;
             get_estimate(pool, estimate_id).await
+        }
+        Err(err) => Err(rollback(tx, err).await),
+    }
+}
+
+/// One estimate line, for loading an estimate into the invoice form.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateLineView {
+    pub product_service_id: Option<i64>,
+    pub description: String,
+    pub quantity_e4: i64,
+    pub rate_cents: i64,
+    pub income_account_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateDetail {
+    pub estimate: EstimateSummary,
+    pub lines: Vec<EstimateLineView>,
+}
+
+pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
+    let estimate = get_estimate(pool, estimate_id).await?;
+    let lines = sqlx::query_as(
+        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+    )
+    .bind(estimate_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(EstimateDetail { estimate, lines })
+}
+
+/// Refuses converting an estimate that is already invoiced or was rejected.
+async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -> Result<String, String> {
+    let header: Option<(String, String)> = sqlx::query_as(
+        "SELECT c.name, e.status FROM estimates e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?1",
+    )
+    .bind(estimate_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (customer_name, status) = header.ok_or_else(|| format!("EST_NOT_FOUND: estimate {estimate_id} does not exist"))?;
+    match status.as_str() {
+        "CLOSED" => Err("EST_CLOSED: this estimate has already been converted to an invoice".to_string()),
+        "REJECTED" => Err("EST_REJECTED: a rejected estimate cannot be invoiced; mark it pending or accepted first".to_string()),
+        _ => Ok(customer_name),
+    }
+}
+
+/// Posts an invoice that was started from an estimate (and possibly edited in the invoice form), and
+/// marks the estimate converted, in one transaction: the estimate is never marked converted for an
+/// invoice that did not post.
+pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let result = async {
+        check_convertible(&mut tx, estimate_id).await?;
+        let invoice_id = write_invoice(&mut tx, &input).await?;
+        sqlx::query("UPDATE estimates SET status = 'CLOSED', invoice_id = ?1 WHERE id = ?2")
+            .bind(invoice_id)
+            .bind(estimate_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        Ok(invoice_id)
+    }
+    .await;
+    match result {
+        Ok(invoice_id) => {
+            tx.commit().await.map_err(db_err)?;
+            crate::invoices::get_summary(pool, invoice_id).await
         }
         Err(err) => Err(rollback(tx, err).await),
     }
@@ -255,5 +321,59 @@ mod tests {
         assert_eq!(ar_balance, 130_000);
         assert!(convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap_err().starts_with("EST_CLOSED"));
         assert!(set_estimate_status(&pool, estimate.id, "PENDING").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice_posts() {
+        let pool = test_pool().await;
+        let services = account_id(&pool, "4100").await;
+        let estimate = create_estimate(
+            &pool,
+            EstimateInput {
+                customer_name: "Initech".into(),
+                estimate_date: d(1),
+                expiration_date: None,
+                memo: None,
+                lines: vec![SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 100_000, rate_cents: 12_500, income_account_id: services }],
+            },
+        )
+        .await
+        .unwrap();
+        let detail = estimate_detail(&pool, estimate.id).await.unwrap();
+        assert_eq!((detail.lines.len(), detail.lines[0].quantity_e4, detail.lines[0].rate_cents), (1, 100_000, 12_500));
+
+        // The form's lines, edited before posting: 8 hours instead of 10.
+        let form = |account: i64| InvoiceInput {
+            customer_name: detail.estimate.customer_name.clone(),
+            issue_date: d(5),
+            due_date: d(30),
+            lines: detail
+                .lines
+                .iter()
+                .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id })
+                .collect(),
+            currency: None,
+        };
+        // A failed post leaves the estimate open.
+        let checking = account_id(&pool, "1010").await;
+        assert!(invoice_from_estimate(&pool, estimate.id, form(checking)).await.is_err());
+        assert_eq!(get_estimate(&pool, estimate.id).await.unwrap().status, "PENDING");
+
+        let invoice = invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap();
+        assert_eq!(invoice.total_cents, 100_000, "the edited quantity was posted");
+        let closed = get_estimate(&pool, estimate.id).await.unwrap();
+        assert_eq!((closed.status.as_str(), closed.invoice_number), ("CLOSED", Some(invoice.invoice_number)));
+        assert!(invoice_from_estimate(&pool, estimate.id, form(services)).await.unwrap_err().starts_with("EST_CLOSED"));
+
+        // The invoice must still be for the estimate's customer.
+        let other = create_estimate(
+            &pool,
+            EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services }] },
+        )
+        .await
+        .unwrap();
+        let elsewhere = InvoiceInput { customer_name: "Someone Else".into(), ..form(services) };
+        assert!(invoice_from_estimate(&pool, other.id, elsewhere).await.unwrap_err().starts_with("EST_INVOICE_MISMATCH"));
+        assert_eq!(get_estimate(&pool, other.id).await.unwrap().status, "PENDING");
     }
 }

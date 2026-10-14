@@ -470,7 +470,7 @@ async fn recompute_paid(
     Ok(())
 }
 
-async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
+pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
     let header: Option<(i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>)> = sqlx::query_as(
         "SELECT entry_number, entry_date, memo, source_type, source_id, status, is_voided, reverses_entry_id
          FROM journal_entries WHERE id = ?1",
@@ -566,7 +566,9 @@ async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> 
             .collect(),
         currency: None,
     };
-    post_entry_in_tx(tx, &reversal, EntrySource::Reversal(journal_entry_id)).await?;
+    let reversal_id = post_entry_in_tx(tx, &reversal, EntrySource::Reversal(journal_entry_id)).await?;
+    // Stock that moved with this entry moves back (refused if later sales already used it).
+    crate::inventory::reverse_for_entry(tx, journal_entry_id, reversal_id, date).await?;
 
     sqlx::query("UPDATE journal_entries SET is_voided = 1 WHERE id = ?1")
         .bind(journal_entry_id)
@@ -986,7 +988,7 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: date(),
                 due_date: date(),
-                lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None }],
                 currency: None,
             },
         )

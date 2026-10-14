@@ -61,6 +61,9 @@ pub struct ProductView {
     pub rate_cents: i64,
     pub income_account_id: i64,
     pub is_active: bool,
+    /// Set for products whose stock is tracked: quantity on hand (scaled by 10,000).
+    #[sqlx(default)]
+    pub qty_on_hand_e4: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -180,8 +183,9 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
 
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
-        "SELECT id, name, description, rate_cents, income_account_id, is_active
-         FROM products_services ORDER BY name COLLATE NOCASE",
+        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, i.qty_on_hand_e4
+         FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
+         ORDER BY p.name COLLATE NOCASE",
     )
     .fetch_all(pool)
     .await
@@ -314,6 +318,10 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
     lines.extend(credits.into_iter().map(|(account, cents)| JournalLine::credit(account, cents)));
+    // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
+    let sold: Vec<(Option<i64>, i64)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4)).collect();
+    let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
+    lines.extend(cost.lines.iter().cloned());
     let customer_label = clean(input.customer_name.as_deref()).map(|c| format!(" - {c}")).unwrap_or_default();
     let entry = JournalEntry {
         id: None,
@@ -323,6 +331,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::SalesReceipt(receipt_id)).await?;
+    cost.record(tx, input.receipt_date, entry_id).await?;
 
     sqlx::query("UPDATE sales_receipts SET journal_entry_id = ?1 WHERE id = ?2")
         .bind(entry_id)
@@ -466,7 +475,7 @@ mod tests {
                 customer_name: "acme corp".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None }],
                 currency: None,
             },
         )

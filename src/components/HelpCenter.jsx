@@ -21,7 +21,7 @@ export const SCREEN_HELP = {
   'sales/invoices': 'Create invoices, see what each customer still owes, and record full or partial payments against one or several invoices.',
   'sales/estimates': 'Quotes for customers that do not touch your books until they become invoices. Mark an estimate accepted, then convert it to an invoice in one step.',
   'sales/customers': 'Everyone you sell to, with their open receivable balance. Add a customer here or while creating an invoice.',
-  'sales/products': 'Products and services you sell. Choosing one on an invoice or sales receipt fills in its description, rate and income account.',
+  'sales/products': 'Products and services you sell. Choosing one on an invoice or sales receipt fills in its description, rate and income account. Track stock to keep quantity on hand and cost at moving average.',
   'expenses/expenses': 'Money paid straight away: expenses (card, cash or bank) and checks, each split across one or more expense accounts.',
   'expenses/bills': 'Bills you owe vendors, tracked in Accounts Payable until paid. Pay several at once with Pay bills.',
   'expenses/vendors': 'Everyone you buy from, with what you still owe each of them.',
@@ -31,6 +31,7 @@ export const SCREEN_HELP = {
   'banking/reconcile': 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
+  'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
   'accounting/qbw-import': 'Bring invoice amounts across from a QuickBooks Desktop company file, review them, and post them as balanced entries.',
   reports: 'Profit and Loss for any date range and the Balance Sheet as of any date, following your fiscal year. Export to CSV, print, or save as PDF.',
   settings: 'Company details and preferences, the closing date, backups and company files, and local AI access.',
@@ -74,7 +75,7 @@ export const HELP_ARTICLES = [
   {
     id: 'estimate', area: 'sales', views: ['sales/estimates'],
     title: 'Quote a customer with an estimate',
-    body: 'Create an estimate the same way as an invoice; it does not affect your books. Mark it accepted, pending or rejected, and convert an accepted estimate to an invoice in one step.',
+    body: 'Create an estimate the same way as an invoice; it does not affect your books. When the customer agrees, Edit as invoice loads its lines into the invoice form to review before posting, and the estimate is marked converted when the invoice posts.',
     keywords: 'quote proposal bid estimate convert accept',
     go: { label: 'New estimate', view: 'sales/estimates', action: 'estimate' },
   },
@@ -90,6 +91,14 @@ export const HELP_ARTICLES = [
     title: 'Set up products and services',
     body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you.',
     keywords: 'item service product price rate catalog',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+  },
+
+  {
+    id: 'inventory', area: 'sales', views: ['sales/products', 'expenses/bills', 'sales/invoices'],
+    title: 'Track inventory and cost of goods sold',
+    body: 'Choose Track stock on a product, record opening stock with Adjust stock, and buy more on bills by picking it as the Stock item. Selling it on an invoice or sales receipt records its moving average cost in Cost of Goods Sold, and LocalBooks will not sell more than is on hand.',
+    keywords: 'inventory stock quantity on hand cogs cost of goods sold average cost sku count adjust',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
   },
 
@@ -192,6 +201,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to the Audit Log', view: 'accounting/audit' },
   },
   {
+    id: 'fx-revaluation', area: 'accounting', views: ['accounting/fx-revaluation', 'sales/invoices', 'reports'],
+    title: 'Revalue foreign-currency invoices at period end',
+    body: 'Enter period-end rates under Accounting › Currency Revaluation to restate what customers owe in other currencies. The unrealized gain or loss posts on that date and reverses the next day, so payments still realize the right gain or loss.',
+    keywords: 'currency revaluation unrealized exchange gain loss foreign period end rate',
+    go: { label: 'Go to Currency Revaluation', view: 'accounting/fx-revaluation' },
+  },
+  {
     id: 'qbw-import', area: 'accounting', views: ['accounting/qbw-import'],
     title: 'Import a QuickBooks Desktop (.qbw) file',
     body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from QuickBooks files yet. Map each line type to an income account, compare the total with QuickBooks, then post.',
@@ -285,7 +301,8 @@ export const HELP_ARTICLES = [
 const ARTICLE_GUIDES = {
   invoice: 'invoices', 'foreign-currency': 'invoices', 'receive-payment': 'customer-payments',
   'sales-receipt': 'sales-receipts-and-estimates', estimate: 'sales-receipts-and-estimates',
-  customers: 'customers-and-products', products: 'customers-and-products', vendors: 'customers-and-products',
+  customers: 'customers-and-products', products: 'customers-and-products', vendors: 'customers-and-products', inventory: 'inventory',
+  'fx-revaluation': 'currency-revaluation',
   'expense-check': 'expenses-and-checks', bill: 'bills', 'pay-bills': 'bills', time: 'time-tracking',
   'bank-feed': 'bank-feeds', deposit: 'deposits-and-transfers', transfer: 'deposits-and-transfers', reconcile: 'reconciling',
   'journal-entry': 'journal-entries-and-voids', void: 'journal-entries-and-voids',
@@ -300,10 +317,11 @@ const ARTICLE_GUIDES = {
 const SCREEN_GUIDES = {
   dashboard: 'getting-started', 'sales/all': 'sales-receipts-and-estimates', 'sales/invoices': 'invoices',
   'sales/estimates': 'sales-receipts-and-estimates', 'sales/customers': 'customers-and-products',
-  'sales/products': 'customers-and-products', 'expenses/expenses': 'expenses-and-checks', 'expenses/bills': 'bills',
+  'sales/products': 'inventory', 'expenses/expenses': 'expenses-and-checks', 'expenses/bills': 'bills',
   'expenses/vendors': 'customers-and-products', 'employees/time': 'time-tracking', 'banking/feeds': 'bank-feeds',
   'banking/transfers': 'deposits-and-transfers', 'banking/reconcile': 'reconciling', 'accounting/journal': 'journal-entries-and-voids',
   'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'quickbooks-import', reports: 'reports',
+  'accounting/fx-revaluation': 'currency-revaluation',
   settings: 'getting-started',
 };
 

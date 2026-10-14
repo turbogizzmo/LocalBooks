@@ -100,9 +100,11 @@ export function parseQuantityE4(text) {
 
 /** 27_500 → "2.75", 10_000 → "1". */
 export function formatQuantity(e4) {
-  const whole = Math.floor(e4 / QUANTITY_SCALE);
-  const frac = String(e4 % QUANTITY_SCALE).padStart(4, '0').replace(/0+$/, '');
-  return frac ? `${whole.toLocaleString('en-US')}.${frac}` : whole.toLocaleString('en-US');
+  const sign = e4 < 0 ? '-' : '';
+  const abs = Math.abs(e4);
+  const whole = Math.floor(abs / QUANTITY_SCALE);
+  const frac = String(abs % QUANTITY_SCALE).padStart(4, '0').replace(/0+$/, '');
+  return `${sign}${whole.toLocaleString('en-US')}${frac ? `.${frac}` : ''}`;
 }
 
 /** round_half_up(a × b ÷ divisor) with BigInt, so it is exact for any safe-integer inputs. */

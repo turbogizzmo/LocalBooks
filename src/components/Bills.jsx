@@ -16,6 +16,7 @@ const isPaymentAccount = (a) => a.accountType === 'BANK' || a.accountType === 'C
 const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PARTIAL');
 
 function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
+  const stockItems = useLedgerQuery(api.listInventoryItems);
   const today = todayIso();
   const [vendor, setVendor] = useState('');
   const [billNumber, setBillNumber] = useState('');
@@ -64,6 +65,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
           memo: l.memo,
           quantityE4: l.quantityE4 ?? null,
           rateCents: l.rateCents ?? null,
+          productServiceId: l.productServiceId ?? null,
         })),
       });
       onPosted(`Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`);
@@ -134,7 +136,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
           </button>
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing stockItems={stockItems.data ?? []} />
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
     </section>
   );

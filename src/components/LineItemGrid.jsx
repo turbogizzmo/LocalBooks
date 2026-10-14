@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import { centsToInput, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
+import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
 export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, qty: '', rate: '' });
@@ -145,7 +145,9 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       >
                         <option value="">—</option>
                         {products.filter((p) => p.isActive).map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>
+                            {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
+                          </option>
                         ))}
                       </select>
                     </td>

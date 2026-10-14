@@ -246,8 +246,12 @@ its entry form with focus in the first field.
 | Transfer | To-account | From-account |
 | Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |
 | Imported QuickBooks invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
+| Sale of a tracked product (added to the invoice or sales receipt entry) | Cost of Goods Sold, at moving average cost | Inventory Asset |
+| Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
+| Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
+| Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
 | Void | Exact reversal of the original entry, same date | |
-| Estimate / time activity | *Non-posting* | |
+| Estimate / time activity | *Non-posting* (an estimate becomes an invoice only when that invoice posts) | |
 
 Statements: **Balance Sheet** closes prior fiscal years' profit into Retained Earnings and shows the
 current fiscal year as Net Income. The fiscal year start month is a preference.
@@ -406,7 +410,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (84 tests) runs against real SQLite databases with every migration applied, on macOS,
+The suite (99 tests, plus 3 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -438,6 +442,8 @@ the single-instance handoff, reviewed forensic corrections, and the MCP server
   are still undecoded; those lines are counted and shown, not guessed. Compressed backups (`.qbb`)
   and portable files (`.qbm`) must be restored in QuickBooks first. Review imported totals against
   your QuickBooks reports.
+- **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
+  checks), can't be sold on foreign-currency invoices, and can't go below zero on hand.
 - Currency amounts use two decimal places (zero-decimal currencies such as JPY display with `.00`).
 
 ---

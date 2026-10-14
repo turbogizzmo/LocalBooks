@@ -22,3 +22,5 @@ Products and services make invoices and sales receipts quicker to fill in.
 
 Choosing the product on an invoice or sales receipt then fills in its description, rate and income
 account. You can still change them on the form.
+
+To keep count of a product you stock, see [Track inventory](inventory.md).

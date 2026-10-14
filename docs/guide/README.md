@@ -14,6 +14,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Record customer payments](customer-payments.md)
 - [Sales receipts and estimates](sales-receipts-and-estimates.md)
 - [Customers, products and services](customers-and-products.md)
+- [Track inventory](inventory.md)
 
 ## Expenses and vendors
 
@@ -36,6 +37,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Verify and correct the ledger](ledger-integrity.md)
 - [Close a period](closing-the-books.md)
 - [Import from QuickBooks Desktop](quickbooks-import.md)
+- [Revalue foreign-currency invoices](currency-revaluation.md)
 
 ## Reports and more
 

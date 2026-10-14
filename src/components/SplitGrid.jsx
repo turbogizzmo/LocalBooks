@@ -2,7 +2,7 @@ import AccountSelect from './AccountSelect.jsx';
 import { formatCents, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, memo: '', amount: '', qty: '', rate: '' });
+export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, memo: '', amount: '', qty: '', rate: '' });
 
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is
@@ -26,10 +26,11 @@ export function summarizeSplits(rows) {
   let invalid = 0;
   const lines = [];
   for (const row of rows) {
-    const blank = row.memo.trim() === '' && row.amount.trim() === '' && (row.qty ?? '').trim() === '' && (row.rate ?? '').trim() === '';
+    const blank = !row.productId && row.memo.trim() === '' && row.amount.trim() === '' && (row.qty ?? '').trim() === '' && (row.rate ?? '').trim() === '';
     if (blank) continue;
     const { priced, quantityE4, rateCents, amount } = evaluateSplit(row);
-    if (row.accountId === null || amount === null || amount <= 0) {
+    // A stock item is bought by quantity and rate, so its cost per unit is known.
+    if (row.accountId === null || amount === null || amount <= 0 || (row.productId && !priced)) {
       invalid += 1;
       continue;
     }
@@ -38,6 +39,7 @@ export function summarizeSplits(rows) {
       accountId: row.accountId,
       amountCents: amount,
       memo: row.memo.trim() || null,
+      productServiceId: row.productId ?? null,
       ...(priced ? { quantityE4, rateCents } : {}),
     });
   }
@@ -48,7 +50,13 @@ export function summarizeSplits(rows) {
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
  * (data-entry grid), sized to the row so editing causes no layout shift.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, currency = null }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, currency = null, stockItems = [] }) {
+  // Tracked products can be bought on a line: the line then posts to the item's inventory account.
+  const withStock = withPricing && stockItems.length > 0;
+  const pickItem = (key, productId) => {
+    const item = stockItems.find((i) => i.productId === productId);
+    update(key, item ? { productId, accountId: item.assetAccountId, memo: item.name } : { productId: null });
+  };
   const money = (cents) => formatMoney(cents, currency);
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const remove = (key) => setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.key !== key) : [blankSplit(defaultAccountId)]));
@@ -60,6 +68,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         <col className="w-[28px]" />
         <col className="w-[260px]" />
         <col />
+        {withStock && <col className="w-[150px]" />}
         {withPricing && <col className="w-[70px]" />}
         {withPricing && <col className="w-[96px]" />}
         <col className="w-[120px]" />
@@ -68,6 +77,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
       <thead>
         <tr>
           <th className="qb-grid-head text-right">#</th>
+          {withStock && <th className="qb-grid-head">Stock item</th>}
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
           {withPricing && <th className="qb-grid-head text-right">Qty</th>}
@@ -84,8 +94,20 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           return (
             <tr key={row.key} className="qb-grid-row">
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
+              {withStock && (
+                <td className="qb-grid-cell-edit">
+                  <select value={row.productId ?? ''} onChange={(e) => pickItem(row.key, e.target.value ? Number(e.target.value) : null)} aria-label={`Stock item ${i + 1}`}>
+                    <option value="">—</option>
+                    {stockItems.map((item) => (
+                      <option key={item.productId} value={item.productId}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              )}
               <td className="qb-grid-cell-edit">
-                <AccountSelect className="" accounts={accounts} filter={filter} value={row.accountId} onChange={(accountId) => update(row.key, { accountId })} placeholder="Select category" aria-label={`${categoryLabel} ${i + 1}`} />
+                <AccountSelect className="" accounts={accounts} filter={filter} value={row.accountId} onChange={(accountId) => update(row.key, { accountId })} placeholder="Select category" aria-label={`${categoryLabel} ${i + 1}`} disabled={Boolean(row.productId)} title={row.productId ? 'A stock item posts to its inventory account' : undefined} />
               </td>
               <td className="qb-grid-cell-edit">
                 <input value={row.memo} onChange={(e) => update(row.key, { memo: e.target.value })} placeholder="What was this for?" aria-label={`Description ${i + 1}`} />
@@ -119,7 +141,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={withPricing ? 4 : 2}>
+          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0)}>
             <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
               ＋ Add split row
             </button>

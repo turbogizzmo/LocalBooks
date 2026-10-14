@@ -24,6 +24,10 @@ An estimate doesn't affect your books until it becomes an invoice.
 
 1. When the customer agrees, open the estimate's menu and choose **Mark accepted**. (You can also
    mark it pending or rejected.)
-2. Choose **Convert to invoice**, check the dates, and click **Create invoice**.
+2. Choose **Edit as invoice…**. The estimate's customer and lines load into the invoice form.
+3. Change anything you need (hours, prices, extra lines), check the dates, and click **Save & Post to
+   Ledger**.
 
-The new invoice posts like any other. See [Create and send an invoice](invoices.md).
+The estimate shows **Converted** with the invoice number once the invoice posts. If you leave the
+form without posting, it stays open. **Convert to invoice now** skips the form: it posts the
+estimate unchanged, dated today and due in 30 days. See [Create and send an invoice](invoices.md).

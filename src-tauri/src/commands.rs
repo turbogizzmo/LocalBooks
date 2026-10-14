@@ -1,5 +1,6 @@
 //! Tauri command surface. Every successful write emits `ledger-changed` so open views refresh live.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{Local, NaiveDate};
@@ -15,7 +16,9 @@ use crate::storage::{self, StorageInfo};
 use crate::export_engine;
 use crate::preferences::{self, FiscalPeriods, TaxDeadline};
 use crate::banking::{self, BankingActivity, DepositInput, TransferInput, UndepositedItem};
-use crate::estimates::{self, EstimateInput, EstimateSummary};
+use crate::estimates::{self, EstimateDetail, EstimateInput, EstimateSummary};
+use crate::inventory::{self, AdjustInput, InventoryItemView, StockMovementView, TrackInput};
+use crate::revaluation::{self, RevaluationPreview, RevaluationView};
 use crate::expenses::{self, BillInput, BillPaymentInput, BillPaymentView, BillSummary, ExpenseInput, ExpenseView};
 use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary, PaymentInput, PaymentView};
 use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView, LedgerVerification};
@@ -889,4 +892,77 @@ pub fn record_startup_failure(data_dir: &Path, message: &str) {
 #[tauri::command]
 pub fn get_startup_failure(app: AppHandle) -> Option<StartupFailure> {
     app.try_state::<StartupFailure>().map(|s| s.inner().clone())
+}
+
+// ------------------------------------------------------------------------------------------------
+// Inventory
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_inventory_items(db: State<'_, Db>) -> Result<Vec<InventoryItemView>, String> {
+    inventory::list_items(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn track_inventory(app: AppHandle, db: State<'_, Db>, input: TrackInput) -> Result<InventoryItemView, String> {
+    let item = inventory::track_product(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(item)
+}
+
+#[tauri::command]
+pub async fn adjust_inventory(app: AppHandle, db: State<'_, Db>, input: AdjustInput) -> Result<InventoryItemView, String> {
+    let item = inventory::adjust(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(item)
+}
+
+#[tauri::command]
+pub async fn list_stock_movements(db: State<'_, Db>, item_id: i64) -> Result<Vec<StockMovementView>, String> {
+    inventory::movements(&db.pool().await, item_id).await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Foreign currency revaluation
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn preview_fx_revaluation(db: State<'_, Db>, as_of: NaiveDate, rates: BTreeMap<String, i64>) -> Result<RevaluationPreview, String> {
+    revaluation::preview(&db.pool().await, as_of, &rates).await
+}
+
+#[tauri::command]
+pub async fn post_fx_revaluation(app: AppHandle, db: State<'_, Db>, as_of: NaiveDate, rates: BTreeMap<String, i64>) -> Result<RevaluationView, String> {
+    let posted = revaluation::post(&db.pool().await, as_of, &rates).await?;
+    notify(&app);
+    Ok(posted)
+}
+
+#[tauri::command]
+pub async fn list_fx_revaluations(db: State<'_, Db>) -> Result<Vec<RevaluationView>, String> {
+    revaluation::list(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn void_fx_revaluation(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    revaluation::void(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------
+// Estimates → invoice form
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn get_estimate_detail(db: State<'_, Db>, estimate_id: i64) -> Result<EstimateDetail, String> {
+    estimates::estimate_detail(&db.pool().await, estimate_id).await
+}
+
+/// Posts an invoice started from an estimate (possibly edited) and marks the estimate converted.
+#[tauri::command]
+pub async fn invoice_from_estimate(app: AppHandle, db: State<'_, Db>, estimate_id: i64, input: InvoiceInput) -> Result<InvoiceSummary, String> {
+    let invoice = estimates::invoice_from_estimate(&db.pool().await, estimate_id, input).await?;
+    notify(&app);
+    Ok(invoice)
 }

@@ -21,6 +21,10 @@ pub struct BillLineInput {
     pub quantity_e4: Option<i64>,
     #[serde(default)]
     pub rate_cents: Option<i64>,
+    /// The product bought. A tracked inventory product adds the quantity to stock at this line's
+    /// cost; the line must then post to that product's inventory account and give a quantity.
+    #[serde(default)]
+    pub product_service_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -205,8 +209,14 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
     .map_err(db_err)?;
 
     let mut debits: Vec<(i64, i64)> = Vec::new();
+    let mut received: Vec<(i64, i64, i64)> = Vec::new(); // (item, quantity, cost)
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
+        if let Some(product) = line.product_service_id {
+            if let Some(item) = crate::inventory::check_purchase_line(tx, product, line.account_id, line.quantity_e4, n).await? {
+                received.push((item, line.quantity_e4.unwrap_or_default(), line.amount_cents));
+            }
+        }
         let category: Option<(String, String, bool, bool)> = sqlx::query_as(
             "SELECT t.classification, a.account_type, a.is_active, a.is_system
              FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
@@ -227,8 +237,8 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
         }
 
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(bill_id)
         .bind(n as i64)
@@ -237,6 +247,7 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
         .bind(line.amount_cents)
         .bind(line.quantity_e4)
         .bind(line.rate_cents)
+        .bind(line.product_service_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -253,6 +264,9 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
     let reference = clean(input.bill_number.as_deref()).map(|n| format!(" #{n}")).unwrap_or_default();
     let entry = JournalEntry { id: None, date: input.bill_date, description: format!("Bill{reference} - {vendor_name}"), lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Bill(bill_id)).await?;
+    for (item, qty, cost) in received {
+        crate::inventory::record_purchase(tx, item, input.bill_date, qty, cost, entry_id).await?;
+    }
 
     sqlx::query("UPDATE bills SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2")
         .bind(entry_id)
@@ -620,7 +634,7 @@ mod tests {
             due_date: d(31),
             memo: None,
             total_cents: lines.iter().map(|(_, cents)| cents).sum(),
-            lines: lines.into_iter().map(|(account, cents)| BillLineInput { account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None }).collect(),
+            lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None }).collect(),
         }
     }
 
@@ -801,7 +815,7 @@ mod tests {
     async fn bill_lines_can_be_priced_by_quantity_and_rate() {
         let pool = test_pool().await;
         let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-        let priced = |q: i64, r: i64, amount: i64| BillLineInput { account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r) };
+        let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None };
         let mut input = bill("Staples", vec![]);
         input.lines = vec![priced(25_000, 1_299, 3_248)];
         input.total_cents = 3_248;
