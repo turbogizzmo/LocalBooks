@@ -622,6 +622,9 @@ pub async fn mount_company_file(app: &AppHandle, path: &Path) -> Result<StorageS
 /// Carries out a request handed over by the operating system or a second launch: open the file
 /// (reporting any problem in the app's banner) and bring the window forward.
 pub async fn handle_hand_off(app: &AppHandle, request: crate::instance::HandOff) {
+    if app.try_state::<StartupFailure>().is_some() {
+        return; // no company file is open; the window is showing why
+    }
     if let crate::instance::HandOff::Open { path } = request {
         if let Err(err) = mount_company_file(app, &path).await {
             app.state::<Db>().set_warning(format!("Could not open {}: {err}.", path.display()));
@@ -851,4 +854,31 @@ pub async fn set_closing_date(app: AppHandle, db: State<'_, Db>, input: ClosingI
     let status = closing::set_closing_date(&db.pool().await, &input).await?;
     notify(&app);
     Ok(status)
+}
+
+// ------------------------------------------------------------------------------------------------
+// Startup failure
+// ------------------------------------------------------------------------------------------------
+
+/// Set when the company file could not be opened at launch. The window then shows this instead
+/// of the app, and no command that needs the books is available.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupFailure {
+    pub message: String,
+    pub company_file: PathBuf,
+}
+
+/// Appends the failure to `startup-error.log` in the app data folder, for support.
+pub fn record_startup_failure(data_dir: &Path, message: &str) {
+    use std::io::Write;
+    let _ = std::fs::create_dir_all(data_dir);
+    if let Ok(mut log) = std::fs::OpenOptions::new().create(true).append(true).open(data_dir.join("startup-error.log")) {
+        let _ = writeln!(log, "{} LocalBooks {}: {message}", Local::now().format("%Y-%m-%d %H:%M:%S %z"), env!("CARGO_PKG_VERSION"));
+    }
+}
+
+#[tauri::command]
+pub fn get_startup_failure(app: AppHandle) -> Option<StartupFailure> {
+    app.try_state::<StartupFailure>().map(|s| s.inner().clone())
 }

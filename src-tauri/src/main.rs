@@ -44,7 +44,17 @@ fn main() {
             }
             // Otherwise the file opens in place; without one, config.json is honoured, falling back
             // to the local file (with a warning) if that location is unavailable.
-            let database = tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file))?;
+            let database = match tauri::async_runtime::block_on(db::Db::startup_with_file(config, launch_file)) {
+                Ok(database) => database,
+                Err(err) => {
+                    // Returning an error from setup aborts the process with no explanation (macOS
+                    // shows only a crash report). Start instead and let the window explain.
+                    eprintln!("LocalBooks could not open its company file: {err}");
+                    commands::record_startup_failure(&data_dir, &err);
+                    app.manage(commands::StartupFailure { message: err, company_file: data_dir.join(storage::DB_FILE_NAME) });
+                    return Ok(());
+                }
+            };
             app.manage(database);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request.
@@ -132,6 +142,7 @@ fn main() {
             commands::open_company_file,
             commands::get_closing_status,
             commands::set_closing_date,
+            commands::get_startup_failure,
             commands::get_mcp_status,
             commands::set_mcp_enabled,
             commands::regenerate_mcp_token,
@@ -193,8 +204,12 @@ fn main() {
                 if let Some(state) = app.try_state::<std::sync::Mutex<Option<instance::InstanceGuard>>>() {
                     drop(state.lock().ok().and_then(|mut guard| guard.take()));
                 }
-                app.state::<mcp_server::McpService>().shutdown().await;
-                app.state::<db::Db>().shutdown().await;
+                if let Some(mcp) = app.try_state::<mcp_server::McpService>() {
+                    mcp.shutdown().await;
+                }
+                if let Some(db) = app.try_state::<db::Db>() {
+                    db.shutdown().await;
+                }
             }),
             _ => {}
         });

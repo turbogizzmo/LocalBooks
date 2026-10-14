@@ -354,6 +354,64 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), String> {
 mod migrate_tests {
     use super::*;
 
+    /// Released migrations are frozen: a company file that already applied one refuses to open if
+    /// its SQL changes (sqlx compares checksums), which would stop the app for every existing user.
+    /// Add a line here for each new migration; never edit an existing line or migration file.
+    #[test]
+    fn released_migrations_are_never_edited() {
+        const RELEASED: &[(i64, &str)] = &[
+            (1, "d5a36071e057949f32a00e72"),
+            (2, "fbf4c17dd5b3397f7d420e4a"),
+            (3, "96723d0cb1d74eb159ec0b22"),
+            (4, "6fe4f2ad900efc25aabe2070"),
+            (5, "b0b3d32999119aba01f28d70"),
+            (6, "dfab9cfc132bb83f4bb8d98a"),
+            (7, "19148d3cbc6ce0e378e3ef1a"),
+            (8, "d8c7cbdcbc46e8b5b6984106"),
+            (9, "6bc8df9779eb42ec784d6a00"),
+            (10, "427c757dc2359e67b42e97a2"),
+            (11, "61ff0225af9d3a53253a4be2"),
+            (12, "b3e722249b0ca4d444f0174a"),
+            (13, "6257a8ded273435ec2e96f7e"),
+            (14, "f48284e33a4d4bfa1a91cc9c"),
+            (15, "f8145154c4a9384330d213fc"),
+        ];
+        let actual: Vec<(i64, String)> = MIGRATOR
+            .iter()
+            .map(|m| (m.version, m.checksum.iter().take(12).map(|b| format!("{b:02x}")).collect()))
+            .collect();
+        for (version, pinned) in RELEASED {
+            let found = actual.iter().find(|(v, _)| v == version).unwrap_or_else(|| panic!("migration {version} was removed"));
+            assert_eq!(&found.1, pinned, "migration {version} was edited after release; add a new migration instead");
+        }
+        for (version, checksum) in &actual {
+            assert!(
+                RELEASED.iter().any(|(v, _)| v == version),
+                "new migration {version}: once it ships, pin it here as ({version}, \"{checksum}\")"
+            );
+        }
+    }
+
+    /// Upgrade check for a real company file: point LOCALBOOKS_UPGRADE_CHECK at a COPY of one and
+    /// run `cargo test -- --ignored upgrades_a_copy`. The copy is migrated in place and verified.
+    #[tokio::test]
+    #[ignore]
+    async fn upgrades_a_copy_of_a_real_company_file() {
+        let path = std::env::var("LOCALBOOKS_UPGRADE_CHECK").expect("set LOCALBOOKS_UPGRADE_CHECK to a copied company file");
+        let path = Path::new(&path);
+        let before = crate::backup::inspect(path).await.expect("the copy is a valid company file");
+        let pool = open(path).await.expect("migrations apply");
+        let verification = crate::ledger::verify_ledger_audit(&pool).await.unwrap();
+        let tb = crate::reports::trial_balance(&pool).await.unwrap();
+        println!(
+            "upgraded from schema {:?}: {} posted entries, intact = {}, trial balance {} / {}",
+            before.schema_version, verification.entries_checked, verification.intact, tb.total_debit_cents, tb.total_credit_cents
+        );
+        assert!(verification.intact, "{:?}", verification.findings);
+        assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
+        pool.close().await;
+    }
+
     #[tokio::test]
     async fn every_migration_is_recorded_once_in_the_audit_trail() {
         let pool = test_pool().await;

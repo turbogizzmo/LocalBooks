@@ -94,6 +94,7 @@ export const api = {
   printReport: () => invoke('print_report'),
 
   getStorageStatus: () => invoke('get_storage_status'),
+  getStartupFailure: () => invoke('get_startup_failure'),
   openCompanyFile: (path) => invoke('open_company_file', { path }),
   getClosingStatus: () => invoke('get_closing_status'),
   setClosingDate: (input) => invoke('set_closing_date', { input }),
