@@ -57,8 +57,8 @@ fn instance_path(config_dir: &Path) -> PathBuf {
     config_dir.join(INSTANCE_FILE)
 }
 
-/// Writes the instance file readable by its owner only.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+/// Writes `bytes` to `path` (atomically) readable by its owner only.
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension(format!("json.partial-{}", std::process::id()));
     {
         let mut options = std::fs::OpenOptions::new();

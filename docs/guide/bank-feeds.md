@@ -1,7 +1,14 @@
 # Import bank transactions (bank feeds)
 
-Download a statement from your bank, import it, and approve each transaction into your books.
-LocalBooks reads **OFX**, **QFX** and **QBO** statement downloads and **CSV** files.
+Bring your bank's transactions into LocalBooks, then approve each one into your books. There are two
+ways to get them:
+
+- **Import a statement file** you download from your bank: **OFX**, **QFX**, **QBO** or **CSV**.
+  Free, and works with almost any bank.
+- **Connect a bank** through SimpleFIN to fetch new transactions with one click. This needs a
+  SimpleFIN Bridge subscription (about $15 a year, paid to SimpleFIN, not LocalBooks).
+
+Either way, transactions wait under **For review** until you approve them. Nothing posts on its own.
 
 ## Import a statement
 
@@ -13,6 +20,40 @@ LocalBooks reads **OFX**, **QFX** and **QBO** statement downloads and **CSV** fi
 You can import overlapping statements safely. Transactions already imported are skipped and
 counted as "already imported", while two genuinely identical purchases on the same day are both
 kept.
+
+## Connect a bank (SimpleFIN)
+
+SimpleFIN Bridge signs in to your banks and shares read-only transaction data with apps you
+approve. LocalBooks never sees your bank password.
+
+1. Go to **bridge.simplefin.org**, create an account, and connect your banks there.
+2. In SimpleFIN Bridge, create a **setup token** for a new app connection and copy it.
+3. In LocalBooks go to **Banking › Bank Feeds** and click **Connect a bank…**.
+4. Paste the token and click **Connect**. Your SimpleFIN accounts and their balances are listed.
+5. For each account you want, choose the LocalBooks bank or credit card account under **Feeds
+   into**, check the **from** date, and click **Link**. The suggested date is the day after the
+   last transaction already in Bank Feeds for that account, so nothing is fetched twice.
+6. Click **Sync now**. New transactions appear under **For review**.
+
+After that, click **Sync banks** on the Bank Feeds toolbar whenever you want new transactions.
+
+Good to know:
+
+- **A setup token works once.** If LocalBooks says the token was already used and you didn't use
+  it, someone else may have: disable it in SimpleFIN Bridge and create a new one.
+- **The access is kept in this computer's keychain**, not in the company file or its backups. If
+  you open the company file on another computer, the connection shows **Reconnect**: paste a new
+  setup token and your account links are kept.
+- **SimpleFIN allows about 24 updates a day**, so LocalBooks syncs only when you ask, and at most
+  every 10 minutes. Each sync re-checks the last 5 days to catch transactions that post late.
+- **Only posted transactions are fetched.** Pending ones arrive in a later sync once they post.
+- **Up to 90 days back.** For older history, import statement files.
+- **Accounts in another currency can't be linked**, because LocalBooks bank accounts are kept in
+  your home currency. Import their statements as files instead.
+- Messages from SimpleFIN (for example "reauthenticate with your bank") appear on the connection.
+  Fix those in SimpleFIN Bridge.
+- **Remove** forgets the connection on this computer. Transactions already fetched stay in Bank
+  Feeds. To stop SimpleFIN sharing data, also disable the app connection in SimpleFIN Bridge.
 
 ## When LocalBooks asks which columns are which
 

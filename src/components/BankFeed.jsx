@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import BankColumnMapping from './BankColumnMapping.jsx';
+import BankConnections, { syncSummaryText } from './BankConnections.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
@@ -27,6 +28,36 @@ export default function BankFeed({ accounts }) {
   // A file waiting for the user to confirm its columns: { path, inspection }.
   const [mappingFile, setMappingFile] = useState(null);
   const listRef = useRef(null);
+  const [showConnections, setShowConnections] = useState(false);
+  // SimpleFIN connections with at least one linked account, for the Sync button.
+  const [syncable, setSyncable] = useState([]);
+
+  const loadConnections = () =>
+    api.listBankConnections().then(
+      (list) => setSyncable(list.filter((c) => c.hasAccess && c.accounts.some((a) => a.bankAccountId !== null))),
+      () => setSyncable([]),
+    );
+  useEffect(() => {
+    loadConnections();
+  }, []);
+
+  const syncAll = async () => {
+    setBusy(true);
+    setNotice(null);
+    const texts = [];
+    let failed = false;
+    for (const c of syncable) {
+      try {
+        texts.push(syncSummaryText(await api.syncBankConnection(c.id)));
+      } catch (err) {
+        failed = true;
+        texts.push(`${c.serverHost}: ${errorText(err)}`);
+      }
+    }
+    setNotice({ kind: failed ? 'error' : 'success', text: texts.join(' ') });
+    setBusy(false);
+    loadConnections();
+  };
 
   useEffect(() => {
     if (bankAccountId === null && feedAccounts.length > 0) setBankAccountId(feedAccounts[0].id);
@@ -149,6 +180,15 @@ export default function BankFeed({ accounts }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {showConnections && (
+        <BankConnections
+          accounts={accounts}
+          onClose={() => {
+            setShowConnections(false);
+            loadConnections();
+          }}
+        />
+      )}
       {mappingFile && (
         <BankColumnMapping
           path={mappingFile.path}
@@ -176,7 +216,16 @@ export default function BankFeed({ accounts }) {
         <button type="button" className="qb-btn qb-btn-secondary" onClick={importStatement} disabled={busy || bankAccountId === null}>
           Import statement…
         </button>
-        <span className="text-xs text-qb-ink-muted">CSV, OFX or QFX from your bank · already-imported transactions are skipped</span>
+        <span className="mx-1 h-4 w-px bg-qb-border" aria-hidden="true" />
+        {syncable.length > 0 && (
+          <button type="button" className="qb-btn qb-btn-primary" onClick={syncAll} disabled={busy}>
+            {busy ? 'Working…' : 'Sync banks'}
+          </button>
+        )}
+        <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setShowConnections(true)} disabled={busy}>
+          {syncable.length > 0 ? 'Bank connections…' : 'Connect a bank…'}
+        </button>
+        <span className="text-xs text-qb-ink-muted">Statements: CSV, OFX or QFX · already-imported transactions are skipped</span>
         <div className="ml-auto flex gap-3 text-sm">
           {feedAccounts.map((a) => (
             <span key={a.id} className={a.id === bankAccountId ? 'font-semibold' : 'text-qb-ink-muted'}>
@@ -217,7 +266,7 @@ export default function BankFeed({ accounts }) {
                 {pending.length === 0 && (
                   <tr>
                     <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">
-                      Nothing to review. Import a CSV export from your bank to get started.
+                      Nothing to review. Import a statement file from your bank, or connect a bank to sync transactions automatically.
                     </td>
                   </tr>
                 )}

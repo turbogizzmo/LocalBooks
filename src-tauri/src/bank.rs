@@ -387,7 +387,7 @@ impl CsvTable {
     }
 }
 
-fn clean_description(raw: &str) -> String {
+pub(crate) fn clean_description(raw: &str) -> String {
     match raw.split_whitespace().collect::<Vec<_>>().join(" ") {
         d if d.is_empty() => "(no description)".to_string(),
         d => d,
@@ -749,27 +749,39 @@ async fn write_import(
             }
         };
 
-        let result = sqlx::query(
-            "INSERT INTO bank_transactions (bank_account_id, txn_date, description, amount_cents, fingerprint)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT (bank_account_id, fingerprint) DO NOTHING",
-        )
-        .bind(bank_account_id)
-        .bind(row.date)
-        .bind(&row.description)
-        .bind(row.amount_cents)
-        .bind(&fingerprint)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-
-        if result.rows_affected() == 1 {
+        if insert_line(tx, bank_account_id, row.date, &row.description, row.amount_cents, &fingerprint).await? {
             summary.imported += 1;
         } else {
             summary.duplicates += 1;
         }
     }
     Ok(summary)
+}
+
+/// Adds one line to the review queue of `bank_account_id`, unless a line with the same fingerprint
+/// is already there (in any status). Returns whether it was added.
+pub(crate) async fn insert_line(
+    tx: &mut Transaction<'_, Sqlite>,
+    bank_account_id: i64,
+    date: NaiveDate,
+    description: &str,
+    amount_cents: i64,
+    fingerprint: &str,
+) -> Result<bool, String> {
+    let result = sqlx::query(
+        "INSERT INTO bank_transactions (bank_account_id, txn_date, description, amount_cents, fingerprint)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (bank_account_id, fingerprint) DO NOTHING",
+    )
+    .bind(bank_account_id)
+    .bind(date)
+    .bind(description)
+    .bind(amount_cents)
+    .bind(fingerprint)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>, String> {

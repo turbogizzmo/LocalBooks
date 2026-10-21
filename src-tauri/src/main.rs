@@ -21,6 +21,7 @@ mod reconcile;
 mod reports;
 mod revaluation;
 mod sales;
+mod simplefin;
 mod statements;
 mod storage;
 mod timesheet;
@@ -58,6 +59,7 @@ fn main() {
                 }
             };
             app.manage(database);
+            app.manage(simplefin::SimpleFin::new(simplefin::SecretStore::for_this_computer(&config_dir))?);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request.
             let pool_handle = app.handle().clone();
@@ -117,6 +119,15 @@ fn main() {
             commands::invoice_from_estimate,
             commands::import_bank_csv,
             commands::list_bank_transactions,
+            commands::simplefin_list,
+            commands::simplefin_connect,
+            commands::simplefin_reconnect,
+            commands::simplefin_refresh_accounts,
+            commands::simplefin_link,
+            commands::simplefin_unlink,
+            commands::simplefin_suggested_start,
+            commands::simplefin_sync,
+            commands::simplefin_disconnect,
             commands::approve_bank_transaction,
             commands::exclude_bank_transaction,
             commands::get_reconcile_state,

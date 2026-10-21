@@ -27,6 +27,7 @@ use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostB
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
 use crate::reports::{self, AccountView, Dashboard};
+use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
 use crate::statements::{self, BalanceSheet, ProfitAndLoss};
 
@@ -112,6 +113,60 @@ pub async fn import_bank_csv(
     let summary = bank::import_file(&db.pool().await, &path, bank_account_id, mapping).await?;
     notify(&app);
     Ok(summary)
+}
+
+// ------------------------------------------------------------------------------------------------
+// SimpleFIN bank connections
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn simplefin_list(db: State<'_, Db>, sf: State<'_, SimpleFin>) -> Result<Vec<ConnectionView>, String> {
+    sf.list(&db.pool().await).await
+}
+
+/// Claims a setup token (it works once) and lists the connection's accounts.
+#[tauri::command]
+pub async fn simplefin_connect(db: State<'_, Db>, sf: State<'_, SimpleFin>, token: String) -> Result<ConnectionView, String> {
+    sf.connect(&db.pool().await, &token).await
+}
+
+#[tauri::command]
+pub async fn simplefin_reconnect(db: State<'_, Db>, sf: State<'_, SimpleFin>, connection_id: i64, token: String) -> Result<ConnectionView, String> {
+    sf.reconnect(&db.pool().await, connection_id, &token).await
+}
+
+#[tauri::command]
+pub async fn simplefin_refresh_accounts(db: State<'_, Db>, sf: State<'_, SimpleFin>, connection_id: i64) -> Result<ConnectionView, String> {
+    sf.refresh_accounts(&db.pool().await, connection_id).await
+}
+
+#[tauri::command]
+pub async fn simplefin_link(db: State<'_, Db>, account_id: i64, bank_account_id: i64, sync_from: NaiveDate) -> Result<(), String> {
+    simplefin::link_account(&db.pool().await, account_id, bank_account_id, sync_from, Local::now().date_naive()).await
+}
+
+#[tauri::command]
+pub async fn simplefin_unlink(db: State<'_, Db>, account_id: i64) -> Result<(), String> {
+    simplefin::unlink_account(&db.pool().await, account_id).await
+}
+
+#[tauri::command]
+pub async fn simplefin_suggested_start(db: State<'_, Db>, bank_account_id: i64) -> Result<NaiveDate, String> {
+    simplefin::suggested_start(&db.pool().await, bank_account_id, Local::now().date_naive()).await
+}
+
+/// Fetches new posted transactions for the connection's linked accounts into Bank Feeds.
+#[tauri::command]
+pub async fn simplefin_sync(app: AppHandle, db: State<'_, Db>, sf: State<'_, SimpleFin>, connection_id: i64) -> Result<SyncSummary, String> {
+    let summary = sf.sync(&db.pool().await, connection_id, chrono::Utc::now()).await?;
+    notify(&app);
+    Ok(summary)
+}
+
+/// Removes the connection and the access saved on this computer; imported lines stay.
+#[tauri::command]
+pub async fn simplefin_disconnect(db: State<'_, Db>, sf: State<'_, SimpleFin>, connection_id: i64) -> Result<(), String> {
+    sf.disconnect(&db.pool().await, connection_id).await
 }
 
 #[tauri::command]

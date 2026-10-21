@@ -382,6 +382,7 @@ mod migrate_tests {
             (20, "ef6f5c20721a265c4926c12d"),
             (21, "4d7f42ef0674c56168e39ac5"),
             (22, "02521200fbf68600e32719a5"),
+            (23, "19280628bd7aecf2b9a34ea8"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()

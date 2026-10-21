@@ -212,7 +212,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services | Invoices with inline line-item grid, full & partial payments, sales receipts, estimates → invoice conversion, printable invoices |
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
-| **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV bank import with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
+| **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
 | **Settings** | Preferences Console · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, open company file, company file location, local read-only AI access |
@@ -397,6 +397,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── ledger.rs           # validation, posting, voiding, journal register, audit queries
         ├── invoices.rs, sales.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
+        ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
         ├── statements.rs, reports.rs, export_engine.rs   # P&L, Balance Sheet, dashboard, CSV
         └── backup.rs, preferences.rs, storage.rs         # backups, settings, tax calendar, storage
 ```
@@ -410,7 +411,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (101 tests, plus 3 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
+The suite (107 tests, plus 4 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -420,7 +421,9 @@ exchange gains and losses, and the .qbw import (mapping rules, duplicate prevent
 re-posting after a void, and rollback when a batch fails partway through), the forensic audit
 trail (tamper detection with the triggers removed), opening `.localbooks` files, closing-date locks (including the RFC 7914 PBKDF2 test vector),
 the single-instance handoff, reviewed forensic corrections, and the MCP server
-(protocol lifecycle, tool output, and every transport guard over real sockets).
+(protocol lifecycle, tool output, and every transport guard over real sockets), and SimpleFIN bank
+connections against a mock server (single-use tokens, credentials kept out of the company file and
+error messages, sync windows, duplicate-free re-syncs, and reconnecting on another computer).
 
 ---
 
