@@ -1,0 +1,46 @@
+# Known-vulnerability check of the dependencies that ship in the app: Rust crates (RustSec
+# advisory database) and runtime npm packages. Runs when a lockfile changes and weekly, so a newly
+# published advisory is caught even without code changes.
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+    paths: ['src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'package-lock.json', 'package.json', '.github/workflows/audit.yml']
+  pull_request:
+    branches: [main]
+    paths: ['src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'package-lock.json', 'package.json', '.github/workflows/audit.yml']
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: cargo audit
+        working-directory: src-tauri
+        # Fails on vulnerabilities; "unmaintained" and similar warnings are reported, not fatal.
+        run: cargo audit
+
+  npm:
+    name: npm packages (shipped)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Build-time tools (Vite, Tailwind) never ship in the app; Dependabot proposes their updates.
+      - name: npm audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=moderate

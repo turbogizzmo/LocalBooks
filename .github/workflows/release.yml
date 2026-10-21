@@ -1,12 +1,18 @@
 # LocalBooks CI/CD
 #
-# push to main   → run the Rust test suite on macOS, Windows and Linux.
+# pull request   → run the Rust test suite on macOS, Windows and Linux (no secrets, read-only).
+# push to main   → same tests.
 # manual run     → run tests, then build installers; keep workflow artifacts for 7 days.
-# push tag v*    → same gates, then build and upload the installers to a DRAFT GitHub Release
-#                  named after the tag. Review the draft and click "Publish" to ship it.
+# push tag v*    → same gates, then build and upload the installers and latest.json to a DRAFT
+#                  GitHub Release named after the tag. Review the draft and click "Publish":
+#                  installed copies see the update only once the release is published.
 #
 # Cut a release:   bump "version" in src-tauri/tauri.conf.json (and package.json / Cargo.toml),
 #                  commit, then:  git tag v0.2.0 && git push origin v0.2.0
+#
+# Updates: the app's updater reads releases/latest/download/latest.json and installs a download only
+# if it is signed with the update key. The key is stored as the repository secrets
+# TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; installer builds fail without them.
 #
 # Code signing is not configured: macOS Gatekeeper and Windows SmartScreen will warn on the
 # resulting installers until Apple Developer ID / Windows signing secrets are added.
@@ -17,10 +23,13 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+# Least privilege by default; only the release build may write (to create the draft release).
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   # A newer push to main supersedes an older run; tag builds always run to completion.
@@ -81,6 +90,8 @@ jobs:
     name: Build (${{ matrix.name }})
     needs: test
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -147,6 +158,9 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update bundles; the matching public key is in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # Only tag builds create a release; manual branch builds upload workflow artifacts below.
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
@@ -159,12 +173,19 @@ jobs:
             - Windows: `.msi` or `-setup.exe`
             - Linux: `.deb`, `.rpm` or `.AppImage`
 
+            Installation guide: https://turbogizzmo.github.io/LocalBooks/
+
+            Already installed? LocalBooks offers this update on its own (or Settings › Updates ›
+            Check for updates), and saves a copy of your company file before upgrading it.
+
             These builds are not code-signed yet: macOS may require right-click → Open the first
-            time, and Windows SmartScreen may ask you to confirm. Your company file stays on your
-            computer; back it up from Settings › File & Data Controls before upgrading.
+            time, and Windows SmartScreen may ask you to confirm (More info → Run anyway).
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          uploadUpdaterJson: false
+          uploadUpdaterJson: true
+          # Windows updates use the per-user setup.exe, matching what the download page recommends;
+          # mixing installer types would leave two copies installed.
+          updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: false
           retryAttempts: 1
           args: ${{ matrix.args }} --verbose

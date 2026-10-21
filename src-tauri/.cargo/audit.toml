@@ -1,0 +1,8 @@
+# cargo audit settings (read by the Security audit workflow).
+[advisories]
+ignore = [
+    # rsa (Marvin timing attack, no fixed version). Listed in Cargo.lock only because sqlx declares
+    # MySQL support as optional; LocalBooks enables SQLite only, so sqlx-mysql and rsa are never
+    # compiled (`cargo tree -i rsa --target all` prints nothing). Re-check if sqlx features change.
+    "RUSTSEC-2023-0071",
+]

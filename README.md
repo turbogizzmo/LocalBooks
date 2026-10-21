@@ -8,6 +8,9 @@ for a high-density, keyboard-friendly interface.
 
 ---
 
+> **Trying LocalBooks?** Download it and follow the install steps on the
+> [**tester page**](https://turbogizzmo.github.io/LocalBooks/). Installed copies update themselves.
+>
 > **Using LocalBooks?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
 > for invoices, payments, bills, banking, reconciling, reports, closing the books, backups and more.
 > The same guides are built into the app's Help (press F1).
@@ -21,10 +24,12 @@ for a high-density, keyboard-friendly interface.
 - [Posting rules](#posting-rules)
 - [Getting started](#getting-started)
 - [Building for release](#building-for-release)
+- [Releases and automatic updates](#releases-and-automatic-updates)
 - [Where your data lives](#where-your-data-lives)
 - [Project layout](#project-layout)
 - [Testing](#testing)
 - [Known limitations](#known-limitations)
+- [License](#license)
 
 ---
 
@@ -289,8 +294,12 @@ company file is created and migrated automatically on first launch.
 ## Building for release
 
 ```bash
-npm run tauri build
+npm run build:mac        # macOS: signed updater bundle; key from ~/.tauri, password from Keychain
 ```
+
+On other platforms set `TAURI_SIGNING_PRIVATE_KEY` (the key, or a path to it) and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, then run `npm run tauri build`. Bundles include updater
+artifacts (`createUpdaterArtifacts`), so a build without the update key fails.
 
 This builds the frontend, compiles Rust in release mode (with LTO), embeds the UI in the binary, and
 produces platform bundles under `src-tauri/target/release/bundle/`:
@@ -306,12 +315,48 @@ Caveats:
 - **Build on the target OS.** Tauri bundles are produced natively; cross-compiling installers (for
   example a Windows `.msi` from macOS) is not supported in practice. Use CI runners per platform.
 - `cargo build --release` alone does **not** embed the frontend; use `npm run tauri build`.
-- **Code signing:** unsigned macOS builds are blocked by Gatekeeper on other machines. Sign and
-  notarize with an Apple Developer ID (and sign Windows installers) before distributing.
+- **Code signing:** macOS builds are ad-hoc signed (`signingIdentity: "-"`) but not notarized, so
+  Gatekeeper asks testers to choose *Open Anyway* once; Windows SmartScreen asks them to choose
+  *Run anyway*. Notarizing with an Apple Developer ID and signing Windows installers removes those
+  prompts.
 - **Headless macOS builds:** the DMG step scripts Finder to lay out the window. In CI or over SSH,
   build with `CI=true npm run tauri build` to skip that styling.
 - Apple Silicon and Intel produce separate binaries; add `--target universal-apple-darwin` for a
   universal build (requires both Rust targets).
+
+---
+
+## Releases and automatic updates
+
+Installed copies check `releases/latest/download/latest.json` a few seconds after launch (and from
+**Settings › Updates**), show the release notes, and install with one click. A download is installed
+only if its [minisign](https://jedisct1.github.io/minisign/) signature matches the public key in
+`tauri.conf.json`; the private key never leaves the maintainer's machine and the
+`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repository secrets. Before a new
+version upgrades a company file's schema, it saves a verified copy to the local backups folder
+(*Before upgrade*, newest five kept).
+
+To ship a release:
+
+1. Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`; commit.
+2. `git tag v0.2.0 && git push origin v0.2.0`. CI tests on all three platforms, builds signed
+   installers and `latest.json`, and attaches them to a **draft** release.
+3. Edit the draft's notes (they appear in the app's update prompt) and click **Publish**. Installed
+   copies see the update only after publishing.
+
+Windows updates use the per-user `-setup.exe` installer, the one the tester page recommends.
+
+### CI and repository automation
+
+| Workflow | When | What |
+|---|---|---|
+| `release.yml` | push, pull request, tag, manual | Tests on macOS, Windows, Linux; installers on tags and manual runs |
+| `codeql.yml` | push, pull request, weekly | Static security analysis of Rust, JavaScript and the workflows |
+| `audit.yml` | lockfile changes, weekly | RustSec and npm advisories for shipped dependencies |
+| `pages.yml` | changes to `site/` | Publishes the [tester page](https://turbogizzmo.github.io/LocalBooks/) |
+| Dependabot | weekly | Grouped update PRs for Cargo, npm and GitHub Actions |
+
+Security reports: see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -433,8 +478,8 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   payroll tax filings.
 - **No sales tax** on invoices or receipts.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
-  receipts, and estimates are home-currency only, and bank accounts are always home currency. There is
-  no unrealized gain/loss revaluation of open balances at period end.
+  receipts, and estimates are home-currency only, and bank accounts are always home currency. Open
+  foreign-currency invoices can be revalued at period end (Accounting › Currency Revaluation).
 - **Single user.** One person at a time per company file, including on shared folders.
 - Whether the `.localbooks` file type is registered on Linux depends on the desktop environment.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
@@ -454,3 +499,9 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 *LocalBooks stores and computes everything locally. Review your financial statements with a
 qualified accountant before filing.*
+
+---
+
+## License
+
+LocalBooks is released under the [MIT License](LICENSE).

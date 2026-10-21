@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LocalBooks Tester Guide</title>
+  <meta name="description" content="Download, install and update the LocalBooks test build, and report what you find.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    /* The LocalBooks app palette and type (tailwind.config.js), so the page feels like the app. */
+    :root {
+      --green: #2ca01c;
+      --green-hover: #248a17;
+      --green-active: #1d7313;
+      --green-tint: #e9f6e7;
+      --nav: #232733;
+      --nav-hover: #2f3443;
+      --nav-active: #393f50;
+      --nav-text: #babec5;
+      --canvas: #f4f5f8;
+      --surface: #ffffff;
+      --ink: #393a3d;
+      --ink-muted: #6b6c72;
+      --ink-faint: #8d9096;
+      --border: #d4d7dc;
+      --border-strong: #babec5;
+      --row-hover: #f5f5f5;
+      --header-bg: #eceef1;
+      --negative: #d52b1e;
+      --warning: #ff8000;
+      --info: #0077c5;
+      --info-tint: #eaf4fb;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      margin: 0;
+      font: 14px/20px var(--sans);
+      color: var(--ink);
+      background: var(--canvas);
+    }
+    a { color: var(--info); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, kbd { font-family: var(--mono); font-size: 12px; }
+    code { background: var(--header-bg); border: 1px solid var(--border); border-radius: 2px; padding: 0 4px; }
+    kbd { background: var(--surface); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
+
+    /* Top bar: the app's sidebar navy */
+    .topbar { background: var(--nav); color: var(--nav-text); }
+    .topbar-inner { max-width: 980px; margin: 0 auto; padding: 0 16px; height: 48px; display: flex; align-items: center; gap: 10px; }
+    .topbar img { width: 26px; height: 26px; border-radius: 4px; }
+    .brand { color: #fff; font-weight: 600; font-size: 16px; }
+    .tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--nav-text); border: 1px solid var(--nav-active); border-radius: 3px; padding: 1px 6px; }
+    .topnav { margin-left: auto; display: flex; gap: 2px; }
+    .topnav a { color: var(--nav-text); padding: 6px 10px; border-radius: 2px; font-size: 13px; }
+    .topnav a:hover { background: var(--nav-hover); color: #fff; text-decoration: none; }
+
+    main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+
+    /* Panels: .qb-panel with the Settings-style header strip */
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+    .panel > h2 {
+      margin: 0; padding: 3px 10px; background: var(--header-bg); border-bottom: 1px solid var(--border);
+      font-size: 11px; line-height: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted);
+    }
+    .panel-body { padding: 14px 16px; }
+    .panel-body > :first-child { margin-top: 0; }
+    .panel-body > :last-child { margin-bottom: 0; }
+    h1 { font-size: 28px; line-height: 34px; margin: 0 0 6px; font-weight: 600; }
+    h3 { font-size: 14px; margin: 16px 0 4px; }
+    p { margin: 8px 0; }
+    .muted { color: var(--ink-muted); }
+    .small { font-size: 12px; line-height: 16px; }
+
+    /* Hero */
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+    .lede { font-size: 15px; line-height: 22px; color: var(--ink); }
+    .facts { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; }
+    .facts li { padding-left: 18px; position: relative; }
+    .facts li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 8px; height: 8px; border-radius: 2px; background: var(--green); }
+
+    .download { border: 1px solid var(--border); border-radius: 2px; background: var(--canvas); padding: 12px; }
+    .download .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+    .version { font-size: 22px; line-height: 28px; font-weight: 600; margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+
+    /* Buttons: .qb-btn */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 14px;
+      font: 600 13px/1 var(--sans); border-radius: 2px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+    }
+    .btn:hover { text-decoration: none; }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:hover { background: var(--green-hover); }
+    .btn-primary:active { background: var(--green-active); }
+    .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--border-strong); }
+    .btn-secondary:hover { background: var(--row-hover); }
+    .btn-block { width: 100%; }
+    .other-downloads { margin-top: 8px; display: grid; gap: 2px; }
+    .other-downloads a { font-size: 12px; }
+
+    /* Tabs: the Settings tab strip */
+    .tabs { display: inline-flex; gap: 1px; border: 1px solid var(--border-strong); border-radius: 2px; overflow: hidden; background: var(--border-strong); margin-bottom: 12px; }
+    .tabs button { font: 600 12px/16px var(--sans); padding: 4px 12px; border: 0; background: #fff; color: var(--ink); cursor: pointer; }
+    .tabs button:hover { background: var(--row-hover); }
+    .tabs button[aria-selected="true"] { background: var(--nav); color: #fff; }
+    [role="tabpanel"][hidden] { display: none; }
+
+    ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+    ol.steps li::marker { font-weight: 600; color: var(--green-active); }
+
+    /* Notices: the app's Notice component */
+    .notice { border: 1px solid; padding: 6px 10px; font-size: 13px; border-radius: 2px; margin: 10px 0; }
+    .notice-info { border-color: #0077c566; background: var(--info-tint); color: #005a96; }
+    .notice-success { border-color: #2ca01c66; background: var(--green-tint); color: var(--green-active); }
+    .notice-warn { border-color: #ff800066; background: #fff8e6; color: #8a4b00; }
+
+    /* Register-style table: .qb-grid */
+    table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .grid th { height: 24px; padding: 0 8px; background: var(--header-bg); color: var(--ink-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; text-align: left; border-bottom: 1px solid var(--border-strong); }
+    .grid td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .grid tr:hover td { background: var(--row-hover); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .guide-list { columns: 2; column-gap: 24px; margin: 0; padding-left: 18px; }
+    .guide-list li { break-inside: avoid; padding: 1px 0; }
+    details { border: 1px solid var(--border); border-radius: 2px; padding: 6px 10px; margin-top: 8px; background: var(--canvas); }
+    summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+
+    footer { max-width: 980px; margin: 0 auto; padding: 8px 16px 32px; color: var(--ink-faint); font-size: 12px; }
+
+    @media (max-width: 760px) {
+      .hero, .two-col { grid-template-columns: 1fr; }
+      .guide-list { columns: 1; }
+      .topnav { display: none; }
+      h1 { font-size: 22px; line-height: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <img src="icon.png" alt="">
+      <span class="brand">LocalBooks</span>
+      <span class="tag">Tester preview</span>
+      <nav class="topnav" aria-label="Sections">
+        <a href="#install">Install</a>
+        <a href="#updates">Updates</a>
+        <a href="#data">Your data</a>
+        <a href="#report">Report a problem</a>
+        <a href="#guides">Guides</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Welcome, tester</h2>
+      <div class="panel-body hero">
+        <div>
+          <h1>Small-business accounting that stays on your computer</h1>
+          <p class="lede">
+            LocalBooks keeps your books in a single file on your own machine: invoices, bills, bank feeds, inventory,
+            reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.
+            Thank you for trying the test build.
+          </p>
+          <ul class="facts">
+            <li>No account, no subscription, no cloud: your company file never leaves your computer.</li>
+            <li>Familiar layout for anyone coming from classic desktop accounting software.</li>
+            <li>Updates install themselves after you approve them, with a copy of your books saved first.</li>
+          </ul>
+        </div>
+        <div class="download" aria-live="polite">
+          <div class="label">Latest version</div>
+          <div class="version" id="version">Checking…</div>
+          <a class="btn btn-primary btn-block" id="primary-download" href="https://github.com/turbogizzmo/LocalBooks/releases/latest">Download LocalBooks</a>
+          <div class="small muted" id="primary-note" style="margin-top:6px">Opens the downloads page.</div>
+          <div class="other-downloads" id="other-downloads"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="install">
+      <h2>Install</h2>
+      <div class="panel-body">
+        <div class="tabs" role="tablist" aria-label="Operating system">
+          <button role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="true">Windows</button>
+          <button role="tab" id="tab-mac" aria-controls="panel-mac" aria-selected="false">macOS</button>
+          <button role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="false">Linux</button>
+        </div>
+
+        <div role="tabpanel" id="panel-windows" aria-labelledby="tab-windows">
+          <ol class="steps">
+            <li>Download the <strong>Windows installer</strong> (the file ending in <code>-setup.exe</code>).</li>
+            <li>Open it. Because this test build is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
+              Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+            <li>Follow the installer. It installs for your user account only and does not need an administrator.</li>
+            <li>Start <strong>LocalBooks</strong> from the Start menu.</li>
+          </ol>
+          <div class="notice notice-info">Use the <code>-setup.exe</code> installer rather than the <code>.msi</code>: automatic updates use the same kind of installer, so you never end up with two copies.</div>
+        </div>
+
+        <div role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" hidden>
+          <ol class="steps">
+            <li>Download the <strong>macOS disk image</strong> (<code>.dmg</code>). One download works on Apple silicon and Intel Macs.</li>
+            <li>Open it and drag <strong>LocalBooks</strong> into <strong>Applications</strong>.</li>
+            <li>Open LocalBooks from Applications. Because this test build is not notarized by Apple yet, macOS stops it the first time.</li>
+            <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about LocalBooks, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
+          </ol>
+          <details>
+            <summary>macOS says LocalBooks “is damaged and can’t be opened”</summary>
+            <p class="small">That message means macOS quarantined the download. Open <strong>Terminal</strong> and run
+              <code>xattr -cr /Applications/LocalBooks.app</code>, then open LocalBooks again.</p>
+          </details>
+        </div>
+
+        <div role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" hidden>
+          <ol class="steps">
+            <li><strong>Debian or Ubuntu:</strong> download the <code>.deb</code> and install it with <code>sudo apt install ./LocalBooks_*.deb</code>.</li>
+            <li><strong>Fedora or openSUSE:</strong> download the <code>.rpm</code> and install it with your package manager.</li>
+            <li><strong>Any distribution:</strong> download the <code>.AppImage</code>, make it executable (<code>chmod +x</code>), and run it. Only the AppImage updates itself; the <code>.deb</code> and <code>.rpm</code> are updated by installing the new package.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <div class="two-col">
+      <section class="panel" id="updates">
+        <h2>Updates</h2>
+        <div class="panel-body">
+          <p>LocalBooks checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
+          <div class="notice notice-info"><strong>LocalBooks 0.2.0</strong> is available (you have 0.1.0). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span></div>
+          <ol class="steps">
+            <li>Read <strong>What’s new</strong> if you like, then click <strong>Install and restart</strong>.</li>
+            <li>LocalBooks downloads the update, checks its digital signature, installs it and reopens.</li>
+            <li>The first time the new version opens your company file, it saves a copy first (Settings › File &amp; Data Controls, listed as <em>Before upgrade</em>).</li>
+          </ol>
+          <p class="small muted">To check yourself, or to turn off automatic checks, go to <strong>Settings › Updates</strong>. Checking sends nothing about your books.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="data">
+        <h2>Your data during testing</h2>
+        <div class="panel-body">
+          <div class="notice notice-warn">This is a test build. Please keep your current bookkeeping system running alongside it, and don’t rely on LocalBooks as your only record yet.</div>
+          <ul class="facts">
+            <li>Your company file stays on your computer. Nothing is uploaded.</li>
+            <li>LocalBooks makes an automatic backup each day. Make your own any time from <strong>Settings › File &amp; Data Controls › Back up now</strong>.</li>
+            <li>To try things freely, use made-up customers and amounts, or keep a separate test company file: <strong>Settings › File &amp; Data Controls › Change Company File Location…</strong>, pick an empty folder, and choose <em>Start a new, empty company file there</em>.</li>
+            <li>Bank connections (SimpleFIN) are optional. For a no-risk trial, SimpleFIN’s demo token gives fake transactions.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" id="report">
+      <h2>Report a problem or suggest something</h2>
+      <div class="panel-body">
+        <p>Open an issue on GitHub (a free GitHub account is needed):</p>
+        <p><a class="btn btn-primary" href="https://github.com/turbogizzmo/LocalBooks/issues/new">Report a problem</a>
+           <a class="btn btn-secondary" href="https://github.com/turbogizzmo/LocalBooks/issues">See known issues</a></p>
+        <table class="grid" aria-label="What to include">
+          <thead><tr><th style="width:34%">Please include</th><th>Where to find it</th></tr></thead>
+          <tbody>
+            <tr><td>Your LocalBooks version</td><td><strong>Settings › Updates</strong></td></tr>
+            <tr><td>Windows or macOS version</td><td>Windows: <kbd>Win</kbd> + <kbd>R</kbd>, type <code>winver</code>. Mac: Apple menu › About This Mac</td></tr>
+            <tr><td>What you did, what you expected, what happened</td><td>Step by step is ideal; a screenshot helps a lot</td></tr>
+            <tr><td>The exact error message</td><td>Copy the text from the red message bar</td></tr>
+          </tbody>
+        </table>
+        <div class="notice notice-warn small">Never attach your company file or backups to a public issue: they contain your financial records. If a file is needed, say so in the issue and we’ll arrange a private way.</div>
+        <p class="small muted">Found a security problem? Please report it privately through <a href="https://github.com/turbogizzmo/LocalBooks/security/advisories/new">GitHub’s private vulnerability reporting</a> instead of a public issue.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="guides">
+      <h2>Step-by-step guides</h2>
+      <div class="panel-body">
+        <p class="muted">The same guides are built into the app: press <kbd>F1</kbd> or click <strong>Help</strong>.</p>
+        <ul class="guide-list" id="guide-list">
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/getting-started.md">Getting started</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/invoices.md">Invoices</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/customer-payments.md">Customer payments</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/sales-receipts-and-estimates.md">Sales receipts and estimates</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bills.md">Bills</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/expenses-and-checks.md">Expenses and checks</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bank-feeds.md">Bank feeds and SimpleFIN</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/deposits-and-transfers.md">Deposits and transfers</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/reconciling.md">Reconciling</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/inventory.md">Inventory</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/reports.md">Reports</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/closing-the-books.md">Closing the books</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/backups-and-company-files.md">Backups and company files</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving from a .qbw company file</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/troubleshooting.md">Troubleshooting</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/tree/main/docs/guide">All guides</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    LocalBooks is open source under the <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/LICENSE">MIT License</a> ·
+    <a href="https://github.com/turbogizzmo/LocalBooks">Source code</a> ·
+    <a href="https://github.com/turbogizzmo/LocalBooks/releases">All releases</a>
+  </footer>
+
+  <script>
+    (function () {
+      var RELEASES = 'https://github.com/turbogizzmo/LocalBooks/releases';
+
+      // OS tabs
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+      function select(id) {
+        tabs.forEach(function (t) {
+          var on = t.id === 'tab-' + id;
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+        });
+      }
+      tabs.forEach(function (t) { t.addEventListener('click', function () { select(t.id.slice(4)); }); });
+
+      var ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '';
+      var os = /win/i.test(ua) ? 'windows' : /mac/i.test(ua) ? 'mac' : /linux|x11/i.test(ua) ? 'linux' : 'windows';
+      select(os);
+
+      // Download links from the latest published release
+      var KINDS = [
+        { os: 'windows', label: 'Windows installer', test: /-setup\.exe$/i },
+        { os: 'windows', label: 'Windows (.msi)', test: /\.msi$/i },
+        { os: 'mac', label: 'macOS disk image', test: /\.dmg$/i },
+        { os: 'linux', label: 'Linux AppImage', test: /\.AppImage$/i },
+        { os: 'linux', label: 'Linux (.deb)', test: /\.deb$/i },
+        { os: 'linux', label: 'Linux (.rpm)', test: /\.rpm$/i }
+      ];
+      var versionEl = document.getElementById('version');
+      var primary = document.getElementById('primary-download');
+      var note = document.getElementById('primary-note');
+      var others = document.getElementById('other-downloads');
+
+      fetch('https://api.github.com/repos/turbogizzmo/LocalBooks/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (release) {
+          versionEl.textContent = release.tag_name || release.name || 'Latest';
+          var found = KINDS.map(function (k) {
+            var asset = (release.assets || []).filter(function (a) { return k.test.test(a.name); })[0];
+            return asset ? { kind: k, asset: asset } : null;
+          }).filter(Boolean);
+          var mine = found.filter(function (f) { return f.kind.os === os; })[0] || found[0];
+          if (!mine) {
+            note.textContent = 'Opens the downloads page.';
+            return;
+          }
+          primary.href = mine.asset.browser_download_url;
+          primary.textContent = 'Download for ' + { windows: 'Windows', mac: 'macOS', linux: 'Linux' }[mine.kind.os];
+          var mb = (mine.asset.size / 1048576).toFixed(1);
+          note.textContent = mine.asset.name + ' · ' + mb + ' MB';
+          found.forEach(function (f) {
+            if (f === mine) return;
+            var a = document.createElement('a');
+            a.href = f.asset.browser_download_url;
+            a.textContent = f.kind.label;
+            others.appendChild(a);
+          });
+          var all = document.createElement('a');
+          all.href = release.html_url || RELEASES;
+          all.textContent = 'Release notes and all files';
+          others.appendChild(all);
+        })
+        .catch(function () {
+          versionEl.textContent = 'Coming soon';
+          note.textContent = 'No release has been published yet. Check back shortly, or open the downloads page.';
+          primary.href = RELEASES;
+        });
+    })();
+  </script>
+</body>
+</html>

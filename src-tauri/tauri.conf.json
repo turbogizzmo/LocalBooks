@@ -25,6 +25,8 @@
   },
   "bundle": {
     "active": true,
+    "license": "MIT",
+    "copyright": "Copyright © 2026 turbogizzmo",
     "targets": "all",
     "category": "Finance",
     "shortDescription": "LocalBooks Desktop: local-first double-entry accounting",
@@ -49,6 +51,21 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBQzkyOTAzRjVGMERCNjIKUldSaTIvRDFBeW5KV2piREFFVEl5YnV2V0NiNGFZd3RjVTEzeWRoQ0o3MzlGeFNibWNiTDcvdHAK",
+      "endpoints": [
+        "https://github.com/turbogizzmo/LocalBooks/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

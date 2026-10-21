@@ -1,0 +1,38 @@
+# Weekly dependency update pull requests. Minor and patch updates are grouped into one PR per
+# ecosystem; major updates arrive separately so they can be reviewed on their own.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      rust-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned deliberately (exact versions in Cargo.toml): update by hand after review.
+      - dependency-name: openqbw
+      - dependency-name: opensqlany
+      - dependency-name: sha2
+      - dependency-name: hmac
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned deliberately; the icon registry in src/lib/icons.js is checked against this version.
+      - dependency-name: lucide-react
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

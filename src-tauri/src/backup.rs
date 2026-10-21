@@ -265,9 +265,31 @@ fn kind_of(file_name: &str) -> &'static str {
         "AUTO"
     } else if file_name.starts_with("pre-restore-") {
         "PRE_RESTORE"
+    } else if file_name.starts_with("pre-upgrade-") {
+        "PRE_UPGRADE"
     } else {
         "MANUAL"
     }
+}
+
+/// Copies of a company file taken before a newer LocalBooks upgraded it; the newest few are kept.
+const PRE_UPGRADE_KEEP: usize = 5;
+
+/// Saves a verified copy of `live_path` (still at schema `version`) before its schema is upgraded:
+/// `pre-upgrade-<file>-v<version>-<timestamp>.db` in `dir`. Older pre-upgrade copies beyond the
+/// newest few are removed.
+pub async fn pre_upgrade_snapshot(pool: &SqlitePool, live_path: &Path, dir: &Path, version: i64) -> Result<u64, String> {
+    let stem = live_path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "company".into());
+    let stamp = Local::now().format("%Y%m%d-%H%M%S");
+    let destination = dir.join(format!("pre-upgrade-{stem}-v{version}-{stamp}.db"));
+    let bytes = snapshot(pool, live_path, &destination).await?;
+    let mut older: Vec<BackupFile> = list_backups(dir)?.into_iter().filter(|b| b.kind == "PRE_UPGRADE").collect();
+    if older.len() > PRE_UPGRADE_KEEP {
+        for stale in older.split_off(PRE_UPGRADE_KEEP) {
+            let _ = std::fs::remove_file(&stale.path);
+        }
+    }
+    Ok(bytes)
 }
 
 /// Snapshots kept in the local backups folder, newest first.
@@ -372,6 +394,41 @@ mod tests {
 
     async fn total_posted(pool: &SqlitePool) -> i64 {
         sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents), 0) FROM v_posted_lines").fetch_one(pool).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
+        let tmp = TempDir::new("pre-upgrade");
+        let live = tmp.0.join("Acme.localbooks");
+        {
+            // A file from the previous release: the latest migration not yet applied.
+            let pool = db::open(&live).await.unwrap();
+            post_sale(&pool, 12_345).await;
+            let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap();
+            sqlx::query("DROP TABLE simplefin_accounts").execute(&pool).await.unwrap();
+            sqlx::query("DROP TABLE simplefin_connections").execute(&pool).await.unwrap();
+            sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ?1").bind(latest).execute(&pool).await.unwrap();
+            pool.close().await;
+        }
+        let config = db::test_config(&tmp.0);
+        let db = Db::open_at(live.clone(), config.clone()).await.unwrap();
+        assert_eq!(total_posted(&db.pool().await).await, 12_345, "the upgraded file keeps its entries");
+
+        let copies: Vec<BackupFile> = list_backups(&config.backups_dir).unwrap().into_iter().filter(|b| b.kind == "PRE_UPGRADE").collect();
+        assert_eq!(copies.len(), 1);
+        assert!(copies[0].file_name.starts_with("pre-upgrade-Acme-v22-"), "{}", copies[0].file_name);
+        // The copy is the file as it was: still at the old schema, with the same books.
+        let copy = open_read_only(Path::new(&copies[0].path)).await.unwrap();
+        let version: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&copy).await.unwrap();
+        assert_eq!(version, 22);
+        assert_eq!(total_posted(&copy).await, 12_345);
+        copy.close().await;
+
+        // An up-to-date file is opened without another copy.
+        db.shutdown().await;
+        let again = Db::open_at(live, config.clone()).await.unwrap();
+        assert_eq!(list_backups(&config.backups_dir).unwrap().iter().filter(|b| b.kind == "PRE_UPGRADE").count(), 1);
+        again.shutdown().await;
     }
 
     #[tokio::test]

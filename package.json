@@ -2,16 +2,20 @@
   "name": "localbooks",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "lucide-react": "1.49.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

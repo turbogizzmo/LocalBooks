@@ -3,6 +3,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { UpdatesPanel } from './Updates.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -614,7 +615,7 @@ function FileAndData({ companyName }) {
     }
   };
 
-  const KIND = { AUTO: 'Automatic', MANUAL: 'Manual', PRE_RESTORE: 'Before restore', EXPORT: 'Exported' };
+  const KIND = { AUTO: 'Automatic', MANUAL: 'Manual', PRE_RESTORE: 'Before restore', PRE_UPGRADE: 'Before upgrade', EXPORT: 'Exported' };
 
   return (
     <div className="flex flex-col gap-2">
@@ -816,7 +817,7 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', data: 'data', ai: 'ai' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', data: 'data', ai: 'ai', updates: 'updates' };
 
 export default function Settings({ companyName, intent }) {
   const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
@@ -838,6 +839,7 @@ export default function Settings({ companyName, intent }) {
           ['preferences', 'Preferences Console'],
           ['data', 'File & Data Controls'],
           ['ai', 'AI Access (MCP)'],
+          ['updates', 'Updates'],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -854,6 +856,7 @@ export default function Settings({ companyName, intent }) {
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'data' && <FileAndData companyName={companyName} />}
       {tab === 'ai' && <LocalAiAccess />}
+      {tab === 'updates' && <UpdatesPanel />}
     </div>
   );
 }

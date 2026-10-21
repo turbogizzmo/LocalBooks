@@ -74,7 +74,8 @@ impl RelocateMode {
     }
 }
 
-async fn open_live(path: &Path) -> Result<Live, String> {
+/// `backups`: where to save a copy of an existing file before upgrading its schema (see `open_for`).
+async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> {
     // A mapped network drive (Z:\...) is opened through its UNC path so it is recognized as shared
     // and keeps working if the drive letter changes.
     let path = &storage::resolve_network_path(path);
@@ -82,14 +83,14 @@ async fn open_live(path: &Path) -> Result<Live, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
-    let pool = open_for(path, &storage).await?;
+    let pool = open_for(path, &storage, backups).await?;
     Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false })
 }
 
 impl Db {
     /// Opens the company file at `path` (creating and migrating it if new).
     pub async fn open_at(path: PathBuf, config: DbConfig) -> Result<Db, String> {
-        let live = open_live(&path).await?;
+        let live = open_live(&path, Some(&config.backups_dir)).await?;
         Ok(Db { live: tokio::sync::RwLock::new(live), config, startup_warning: std::sync::Mutex::new(None) })
     }
 
@@ -123,7 +124,7 @@ impl Db {
     /// instead and the reason is shown.
     pub async fn startup_with_file(config: DbConfig, file: Option<PathBuf>) -> Result<Db, String> {
         let Some(file) = file else { return Db::startup(config).await };
-        match open_company_file(&file).await {
+        match open_company_file(&file, &config.backups_dir).await {
             Ok(live) => Ok(Db { live: tokio::sync::RwLock::new(live), config, startup_warning: std::sync::Mutex::new(None) }),
             Err(err) => {
                 let db = Db::startup(config).await?;
@@ -148,7 +149,7 @@ impl Db {
         if same {
             return Ok(self.status().await);
         }
-        let next = open_company_file(path).await?;
+        let next = open_company_file(path, &self.config.backups_dir).await?;
         {
             let mut live = self.live.write().await;
             live.pool.close().await;
@@ -209,7 +210,7 @@ impl Db {
         };
         let swapped = remove_sidecars(&path)
             .and_then(|()| std::fs::rename(staged, &path).map_err(|e| format!("cannot replace the company file: {e}")));
-        match open_for(&path, &storage).await {
+        match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
                 swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
@@ -217,7 +218,7 @@ impl Db {
             Err(open_err) => {
                 std::fs::copy(fallback, &path).map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
                 remove_sidecars(&path)?;
-                live.pool = open_for(&path, &storage).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
+                live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
             }
         }
@@ -248,7 +249,7 @@ impl Db {
             RelocateMode::StartNew => {}
         }
 
-        let next = open_live(&target).await?;
+        let next = open_live(&target, Some(&self.config.backups_dir)).await?;
         {
             let mut live = self.live.write().await;
             live.pool.close().await;
@@ -273,12 +274,12 @@ impl Db {
 }
 
 /// Opens an existing company file chosen by the user, after the same checks a restore applies.
-async fn open_company_file(path: &Path) -> Result<Live, String> {
+async fn open_company_file(path: &Path, backups: &Path) -> Result<Live, String> {
     if !path.is_file() {
         return Err(format!("OPEN_NOT_FOUND: {} does not exist", path.display()));
     }
     crate::backup::inspect(path).await?;
-    let mut live = open_live(path).await?;
+    let mut live = open_live(path, Some(backups)).await?;
     live.opened_from_file = true;
     Ok(live)
 }
@@ -291,12 +292,16 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 /// WAL + `synchronous = FULL` gives full durability: a committed entry survives power loss.
 pub async fn open(path: &Path) -> Result<SqlitePool, String> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    open_for(path, &storage::classify(dir)).await
+    open_for(path, &storage::classify(dir), None).await
 }
 
 /// Opens with settings suited to where the file lives. Shared locations (network or synced folders)
 /// cannot use WAL, so they use a rollback journal with exclusive locking on a single connection.
-async fn open_for(path: &Path, storage: &StorageInfo) -> Result<SqlitePool, String> {
+///
+/// When an existing company file needs schema upgrades (a newer LocalBooks opening it for the first
+/// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
+/// undone by restoring it.
+async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) -> Result<SqlitePool, String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     }
@@ -319,9 +324,34 @@ async fn open_for(path: &Path, storage: &StorageInfo) -> Result<SqlitePool, Stri
         .await
         .map_err(|e| format!("cannot open company file {}: {e}", path.display()))?;
 
+    if let Some(dir) = backups {
+        if let Some(version) = pending_upgrade_from(&pool).await? {
+            crate::backup::pre_upgrade_snapshot(&pool, path, dir, version).await.map_err(|e| {
+                format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
+            })?;
+        }
+    }
     migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
 
     Ok(pool)
+}
+
+/// The schema version of an existing company file that has migrations still to apply, or None for a
+/// new (empty) file or one that is up to date.
+async fn pending_upgrade_from(pool: &SqlitePool) -> Result<Option<i64>, String> {
+    let has_table: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations')")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("cannot read company file: {e}"))?;
+    if !has_table {
+        return Ok(None);
+    }
+    let current: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("cannot read company file: {e}"))?;
+    let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap_or(0);
+    Ok(current.filter(|v| *v < latest))
 }
 
 /// Applies pending migrations with foreign-key enforcement off, as SQLite's table-rebuild procedure

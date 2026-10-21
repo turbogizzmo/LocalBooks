@@ -18,6 +18,7 @@ import AuditLog from './components/AuditLog.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
+import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
 import { Icon } from './lib/icons.js';
@@ -146,6 +147,7 @@ export default function App() {
             </button>
           </div>
         </header>
+        <UpdateBanner />
         {storage.data?.startupWarning && (
           <div className="no-print">
             <Notice kind="info" text={`${storage.data.startupWarning} Change it in Settings › File & Data Controls.`} />

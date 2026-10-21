@@ -3,6 +3,8 @@ name = "localbooks"
 version = "0.1.0"
 description = "LocalBooks: local-first double-entry accounting"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/turbogizzmo/LocalBooks"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -23,6 +25,8 @@ sha2 = "=0.10.9"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "migrate", "macros", "derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 
 [target.'cfg(windows)'.dependencies]
