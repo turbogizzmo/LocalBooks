@@ -12,8 +12,8 @@
     "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.14.0",
     "lucide-react": "1.49.0",
@@ -21,10 +21,10 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
+    "@tauri-apps/cli": "^2.12.3",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
+    "postcss": "^8.5.31",
     "tailwindcss": "^3.4.14",
     "vite": "^5.4.10"
   }
