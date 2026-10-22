@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
+import ClassSelect, { tracksClasses, useClasses } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -13,7 +14,7 @@ export const SOURCE_LABEL = {
 };
 
 let nextKey = 1;
-const blankRow = () => ({ key: nextKey++, accountId: null, debit: '', credit: '', memo: '' });
+const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit: '', credit: '', memo: '' });
 
 function JournalForm({ accounts, onPosted, onCancel }) {
   const [date, setDate] = useState(todayIso());
@@ -22,6 +23,8 @@ function JournalForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const dateRef = useRef(null);
+  const classes = useClasses();
+  const withClasses = tracksClasses(classes) || rows.some((r) => r.classId !== null);
 
   useEffect(() => dateRef.current?.focus(), []);
 
@@ -50,7 +53,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
         id: null,
         date,
         description: memo.trim(),
-        lines: used.map((p) => ({ account_id: p.row.accountId, debit: p.debit, credit: p.credit, memo: p.row.memo.trim() || null })),
+        lines: used.map((p) => ({ account_id: p.row.accountId, debit: p.debit, credit: p.credit, memo: p.row.memo.trim() || null, class_id: p.row.classId })),
       });
       onPosted(`Journal entry posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
       setRows([blankRow(), blankRow(), blankRow(), blankRow()]);
@@ -83,6 +86,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
           <col className="w-[120px]" />
           <col className="w-[120px]" />
           <col />
+          {withClasses && <col className="w-[160px]" />}
           <col className="w-[28px]" />
         </colgroup>
         <thead>
@@ -92,6 +96,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
             <th className="qb-grid-head text-right">Debits</th>
             <th className="qb-grid-head text-right">Credits</th>
             <th className="qb-grid-head">Description</th>
+            {withClasses && <th className="qb-grid-head">Class</th>}
             <th className="qb-grid-head" aria-label="Remove" />
           </tr>
         </thead>
@@ -111,6 +116,11 @@ function JournalForm({ accounts, onPosted, onCancel }) {
               <td className="qb-grid-cell-edit">
                 <input value={p.row.memo} onChange={(e) => update(p.row.key, { memo: e.target.value })} aria-label={`Description ${i + 1}`} />
               </td>
+              {withClasses && (
+                <td className="qb-grid-cell-edit">
+                  <ClassSelect className="" classes={classes} value={p.row.classId} onChange={(classId) => update(p.row.key, { classId })} aria-label={`Class ${i + 1}`} />
+                </td>
+              )}
               <td className="qb-grid-cell cell-flush text-center">
                 <button type="button" onClick={() => setRows((rs) => (rs.length > 2 ? rs.filter((r) => r.key !== p.row.key) : rs))} className="h-row w-full text-qb-ink-faint hover:text-qb-negative" aria-label={`Remove line ${i + 1}`}>
                   ×
@@ -127,7 +137,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
             </td>
             <td className="qb-grid-cell num">{formatCents(totalDebit)}</td>
             <td className="qb-grid-cell num">{formatCents(totalCredit)}</td>
-            <td className={`qb-grid-cell ${difference === 0 ? 'text-qb-green-active' : 'text-qb-negative'}`}>
+            <td className={`qb-grid-cell ${difference === 0 ? 'text-qb-green-active' : 'text-qb-negative'}`} colSpan={withClasses ? 2 : 1}>
               {difference === 0 ? (totalDebit > 0 ? '✓ Balanced' : '') : `Out of balance by ${formatCents(Math.abs(difference))}`}
             </td>
             <td />
@@ -165,6 +175,7 @@ function EntryLines({ entryId }) {
             <td className="w-[48px] py-0.5 pl-8 text-qb-ink-faint">{l.lineNumber}</td>
             <td className="py-0.5">{l.accountName}</td>
             <td className="py-0.5 text-qb-ink-muted">{l.memo ?? ''}</td>
+            <td className="w-[160px] py-0.5 text-qb-ink-muted">{l.className ?? ''}</td>
             <td className="num w-[120px] py-0.5">{l.debitCents ? formatCents(l.debitCents) : ''}</td>
             <td className="num w-[120px] py-0.5 pr-[42px]">{l.creditCents ? formatCents(l.creditCents) : ''}</td>
           </tr>

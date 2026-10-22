@@ -146,27 +146,39 @@ export function InvoiceDocument({ detail, company }) {
 
 const LINE_CLASS = { section: 'doc-line-section', account: '', subtotal: 'doc-line-subtotal', total: 'doc-line-total', net: 'doc-line-net' };
 
-export function StatementDocument({ company, title, subtitle, lines, footer }) {
+/**
+ * A financial statement for print. With `columns` (e.g. Profit and Loss by Class), each line
+ * carries `amountsCents`, one per column; otherwise a single Total column from `amountCents`.
+ */
+export function StatementDocument({ company, title, subtitle, lines, footer, columns = null }) {
   const formatCents = (cents) => formatMoney(cents, null);
+  const heads = columns ?? ['Total'];
+  const amounts = (line) => (columns ? line.amountsCents : [line.amountCents]);
   return (
     <article className="doc">
       <DocHeader company={company} title={title} subtitle={subtitle} />
       <table className="doc-table doc-statement">
         <colgroup>
           <col />
-          <col style={{ width: '1.6in' }} />
+          {heads.map((h) => (
+            <col key={h} style={{ width: columns ? '1.05in' : '1.6in' }} />
+          ))}
         </colgroup>
         <thead>
           <tr>
             <th />
-            <th className="doc-num">Total</th>
+            {heads.map((h) => (
+              <th key={h} className="doc-num">{h}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {lines.map((line, i) => (
             <tr key={`${i}-${line.label}`} className={LINE_CLASS[line.kind]}>
               <td style={{ paddingLeft: `${6 + line.depth * 14}pt` }}>{line.label}</td>
-              <td className="doc-num">{line.amountCents !== null && line.amountCents !== undefined ? formatCents(line.amountCents) : ''}</td>
+              {amounts(line).map((cents, c) => (
+                <td key={c} className="doc-num">{cents !== null && cents !== undefined ? formatCents(cents) : ''}</td>
+              ))}
             </tr>
           ))}
         </tbody>

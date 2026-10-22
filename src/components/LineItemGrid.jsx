@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import ClassSelect, { classLabel, tracksClasses, useClasses } from './ClassSelect.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, qty: '', rate: '' });
+export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, qty: '', rate: '' });
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
@@ -37,6 +38,7 @@ export function summarizeLines(lines) {
       quantityE4: state.qty,
       rateCents: state.rate,
       incomeAccountId: line.accountId,
+      classId: line.classId ?? null,
     }));
   return { evaluated, filled, invalidCount, total, payload };
 }
@@ -53,6 +55,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const focusCol = useRef('description');
   const tableRef = useRef(null);
   const withProducts = Array.isArray(products);
+  const classes = useClasses();
+  const withClasses = tracksClasses(classes) || lines.some((l) => l.classId != null);
 
   useEffect(() => {
     if (active === null) return;
@@ -98,6 +102,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         {withProducts && <col className="w-[180px]" />}
         <col />
         <col className="w-[220px]" />
+        {withClasses && <col className="w-[150px]" />}
         <col className="w-[64px]" />
         <col className="w-[100px]" />
         <col className="w-[108px]" />
@@ -109,6 +114,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           {withProducts && <th className="qb-grid-head">Product/Service</th>}
           <th className="qb-grid-head">Description</th>
           <th className="qb-grid-head">Income account</th>
+          {withClasses && <th className="qb-grid-head">Class</th>}
           <th className="qb-grid-head text-right">Qty</th>
           <th className="qb-grid-head text-right">Rate</th>
           <th className="qb-grid-head text-right">Amount</th>
@@ -174,6 +180,19 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       aria-invalid={bad('account')}
                     />
                   </td>
+                  {withClasses && (
+                    <td className="qb-grid-cell-edit">
+                      <ClassSelect
+                        data-col="class"
+                        className=""
+                        classes={classes}
+                        value={line.classId ?? null}
+                        onChange={(classId) => update(i, { classId })}
+                        onKeyDown={(e) => onKeyDown(e, i)}
+                        aria-label={`Class ${i + 1}`}
+                      />
+                    </td>
+                  )}
                   <td className="qb-grid-cell-edit">
                     <input
                       data-col="qty"
@@ -210,6 +229,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                   <td className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
                     {line.accountId !== null ? accountLabel(accounts, line.accountId) : state.blank ? '' : 'Select account'}
                   </td>
+                  {withClasses && (
+                    <td className="qb-grid-cell" {...cellProps('class')}>
+                      {line.classId != null ? classLabel(classes, line.classId) : ''}
+                    </td>
+                  )}
                   <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
                     {line.qty}
                   </td>

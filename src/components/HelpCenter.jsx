@@ -29,11 +29,13 @@ export const SCREEN_HELP = {
   'banking/feeds': 'Import your bank’s CSV, OFX or QFX statement, or connect a bank through SimpleFIN to sync new transactions, then approve each transaction into a category. LocalBooks skips anything already imported and learns from what you approve.',
   'banking/transfers': 'Bank deposits (including customer payments held in Undeposited Funds) and transfers between your own accounts.',
   'banking/reconcile': 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
+  'accounting/chart-of-accounts': 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here.',
+  'accounting/classes': 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
   'accounting/qbw-import': 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
-  reports: 'Profit and Loss for any date range and the Balance Sheet as of any date, following your fiscal year. Export to CSV, print, or save as PDF.',
+  reports: 'Profit and Loss for any date range (also split by class) and the Balance Sheet as of any date, following your fiscal year. Export to CSV, print, or save as PDF.',
   settings: 'Company details and preferences, the closing date, backups and company files, and local AI access.',
 };
 
@@ -173,6 +175,20 @@ export const HELP_ARTICLES = [
 
   // Accounting & audit
   {
+    id: 'chart-of-accounts', area: 'accounting', views: ['accounting/chart-of-accounts', 'accounting/journal', 'dashboard'],
+    title: 'Find and edit the chart of accounts',
+    body: 'Accounting › Chart of Accounts lists every account by type, with subaccounts indented under their parent and balances for asset, liability and equity accounts. Use New account to add one, double-click an account to rename or renumber it, and make unused accounts inactive so they leave the pickers while their history stays.',
+    keywords: 'chart of accounts coa account list new account subaccount rename number inactive category ledger accounts',
+    go: { label: 'Go to Chart of Accounts', view: 'accounting/chart-of-accounts' },
+  },
+  {
+    id: 'classes', area: 'accounting', views: ['accounting/classes', 'sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal', 'reports'],
+    title: 'Track departments or locations with classes',
+    body: 'Add classes (and subclasses) under Accounting › Classes; a Class column then appears on invoices, sales receipts, estimates, bills, expenses, checks and journal entries. Reports › Profit and Loss by Class shows income and expenses for each class side by side, with anything unclassified in its own column.',
+    keywords: 'class classes class tracking department location division region segment profit center',
+    go: { label: 'Go to Classes', view: 'accounting/classes' },
+  },
+  {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
     title: 'Post a manual journal entry',
     body: 'Choose New journal entry and enter at least two lines whose debits equal credits; LocalBooks will not post an entry that does not balance. Use it for adjustments such as depreciation or opening balances.',
@@ -227,7 +243,7 @@ export const HELP_ARTICLES = [
     id: 'profit-loss', area: 'reports', views: ['reports', 'dashboard'],
     title: 'Run a Profit and Loss',
     body: 'Pick a period such as This month, This fiscal quarter or Last fiscal year, or a custom date range, to see income, cost of goods sold, expenses and net income. Fiscal periods follow the fiscal year start set in Settings.',
-    keywords: 'profit loss income statement p&l net income revenue',
+    keywords: 'profit loss income statement p&l net income revenue by class department location',
     go: { label: 'Go to Reports', view: 'reports' },
   },
   {

@@ -106,15 +106,23 @@ pub struct JournalLine {
     pub credit: i64,
     #[serde(default)]
     pub memo: Option<String>,
+    /// Optional class (see `classes`), reported in Profit & Loss by Class.
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 impl JournalLine {
     pub fn debit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: cents, credit: 0, memo: None }
+        Self { account_id, debit: cents, credit: 0, memo: None, class_id: None }
     }
 
     pub fn credit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: 0, credit: cents, memo: None }
+        Self { account_id, debit: 0, credit: cents, memo: None, class_id: None }
+    }
+
+    pub fn with_class(mut self, class_id: Option<i64>) -> Self {
+        self.class_id = class_id;
+        self
     }
 
     pub fn with_memo(mut self, memo: Option<&str>) -> Self {
@@ -362,6 +370,7 @@ async fn write_entry(
     .map_err(db_err)?;
 
     let mut checked: HashSet<i64> = HashSet::with_capacity(entry.lines.len());
+    let mut checked_classes: HashSet<i64> = HashSet::new();
     for (idx, line) in entry.lines.iter().enumerate() {
         let n = idx + 1;
         if checked.insert(line.account_id) {
@@ -387,13 +396,17 @@ async fn write_entry(
                 Some(_) => {}
             }
         }
+        // A reversal must carry the original's classes even if one has since been made inactive.
+        if let Some(class_id) = line.class_id.filter(|c| source.reverses().is_none() && checked_classes.insert(*c)) {
+            crate::classes::check_usable(tx, class_id, &format!("JE: line {n}")).await?;
+        }
 
         let (home_debit, home_credit) = home_amounts[idx];
         let foreign = entry.currency.is_some();
         sqlx::query(
             "INSERT INTO journal_lines
-                (journal_entry_id, line_number, account_id, debit_cents, credit_cents, memo, foreign_debit_cents, foreign_credit_cents)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (journal_entry_id, line_number, account_id, debit_cents, credit_cents, memo, foreign_debit_cents, foreign_credit_cents, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(entry_id)
         .bind(n as i64)
@@ -403,6 +416,7 @@ async fn write_entry(
         .bind(line.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()))
         .bind(foreign.then_some(line.debit))
         .bind(foreign.then_some(line.credit))
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -547,8 +561,8 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         return Err(reason);
     }
 
-    let lines: Vec<(i64, i64, i64, Option<String>)> = sqlx::query_as(
-        "SELECT account_id, debit_cents, credit_cents, memo FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
+    let lines: Vec<(i64, i64, i64, Option<String>, Option<i64>)> = sqlx::query_as(
+        "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
     )
     .bind(journal_entry_id)
     .fetch_all(&mut **tx)
@@ -562,7 +576,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         description: format!("VOID of entry #{number}{}", memo.map(|m| format!(": {m}")).unwrap_or_default()),
         lines: lines
             .into_iter()
-            .map(|(account_id, debit, credit, memo)| JournalLine { account_id, debit: credit, credit: debit, memo })
+            .map(|(account_id, debit, credit, memo, class_id)| JournalLine { account_id, debit: credit, credit: debit, memo, class_id })
             .collect(),
         currency: None,
     };
@@ -666,6 +680,8 @@ pub struct JournalLineView {
     pub debit_cents: i64,
     pub credit_cents: i64,
     pub memo: Option<String>,
+    pub class_id: Option<i64>,
+    pub class_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -703,8 +719,10 @@ pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<J
 
 pub async fn journal_entry_lines(pool: &SqlitePool, journal_entry_id: i64) -> Result<Vec<JournalLineView>, String> {
     sqlx::query_as::<_, JournalLineView>(
-        "SELECT l.line_number, l.account_id, c.full_name AS account_name, l.debit_cents, l.credit_cents, l.memo
+        "SELECT l.line_number, l.account_id, c.full_name AS account_name, l.debit_cents, l.credit_cents, l.memo,
+                l.class_id, k.full_name AS class_name
          FROM journal_lines l JOIN v_chart_of_accounts c ON c.id = l.account_id
+         LEFT JOIN v_classes k ON k.id = l.class_id
          WHERE l.journal_entry_id = ?1 ORDER BY l.line_number",
     )
     .bind(journal_entry_id)
@@ -921,7 +939,7 @@ mod tests {
             date: date(),
             description: "Two-sided line".into(),
             lines: vec![
-                JournalLine { account_id: fx.checking, debit: 10_000, credit: 10_000, memo: None },
+                JournalLine { account_id: fx.checking, debit: 10_000, credit: 10_000, memo: None, class_id: None },
                 JournalLine::debit(fx.sales, 5_000),
                 JournalLine::credit(fx.sales, 5_000),
             ],
@@ -988,7 +1006,7 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: date(),
                 due_date: date(),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None }],
                 currency: None,
             },
         )
@@ -1236,5 +1254,60 @@ mod tests {
         sqlx::query("DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1").bind(untouched).execute(&fx.pool).await.unwrap();
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
         assert!(verification.findings.iter().any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
+    }
+
+    /// The snapshot format from before classes existed (migration 0013), kept to prove that entries
+    /// without a class still snapshot byte-for-byte as they did when they were posted.
+    const PRE_CLASS_LINES_SQL: &str = "SELECT json_group_array(json_object(
+            'lineNumber', l.line_number, 'accountId', l.account_id, 'debitCents', l.debit_cents,
+            'creditCents', l.credit_cents, 'memo', l.memo, 'foreignDebitCents', l.foreign_debit_cents,
+            'foreignCreditCents', l.foreign_credit_cents) ORDER BY l.line_number)
+        FROM journal_lines l WHERE l.journal_entry_id = ?1";
+
+    #[tokio::test]
+    async fn classes_join_the_snapshot_without_changing_unclassified_ones() {
+        let fx = setup().await;
+        let rent = account_id(&fx.pool, "6300").await;
+        let east = crate::classes::create_class(&fx.pool, crate::classes::ClassInput { name: "East".into(), parent_id: None }).await.unwrap().id;
+        let post = |lines: Vec<JournalLine>| {
+            post_journal_entry(&fx.pool, JournalEntry { id: None, date: date(), description: "Caf\u{e9} \"rent\" \u{1F680}".into(), lines, currency: None })
+        };
+
+        let plain = post(vec![JournalLine::debit(rent, 1_250).with_memo(Some("tab\there")), JournalLine::credit(fx.checking, 1_250)]).await.unwrap();
+        let (live, old): (String, String) = sqlx::query_as(&format!(
+            "SELECT json_extract(snapshot, '$.lines'), ({PRE_CLASS_LINES_SQL}) FROM v_entry_snapshot WHERE entry_id = ?1"
+        ))
+        .bind(plain)
+        .fetch_one(&fx.pool)
+        .await
+        .unwrap();
+        assert_eq!(live, old);
+
+        let classed = post(vec![JournalLine::debit(rent, 700).with_class(Some(east)), JournalLine::credit(fx.checking, 700)]).await.unwrap();
+        let snapshot: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1")
+            .bind(classed)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        let snapshot: serde_json::Value = serde_json::from_str(&snapshot).unwrap();
+        assert_eq!(snapshot["lines"][0]["classId"], east);
+        assert!(snapshot["lines"][1].get("classId").is_none());
+
+        // The void's reversing entry carries the class, so the class nets to zero.
+        void_transaction(&fx.pool, classed).await.unwrap();
+        let east_net: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) - SUM(credit_cents) FROM v_posted_lines WHERE class_id = ?1")
+            .bind(east)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        assert_eq!(east_net, 0);
+        assert!(verify_ledger_audit(&fx.pool).await.unwrap().intact);
+
+        // Moving a posted line to another class (bypassing the triggers) is detected.
+        let west = crate::classes::create_class(&fx.pool, crate::classes::ClassInput { name: "West".into(), parent_id: None }).await.unwrap().id;
+        sqlx::query("DROP TRIGGER trg_jl_update_draft_only").execute(&fx.pool).await.unwrap();
+        sqlx::query("UPDATE journal_lines SET class_id = ?1 WHERE journal_entry_id = ?2 AND class_id IS NOT NULL").bind(west).bind(classed).execute(&fx.pool).await.unwrap();
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        assert!(verification.findings.iter().any(|f| f.entry_id == classed && f.problem.starts_with("Differs from its posting snapshot")));
     }
 }
