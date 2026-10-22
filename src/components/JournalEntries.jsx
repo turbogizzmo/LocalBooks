@@ -163,7 +163,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
   );
 }
 
-function EntryLines({ entryId }) {
+export function EntryLines({ entryId }) {
   const [lines, setLines] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {

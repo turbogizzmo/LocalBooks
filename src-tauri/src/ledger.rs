@@ -156,6 +156,8 @@ pub enum EntrySource {
     BillPayment(i64),
     Check(i64),
     Transfer(i64),
+    CreditMemo(i64),
+    VendorCredit(i64),
     /// The reversing entry that voids the given journal entry.
     Reversal(i64),
     /// A journal entry that moves posted lines to another class (see `classes::reclassify`).
@@ -175,6 +177,8 @@ impl EntrySource {
             EntrySource::BillPayment(_) => "BILL_PAYMENT",
             EntrySource::Check(_) => "CHECK",
             EntrySource::Transfer(_) => "TRANSFER",
+            EntrySource::CreditMemo(_) => "CREDIT_MEMO",
+            EntrySource::VendorCredit(_) => "VENDOR_CREDIT",
         }
     }
 
@@ -189,7 +193,9 @@ impl EntrySource {
             | EntrySource::Bill(id)
             | EntrySource::BillPayment(id)
             | EntrySource::Check(id)
-            | EntrySource::Transfer(id) => Some(id),
+            | EntrySource::Transfer(id)
+            | EntrySource::CreditMemo(id)
+            | EntrySource::VendorCredit(id) => Some(id),
         }
     }
 
@@ -460,17 +466,20 @@ pub async fn void_transaction(pool: &SqlitePool, journal_entry_id: i64) -> Resul
     }
 }
 
-/// Paid amount and status implied by an invoice's or bill's surviving (non-voided) payments.
-async fn recompute_paid(
+/// Paid amount and status implied by an invoice's or bill's surviving (non-voided) payments and
+/// applied credits.
+pub(crate) async fn recompute_paid(
     tx: &mut Transaction<'_, Sqlite>,
     document_table: &str,
     payment_table: &str,
     fk: &str,
     document_id: i64,
 ) -> Result<(), String> {
+    let credit_table = if document_table == "bills" { "vendor_credit_applications" } else { "credit_applications" };
     let (total, paid): (i64, i64) = sqlx::query_as(&format!(
         "SELECT d.total_cents,
                 COALESCE((SELECT SUM(amount_cents) FROM {payment_table} WHERE {fk} = d.id AND is_voided = 0), 0)
+              + COALESCE((SELECT SUM(amount_cents) FROM {credit_table} WHERE {fk} = d.id AND is_voided = 0), 0)
          FROM {document_table} d WHERE d.id = ?1"
     ))
     .bind(document_id)
@@ -533,7 +542,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     let doc = source_id.unwrap_or_default();
     let blocked: Option<String> = match source_type.as_str() {
         "INVOICE" => sqlx::query_scalar(
-            "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments applied; void those payments first'
+            "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments or credits applied; void or remove those first'
              FROM invoices WHERE id = ?1 AND amount_paid_cents <> 0",
         )
         .bind(doc)
@@ -556,6 +565,28 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         )
         .bind(doc)
         .bind(&source_type)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?,
+        "CREDIT_MEMO" => sqlx::query_scalar(
+            "SELECT 'VOID_CREDIT_USED: credit memo #' || m.credit_number || ' has been applied to invoices or refunded; remove those first'
+             FROM credit_memos m WHERE m.id = ?1 AND (
+                 EXISTS (SELECT 1 FROM credit_applications a WHERE a.credit_memo_id = m.id AND a.is_voided = 0)
+                 OR EXISTS (SELECT 1 FROM credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
+                            WHERE r.credit_memo_id = m.id AND e.is_voided = 0))",
+        )
+        .bind(doc)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?,
+        "VENDOR_CREDIT" => sqlx::query_scalar(
+            "SELECT 'VOID_CREDIT_USED: this vendor credit has been applied to bills or refunded; remove those first'
+             FROM vendor_credits c WHERE c.id = ?1 AND (
+                 EXISTS (SELECT 1 FROM vendor_credit_applications a WHERE a.vendor_credit_id = c.id AND a.is_voided = 0)
+                 OR EXISTS (SELECT 1 FROM vendor_credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
+                            WHERE r.vendor_credit_id = c.id AND e.is_voided = 0))",
+        )
+        .bind(doc)
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?,
@@ -643,6 +674,12 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         }
         "TRANSFER" => {
             sqlx::query(&flag("transfers")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+        }
+        "CREDIT_MEMO" => {
+            sqlx::query(&flag("credit_memos")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+        }
+        "VENDOR_CREDIT" => {
+            sqlx::query(&flag("vendor_credits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
         "DEPOSIT" => {
             sqlx::query(&flag("deposits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;

@@ -7,6 +7,7 @@ mod banking;
 mod classes;
 mod closing;
 mod commands;
+mod credits;
 mod db;
 mod estimates;
 mod expenses;
@@ -16,10 +17,12 @@ mod instance;
 mod inventory;
 mod invoices;
 mod ledger;
+mod parties;
 mod mcp_server;
 mod preferences;
 mod qbw_import;
 mod reconcile;
+mod registers;
 mod reports;
 mod revaluation;
 mod sales;
@@ -114,6 +117,24 @@ fn main() {
             commands::set_class_active,
             commands::delete_class,
             commands::list_reclass_lines,
+            commands::get_account_register,
+            commands::get_party,
+            commands::update_party,
+            commands::set_party_active,
+            commands::update_product,
+            commands::set_product_active,
+            commands::list_credit_memos,
+            commands::create_credit_memo,
+            commands::apply_customer_credit,
+            commands::list_customer_credit_applications,
+            commands::remove_customer_credit,
+            commands::refund_customer_credit,
+            commands::list_vendor_credits,
+            commands::create_vendor_credit,
+            commands::apply_vendor_credit,
+            commands::list_vendor_credit_applications,
+            commands::remove_vendor_credit,
+            commands::refund_vendor_credit,
             commands::reclassify_lines,
             commands::get_dashboard,
             commands::post_journal_entry,

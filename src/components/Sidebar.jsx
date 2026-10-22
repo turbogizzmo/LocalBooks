@@ -13,6 +13,7 @@ export const NAV = [
       { id: 'sales/all', label: 'All Sales' },
       { id: 'sales/invoices', label: 'Invoices' },
       { id: 'sales/estimates', label: 'Estimates' },
+      { id: 'sales/credits', label: 'Credit Memos & Refunds' },
       { id: 'sales/customers', label: 'Customers' },
       { id: 'sales/products', label: 'Products & Services' },
     ],
@@ -24,6 +25,7 @@ export const NAV = [
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
+      { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/vendors', label: 'Vendors' },
     ],
   },
@@ -49,6 +51,7 @@ export const NAV = [
     icon: <Icon name="Accounting" />,
     children: [
       { id: 'accounting/chart-of-accounts', label: 'Chart of Accounts' },
+      { id: 'accounting/register', label: 'Account Registers' },
       { id: 'accounting/classes', label: 'Classes' },
       { id: 'accounting/reclassify', label: 'Reclassify Transactions' },
       { id: 'accounting/journal', label: 'Journal Entries' },

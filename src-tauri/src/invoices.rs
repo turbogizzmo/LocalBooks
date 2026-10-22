@@ -54,6 +54,8 @@ pub struct InvoiceInput {
 pub struct InvoiceSummary {
     pub id: i64,
     pub invoice_number: i64,
+    pub customer_id: Option<i64>,
+    /// The customer's current name (renaming a customer renames it on its invoices too).
     pub customer_name: String,
     pub issue_date: String,
     pub due_date: String,
@@ -74,14 +76,14 @@ pub struct InvoiceSummary {
 }
 
 const SUMMARY_SELECT: &str = "
-    SELECT i.id, i.invoice_number, i.customer_name, i.issue_date, i.due_date, i.total_cents,
+    SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name) AS customer_name, i.issue_date, i.due_date, i.total_cents,
            i.amount_paid_cents, i.total_cents - i.amount_paid_cents AS balance_cents, i.status,
            i.journal_entry_id,
            (SELECT MAX(payment_date) FROM invoice_payments WHERE invoice_id = i.id AND is_voided = 0) AS last_payment_date,
            (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) AS item_count,
            i.is_voided, i.currency_code, i.exchange_rate_e6,
            b.home_total_cents, CASE WHEN i.is_voided = 1 THEN 0 ELSE b.home_open_cents END AS home_balance_cents
-    FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id";
+    FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id";
 
 pub const PAYMENT_METHODS: &[&str] = &["CASH", "CHECK", "CREDIT_CARD", "ACH", "WIRE", "OTHER"];
 
@@ -539,9 +541,13 @@ pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<Invoic
 
 /// Groups open invoice balances (home currency, i.e. the A/R still on the books) by days past due.
 pub async fn ar_aging(pool: &SqlitePool, as_of: NaiveDate) -> Result<ArAging, String> {
+    // Open invoices by due date, and credit not yet used (negative) by the credit memo's date.
     let open: Vec<(NaiveDate, i64)> = sqlx::query_as(
         "SELECT i.due_date, b.home_open_cents FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
-         WHERE i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0",
+         WHERE i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0
+         UNION ALL
+         SELECT m.credit_date, -b.remaining_cents FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
+         WHERE b.remaining_cents > 0",
     )
     .fetch_all(pool)
     .await

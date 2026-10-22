@@ -79,7 +79,7 @@ const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeri
 const longDate = (iso) => LONG_DATE.format(new Date(`${iso}T00:00:00Z`));
 
 /** One statement line: name left (indented by depth), amounts right, rules by line kind. */
-function StatementLine({ line, columns }) {
+function StatementLine({ line, columns, onAccount }) {
   const indent = { paddingLeft: `${8 + line.depth * 16}px` };
   const strong = line.kind !== 'account';
   const rule =
@@ -89,9 +89,14 @@ function StatementLine({ line, columns }) {
         ? 'border-t border-qb-ink'
         : '';
   const spacing = line.kind === 'net' ? 'pb-2' : line.kind === 'total' && line.depth === 0 ? 'pb-1.5' : '';
+  const drills = onAccount && line.accountId != null;
   return (
-    <tr className={`${line.kind === 'account' ? 'hover:bg-qb-row-hover' : ''} ${spacing}`}>
-      <td className={`py-0.5 pr-2 ${strong ? 'font-semibold' : ''} ${line.kind === 'net' ? 'text-md' : ''}`} style={indent}>
+    <tr
+      className={`${line.kind === 'account' || drills ? 'hover:bg-qb-row-hover' : ''} ${drills ? 'cursor-pointer' : ''} ${spacing}`}
+      onClick={drills ? () => onAccount(line) : undefined}
+      title={drills ? 'Open the register for this account' : undefined}
+    >
+      <td className={`py-0.5 pr-2 ${strong ? 'font-semibold' : ''} ${line.kind === 'net' ? 'text-md' : ''} ${drills ? 'hover:text-qb-info hover:underline' : ''}`} style={indent}>
         {line.label}
       </td>
       {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
@@ -106,7 +111,7 @@ function StatementLine({ line, columns }) {
 }
 
 /** An on-screen statement; `columns` (from Profit and Loss by Class) gives one amount column each. */
-function Statement({ title, subtitle, lines, footer, columns = null }) {
+function Statement({ title, subtitle, lines, footer, columns = null, onAccount = null }) {
   const company = useCompany();
   const wide = columns && columns.length > 2;
   return (
@@ -133,7 +138,7 @@ function Statement({ title, subtitle, lines, footer, columns = null }) {
         </thead>
         <tbody>
           {lines.map((line, i) => (
-            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} />
+            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} onAccount={onAccount} />
           ))}
         </tbody>
       </table>
@@ -142,7 +147,7 @@ function Statement({ title, subtitle, lines, footer, columns = null }) {
   );
 }
 
-function ProfitAndLoss({ byClass = false }) {
+function ProfitAndLoss({ byClass = false, navigate }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
@@ -234,6 +239,9 @@ function ProfitAndLoss({ byClass = false }) {
           subtitle={(data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(data.startDate)} – ${longDate(data.endDate)}`) + (byClass ? '' : classSubtitle)}
           lines={data.lines}
           columns={byClass ? data.columns : null}
+          onAccount={(line) =>
+            navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate, includeSubaccounts: line.kind === 'subtotal' })
+          }
           footer={byClass ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified' : 'Accrual basis · posted transactions only'}
         />
       )}
@@ -241,7 +249,7 @@ function ProfitAndLoss({ byClass = false }) {
   );
 }
 
-function BalanceSheet() {
+function BalanceSheet({ navigate }) {
   const [asOf, setAsOf] = useState(todayIso());
   const [notice, setNotice] = useState(null);
   const { data, error, reload } = useLedgerQuery(() => api.getBalanceSheet(asOf));
@@ -277,6 +285,7 @@ function BalanceSheet() {
           title="Balance Sheet"
           subtitle={`As of ${longDate(data.asOf)}`}
           lines={data.lines}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: null, endDate: data.asOf, includeSubaccounts: line.kind === 'subtotal' })}
           footer={`Accrual basis · fiscal year began ${longDate(data.fiscalYearStart)} · prior years' profit is shown in Retained Earnings`}
         />
       )}
@@ -284,7 +293,7 @@ function BalanceSheet() {
   );
 }
 
-export default function Reports() {
+export default function Reports({ navigate }) {
   const [report, setReport] = useState('pl');
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -306,9 +315,9 @@ export default function Reports() {
           </button>
         ))}
       </div>
-      {report === 'pl' && <ProfitAndLoss key="pl" />}
-      {report === 'plc' && <ProfitAndLoss key="plc" byClass />}
-      {report === 'bs' && <BalanceSheet />}
+      {report === 'pl' && <ProfitAndLoss key="pl" navigate={navigate} />}
+      {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
+      {report === 'bs' && <BalanceSheet navigate={navigate} />}
     </div>
   );
 }

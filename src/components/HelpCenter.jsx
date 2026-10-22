@@ -20,6 +20,9 @@ export const SCREEN_HELP = {
   'sales/all': 'Every sale in one register: invoices, payments and sales receipts. Record a sales receipt here when a customer pays at the time of sale.',
   'sales/invoices': 'Create invoices, see what each customer still owes, and record full or partial payments against one or several invoices.',
   'sales/estimates': 'Quotes for customers that do not touch your books until they become invoices. Mark an estimate accepted, then convert it to an invoice in one step.',
+  'sales/credits': 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
+  'expenses/credits': 'Credit a vendor gave you, for returns or overcharges: apply it to their open bills, or record the refund they send.',
+  'accounting/register': 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction.',
   'sales/customers': 'Everyone you sell to, with their open receivable balance. Add a customer here or while creating an invoice.',
   'sales/products': 'Products and services you sell. Choosing one on an invoice or sales receipt fills in its description, rate and income account. Track stock to keep quantity on hand and cost at moving average.',
   'expenses/expenses': 'Money paid straight away: expenses (card, cash or bank) and checks, each split across one or more expense accounts.',
@@ -105,6 +108,20 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Products & Services', view: 'sales/products' },
   },
 
+  {
+    id: 'credit-memo', area: 'sales', views: ['sales/credits', 'sales/invoices', 'sales/customers'],
+    title: 'Give a customer credit or a refund',
+    body: 'Sales › Credit Memos & Refunds: a credit memo reduces what the customer owes and can be applied to their open invoices or refunded by check later; a refund receipt pays the money back straight away. Applying a credit marks the invoice paid by that amount.',
+    keywords: 'credit memo refund return customer credit refund receipt apply credit',
+    go: { label: 'New credit memo', view: 'sales/credits', action: 'credit-memo' },
+  },
+  {
+    id: 'vendor-credit', area: 'expenses', views: ['expenses/credits', 'expenses/bills', 'expenses/vendors'],
+    title: 'Record a vendor credit',
+    body: 'Expenses › Vendor Credits records credit a vendor gave you for returns or overcharges. Apply it to that vendor’s open bills, or record the refund when they send money back.',
+    keywords: 'vendor credit supplier credit return refund debit memo',
+    go: { label: 'New vendor credit', view: 'expenses/credits', action: 'vendor-credit' },
+  },
   // Expenses & vendors
   {
     id: 'expense-check', area: 'expenses', views: ['expenses/expenses'],
@@ -175,6 +192,13 @@ export const HELP_ARTICLES = [
   },
 
   // Accounting & audit
+  {
+    id: 'register', area: 'accounting', views: ['accounting/register', 'accounting/chart-of-accounts', 'reports'],
+    title: 'Open an account register',
+    body: 'Accounting › Account Registers shows every transaction in one account with a running balance; double-clicking an account in the Chart of Accounts or clicking an account on a report opens it too. Click a row to see the whole transaction, or void it from the ▾ menu.',
+    keywords: 'register account register ledger running balance transactions drill down quickreport',
+    go: { label: 'Go to Account Registers', view: 'accounting/register' },
+  },
   {
     id: 'chart-of-accounts', area: 'accounting', views: ['accounting/chart-of-accounts', 'accounting/journal', 'dashboard'],
     title: 'Find and edit the chart of accounts',

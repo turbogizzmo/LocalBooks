@@ -147,7 +147,8 @@ pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String>
     sqlx::query_as::<_, PartyView>(
         "SELECT c.id, c.name, c.email, c.is_active,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
-                          WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0) AS open_balance_cents
+                          WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
+                - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS open_balance_cents
          FROM customers c ORDER BY c.name COLLATE NOCASE",
     )
     .fetch_all(pool)

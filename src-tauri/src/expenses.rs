@@ -95,7 +95,8 @@ pub async fn list_vendors(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT v.id, v.name, v.email, v.is_active,
                 COALESCE((SELECT SUM(total_cents - amount_paid_cents) FROM bills
-                          WHERE vendor_id = v.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0) AS open_balance_cents
+                          WHERE vendor_id = v.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0)
+                - COALESCE((SELECT SUM(remaining_cents) FROM v_vendor_credit_balances WHERE vendor_id = v.id), 0) AS open_balance_cents
          FROM vendors v ORDER BY v.name COLLATE NOCASE",
     )
     .fetch_all(pool)

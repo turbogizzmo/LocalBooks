@@ -18,6 +18,9 @@ import AuditLog from './components/AuditLog.jsx';
 import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Classes from './components/Classes.jsx';
 import Reclassify from './components/Reclassify.jsx';
+import Register from './components/Register.jsx';
+import CreditMemos from './components/CreditMemos.jsx';
+import VendorCredits from './components/VendorCredits.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
@@ -162,23 +165,26 @@ export default function App() {
           {view === 'sales/all' && <AllSales {...props} />}
           {view === 'sales/invoices' && <Invoices {...props} />}
           {view === 'sales/estimates' && <Estimates {...props} />}
+          {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
           {view === 'sales/products' && <Products accounts={list} />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}
+          {view === 'expenses/credits' && <VendorCredits {...props} />}
           {view === 'expenses/vendors' && <PartyList kind="vendor" />}
           {view === 'employees/time' && <TimeTracking {...props} />}
           {view === 'banking/feeds' && <BankFeed accounts={list} />}
           {view === 'banking/transfers' && <DepositsTransfers {...props} />}
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}
-          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} />}
+          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} navigate={select} />}
           {view === 'accounting/classes' && <Classes />}
           {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
+          {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
-          {view === 'reports' && <Reports />}
+          {view === 'reports' && <Reports navigate={select} />}
           {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
         </div>
       </main>
