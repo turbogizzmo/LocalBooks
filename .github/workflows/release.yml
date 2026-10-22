@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -112,7 +112,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify tag matches app version
         if: github.ref_type == 'tag'
@@ -131,7 +131,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends $LINUX_DEPS
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload installers (7 days)
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LocalBooks-${{ matrix.platform }}
           path: ${{ steps.installers.outputs.paths }}
