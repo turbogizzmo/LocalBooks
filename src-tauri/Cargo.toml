@@ -10,7 +10,7 @@ repository = "https://github.com/turbogizzmo/LocalBooks"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
 hmac = "=0.12.1"
