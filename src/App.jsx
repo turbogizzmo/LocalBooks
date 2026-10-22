@@ -15,6 +15,7 @@ import DepositsTransfers from './components/DepositsTransfers.jsx';
 import Reconcile from './components/Reconcile.jsx';
 import JournalEntries from './components/JournalEntries.jsx';
 import AuditLog from './components/AuditLog.jsx';
+import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
@@ -168,6 +169,7 @@ export default function App() {
           {view === 'banking/feeds' && <BankFeed accounts={list} />}
           {view === 'banking/transfers' && <DepositsTransfers {...props} />}
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}
+          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}

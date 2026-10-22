@@ -48,6 +48,7 @@ export const NAV = [
     label: 'Accounting',
     icon: <Icon name="Accounting" />,
     children: [
+      { id: 'accounting/chart-of-accounts', label: 'Chart of Accounts' },
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
