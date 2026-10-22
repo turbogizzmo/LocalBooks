@@ -358,11 +358,16 @@ async fn pending_upgrade_from(pool: &SqlitePool) -> Result<Option<i64>, String> 
 /// requires (sqlx wraps each SQLite migration in a transaction, where the pragma cannot change).
 /// The whole database is then checked for dangling references before enforcement is restored.
 pub async fn migrate(pool: &SqlitePool) -> Result<(), String> {
+    migrate_with(pool, &MIGRATOR).await
+}
+
+/// [`migrate`] with a given set of migrations (tests use it to build files from earlier releases).
+pub(crate) async fn migrate_with(pool: &SqlitePool, migrator: &sqlx::migrate::Migrator) -> Result<(), String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await.map_err(|e| e.to_string())?;
     // `run_direct` takes the connection itself rather than an `Acquire` impl, which keeps this
     // future provably `Send` when a restore runs it inside a Tauri command.
-    let migrated = MIGRATOR.run_direct(&mut *conn).await.map_err(|e| e.to_string());
+    let migrated = migrator.run_direct(&mut *conn).await.map_err(|e| e.to_string());
     let violations = sqlx::query("SELECT 1 FROM pragma_foreign_key_check LIMIT 1")
         .fetch_optional(&mut *conn)
         .await
@@ -413,6 +418,7 @@ mod migrate_tests {
             (21, "4d7f42ef0674c56168e39ac5"),
             (22, "02521200fbf68600e32719a5"),
             (23, "19280628bd7aecf2b9a34ea8"),
+            (24, "61bad942842dbe5b8742f1b0"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()

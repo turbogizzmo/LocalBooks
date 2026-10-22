@@ -33,6 +33,8 @@ pub struct InvoiceLineInput {
     /// The product or service sold; a tracked inventory product also records its cost of goods sold.
     #[serde(default)]
     pub product_service_id: Option<i64>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -212,20 +214,21 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
     let customer = input.customer_name.trim();
     let customer_id = crate::sales::find_or_create_named(tx, crate::sales::Party::Customer, customer).await?;
 
-    // Credits aggregated per income account, in first-appearance order (in the invoice currency).
-    let mut credits: Vec<(i64, i64)> = Vec::new();
+    // Credits aggregated per income account and class, in first-appearance order (in the invoice currency).
+    let mut credits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     for line in &input.lines {
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
-        match credits.iter_mut().find(|(id, _)| *id == line.income_account_id) {
+        let key = (line.income_account_id, line.class_id);
+        match credits.iter_mut().find(|(k, _)| *k == key) {
             Some((_, sum)) => *sum += amount,
-            None => credits.push((line.income_account_id, amount)),
+            None => credits.push((key, amount)),
         }
     }
     let ar_account = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
     let mut lines = vec![JournalLine::debit(ar_account, total)];
-    lines.extend(credits.into_iter().map(|(account, cents)| JournalLine::credit(account, cents)));
+    lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
-    let sold: Vec<(Option<i64>, i64)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4)).collect();
+    let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
     if !cost.is_empty() && input.currency.is_some() {
         return Err("INV_FX_INVENTORY: inventory items can only be sold on home-currency invoices".into());
@@ -274,12 +277,15 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
             Some((_, 0)) => return Err(format!("INV_INACTIVE_ACCOUNT: line {n} uses an inactive account")),
             Some(_) => {}
         }
+        if let Some(class) = line.class_id {
+            crate::classes::check_usable(tx, class, &format!("INV: line {n}")).await?;
+        }
 
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO invoice_items
-                (invoice_id, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (invoice_id, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(invoice_id)
         .bind(n as i64)
@@ -289,6 +295,7 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
         .bind(amount)
         .bind(line.income_account_id)
         .bind(line.product_service_id)
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -616,7 +623,7 @@ mod tests {
                 customer_name: customer.into(),
                 issue_date: issue,
                 due_date: due,
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: cents, income_account_id: services, product_service_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None }],
                 currency: None,
             },
         )
@@ -639,9 +646,9 @@ mod tests {
             issue_date: d(1),
             due_date: d(31),
             lines: vec![
-                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 30000, rate_cents: 15_000, income_account_id: services, product_service_id: None },
-                InvoiceLineInput{ description: "Widget".into(), quantity_e4: 10000, rate_cents: 2_500, income_account_id: sales, product_service_id: None },
-                InvoiceLineInput{ description: "Support".into(), quantity_e4: 20000, rate_cents: 1_000, income_account_id: services, product_service_id: None },
+                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 30000, rate_cents: 15_000, income_account_id: services, product_service_id: None, class_id: None },
+                InvoiceLineInput{ description: "Widget".into(), quantity_e4: 10000, rate_cents: 2_500, income_account_id: sales, product_service_id: None, class_id: None },
+                InvoiceLineInput{ description: "Support".into(), quantity_e4: 20000, rate_cents: 1_000, income_account_id: services, product_service_id: None, class_id: None },
             ],
             currency: None,
         };
@@ -737,8 +744,8 @@ mod tests {
             issue_date: d(1),
             due_date: d(31),
             lines: vec![
-                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: services, product_service_id: None },
-                InvoiceLineInput{ description: "Oops".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: rent, product_service_id: None },
+                InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: services, product_service_id: None, class_id: None },
+                InvoiceLineInput{ description: "Oops".into(), quantity_e4: 10000, rate_cents: 10_000, income_account_id: rent, product_service_id: None, class_id: None },
             ],
             currency: None,
         };
@@ -791,8 +798,8 @@ mod tests {
                 issue_date: d(1),
                 due_date: d(31),
                 lines: vec![
-                    InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 15_000, rate_cents: 12_500, income_account_id: services, product_service_id: None },
-                    InvoiceLineInput{ description: "Review".into(), quantity_e4: 27_500, rate_cents: 3_333, income_account_id: services, product_service_id: None },
+                    InvoiceLineInput{ description: "Consulting".into(), quantity_e4: 15_000, rate_cents: 12_500, income_account_id: services, product_service_id: None, class_id: None },
+                    InvoiceLineInput{ description: "Review".into(), quantity_e4: 27_500, rate_cents: 3_333, income_account_id: services, product_service_id: None, class_id: None },
                 ],
                 currency: None,
             },
@@ -828,7 +835,7 @@ mod tests {
                 customer_name: "Berlin GmbH".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput{ description: "Project".into(), quantity_e4: 10_000, rate_cents: 100_000, income_account_id: services, product_service_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Project".into(), quantity_e4: 10_000, rate_cents: 100_000, income_account_id: services, product_service_id: None, class_id: None }],
                 currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 }),
             },
         )
@@ -880,7 +887,7 @@ mod tests {
                 customer_name: "London Ltd".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, product_service_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None }],
                 currency: Some(ForeignCurrency { code: "GBP".into(), exchange_rate_e6: 1_270_000 }),
             },
         )

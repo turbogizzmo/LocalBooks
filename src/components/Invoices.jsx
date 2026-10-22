@@ -528,6 +528,7 @@ export default function Invoices({ accounts, intent }) {
             ...estimateLines.map((l) => ({
               ...blankLine(l.incomeAccountId),
               productId: l.productServiceId,
+              classId: l.classId ?? null,
               description: l.description,
               qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
               rate: centsToInput(l.rateCents),
@@ -577,12 +578,13 @@ export default function Invoices({ accounts, intent }) {
         issueDate,
         dueDate,
         // The product travels with each line: tracked stock records its cost of goods sold.
-        lines: payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId }) => ({
+        lines: payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId }) => ({
           productServiceId,
           description,
           quantityE4,
           rateCents,
           incomeAccountId,
+          classId,
         })),
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
       };

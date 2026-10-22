@@ -7,7 +7,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 
 const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
-function Dialog({ title, children, onClose }) {
+export function Dialog({ title, children, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current?.querySelector('input, select')?.focus();

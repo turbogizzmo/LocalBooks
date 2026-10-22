@@ -112,10 +112,13 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("EST_NOT_INCOME_ACCOUNT: line {} must use an Income account", idx + 1));
         }
+        if let Some(class) = line.class_id {
+            crate::classes::check_usable(tx, class, &format!("EST: line {}", idx + 1)).await?;
+        }
         sqlx::query(
             "INSERT INTO estimate_lines
-                (estimate_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (estimate_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(estimate_id)
         .bind(idx as i64 + 1)
@@ -125,6 +128,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .bind(line.rate_cents)
         .bind(amount)
         .bind(line.income_account_id)
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -159,8 +163,9 @@ pub async fn convert_to_invoice(
     let mut tx = pool.begin().await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
-        let lines: Vec<(String, i64, i64, i64, Option<i64>)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id
+             FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
@@ -172,12 +177,13 @@ pub async fn convert_to_invoice(
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id)| InvoiceLineInput {
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id)| InvoiceLineInput {
                     description,
                     quantity_e4,
                     rate_cents,
                     income_account_id,
                     product_service_id,
+                    class_id,
                 })
                 .collect(),
             currency: None,
@@ -210,6 +216,7 @@ pub struct EstimateLineView {
     pub quantity_e4: i64,
     pub rate_cents: i64,
     pub income_account_id: i64,
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -222,7 +229,8 @@ pub struct EstimateDetail {
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
     let estimate = get_estimate(pool, estimate_id).await?;
     let lines = sqlx::query_as(
-        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id
+         FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
     )
     .bind(estimate_id)
     .fetch_all(pool)
@@ -295,7 +303,7 @@ mod tests {
     async fn estimate_does_not_post_until_converted() {
         let pool = test_pool().await;
         let (services, ar) = (account_id(&pool, "4100").await, account_id(&pool, "1200").await);
-        let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services };
+        let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services, class_id: None };
         let estimate = create_estimate(
             &pool,
             EstimateInput { customer_name: "Initech".into(), estimate_date: d(1), expiration_date: Some(d(31)), memo: None, lines: vec![line(10, 12_500), line(1, 5_000)] },
@@ -335,7 +343,7 @@ mod tests {
                 estimate_date: d(1),
                 expiration_date: None,
                 memo: None,
-                lines: vec![SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 100_000, rate_cents: 12_500, income_account_id: services }],
+                lines: vec![SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 100_000, rate_cents: 12_500, income_account_id: services, class_id: None }],
             },
         )
         .await
@@ -351,7 +359,7 @@ mod tests {
             lines: detail
                 .lines
                 .iter()
-                .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id })
+                .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id, class_id: None })
                 .collect(),
             currency: None,
         };
@@ -369,7 +377,7 @@ mod tests {
         // The invoice must still be for the estimate's customer.
         let other = create_estimate(
             &pool,
-            EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services }] },
+            EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None }] },
         )
         .await
         .unwrap();

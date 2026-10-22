@@ -172,30 +172,54 @@ pub(crate) struct SaleCost {
     movements: Vec<(i64, i64, i64)>,
 }
 
-/// Works out the cost of the tracked products on a sale's lines (`(product_id, quantity_e4)`).
-/// Several lines for the same product are costed together, in one movement.
-pub(crate) async fn cost_of_sale(tx: &mut Transaction<'_, Sqlite>, lines: &[(Option<i64>, i64)]) -> Result<SaleCost, String> {
-    let mut per_product: BTreeMap<i64, i64> = BTreeMap::new();
-    for (product, qty) in lines {
+/// Works out the cost of the tracked products on a sale's lines (`(product_id, quantity_e4, class_id)`).
+/// Several lines for the same product are costed together, in one movement; when they carry
+/// different classes, the Cost of Goods Sold is split between those classes by quantity.
+pub(crate) async fn cost_of_sale(tx: &mut Transaction<'_, Sqlite>, lines: &[(Option<i64>, i64, Option<i64>)]) -> Result<SaleCost, String> {
+    // Per product: total quantity, and quantity per class in first-appearance order.
+    let mut per_product: BTreeMap<i64, (i64, Vec<(Option<i64>, i64)>)> = BTreeMap::new();
+    for (product, qty, class) in lines {
         if let Some(p) = product {
-            *per_product.entry(*p).or_insert(0) += qty;
+            let (total, by_class) = per_product.entry(*p).or_default();
+            *total += qty;
+            match by_class.iter_mut().find(|(c, _)| c == class) {
+                Some((_, q)) => *q += qty,
+                None => by_class.push((*class, *qty)),
+            }
         }
     }
-    let mut debits: BTreeMap<i64, i64> = BTreeMap::new();
+    let mut debits: BTreeMap<(i64, Option<i64>), i64> = BTreeMap::new();
     let mut credits: BTreeMap<i64, i64> = BTreeMap::new();
     let mut movements = Vec::new();
-    for (product, qty) in per_product {
+    for (product, (qty, by_class)) in per_product {
         let Some(item) = item_for_product(tx, product).await? else { continue };
         let cost = sale_cost(&item, qty)?;
         if cost > 0 {
-            *debits.entry(item.cogs_account_id).or_insert(0) += cost;
+            for (class, share) in split_by_quantity(cost, qty, &by_class)? {
+                *debits.entry((item.cogs_account_id, class)).or_insert(0) += share;
+            }
             *credits.entry(item.asset_account_id).or_insert(0) += cost;
         }
         movements.push((item.id, qty, cost));
     }
-    let mut out: Vec<JournalLine> = debits.into_iter().map(|(a, c)| JournalLine::debit(a, c)).collect();
+    let mut out: Vec<JournalLine> =
+        debits.into_iter().filter(|(_, c)| *c != 0).map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
     out.extend(credits.into_iter().map(|(a, c)| JournalLine::credit(a, c)));
     Ok(SaleCost { lines: out, movements })
+}
+
+/// Splits `cost` across classes in proportion to their quantities. Each share is the difference of
+/// rounded running totals, so the shares never go negative and always add up to `cost` exactly.
+fn split_by_quantity(cost: i64, total_qty: i64, by_class: &[(Option<i64>, i64)]) -> Result<Vec<(Option<i64>, i64)>, String> {
+    let mut shares = Vec::with_capacity(by_class.len());
+    let (mut running_qty, mut assigned) = (0, 0);
+    for (class, qty) in by_class {
+        running_qty += qty;
+        let upto = mul_div_round(cost, running_qty, total_qty).ok_or("STOCK_OVERFLOW: cost out of range")?;
+        shares.push((*class, upto - assigned));
+        assigned = upto;
+    }
+    Ok(shares)
 }
 
 impl SaleCost {
@@ -565,6 +589,47 @@ mod tests {
     /// The stock ledger and the Inventory Asset account must always agree.
     async fn assert_reconciled(s: &Shop) {
         assert_eq!(gl(&s.pool, s.inventory).await, item(&s.pool, s.item).await.value_cents, "stock value matches the Inventory Asset account");
+    }
+
+    #[tokio::test]
+    async fn cost_of_goods_sold_is_split_between_the_classes_on_a_sale() {
+        let s = shop().await;
+        let class = |name: &str| crate::classes::create_class(&s.pool, crate::classes::ClassInput { name: name.into(), parent_id: None });
+        let (east, west) = (class("East").await.unwrap().id, class("West").await.unwrap().id);
+        bill(&s, 3, 1_000, s.inventory).await.unwrap(); // 3 units at $10.00
+
+        let input: crate::invoices::InvoiceInput = serde_json::from_value(json!({
+            "customerName": "Customer", "issueDate": "2026-04-10", "dueDate": "2026-05-10",
+            "lines": [
+                { "description": "Widget", "quantityE4": 10_000, "rateCents": 2_500, "incomeAccountId": s.sales, "productServiceId": s.product, "classId": east },
+                { "description": "Widget", "quantityE4": 20_000, "rateCents": 2_500, "incomeAccountId": s.sales, "productServiceId": s.product, "classId": west },
+                { "description": "Widget", "quantityE4": 10_000, "rateCents": 2_500, "incomeAccountId": s.sales, "productServiceId": s.product, "classId": east }
+            ]
+        }))
+        .unwrap();
+        crate::invoices::create_and_post_invoice(&s.pool, input).await.unwrap();
+
+        let by_class = |account: i64, class: i64| {
+            sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1 AND class_id = ?2")
+                .bind(account)
+                .bind(class)
+                .fetch_one(&s.pool)
+        };
+        // 4 units sold against 3 on hand: $30.00 actual plus one more at the last cost, $40.00 in all.
+        assert_eq!((by_class(s.sales, east).await.unwrap(), by_class(s.sales, west).await.unwrap()), (-5_000, -5_000));
+        assert_eq!((by_class(s.cogs, east).await.unwrap(), by_class(s.cogs, west).await.unwrap()), (2_000, 2_000));
+        assert_eq!(gl(&s.pool, s.cogs).await, 4_000);
+        assert_reconciled(&s).await;
+    }
+
+    #[test]
+    fn quantity_split_never_goes_negative_and_adds_up() {
+        let classes: Vec<(Option<i64>, i64)> = (0..7).map(|c| (Some(c), 1)).collect();
+        for cost in [1, 2, 3, 5, 100, 101] {
+            let shares = split_by_quantity(cost, 7, &classes).unwrap();
+            assert!(shares.iter().all(|(_, s)| *s >= 0), "{shares:?}");
+            assert_eq!(shares.iter().map(|(_, s)| s).sum::<i64>(), cost);
+        }
     }
 
     #[tokio::test]

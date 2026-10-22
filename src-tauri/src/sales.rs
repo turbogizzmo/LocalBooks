@@ -84,6 +84,8 @@ pub struct SalesLineInput {
     pub quantity_e4: i64,
     pub rate_cents: i64,
     pub income_account_id: i64,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -280,7 +282,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     .await
     .map_err(db_err)?;
 
-    let mut credits: Vec<(i64, i64)> = Vec::new();
+    let mut credits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
         let classification: Option<String> = sqlx::query_scalar(
@@ -293,11 +295,14 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         if classification.as_deref() != Some("INCOME") {
             return Err(format!("SR_NOT_INCOME_ACCOUNT: line {n} must use an Income account"));
         }
+        if let Some(class) = line.class_id {
+            crate::classes::check_usable(tx, class, &format!("SR: line {n}")).await?;
+        }
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO sales_receipt_lines
-                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(receipt_id)
         .bind(n as i64)
@@ -307,19 +312,21 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         .bind(line.rate_cents)
         .bind(amount)
         .bind(line.income_account_id)
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-        match credits.iter_mut().find(|(id, _)| *id == line.income_account_id) {
+        let key = (line.income_account_id, line.class_id);
+        match credits.iter_mut().find(|(k, _)| *k == key) {
             Some((_, sum)) => *sum += amount,
-            None => credits.push((line.income_account_id, amount)),
+            None => credits.push((key, amount)),
         }
     }
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
-    lines.extend(credits.into_iter().map(|(account, cents)| JournalLine::credit(account, cents)));
+    lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
-    let sold: Vec<(Option<i64>, i64)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4)).collect();
+    let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
     lines.extend(cost.lines.iter().cloned());
     let customer_label = clean(input.customer_name.as_deref()).map(|c| format!(" - {c}")).unwrap_or_default();
@@ -395,7 +402,7 @@ mod tests {
     }
 
     fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-        SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account }
+        SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None }
     }
 
     #[tokio::test]
@@ -475,7 +482,7 @@ mod tests {
                 customer_name: "acme corp".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None }],
                 currency: None,
             },
         )

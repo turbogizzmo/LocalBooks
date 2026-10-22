@@ -77,8 +77,8 @@ async function saveCsv(report, params, filename, onNotice) {
 const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const longDate = (iso) => LONG_DATE.format(new Date(`${iso}T00:00:00Z`));
 
-/** One statement line: name left (indented by depth), amount right, rules by line kind. */
-function StatementLine({ line }) {
+/** One statement line: name left (indented by depth), amounts right, rules by line kind. */
+function StatementLine({ line, columns }) {
   const indent = { paddingLeft: `${8 + line.depth * 16}px` };
   const strong = line.kind !== 'account';
   const rule =
@@ -93,19 +93,23 @@ function StatementLine({ line }) {
       <td className={`py-0.5 pr-2 ${strong ? 'font-semibold' : ''} ${line.kind === 'net' ? 'text-md' : ''}`} style={indent}>
         {line.label}
       </td>
-      <td className="w-[160px] py-0.5 pr-2 align-bottom">
-        {line.amountCents !== null && line.amountCents !== undefined && (
-          <div className={`num ${strong ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>{formatCents(line.amountCents)}</div>
-        )}
-      </td>
+      {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
+        <td key={c} className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal ? 'bg-qb-canvas' : ''}`}>
+          {cents !== null && cents !== undefined && (
+            <div className={`num ${strong || columns?.[c]?.isTotal ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>{formatCents(cents)}</div>
+          )}
+        </td>
+      ))}
     </tr>
   );
 }
 
-function Statement({ title, subtitle, lines, footer }) {
+/** An on-screen statement; `columns` (from Profit and Loss by Class) gives one amount column each. */
+function Statement({ title, subtitle, lines, footer, columns = null }) {
   const company = useCompany();
+  const wide = columns && columns.length > 2;
   return (
-    <article className="mx-auto w-full max-w-[760px] bg-white px-6 py-4 shadow-panel">
+    <article className={`mx-auto w-full ${wide ? 'max-w-[1240px] overflow-x-auto' : 'max-w-[760px]'} bg-white px-6 py-4 shadow-panel`}>
       <header className="mb-3 flex items-start gap-4 border-b-[3px] border-double border-qb-ink pb-2">
         <div className="min-w-0 flex-1">
           <div className="text-xs uppercase tracking-wide text-qb-ink-muted">{company.name}</div>
@@ -115,18 +119,20 @@ function Statement({ title, subtitle, lines, footer }) {
         {company.logo && <img src={company.logo} alt={`${company.name} logo`} className="max-h-[56px] max-w-[180px] object-contain" />}
       </header>
       <PrintPortal>
-        <StatementDocument company={company} title={title} subtitle={subtitle} lines={lines} footer={footer} />
+        <StatementDocument company={company} title={title} subtitle={subtitle} lines={lines} footer={footer} columns={columns?.map((c) => c.label) ?? null} />
       </PrintPortal>
       <table className="w-full border-collapse text-base">
         <thead>
           <tr className="border-b border-qb-border-strong">
             <th className="py-0.5 text-left text-xs font-semibold uppercase tracking-wide text-qb-ink-muted" />
-            <th className="py-0.5 pr-2 text-right text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Total</th>
+            {(columns ?? [{ label: 'Total' }]).map((c) => (
+              <th key={c.label} className="py-0.5 pr-2 text-right text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{c.label}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {lines.map((line, i) => (
-            <StatementLine key={`${i}-${line.label}`} line={line} />
+            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} />
           ))}
         </tbody>
       </table>
@@ -135,12 +141,12 @@ function Statement({ title, subtitle, lines, footer }) {
   );
 }
 
-function ProfitAndLoss() {
+function ProfitAndLoss({ byClass = false }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
   const [notice, setNotice] = useState(null);
-  const { data, error, reload } = useLedgerQuery(() => api.getProfitAndLoss(start, end));
+  const { data, error, reload } = useLedgerQuery(() => (byClass ? api.getProfitAndLossByClass(start, end) : api.getProfitAndLoss(start, end)));
 
   // Once the fiscal calendar loads (or changes in Settings), re-resolve the selected preset.
   useEffect(() => {
@@ -177,26 +183,37 @@ function ProfitAndLoss() {
           <span className="qb-label">To</span>
           <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
         </label>
-        {data && (
+        {data && !byClass && (
           <div className="ml-auto flex gap-4 self-center text-sm">
             <span className="text-qb-ink-muted">Revenue <span className="num font-semibold text-qb-ink">{formatCents(data.totalRevenueCents)}</span></span>
             <span className="text-qb-ink-muted">Expenses <span className="num font-semibold text-qb-ink">{formatCents(data.totalExpensesCents)}</span></span>
             <span className="text-qb-ink-muted">Net income <span className={`num font-semibold ${data.netIncomeCents < 0 ? 'text-qb-negative' : 'text-qb-green-active'}`}>{data.netIncomeDisplay}</span></span>
           </div>
         )}
-        <div className={data ? '' : 'ml-auto'}>
-          <ExportMenu onNotice={setNotice} onCsv={() => saveCsv('profit_and_loss', { startDate: start, endDate: end }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice)} />
+        <div className={data && !byClass ? '' : 'ml-auto'}>
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() =>
+              byClass
+                ? saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice)
+                : saveCsv('profit_and_loss', { startDate: start, endDate: end }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice)
+            }
+          />
         </div>
       </div>
       {end < start && <Notice kind="error" text="The end date is before the start date." />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={error} />}
+      {byClass && data && data.columns.length === 1 && (
+        <Notice kind="info" text="No income or expenses in this period carry a class. Add classes under Accounting › Classes, then choose one on each line." />
+      )}
       {data && (
         <Statement
-          title="Profit and Loss"
+          title={byClass ? 'Profit and Loss by Class' : 'Profit and Loss'}
           subtitle={data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(data.startDate)} – ${longDate(data.endDate)}`}
           lines={data.lines}
-          footer="Accrual basis · posted transactions only"
+          columns={byClass ? data.columns : null}
+          footer={byClass ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified' : 'Accrual basis · posted transactions only'}
         />
       )}
     </>
@@ -253,6 +270,7 @@ export default function Reports() {
       <div className="no-print flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
         {[
           ['pl', 'Profit and Loss'],
+          ['plc', 'Profit and Loss by Class'],
           ['bs', 'Balance Sheet'],
         ].map(([id, label]) => (
           <button
@@ -267,7 +285,9 @@ export default function Reports() {
           </button>
         ))}
       </div>
-      {report === 'pl' ? <ProfitAndLoss /> : <BalanceSheet />}
+      {report === 'pl' && <ProfitAndLoss key="pl" />}
+      {report === 'plc' && <ProfitAndLoss key="plc" byClass />}
+      {report === 'bs' && <BalanceSheet />}
     </div>
   );
 }

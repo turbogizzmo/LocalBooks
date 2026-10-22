@@ -13,7 +13,11 @@ use crate::ledger::db_err;
 pub struct AccountView {
     pub id: i64,
     pub account_number: Option<String>,
+    pub name: String,
     pub full_name: String,
+    pub parent_id: Option<i64>,
+    pub depth: i64,
+    pub description: Option<String>,
     pub account_type: String,
     pub account_type_name: String,
     pub classification: String,
@@ -61,7 +65,7 @@ pub struct Dashboard {
 
 pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<AccountView>, String> {
     sqlx::query_as::<_, AccountView>(
-        "SELECT c.id, c.account_number, c.full_name, c.account_type, c.account_type_name, c.classification,
+        "SELECT c.id, c.account_number, c.name, c.full_name, c.parent_id, c.depth, c.description, c.account_type, c.account_type_name, c.classification,
                 c.is_active, c.is_system, b.balance_cents
          FROM v_chart_of_accounts c
          JOIN v_account_balances b ON b.account_id = c.id

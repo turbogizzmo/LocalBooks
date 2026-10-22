@@ -8,6 +8,15 @@ export const COMPANY_FILE_CHANGED = 'company-file-changed';
 
 export const api = {
   listAccounts: () => invoke('list_accounts'),
+  listAccountTypes: () => invoke('list_account_types'),
+  createAccount: (input) => invoke('create_account', { input }),
+  updateAccount: (id, input) => invoke('update_account', { id, input }),
+  setAccountActive: (id, active) => invoke('set_account_active', { id, active }),
+  listClasses: () => invoke('list_classes'),
+  createClass: (input) => invoke('create_class', { input }),
+  updateClass: (id, input) => invoke('update_class', { id, input }),
+  setClassActive: (id, active) => invoke('set_class_active', { id, active }),
+  deleteClass: (id) => invoke('delete_class', { id }),
   getDashboard: () => invoke('get_dashboard'),
   listInvoices: () => invoke('list_invoices'),
   createInvoice: (input) => invoke('create_invoice', { input }),
@@ -41,6 +50,7 @@ export const api = {
   cancelReconciliation: (reconciliationId) => invoke('cancel_reconciliation', { reconciliationId }),
 
   getProfitAndLoss: (startDate, endDate) => invoke('get_profit_and_loss', { startDate, endDate }),
+  getProfitAndLossByClass: (startDate, endDate) => invoke('get_profit_and_loss_by_class', { startDate, endDate }),
   getBalanceSheet: (asOf) => invoke('get_balance_sheet', { asOf }),
 
   listCustomers: () => invoke('list_customers'),

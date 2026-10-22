@@ -38,6 +38,7 @@ export const QUICK_CREATE = [
       { id: 'journal-entry', label: 'Journal Entry', view: 'accounting/journal' },
       { id: 'bank-deposit', label: 'Bank Deposit', view: 'banking/transfers' },
       { id: 'transfer', label: 'Transfer', view: 'banking/transfers' },
+      { id: 'new-account', label: 'Account', view: 'accounting/chart-of-accounts' },
     ],
   },
 ];
