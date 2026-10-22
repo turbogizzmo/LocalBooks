@@ -400,27 +400,53 @@ mod tests {
     async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
         let tmp = TempDir::new("pre-upgrade");
         let live = tmp.0.join("Acme.localbooks");
+        let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap();
+        let previous_version = latest - 1;
         {
-            // A file from the previous release: the latest migration not yet applied.
-            let pool = db::open(&live).await.unwrap();
-            post_sale(&pool, 12_345).await;
-            let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap();
-            sqlx::query("DROP TABLE simplefin_accounts").execute(&pool).await.unwrap();
-            sqlx::query("DROP TABLE simplefin_connections").execute(&pool).await.unwrap();
-            sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ?1").bind(latest).execute(&pool).await.unwrap();
+            // A file from the previous release: every migration but the latest, with a sale posted
+            // as that release's schema allows (plain SQL, since today's posting code writes newer columns).
+            let options = SqliteConnectOptions::new().filename(&live).create_if_missing(true).foreign_keys(true);
+            let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await.unwrap();
+            let previous = sqlx::migrate::Migrator {
+                migrations: MIGRATOR.iter().filter(|m| m.version < latest).cloned().collect::<Vec<_>>().into(),
+                ..sqlx::migrate::Migrator::DEFAULT
+            };
+            db::migrate_with(&pool, &previous).await.unwrap();
+            let entry: i64 = sqlx::query_scalar(
+                "INSERT INTO journal_entries (entry_number, entry_date, memo) VALUES (1, '2026-10-01', 'Sale \u{2014} \"cash\"') RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            sqlx::query(
+                "INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents, credit_cents)
+                 SELECT ?1, 1, id, 12345, 0 FROM chart_of_accounts WHERE account_number = '1010'
+                 UNION ALL SELECT ?1, 2, id, 0, 12345 FROM chart_of_accounts WHERE account_number = '4100'",
+            )
+            .bind(entry)
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query("UPDATE journal_entries SET status = 'POSTED', posted_at = '2026-10-01T09:00:00.000Z' WHERE id = ?1")
+                .bind(entry)
+                .execute(&pool)
+                .await
+                .unwrap();
             pool.close().await;
         }
         let config = db::test_config(&tmp.0);
         let db = Db::open_at(live.clone(), config.clone()).await.unwrap();
         assert_eq!(total_posted(&db.pool().await).await, 12_345, "the upgraded file keeps its entries");
+        let audit = crate::ledger::verify_ledger_audit(&db.pool().await).await.unwrap();
+        assert!(audit.intact, "entries posted before the upgrade still match their snapshots: {:?}", audit.findings);
 
         let copies: Vec<BackupFile> = list_backups(&config.backups_dir).unwrap().into_iter().filter(|b| b.kind == "PRE_UPGRADE").collect();
         assert_eq!(copies.len(), 1);
-        assert!(copies[0].file_name.starts_with("pre-upgrade-Acme-v22-"), "{}", copies[0].file_name);
+        assert!(copies[0].file_name.starts_with(&format!("pre-upgrade-Acme-v{previous_version}-")), "{}", copies[0].file_name);
         // The copy is the file as it was: still at the old schema, with the same books.
         let copy = open_read_only(Path::new(&copies[0].path)).await.unwrap();
         let version: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&copy).await.unwrap();
-        assert_eq!(version, 22);
+        assert_eq!(version, previous_version);
         assert_eq!(total_posted(&copy).await, 12_345);
         copy.close().await;
 

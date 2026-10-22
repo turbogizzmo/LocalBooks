@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod accounts;
 mod backup;
 mod bank;
 mod banking;
+mod classes;
 mod closing;
 mod commands;
 mod db;
@@ -102,6 +104,15 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
+            commands::list_account_types,
+            commands::create_account,
+            commands::update_account,
+            commands::set_account_active,
+            commands::list_classes,
+            commands::create_class,
+            commands::update_class,
+            commands::set_class_active,
+            commands::delete_class,
             commands::get_dashboard,
             commands::post_journal_entry,
             commands::list_invoices,
@@ -141,6 +152,7 @@ fn main() {
             commands::lock_reconciliation,
             commands::cancel_reconciliation,
             commands::get_profit_and_loss,
+            commands::get_profit_and_loss_by_class,
             commands::get_balance_sheet,
             commands::list_customers,
             commands::create_customer,

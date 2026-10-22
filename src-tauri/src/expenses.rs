@@ -25,6 +25,8 @@ pub struct BillLineInput {
     /// cost; the line must then post to that product's inventory account and give a quantity.
     #[serde(default)]
     pub product_service_id: Option<i64>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -208,7 +210,7 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
     .await
     .map_err(db_err)?;
 
-    let mut debits: Vec<(i64, i64)> = Vec::new();
+    let mut debits: Vec<((i64, Option<i64>), i64)> = Vec::new();
     let mut received: Vec<(i64, i64, i64)> = Vec::new(); // (item, quantity, cost)
     for (idx, line) in input.lines.iter().enumerate() {
         let n = idx + 1;
@@ -235,10 +237,13 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
             }
             Some(_) => {}
         }
+        if let Some(class) = line.class_id {
+            crate::classes::check_usable(tx, class, &format!("BILL: line {n}")).await?;
+        }
 
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(bill_id)
         .bind(n as i64)
@@ -248,18 +253,21 @@ async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Resu
         .bind(line.quantity_e4)
         .bind(line.rate_cents)
         .bind(line.product_service_id)
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-        // One debit per distinct account, in first-appearance order.
-        match debits.iter_mut().find(|(id, _)| *id == line.account_id) {
+        // One debit per distinct account and class, in first-appearance order.
+        let key = (line.account_id, line.class_id);
+        match debits.iter_mut().find(|(k, _)| *k == key) {
             Some((_, sum)) => *sum += line.amount_cents,
-            None => debits.push((line.account_id, line.amount_cents)),
+            None => debits.push((key, line.amount_cents)),
         }
     }
 
     let ap_account = system_account(tx, "ACCOUNTS_PAYABLE").await?;
-    let mut lines: Vec<JournalLine> = debits.into_iter().map(|(account, cents)| JournalLine::debit(account, cents)).collect();
+    let mut lines: Vec<JournalLine> =
+        debits.into_iter().map(|((account, class), cents)| JournalLine::debit(account, cents).with_class(class)).collect();
     lines.push(JournalLine::credit(ap_account, total));
     let receipt = crate::inventory::plan_receipt(tx, &received).await?;
     lines.extend(receipt.lines.iter().cloned());
@@ -414,6 +422,8 @@ pub struct SplitLineInput {
     pub account_id: i64,
     pub amount_cents: i64,
     pub memo: Option<String>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -517,7 +527,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let mut lines: Vec<JournalLine> = input
         .lines
         .iter()
-        .map(|line| JournalLine::debit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()))
+        .map(|line| JournalLine::debit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id))
         .collect();
     lines.push(JournalLine::credit(input.payment_account_id, total));
     let home_total = match &input.currency {
@@ -551,13 +561,14 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
 
     for (idx, line) in input.lines.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(expense_id)
         .bind(idx as i64 + 1)
         .bind(line.account_id)
         .bind(line.amount_cents)
         .bind(clean(line.memo.as_deref()))
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(|e| format!("{} (split line {})", db_err(e), idx + 1))?;
@@ -634,7 +645,7 @@ mod tests {
             due_date: d(31),
             memo: None,
             total_cents: lines.iter().map(|(_, cents)| cents).sum(),
-            lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None }).collect(),
+            lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None }).collect(),
         }
     }
 
@@ -732,7 +743,7 @@ mod tests {
             check_number: Some("1042".into()),
             payment_method: None,
             memo: None,
-            lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None }).collect(),
+            lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None }).collect(),
             currency: None,
         };
 
@@ -794,8 +805,8 @@ mod tests {
                 payment_method: Some("CREDIT_CARD".into()),
                 memo: None,
                 lines: vec![
-                    SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()) },
-                    SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None },
+                    SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()), class_id: None },
+                    SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None, class_id: None },
                 ],
                 currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
             },
@@ -815,7 +826,7 @@ mod tests {
     async fn bill_lines_can_be_priced_by_quantity_and_rate() {
         let pool = test_pool().await;
         let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-        let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None };
+        let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None, class_id: None };
         let mut input = bill("Staples", vec![]);
         input.lines = vec![priced(25_000, 1_299, 3_248)];
         input.total_cents = 3_248;

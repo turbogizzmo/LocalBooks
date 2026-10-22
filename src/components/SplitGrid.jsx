@@ -1,8 +1,9 @@
 import AccountSelect from './AccountSelect.jsx';
+import ClassSelect, { tracksClasses, useClasses } from './ClassSelect.jsx';
 import { formatCents, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, memo: '', amount: '', qty: '', rate: '' });
+export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, memo: '', amount: '', qty: '', rate: '' });
 
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is
@@ -40,6 +41,7 @@ export function summarizeSplits(rows) {
       amountCents: amount,
       memo: row.memo.trim() || null,
       productServiceId: row.productId ?? null,
+      classId: row.classId ?? null,
       ...(priced ? { quantityE4, rateCents } : {}),
     });
   }
@@ -48,9 +50,12 @@ export function summarizeSplits(rows) {
 
 /**
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
- * (data-entry grid), sized to the row so editing causes no layout shift.
+ * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
+ * column (once the company has classes) for documents whose lines carry one.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, currency = null, stockItems = [] }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, currency = null, stockItems = [] }) {
+  const classes = useClasses();
+  const withClasses = classesAllowed && (tracksClasses(classes) || rows.some((r) => r.classId != null));
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
   const withStock = withPricing && stockItems.length > 0;
   const pickItem = (key, productId) => {
@@ -66,9 +71,10 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
     <table className="qb-grid">
       <colgroup>
         <col className="w-[28px]" />
+        {withStock && <col className="w-[150px]" />}
         <col className="w-[260px]" />
         <col />
-        {withStock && <col className="w-[150px]" />}
+        {withClasses && <col className="w-[150px]" />}
         {withPricing && <col className="w-[70px]" />}
         {withPricing && <col className="w-[96px]" />}
         <col className="w-[120px]" />
@@ -80,6 +86,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           {withStock && <th className="qb-grid-head">Stock item</th>}
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
+          {withClasses && <th className="qb-grid-head">Class</th>}
           {withPricing && <th className="qb-grid-head text-right">Qty</th>}
           {withPricing && <th className="qb-grid-head text-right">Rate</th>}
           <th className="qb-grid-head text-right">Amount</th>
@@ -112,6 +119,11 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
               <td className="qb-grid-cell-edit">
                 <input value={row.memo} onChange={(e) => update(row.key, { memo: e.target.value })} placeholder="What was this for?" aria-label={`Description ${i + 1}`} />
               </td>
+              {withClasses && (
+                <td className="qb-grid-cell-edit">
+                  <ClassSelect className="" classes={classes} value={row.classId ?? null} onChange={(classId) => update(row.key, { classId })} aria-label={`Class ${i + 1}`} />
+                </td>
+              )}
               {withPricing && (
                 <td className="qb-grid-cell-edit">
                   <input className="num" value={row.qty ?? ''} onChange={(e) => update(row.key, { qty: e.target.value })} inputMode="decimal" aria-invalid={evaluated.priced && evaluated.quantityE4 === null} aria-label={`Quantity ${i + 1}`} />
@@ -141,7 +153,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0)}>
+          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0)}>
             <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
               ＋ Add split row
             </button>

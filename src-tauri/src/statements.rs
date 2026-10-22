@@ -145,8 +145,18 @@ fn net_income(chart: &Chart, debit_net: &HashMap<i64, i64>) -> i64 {
 
 struct Builder<'a> {
     chart: &'a Chart,
+    /// Amounts that decide which accounts and sections appear. Equal to `natural`, except in a
+    /// Profit & Loss by Class column, where every column takes its shape from the Total column so
+    /// all columns have the same rows.
+    shape: HashMap<i64, i64>,
     natural: HashMap<i64, i64>,
     lines: Vec<ReportLine>,
+}
+
+impl<'a> Builder<'a> {
+    fn new(chart: &'a Chart, natural: HashMap<i64, i64>) -> Self {
+        Builder { chart, shape: natural.clone(), natural, lines: Vec::new() }
+    }
 }
 
 impl<'a> Builder<'a> {
@@ -159,6 +169,7 @@ impl<'a> Builder<'a> {
         let account = &self.chart.accounts[idx];
         let (id, label) = (account.id, account.label.clone());
         let own = self.natural.get(&id).copied().unwrap_or(0);
+        let shown = self.shape.get(&id).is_some_and(|&a| a != 0);
 
         let start = self.lines.len();
         let mut child_total = 0;
@@ -171,12 +182,12 @@ impl<'a> Builder<'a> {
         let child_lines: Vec<ReportLine> = self.lines.drain(start..).collect();
 
         if !child_active {
-            if own != 0 {
+            if shown {
                 self.push(LineKind::Account, label, depth, Some(own), Some(id));
             }
-            return (own, own != 0);
+            return (own, shown);
         }
-        self.push(LineKind::Account, label.clone(), depth, (own != 0).then_some(own), Some(id));
+        self.push(LineKind::Account, label.clone(), depth, shown.then_some(own), Some(id));
         self.lines.extend(child_lines);
         self.push(LineKind::Subtotal, format!("Total {label}"), depth, Some(own + child_total), Some(id));
         (own + child_total, true)
@@ -229,8 +240,37 @@ pub async fn profit_and_loss(pool: &SqlitePool, start_date: NaiveDate, end_date:
     }
     let chart = Chart::load(pool).await?;
     let movement = debit_net(pool, Some(start_date), end_date).await?;
-    let mut b = Builder { natural: chart.natural(&movement), chart: &chart, lines: Vec::new() };
+    let pl = build_pl(Builder::new(&chart, chart.natural(&movement)), None);
+    debug_assert_eq!(pl.net, net_income(&chart, &movement));
 
+    let symbol = currency_symbol(pool).await?;
+    Ok(ProfitAndLoss {
+        start_date,
+        end_date,
+        lines: pl.lines,
+        total_revenue_cents: pl.income + pl.other_income,
+        total_expenses_cents: pl.cogs + pl.expenses + pl.other_expense,
+        gross_profit_cents: pl.income - pl.cogs,
+        net_income_cents: pl.net,
+        net_income_display: format_money(pl.net, &symbol),
+        currency_symbol: symbol,
+    })
+}
+
+struct PlBody {
+    lines: Vec<ReportLine>,
+    income: i64,
+    cogs: i64,
+    expenses: i64,
+    other_income: i64,
+    other_expense: i64,
+    net: i64,
+    has_net_other: bool,
+}
+
+/// Lays out a Profit & Loss. `net_other` forces whether the "Net Other Income" line appears (so a
+/// by-class column matches its Total column); `None` shows it when there is other income or expense.
+fn build_pl(mut b: Builder<'_>, net_other: Option<bool>) -> PlBody {
     let income = b.section("Income", &["INCOME"], 0, true);
     let cogs = b.section("Cost of Goods Sold", &["COST_OF_GOODS_SOLD"], 0, false);
     let gross_profit = income - cogs;
@@ -240,25 +280,114 @@ pub async fn profit_and_loss(pool: &SqlitePool, start_date: NaiveDate, end_date:
     b.push(LineKind::Total, "Net Operating Income", 0, Some(net_operating), None);
     let other_income = b.section("Other Income", &["OTHER_INCOME"], 0, false);
     let other_expense = b.section("Other Expenses", &["OTHER_EXPENSE"], 0, false);
-    if other_income != 0 || other_expense != 0 {
+    let has_net_other = net_other.unwrap_or(other_income != 0 || other_expense != 0);
+    if has_net_other {
         b.push(LineKind::Total, "Net Other Income", 0, Some(other_income - other_expense), None);
     }
     let net = net_operating + other_income - other_expense;
     b.push(LineKind::Net, "Net Income", 0, Some(net), None);
+    PlBody { lines: b.lines, income, cogs, expenses, other_income, other_expense, net, has_net_other }
+}
 
-    debug_assert_eq!(net, net_income(&chart, &movement));
-    let symbol = currency_symbol(pool).await?;
-    Ok(ProfitAndLoss {
-        start_date,
-        end_date,
-        lines: b.lines,
-        total_revenue_cents: income + other_income,
-        total_expenses_cents: cogs + expenses + other_expense,
-        gross_profit_cents: gross_profit,
-        net_income_cents: net,
-        net_income_display: format_money(net, &symbol),
-        currency_symbol: symbol,
-    })
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassColumn {
+    /// `None` for the Unclassified column and for the Total column (`is_total`).
+    pub class_id: Option<i64>,
+    pub label: String,
+    pub is_total: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassReportLine {
+    pub kind: LineKind,
+    pub label: String,
+    pub depth: u32,
+    pub account_id: Option<i64>,
+    /// One amount per column, in `columns` order; `None` where the row has no amount (headings).
+    pub amounts_cents: Vec<Option<i64>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfitAndLossByClass {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub columns: Vec<ClassColumn>,
+    pub lines: Vec<ClassReportLine>,
+    pub currency_symbol: String,
+}
+
+/// Profit & Loss with one column per class that has income or expense in the range, an
+/// "Unclassified" column for lines without a class, and a Total column equal to the ordinary
+/// Profit & Loss. Every column has the same rows, so each row adds across to its total.
+pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<ProfitAndLossByClass, String> {
+    if end_date < start_date {
+        return Err("RPT_BAD_RANGE: the end date is before the start date".into());
+    }
+    let chart = Chart::load(pool).await?;
+    let pl_accounts: std::collections::HashSet<i64> =
+        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
+
+    // Debit-net movement per (class, account) over P&L accounts only.
+    let rows: Vec<(Option<i64>, i64, i64)> = sqlx::query_as(
+        "SELECT class_id, account_id, SUM(debit_cents) - SUM(credit_cents)
+         FROM v_posted_lines
+         WHERE entry_date >= ?1 AND entry_date <= ?2
+         GROUP BY class_id, account_id",
+    )
+    .bind(start_date)
+    .bind(end_date)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let mut by_class: HashMap<Option<i64>, HashMap<i64, i64>> = HashMap::new();
+    let mut total: HashMap<i64, i64> = HashMap::new();
+    for (class, account, net) in rows {
+        if net != 0 && pl_accounts.contains(&account) {
+            by_class.entry(class).or_default().insert(account, net);
+            *total.entry(account).or_insert(0) += net;
+        }
+    }
+
+    let names: Vec<(i64, String)> = sqlx::query_as("SELECT id, full_name FROM v_classes ORDER BY full_name COLLATE NOCASE")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let mut columns: Vec<ClassColumn> = names
+        .into_iter()
+        .filter(|(id, _)| by_class.contains_key(&Some(*id)))
+        .map(|(id, label)| ClassColumn { class_id: Some(id), label, is_total: false })
+        .collect();
+    if by_class.contains_key(&None) {
+        columns.push(ClassColumn { class_id: None, label: "Unclassified".into(), is_total: false });
+    }
+
+    let total_natural = chart.natural(&total);
+    let totals = build_pl(Builder::new(&chart, total_natural.clone()), None);
+    let bodies: Vec<PlBody> = columns
+        .iter()
+        .map(|c| {
+            let natural = chart.natural(by_class.get(&c.class_id).unwrap_or(&HashMap::new()));
+            let b = Builder { chart: &chart, shape: total_natural.clone(), natural, lines: Vec::new() };
+            build_pl(b, Some(totals.has_net_other))
+        })
+        .collect();
+
+    let lines = totals
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let mut amounts_cents: Vec<Option<i64>> = bodies.iter().map(|b| b.lines[i].amount_cents).collect();
+            amounts_cents.push(line.amount_cents);
+            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents }
+        })
+        .collect();
+    columns.push(ClassColumn { class_id: None, label: "Total".into(), is_total: true });
+
+    Ok(ProfitAndLossByClass { start_date, end_date, columns, lines, currency_symbol: currency_symbol(pool).await? })
 }
 
 pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<BalanceSheet, String> {
@@ -277,7 +406,7 @@ pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<Balanc
     if let Some(re) = chart.accounts.iter().find(|a| a.is_system && a.account_type == "EQUITY" && a.name == "Retained Earnings") {
         *natural.entry(re.id).or_insert(0) += prior_net_income;
     }
-    let mut b = Builder { natural, chart: &chart, lines: Vec::new() };
+    let mut b = Builder::new(&chart, natural);
 
     let assets = b.group("ASSETS", "TOTAL ASSETS", LineKind::Net, 0, true, |b| {
         let current = b.group("Current Assets", "Total Current Assets", LineKind::Total, 1, true, |b| {
@@ -359,6 +488,59 @@ mod tests {
 
     fn find<'l>(lines: &'l [ReportLine], label: &str) -> &'l ReportLine {
         lines.iter().find(|l| l.label == label).unwrap_or_else(|| panic!("missing line {label}"))
+    }
+
+    #[tokio::test]
+    async fn profit_and_loss_by_class_splits_every_row_and_adds_across() {
+        use crate::classes::{create_class, ClassInput};
+        let pool = test_pool().await;
+        let (checking, sales, rent, interest) =
+            (account_id(&pool, "1010").await, account_id(&pool, "4000").await, account_id(&pool, "6300").await, account_id(&pool, "7000").await);
+        let class = |name: &str| create_class(&pool, ClassInput { name: name.into(), parent_id: None });
+        let (east, west, idle) = (class("East").await.unwrap().id, class("West").await.unwrap().id, class("Idle").await.unwrap().id);
+        let post_lines = |lines: Vec<JournalLine>| {
+            post_journal_entry(&pool, JournalEntry { id: None, date: ymd(2026, 4, 10), description: String::new(), lines, currency: None })
+        };
+
+        post_lines(vec![
+            JournalLine::debit(checking, 100_000),
+            JournalLine::credit(sales, 60_000).with_class(Some(east)),
+            JournalLine::credit(sales, 40_000).with_class(Some(west)),
+        ])
+        .await
+        .unwrap();
+        post_lines(vec![JournalLine::debit(rent, 30_000).with_class(Some(east)), JournalLine::credit(checking, 30_000)]).await.unwrap();
+        post_lines(vec![JournalLine::debit(checking, 500), JournalLine::credit(interest, 500)]).await.unwrap();
+        // A voided West expense nets to zero in West.
+        let voided = post_lines(vec![JournalLine::debit(rent, 9_999).with_class(Some(west)), JournalLine::credit(checking, 9_999)]).await.unwrap();
+        crate::ledger::void_transaction(&pool, voided).await.unwrap();
+        // Outside the range.
+        post_journal_entry(
+            &pool,
+            JournalEntry { id: None, date: ymd(2026, 6, 1), description: String::new(), currency: None,
+                lines: vec![JournalLine::debit(rent, 1).with_class(Some(idle)), JournalLine::credit(checking, 1)] },
+        )
+        .await
+        .unwrap();
+
+        let report = profit_and_loss_by_class(&pool, ymd(2026, 4, 1), ymd(2026, 4, 30)).await.unwrap();
+        let labels: Vec<&str> = report.columns.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["East", "West", "Unclassified", "Total"]);
+
+        let plain = profit_and_loss(&pool, ymd(2026, 4, 1), ymd(2026, 4, 30)).await.unwrap();
+        assert_eq!(report.lines.len(), plain.lines.len());
+        for (row, line) in report.lines.iter().zip(&plain.lines) {
+            assert_eq!(row.label, line.label);
+            assert_eq!(*row.amounts_cents.last().unwrap(), line.amount_cents, "Total column of {}", row.label);
+            if let Some(total) = line.amount_cents {
+                let across: i64 = row.amounts_cents[..3].iter().map(|a| a.unwrap_or(0)).sum();
+                assert_eq!(across, total, "{} adds across", row.label);
+            }
+        }
+        let row = |label: &str| report.lines.iter().find(|l| l.label == label).unwrap().amounts_cents.clone();
+        assert_eq!(row("Net Income"), [Some(30_000), Some(40_000), Some(500), Some(70_500)]);
+        assert_eq!(row("Net Other Income"), [Some(0), Some(0), Some(500), Some(500)]);
+        assert_eq!(row("6300 Rent & Lease"), [Some(30_000), Some(0), Some(0), Some(30_000)]);
     }
 
     #[tokio::test]

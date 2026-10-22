@@ -12,7 +12,7 @@ use chrono::NaiveDate;
 use sqlx::SqlitePool;
 
 use crate::preferences;
-use crate::statements::{self, LineKind, ReportLine};
+use crate::statements::{self, ClassReportLine, LineKind, ReportLine};
 
 /// Cents as a plain decimal string: 123456 → "1234.56", -5 → "-0.05".
 pub fn plain_amount(cents: i64) -> String {
@@ -51,6 +51,28 @@ pub fn statement_to_csv(company: &str, title: &str, period: &str, lines: &[Repor
     Ok(format!("\u{feff}{body}"))
 }
 
+/// Renders multi-column (by class) statement lines as a CSV document, one amount column per class.
+pub fn class_statement_to_csv(company: &str, title: &str, period: &str, columns: &[String], lines: &[ClassReportLine]) -> Result<String, String> {
+    let mut writer = csv::WriterBuilder::new().flexible(true).from_writer(Vec::new());
+    let mut row = |fields: &[&str]| writer.write_record(fields).map_err(|e| format!("EXPORT_CSV: {e}"));
+    row(&[company])?;
+    row(&[title])?;
+    row(&[period])?;
+    row(&["Accrual basis"])?;
+    row(&[""])?;
+    let mut header = vec!["Account", "Line type"];
+    header.extend(columns.iter().map(String::as_str));
+    row(&header)?;
+    for line in lines {
+        let mut fields = vec![format!("{}{}", "  ".repeat(line.depth as usize), line.label), kind_label(line.kind).to_string()];
+        fields.extend(line.amounts_cents.iter().map(|a| a.map(plain_amount).unwrap_or_default()));
+        row(&fields.iter().map(String::as_str).collect::<Vec<_>>())?;
+    }
+    let bytes = writer.into_inner().map_err(|e| format!("EXPORT_CSV: {e}"))?;
+    let body = String::from_utf8(bytes).map_err(|e| format!("EXPORT_CSV: {e}"))?;
+    Ok(format!("\u{feff}{body}"))
+}
+
 fn long_date(d: NaiveDate) -> String {
     d.format("%B %-d, %Y").to_string()
 }
@@ -60,6 +82,14 @@ pub async fn profit_and_loss_csv(pool: &SqlitePool, start: NaiveDate, end: Naive
     let company = preferences::get(pool, "company_name").await?;
     let period = if start == end { long_date(start) } else { format!("{} - {}", long_date(start), long_date(end)) };
     statement_to_csv(&company, "Profit and Loss", &period, &pl.lines)
+}
+
+pub async fn profit_and_loss_by_class_csv(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<String, String> {
+    let report = statements::profit_and_loss_by_class(pool, start, end).await?;
+    let company = preferences::get(pool, "company_name").await?;
+    let period = if start == end { long_date(start) } else { format!("{} - {}", long_date(start), long_date(end)) };
+    let columns: Vec<String> = report.columns.iter().map(|c| c.label.clone()).collect();
+    class_statement_to_csv(&company, "Profit and Loss by Class", &period, &columns, &report.lines)
 }
 
 pub async fn balance_sheet_csv(pool: &SqlitePool, as_of: NaiveDate) -> Result<String, String> {
@@ -86,12 +116,16 @@ pub fn write_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Renders the named report (`profit_and_loss` or `balance_sheet`) as CSV.
+/// Renders the named report (`profit_and_loss`, `profit_and_loss_by_class` or `balance_sheet`) as CSV.
 pub async fn render(pool: &SqlitePool, report: &str, start: Option<NaiveDate>, end: Option<NaiveDate>, as_of: Option<NaiveDate>) -> Result<String, String> {
     match report {
         "profit_and_loss" => {
             let (s, e) = start.zip(end).ok_or_else(|| "EXPORT_BAD_RANGE: a Profit and Loss export needs a start and end date".to_string())?;
             profit_and_loss_csv(pool, s, e).await
+        }
+        "profit_and_loss_by_class" => {
+            let (s, e) = start.zip(end).ok_or_else(|| "EXPORT_BAD_RANGE: a Profit and Loss by Class export needs a start and end date".to_string())?;
+            profit_and_loss_by_class_csv(pool, s, e).await
         }
         "balance_sheet" => {
             let a = as_of.ok_or_else(|| "EXPORT_BAD_RANGE: a Balance Sheet export needs an as-of date".to_string())?;
@@ -138,6 +172,10 @@ mod tests {
         assert_eq!(rows[2], vec!["January 1, 2026 - December 31, 2026"]);
         assert!(rows.contains(&vec!["  4100 Services".to_string(), "Account".to_string(), "1234.56".to_string()]));
         assert_eq!(rows.last().unwrap(), &vec!["Net Income".to_string(), "Net".to_string(), "1234.56".to_string()]);
+
+        let by_class = render(&pool, "profit_and_loss_by_class", Some(date), Some(date), None).await.unwrap();
+        assert!(by_class.contains("Account,Line type,Unclassified,Total"), "{by_class}");
+        assert!(by_class.contains("Net Income,Net,1234.56,1234.56"), "{by_class}");
 
         let bs = render(&pool, "balance_sheet", None, None, Some(date)).await.unwrap();
         assert!(bs.contains("TOTAL ASSETS,Net,1234.56"));

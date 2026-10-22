@@ -7,8 +7,10 @@ use chrono::{Local, NaiveDate};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::accounts::{self, AccountInput, AccountTypeView};
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
 use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
+use crate::classes::{self, ClassInput, ClassView};
 use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
@@ -29,7 +31,7 @@ use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconcili
 use crate::reports::{self, AccountView, Dashboard};
 use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
-use crate::statements::{self, BalanceSheet, ProfitAndLoss};
+use crate::statements::{self, BalanceSheet, ProfitAndLoss, ProfitAndLossByClass};
 
 pub const LEDGER_CHANGED: &str = "ledger-changed";
 
@@ -41,6 +43,65 @@ fn notify(app: &AppHandle) {
 #[tauri::command]
 pub async fn list_accounts(db: State<'_, Db>) -> Result<Vec<AccountView>, String> {
     reports::list_accounts(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn list_account_types(db: State<'_, Db>) -> Result<Vec<AccountTypeView>, String> {
+    accounts::list_account_types(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn create_account(app: AppHandle, db: State<'_, Db>, input: AccountInput) -> Result<AccountView, String> {
+    let account = accounts::create_account(&db.pool().await, input).await?;
+    notify(&app);
+    Ok(account)
+}
+
+#[tauri::command]
+pub async fn update_account(app: AppHandle, db: State<'_, Db>, id: i64, input: AccountInput) -> Result<AccountView, String> {
+    let account = accounts::update_account(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(account)
+}
+
+#[tauri::command]
+pub async fn set_account_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<AccountView, String> {
+    let account = accounts::set_account_active(&db.pool().await, id, active).await?;
+    notify(&app);
+    Ok(account)
+}
+
+#[tauri::command]
+pub async fn list_classes(db: State<'_, Db>) -> Result<Vec<ClassView>, String> {
+    classes::list_classes(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn create_class(app: AppHandle, db: State<'_, Db>, input: ClassInput) -> Result<ClassView, String> {
+    let class = classes::create_class(&db.pool().await, input).await?;
+    notify(&app);
+    Ok(class)
+}
+
+#[tauri::command]
+pub async fn update_class(app: AppHandle, db: State<'_, Db>, id: i64, input: ClassInput) -> Result<ClassView, String> {
+    let class = classes::update_class(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(class)
+}
+
+#[tauri::command]
+pub async fn set_class_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<ClassView, String> {
+    let class = classes::set_class_active(&db.pool().await, id, active).await?;
+    notify(&app);
+    Ok(class)
+}
+
+#[tauri::command]
+pub async fn delete_class(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    classes::delete_class(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -263,6 +324,15 @@ pub async fn get_profit_and_loss(
     end_date: NaiveDate,
 ) -> Result<ProfitAndLoss, String> {
     statements::profit_and_loss(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_profit_and_loss_by_class(
+    db: State<'_, Db>,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+) -> Result<ProfitAndLossByClass, String> {
+    statements::profit_and_loss_by_class(&db.pool().await, start_date, end_date).await
 }
 
 #[tauri::command]
