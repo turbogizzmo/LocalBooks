@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::ledger::{db_err, format_money};
@@ -115,16 +115,50 @@ impl Chart {
     }
 }
 
+/// Report filter by class: the chosen classes (each with all of its subclasses), and optionally the
+/// lines that have no class.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassFilter {
+    #[serde(default)]
+    pub class_ids: Vec<i64>,
+    #[serde(default)]
+    pub unclassified: bool,
+}
+
+/// "Class: East, West" or "Class: Unclassified", for report subtitles and exports.
+pub async fn class_filter_label(pool: &SqlitePool, filter: &ClassFilter) -> Result<String, String> {
+    let mut names: Vec<String> = Vec::new();
+    for id in &filter.class_ids {
+        let name: Option<String> = sqlx::query_scalar("SELECT full_name FROM v_classes WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+        names.push(name.ok_or_else(|| format!("CLASS_NOT_FOUND: class {id} does not exist"))?);
+    }
+    if filter.unclassified {
+        names.push("Unclassified".into());
+    }
+    Ok(format!("Class: {}", if names.is_empty() { "none".to_string() } else { names.join(", ") }))
+}
+
 /// Net debit movement per account (debits minus credits) over posted entries in `[from, to]`.
 async fn debit_net(pool: &SqlitePool, from: Option<NaiveDate>, to: NaiveDate) -> Result<HashMap<i64, i64>, String> {
+    debit_net_filtered(pool, from, to, None).await
+}
+
+async fn debit_net_filtered(pool: &SqlitePool, from: Option<NaiveDate>, to: NaiveDate, filter: Option<&ClassFilter>) -> Result<HashMap<i64, i64>, String> {
+    let ids = filter.map(|f| serde_json::to_string(&f.class_ids).unwrap_or_else(|_| "[]".into()));
     let rows: Vec<(i64, i64)> = sqlx::query_as(
         "SELECT account_id, SUM(debit_cents) - SUM(credit_cents)
          FROM v_posted_lines
          WHERE (?1 IS NULL OR entry_date >= ?1) AND entry_date <= ?2
+           AND (?3 IS NULL
+                OR class_id IN (SELECT a.class_id FROM v_class_ancestry a JOIN json_each(?3) j ON j.value = a.ancestor_id)
+                OR (?4 AND class_id IS NULL))
          GROUP BY account_id",
     )
     .bind(from)
     .bind(to)
+    .bind(ids)
+    .bind(filter.is_some_and(|f| f.unclassified))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
@@ -235,11 +269,16 @@ impl<'a> Builder<'a> {
 }
 
 pub async fn profit_and_loss(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<ProfitAndLoss, String> {
+    profit_and_loss_filtered(pool, start_date, end_date, None).await
+}
+
+/// Profit & Loss limited to the lines of the classes in `filter` (all lines when `None`).
+pub async fn profit_and_loss_filtered(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate, filter: Option<&ClassFilter>) -> Result<ProfitAndLoss, String> {
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let chart = Chart::load(pool).await?;
-    let movement = debit_net(pool, Some(start_date), end_date).await?;
+    let movement = debit_net_filtered(pool, Some(start_date), end_date, filter).await?;
     let pl = build_pl(Builder::new(&chart, chart.natural(&movement)), None);
     debug_assert_eq!(pl.net, net_income(&chart, &movement));
 
@@ -292,9 +331,14 @@ fn build_pl(mut b: Builder<'_>, net_other: Option<bool>) -> PlBody {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassColumn {
-    /// `None` for the Unclassified column and for the Total column (`is_total`).
+    /// The class the column is for; `None` for Unclassified and Total.
     pub class_id: Option<i64>,
     pub label: String,
+    /// `class` (a class with no subclass columns), `other` (a parent's own lines, shown beside
+    /// its subclasses), `subtotal` (a parent with all its subclasses), `unclassified` or `total`.
+    pub kind: &'static str,
+    /// Nesting of the class (0 for top-level classes, Unclassified and Total).
+    pub depth: u32,
     pub is_total: bool,
 }
 
@@ -351,29 +395,38 @@ pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, 
         }
     }
 
-    let names: Vec<(i64, String)> = sqlx::query_as("SELECT id, full_name FROM v_classes ORDER BY full_name COLLATE NOCASE")
-        .fetch_all(pool)
-        .await
-        .map_err(db_err)?;
-    let mut columns: Vec<ClassColumn> = names
-        .into_iter()
-        .filter(|(id, _)| by_class.contains_key(&Some(*id)))
-        .map(|(id, label)| ClassColumn { class_id: Some(id), label, is_total: false })
-        .collect();
+    let classes: Vec<(i64, Option<i64>, String, String)> =
+        sqlx::query_as("SELECT id, parent_id, name, full_name FROM v_classes ORDER BY replace(lower(full_name), ':', char(1))")
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
+    // Each column adds up the movement of these classes (None = unclassified lines).
+    let mut columns: Vec<(ClassColumn, Vec<Option<i64>>)> = Vec::new();
+    for (id, parent, _, _) in &classes {
+        if parent.is_none() {
+            class_columns(&classes, &by_class, *id, 0, &mut columns);
+        }
+    }
     if by_class.contains_key(&None) {
-        columns.push(ClassColumn { class_id: None, label: "Unclassified".into(), is_total: false });
+        columns.push((ClassColumn { class_id: None, label: "Unclassified".into(), kind: "unclassified", depth: 0, is_total: false }, vec![None]));
     }
 
     let total_natural = chart.natural(&total);
     let totals = build_pl(Builder::new(&chart, total_natural.clone()), None);
     let bodies: Vec<PlBody> = columns
         .iter()
-        .map(|c| {
-            let natural = chart.natural(by_class.get(&c.class_id).unwrap_or(&HashMap::new()));
-            let b = Builder { chart: &chart, shape: total_natural.clone(), natural, lines: Vec::new() };
+        .map(|(_, members)| {
+            let mut movement: HashMap<i64, i64> = HashMap::new();
+            for member in members {
+                for (account, net) in by_class.get(member).into_iter().flatten() {
+                    *movement.entry(*account).or_insert(0) += net;
+                }
+            }
+            let b = Builder { chart: &chart, shape: total_natural.clone(), natural: chart.natural(&movement), lines: Vec::new() };
             build_pl(b, Some(totals.has_net_other))
         })
         .collect();
+    let mut columns: Vec<ClassColumn> = columns.into_iter().map(|(c, _)| c).collect();
 
     let lines = totals
         .lines
@@ -385,9 +438,45 @@ pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, 
             ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents }
         })
         .collect();
-    columns.push(ClassColumn { class_id: None, label: "Total".into(), is_total: true });
+    columns.push(ClassColumn { class_id: None, label: "Total".into(), kind: "total", depth: 0, is_total: true });
 
     Ok(ProfitAndLossByClass { start_date, end_date, columns, lines, currency_symbol: currency_symbol(pool).await? })
+}
+
+/// The columns for class `id` and its subclasses, as classic desktop software lays them out: a class
+/// whose subclasses have activity shows a column per subclass, then "<class> (other)" for lines
+/// tagged with the class itself, then "Total <class>"; any other class with activity is one column.
+fn class_columns(
+    classes: &[(i64, Option<i64>, String, String)],
+    by_class: &HashMap<Option<i64>, HashMap<i64, i64>>,
+    id: i64,
+    depth: u32,
+    out: &mut Vec<(ClassColumn, Vec<Option<i64>>)>,
+) -> Vec<Option<i64>> {
+    let (_, _, name, full_name) = classes.iter().find(|c| c.0 == id).expect("class exists");
+    let start = out.len();
+    let mut subtree: Vec<Option<i64>> = Vec::new();
+    for (child, parent, _, _) in classes {
+        if *parent == Some(id) {
+            subtree.extend(class_columns(classes, by_class, *child, depth + 1, out));
+        }
+    }
+    let own = by_class.contains_key(&Some(id));
+    let column = |label: String, kind| ClassColumn { class_id: Some(id), label, kind, depth, is_total: false };
+    if out.len() == start {
+        // No subclass has activity: one column, if the class itself has any.
+        if own {
+            out.push((column(full_name.clone(), "class"), vec![Some(id)]));
+            return vec![Some(id)];
+        }
+        return Vec::new();
+    }
+    if own {
+        out.push((column(format!("{name} (other)"), "other"), vec![Some(id)]));
+        subtree.push(Some(id));
+    }
+    out.push((column(format!("Total {full_name}"), "subtotal"), subtree.clone()));
+    subtree
 }
 
 pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<BalanceSheet, String> {
@@ -541,6 +630,46 @@ mod tests {
         assert_eq!(row("Net Income"), [Some(30_000), Some(40_000), Some(500), Some(70_500)]);
         assert_eq!(row("Net Other Income"), [Some(0), Some(0), Some(500), Some(500)]);
         assert_eq!(row("6300 Rent & Lease"), [Some(30_000), Some(0), Some(0), Some(30_000)]);
+    }
+
+    #[tokio::test]
+    async fn parent_classes_get_subclass_columns_other_and_a_total() {
+        use crate::classes::{create_class, ClassInput};
+        let pool = test_pool().await;
+        let (checking, sales, rent) = (account_id(&pool, "1010").await, account_id(&pool, "4000").await, account_id(&pool, "6300").await);
+        let class = |name: &str, parent| create_class(&pool, ClassInput { name: name.into(), parent_id: parent });
+        let east = class("East", None).await.unwrap().id;
+        let retail = class("Retail", Some(east)).await.unwrap().id;
+        let wholesale = class("Wholesale", Some(east)).await.unwrap().id;
+        let _quiet = class("Quiet", Some(east)).await.unwrap().id;
+        let west = class("West", None).await.unwrap().id;
+        let post = |lines: Vec<JournalLine>| post_journal_entry(&pool, JournalEntry { id: None, date: ymd(2026, 5, 1), description: String::new(), lines, currency: None });
+        post(vec![
+            JournalLine::debit(checking, 1_000),
+            JournalLine::credit(sales, 600).with_class(Some(retail)),
+            JournalLine::credit(sales, 300).with_class(Some(wholesale)),
+            JournalLine::credit(sales, 100).with_class(Some(west)),
+        ])
+        .await
+        .unwrap();
+        post(vec![JournalLine::debit(rent, 200).with_class(Some(east)), JournalLine::credit(checking, 200)]).await.unwrap();
+
+        let report = profit_and_loss_by_class(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31)).await.unwrap();
+        let labels: Vec<(&str, &str)> = report.columns.iter().map(|c| (c.label.as_str(), c.kind)).collect();
+        assert_eq!(
+            labels,
+            [("East:Retail", "class"), ("East:Wholesale", "class"), ("East (other)", "other"), ("Total East", "subtotal"), ("West", "class"), ("Total", "total")]
+        );
+        let net = report.lines.iter().find(|l| l.label == "Net Income").unwrap();
+        assert_eq!(net.amounts_cents, [Some(600), Some(300), Some(-200), Some(700), Some(100), Some(800)]);
+
+        // Filtering the plain Profit & Loss by East includes its subclasses; West alone excludes them.
+        let east_only = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![east], unclassified: false })).await.unwrap();
+        assert_eq!(east_only.net_income_cents, 700);
+        let west_only = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![west], unclassified: false })).await.unwrap();
+        assert_eq!(west_only.net_income_cents, 100);
+        let none = profit_and_loss_filtered(&pool, ymd(2026, 5, 1), ymd(2026, 5, 31), Some(&ClassFilter { class_ids: vec![], unclassified: true })).await.unwrap();
+        assert_eq!(none.net_income_cents, 0);
     }
 
     #[tokio::test]

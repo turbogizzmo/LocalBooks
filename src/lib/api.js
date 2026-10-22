@@ -17,6 +17,8 @@ export const api = {
   updateClass: (id, input) => invoke('update_class', { id, input }),
   setClassActive: (id, active) => invoke('set_class_active', { id, active }),
   deleteClass: (id) => invoke('delete_class', { id }),
+  listReclassLines: (query) => invoke('list_reclass_lines', { query }),
+  reclassifyLines: (lineIds, classId) => invoke('reclassify_lines', { lineIds, classId }),
   getDashboard: () => invoke('get_dashboard'),
   listInvoices: () => invoke('list_invoices'),
   createInvoice: (input) => invoke('create_invoice', { input }),
@@ -26,8 +28,8 @@ export const api = {
   importBankFile: (path, bankAccountId, mapping = null) => invoke('import_bank_csv', { path, bankAccountId, mapping }),
   inspectBankFile: (path, mapping = null) => invoke('inspect_bank_file', { path, mapping }),
   listBankTransactions: () => invoke('list_bank_transactions'),
-  approveBankTransaction: (transactionId, categoryAccountId) =>
-    invoke('approve_bank_transaction', { transactionId, categoryAccountId }),
+  approveBankTransaction: (transactionId, categoryAccountId, classId = null) =>
+    invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId }),
   excludeBankTransaction: (transactionId) => invoke('exclude_bank_transaction', { transactionId }),
   listBankConnections: () => invoke('simplefin_list'),
   connectBank: (token) => invoke('simplefin_connect', { token }),
@@ -49,7 +51,7 @@ export const api = {
   lockReconciliation: (reconciliationId) => invoke('lock_reconciliation', { reconciliationId }),
   cancelReconciliation: (reconciliationId) => invoke('cancel_reconciliation', { reconciliationId }),
 
-  getProfitAndLoss: (startDate, endDate) => invoke('get_profit_and_loss', { startDate, endDate }),
+  getProfitAndLoss: (startDate, endDate, classFilter = null) => invoke('get_profit_and_loss', { startDate, endDate, classFilter }),
   getProfitAndLossByClass: (startDate, endDate) => invoke('get_profit_and_loss_by_class', { startDate, endDate }),
   getBalanceSheet: (asOf) => invoke('get_balance_sheet', { asOf }),
 
@@ -118,8 +120,8 @@ export const api = {
   getFiscalPeriods: () => invoke('get_fiscal_periods', { asOf: null }),
   getTaxCalendar: () => invoke('get_tax_calendar', { asOf: null }),
 
-  reportCsv: (report, { startDate = null, endDate = null, asOf = null } = {}) =>
-    invoke('report_csv', { report, startDate, endDate, asOf }),
+  reportCsv: (report, { startDate = null, endDate = null, asOf = null, classFilter = null } = {}) =>
+    invoke('report_csv', { report, startDate, endDate, asOf, classFilter }),
   saveReportToDisk: (reportHtmlOrMatrix, filename) => invoke('save_report_to_disk', { reportHtmlOrMatrix, filename }),
   printReport: () => invoke('print_report'),
 

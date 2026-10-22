@@ -10,7 +10,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::accounts::{self, AccountInput, AccountTypeView};
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
 use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
-use crate::classes::{self, ClassInput, ClassView};
+use crate::classes::{self, ClassInput, ClassView, ReclassLine, ReclassQuery};
 use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
@@ -31,7 +31,7 @@ use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconcili
 use crate::reports::{self, AccountView, Dashboard};
 use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
-use crate::statements::{self, BalanceSheet, ProfitAndLoss, ProfitAndLossByClass};
+use crate::statements::{self, BalanceSheet, ClassFilter, ProfitAndLoss, ProfitAndLossByClass};
 
 pub const LEDGER_CHANGED: &str = "ledger-changed";
 
@@ -95,6 +95,18 @@ pub async fn set_class_active(app: AppHandle, db: State<'_, Db>, id: i64, active
     let class = classes::set_class_active(&db.pool().await, id, active).await?;
     notify(&app);
     Ok(class)
+}
+
+#[tauri::command]
+pub async fn list_reclass_lines(db: State<'_, Db>, query: ReclassQuery) -> Result<Vec<ReclassLine>, String> {
+    classes::reclass_candidates(&db.pool().await, &query).await
+}
+
+#[tauri::command]
+pub async fn reclassify_lines(app: AppHandle, db: State<'_, Db>, line_ids: Vec<i64>, class_id: Option<i64>) -> Result<usize, String> {
+    let moved = classes::reclassify(&db.pool().await, &line_ids, class_id).await?;
+    notify(&app);
+    Ok(moved)
 }
 
 #[tauri::command]
@@ -241,8 +253,9 @@ pub async fn approve_bank_transaction(
     db: State<'_, Db>,
     transaction_id: i64,
     category_account_id: i64,
+    class_id: Option<i64>,
 ) -> Result<i64, String> {
-    let entry_id = bank::approve(&db.pool().await, transaction_id, category_account_id).await?;
+    let entry_id = bank::approve(&db.pool().await, transaction_id, category_account_id, class_id).await?;
     notify(&app);
     Ok(entry_id)
 }
@@ -322,8 +335,9 @@ pub async fn get_profit_and_loss(
     db: State<'_, Db>,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    class_filter: Option<ClassFilter>,
 ) -> Result<ProfitAndLoss, String> {
-    statements::profit_and_loss(&db.pool().await, start_date, end_date).await
+    statements::profit_and_loss_filtered(&db.pool().await, start_date, end_date, class_filter.as_ref()).await
 }
 
 #[tauri::command]
@@ -848,8 +862,9 @@ pub async fn report_csv(
     start_date: Option<NaiveDate>,
     end_date: Option<NaiveDate>,
     as_of: Option<NaiveDate>,
+    class_filter: Option<ClassFilter>,
 ) -> Result<String, String> {
-    export_engine::render(&db.pool().await, &report, start_date, end_date, as_of).await
+    export_engine::render(&db.pool().await, &report, start_date, end_date, as_of, class_filter.as_ref()).await
 }
 
 /// Prompts with the native Save dialog and writes `report_html_or_matrix` to the chosen file.

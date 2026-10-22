@@ -17,6 +17,7 @@ import JournalEntries from './components/JournalEntries.jsx';
 import AuditLog from './components/AuditLog.jsx';
 import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Classes from './components/Classes.jsx';
+import Reclassify from './components/Reclassify.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
@@ -172,6 +173,7 @@ export default function App() {
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}
           {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} />}
           {view === 'accounting/classes' && <Classes />}
+          {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}

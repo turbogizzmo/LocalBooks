@@ -75,6 +75,14 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
                 Err(format!("PREF_BAD_TAX_FORM: unknown tax form '{v}'"))
             }
         }
+        "class_tracking" | "class_prompt" => match v {
+            "true" | "false" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_FLAG: use true or false".into()),
+        },
+        "class_assign" => match v {
+            "line" | "transaction" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_CLASS_ASSIGN: assign classes per line or per transaction".into()),
+        },
         "auto_backup_enabled" => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),

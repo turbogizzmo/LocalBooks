@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
-import ClassSelect, { tracksClasses, useClasses } from './ClassSelect.jsx';
+import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -23,8 +23,9 @@ function JournalForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const dateRef = useRef(null);
-  const classes = useClasses();
-  const withClasses = tracksClasses(classes) || rows.some((r) => r.classId !== null);
+  const formClass = useFormClass(accounts);
+  const { classes } = formClass;
+  const withClasses = showsClassColumn(formClass, rows);
 
   useEffect(() => dateRef.current?.focus(), []);
 
@@ -47,17 +48,19 @@ function JournalForm({ accounts, onPosted, onCancel }) {
     if (invalid > 0) return setError(`${invalid} line(s) need an account and exactly one of debit or credit.`);
     if (used.length < 2) return setError('A journal entry needs at least two lines.');
     if (difference !== 0) return setError(`Debits and credits are out of balance by ${formatCents(Math.abs(difference))}.`);
+    const lines = formClass.apply(
+      used.map((p) => ({ account_id: p.row.accountId, debit: p.debit, credit: p.credit, memo: p.row.memo.trim() || null, class_id: p.row.classId })),
+      'class_id',
+    );
+    const warning = formClass.missing(lines, 'class_id');
+    if (warning) return setError(warning);
     setBusy(true);
     try {
-      await api.postJournalEntry({
-        id: null,
-        date,
-        description: memo.trim(),
-        lines: used.map((p) => ({ account_id: p.row.accountId, debit: p.debit, credit: p.credit, memo: p.row.memo.trim() || null, class_id: p.row.classId })),
-      });
+      await api.postJournalEntry({ id: null, date, description: memo.trim(), lines });
       onPosted(`Journal entry posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
       setRows([blankRow(), blankRow(), blankRow(), blankRow()]);
       setMemo('');
+      formClass.reset();
       setError(null);
     } catch (err) {
       setError(errorText(err));
@@ -78,6 +81,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
           <span className="qb-label">Memo</span>
           <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reason for this entry" />
         </label>
+        {formClass.header}
       </div>
       <table className="qb-grid">
         <colgroup>

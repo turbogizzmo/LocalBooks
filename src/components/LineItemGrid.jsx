@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import ClassSelect, { classLabel, tracksClasses, useClasses } from './ClassSelect.jsx';
+import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
@@ -55,8 +55,9 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const focusCol = useRef('description');
   const tableRef = useRef(null);
   const withProducts = Array.isArray(products);
-  const classes = useClasses();
-  const withClasses = tracksClasses(classes) || lines.some((l) => l.classId != null);
+  const tracking = useClassTracking();
+  const { classes } = tracking;
+  const withClasses = showsClassColumn(tracking, lines);
 
   useEffect(() => {
     if (active === null) return;

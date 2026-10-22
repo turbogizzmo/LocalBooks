@@ -50,6 +50,7 @@ export const NAV = [
     children: [
       { id: 'accounting/chart-of-accounts', label: 'Chart of Accounts' },
       { id: 'accounting/classes', label: 'Classes' },
+      { id: 'accounting/reclassify', label: 'Reclassify Transactions' },
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },

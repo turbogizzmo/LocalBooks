@@ -1,5 +1,5 @@
 import AccountSelect from './AccountSelect.jsx';
-import ClassSelect, { tracksClasses, useClasses } from './ClassSelect.jsx';
+import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { formatCents, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
@@ -54,8 +54,9 @@ export function summarizeSplits(rows) {
  * column (once the company has classes) for documents whose lines carry one.
  */
 export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, currency = null, stockItems = [] }) {
-  const classes = useClasses();
-  const withClasses = classesAllowed && (tracksClasses(classes) || rows.some((r) => r.classId != null));
+  const tracking = useClassTracking();
+  const { classes } = tracking;
+  const withClasses = classesAllowed && showsClassColumn(tracking, rows);
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
   const withStock = withPricing && stockItems.length > 0;
   const pickItem = (key, productId) => {

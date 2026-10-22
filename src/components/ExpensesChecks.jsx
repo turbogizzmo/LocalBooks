@@ -3,6 +3,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
@@ -35,6 +36,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
+  const formClass = useFormClass(accounts);
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   useEffect(() => setCheckNumber(nextCheck), [nextCheck]);
@@ -59,6 +61,9 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
     if (lines.some((l) => l.accountId === accountId)) return setError('A split row cannot use the payment account itself.');
     if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
+    const postedLines = formClass.apply(lines);
+    const warning = formClass.missing(postedLines);
+    if (warning) return setError(warning);
     setBusy(true);
     try {
       const posted = await api.postExpense({
@@ -69,7 +74,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         checkNumber: kind === 'CHECK' ? checkNumber.trim() || null : null,
         paymentMethod: kind === 'EXPENSE' ? method : null,
         memo: memo.trim() || null,
-        lines,
+        lines: postedLines,
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
       });
       onPosted(
@@ -79,6 +84,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+      formClass.reset();
       setError(null);
       payeeRef.current?.focus();
     } catch (err) {
@@ -140,6 +146,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             </select>
           </label>
         )}
+        {formClass.header}
         <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
         <div className="ml-auto text-right">
           <div className="qb-label">Total</div>

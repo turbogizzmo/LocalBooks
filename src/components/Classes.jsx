@@ -28,6 +28,8 @@ function ParentSelect({ classes, cls, value, onChange, ...rest }) {
  */
 export default function Classes() {
   const { data, error } = useLedgerQuery(api.listClasses);
+  const prefs = useLedgerQuery(api.getPreferences).data;
+  const tracking = prefs?.class_tracking === 'true';
   const classes = data ?? [];
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState(null);
@@ -89,6 +91,24 @@ export default function Classes() {
             Show inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
           </label>
         </div>
+        {prefs && (
+          <div className={`flex flex-none items-center gap-2 border-b border-qb-border px-2 py-1 text-sm ${tracking ? 'bg-qb-green-tint' : 'bg-[#fff4e5]'}`}>
+            <label className="flex items-center gap-1.5 font-semibold">
+              <input
+                type="checkbox"
+                className="accent-qb-green"
+                checked={tracking}
+                onChange={(e) => run(() => api.setPreference('class_tracking', e.target.checked ? 'true' : 'false'), () => (e.target.checked ? 'Class tracking is on.' : 'Class tracking is off; existing classes stay on their transactions.'))}
+              />
+              Use class tracking
+            </label>
+            <span className="text-xs text-qb-ink-muted">
+              {tracking
+                ? 'A Class column shows on entry forms. Choose one class per transaction or a missing-class warning in Settings › Class tracking.'
+                : 'Turn this on to show a Class column on entry forms; until then, classes you add here are not offered on forms.'}
+            </span>
+          </div>
+        )}
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={`Could not load classes: ${error}`} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">

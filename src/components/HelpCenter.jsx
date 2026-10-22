@@ -31,6 +31,7 @@ export const SCREEN_HELP = {
   'banking/reconcile': 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
   'accounting/chart-of-accounts': 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here.',
   'accounting/classes': 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
+  'accounting/reclassify': 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
@@ -184,9 +185,16 @@ export const HELP_ARTICLES = [
   {
     id: 'classes', area: 'accounting', views: ['accounting/classes', 'sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal', 'reports'],
     title: 'Track departments or locations with classes',
-    body: 'Add classes (and subclasses) under Accounting › Classes; a Class column then appears on invoices, sales receipts, estimates, bills, expenses, checks and journal entries. Reports › Profit and Loss by Class shows income and expenses for each class side by side, with anything unclassified in its own column.',
+    body: 'Turn on Use class tracking under Accounting › Classes (or Settings › Class tracking) and add classes and subclasses; a Class column then appears on invoices, sales receipts, estimates, bills, expenses, checks, deposits, bank feed approvals, time and journal entries. Settings can assign one class to a whole transaction instead, or warn before saving lines without a class, and Reports › Profit and Loss by Class shows each class side by side with parent totals.',
     keywords: 'class classes class tracking department location division region segment profit center',
     go: { label: 'Go to Classes', view: 'accounting/classes' },
+  },
+  {
+    id: 'reclassify', area: 'accounting', views: ['accounting/reclassify', 'accounting/classes', 'reports'],
+    title: 'Fix the class on posted transactions',
+    body: 'Accounting › Reclassify Transactions lists posted income and expense lines by date, account and current class; tick lines, choose the new class and choose Reclassify. Each move posts a reclassifying journal entry on the line’s own date, so reports are corrected for that period, and voiding that entry undoes it.',
+    keywords: 'reclassify wrong class change class fix class move class',
+    go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
   },
   {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -25,6 +26,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
+  const formClass = useFormClass(accounts);
 
   useEffect(() => customerRef.current?.focus(), []);
   useEffect(() => {
@@ -46,12 +48,14 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         estimateDate: date,
         expirationDate: expires || null,
         memo: memo.trim() || null,
-        lines: payload,
+        // Estimates do not post, so there is no missing-class warning; the class carries to the invoice.
+        lines: formClass.apply(payload),
       });
       onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.`);
       setCustomer('');
       setMemo('');
       setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+      formClass.reset();
       setError(null);
       customerRef.current?.focus();
     } catch (err) {
@@ -82,6 +86,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
           <span className="qb-label">Expiration date</span>
           <input type="date" className="qb-input w-[132px]" value={expires} onChange={(e) => setExpires(e.target.value)} />
         </label>
+        {formClass.header}
         <div className="ml-auto text-right">
           <div className="qb-label">Total</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>

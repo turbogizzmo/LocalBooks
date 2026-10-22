@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
@@ -506,6 +507,7 @@ export default function Invoices({ accounts, intent }) {
   const [notice, setNotice] = useState(null);
   // Set while the form holds an estimate's lines: posting then marks that estimate converted.
   const [fromEstimate, setFromEstimate] = useState(null);
+  const formClass = useFormClass(accounts);
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -560,6 +562,7 @@ export default function Invoices({ accounts, intent }) {
     setDueDate(addDays(todayIso(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
+    formClass.reset();
   };
 
   const save = async () => {
@@ -570,6 +573,19 @@ export default function Invoices({ accounts, intent }) {
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
+    // The product travels with each line: tracked stock records its cost of goods sold.
+    const postedLines = formClass.apply(
+      payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId }) => ({
+        productServiceId,
+        description,
+        quantityE4,
+        rateCents,
+        incomeAccountId,
+        classId,
+      })),
+    );
+    const warning = formClass.missing(postedLines);
+    if (warning) return setNotice({ kind: 'error', text: warning });
 
     setBusy(true);
     try {
@@ -577,15 +593,7 @@ export default function Invoices({ accounts, intent }) {
         customerName: customer.trim(),
         issueDate,
         dueDate,
-        // The product travels with each line: tracked stock records its cost of goods sold.
-        lines: payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId }) => ({
-          productServiceId,
-          description,
-          quantityE4,
-          rateCents,
-          incomeAccountId,
-          classId,
-        })),
+        lines: postedLines,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
       };
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
@@ -682,6 +690,7 @@ export default function Invoices({ accounts, intent }) {
               }}
             />
           </label>
+          {formClass.header}
           {!receiving && (
             <button type="button" className="qb-btn qb-btn-secondary self-center" onClick={() => setReceiving(true)}>
               Receive payment

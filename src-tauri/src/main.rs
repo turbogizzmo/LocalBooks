@@ -113,6 +113,8 @@ fn main() {
             commands::update_class,
             commands::set_class_active,
             commands::delete_class,
+            commands::list_reclass_lines,
+            commands::reclassify_lines,
             commands::get_dashboard,
             commands::post_journal_entry,
             commands::list_invoices,

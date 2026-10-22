@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
+import { classLabel, useClasses } from './ClassSelect.jsx';
 import { PrintPortal, StatementDocument, useCompany } from './PrintDocuments.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
@@ -94,9 +95,9 @@ function StatementLine({ line, columns }) {
         {line.label}
       </td>
       {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
-        <td key={c} className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal ? 'bg-qb-canvas' : ''}`}>
+        <td key={c} className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'bg-qb-canvas' : ''}`}>
           {cents !== null && cents !== undefined && (
-            <div className={`num ${strong || columns?.[c]?.isTotal ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>{formatCents(cents)}</div>
+            <div className={`num ${strong || columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>{formatCents(cents)}</div>
           )}
         </td>
       ))}
@@ -126,7 +127,7 @@ function Statement({ title, subtitle, lines, footer, columns = null }) {
           <tr className="border-b border-qb-border-strong">
             <th className="py-0.5 text-left text-xs font-semibold uppercase tracking-wide text-qb-ink-muted" />
             {(columns ?? [{ label: 'Total' }]).map((c) => (
-              <th key={c.label} className="py-0.5 pr-2 text-right text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{c.label}</th>
+              <th key={c.label} className={`py-0.5 pr-2 text-right text-xs font-semibold uppercase tracking-wide ${c.kind === 'subtotal' || c.isTotal ? 'text-qb-ink' : 'text-qb-ink-muted'} ${c.kind === 'other' ? 'italic' : ''}`}>{c.label}</th>
             ))}
           </tr>
         </thead>
@@ -146,7 +147,11 @@ function ProfitAndLoss({ byClass = false }) {
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
   const [notice, setNotice] = useState(null);
-  const { data, error, reload } = useLedgerQuery(() => (byClass ? api.getProfitAndLossByClass(start, end) : api.getProfitAndLoss(start, end)));
+  const classes = useClasses();
+  // '' = all lines, 'none' = lines without a class, otherwise a class id (with its subclasses).
+  const [classChoice, setClassChoice] = useState('');
+  const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
+  const { data, error, reload } = useLedgerQuery(() => (byClass ? api.getProfitAndLossByClass(start, end) : api.getProfitAndLoss(start, end, classFilter)));
 
   // Once the fiscal calendar loads (or changes in Settings), re-resolve the selected preset.
   useEffect(() => {
@@ -155,7 +160,8 @@ function ProfitAndLoss({ byClass = false }) {
 
   useEffect(() => {
     if (start && end && start <= end) reload();
-  }, [start, end, reload]);
+  }, [start, end, classChoice, reload]);
+  const classSubtitle = classChoice === '' ? '' : ` · Class: ${classChoice === 'none' ? 'Unclassified' : `${classLabel(classes, Number(classChoice))} (with subclasses)`}`;
 
   return (
     <>
@@ -183,6 +189,21 @@ function ProfitAndLoss({ byClass = false }) {
           <span className="qb-label">To</span>
           <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
         </label>
+        {!byClass && classes.length > 0 && (
+          <label>
+            <span className="qb-label">Class</span>
+            <select className="qb-input w-[180px]" value={classChoice} onChange={(e) => setClassChoice(e.target.value)}>
+              <option value="">All classes</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {'\u00a0\u00a0'.repeat(c.depth)}
+                  {c.name}
+                </option>
+              ))}
+              <option value="none">Unclassified</option>
+            </select>
+          </label>
+        )}
         {data && !byClass && (
           <div className="ml-auto flex gap-4 self-center text-sm">
             <span className="text-qb-ink-muted">Revenue <span className="num font-semibold text-qb-ink">{formatCents(data.totalRevenueCents)}</span></span>
@@ -196,7 +217,7 @@ function ProfitAndLoss({ byClass = false }) {
             onCsv={() =>
               byClass
                 ? saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice)
-                : saveCsv('profit_and_loss', { startDate: start, endDate: end }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice)
+                : saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice)
             }
           />
         </div>
@@ -210,7 +231,7 @@ function ProfitAndLoss({ byClass = false }) {
       {data && (
         <Statement
           title={byClass ? 'Profit and Loss by Class' : 'Profit and Loss'}
-          subtitle={data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(data.startDate)} – ${longDate(data.endDate)}`}
+          subtitle={(data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(data.startDate)} – ${longDate(data.endDate)}`) + (byClass ? '' : classSubtitle)}
           lines={data.lines}
           columns={byClass ? data.columns : null}
           footer={byClass ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified' : 'Accrual basis · posted transactions only'}

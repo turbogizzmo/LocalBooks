@@ -4,6 +4,7 @@ import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
 import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
@@ -26,6 +27,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
   const [rows, setRows] = useState(() => [blankSplit(null)]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const formClass = useFormClass(accounts);
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -50,6 +52,19 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
     if (lines.length === 0) return setError('Allocate the bill to at least one category.');
     if (unallocated !== 0) return setError(`Split rows must add up to the bill total; ${formatCents(unallocated)} is unallocated.`);
     if (dueDate < billDate) return setError('Due date cannot be before the bill date.');
+    const postedLines = formClass.apply(
+      lines.map((l) => ({
+        accountId: l.accountId,
+        amountCents: l.amountCents,
+        memo: l.memo,
+        quantityE4: l.quantityE4 ?? null,
+        rateCents: l.rateCents ?? null,
+        productServiceId: l.productServiceId ?? null,
+        classId: l.classId ?? null,
+      })),
+    );
+    const warning = formClass.missing(postedLines);
+    if (warning) return setError(warning);
     setBusy(true);
     try {
       const bill = await api.postVendorBill({
@@ -59,21 +74,14 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
         dueDate,
         memo: null,
         totalCents,
-        lines: lines.map((l) => ({
-          accountId: l.accountId,
-          amountCents: l.amountCents,
-          memo: l.memo,
-          quantityE4: l.quantityE4 ?? null,
-          rateCents: l.rateCents ?? null,
-          productServiceId: l.productServiceId ?? null,
-          classId: l.classId ?? null,
-        })),
+        lines: postedLines,
       });
       onPosted(`Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`);
       setVendor('');
       setBillNumber('');
       setTotal('');
       setRows([blankSplit(defaultCategory)]);
+      formClass.reset();
       setError(null);
       vendorRef.current?.focus();
     } catch (err) {
@@ -116,6 +124,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
           <span className="qb-label">Due date</span>
           <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
+        {formClass.header}
         <label>
           <span className="qb-label">Bill total</span>
           <input

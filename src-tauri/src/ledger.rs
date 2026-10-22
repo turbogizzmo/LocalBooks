@@ -158,12 +158,14 @@ pub enum EntrySource {
     Transfer(i64),
     /// The reversing entry that voids the given journal entry.
     Reversal(i64),
+    /// A journal entry that moves posted lines to another class (see `classes::reclassify`).
+    Reclassification,
 }
 
 impl EntrySource {
     fn type_code(self) -> &'static str {
         match self {
-            EntrySource::Journal | EntrySource::Reversal(_) => "JOURNAL",
+            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => "JOURNAL",
             EntrySource::Invoice(_) => "INVOICE",
             EntrySource::ReceivePayment(_) => "RECEIVE_PAYMENT",
             EntrySource::Expense(_) => "EXPENSE",
@@ -178,7 +180,7 @@ impl EntrySource {
 
     fn source_id(self) -> Option<i64> {
         match self {
-            EntrySource::Journal | EntrySource::Reversal(_) => None,
+            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => None,
             EntrySource::Invoice(id)
             | EntrySource::ReceivePayment(id)
             | EntrySource::Expense(id)
@@ -396,8 +398,10 @@ async fn write_entry(
                 Some(_) => {}
             }
         }
-        // A reversal must carry the original's classes even if one has since been made inactive.
-        if let Some(class_id) = line.class_id.filter(|c| source.reverses().is_none() && checked_classes.insert(*c)) {
+        // A reversal must carry the original's classes even if one has since been made inactive, and
+        // a reclassification moves lines out of a class that may be inactive (it checks the target).
+        let carries_existing = source.reverses().is_some() || source == EntrySource::Reclassification;
+        if let Some(class_id) = line.class_id.filter(|c| !carries_existing && checked_classes.insert(*c)) {
             crate::classes::check_usable(tx, class_id, &format!("JE: line {n}")).await?;
         }
 
@@ -560,6 +564,39 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     if let Some(reason) = blocked {
         return Err(reason);
     }
+    // Lines moved to another class: voiding this entry would reverse them into their original class
+    // while the reclassifying entry still moves them, so that entry is voided first.
+    let reclassified_by: Option<i64> = sqlx::query_scalar(
+        "SELECT re.entry_number FROM class_reclassifications r
+         JOIN journal_lines l ON l.id = r.line_id
+         JOIN journal_entries re ON re.id = r.journal_entry_id
+         WHERE l.journal_entry_id = ?1 AND re.is_voided = 0
+         ORDER BY r.id DESC LIMIT 1",
+    )
+    .bind(journal_entry_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if let Some(reclass_number) = reclassified_by {
+        return Err(format!(
+            "VOID_RECLASSIFIED: entry #{number} has lines moved to another class by entry #{reclass_number}; void that entry first"
+        ));
+    }
+    // A reclassifying entry is undone newest first: a later move of the same lines builds on it.
+    let later: Option<i64> = sqlx::query_scalar(
+        "SELECT re.entry_number FROM class_reclassifications mine
+         JOIN class_reclassifications r ON r.line_id = mine.line_id AND r.id > mine.id
+         JOIN journal_entries re ON re.id = r.journal_entry_id
+         WHERE mine.journal_entry_id = ?1 AND re.is_voided = 0
+         LIMIT 1",
+    )
+    .bind(journal_entry_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if let Some(later_number) = later {
+        return Err(format!("VOID_RECLASS_ORDER: entry #{later_number} reclassifies the same lines again; void it first"));
+    }
 
     let lines: Vec<(i64, i64, i64, Option<String>, Option<i64>)> = sqlx::query_as(
         "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
@@ -639,7 +676,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     // A bank feed line whose document was voided goes back to "For review".
     sqlx::query(
         "UPDATE bank_transactions
-         SET status = 'PENDING', journal_entry_id = NULL, category_account_id = NULL, reviewed_at = NULL
+         SET status = 'PENDING', journal_entry_id = NULL, category_account_id = NULL, class_id = NULL, reviewed_at = NULL
          WHERE journal_entry_id = ?1",
     )
     .bind(journal_entry_id)
