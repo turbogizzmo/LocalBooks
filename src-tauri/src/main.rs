@@ -23,6 +23,7 @@ mod preferences;
 mod qbw_import;
 mod reconcile;
 mod registers;
+mod report_center;
 mod reports;
 mod revaluation;
 mod sales;
@@ -176,6 +177,12 @@ fn main() {
             commands::cancel_reconciliation,
             commands::get_profit_and_loss,
             commands::get_profit_and_loss_by_class,
+            commands::get_profit_and_loss_periods,
+            commands::get_trial_balance_as_of,
+            commands::get_cash_flow,
+            commands::get_general_ledger,
+            commands::get_aging,
+            commands::get_summary_report,
             commands::get_balance_sheet,
             commands::list_customers,
             commands::create_customer,

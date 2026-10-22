@@ -34,7 +34,8 @@ use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconcili
 use crate::reports::{self, AccountView, Dashboard};
 use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
-use crate::statements::{self, BalanceSheet, ClassFilter, ProfitAndLoss, ProfitAndLossByClass};
+use crate::statements::{self, BalanceSheet, Basis, CashFlowStatement, ClassFilter, DatedTrialBalance, PeriodReportInput, ProfitAndLoss, ProfitAndLossByClass};
+use crate::report_center::{self, AgingReport, GeneralLedger, SummaryReport};
 
 pub const LEDGER_CHANGED: &str = "ledger-changed";
 
@@ -339,8 +340,46 @@ pub async fn get_profit_and_loss(
     start_date: NaiveDate,
     end_date: NaiveDate,
     class_filter: Option<ClassFilter>,
+    basis: Option<Basis>,
 ) -> Result<ProfitAndLoss, String> {
-    statements::profit_and_loss_filtered(&db.pool().await, start_date, end_date, class_filter.as_ref()).await
+    statements::profit_and_loss_basis(&db.pool().await, start_date, end_date, class_filter.as_ref(), basis.unwrap_or_default()).await
+}
+
+#[tauri::command]
+pub async fn get_profit_and_loss_periods(db: State<'_, Db>, input: PeriodReportInput) -> Result<ProfitAndLossByClass, String> {
+    statements::profit_and_loss_periods(&db.pool().await, &input).await
+}
+
+#[tauri::command]
+pub async fn get_trial_balance_as_of(db: State<'_, Db>, as_of: NaiveDate) -> Result<DatedTrialBalance, String> {
+    statements::trial_balance_as_of(&db.pool().await, as_of).await
+}
+
+#[tauri::command]
+pub async fn get_cash_flow(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<CashFlowStatement, String> {
+    statements::cash_flow(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_general_ledger(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<GeneralLedger, String> {
+    report_center::general_ledger(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_aging(db: State<'_, Db>, payable: bool, as_of: NaiveDate) -> Result<AgingReport, String> {
+    report_center::aging(&db.pool().await, payable, as_of).await
+}
+
+/// `customer` (sales by customer), `vendor` (expenses by vendor) or `product` (sales by product/service).
+#[tauri::command]
+pub async fn get_summary_report(db: State<'_, Db>, by: String, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
+    let pool = db.pool().await;
+    match by.as_str() {
+        "customer" => report_center::by_party(&pool, false, start_date, end_date).await,
+        "vendor" => report_center::by_party(&pool, true, start_date, end_date).await,
+        "product" => report_center::sales_by_product(&pool, start_date, end_date).await,
+        other => Err(format!("RPT_UNKNOWN: '{other}' is not a summary report")),
+    }
 }
 
 #[tauri::command]

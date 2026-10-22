@@ -184,7 +184,7 @@ export default function App() {
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
-          {view === 'reports' && <Reports navigate={select} />}
+          {view === 'reports' && <Reports navigate={select} intent={intent} />}
           {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
         </div>
       </main>

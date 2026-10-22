@@ -51,7 +51,13 @@ export const api = {
   lockReconciliation: (reconciliationId) => invoke('lock_reconciliation', { reconciliationId }),
   cancelReconciliation: (reconciliationId) => invoke('cancel_reconciliation', { reconciliationId }),
 
-  getProfitAndLoss: (startDate, endDate, classFilter = null) => invoke('get_profit_and_loss', { startDate, endDate, classFilter }),
+  getProfitAndLoss: (startDate, endDate, classFilter = null, basis = 'ACCRUAL') => invoke('get_profit_and_loss', { startDate, endDate, classFilter, basis }),
+  getProfitAndLossPeriods: (input) => invoke('get_profit_and_loss_periods', { input }),
+  getTrialBalanceAsOf: (asOf) => invoke('get_trial_balance_as_of', { asOf }),
+  getCashFlow: (startDate, endDate) => invoke('get_cash_flow', { startDate, endDate }),
+  getGeneralLedger: (startDate, endDate) => invoke('get_general_ledger', { startDate, endDate }),
+  getAging: (payable, asOf) => invoke('get_aging', { payable, asOf }),
+  getSummaryReport: (by, startDate, endDate) => invoke('get_summary_report', { by, startDate, endDate }),
   getProfitAndLossByClass: (startDate, endDate) => invoke('get_profit_and_loss_by_class', { startDate, endDate }),
   getBalanceSheet: (asOf) => invoke('get_balance_sheet', { asOf }),
 

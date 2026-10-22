@@ -39,7 +39,7 @@ export const SCREEN_HELP = {
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
   'accounting/qbw-import': 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
-  reports: 'Profit and Loss for any date range (also split by class) and the Balance Sheet as of any date, following your fiscal year. Export to CSV, print, or save as PDF.',
+  reports: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
   settings: 'Company details and preferences, the closing date, backups and company files, and local AI access.',
 };
 
@@ -276,6 +276,27 @@ export const HELP_ARTICLES = [
     title: 'Run a Profit and Loss',
     body: 'Pick a period such as This month, This fiscal quarter or Last fiscal year, or a custom date range, to see income, cost of goods sold, expenses and net income. Fiscal periods follow the fiscal year start set in Settings.',
     keywords: 'profit loss income statement p&l net income revenue by class department location',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'cash-basis', area: 'reports', views: ['reports'],
+    title: 'See profit on a cash basis, by month, or against last year',
+    body: 'On the Profit and Loss, set Basis to Cash to count invoices and bills only as they are paid, Columns to Months or Quarters to split the period, or Compare with to show the previous period or previous year beside it with the change in dollars and percent.',
+    keywords: 'cash basis accrual monthly quarterly compare previous year prior period comparison columns',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'aging', area: 'reports', views: ['reports', 'sales/invoices', 'expenses/bills'],
+    title: 'See who owes you and what you owe',
+    body: 'Reports › A/R Aging Summary and A/P Aging Summary show open balances by customer or vendor in current, 1–30, 31–60, 61–90 and 91+ days past due as of any date; Open Invoices and Unpaid Bills list each open item. Credit not yet used shows as a negative amount.',
+    keywords: 'aging ar aging ap aging open invoices unpaid bills receivables payables past due overdue customer balance vendor balance',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'accountant-reports', area: 'reports', views: ['reports'],
+    title: 'Trial Balance, General Ledger and Cash Flows',
+    body: 'Under For my accountant, the Trial Balance shows every account’s debit or credit balance as of a date and the General Ledger every transaction by account with running balances; the Statement of Cash Flows explains the change in your bank balances by operating, investing and financing activity.',
+    keywords: 'trial balance general ledger gl cash flow statement of cash flows accountant tax',
     go: { label: 'Go to Reports', view: 'reports' },
   },
   {

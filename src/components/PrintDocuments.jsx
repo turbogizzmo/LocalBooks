@@ -21,7 +21,7 @@ const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeri
 export const longDate = (iso) => (iso ? LONG_DATE.format(new Date(`${iso}T00:00:00Z`)) : '');
 
 /** Company block on the left; logo pinned to the top-right with the document title beneath it. */
-function DocHeader({ company, title, subtitle }) {
+export function DocHeader({ company, title, subtitle }) {
   const lines = [company.legalName && company.legalName !== company.name ? company.legalName : null, company.address, [company.phone, company.email].filter(Boolean).join(' · '), company.ein ? `EIN ${company.ein}` : null]
     .filter(Boolean)
     .join('\n');
@@ -152,7 +152,10 @@ const LINE_CLASS = { section: 'doc-line-section', account: '', subtotal: 'doc-li
  */
 export function StatementDocument({ company, title, subtitle, lines, footer, columns = null }) {
   const formatCents = (cents) => formatMoney(cents, null);
-  const heads = columns ?? ['Total'];
+  // Columns are labels or { label, kind }; a `percent` column holds basis points.
+  const heads = (columns ?? ['Total']).map((c) => (typeof c === 'string' ? c : c.label));
+  const kinds = (columns ?? []).map((c) => (typeof c === 'string' ? null : c.kind));
+  const format = (c, cents) => (kinds[c] === 'percent' ? `${(cents / 100).toFixed(1)}%` : formatCents(cents));
   const amounts = (line) => (columns ? line.amountsCents : [line.amountCents]);
   return (
     <article className="doc">
@@ -177,7 +180,7 @@ export function StatementDocument({ company, title, subtitle, lines, footer, col
             <tr key={`${i}-${line.label}`} className={LINE_CLASS[line.kind]}>
               <td style={{ paddingLeft: `${6 + line.depth * 14}pt` }}>{line.label}</td>
               {amounts(line).map((cents, c) => (
-                <td key={c} className="doc-num">{cents !== null && cents !== undefined ? formatCents(cents) : ''}</td>
+                <td key={c} className="doc-num">{cents !== null && cents !== undefined ? format(c, cents) : ''}</td>
               ))}
             </tr>
           ))}

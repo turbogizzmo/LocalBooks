@@ -12,7 +12,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::ledger::{db_err, format_money};
+use crate::ledger::{db_err, format_money, mul_div_round};
 use crate::preferences::{currency_symbol, fiscal_start_month, fiscal_year_bounds};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -167,6 +167,117 @@ async fn debit_net_filtered(pool: &SqlitePool, from: Option<NaiveDate>, to: Naiv
 
 const PL_TYPES: &[&str] = &["INCOME", "COST_OF_GOODS_SOLD", "EXPENSE", "OTHER_INCOME", "OTHER_EXPENSE"];
 
+/// Income and expense movement for a period on either basis.
+async fn pl_movement(
+    pool: &SqlitePool,
+    chart: &Chart,
+    start: NaiveDate,
+    end: NaiveDate,
+    filter: Option<&ClassFilter>,
+    basis: Basis,
+) -> Result<HashMap<i64, i64>, String> {
+    match basis {
+        Basis::Accrual => debit_net_filtered(pool, Some(start), end, filter).await,
+        Basis::Cash => cash_basis_movement(pool, chart, start, end, filter).await,
+    }
+}
+
+/// Journal entries whose income and expense are recognized only as they are settled on a cash
+/// basis: invoices, bills, credit memos kept as credit, vendor credits, and the voids of those.
+const DEFERRED_ENTRIES: &str = "WITH deferred AS (
+        SELECT e.id FROM journal_entries e
+        WHERE e.source_type IN ('INVOICE', 'BILL', 'VENDOR_CREDIT')
+           OR (e.source_type = 'CREDIT_MEMO' AND (SELECT refund_account_id FROM credit_memos WHERE id = e.source_id) IS NULL)
+    )";
+
+/// Cash-basis movement: everything paid at the time (sales receipts, expenses, checks, deposits,
+/// journal entries, payment FX differences) counts on its date as on the accrual basis; an
+/// invoice, bill or credit counts in proportion to how much of it was settled in the period, on
+/// the settlement dates (payments, and credits applied or refunded). Two documents settled against
+/// each other with a credit cancel out, as no cash moved.
+async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate, end: NaiveDate, filter: Option<&ClassFilter>) -> Result<HashMap<i64, i64>, String> {
+    let ids = filter.map(|f| serde_json::to_string(&f.class_ids).unwrap_or_else(|_| "[]".into()));
+    let unclassified = filter.is_some_and(|f| f.unclassified);
+    let class_clause = "(?3 IS NULL
+                OR l.class_id IN (SELECT a.class_id FROM v_class_ancestry a JOIN json_each(?3) j ON j.value = a.ancestor_id)
+                OR (?4 AND l.class_id IS NULL))";
+    let immediate: Vec<(i64, i64)> = sqlx::query_as(&format!(
+        "{DEFERRED_ENTRIES}
+         SELECT l.account_id, SUM(l.debit_cents) - SUM(l.credit_cents)
+         FROM v_posted_lines l JOIN journal_entries e ON e.id = l.journal_entry_id
+         WHERE l.entry_date BETWEEN ?1 AND ?2 AND {class_clause}
+           AND e.id NOT IN (SELECT id FROM deferred)
+           AND (e.reverses_entry_id IS NULL OR e.reverses_entry_id NOT IN (SELECT id FROM deferred))
+         GROUP BY l.account_id"
+    ))
+    .bind(start)
+    .bind(end)
+    .bind(&ids)
+    .bind(unclassified)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let mut movement: HashMap<i64, i64> = immediate.into_iter().collect();
+
+    // (document's journal entry, document total, amount settled in the period)
+    let settled: Vec<(i64, i64, i64)> = sqlx::query_as(
+        "SELECT * FROM (
+            SELECT i.journal_entry_id, COALESCE(i.home_total_cents, i.total_cents),
+                   COALESCE((SELECT SUM(COALESCE(p.ar_relief_cents, p.amount_cents)) FROM invoice_payments p
+                             WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
+                 + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a
+                             WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0) AS settled
+            FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL
+            UNION ALL
+            SELECT b.journal_entry_id, b.total_cents,
+                   COALESCE((SELECT SUM(p.amount_cents) FROM bill_payments p WHERE p.bill_id = b.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
+                 + COALESCE((SELECT SUM(a.amount_cents) FROM vendor_credit_applications a
+                             WHERE a.bill_id = b.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
+            FROM bills b WHERE b.is_voided = 0 AND b.journal_entry_id IS NOT NULL
+            UNION ALL
+            SELECT m.journal_entry_id, m.total_cents,
+                   COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a
+                             WHERE a.credit_memo_id = m.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
+                 + COALESCE((SELECT SUM(r.amount_cents) FROM credit_refunds r JOIN journal_entries re ON re.id = r.journal_entry_id
+                             WHERE r.credit_memo_id = m.id AND re.is_voided = 0 AND r.refund_date BETWEEN ?1 AND ?2), 0)
+            FROM credit_memos m WHERE m.is_voided = 0 AND m.refund_account_id IS NULL AND m.journal_entry_id IS NOT NULL
+            UNION ALL
+            SELECT c.journal_entry_id, c.total_cents,
+                   COALESCE((SELECT SUM(a.amount_cents) FROM vendor_credit_applications a
+                             WHERE a.vendor_credit_id = c.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
+                 + COALESCE((SELECT SUM(r.amount_cents) FROM vendor_credit_refunds r JOIN journal_entries re ON re.id = r.journal_entry_id
+                             WHERE r.vendor_credit_id = c.id AND re.is_voided = 0 AND r.refund_date BETWEEN ?1 AND ?2), 0)
+            FROM vendor_credits c WHERE c.is_voided = 0 AND c.journal_entry_id IS NOT NULL
+         ) WHERE settled > 0",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+
+    let pl_accounts: std::collections::HashSet<i64> =
+        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
+    for (entry_id, total, paid) in settled {
+        let lines: Vec<(i64, i64)> = sqlx::query_as(&format!(
+            "SELECT l.account_id, l.debit_cents - l.credit_cents FROM journal_lines l WHERE l.journal_entry_id = ?5 AND {class_clause}"
+        ))
+        .bind(start)
+        .bind(end)
+        .bind(&ids)
+        .bind(unclassified)
+        .bind(entry_id)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+        for (account, net) in lines.into_iter().filter(|(a, _)| pl_accounts.contains(a)) {
+            let share = mul_div_round(net, paid.min(total), total).ok_or("RPT_OVERFLOW: amount out of range")?;
+            *movement.entry(account).or_insert(0) += share;
+        }
+    }
+    Ok(movement)
+}
+
 /// Net income (credit-positive) of all P&L accounts in a debit-net movement map.
 fn net_income(chart: &Chart, debit_net: &HashMap<i64, i64>) -> i64 {
     -chart
@@ -274,11 +385,31 @@ pub async fn profit_and_loss(pool: &SqlitePool, start_date: NaiveDate, end_date:
 
 /// Profit & Loss limited to the lines of the classes in `filter` (all lines when `None`).
 pub async fn profit_and_loss_filtered(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate, filter: Option<&ClassFilter>) -> Result<ProfitAndLoss, String> {
+    profit_and_loss_basis(pool, start_date, end_date, filter, Basis::Accrual).await
+}
+
+/// Accrual (income when invoiced, expenses when billed) or cash (when paid).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Basis {
+    #[default]
+    Accrual,
+    Cash,
+}
+
+/// Profit & Loss on either basis, optionally limited to some classes.
+pub async fn profit_and_loss_basis(
+    pool: &SqlitePool,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    filter: Option<&ClassFilter>,
+    basis: Basis,
+) -> Result<ProfitAndLoss, String> {
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let chart = Chart::load(pool).await?;
-    let movement = debit_net_filtered(pool, Some(start_date), end_date, filter).await?;
+    let movement = pl_movement(pool, &chart, start_date, end_date, filter, basis).await?;
     let pl = build_pl(Builder::new(&chart, chart.natural(&movement)), None);
     debug_assert_eq!(pl.net, net_income(&chart, &movement));
 
@@ -441,6 +572,233 @@ pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, 
     columns.push(ClassColumn { class_id: None, label: "Total".into(), kind: "total", depth: 0, is_total: true });
 
     Ok(ProfitAndLossByClass { start_date, end_date, columns, lines, currency_symbol: currency_symbol(pool).await? })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatedTrialBalance {
+    pub as_of: NaiveDate,
+    pub fiscal_year_start: NaiveDate,
+    pub rows: Vec<crate::reports::TrialBalanceRow>,
+    pub total_debit_cents: i64,
+    pub total_credit_cents: i64,
+}
+
+/// Trial balance as of a date: balance sheet accounts as of that date, income and expense accounts
+/// for the fiscal year to date, and earlier years' profit in Retained Earnings, as the desktop
+/// report shows it. Debits always equal credits.
+pub async fn trial_balance_as_of(pool: &SqlitePool, as_of: NaiveDate) -> Result<DatedTrialBalance, String> {
+    let chart = Chart::load(pool).await?;
+    let (fiscal_start, _) = fiscal_year_bounds(as_of, fiscal_start_month(pool).await?);
+    let cumulative = debit_net(pool, None, as_of).await?;
+    let prior = match fiscal_start.pred_opt() {
+        Some(day_before) => debit_net(pool, None, day_before).await?,
+        None => HashMap::new(),
+    };
+    let prior_net_income = net_income(&chart, &prior);
+    let order: Vec<(i64, Option<String>, String, String)> = sqlx::query_as(
+        "SELECT id, account_number, full_name, account_type_name FROM v_chart_of_accounts ORDER BY type_sort_order, COALESCE(account_number, ''), full_name",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let retained = chart.accounts.iter().find(|a| a.is_system && a.account_type == "EQUITY" && a.name == "Retained Earnings").map(|a| a.id);
+    let is_pl: HashMap<i64, bool> = chart.accounts.iter().map(|a| (a.id, PL_TYPES.contains(&a.account_type.as_str()))).collect();
+
+    let mut tb = DatedTrialBalance { as_of, fiscal_year_start: fiscal_start, rows: Vec::new(), total_debit_cents: 0, total_credit_cents: 0 };
+    for (account_id, account_number, full_name, account_type_name) in order {
+        let mut net = cumulative.get(&account_id).copied().unwrap_or(0);
+        if is_pl.get(&account_id).copied().unwrap_or(false) {
+            net -= prior.get(&account_id).copied().unwrap_or(0);
+        }
+        if Some(account_id) == retained {
+            net -= prior_net_income; // profit is a credit
+        }
+        if net == 0 {
+            continue;
+        }
+        let (debit_cents, credit_cents) = if net > 0 { (net, 0) } else { (0, -net) };
+        tb.total_debit_cents += debit_cents;
+        tb.total_credit_cents += credit_cents;
+        tb.rows.push(crate::reports::TrialBalanceRow { account_id, account_number, full_name, account_type_name, debit_cents, credit_cents });
+    }
+    Ok(tb)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CashFlowStatement {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub lines: Vec<ReportLine>,
+    pub net_change_cents: i64,
+    pub cash_start_cents: i64,
+    pub cash_end_cents: i64,
+    pub currency_symbol: String,
+}
+
+/// Statement of Cash Flows by the indirect method. Cash is the Bank accounts. Net income is
+/// adjusted by the change in every other current asset and liability (operating), fixed and other
+/// assets (investing), and long-term liabilities and equity (financing), so the net change always
+/// equals the change in bank balances.
+pub async fn cash_flow(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<CashFlowStatement, String> {
+    if end_date < start_date {
+        return Err("RPT_BAD_RANGE: the end date is before the start date".into());
+    }
+    let chart = Chart::load(pool).await?;
+    let movement = debit_net(pool, Some(start_date), end_date).await?;
+    let before = match start_date.pred_opt() {
+        Some(day) => debit_net(pool, None, day).await?,
+        None => HashMap::new(),
+    };
+    let net = net_income(&chart, &movement);
+    let mut lines: Vec<ReportLine> = Vec::new();
+    let mut push = |kind, label: String, depth, amount: Option<i64>, account_id| lines.push(ReportLine { kind, label, depth, amount_cents: amount, account_id });
+    // Cash goes up when an asset goes down or a liability or equity account goes up.
+    let section = |types: &[&str]| -> Vec<(i64, String, i64)> {
+        chart
+            .accounts
+            .iter()
+            .filter(|a| types.contains(&a.account_type.as_str()))
+            .filter_map(|a| movement.get(&a.id).filter(|m| **m != 0).map(|m| (a.id, a.label.clone(), -m)))
+            .collect()
+    };
+    let operating = section(&["ACCOUNTS_RECEIVABLE", "OTHER_CURRENT_ASSET", "ACCOUNTS_PAYABLE", "CREDIT_CARD", "OTHER_CURRENT_LIABILITY"]);
+    let investing = section(&["FIXED_ASSET", "OTHER_ASSET"]);
+    let financing = section(&["LONG_TERM_LIABILITY", "EQUITY"]);
+
+    push(LineKind::Section, "OPERATING ACTIVITIES".into(), 0, None, None);
+    push(LineKind::Account, "Net Income".into(), 1, Some(net), None);
+    let mut operating_total = net;
+    if !operating.is_empty() {
+        push(LineKind::Section, "Adjustments to reconcile Net Income to net cash provided by operations".into(), 1, None, None);
+        for (id, label, amount) in &operating {
+            push(LineKind::Account, label.clone(), 2, Some(*amount), Some(*id));
+            operating_total += amount;
+        }
+    }
+    push(LineKind::Total, "Net cash provided by operating activities".into(), 0, Some(operating_total), None);
+    let mut group = |title: &str, total_label: &str, rows: &[(i64, String, i64)]| -> i64 {
+        if rows.is_empty() {
+            return 0;
+        }
+        push(LineKind::Section, title.into(), 0, None, None);
+        let total: i64 = rows.iter().map(|r| r.2).sum();
+        for (id, label, amount) in rows {
+            push(LineKind::Account, label.clone(), 1, Some(*amount), Some(*id));
+        }
+        push(LineKind::Total, total_label.into(), 0, Some(total), None);
+        total
+    };
+    let investing_total = group("INVESTING ACTIVITIES", "Net cash provided by investing activities", &investing);
+    let financing_total = group("FINANCING ACTIVITIES", "Net cash provided by financing activities", &financing);
+    let change = operating_total + investing_total + financing_total;
+    let is_cash = |a: &&Account| a.account_type == "BANK";
+    let cash_start: i64 = chart.accounts.iter().filter(is_cash).filter_map(|a| before.get(&a.id)).sum();
+    let cash_change: i64 = chart.accounts.iter().filter(is_cash).filter_map(|a| movement.get(&a.id)).sum();
+    debug_assert_eq!(change, cash_change, "the statement ties to the bank accounts");
+    push(LineKind::Net, "Net cash increase for period".into(), 0, Some(change), None);
+    push(LineKind::Account, "Cash at beginning of period".into(), 0, Some(cash_start), None);
+    push(LineKind::Net, "Cash at end of period".into(), 0, Some(cash_start + cash_change), None);
+    Ok(CashFlowStatement {
+        start_date,
+        end_date,
+        lines,
+        net_change_cents: change,
+        cash_start_cents: cash_start,
+        cash_end_cents: cash_start + cash_change,
+        currency_symbol: currency_symbol(pool).await?,
+    })
+}
+
+/// One column of a multi-period Profit & Loss.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeriodColumn {
+    pub label: String,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeriodReportInput {
+    pub columns: Vec<PeriodColumn>,
+    /// Adds a Total column (the sum of the period columns).
+    #[serde(default)]
+    pub total: bool,
+    /// Adds "$ Change" and "% Change" columns comparing the first column with the second.
+    #[serde(default)]
+    pub compare: bool,
+    #[serde(default)]
+    pub basis: Basis,
+    #[serde(default)]
+    pub class_filter: Option<ClassFilter>,
+}
+
+/// Profit & Loss with a column per period (months, quarters, or this period against an earlier
+/// one), every column with the same rows. `% Change` amounts are basis points (12.5% = 1250).
+pub async fn profit_and_loss_periods(pool: &SqlitePool, input: &PeriodReportInput) -> Result<ProfitAndLossByClass, String> {
+    if input.columns.is_empty() || input.columns.len() > 36 {
+        return Err("RPT_BAD_COLUMNS: choose between 1 and 36 periods".into());
+    }
+    if input.columns.iter().any(|c| c.end_date < c.start_date) {
+        return Err("RPT_BAD_RANGE: a period ends before it starts".into());
+    }
+    if input.compare && input.columns.len() != 2 {
+        return Err("RPT_BAD_COMPARE: a comparison needs exactly two periods".into());
+    }
+    let chart = Chart::load(pool).await?;
+    let mut movements = Vec::with_capacity(input.columns.len());
+    for c in &input.columns {
+        movements.push(pl_movement(pool, &chart, c.start_date, c.end_date, input.class_filter.as_ref(), input.basis).await?);
+    }
+    // Rows come from every period together, so each column lines up.
+    let mut union: HashMap<i64, i64> = HashMap::new();
+    for m in &movements {
+        for (account, net) in m {
+            *union.entry(*account).or_insert(0) += net.abs();
+        }
+    }
+    let shape = chart.natural(&union);
+    let shaped = build_pl(Builder::new(&chart, shape.clone()), None);
+    let bodies: Vec<PlBody> = movements
+        .iter()
+        .map(|m| build_pl(Builder { chart: &chart, shape: shape.clone(), natural: chart.natural(m), lines: Vec::new() }, Some(shaped.has_net_other)))
+        .collect();
+    let mut columns: Vec<ClassColumn> =
+        input.columns.iter().map(|c| ClassColumn { class_id: None, label: c.label.clone(), kind: "period", depth: 0, is_total: false }).collect();
+    if input.total {
+        columns.push(ClassColumn { class_id: None, label: "Total".into(), kind: "total", depth: 0, is_total: true });
+    }
+    if input.compare {
+        columns.push(ClassColumn { class_id: None, label: "$ Change".into(), kind: "change", depth: 0, is_total: false });
+        columns.push(ClassColumn { class_id: None, label: "% Change".into(), kind: "percent", depth: 0, is_total: false });
+    }
+    let lines = shaped
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let mut amounts: Vec<Option<i64>> = bodies.iter().map(|b| b.lines[i].amount_cents).collect();
+            if input.total {
+                amounts.push(line.amount_cents.map(|_| amounts.iter().map(|a| a.unwrap_or(0)).sum()));
+            }
+            if input.compare {
+                let (current, previous) = (amounts[0], amounts[1]);
+                amounts.push(current.zip(previous).map(|(c, p)| c - p));
+                amounts.push(current.zip(previous).and_then(|(c, p)| if p == 0 { None } else { mul_div_round(c - p, 10_000, p.abs()) }));
+            }
+            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: amounts }
+        })
+        .collect();
+    Ok(ProfitAndLossByClass {
+        start_date: input.columns.iter().map(|c| c.start_date).min().unwrap(),
+        end_date: input.columns.iter().map(|c| c.end_date).max().unwrap(),
+        columns,
+        lines,
+        currency_symbol: currency_symbol(pool).await?,
+    })
 }
 
 /// The columns for class `id` and its subclasses, as classic desktop software lays them out: a class
@@ -630,6 +988,78 @@ mod tests {
         assert_eq!(row("Net Income"), [Some(30_000), Some(40_000), Some(500), Some(70_500)]);
         assert_eq!(row("Net Other Income"), [Some(0), Some(0), Some(500), Some(500)]);
         assert_eq!(row("6300 Rent & Lease"), [Some(30_000), Some(0), Some(0), Some(30_000)]);
+    }
+
+    #[tokio::test]
+    async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
+        let pool = test_pool().await;
+        let (checking, services, rent) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, account_id(&pool, "6300").await);
+        let invoice = |day: &str, cents: i64| {
+            let pool = pool.clone();
+            let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+                "customerName": "Acme", "issueDate": day, "dueDate": "2026-12-31",
+                "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": services }]
+            }))
+            .unwrap();
+            async move { crate::invoices::create_and_post_invoice(&pool, input).await.unwrap().id }
+        };
+        let pay = |invoice_id, day, cents| {
+            crate::invoices::record_payment(
+                &pool,
+                crate::invoices::PaymentInput { invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+            )
+        };
+        let first = invoice("2026-01-10", 100_000).await;
+        post(&pool, ymd(2026, 1, 15), rent, checking, 10_000).await;
+        pay(first, ymd(2026, 2, 5), 40_000).await.unwrap();
+        pay(first, ymd(2026, 3, 3), 60_000).await.unwrap();
+        let second = invoice("2026-03-01", 50_000).await;
+        let memo = crate::credits::create_credit_memo(
+            &pool,
+            crate::credits::CreditMemoInput {
+                customer_name: "Acme".into(),
+                credit_date: ymd(2026, 3, 10),
+                memo: None,
+                refund_account_id: None,
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: services, class_id: None }],
+            },
+        )
+        .await
+        .unwrap();
+        crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: second, amount_cents: 20_000, applied_date: ymd(2026, 3, 12) }).await.unwrap();
+        pay(second, ymd(2026, 3, 20), 30_000).await.unwrap();
+
+        let net = |basis, m: u32, last: u32| profit_and_loss_basis(&pool, ymd(2026, m, 1), ymd(2026, m, last), None, basis);
+        assert_eq!(net(Basis::Accrual, 1, 31).await.unwrap().net_income_cents, 90_000);
+        assert_eq!(net(Basis::Cash, 1, 31).await.unwrap().net_income_cents, -10_000, "January: only the rent was paid");
+        assert_eq!(net(Basis::Cash, 2, 28).await.unwrap().net_income_cents, 40_000);
+        assert_eq!(net(Basis::Accrual, 3, 31).await.unwrap().net_income_cents, 30_000, "invoice 50,000 less the 20,000 credit");
+        assert_eq!(net(Basis::Cash, 3, 31).await.unwrap().net_income_cents, 90_000, "60,000 + 30,000 received; the credit applied nets to zero");
+        let year = |basis| profit_and_loss_basis(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31), None, basis);
+        assert_eq!(year(Basis::Cash).await.unwrap().net_income_cents, year(Basis::Accrual).await.unwrap().net_income_cents, "everything is paid by year end");
+
+        let report = profit_and_loss_periods(
+            &pool,
+            &PeriodReportInput {
+                columns: vec![
+                    PeriodColumn { label: "Mar 2026".into(), start_date: ymd(2026, 3, 1), end_date: ymd(2026, 3, 31) },
+                    PeriodColumn { label: "Feb 2026".into(), start_date: ymd(2026, 2, 1), end_date: ymd(2026, 2, 28) },
+                ],
+                total: false,
+                compare: true,
+                basis: Basis::Cash,
+                class_filter: None,
+            },
+        )
+        .await
+        .unwrap();
+        let labels: Vec<&str> = report.columns.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["Mar 2026", "Feb 2026", "$ Change", "% Change"]);
+        let net_row = report.lines.iter().find(|l| l.label == "Net Income").unwrap();
+        assert_eq!(net_row.amounts_cents, [Some(90_000), Some(40_000), Some(50_000), Some(12_500)], "up 125%");
+        assert!(report.lines.iter().all(|l| l.label != "6300 Rent & Lease"), "rent was paid in January, outside both columns");
+        let services_row = report.lines.iter().find(|l| l.label == "4100 Services").unwrap();
+        assert_eq!(services_row.amounts_cents, [Some(90_000), Some(40_000), Some(50_000), Some(12_500)]);
     }
 
     #[tokio::test]
