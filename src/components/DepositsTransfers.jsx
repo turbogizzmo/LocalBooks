@@ -3,6 +3,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
@@ -24,6 +25,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
+  const formClass = useFormClass(accounts);
 
   useEffect(() => bankRef.current?.focus(), []);
   useEffect(() => {
@@ -48,6 +50,9 @@ function DepositForm({ accounts, onPosted, onCancel }) {
     if (bankId === null) return setError('Choose the bank account to deposit into.');
     if (other.invalid > 0) return setError(`${other.invalid} other-funds row(s) need an account and an amount above zero.`);
     if (picked.size === 0 && other.lines.length === 0) return setError('Select payments to deposit or add other funds.');
+    const otherLines = formClass.apply(other.lines);
+    const warning = formClass.missing(otherLines);
+    if (warning) return setError(warning);
     setBusy(true);
     try {
       await api.postBankDeposit({
@@ -55,12 +60,13 @@ function DepositForm({ accounts, onPosted, onCancel }) {
         depositDate: date,
         memo: memo.trim() || null,
         items: items.filter((i) => picked.has(key(i))).map((i) => ({ kind: i.kind, id: i.id })),
-        otherLines: other.lines,
+        otherLines,
       });
       onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}.`);
       setPicked(new Set());
       setRows([blankSplit(null)]);
       setMemo('');
+      formClass.reset();
       setError(null);
     } catch (err) {
       setError(errorText(err));
@@ -77,6 +83,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
           <span className="qb-label">Deposit to</span>
           <AccountSelect ref={bankRef} accounts={accounts} filter={isBank} value={bankId} onChange={setBankId} className="qb-input w-[200px]" />
         </label>
+        {formClass.header}
         <label>
           <span className="qb-label">Date</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -145,7 +152,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
         </tbody>
       </table>
       <div className="border-y border-qb-border bg-qb-canvas px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Add funds to this deposit</div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses />
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">

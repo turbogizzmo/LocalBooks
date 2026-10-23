@@ -11,6 +11,9 @@ export const QUICK_CREATE = [
       { id: 'receive-payment', label: 'Receive Payment', view: 'sales/invoices' },
       { id: 'estimate', label: 'Estimate', view: 'sales/estimates' },
       { id: 'sales-receipt', label: 'Sales Receipt', view: 'sales/all' },
+      { id: 'credit-memo', label: 'Credit Memo', view: 'sales/credits' },
+      { id: 'refund-receipt', label: 'Refund Receipt', view: 'sales/credits' },
+      { id: 'statement', label: 'Statement', view: 'sales/statements' },
     ],
   },
   {
@@ -20,7 +23,9 @@ export const QUICK_CREATE = [
       { id: 'expense', label: 'Expense', view: 'expenses/expenses' },
       { id: 'check', label: 'Check', view: 'expenses/expenses' },
       { id: 'bill', label: 'Bill', view: 'expenses/bills' },
+      { id: 'purchase-order', label: 'Purchase Order', view: 'expenses/purchase-orders' },
       { id: 'pay-bills', label: 'Pay Bills', view: 'expenses/bills' },
+      { id: 'vendor-credit', label: 'Vendor Credit', view: 'expenses/credits' },
     ],
   },
   {

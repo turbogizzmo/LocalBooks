@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import ClassSelect, { classLabel, tracksClasses, useClasses } from './ClassSelect.jsx';
+import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, qty: '', rate: '' });
+export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
@@ -39,6 +39,8 @@ export function summarizeLines(lines) {
       rateCents: state.rate,
       incomeAccountId: line.accountId,
       classId: line.classId ?? null,
+      isTaxable: Boolean(line.isTaxable),
+      amountCents: state.amount,
     }));
   return { evaluated, filled, invalidCount, total, payload };
 }
@@ -49,14 +51,15 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * Inline-editable line items. Clicking any cell turns that row into inputs immediately, focused on
  * the clicked column; Enter moves to the next row (adding one at the end), Escape leaves edit mode.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
   const tableRef = useRef(null);
   const withProducts = Array.isArray(products);
-  const classes = useClasses();
-  const withClasses = tracksClasses(classes) || lines.some((l) => l.classId != null);
+  const tracking = useClassTracking();
+  const { classes } = tracking;
+  const withClasses = showsClassColumn(tracking, lines);
 
   useEffect(() => {
     if (active === null) return;
@@ -90,6 +93,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       productId,
       description: product.description ?? product.name,
       accountId: product.incomeAccountId,
+      isTaxable: Boolean(product.isTaxable),
       rate: product.rateCents > 0 ? centsToInput(product.rateCents) : line.rate,
       qty: line.qty.trim() === '' ? '1' : line.qty,
     });
@@ -106,6 +110,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <col className="w-[64px]" />
         <col className="w-[100px]" />
         <col className="w-[108px]" />
+        {withTax && <col className="w-[40px]" />}
         <col className="w-[28px]" />
       </colgroup>
       <thead>
@@ -118,6 +123,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           <th className="qb-grid-head text-right">Qty</th>
           <th className="qb-grid-head text-right">Rate</th>
           <th className="qb-grid-head text-right">Amount</th>
+          {withTax && <th className="qb-grid-head text-center" title="Taxable">Tax</th>}
           <th className="qb-grid-head" aria-label="Remove" />
         </tr>
       </thead>
@@ -245,6 +251,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
               <td className="qb-grid-cell num font-semibold">
                 {state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
               </td>
+              {withTax && (
+                <td className="qb-grid-cell cell-flush text-center">
+                  <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />
+                </td>
+              )}
               <td className="qb-grid-cell cell-flush text-center">
                 <button
                   type="button"

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
+import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMinutes, parseHoursToMinutes, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -84,6 +85,8 @@ function SingleActivity({ employees, customers, products, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const employeeRef = useRef(null);
+  const tracking = useClassTracking();
+  const [classId, setClassId] = useState(null);
 
   useEffect(() => employeeRef.current?.focus(), []);
 
@@ -103,7 +106,7 @@ function SingleActivity({ employees, customers, products, onSaved }) {
     setBusy(true);
     try {
       await api.createTimeActivities([
-        { employeeId, activityDate: date, customerId, productServiceId: serviceId, minutes, billable, hourlyRateCents: billable ? rateCents : null, description: description.trim() || null },
+        { employeeId, activityDate: date, customerId, productServiceId: serviceId, minutes, billable, hourlyRateCents: billable ? rateCents : null, description: description.trim() || null, classId },
       ]);
       onSaved(`Recorded ${formatMinutes(minutes)} for ${employees.find((e) => e.id === employeeId)?.name}.`);
       setHours('');
@@ -159,6 +162,12 @@ function SingleActivity({ employees, customers, products, onSaved }) {
           <span className="qb-label">Time (hh:mm or 1.5)</span>
           <input className="qb-input num w-[90px]" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0:00" aria-invalid={hours !== '' && minutes === null} />
         </label>
+        {tracking.enabled && tracking.hasClasses && (
+          <label>
+            <span className="qb-label">Class</span>
+            <ClassSelect className="qb-input w-[160px]" classes={tracking.classes} value={classId} onChange={setClassId} />
+          </label>
+        )}
       </div>
       <div className="flex items-center gap-2 px-2 pb-1">
         <input className="qb-input flex-1" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description of work" />
@@ -186,6 +195,8 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const employeeRef = useRef(null);
+  const tracking = useClassTracking();
+  const [classId, setClassId] = useState(null);
 
   useEffect(() => employeeRef.current?.focus(), []);
 
@@ -215,6 +226,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
             billable: r.billable,
             hourlyRateCents: r.billable ? rateCents : null,
             description: r.description.trim() || null,
+            classId,
           });
         }
       });
@@ -246,6 +258,12 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           <span className="qb-label">Week starting (Monday)</span>
           <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
         </label>
+        {tracking.enabled && tracking.hasClasses && (
+          <label>
+            <span className="qb-label">Class</span>
+            <ClassSelect className="qb-input w-[160px]" classes={tracking.classes} value={classId} onChange={setClassId} />
+          </label>
+        )}
         <div className="ml-auto text-right">
           <div className="qb-label">Week total</div>
           <div className="num text-2xl font-semibold leading-none">{formatMinutes(rows.reduce((s, r) => s + rowTotal(r), 0))}</div>
@@ -450,7 +468,10 @@ export default function TimeTracking({ intent }) {
                   <td className="qb-grid-cell">{formatDate(a.activityDate)}</td>
                   <td className="qb-grid-cell font-semibold">{a.employeeName}</td>
                   <td className="qb-grid-cell">{a.customerName ?? ''}</td>
-                  <td className="qb-grid-cell">{a.serviceName ?? ''}</td>
+                  <td className="qb-grid-cell">
+                    {a.serviceName ?? ''}
+                    {a.className && <span className="ml-1 text-xs text-qb-ink-muted">· {a.className}</span>}
+                  </td>
                   <td className="qb-grid-cell text-qb-ink-muted" title={a.description ?? ''}>{a.description ?? ''}</td>
                   <td className="qb-grid-cell">{a.billable ? <span className="font-semibold text-qb-green-active">✓ Yes</span> : <span className="text-qb-ink-faint">No</span>}</td>
                   <td className="qb-grid-cell num">{a.hourlyRateCents !== null ? `${formatCents(a.hourlyRateCents)}/hr` : ''}</td>

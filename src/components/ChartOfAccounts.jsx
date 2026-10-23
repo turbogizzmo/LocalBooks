@@ -129,7 +129,7 @@ function AccountDialog({ account, accounts, types, onClose, onSaved }) {
   );
 }
 
-export default function ChartOfAccounts({ accounts, intent }) {
+export default function ChartOfAccounts({ accounts, intent, navigate }) {
   const types = useLedgerQuery(api.listAccountTypes).data ?? [];
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -216,7 +216,7 @@ export default function ChartOfAccounts({ accounts, intent }) {
                     <td className="qb-grid-cell" />
                   </tr>,
                   ...rows.map((a) => (
-                    <tr key={a.id} className={`qb-grid-row ${a.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ account: a })}>
+                    <tr key={a.id} className={`qb-grid-row ${a.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => navigate('accounting/register', 'open', { accountId: a.id })}>
                       <td className="qb-grid-cell text-qb-ink-muted">{a.accountNumber ?? ''}</td>
                       <td className="qb-grid-cell" title={a.fullName}>
                         <span style={{ paddingLeft: `${(query ? 0 : a.depth) * 16}px` }}>{query ? a.fullName : a.name}</span>
@@ -231,6 +231,7 @@ export default function ChartOfAccounts({ accounts, intent }) {
                         <RowMenu
                           label={`Actions for ${a.fullName}`}
                           items={[
+                            { label: 'Open register', onSelect: () => navigate('accounting/register', 'open', { accountId: a.id }) },
                             { label: 'Edit…', onSelect: () => setDialog({ account: a }) },
                             a.isActive
                               ? { label: 'Make inactive', disabled: a.isSystem, hint: a.isSystem ? 'LocalBooks posts to this account automatically' : undefined, onSelect: () => setActive(a, false) }
@@ -251,7 +252,7 @@ export default function ChartOfAccounts({ accounts, intent }) {
           </table>
         </div>
         <div className="flex-none border-t border-qb-border px-2 py-0.5 text-xs text-qb-ink-muted">
-          Double-click an account to edit it. Balances are shown for balance sheet accounts; see Reports › Profit and Loss for income and expenses over a period.
+          Double-click an account to open its register; edit it from the ▾ menu. Balances are shown for balance sheet accounts; see Reports › Profit and Loss for income and expenses over a period.
         </div>
       </section>
     </div>

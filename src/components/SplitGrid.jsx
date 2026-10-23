@@ -1,9 +1,21 @@
 import AccountSelect from './AccountSelect.jsx';
-import ClassSelect, { tracksClasses, useClasses } from './ClassSelect.jsx';
-import { formatCents, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
+import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
+import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
 export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, memo: '', amount: '', qty: '', rate: '' });
+
+/** Split rows for a posted bill's or expense's lines, to edit it. */
+export const splitRowsFrom = (lines) =>
+  lines.map((l) => ({
+    ...blankSplit(l.accountId),
+    productId: l.productServiceId ?? null,
+    classId: l.classId ?? null,
+    memo: l.memo ?? '',
+    amount: l.quantityE4 ? '' : centsToInput(l.amountCents),
+    qty: l.quantityE4 ? formatQuantity(l.quantityE4).replace(/,/g, '') : '',
+    rate: l.quantityE4 && l.rateCents ? centsToInput(l.rateCents) : '',
+  }));
 
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is
@@ -54,8 +66,9 @@ export function summarizeSplits(rows) {
  * column (once the company has classes) for documents whose lines carry one.
  */
 export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, currency = null, stockItems = [] }) {
-  const classes = useClasses();
-  const withClasses = classesAllowed && (tracksClasses(classes) || rows.some((r) => r.classId != null));
+  const tracking = useClassTracking();
+  const { classes } = tracking;
+  const withClasses = classesAllowed && showsClassColumn(tracking, rows);
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
   const withStock = withPricing && stockItems.length > 0;
   const pickItem = (key, productId) => {

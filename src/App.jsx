@@ -17,12 +17,22 @@ import JournalEntries from './components/JournalEntries.jsx';
 import AuditLog from './components/AuditLog.jsx';
 import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Classes from './components/Classes.jsx';
+import Reclassify from './components/Reclassify.jsx';
+import Register from './components/Register.jsx';
+import CreditMemos from './components/CreditMemos.jsx';
+import VendorCredits from './components/VendorCredits.jsx';
+import SalesTax from './components/SalesTax.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
+import Statements from './components/Statements.jsx';
+import Recurring, { useDueRecurring } from './components/Recurring.jsx';
+import PurchaseOrders from './components/PurchaseOrders.jsx';
+import Budgets from './components/Budgets.jsx';
+import GlobalSearch from './components/GlobalSearch.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
@@ -108,6 +118,7 @@ export default function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  const dueRecurring = useDueRecurring();
   const { item, parent } = findNav(view);
   const props = { accounts: list, intent, navigate: select };
 
@@ -120,6 +131,16 @@ export default function App() {
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
           <h1 className="text-lg font-semibold">{item.label}</h1>
           <div className="ml-auto flex min-w-0 items-center gap-3">
+          {dueRecurring > 0 && view !== 'accounting/recurring' && (
+            <button
+              type="button"
+              className="flex-none rounded-sm bg-qb-green-tint px-2 py-0.5 text-xs font-semibold text-qb-green-active hover:underline"
+              onClick={() => select('accounting/recurring')}
+            >
+              {dueRecurring} recurring transaction{dueRecurring === 1 ? '' : 's'} due
+            </button>
+          )}
+          <GlobalSearch navigate={select} />
           {storage.data && (
             <span
               className="flex min-w-0 max-w-[420px] items-center gap-1.5 text-xs text-qb-ink-muted"
@@ -161,22 +182,31 @@ export default function App() {
           {view === 'sales/all' && <AllSales {...props} />}
           {view === 'sales/invoices' && <Invoices {...props} />}
           {view === 'sales/estimates' && <Estimates {...props} />}
+          {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
           {view === 'sales/products' && <Products accounts={list} />}
+          {view === 'sales/tax' && <SalesTax accounts={list} />}
+          {view === 'sales/statements' && <Statements />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}
+          {view === 'expenses/credits' && <VendorCredits {...props} />}
+          {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
           {view === 'expenses/vendors' && <PartyList kind="vendor" />}
           {view === 'employees/time' && <TimeTracking {...props} />}
           {view === 'banking/feeds' && <BankFeed accounts={list} />}
           {view === 'banking/transfers' && <DepositsTransfers {...props} />}
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}
-          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} />}
+          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} navigate={select} />}
           {view === 'accounting/classes' && <Classes />}
+          {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
+          {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
+          {view === 'accounting/recurring' && <Recurring />}
+          {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
-          {view === 'reports' && <Reports />}
+          {view === 'reports' && <Reports navigate={select} intent={intent} />}
           {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
         </div>
       </main>

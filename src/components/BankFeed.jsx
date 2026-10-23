@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import BankColumnMapping from './BankColumnMapping.jsx';
 import BankConnections, { syncSummaryText } from './BankConnections.jsx';
@@ -82,6 +83,9 @@ export default function BankFeed({ accounts }) {
   const selectedIndex = pending.findIndex((t) => t.id === selectedId);
   const selected = selectedIndex >= 0 ? pending[selectedIndex] : null;
   const categoryId = selected ? (overrides[selected.id] ?? selected.suggestion?.accountId ?? null) : null;
+  const tracking = useClassTracking();
+  const [classes, setClasses] = useState({}); // bank line id → chosen class
+  const classId = selected ? (classes[selected.id] ?? null) : null;
 
   const reportImport = (r, path) => {
     const extras = [
@@ -130,7 +134,7 @@ export default function BankFeed({ accounts }) {
     if (!selected || categoryId === null) return;
     setBusy(true);
     try {
-      await api.approveBankTransaction(selected.id, categoryId);
+      await api.approveBankTransaction(selected.id, categoryId, classId);
       setFlashId(selected.id);
       setNotice({
         kind: 'success',
@@ -325,6 +329,12 @@ export default function BankFeed({ accounts }) {
                   <span className="mt-0.5 block text-xs text-qb-ink-muted">{ORIGIN_TEXT[selected.suggestion.origin]}</span>
                 )}
               </label>
+              {tracking.enabled && tracking.hasClasses && (
+                <label>
+                  <span className="qb-label">Class</span>
+                  <ClassSelect classes={tracking.classes} value={classId} onChange={(id) => setClasses((c) => ({ ...c, [selected.id]: id }))} />
+                </label>
+              )}
 
               <div className="rounded-xs border border-qb-border bg-qb-canvas px-2 py-1 text-xs">
                 <div className="mb-0.5 font-semibold text-qb-ink-muted">Journal entry preview</div>

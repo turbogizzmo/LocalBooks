@@ -21,7 +21,7 @@ const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeri
 export const longDate = (iso) => (iso ? LONG_DATE.format(new Date(`${iso}T00:00:00Z`)) : '');
 
 /** Company block on the left; logo pinned to the top-right with the document title beneath it. */
-function DocHeader({ company, title, subtitle }) {
+export function DocHeader({ company, title, subtitle }) {
   const lines = [company.legalName && company.legalName !== company.name ? company.legalName : null, company.address, [company.phone, company.email].filter(Boolean).join(' · '), company.ein ? `EIN ${company.ein}` : null]
     .filter(Boolean)
     .join('\n');
@@ -44,7 +44,10 @@ export function InvoiceDocument({ detail, company }) {
   const { invoice, items, payments } = detail;
   // A foreign-currency invoice prints in the customer's currency, with its ISO code.
   const formatCents = (cents) => formatMoney(cents, invoice.currencyCode);
-  const paid = payments.reduce((s, p) => s + p.amountCents, 0);
+  // Amount paid includes credit memos applied, which are not payments.
+  const paid = invoice.amountPaidCents ?? payments.reduce((s, p) => s + p.amountCents, 0);
+  const credits = invoice.creditsAppliedCents ?? 0;
+  const tax = invoice.taxCents ?? 0;
   const termsDays = Math.round((Date.parse(invoice.dueDate) - Date.parse(invoice.issueDate)) / 86_400_000);
   const terms = termsDays === 0 ? 'Due on receipt' : `Net ${termsDays}`;
   return (
@@ -118,6 +121,18 @@ export function InvoiceDocument({ detail, company }) {
 
       <table className="doc-totals">
         <tbody>
+          {tax > 0 && (
+            <>
+              <tr>
+                <td>Subtotal</td>
+                <td className="doc-num">{formatCents(invoice.totalCents - tax)}</td>
+              </tr>
+              <tr>
+                <td>{invoice.taxRateName ? `Sales tax (${invoice.taxRateName})` : 'Sales tax'}</td>
+                <td className="doc-num">{formatCents(tax)}</td>
+              </tr>
+            </>
+          )}
           <tr>
             <td>Total</td>
             <td className="doc-num">{formatCents(invoice.totalCents)}</td>
@@ -128,6 +143,12 @@ export function InvoiceDocument({ detail, company }) {
               <td className="doc-num">-{formatCents(p.amountCents)}</td>
             </tr>
           ))}
+          {credits > 0 && (
+            <tr>
+              <td>Credits applied</td>
+              <td className="doc-num">-{formatCents(credits)}</td>
+            </tr>
+          )}
           <tr className="doc-grand">
             <td>Balance due</td>
             <td className="doc-num">{formatCents(invoice.isVoided ? 0 : invoice.totalCents - paid)}</td>
@@ -152,7 +173,10 @@ const LINE_CLASS = { section: 'doc-line-section', account: '', subtotal: 'doc-li
  */
 export function StatementDocument({ company, title, subtitle, lines, footer, columns = null }) {
   const formatCents = (cents) => formatMoney(cents, null);
-  const heads = columns ?? ['Total'];
+  // Columns are labels or { label, kind }; a `percent` column holds basis points.
+  const heads = (columns ?? ['Total']).map((c) => (typeof c === 'string' ? c : c.label));
+  const kinds = (columns ?? []).map((c) => (typeof c === 'string' ? null : c.kind));
+  const format = (c, cents) => (kinds[c] === 'percent' ? `${(cents / 100).toFixed(1)}%` : formatCents(cents));
   const amounts = (line) => (columns ? line.amountsCents : [line.amountCents]);
   return (
     <article className="doc">
@@ -177,7 +201,7 @@ export function StatementDocument({ company, title, subtitle, lines, footer, col
             <tr key={`${i}-${line.label}`} className={LINE_CLASS[line.kind]}>
               <td style={{ paddingLeft: `${6 + line.depth * 14}pt` }}>{line.label}</td>
               {amounts(line).map((cents, c) => (
-                <td key={c} className="doc-num">{cents !== null && cents !== undefined ? formatCents(cents) : ''}</td>
+                <td key={c} className="doc-num">{cents !== null && cents !== undefined ? format(c, cents) : ''}</td>
               ))}
             </tr>
           ))}
@@ -220,4 +244,91 @@ export function useInvoicePrinter(onError) {
     </PrintPortal>
   ) : null;
   return [portal, print];
+}
+
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+function under1000(n) {
+  const words = [];
+  if (n >= 100) {
+    words.push(`${ONES[Math.floor(n / 100)]} Hundred`);
+    n %= 100;
+  }
+  if (n >= 20) {
+    words.push(TENS[Math.floor(n / 10)] + (n % 10 ? `-${ONES[n % 10]}` : ''));
+  } else if (n > 0) {
+    words.push(ONES[n]);
+  }
+  return words.join(' ');
+}
+
+/** 1234.56 → "One Thousand Two Hundred Thirty-Four and 56/100", as written on a check. */
+export function amountInWords(cents) {
+  let dollars = Math.floor(Math.abs(cents) / 100);
+  const rest = String(Math.abs(cents) % 100).padStart(2, '0');
+  if (dollars === 0) return `Zero and ${rest}/100`;
+  const parts = [];
+  for (const scale of ['', ' Thousand', ' Million', ' Billion']) {
+    const chunk = dollars % 1000;
+    if (chunk) parts.unshift(`${under1000(chunk)}${scale}`);
+    dollars = Math.floor(dollars / 1000);
+    if (!dollars) break;
+  }
+  return `${parts.join(' ')} and ${rest}/100`;
+}
+
+/** A voucher check: the check on top, then two stubs with the payee, amount and memo. */
+export function CheckDocument({ company, check, bankName }) {
+  const amount = formatMoney(check.totalCents, check.currencyCode);
+  const stub = (
+    <div className="check-stub">
+      <div className="check-stub-row">
+        <span>{check.payeeName ?? ''}</span>
+        <span>{formatDate(check.expenseDate)}</span>
+      </div>
+      <div className="check-stub-row">
+        <span>{check.memo ?? ''}</span>
+        <span className="doc-num">{amount}</span>
+      </div>
+      <div className="check-stub-row check-muted">
+        <span>{bankName}</span>
+        <span>{check.checkNumber ? `Check #${check.checkNumber}` : ''}</span>
+      </div>
+    </div>
+  );
+  return (
+    <article className="doc check">
+      <section className="check-face">
+        <div className="check-row">
+          <div>
+            <div className="doc-company-name">{company.name}</div>
+            <div className="doc-company-lines">{company.address}</div>
+          </div>
+          <div className="check-number">{check.checkNumber ?? ''}</div>
+        </div>
+        <div className="check-row check-date">
+          <span />
+          <span>Date {formatDate(check.expenseDate)}</span>
+        </div>
+        <div className="check-row check-payee">
+          <span>
+            Pay to the order of <strong>{check.payeeName ?? ''}</strong>
+          </span>
+          <span className="check-amount">**{amount}</span>
+        </div>
+        <div className="check-words">
+          {amountInWords(check.totalCents)}
+          {' '}
+          {'*'.repeat(12)} Dollars
+        </div>
+        <div className="check-row check-bottom">
+          <span>Memo {check.memo ?? ''}</span>
+          <span className="check-signature">Authorized signature</span>
+        </div>
+      </section>
+      {stub}
+      {stub}
+    </article>
+  );
 }

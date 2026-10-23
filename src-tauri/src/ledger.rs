@@ -156,14 +156,18 @@ pub enum EntrySource {
     BillPayment(i64),
     Check(i64),
     Transfer(i64),
+    CreditMemo(i64),
+    VendorCredit(i64),
     /// The reversing entry that voids the given journal entry.
     Reversal(i64),
+    /// A journal entry that moves posted lines to another class (see `classes::reclassify`).
+    Reclassification,
 }
 
 impl EntrySource {
     fn type_code(self) -> &'static str {
         match self {
-            EntrySource::Journal | EntrySource::Reversal(_) => "JOURNAL",
+            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => "JOURNAL",
             EntrySource::Invoice(_) => "INVOICE",
             EntrySource::ReceivePayment(_) => "RECEIVE_PAYMENT",
             EntrySource::Expense(_) => "EXPENSE",
@@ -173,12 +177,14 @@ impl EntrySource {
             EntrySource::BillPayment(_) => "BILL_PAYMENT",
             EntrySource::Check(_) => "CHECK",
             EntrySource::Transfer(_) => "TRANSFER",
+            EntrySource::CreditMemo(_) => "CREDIT_MEMO",
+            EntrySource::VendorCredit(_) => "VENDOR_CREDIT",
         }
     }
 
     fn source_id(self) -> Option<i64> {
         match self {
-            EntrySource::Journal | EntrySource::Reversal(_) => None,
+            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => None,
             EntrySource::Invoice(id)
             | EntrySource::ReceivePayment(id)
             | EntrySource::Expense(id)
@@ -187,7 +193,9 @@ impl EntrySource {
             | EntrySource::Bill(id)
             | EntrySource::BillPayment(id)
             | EntrySource::Check(id)
-            | EntrySource::Transfer(id) => Some(id),
+            | EntrySource::Transfer(id)
+            | EntrySource::CreditMemo(id)
+            | EntrySource::VendorCredit(id) => Some(id),
         }
     }
 
@@ -396,8 +404,10 @@ async fn write_entry(
                 Some(_) => {}
             }
         }
-        // A reversal must carry the original's classes even if one has since been made inactive.
-        if let Some(class_id) = line.class_id.filter(|c| source.reverses().is_none() && checked_classes.insert(*c)) {
+        // A reversal must carry the original's classes even if one has since been made inactive, and
+        // a reclassification moves lines out of a class that may be inactive (it checks the target).
+        let carries_existing = source.reverses().is_some() || source == EntrySource::Reclassification;
+        if let Some(class_id) = line.class_id.filter(|c| !carries_existing && checked_classes.insert(*c)) {
             crate::classes::check_usable(tx, class_id, &format!("JE: line {n}")).await?;
         }
 
@@ -456,17 +466,20 @@ pub async fn void_transaction(pool: &SqlitePool, journal_entry_id: i64) -> Resul
     }
 }
 
-/// Paid amount and status implied by an invoice's or bill's surviving (non-voided) payments.
-async fn recompute_paid(
+/// Paid amount and status implied by an invoice's or bill's surviving (non-voided) payments and
+/// applied credits.
+pub(crate) async fn recompute_paid(
     tx: &mut Transaction<'_, Sqlite>,
     document_table: &str,
     payment_table: &str,
     fk: &str,
     document_id: i64,
 ) -> Result<(), String> {
+    let credit_table = if document_table == "bills" { "vendor_credit_applications" } else { "credit_applications" };
     let (total, paid): (i64, i64) = sqlx::query_as(&format!(
         "SELECT d.total_cents,
                 COALESCE((SELECT SUM(amount_cents) FROM {payment_table} WHERE {fk} = d.id AND is_voided = 0), 0)
+              + COALESCE((SELECT SUM(amount_cents) FROM {credit_table} WHERE {fk} = d.id AND is_voided = 0), 0)
          FROM {document_table} d WHERE d.id = ?1"
     ))
     .bind(document_id)
@@ -529,7 +542,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     let doc = source_id.unwrap_or_default();
     let blocked: Option<String> = match source_type.as_str() {
         "INVOICE" => sqlx::query_scalar(
-            "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments applied; void those payments first'
+            "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments or credits applied; void or remove those first'
              FROM invoices WHERE id = ?1 AND amount_paid_cents <> 0",
         )
         .bind(doc)
@@ -555,10 +568,65 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?,
+        "CREDIT_MEMO" => sqlx::query_scalar(
+            "SELECT 'VOID_CREDIT_USED: credit memo #' || m.credit_number || ' has been applied to invoices or refunded; remove those first'
+             FROM credit_memos m WHERE m.id = ?1 AND (
+                 EXISTS (SELECT 1 FROM credit_applications a WHERE a.credit_memo_id = m.id AND a.is_voided = 0)
+                 OR EXISTS (SELECT 1 FROM credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
+                            WHERE r.credit_memo_id = m.id AND e.is_voided = 0))",
+        )
+        .bind(doc)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?,
+        "VENDOR_CREDIT" => sqlx::query_scalar(
+            "SELECT 'VOID_CREDIT_USED: this vendor credit has been applied to bills or refunded; remove those first'
+             FROM vendor_credits c WHERE c.id = ?1 AND (
+                 EXISTS (SELECT 1 FROM vendor_credit_applications a WHERE a.vendor_credit_id = c.id AND a.is_voided = 0)
+                 OR EXISTS (SELECT 1 FROM vendor_credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
+                            WHERE r.vendor_credit_id = c.id AND e.is_voided = 0))",
+        )
+        .bind(doc)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?,
         _ => None,
     };
     if let Some(reason) = blocked {
         return Err(reason);
+    }
+    // Lines moved to another class: voiding this entry would reverse them into their original class
+    // while the reclassifying entry still moves them, so that entry is voided first.
+    let reclassified_by: Option<i64> = sqlx::query_scalar(
+        "SELECT re.entry_number FROM class_reclassifications r
+         JOIN journal_lines l ON l.id = r.line_id
+         JOIN journal_entries re ON re.id = r.journal_entry_id
+         WHERE l.journal_entry_id = ?1 AND re.is_voided = 0
+         ORDER BY r.id DESC LIMIT 1",
+    )
+    .bind(journal_entry_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if let Some(reclass_number) = reclassified_by {
+        return Err(format!(
+            "VOID_RECLASSIFIED: entry #{number} has lines moved to another class by entry #{reclass_number}; void that entry first"
+        ));
+    }
+    // A reclassifying entry is undone newest first: a later move of the same lines builds on it.
+    let later: Option<i64> = sqlx::query_scalar(
+        "SELECT re.entry_number FROM class_reclassifications mine
+         JOIN class_reclassifications r ON r.line_id = mine.line_id AND r.id > mine.id
+         JOIN journal_entries re ON re.id = r.journal_entry_id
+         WHERE mine.journal_entry_id = ?1 AND re.is_voided = 0
+         LIMIT 1",
+    )
+    .bind(journal_entry_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if let Some(later_number) = later {
+        return Err(format!("VOID_RECLASS_ORDER: entry #{later_number} reclassifies the same lines again; void it first"));
     }
 
     let lines: Vec<(i64, i64, i64, Option<String>, Option<i64>)> = sqlx::query_as(
@@ -607,6 +675,12 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         "TRANSFER" => {
             sqlx::query(&flag("transfers")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }
+        "CREDIT_MEMO" => {
+            sqlx::query(&flag("credit_memos")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+        }
+        "VENDOR_CREDIT" => {
+            sqlx::query(&flag("vendor_credits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+        }
         "DEPOSIT" => {
             sqlx::query(&flag("deposits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
             sqlx::query("UPDATE deposit_lines SET is_voided = 1 WHERE deposit_id = ?1")
@@ -639,7 +713,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     // A bank feed line whose document was voided goes back to "For review".
     sqlx::query(
         "UPDATE bank_transactions
-         SET status = 'PENDING', journal_entry_id = NULL, category_account_id = NULL, reviewed_at = NULL
+         SET status = 'PENDING', journal_entry_id = NULL, category_account_id = NULL, class_id = NULL, reviewed_at = NULL
          WHERE journal_entry_id = ?1",
     )
     .bind(journal_entry_id)
@@ -1006,8 +1080,10 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: date(),
                 due_date: date(),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
+                tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await

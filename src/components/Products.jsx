@@ -1,25 +1,94 @@
 import { useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
-import { AdjustDialog, TrackDialog } from './InventoryDialog.jsx';
+import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
+import RowMenu from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
+function ProductDialog({ product, accounts, onClose, onSaved }) {
+  const [name, setName] = useState(product.name);
+  const [description, setDescription] = useState(product.description ?? '');
+  const [rate, setRate] = useState(product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
+  const [accountId, setAccountId] = useState(product.incomeAccountId);
+  const [taxable, setTaxable] = useState(product.isTaxable !== false);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (rateCents === null || rateCents < 0) return setError('Enter a valid rate.');
+    setBusy(true);
+    try {
+      const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId, isTaxable: taxable });
+      onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog title={`Edit ${product.name}`} onClose={onClose}>
+      <form onSubmit={submit} className="flex flex-col gap-2 px-3 py-2 text-xs">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Name</span>
+            <input className="qb-input" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Rate</span>
+            <input className="qb-input num" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rateCents === null} />
+          </label>
+          <label className="col-span-2 flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Description on sales forms</span>
+            <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <label className="col-span-2 flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Income account</span>
+            <AccountSelect accounts={accounts} filter={incomeOnly} value={accountId} onChange={setAccountId} />
+          </label>
+          <label className="col-span-2 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+            Taxable: charge sales tax when this is sold
+          </label>
+        </div>
+        {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+        <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
+          <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 export default function Products({ accounts }) {
   const { data, error } = useLedgerQuery(api.listProducts);
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
-  // { mode: 'track', product } or { mode: 'adjust', item }
+  // { mode: 'track', product }, { mode: 'adjust', item } or { mode: 'edit', product }
   const [dialog, setDialog] = useState(null);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && incomeOnly(a))?.id ?? null, [accounts]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
   const [accountId, setAccountId] = useState(null);
+  const [taxable, setTaxable] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [showInactive, setShowInactive] = useState(false);
+  const setActive = async (p, active) => {
+    try {
+      await api.setProductActive(p.id, active);
+      setNotice({ kind: 'success', text: active ? `${p.name} is active again.` : `${p.name} is inactive: hidden from sales forms, with its history kept.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
 
   const chosenAccount = accountId ?? defaultIncome;
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
@@ -36,6 +105,7 @@ export default function Products({ accounts }) {
         description: description.trim() || null,
         rateCents,
         incomeAccountId: chosenAccount,
+        isTaxable: taxable,
       });
       setNotice({ kind: 'success', text: `Added ${product.name}.` });
       setName('');
@@ -60,6 +130,17 @@ export default function Products({ accounts }) {
           }}
         />
       )}
+      {dialog?.mode === 'edit' && (
+        <ProductDialog
+          product={dialog.product}
+          accounts={accounts}
+          onClose={() => setDialog(null)}
+          onSaved={(text) => {
+            setDialog(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
       {dialog?.mode === 'adjust' && (
         <AdjustDialog
           item={dialog.item}
@@ -74,7 +155,11 @@ export default function Products({ accounts }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
-          <span className="ml-2 text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
+          <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
+          <label className="ml-auto flex flex-none items-center gap-1 text-sm">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+            Show inactive
+          </label>
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
@@ -90,6 +175,7 @@ export default function Products({ accounts }) {
                 <col className="w-[100px]" />
                 <col className="w-[110px]" />
                 <col className="w-[120px]" />
+                <col className="w-[30px]" />
               </colgroup>
               <thead>
                 <tr>
@@ -100,6 +186,7 @@ export default function Products({ accounts }) {
                   <th className="qb-grid-head text-right">On hand</th>
                   <th className="qb-grid-head text-right">Avg cost</th>
                   <th className="qb-grid-head text-right">Stock value</th>
+                  <th className="qb-grid-head" aria-label="Stock" />
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
@@ -115,7 +202,13 @@ export default function Products({ accounts }) {
                     <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" inputMode="decimal" aria-label="Rate" aria-invalid={rateCents === null} />
                   </td>
                   <td className="qb-grid-cell-edit">
-                    <AccountSelect className="" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
+                    <span className="flex items-center gap-1">
+                      <AccountSelect className="min-w-0 flex-1" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
+                      <label className="flex flex-none items-center gap-0.5 pr-1 text-xs" title="Charge sales tax when sold">
+                        <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+                        Tax
+                      </label>
+                    </span>
                   </td>
                   <td className="qb-grid-cell" colSpan={3} />
                   <td className="qb-grid-cell cell-tight">
@@ -123,18 +216,25 @@ export default function Products({ accounts }) {
                       Add
                     </button>
                   </td>
+                  <td className="qb-grid-cell" />
                 </tr>
                 {data && data.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
+                    <td colSpan={9} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
                   </tr>
                 )}
-                {(data ?? []).map((p) => (
-                  <tr key={p.id} className="qb-grid-row">
-                    <td className="qb-grid-cell font-semibold">{p.name}</td>
+                {(data ?? []).filter((p) => showInactive || p.isActive).map((p) => (
+                  <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ mode: 'edit', product: p })}>
+                    <td className="qb-grid-cell font-semibold">
+                      {p.name}
+                      {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
+                    </td>
                     <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
                     <td className="qb-grid-cell num">{p.rateCents ? formatCents(p.rateCents) : ''}</td>
-                    <td className="qb-grid-cell">{accountLabel(accounts, p.incomeAccountId)}</td>
+                    <td className="qb-grid-cell">
+                      {accountLabel(accounts, p.incomeAccountId)}
+                      {p.isTaxable && <span className="ml-1 text-2xs font-semibold uppercase text-qb-ink-muted" title="Taxable">Tax</span>}
+                    </td>
                     {items.has(p.id) ? (
                       <>
                         <td
@@ -161,6 +261,15 @@ export default function Products({ accounts }) {
                         </td>
                       </>
                     )}
+                    <td className="qb-grid-cell cell-tight text-center">
+                      <RowMenu
+                        label={`Actions for ${p.name}`}
+                        items={[
+                          { label: 'Edit…', onSelect: () => setDialog({ mode: 'edit', product: p }) },
+                          p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
+                        ]}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

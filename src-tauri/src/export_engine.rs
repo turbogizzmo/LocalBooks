@@ -12,7 +12,7 @@ use chrono::NaiveDate;
 use sqlx::SqlitePool;
 
 use crate::preferences;
-use crate::statements::{self, ClassReportLine, LineKind, ReportLine};
+use crate::statements::{self, ClassFilter, ClassReportLine, LineKind, ReportLine};
 
 /// Cents as a plain decimal string: 123456 → "1234.56", -5 → "-0.05".
 pub fn plain_amount(cents: i64) -> String {
@@ -77,10 +77,13 @@ fn long_date(d: NaiveDate) -> String {
     d.format("%B %-d, %Y").to_string()
 }
 
-pub async fn profit_and_loss_csv(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<String, String> {
-    let pl = statements::profit_and_loss(pool, start, end).await?;
+pub async fn profit_and_loss_csv(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, filter: Option<&ClassFilter>) -> Result<String, String> {
+    let pl = statements::profit_and_loss_filtered(pool, start, end, filter).await?;
     let company = preferences::get(pool, "company_name").await?;
-    let period = if start == end { long_date(start) } else { format!("{} - {}", long_date(start), long_date(end)) };
+    let mut period = if start == end { long_date(start) } else { format!("{} - {}", long_date(start), long_date(end)) };
+    if let Some(filter) = filter {
+        period = format!("{period} · {}", statements::class_filter_label(pool, filter).await?);
+    }
     statement_to_csv(&company, "Profit and Loss", &period, &pl.lines)
 }
 
@@ -117,11 +120,18 @@ pub fn write_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
 }
 
 /// Renders the named report (`profit_and_loss`, `profit_and_loss_by_class` or `balance_sheet`) as CSV.
-pub async fn render(pool: &SqlitePool, report: &str, start: Option<NaiveDate>, end: Option<NaiveDate>, as_of: Option<NaiveDate>) -> Result<String, String> {
+pub async fn render(
+    pool: &SqlitePool,
+    report: &str,
+    start: Option<NaiveDate>,
+    end: Option<NaiveDate>,
+    as_of: Option<NaiveDate>,
+    class_filter: Option<&ClassFilter>,
+) -> Result<String, String> {
     match report {
         "profit_and_loss" => {
             let (s, e) = start.zip(end).ok_or_else(|| "EXPORT_BAD_RANGE: a Profit and Loss export needs a start and end date".to_string())?;
-            profit_and_loss_csv(pool, s, e).await
+            profit_and_loss_csv(pool, s, e, class_filter).await
         }
         "profit_and_loss_by_class" => {
             let (s, e) = start.zip(end).ok_or_else(|| "EXPORT_BAD_RANGE: a Profit and Loss by Class export needs a start and end date".to_string())?;
@@ -164,7 +174,7 @@ mod tests {
             .unwrap();
         crate::preferences::set(&pool, "company_name", "Acme, \"Widgets\" & Co").await.unwrap();
 
-        let csv = render(&pool, "profit_and_loss", Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()), Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()), None).await.unwrap();
+        let csv = render(&pool, "profit_and_loss", Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()), Some(NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()), None, None).await.unwrap();
         assert!(csv.starts_with('\u{feff}'));
         let mut reader = csv::ReaderBuilder::new().has_headers(false).flexible(true).from_reader(csv.trim_start_matches('\u{feff}').as_bytes());
         let rows: Vec<Vec<String>> = reader.records().map(|r| r.unwrap().iter().map(String::from).collect()).collect();
@@ -173,13 +183,13 @@ mod tests {
         assert!(rows.contains(&vec!["  4100 Services".to_string(), "Account".to_string(), "1234.56".to_string()]));
         assert_eq!(rows.last().unwrap(), &vec!["Net Income".to_string(), "Net".to_string(), "1234.56".to_string()]);
 
-        let by_class = render(&pool, "profit_and_loss_by_class", Some(date), Some(date), None).await.unwrap();
+        let by_class = render(&pool, "profit_and_loss_by_class", Some(date), Some(date), None, None).await.unwrap();
         assert!(by_class.contains("Account,Line type,Unclassified,Total"), "{by_class}");
         assert!(by_class.contains("Net Income,Net,1234.56,1234.56"), "{by_class}");
 
-        let bs = render(&pool, "balance_sheet", None, None, Some(date)).await.unwrap();
+        let bs = render(&pool, "balance_sheet", None, None, Some(date), None).await.unwrap();
         assert!(bs.contains("TOTAL ASSETS,Net,1234.56"));
-        assert!(render(&pool, "cash_flow", None, None, Some(date)).await.unwrap_err().starts_with("EXPORT_UNKNOWN_REPORT"));
+        assert!(render(&pool, "cash_flow", None, None, Some(date), None).await.unwrap_err().starts_with("EXPORT_UNKNOWN_REPORT"));
 
         let dir = std::env::temp_dir().join(format!("localbooks-export-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
