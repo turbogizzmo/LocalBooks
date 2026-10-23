@@ -19,6 +19,8 @@ An estimate doesn't affect your books until it becomes an invoice.
 1. Go to **Sales › Estimates** and click **New estimate** (or **+ New › Estimate**).
 2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items.
 3. Click **Save Estimate**.
+4. To send it, open the estimate's menu and choose **Print…** or **Save as PDF…**. Estimates have
+   their own form design: see [Design your invoices and estimates](custom-forms.md).
 
 ## Turn an estimate into an invoice
 
