@@ -20,6 +20,8 @@ use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInp
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
 use crate::forms::{self, EmailDraft, FormKind, FormTemplate, RenderedForm};
 use crate::mail_app::{self, ComposeOutcome};
+use crate::secrets::SecretStore;
+use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
 use crate::storage::{self, StorageInfo};
@@ -951,6 +953,36 @@ pub async fn email_form_with_mail_app(app: AppHandle, db: State<'_, Db>, kind: F
     })
     .await
     .map_err(|e| format!("MAIL_OPEN: {e}"))?
+}
+
+/// Sends the document's PDF to the customer through the company's email server.
+#[tauri::command]
+pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, email: EmailInput) -> Result<(), String> {
+    let (to, subject, body) = email.checked()?;
+    let pool = db.pool().await;
+    let (file_name, pdf) = forms::pdf_file(&pool, kind, document_id).await?;
+    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to, subject, body, file_name, pdf }).await
+}
+
+fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
+    Ok(smtp::secret_store(&app.path().app_config_dir().map_err(|e| format!("SMTP_CONFIG: {e}"))?))
+}
+
+#[tauri::command]
+pub async fn get_smtp_settings(app: AppHandle, db: State<'_, Db>) -> Result<SmtpStatus, String> {
+    smtp::status(&db.pool().await, &smtp_secrets(&app)?).await
+}
+
+/// Saves the email server settings; `password` replaces the saved one (empty removes it).
+#[tauri::command]
+pub async fn save_smtp_settings(app: AppHandle, db: State<'_, Db>, settings: SmtpSettings, password: Option<String>) -> Result<SmtpStatus, String> {
+    smtp::save_settings(&db.pool().await, &smtp_secrets(&app)?, settings, password).await
+}
+
+/// Connects and signs in with the settings as entered, without saving or sending anything.
+#[tauri::command]
+pub async fn test_smtp_settings(app: AppHandle, settings: SmtpSettings, password: Option<String>) -> Result<(), String> {
+    smtp::test_connection(settings, &smtp_secrets(&app)?, password).await
 }
 
 // ------------------------------------------------------------------------------------------------

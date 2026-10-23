@@ -11,6 +11,10 @@ The list shows each customer's open balance in Accounts Receivable, or what you 
 vendor. Use **Find a customer** to filter the list. Customers are also added automatically when you
 post an invoice for a new name.
 
+To add a company name, billing address, phone, payment terms or notes, open the customer's
+**Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
+and estimates, and the email address is filled in when you choose **Email…** on one of them.
+
 ## Add a product or service
 
 Products and services make invoices and sales receipts quicker to fill in.

@@ -5,6 +5,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
+import EmailSettings from './EmailSettings.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -855,7 +856,7 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', data: 'data', ai: 'ai', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', updates: 'updates' };
 
 export default function Settings({ companyName, intent }) {
   const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
@@ -876,6 +877,7 @@ export default function Settings({ companyName, intent }) {
         {[
           ['preferences', 'Preferences Console'],
           ['forms', 'Custom Forms'],
+          ['email', 'Email'],
           ['data', 'File & Data Controls'],
           ['ai', 'AI Access (MCP)'],
           ['updates', 'Updates'],
@@ -894,6 +896,7 @@ export default function Settings({ companyName, intent }) {
       </div>
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
+      {tab === 'email' && <EmailSettings />}
       {tab === 'data' && <FileAndData companyName={companyName} />}
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'updates' && <UpdatesPanel />}

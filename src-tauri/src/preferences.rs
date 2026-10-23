@@ -92,6 +92,7 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             _ => Err("PREF_BAD_KEEP: keep between 1 and 60 automatic backups".into()),
         },
         LOGO_KEY => Err("PREF_LOGO: set the logo with the logo upload, which validates the image".into()),
+        crate::smtp::SETTINGS_KEY => Err("PREF_SMTP: change email server settings in Settings › Email".into()),
         other => Err(format!("PREF_UNKNOWN: '{other}' is not a preference")),
     }
 }
@@ -107,9 +108,12 @@ pub fn parse_fiscal_start(value: &str) -> Result<u32, String> {
     Ok(month)
 }
 
-/// All preferences except the logo, which is large and fetched separately.
+/// All preferences except the logo, which is large and fetched separately, and the email server
+/// settings, which have their own commands.
 pub async fn get_all(pool: &SqlitePool) -> Result<BTreeMap<String, String>, String> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM system_preferences WHERE key <> 'company_logo_base64'")
+    let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM system_preferences WHERE key NOT IN (?1, ?2)")
+        .bind(LOGO_KEY)
+        .bind(crate::smtp::SETTINGS_KEY)
         .fetch_all(pool)
         .await
         .map_err(db_err)?;

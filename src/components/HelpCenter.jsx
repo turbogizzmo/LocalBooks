@@ -400,7 +400,7 @@ export const HELP_ARTICLES = [
   {
     id: 'preferences', area: 'company', views: ['settings'],
     title: 'Set company details and preferences',
-    body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices and reports.',
+    body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices, estimates and reports; Settings › Custom Forms sets how invoices and estimates look.',
     keywords: 'company name address logo fiscal year currency settings preferences tax form',
     go: { label: 'Go to Preferences', view: 'settings', action: 'preferences' },
   },
@@ -412,11 +412,18 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Custom Forms', view: 'settings', action: 'forms' },
   },
   {
+    id: 'smtp', area: 'company', views: ['settings'],
+    title: 'Send emailed forms from LocalBooks (SMTP)',
+    body: 'Settings › Email can send invoices and estimates through your email provider’s SMTP server instead of opening your mail app. Enter the server, security, port, username and password (often an app password), click Test connection, then Save. The password is kept in this computer’s Keychain or Credential Manager.',
+    keywords: 'smtp email server gmail outlook app password send mail settings',
+    go: { label: 'Email settings', view: 'settings', action: 'email' },
+  },
+  {
     id: 'email-form', area: 'sales', views: ['sales/invoices', 'sales/estimates', 'sales/all'],
     title: 'Email an invoice or estimate',
-    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms.',
-    keywords: 'email send mail outlook attach pdf customer invoice estimate',
-    go: { label: 'Go to Invoices', view: 'sales/invoices' },
+    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms; to send directly from LocalBooks instead, set up your email server in Settings › Email.',
+    keywords: 'email send mail outlook smtp server attach pdf customer invoice estimate',
+    go: { label: 'Email settings', view: 'settings', action: 'email' },
   },
   {
     id: 'closing-date', area: 'company', views: ['settings', 'accounting/journal'],
@@ -467,7 +474,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
-  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
 };
 

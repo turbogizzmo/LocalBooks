@@ -8,7 +8,7 @@ details that appear on invoices and reports and decide how your fiscal year work
 1. Click **Settings** in the left sidebar. The **Preferences Console** tab opens.
 2. Under **Company**, fill in **Company name**, **Legal name**, **Address**, **Email**, **Phone**
    and **EIN**. Each field saves as soon as you click away from it; a green **✓ Saved** confirms it.
-3. Click **Upload logo…** to add your logo. It prints on invoices and reports.
+3. Click **Upload logo…** to add your logo. It prints on invoices, estimates and reports.
 
 ## Choose your accounting settings
 
@@ -21,6 +21,14 @@ details that appear on invoices and reports and decide how your fiscal year work
 
 > **Tip:** The tax calendar is a reminder, not tax advice. Weekends move to Monday, but holidays,
 > extensions and state deadlines are not included.
+
+## Design your forms and set up email
+
+1. Open **Settings › Custom Forms** to choose how invoices and estimates look: title, font, colors,
+   logo placement, columns, and the message and terms printed on them. See
+   [Design your invoices and estimates](custom-forms.md).
+2. Emailed forms open in your own mail app with the PDF attached. To send them from LocalBooks
+   instead, enter your email provider's SMTP settings in **Settings › Email**.
 
 ## Check your chart of accounts
 

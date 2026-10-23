@@ -66,15 +66,24 @@ function composedText(outcome, fileName) {
 /** Edits the email for a document, then hands it to the mail app with the PDF attached. */
 export function EmailFormDialog({ kind, id, onClose, onNotice }) {
   const [draft, setDraft] = useState(null);
+  // Set when sending from LocalBooks (SMTP) is turned on: { fromEmail }.
+  const [smtp, setSmtp] = useState(null);
+  const [method, setMethod] = useState('MAIL_APP');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const toRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .getEmailDraft(kind, id)
-      .then((d) => !cancelled && setDraft(d))
+    Promise.all([api.getEmailDraft(kind, id), api.getSmtpSettings()])
+      .then(([d, status]) => {
+        if (cancelled) return;
+        if (status.settings.enabled) {
+          setSmtp({ fromEmail: status.settings.fromEmail });
+          setMethod('SMTP');
+        }
+        setDraft(d);
+      })
       .catch((err) => !cancelled && setError(errorText(err)));
     return () => {
       cancelled = true;
@@ -94,8 +103,14 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
     setBusy(true);
     setError(null);
     try {
-      const outcome = await api.emailFormWithMailApp(kind, id, { to: draft.to, subject: draft.subject, body: draft.body });
-      onNotice({ kind: 'success', text: composedText(outcome, draft.fileName) });
+      const email = { to: draft.to, subject: draft.subject, body: draft.body };
+      if (method === 'SMTP') {
+        await api.emailFormWithSmtp(kind, id, email);
+        onNotice({ kind: 'success', text: `Sent ${draft.fileName} to ${draft.to}.` });
+      } else {
+        const outcome = await api.emailFormWithMailApp(kind, id, email);
+        onNotice({ kind: 'success', text: composedText(outcome, draft.fileName) });
+      }
       onClose();
     } catch (err) {
       setError(errorText(err));
@@ -126,8 +141,20 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
             <textarea aria-label="Message" rows={9} className="qb-input h-auto w-full py-0.5" value={draft.body} onChange={set('body')} />
             <div className="flex items-center gap-1.5 text-xs text-qb-ink-muted">
               <span className="rounded-xs border border-qb-border bg-qb-canvas px-1.5 py-0.5 font-semibold text-qb-ink">📎 {draft.fileName}</span>
-              <span>opens in your mail app as a new message for you to review and send</span>
+              <span>{method === 'SMTP' ? `sent from ${smtp.fromEmail}` : 'opens in your mail app as a new message for you to review and send'}</span>
             </div>
+            {smtp && (
+              <div className="flex gap-3 text-xs" role="radiogroup" aria-label="How to send">
+                <label className="flex items-center gap-1">
+                  <input type="radio" name="email-send-method" checked={method === 'SMTP'} onChange={() => setMethod('SMTP')} />
+                  Send from LocalBooks
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="radio" name="email-send-method" checked={method === 'MAIL_APP'} onChange={() => setMethod('MAIL_APP')} />
+                  Open in my mail app instead
+                </label>
+              </div>
+            )}
             {error && <p className="font-semibold text-qb-negative">{error}</p>}
           </div>
         )}
@@ -136,7 +163,7 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
             Cancel
           </button>
           <button type="button" className="qb-btn qb-btn-primary" onClick={send} disabled={busy || !draft}>
-            {busy ? 'Opening…' : 'Open in mail app'}
+            {method === 'SMTP' ? (busy ? 'Sending…' : 'Send') : busy ? 'Opening…' : 'Open in mail app'}
           </button>
         </div>
       </div>

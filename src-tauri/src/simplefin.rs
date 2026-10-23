@@ -20,8 +20,8 @@
 //! Bridge speaks protocol 1.0; responses in the 2.0 draft's shape (connections, `errlist`) are read
 //! too. Transaction dates are the UTC calendar date of the `posted` timestamp.
 
-use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::Path;
 use std::time::Duration;
 
 use base64::Engine;
@@ -33,6 +33,7 @@ use sqlx::SqlitePool;
 
 use crate::bank::{clean_description, insert_line, parse_amount_cents};
 use crate::ledger::{db_err, rollback};
+use crate::secrets::SecretStore;
 
 /// Longest span one request covers. The protocol allows 90 days; Bridge warns above 45.
 const MAX_WINDOW_DAYS: u64 = 45;
@@ -44,113 +45,12 @@ pub const MAX_HISTORY_DAYS: u64 = 90;
 const MIN_SYNC_INTERVAL: chrono::Duration = chrono::Duration::minutes(10);
 
 const KEYCHAIN_SERVICE: &str = "LocalBooks SimpleFIN";
-// Used on Linux, and by tests everywhere.
-#[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
+// The credential file on Linux.
 const SECRETS_FILE: &str = "simplefin-secrets.json";
 
-// ------------------------------------------------------------------------------------------------
-// Credential storage
-// ------------------------------------------------------------------------------------------------
-
 /// Where Access URLs are kept, by connection `secret_key`.
-#[derive(Debug, Clone)]
-pub enum SecretStore {
-    /// The macOS Keychain or Windows Credential Manager.
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    System,
-    /// A JSON file readable by its owner only (Linux, and tests).
-    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
-    File(PathBuf),
-}
-
-impl SecretStore {
-    pub fn for_this_computer(config_dir: &Path) -> Self {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            let _ = config_dir;
-            SecretStore::System
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            SecretStore::File(config_dir.join(SECRETS_FILE))
-        }
-    }
-
-    fn read_file(path: &Path) -> Result<BTreeMap<String, String>, String> {
-        match std::fs::read(path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| format!("SFIN_SECRETS: {} is damaged: {e}", path.display())),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-            Err(e) => Err(format!("SFIN_SECRETS: cannot read {}: {e}", path.display())),
-        }
-    }
-
-    fn write_file(path: &Path, map: &BTreeMap<String, String>) -> Result<(), String> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("SFIN_SECRETS: cannot create {}: {e}", dir.display()))?;
-        }
-        let json = serde_json::to_vec_pretty(map).map_err(|e| format!("SFIN_SECRETS: {e}"))?;
-        crate::instance::write_private(path, &json).map_err(|e| format!("SFIN_SECRETS: cannot write {}: {e}", path.display()))
-    }
-
-    fn get_blocking(&self, key: &str) -> Result<Option<String>, String> {
-        match self {
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            SecretStore::System => match keyring::Entry::new(KEYCHAIN_SERVICE, key).and_then(|e| e.get_password()) {
-                Ok(secret) => Ok(Some(secret)),
-                Err(keyring::Error::NoEntry) => Ok(None),
-                Err(e) => Err(format!("SFIN_KEYCHAIN: cannot read the saved bank connection: {e}")),
-            },
-            SecretStore::File(path) => Ok(Self::read_file(path)?.remove(key)),
-        }
-    }
-
-    fn put_blocking(&self, key: &str, secret: &str) -> Result<(), String> {
-        match self {
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            SecretStore::System => keyring::Entry::new(KEYCHAIN_SERVICE, key)
-                .and_then(|e| e.set_password(secret))
-                .map_err(|e| format!("SFIN_KEYCHAIN: cannot save the bank connection: {e}")),
-            SecretStore::File(path) => {
-                let mut map = Self::read_file(path)?;
-                map.insert(key.to_string(), secret.to_string());
-                Self::write_file(path, &map)
-            }
-        }
-    }
-
-    fn delete_blocking(&self, key: &str) -> Result<(), String> {
-        match self {
-            #[cfg(any(target_os = "macos", target_os = "windows"))]
-            SecretStore::System => match keyring::Entry::new(KEYCHAIN_SERVICE, key).and_then(|e| e.delete_credential()) {
-                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-                Err(e) => Err(format!("SFIN_KEYCHAIN: cannot remove the saved bank connection: {e}")),
-            },
-            SecretStore::File(path) => {
-                let mut map = Self::read_file(path)?;
-                if map.remove(key).is_some() {
-                    Self::write_file(path, &map)?;
-                }
-                Ok(())
-            }
-        }
-    }
-
-    // The system store may wait on the user (a Keychain permission prompt), so it runs off the
-    // async workers.
-    async fn get(&self, key: &str) -> Result<Option<String>, String> {
-        let (store, key) = (self.clone(), key.to_string());
-        tokio::task::spawn_blocking(move || store.get_blocking(&key)).await.map_err(|e| format!("SFIN_KEYCHAIN: {e}"))?
-    }
-
-    async fn put(&self, key: &str, secret: &str) -> Result<(), String> {
-        let (store, key, secret) = (self.clone(), key.to_string(), secret.to_string());
-        tokio::task::spawn_blocking(move || store.put_blocking(&key, &secret)).await.map_err(|e| format!("SFIN_KEYCHAIN: {e}"))?
-    }
-
-    async fn delete(&self, key: &str) -> Result<(), String> {
-        let (store, key) = (self.clone(), key.to_string());
-        tokio::task::spawn_blocking(move || store.delete_blocking(&key)).await.map_err(|e| format!("SFIN_KEYCHAIN: {e}"))?
-    }
+pub fn secret_store(config_dir: &Path) -> SecretStore {
+    SecretStore::for_this_computer(config_dir, KEYCHAIN_SERVICE, SECRETS_FILE, "the bank connection")
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -964,6 +864,7 @@ pub async fn suggested_start(pool: &SqlitePool, bank_account_id: i64, today: Nai
 mod tests {
     use super::*;
     use crate::db::test_pool;
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -1089,7 +990,7 @@ mod tests {
     }
 
     fn service(dir: &Path) -> SimpleFin {
-        SimpleFin::new(SecretStore::File(dir.join(SECRETS_FILE))).unwrap()
+        SimpleFin::new(SecretStore::in_file(dir.join(SECRETS_FILE), KEYCHAIN_SERVICE, "the bank connection")).unwrap()
     }
 
     fn temp_dir(name: &str) -> PathBuf {
