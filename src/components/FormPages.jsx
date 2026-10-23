@@ -172,17 +172,18 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
 }
 
 /**
- * Prints, saves and emails invoices and estimates with their designed form. Returns [elements to
- * render, { print(kind, id), savePdf(kind, id), email(kind, id) }]; results are reported through
- * `onNotice`.
+ * Prints, saves and emails forms with their customer's form style. Returns [elements to render,
+ * { print(kind, id, period), printMany([{ kind, id, period }]), savePdf(kind, id, period),
+ * email(kind, id) }]; `period` is for statements. Results are reported through `onNotice`.
  */
 export function useFormPrinter(onNotice) {
-  const [form, setForm] = useState(null);
+  // The forms to print, each { pages, logo }.
+  const [forms, setForms] = useState(null);
 
   useEffect(() => {
-    if (!form) return undefined;
+    if (!forms) return undefined;
     // Once printed, empty the print root so printing the screen itself works again.
-    const clear = () => setForm(null);
+    const clear = () => setForms(null);
     window.addEventListener('afterprint', clear);
     // Let React commit the pages (and the logo image decode) before the dialog snapshots the page.
     const timer = setTimeout(printDocument, 80);
@@ -190,23 +191,24 @@ export function useFormPrinter(onNotice) {
       clearTimeout(timer);
       window.removeEventListener('afterprint', clear);
     };
-  }, [form]);
+  }, [forms]);
 
-  const print = useCallback(
-    async (kind, id) => {
+  const printMany = useCallback(
+    async (list) => {
       try {
-        setForm(await api.renderForm(kind, id));
+        setForms(await Promise.all(list.map((f) => api.renderForm(f.kind, f.id, f.period ?? null))));
       } catch (err) {
         onNotice({ kind: 'error', text: errorText(err) });
       }
     },
     [onNotice],
   );
+  const print = useCallback((kind, id, period = null) => printMany([{ kind, id, period }]), [printMany]);
 
   const savePdf = useCallback(
-    async (kind, id) => {
+    async (kind, id, period = null) => {
       try {
-        const path = await api.saveFormPdf(kind, id);
+        const path = await api.saveFormPdf(kind, id, period);
         if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
       } catch (err) {
         onNotice({ kind: 'error', text: errorText(err) });
@@ -221,24 +223,22 @@ export function useFormPrinter(onNotice) {
 
   const portal = (
     <>
-      {form && (
+      {forms && (
         <PrintPortal>
-          {form.pages.map((page, i) => (
-            <FormSheet key={i} page={page} logo={form.logo} />
-          ))}
+          {forms.flatMap((form, f) => form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />))}
         </PrintPortal>
       )}
       {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} onClose={closeEmail} onNotice={onNotice} />}
     </>
   );
-  return [portal, { print, savePdf, email }];
+  return [portal, { print, printMany, savePdf, email }];
 }
 
-/** Row-menu entries for a document's form. */
-export function formMenuItems(kind, id, actions) {
+/** Row-menu entries for a document's form; `withEmail` false leaves out Email…. */
+export function formMenuItems(kind, id, actions, withEmail = true) {
   return [
     { label: 'Print…', onSelect: () => actions.print(kind, id) },
     { label: 'Save as PDF…', onSelect: () => actions.savePdf(kind, id) },
-    { label: 'Email…', onSelect: () => actions.email(kind, id) },
+    ...(withEmail ? [{ label: 'Email…', onSelect: () => actions.email(kind, id) }] : []),
   ];
 }

@@ -266,6 +266,7 @@ export default function AllSales({ accounts, intent }) {
                       <RowMenu
                         items={[
                           ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms) : []),
+                          ...(r.kind === 'SALES_RECEIPT' ? formMenuItems('SALES_RECEIPT', r.id, forms, false) : []),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}
                       />
