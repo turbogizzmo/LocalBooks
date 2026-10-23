@@ -1303,8 +1303,34 @@ pub async fn auto_map_ledger_accounts(app: AppHandle, db: State<'_, Db>, batch_i
 
 #[tauri::command]
 pub async fn post_ledger_batch(app: AppHandle, db: State<'_, Db>, input: PostLedgerInput) -> Result<PostLedgerResult, String> {
-    let result = qbw_ledger_import::post_batch(&db.pool().await, &input).await?;
+    // Keep a copy of the books as they are now, so the import can be undone exactly ("Start over").
+    let snapshot = backup::pre_import_snapshot(&db, input.batch_id).await?;
+    let pool = db.pool().await;
+    let posted = qbw_ledger_import::post_batch(&pool, &input).await;
+    match &posted {
+        Ok(result) if result.entries_posted > 0 => {
+            if let Err(e) = qbw_ledger_import::set_pre_post_backup(&pool, input.batch_id, &snapshot).await {
+                let _ = std::fs::remove_file(&snapshot);
+                notify(&app);
+                return Err(e);
+            }
+        }
+        _ => {
+            let _ = std::fs::remove_file(&snapshot);
+        }
+    }
     notify(&app);
+    posted
+}
+
+/// Puts back the copy of the company file taken just before the import posted. Everything recorded
+/// since that moment is undone; the books being replaced are kept as a pre-restore backup.
+#[tauri::command]
+pub async fn start_over_ledger_batch(app_handle: AppHandle, batch_id: i64) -> Result<RestoreResult, String> {
+    let db = app_handle.state::<Db>();
+    let source = qbw_ledger_import::pre_post_backup(&db.pool().await, batch_id).await?;
+    let result = backup::restore(&db, &source).await?;
+    notify(&app_handle);
     Ok(result)
 }
 

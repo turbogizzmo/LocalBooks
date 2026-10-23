@@ -9,7 +9,7 @@
 //! and have every posted journal entry in balance. The current books are snapshotted first, the
 //! backup is copied and upgraded to the current schema off to the side, and only then swapped in.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Local};
@@ -29,7 +29,7 @@ const AUTO_BACKUP_INTERVAL: Duration = Duration::from_secs(20 * 60 * 60);
 pub struct BackupFile {
     pub path: String,
     pub file_name: String,
-    /// `AUTO`, `MANUAL`, `PRE_RESTORE` or `EXPORT`
+    /// `AUTO`, `MANUAL`, `PRE_RESTORE`, `PRE_UPGRADE`, `PRE_IMPORT` or `EXPORT`
     pub kind: String,
     pub size_bytes: u64,
     pub modified: String,
@@ -267,9 +267,20 @@ fn kind_of(file_name: &str) -> &'static str {
         "PRE_RESTORE"
     } else if file_name.starts_with("pre-upgrade-") {
         "PRE_UPGRADE"
+    } else if file_name.starts_with("pre-import-") {
+        "PRE_IMPORT"
     } else {
         "MANUAL"
     }
+}
+
+/// Saves a verified copy of the live books just before an import posts to them:
+/// `pre-import-<batch>-<timestamp>.db`. These are never pruned automatically: "Start over" on
+/// the import restores it.
+pub async fn pre_import_snapshot(db: &Db, batch_id: i64) -> Result<PathBuf, String> {
+    let path = db.backups_dir().join(format!("pre-import-{batch_id}-{}.db", stamp()));
+    snapshot(&db.pool().await, &db.path().await, &path).await?;
+    Ok(path)
 }
 
 /// Copies of a company file taken before a newer LocalBooks upgraded it; the newest few are kept.

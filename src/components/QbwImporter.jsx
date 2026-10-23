@@ -141,7 +141,7 @@ function ChooseFile({ busy, onFile }) {
   );
 }
 
-function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onDelete }) {
+function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, onDelete }) {
   return (
     <table className="qb-grid">
       <colgroup>
@@ -149,7 +149,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onDelete }) {
         <col className="w-[170px]" />
         <col className="w-[90px]" />
         <col className="w-[190px]" />
-        <col className="w-[330px]" />
+        <col className="w-[420px]" />
       </colgroup>
       <thead>
         <tr>
@@ -180,6 +180,21 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onDelete }) {
                   <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={busy || isOpen} onClick={() => onOpen(b)}>
                     {isOpen ? 'Open below' : 'Open'}
                   </button>
+                  {b.liveEntryCount > 0 && b.kind === 'ledger' && (
+                    <button
+                      type="button"
+                      className="qb-btn qb-btn-secondary h-row px-2 text-xs text-qb-negative"
+                      disabled={busy || !b.startOver}
+                      title={
+                        b.startOver
+                          ? `Put back the copy of your books saved just before this import (${STAMP.format(new Date(b.startOver.takenAt))})`
+                          : 'No copy was saved before this import was posted; use Reverse posted entries'
+                      }
+                      onClick={() => onStartOver(b)}
+                    >
+                      Start over…
+                    </button>
+                  )}
                   {b.liveEntryCount > 0 && (
                     <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs text-qb-negative" disabled={busy} onClick={() => onReverse(b)}>
                       Reverse posted entries…
@@ -591,6 +606,39 @@ export default function QbwImporter({ accounts }) {
     );
   };
 
+  // Restores the copy of the company file saved just before the import posted. Two confirmations,
+  // the second typed, because everything recorded since that moment is undone too.
+  const startOver = async (b) => {
+    const when = STAMP.format(new Date(b.startOver.takenAt));
+    if (
+      !window.confirm(
+        `Start over: put your books back to how they were just before ${b.fileName} was posted (${when})?\n\n` +
+          `This removes the ${b.liveEntryCount.toLocaleString()} imported entries, with no reversing entries left behind. The accounts set up for the import stay, so it can be posted again.\n\n` +
+          `It also undoes ANYTHING else recorded since ${when}: invoices, payments, edits, other imports.\n\n` +
+          `Your books as they are now are saved as a backup first (Settings › Backups), so this can be undone.`,
+      )
+    )
+      return;
+    const typed = window.prompt('This replaces your company file. Type START OVER to confirm.');
+    if (typed?.trim().toUpperCase() !== 'START OVER') {
+      if (typed !== null) setNotice({ kind: 'info', text: 'Start over cancelled: the confirmation text did not match. Nothing was changed.' });
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await api.startOverLedgerBatch(b.id);
+      setNotice({
+        kind: 'success',
+        text: `Your books are back to how they were on ${when}. The import is still listed, not posted: post it again, or delete it and import a fresh copy. Your previous books were saved as ${result.safetyBackup.fileName}. Reloading…`,
+      });
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+      setBusy(false);
+    }
+  };
+
   const remove = (b) => {
     if (!window.confirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`)) return;
     run(() => (b.kind === 'ledger' ? api.discardLedgerBatch(b.id) : api.discardQbwBatch(b.id)), () => 'Import deleted.').then(() => {
@@ -646,7 +694,9 @@ export default function QbwImporter({ accounts }) {
         <section className="qb-panel">
           <div className="flex min-h-[36px] items-center border-b border-qb-border px-3 py-1">
             <h3 className="text-md font-semibold">Your imports</h3>
-            <span className="ml-2 text-xs text-qb-ink-muted">Open one to continue it. Delete removes the import only; Reverse undoes what it posted.</span>
+            <span className="ml-2 text-xs text-qb-ink-muted">
+              Open one to continue it. Start over puts your books back to just before the import; Reverse undoes what it posted; Delete removes the import only.
+            </span>
           </div>
           <ImportsTable
             batches={batches}
@@ -654,6 +704,7 @@ export default function QbwImporter({ accounts }) {
             busy={busy}
             onOpen={(b) => setOpened({ kind: b.kind, id: b.id })}
             onReverse={reverse}
+            onStartOver={startOver}
             onDelete={remove}
           />
         </section>
