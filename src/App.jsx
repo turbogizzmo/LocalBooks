@@ -21,6 +21,7 @@ import Reclassify from './components/Reclassify.jsx';
 import Register from './components/Register.jsx';
 import CreditMemos from './components/CreditMemos.jsx';
 import VendorCredits from './components/VendorCredits.jsx';
+import SalesTax from './components/SalesTax.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
 import QbwImporter from './components/QbwImporter.jsx';
@@ -168,6 +169,7 @@ export default function App() {
           {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
           {view === 'sales/products' && <Products accounts={list} />}
+          {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}
           {view === 'expenses/credits' && <VendorCredits {...props} />}

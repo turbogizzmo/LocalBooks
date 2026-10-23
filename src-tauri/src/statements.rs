@@ -1021,7 +1021,8 @@ mod tests {
                 credit_date: ymd(2026, 3, 10),
                 memo: None,
                 refund_account_id: None,
-                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: services, class_id: None }],
+                lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: services, class_id: None, is_taxable: false }],
+                tax_rate_id: None,
             },
         )
         .await

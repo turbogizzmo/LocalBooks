@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
+import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 
@@ -16,6 +17,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const salesTax = useSalesTax();
 
   useEffect(() => {
     api.getParty(kind, id).then(
@@ -40,6 +42,9 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         notes: form.notes,
         taxId: form.taxId,
         is1099: Boolean(form.is1099),
+        taxRateId: form.taxRateId ?? null,
+        isTaxExempt: Boolean(form.isTaxExempt),
+        taxExemption: form.taxExemption,
       });
       onSaved(`Saved ${noun} ${saved.name}.`);
     } catch (err) {
@@ -77,6 +82,29 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
                 Track payments for a 1099
               </label>
+            )}
+            {kind === 'customer' && salesTax.enabled && (
+              <>
+                <label className="flex flex-col gap-0.5">
+                  <span className="font-semibold text-qb-ink-muted">Default sales tax</span>
+                  <select
+                    className="qb-input"
+                    value={form.taxRateId ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, taxRateId: e.target.value === '' ? null : Number(e.target.value) }))}
+                    disabled={form.isTaxExempt}
+                  >
+                    <option value="">Company default</option>
+                    {salesTax.activeRates.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name} ({ratePercent(r.ratePpm)})</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5 self-end pb-1 text-sm">
+                  <input type="checkbox" className="accent-qb-green" checked={Boolean(form.isTaxExempt)} onChange={set('isTaxExempt')} />
+                  Tax exempt
+                </label>
+                {form.isTaxExempt && field('Exemption (reason or certificate no.)', 'taxExemption')}
+              </>
             )}
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>

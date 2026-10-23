@@ -81,6 +81,13 @@ export const api = {
   listVendors: () => invoke('list_vendors'),
   createVendor: (name, email) => invoke('create_vendor', { name, email: email || null }),
   listBills: () => invoke('list_bills'),
+  listTaxRates: () => invoke('list_tax_rates'),
+  createTaxRate: (input) => invoke('create_tax_rate', { input }),
+  updateTaxRate: (id, input) => invoke('update_tax_rate', { id, input }),
+  setTaxRateActive: (id, active) => invoke('set_tax_rate_active', { id, active }),
+  paySalesTax: (input) => invoke('pay_sales_tax', { input }),
+  listSalesTaxPayments: () => invoke('list_sales_tax_payments'),
+  getTaxLiability: (startDate, endDate) => invoke('get_tax_liability', { startDate, endDate }),
   getAccountRegister: (accountId, startDate = null, endDate = null, includeSubaccounts = false) =>
     invoke('get_account_register', { accountId, startDate, endDate, includeSubaccounts }),
   getParty: (kind, id) => invoke('get_party', { kind, id }),

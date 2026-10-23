@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { taxOn, useFormTax } from './SalesTax.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { depositFilter, StatusBadge } from './Invoices.jsx';
@@ -28,6 +29,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const formClass = useFormClass(accounts);
+  const tax = useFormTax(customer, customers.data);
 
   useEffect(() => {
     if (depositId === null && defaultDeposit !== null) setDepositId(defaultDeposit);
@@ -37,7 +39,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, total, payload } = summarizeLines(lines);
+  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
+  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
+  const total = subtotal + taxCents;
 
   const save = async () => {
     if (filled.length === 0) return setError('Add at least one line.');
@@ -56,6 +60,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         reference: reference || null,
         memo: memo || null,
         lines: postedLines,
+        taxRateId: tax.rateId,
       });
       onPosted(`Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.`);
     } catch (err) {
@@ -99,12 +104,14 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
           <AccountSelect accounts={accounts} filter={depositFilter} value={depositId} onChange={setDepositId} className="qb-input w-[190px]" />
         </label>
         {formClass.header}
+        {tax.picker}
         <div className="ml-auto text-right">
           <div className="qb-label">Amount received</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatCents(taxCents)} sales tax</div>}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

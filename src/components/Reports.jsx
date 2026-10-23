@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { AgingReport, CashFlowReport, GeneralLedgerReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
+import { AgingReport, CashFlowReport, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -292,6 +292,7 @@ const REPORT_GROUPS = [
     reports: [
       ['ap', 'A/P Aging Summary'],
       ['ap-detail', 'Unpaid Bills (A/P Aging Detail)'],
+      ['sales-tax', 'Sales Tax Liability'],
     ],
   },
   { title: 'Expenses and vendors', reports: [['expenses-vendor', 'Expenses by Vendor Summary']] },
@@ -342,6 +343,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
         {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
+        {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
       </div>
     </div>

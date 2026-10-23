@@ -360,3 +360,36 @@ export function SummaryReport({ by }) {
     />
   );
 }
+
+export function SalesTaxLiabilityReport() {
+  const p = usePeriod('thisQuarter');
+  const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getTaxLiability(p.start, p.end) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [p.start, p.end, reload]);
+  const pct = (ppm) => (ppm == null ? '' : `${(ppm / 10_000).toString()}%`);
+  const rows = data
+    ? [
+        ...data.rows.map((r) => ({ cells: [r.name, pct(r.ratePpm), formatCents(r.taxableSalesCents), formatCents(r.nonTaxableSalesCents), formatCents(r.taxCollectedCents)] })),
+        { kind: 'grand', cells: ['TOTAL', '', formatCents(data.rows.reduce((s, r) => s + r.taxableSalesCents, 0)), formatCents(data.rows.reduce((s, r) => s + r.nonTaxableSalesCents, 0)), formatCents(data.taxCollectedCents)] },
+        { kind: 'total', cells: ['Paid in the period', '', '', '', formatCents(data.paidCents)] },
+        { kind: 'total', cells: [`Owed as of ${longDate(data.endDate)}`, '', '', '', formatCents(data.owedCents)] },
+      ]
+    : [];
+  return (
+    <TableReport
+      title="Sales Tax Liability"
+      subtitle={data ? rangeText(data.startDate, data.endDate) : ''}
+      columns={[{ label: 'Tax rate' }, { label: 'Rate', align: 'right' }, { label: 'Taxable sales', align: 'right' }, { label: 'Non-taxable sales', align: 'right' }, { label: 'Tax', align: 'right' }]}
+      rows={rows}
+      error={error}
+      toolbar={p.controls}
+      footer="Invoices and sales receipts less credit memos, by document date · record payments under Sales › Sales Tax"
+      onCsvRows={() => [
+        ...data.rows.map((r) => [r.name, pct(r.ratePpm), plainAmount(r.taxableSalesCents), plainAmount(r.nonTaxableSalesCents), plainAmount(r.taxCollectedCents)]),
+        ['Paid in the period', '', '', '', plainAmount(data.paidCents)],
+        ['Owed at end of period', '', '', '', plainAmount(data.owedCents)],
+      ]}
+    />
+  );
+}

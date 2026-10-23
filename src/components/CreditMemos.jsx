@@ -5,6 +5,7 @@ import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { taxOn, useFormTax } from './SalesTax.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
@@ -25,6 +26,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const formClass = useFormClass(accounts);
+  const tax = useFormTax(customer, customers.data);
 
   useEffect(() => {
     if (defaultIncome !== null) setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
@@ -33,7 +35,9 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
     if (refundFrom === null && defaultBank !== null) setRefundFrom(defaultBank);
   }, [defaultBank, refundFrom]);
 
-  const { filled, invalidCount, total, payload } = summarizeLines(lines);
+  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
+  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
+  const total = subtotal + taxCents;
 
   const save = async () => {
     if (!customer.trim()) return setError('Enter a customer.');
@@ -51,6 +55,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         memo: memo.trim() || null,
         refundAccountId: refund ? refundFrom : null,
         lines: postedLines,
+        taxRateId: tax.rateId,
       });
       onPosted(
         refund
@@ -61,6 +66,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
       setMemo('');
       setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
       formClass.reset();
+      tax.reset();
       setError(null);
     } catch (err) {
       setError(errorText(err));
@@ -97,12 +103,14 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
           <input className="qb-input w-[220px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reason for the credit" />
         </label>
         {formClass.header}
+        {tax.picker}
         <div className="ml-auto text-right">
           <div className="qb-label">{refund ? 'Refunded' : 'Credit'}</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatCents(taxCents)} sales tax</div>}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={(products.data ?? []).filter((p) => p.qtyOnHandE4 == null)} defaultAccountId={defaultIncome} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={(products.data ?? []).filter((p) => p.qtyOnHandE4 == null)} defaultAccountId={defaultIncome} withTax={tax.enabled} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

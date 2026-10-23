@@ -75,7 +75,7 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
                 Err(format!("PREF_BAD_TAX_FORM: unknown tax form '{v}'"))
             }
         }
-        "class_tracking" | "class_prompt" => match v {
+        "class_tracking" | "class_prompt" | "sales_tax_enabled" => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
         },
@@ -358,6 +358,19 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
 mod tests {
     use super::*;
     use crate::db::test_pool;
+
+    /// Every preference a migration seeds must be settable to its own value, or its Settings control
+    /// would fail the first time it is used.
+    #[tokio::test]
+    async fn every_seeded_preference_is_settable() {
+        let pool = test_pool().await;
+        for (key, value) in get_all(&pool).await.unwrap() {
+            if key == "company_name" && value.is_empty() {
+                continue;
+            }
+            set(&pool, &key, &value).await.unwrap_or_else(|e| panic!("{key} = {value:?}: {e}"));
+        }
+    }
 
     fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { taxOn, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
@@ -508,6 +509,7 @@ export default function Invoices({ accounts, intent }) {
   // Set while the form holds an estimate's lines: posting then marks that estimate converted.
   const [fromEstimate, setFromEstimate] = useState(null);
   const formClass = useFormClass(accounts);
+  const tax = useFormTax(customer, customers.data);
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -531,6 +533,7 @@ export default function Invoices({ accounts, intent }) {
               ...blankLine(l.incomeAccountId),
               productId: l.productServiceId,
               classId: l.classId ?? null,
+              isTaxable: Boolean(l.isTaxable),
               description: l.description,
               qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
               rate: centsToInput(l.rateCents),
@@ -538,6 +541,7 @@ export default function Invoices({ accounts, intent }) {
             blankLine(defaultAccountId),
           ]);
           setFromEstimate({ id: estimate.id, number: estimate.estimateNumber });
+          tax.set(estimate.taxRateId ?? null);
           setNotice(null);
           customerRef.current?.focus();
         },
@@ -553,7 +557,9 @@ export default function Invoices({ accounts, intent }) {
     if (t && fromDate) setDueDate(addDays(fromDate, t.days));
   };
 
-  const { filled, invalidCount, total, payload } = summarizeLines(lines);
+  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
+  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
+  const total = subtotal + taxCents;
 
   const reset = () => {
     setCustomer('');
@@ -563,6 +569,7 @@ export default function Invoices({ accounts, intent }) {
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
     formClass.reset();
+    tax.reset();
   };
 
   const save = async () => {
@@ -575,13 +582,14 @@ export default function Invoices({ accounts, intent }) {
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
     // The product travels with each line: tracked stock records its cost of goods sold.
     const postedLines = formClass.apply(
-      payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId }) => ({
+      payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId, isTaxable }) => ({
         productServiceId,
         description,
         quantityE4,
         rateCents,
         incomeAccountId,
         classId,
+        isTaxable,
       })),
     );
     const warning = formClass.missing(postedLines);
@@ -594,6 +602,7 @@ export default function Invoices({ accounts, intent }) {
         issueDate,
         dueDate,
         lines: postedLines,
+        taxRateId: tax.rateId,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
       };
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
@@ -691,6 +700,7 @@ export default function Invoices({ accounts, intent }) {
             />
           </label>
           {formClass.header}
+          {tax.picker}
           {!receiving && (
             <button type="button" className="qb-btn qb-btn-secondary self-center" onClick={() => setReceiving(true)}>
               Receive payment
@@ -700,13 +710,14 @@ export default function Invoices({ accounts, intent }) {
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
             <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
+            {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatMoney(taxCents, currency || null)} sales tax</div>}
             {currency && parseRateE6(rate) !== null && total > 0 && (
               <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(total, parseRateE6(rate)))} in {homeCurrency}</div>
             )}
           </div>
         </div>
 
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} />
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} />
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>

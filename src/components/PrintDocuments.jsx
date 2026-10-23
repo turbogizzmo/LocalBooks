@@ -44,7 +44,10 @@ export function InvoiceDocument({ detail, company }) {
   const { invoice, items, payments } = detail;
   // A foreign-currency invoice prints in the customer's currency, with its ISO code.
   const formatCents = (cents) => formatMoney(cents, invoice.currencyCode);
-  const paid = payments.reduce((s, p) => s + p.amountCents, 0);
+  // Amount paid includes credit memos applied, which are not payments.
+  const paid = invoice.amountPaidCents ?? payments.reduce((s, p) => s + p.amountCents, 0);
+  const credits = invoice.creditsAppliedCents ?? 0;
+  const tax = invoice.taxCents ?? 0;
   const termsDays = Math.round((Date.parse(invoice.dueDate) - Date.parse(invoice.issueDate)) / 86_400_000);
   const terms = termsDays === 0 ? 'Due on receipt' : `Net ${termsDays}`;
   return (
@@ -118,6 +121,18 @@ export function InvoiceDocument({ detail, company }) {
 
       <table className="doc-totals">
         <tbody>
+          {tax > 0 && (
+            <>
+              <tr>
+                <td>Subtotal</td>
+                <td className="doc-num">{formatCents(invoice.totalCents - tax)}</td>
+              </tr>
+              <tr>
+                <td>{invoice.taxRateName ? `Sales tax (${invoice.taxRateName})` : 'Sales tax'}</td>
+                <td className="doc-num">{formatCents(tax)}</td>
+              </tr>
+            </>
+          )}
           <tr>
             <td>Total</td>
             <td className="doc-num">{formatCents(invoice.totalCents)}</td>
@@ -128,6 +143,12 @@ export function InvoiceDocument({ detail, company }) {
               <td className="doc-num">-{formatCents(p.amountCents)}</td>
             </tr>
           ))}
+          {credits > 0 && (
+            <tr>
+              <td>Credits applied</td>
+              <td className="doc-num">-{formatCents(credits)}</td>
+            </tr>
+          )}
           <tr className="doc-grand">
             <td>Balance due</td>
             <td className="doc-num">{formatCents(invoice.isVoided ? 0 : invoice.totalCents - paid)}</td>

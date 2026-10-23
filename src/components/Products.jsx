@@ -13,6 +13,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   const [description, setDescription] = useState(product.description ?? '');
   const [rate, setRate] = useState(product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
   const [accountId, setAccountId] = useState(product.incomeAccountId);
+  const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
@@ -22,7 +23,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     if (rateCents === null || rateCents < 0) return setError('Enter a valid rate.');
     setBusy(true);
     try {
-      const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId });
+      const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId, isTaxable: taxable });
       onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
     } catch (err) {
       setError(errorText(err));
@@ -50,6 +51,10 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
             <span className="font-semibold text-qb-ink-muted">Income account</span>
             <AccountSelect accounts={accounts} filter={incomeOnly} value={accountId} onChange={setAccountId} />
           </label>
+          <label className="col-span-2 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+            Taxable: charge sales tax when this is sold
+          </label>
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
@@ -72,6 +77,7 @@ export default function Products({ accounts }) {
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
   const [accountId, setAccountId] = useState(null);
+  const [taxable, setTaxable] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
@@ -99,6 +105,7 @@ export default function Products({ accounts }) {
         description: description.trim() || null,
         rateCents,
         incomeAccountId: chosenAccount,
+        isTaxable: taxable,
       });
       setNotice({ kind: 'success', text: `Added ${product.name}.` });
       setName('');
@@ -195,7 +202,13 @@ export default function Products({ accounts }) {
                     <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" inputMode="decimal" aria-label="Rate" aria-invalid={rateCents === null} />
                   </td>
                   <td className="qb-grid-cell-edit">
-                    <AccountSelect className="" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
+                    <span className="flex items-center gap-1">
+                      <AccountSelect className="min-w-0 flex-1" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
+                      <label className="flex flex-none items-center gap-0.5 pr-1 text-xs" title="Charge sales tax when sold">
+                        <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+                        Tax
+                      </label>
+                    </span>
                   </td>
                   <td className="qb-grid-cell" colSpan={3} />
                   <td className="qb-grid-cell cell-tight">
@@ -218,7 +231,10 @@ export default function Products({ accounts }) {
                     </td>
                     <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
                     <td className="qb-grid-cell num">{p.rateCents ? formatCents(p.rateCents) : ''}</td>
-                    <td className="qb-grid-cell">{accountLabel(accounts, p.incomeAccountId)}</td>
+                    <td className="qb-grid-cell">
+                      {accountLabel(accounts, p.incomeAccountId)}
+                      {p.isTaxable && <span className="ml-1 text-2xs font-semibold uppercase text-qb-ink-muted" title="Taxable">Tax</span>}
+                    </td>
                     {items.has(p.id) ? (
                       <>
                         <td

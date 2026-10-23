@@ -16,6 +16,7 @@ export const NAV = [
       { id: 'sales/credits', label: 'Credit Memos & Refunds' },
       { id: 'sales/customers', label: 'Customers' },
       { id: 'sales/products', label: 'Products & Services' },
+      { id: 'sales/tax', label: 'Sales Tax' },
     ],
   },
   {

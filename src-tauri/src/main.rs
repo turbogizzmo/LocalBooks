@@ -27,6 +27,7 @@ mod report_center;
 mod reports;
 mod revaluation;
 mod sales;
+mod sales_tax;
 mod simplefin;
 mod statements;
 mod storage;
@@ -183,6 +184,13 @@ fn main() {
             commands::get_general_ledger,
             commands::get_aging,
             commands::get_summary_report,
+            commands::list_tax_rates,
+            commands::create_tax_rate,
+            commands::update_tax_rate,
+            commands::set_tax_rate_active,
+            commands::pay_sales_tax,
+            commands::list_sales_tax_payments,
+            commands::get_tax_liability,
             commands::get_balance_sheet,
             commands::list_customers,
             commands::create_customer,

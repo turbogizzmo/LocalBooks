@@ -20,6 +20,7 @@ export const SCREEN_HELP = {
   'sales/all': 'Every sale in one register: invoices, payments and sales receipts. Record a sales receipt here when a customer pays at the time of sale.',
   'sales/invoices': 'Create invoices, see what each customer still owes, and record full or partial payments against one or several invoices.',
   'sales/estimates': 'Quotes for customers that do not touch your books until they become invoices. Mark an estimate accepted, then convert it to an invoice in one step.',
+  'sales/tax': 'Turn on sales tax, set up the rates you charge, see taxable sales and tax owed for any period, and record payments to the tax agency.',
   'sales/credits': 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
   'expenses/credits': 'Credit a vendor gave you, for returns or overcharges: apply it to their open bills, or record the refund they send.',
   'accounting/register': 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction.',
@@ -108,6 +109,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Products & Services', view: 'sales/products' },
   },
 
+  {
+    id: 'sales-tax', area: 'sales', views: ['sales/tax', 'sales/invoices', 'sales/all', 'sales/products', 'sales/customers'],
+    title: 'Charge and pay sales tax',
+    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (from the customer, or none if they are exempt); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed.',
+    keywords: 'sales tax vat gst tax rate taxable exempt pay sales tax liability agency',
+    go: { label: 'Go to Sales Tax', view: 'sales/tax' },
+  },
   {
     id: 'credit-memo', area: 'sales', views: ['sales/credits', 'sales/invoices', 'sales/customers'],
     title: 'Give a customer credit or a refund',

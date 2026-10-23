@@ -50,6 +50,13 @@ pub struct PartyView {
     pub email: Option<String>,
     pub is_active: bool,
     pub open_balance_cents: i64,
+    /// Customers: default sales tax rate and exemption; default terms (customers and vendors).
+    #[sqlx(default)]
+    pub tax_rate_id: Option<i64>,
+    #[sqlx(default)]
+    pub is_tax_exempt: bool,
+    #[sqlx(default)]
+    pub terms_days: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -61,6 +68,7 @@ pub struct ProductView {
     pub rate_cents: i64,
     pub income_account_id: i64,
     pub is_active: bool,
+    pub is_taxable: bool,
     /// Set for products whose stock is tracked: quantity on hand (scaled by 10,000).
     #[sqlx(default)]
     pub qty_on_hand_e4: Option<i64>,
@@ -73,6 +81,13 @@ pub struct ProductInput {
     pub description: Option<String>,
     pub rate_cents: i64,
     pub income_account_id: i64,
+    /// Charged sales tax when sold (on by default).
+    #[serde(default = "taxable_by_default")]
+    pub is_taxable: bool,
+}
+
+fn taxable_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,6 +101,8 @@ pub struct SalesLineInput {
     pub income_account_id: i64,
     #[serde(default)]
     pub class_id: Option<i64>,
+    #[serde(default)]
+    pub is_taxable: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -99,6 +116,8 @@ pub struct SalesReceiptInput {
     pub reference: Option<String>,
     pub memo: Option<String>,
     pub lines: Vec<SalesLineInput>,
+    #[serde(default)]
+    pub tax_rate_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -145,7 +164,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
-        "SELECT c.id, c.name, c.email, c.is_active,
+        "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS open_balance_cents
@@ -186,7 +205,7 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
 
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
-        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, i.qty_on_hand_e4
+        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4
          FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
          ORDER BY p.name COLLATE NOCASE",
     )
@@ -204,13 +223,14 @@ pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<Pr
         return Err("PRODUCT_BAD_RATE: rate must be zero or more".into());
     }
     sqlx::query_as::<_, ProductView>(
-        "INSERT INTO products_services (name, description, rate_cents, income_account_id) VALUES (?1, ?2, ?3, ?4)
-         RETURNING id, name, description, rate_cents, income_account_id, is_active",
+        "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable) VALUES (?1, ?2, ?3, ?4, ?5)
+         RETURNING id, name, description, rate_cents, income_account_id, is_active, is_taxable",
     )
     .bind(name)
     .bind(clean(input.description.as_deref()))
     .bind(input.rate_cents)
     .bind(input.income_account_id)
+    .bind(input.is_taxable)
     .fetch_one(pool)
     .await
     .map_err(|e| match e {
@@ -261,15 +281,22 @@ pub async fn post_sales_receipt(pool: &SqlitePool, input: SalesReceiptInput) -> 
 }
 
 async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesReceiptInput) -> Result<i64, String> {
-    let total = validate_sales_receipt(input)?;
+    let subtotal = validate_sales_receipt(input)?;
+    let mut taxable = 0;
+    for line in input.lines.iter().filter(|l| l.is_taxable) {
+        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
+    }
+    let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
+    let tax_cents = tax.map_or(0, |t| t.cents);
+    let total = subtotal.checked_add(tax_cents).filter(|t| *t <= crate::ledger::MAX_LINE_CENTS).ok_or("SR_TOO_LARGE: the receipt total is too large")?;
     let customer_id = match clean(input.customer_name.as_deref()) {
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
         None => None,
     };
 
     let (receipt_id, receipt_number): (i64, i64) = sqlx::query_as(
-        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents)
-         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents)
+         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          RETURNING id, receipt_number",
     )
     .bind(customer_id)
@@ -279,6 +306,8 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     .bind(clean(input.reference.as_deref()))
     .bind(clean(input.memo.as_deref()))
     .bind(total)
+    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax_cents)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -302,8 +331,8 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO sales_receipt_lines
-                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(receipt_id)
         .bind(n as i64)
@@ -314,6 +343,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         .bind(amount)
         .bind(line.income_account_id)
         .bind(line.class_id)
+        .bind(line.is_taxable && tax.is_some())
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -326,6 +356,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
+    lines.extend(tax.and_then(|t| t.line(false)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
@@ -403,7 +434,7 @@ mod tests {
     }
 
     fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-        SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None }
+        SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None, is_taxable: false }
     }
 
     #[tokio::test]
@@ -412,7 +443,7 @@ mod tests {
         let (checking, sales, services) = (account_id(&pool, "1010").await, account_id(&pool, "4000").await, account_id(&pool, "4100").await);
         let widget = create_product(
             &pool,
-            ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: 1_999, income_account_id: sales },
+            ProductInput { name: "Widget".into(), description: Some("Blue widget".into()), rate_cents: 1_999, income_account_id: sales, is_taxable: true },
         )
         .await
         .expect("product saved");
@@ -427,6 +458,7 @@ mod tests {
                 reference: None,
                 memo: Some("Counter sale".into()),
                 lines: vec![line(Some(widget.id), 3, 1_999, sales), line(None, 1, 5_000, services)],
+                tax_rate_id: None,
             },
         )
         .await
@@ -454,6 +486,7 @@ mod tests {
                 reference: None,
                 memo: None,
                 lines: vec![line(None, 1, 5_000, rent)],
+                tax_rate_id: None,
             },
         )
         .await
@@ -467,7 +500,7 @@ mod tests {
         .unwrap();
         assert_eq!((receipts, entries, customers), (0, 0, 0));
 
-        let err = create_product(&pool, ProductInput { name: "Bad".into(), description: None, rate_cents: 100, income_account_id: rent })
+        let err = create_product(&pool, ProductInput { name: "Bad".into(), description: None, rate_cents: 100, income_account_id: rent, is_taxable: true })
             .await
             .expect_err("product must map to income");
         assert!(err.starts_with("PRODUCT_NOT_INCOME_ACCOUNT"), "{err}");
@@ -483,8 +516,9 @@ mod tests {
                 customer_name: "acme corp".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
+                tax_rate_id: None,
             },
         )
         .await
@@ -506,6 +540,7 @@ mod tests {
                 reference: None,
                 memo: None,
                 lines: vec![line(None, 2, 2_500, services)],
+                tax_rate_id: None,
             },
         )
         .await

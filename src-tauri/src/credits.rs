@@ -68,6 +68,9 @@ pub struct CreditMemoInput {
     #[serde(default)]
     pub refund_account_id: Option<i64>,
     pub lines: Vec<SalesLineInput>,
+    /// Sales tax given back on the taxable lines.
+    #[serde(default)]
+    pub tax_rate_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -120,6 +123,13 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
         let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "CM")?;
         total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or_else(|| format!("CM_TOO_LARGE: total exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
+    let mut taxable = 0;
+    for line in input.lines.iter().filter(|l| l.is_taxable) {
+        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
+    }
+    let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "CM").await?;
+    let tax_cents = tax.map_or(0, |t| t.cents);
+    let total = total.checked_add(tax_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("CM_TOO_LARGE: the credit is too large")?;
     if let Some(account) = input.refund_account_id {
         check_money_account(tx, account, "CM").await?;
     }
@@ -127,8 +137,8 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
     let customer_id = find_or_create_named(tx, Party::Customer, customer).await?;
 
     let (memo_id, number): (i64, i64) = sqlx::query_as(
-        "INSERT INTO credit_memos (credit_number, customer_id, credit_date, memo, refund_account_id, total_cents)
-         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO credit_memos (credit_number, customer_id, credit_date, memo, refund_account_id, total_cents, tax_rate_id, tax_cents)
+         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING id, credit_number",
     )
     .bind(customer_id)
@@ -136,6 +146,8 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
     .bind(clean(input.memo.as_deref()))
     .bind(input.refund_account_id)
     .bind(total)
+    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax_cents)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -172,8 +184,8 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO credit_memo_lines
-                (credit_memo_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                (credit_memo_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(memo_id)
         .bind(n as i64)
@@ -184,6 +196,7 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
         .bind(amount)
         .bind(line.income_account_id)
         .bind(line.class_id)
+        .bind(line.is_taxable && tax.is_some())
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -199,6 +212,7 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
         None => system_account(tx, "ACCOUNTS_RECEIVABLE").await?,
     };
     let mut lines: Vec<JournalLine> = debits.into_iter().map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
+    lines.extend(tax.and_then(|t| t.line(true)));
     lines.push(JournalLine::credit(credit_account, total));
     let kind = if input.refund_account_id.is_some() { "Refund receipt" } else { "Credit memo" };
     let entry = JournalEntry { id: None, date: input.credit_date, description: format!("{kind} #{number} - {customer}"), lines, currency: None };
@@ -639,7 +653,7 @@ mod tests {
     }
 
     fn line(account: i64, cents: i64) -> SalesLineInput {
-        SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: account, class_id: None }
+        SalesLineInput { product_service_id: None, description: "Returned work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: account, class_id: None, is_taxable: false }
     }
 
     async fn invoice(pool: &SqlitePool, customer: &str, services: i64, cents: i64) -> i64 {
@@ -666,7 +680,7 @@ mod tests {
         let inv = invoice(&pool, "Acme", services, 50_000).await;
         let other = invoice(&pool, "Other Co", services, 10_000).await;
 
-        let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 20_000)] })
+        let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 20_000)], tax_rate_id: None })
             .await
             .unwrap();
         assert_eq!((memo.customer_name.as_str(), memo.remaining_cents), ("Acme", 20_000));
@@ -719,7 +733,7 @@ mod tests {
         let pool = test_pool().await;
         let (checking, ar, services) = (account(&pool, "1010").await, account(&pool, "1200").await, account(&pool, "4100").await);
         let inv = invoice(&pool, "Acme", services, 30_000).await;
-        let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "Acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 30_000)] })
+        let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "Acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 30_000)], tax_rate_id: None })
             .await
             .unwrap();
         apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: inv, amount_cents: 30_000, applied_date: d(6) }).await.unwrap();
@@ -733,7 +747,7 @@ mod tests {
         let before = balance(&pool, checking).await;
         let receipt = create_credit_memo(
             &pool,
-            CreditMemoInput { customer_name: "Walk-in".into(), credit_date: d(9), memo: None, refund_account_id: Some(checking), lines: vec![line(services, 4_500)] },
+            CreditMemoInput { customer_name: "Walk-in".into(), credit_date: d(9), memo: None, refund_account_id: Some(checking), lines: vec![line(services, 4_500)], tax_rate_id: None },
         )
         .await
         .unwrap();
