@@ -13,8 +13,11 @@ export const NAV = [
       { id: 'sales/all', label: 'All Sales' },
       { id: 'sales/invoices', label: 'Invoices' },
       { id: 'sales/estimates', label: 'Estimates' },
+      { id: 'sales/credits', label: 'Credit Memos & Refunds' },
       { id: 'sales/customers', label: 'Customers' },
       { id: 'sales/products', label: 'Products & Services' },
+      { id: 'sales/tax', label: 'Sales Tax' },
+      { id: 'sales/statements', label: 'Customer Statements' },
     ],
   },
   {
@@ -24,6 +27,8 @@ export const NAV = [
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
+      { id: 'expenses/purchase-orders', label: 'Purchase Orders' },
+      { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/vendors', label: 'Vendors' },
     ],
   },
@@ -49,8 +54,12 @@ export const NAV = [
     icon: <Icon name="Accounting" />,
     children: [
       { id: 'accounting/chart-of-accounts', label: 'Chart of Accounts' },
+      { id: 'accounting/register', label: 'Account Registers' },
       { id: 'accounting/classes', label: 'Classes' },
+      { id: 'accounting/reclassify', label: 'Reclassify Transactions' },
       { id: 'accounting/journal', label: 'Journal Entries' },
+      { id: 'accounting/recurring', label: 'Recurring Transactions' },
+      { id: 'accounting/budgets', label: 'Budgets' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
       { id: 'accounting/qbw-import', label: 'Desktop Migration Wizard' },

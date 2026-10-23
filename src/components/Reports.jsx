@@ -1,152 +1,82 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
-import { PrintPortal, StatementDocument, useCompany } from './PrintDocuments.jsx';
-import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { classLabel, useClasses } from './ClassSelect.jsx';
+import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { AgingReport, BudgetVsActualReport, CashFlowReport, Vendors1099Report, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
+import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
-import { periodRange, todayIso } from '../lib/dates.js';
+import { addDays, todayIso } from '../lib/dates.js';
 
-const PERIODS = [
-  { id: 'thisMonth', label: 'This month' },
-  { id: 'lastMonth', label: 'Last month' },
-  { id: 'fiscalQuarter', label: 'This fiscal quarter' },
-  { id: 'fiscalYearToDate', label: 'Fiscal year to date' },
-  { id: 'fiscalYear', label: 'This fiscal year' },
-  { id: 'lastFiscalYear', label: 'Last fiscal year' },
-  { id: 'custom', label: 'Custom' },
-];
+const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const MONTH_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-/** Resolves a period preset; fiscal presets come from the company's fiscal year setting. */
-function resolvePeriod(id, fiscal) {
-  const fromFiscal = { fiscalQuarter: 'thisQuarter', fiscalYearToDate: 'yearToDate', fiscalYear: 'thisYear', lastFiscalYear: 'lastYear' }[id];
-  if (fromFiscal && fiscal) return [fiscal[fromFiscal].start, fiscal[fromFiscal].end];
-  if (fromFiscal) return periodRange(id === 'fiscalYearToDate' ? 'thisYearToDate' : id === 'lastFiscalYear' ? 'lastYear' : id === 'fiscalQuarter' ? 'thisQuarter' : 'thisYear');
-  return periodRange(id);
-}
-
-/** "Export" dropdown: CSV through the native save dialog, or the system print dialog (Save as PDF). */
-function ExportMenu({ onCsv, onNotice }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => !ref.current?.contains(e.target) && setOpen(false);
-    const esc = (e) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
-
-  const run = async (action) => {
-    setOpen(false);
-    try {
-      await action();
-    } catch (err) {
-      onNotice({ kind: 'error', text: errorText(err) });
+/** The range split into calendar months or quarters (the first and last clipped to the range). */
+export function splitPeriods(start, end, mode) {
+  const columns = [];
+  let [y, m] = start.split('-').map(Number);
+  while (iso(y, m, 1) <= end) {
+    const label = mode === 'quarters' ? `Q${Math.floor((m - 1) / 3) + 1} ${y}` : MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1)));
+    const from = iso(y, m, 1) < start ? start : iso(y, m, 1);
+    const to = iso(y, m, lastDay(y, m)) > end ? end : iso(y, m, lastDay(y, m));
+    const last = columns[columns.length - 1];
+    if (last && last.label === label) last.endDate = to;
+    else columns.push({ label, startDate: from, endDate: to });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
     }
-  };
-  const print = printDocument;
-
-  return (
-    <div ref={ref} className="relative self-center">
-      <button type="button" className="qb-btn qb-btn-secondary h-row" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        Export ▾
-      </button>
-      {open && (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-0.5 w-[180px] rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover">
-          <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onCsv)}>
-            Export to CSV
-          </button>
-          <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(print)}>
-            Print / Save to PDF
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  }
+  return columns;
 }
 
-async function saveCsv(report, params, filename, onNotice) {
-  const csv = await api.reportCsv(report, params);
-  const path = await api.saveReportToDisk(csv, filename);
-  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+const shiftYear = (date) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return iso(y - 1, m, Math.min(d, lastDay(y - 1, m)));
+};
+
+/** The comparison period: the same length immediately before, or the same dates a year earlier. */
+export function priorRange(start, end, mode) {
+  if (mode === 'year') return [shiftYear(start), shiftYear(end)];
+  const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
+  const to = addDays(start, -1);
+  return [addDays(to, -days), to];
 }
 
-const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-const longDate = (iso) => LONG_DATE.format(new Date(`${iso}T00:00:00Z`));
+const RANGE_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const shortRange = (from, to) => `${RANGE_LABEL.format(new Date(`${from}T00:00:00Z`))} – ${RANGE_LABEL.format(new Date(`${to}T00:00:00Z`))}`;
 
-/** One statement line: name left (indented by depth), amounts right, rules by line kind. */
-function StatementLine({ line, columns }) {
-  const indent = { paddingLeft: `${8 + line.depth * 16}px` };
-  const strong = line.kind !== 'account';
-  const rule =
-    line.kind === 'net'
-      ? 'border-t border-b-[3px] border-double border-qb-ink'
-      : line.kind === 'total' || line.kind === 'subtotal'
-        ? 'border-t border-qb-ink'
-        : '';
-  const spacing = line.kind === 'net' ? 'pb-2' : line.kind === 'total' && line.depth === 0 ? 'pb-1.5' : '';
-  return (
-    <tr className={`${line.kind === 'account' ? 'hover:bg-qb-row-hover' : ''} ${spacing}`}>
-      <td className={`py-0.5 pr-2 ${strong ? 'font-semibold' : ''} ${line.kind === 'net' ? 'text-md' : ''}`} style={indent}>
-        {line.label}
-      </td>
-      {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
-        <td key={c} className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal ? 'bg-qb-canvas' : ''}`}>
-          {cents !== null && cents !== undefined && (
-            <div className={`num ${strong || columns?.[c]?.isTotal ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>{formatCents(cents)}</div>
-          )}
-        </td>
-      ))}
-    </tr>
-  );
-}
-
-/** An on-screen statement; `columns` (from Profit and Loss by Class) gives one amount column each. */
-function Statement({ title, subtitle, lines, footer, columns = null }) {
-  const company = useCompany();
-  const wide = columns && columns.length > 2;
-  return (
-    <article className={`mx-auto w-full ${wide ? 'max-w-[1240px] overflow-x-auto' : 'max-w-[760px]'} bg-white px-6 py-4 shadow-panel`}>
-      <header className="mb-3 flex items-start gap-4 border-b-[3px] border-double border-qb-ink pb-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase tracking-wide text-qb-ink-muted">{company.name}</div>
-          <h2 className="text-xl font-semibold">{title}</h2>
-          <div className="text-sm text-qb-ink-muted">{subtitle}</div>
-        </div>
-        {company.logo && <img src={company.logo} alt={`${company.name} logo`} className="max-h-[56px] max-w-[180px] object-contain" />}
-      </header>
-      <PrintPortal>
-        <StatementDocument company={company} title={title} subtitle={subtitle} lines={lines} footer={footer} columns={columns?.map((c) => c.label) ?? null} />
-      </PrintPortal>
-      <table className="w-full border-collapse text-base">
-        <thead>
-          <tr className="border-b border-qb-border-strong">
-            <th className="py-0.5 text-left text-xs font-semibold uppercase tracking-wide text-qb-ink-muted" />
-            {(columns ?? [{ label: 'Total' }]).map((c) => (
-              <th key={c.label} className="py-0.5 pr-2 text-right text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{c.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line, i) => (
-            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} />
-          ))}
-        </tbody>
-      </table>
-      {footer && <footer className="mt-3 border-t border-qb-border pt-1 text-xs text-qb-ink-muted">{footer}</footer>}
-    </article>
-  );
-}
-
-function ProfitAndLoss({ byClass = false }) {
+function ProfitAndLoss({ byClass = false, navigate }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
   const [notice, setNotice] = useState(null);
-  const { data, error, reload } = useLedgerQuery(() => (byClass ? api.getProfitAndLossByClass(start, end) : api.getProfitAndLoss(start, end)));
+  const classes = useClasses();
+  // '' = all lines, 'none' = lines without a class, otherwise a class id (with its subclasses).
+  const [classChoice, setClassChoice] = useState('');
+  const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
+  const [basis, setBasis] = useState('ACCRUAL');
+  const [split, setSplit] = useState('total'); // total | months | quarters
+  const [compare, setCompare] = useState('none'); // none | period | year
+  const periodColumns = () => {
+    if (split !== 'total') return splitPeriods(start, end, split);
+    if (compare === 'none') return null;
+    const [ps, pe] = priorRange(start, end, compare);
+    return [
+      { label: shortRange(start, end), startDate: start, endDate: end },
+      { label: shortRange(ps, pe), startDate: ps, endDate: pe },
+    ];
+  };
+  const multi = !byClass && (split !== 'total' || compare !== 'none');
+  const { data, error, reload } = useLedgerQuery(() => {
+    if (byClass) return api.getProfitAndLossByClass(start, end);
+    if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis);
+    const columns = periodColumns();
+    if (columns.length > 36) return Promise.reject(new Error('RPT_BAD_COLUMNS: choose a shorter range or quarters (at most 36 columns)'));
+    return api.getProfitAndLossPeriods({ columns, total: split !== 'total', compare: split === 'total' && compare !== 'none', basis, classFilter });
+  });
 
   // Once the fiscal calendar loads (or changes in Settings), re-resolve the selected preset.
   useEffect(() => {
@@ -155,7 +85,12 @@ function ProfitAndLoss({ byClass = false }) {
 
   useEffect(() => {
     if (start && end && start <= end) reload();
-  }, [start, end, reload]);
+  }, [start, end, classChoice, basis, split, compare, reload]);
+  const classSubtitle = classChoice === '' ? '' : ` · Class: ${classChoice === 'none' ? 'Unclassified' : `${classLabel(classes, Number(classChoice))} (with subclasses)`}`;
+  const company = useCompany();
+  const subtitle = data
+    ? (data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(start)} – ${longDate(end)}`) + (byClass ? '' : classSubtitle)
+    : '';
 
   return (
     <>
@@ -183,21 +118,77 @@ function ProfitAndLoss({ byClass = false }) {
           <span className="qb-label">To</span>
           <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
         </label>
-        {data && !byClass && (
+        {!byClass && (
+          <>
+            <label>
+              <span className="qb-label">Basis</span>
+              <select className="qb-input w-[100px]" value={basis} onChange={(e) => setBasis(e.target.value)}>
+                <option value="ACCRUAL">Accrual</option>
+                <option value="CASH">Cash</option>
+              </select>
+            </label>
+            <label>
+              <span className="qb-label">Columns</span>
+              <select className="qb-input w-[120px]" value={split} onChange={(e) => setSplit(e.target.value)}>
+                <option value="total">Total only</option>
+                <option value="months">Months</option>
+                <option value="quarters">Quarters</option>
+              </select>
+            </label>
+            <label>
+              <span className="qb-label">Compare with</span>
+              <select className="qb-input w-[150px]" value={split === 'total' ? compare : 'none'} onChange={(e) => setCompare(e.target.value)} disabled={split !== 'total'}>
+                <option value="none">Nothing</option>
+                <option value="period">Previous period</option>
+                <option value="year">Previous year</option>
+              </select>
+            </label>
+          </>
+        )}
+        {!byClass && classes.length > 0 && (
+          <label>
+            <span className="qb-label">Class</span>
+            <select className="qb-input w-[180px]" value={classChoice} onChange={(e) => setClassChoice(e.target.value)}>
+              <option value="">All classes</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {'\u00a0\u00a0'.repeat(c.depth)}
+                  {c.name}
+                </option>
+              ))}
+              <option value="none">Unclassified</option>
+            </select>
+          </label>
+        )}
+        {data && !byClass && !multi && (
           <div className="ml-auto flex gap-4 self-center text-sm">
             <span className="text-qb-ink-muted">Revenue <span className="num font-semibold text-qb-ink">{formatCents(data.totalRevenueCents)}</span></span>
             <span className="text-qb-ink-muted">Expenses <span className="num font-semibold text-qb-ink">{formatCents(data.totalExpensesCents)}</span></span>
             <span className="text-qb-ink-muted">Net income <span className={`num font-semibold ${data.netIncomeCents < 0 ? 'text-qb-negative' : 'text-qb-green-active'}`}>{data.netIncomeDisplay}</span></span>
           </div>
         )}
-        <div className={data && !byClass ? '' : 'ml-auto'}>
+        <div className={data && !byClass && !multi ? '' : 'ml-auto'}>
           <ExportMenu
             onNotice={setNotice}
-            onCsv={() =>
-              byClass
-                ? saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice)
-                : saveCsv('profit_and_loss', { startDate: start, endDate: end }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice)
-            }
+            onCsv={() => {
+              if (byClass) return saveCsv('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.csv`, setNotice);
+              if (!multi && basis === 'ACCRUAL') return saveCsv('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+              // Cash basis and multi-column layouts export what is on screen.
+              const columns = data.columns ?? [{ label: 'Total' }];
+              const rows = [
+                [company.name],
+                ['Profit and Loss'],
+                [subtitle],
+                [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
+                [],
+                ['Account', ...columns.map((c) => c.label)],
+                ...data.lines.map((l) => [
+                  `${'  '.repeat(l.depth)}${l.label}`,
+                  ...(data.columns ? l.amountsCents : [l.amountCents]).map((a, i) => (columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a))),
+                ]),
+              ];
+              return saveText(toCsv(rows), `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+            }}
           />
         </div>
       </div>
@@ -210,17 +201,24 @@ function ProfitAndLoss({ byClass = false }) {
       {data && (
         <Statement
           title={byClass ? 'Profit and Loss by Class' : 'Profit and Loss'}
-          subtitle={data.startDate === data.endDate ? longDate(data.startDate) : `${longDate(data.startDate)} – ${longDate(data.endDate)}`}
+          subtitle={subtitle}
           lines={data.lines}
-          columns={byClass ? data.columns : null}
-          footer={byClass ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified' : 'Accrual basis · posted transactions only'}
+          columns={byClass || multi ? data.columns : null}
+          onAccount={(line) =>
+            navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate, includeSubaccounts: line.kind === 'subtotal' })
+          }
+          footer={
+            byClass
+              ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified'
+              : `${basis === 'CASH' ? 'Cash basis: invoices and bills count as they are paid' : 'Accrual basis'} · posted transactions only`
+          }
         />
       )}
     </>
   );
 }
 
-function BalanceSheet() {
+function BalanceSheet({ navigate }) {
   const [asOf, setAsOf] = useState(todayIso());
   const [notice, setNotice] = useState(null);
   const { data, error, reload } = useLedgerQuery(() => api.getBalanceSheet(asOf));
@@ -256,6 +254,7 @@ function BalanceSheet() {
           title="Balance Sheet"
           subtitle={`As of ${longDate(data.asOf)}`}
           lines={data.lines}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: null, endDate: data.asOf, includeSubaccounts: line.kind === 'subtotal' })}
           footer={`Accrual basis · fiscal year began ${longDate(data.fiscalYearStart)} · prior years' profit is shown in Retained Earnings`}
         />
       )}
@@ -263,31 +262,99 @@ function BalanceSheet() {
   );
 }
 
-export default function Reports() {
-  const [report, setReport] = useState('pl');
+/** The report list, grouped as in classic desktop accounting software. */
+const REPORT_GROUPS = [
+  {
+    title: 'Business overview',
+    reports: [
+      ['pl', 'Profit and Loss'],
+      ['plc', 'Profit and Loss by Class'],
+      ['bs', 'Balance Sheet'],
+      ['cf', 'Statement of Cash Flows'],
+      ['bva', 'Budget vs. Actuals'],
+    ],
+  },
+  {
+    title: 'Who owes you',
+    reports: [
+      ['ar', 'A/R Aging Summary'],
+      ['ar-detail', 'Open Invoices (A/R Aging Detail)'],
+    ],
+  },
+  {
+    title: 'Sales and customers',
+    reports: [
+      ['sales-customer', 'Sales by Customer Summary'],
+      ['sales-product', 'Sales by Product/Service Summary'],
+    ],
+  },
+  {
+    title: 'What you owe',
+    reports: [
+      ['ap', 'A/P Aging Summary'],
+      ['ap-detail', 'Unpaid Bills (A/P Aging Detail)'],
+      ['sales-tax', 'Sales Tax Liability'],
+    ],
+  },
+  {
+    title: 'Expenses and vendors',
+    reports: [
+      ['expenses-vendor', 'Expenses by Vendor Summary'],
+      ['1099', '1099 Summary'],
+    ],
+  },
+  {
+    title: 'For my accountant',
+    reports: [
+      ['tb', 'Trial Balance'],
+      ['gl', 'General Ledger'],
+    ],
+  },
+];
+
+export default function Reports({ navigate, intent }) {
+  const [report, setReport] = useState(() => intent?.data?.report ?? 'pl');
+  useEffect(() => {
+    if (intent?.data?.report) setReport(intent.data.report);
+  }, [intent]);
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
-      <div className="no-print flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
-        {[
-          ['pl', 'Profit and Loss'],
-          ['plc', 'Profit and Loss by Class'],
-          ['bs', 'Balance Sheet'],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={report === id}
-            onClick={() => setReport(id)}
-            className={`px-3 py-0.5 font-semibold ${report === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
-          >
-            {label}
-          </button>
+    <div className="flex h-full gap-2 p-2">
+      <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
+        {REPORT_GROUPS.map((group) => (
+          <div key={group.title} className="mb-1">
+            <div className="px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">{group.title}</div>
+            {group.reports.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={report === id ? 'page' : undefined}
+                onClick={() => setReport(id)}
+                className={`block w-full px-3 py-0.5 text-left text-sm ${report === id ? 'bg-qb-green-tint font-semibold text-qb-green-active' : 'hover:bg-qb-row-hover'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ))}
+      </nav>
+      <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-auto scrollbar-thin">
+        {report === 'pl' && <ProfitAndLoss key="pl" navigate={navigate} />}
+        {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
+        {report === 'bs' && <BalanceSheet navigate={navigate} />}
+        {report === 'cf' && <CashFlowReport navigate={navigate} />}
+        {report === 'ar' && <AgingReport key="ar" payable={false} detail={false} />}
+        {report === 'ar-detail' && <AgingReport key="ard" payable={false} detail />}
+        {report === 'ap' && <AgingReport key="ap" payable detail={false} />}
+        {report === 'ap-detail' && <AgingReport key="apd" payable detail />}
+        {report === 'sales-customer' && <SummaryReport key="sc" by="customer" />}
+        {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
+        {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
+        {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
+        {report === 'sales-tax' && <SalesTaxLiabilityReport />}
+        {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
+        {report === 'bva' && <BudgetVsActualReport navigate={navigate} />}
+        {report === '1099' && <Vendors1099Report />}
       </div>
-      {report === 'pl' && <ProfitAndLoss key="pl" />}
-      {report === 'plc' && <ProfitAndLoss key="plc" byClass />}
-      {report === 'bs' && <BalanceSheet />}
     </div>
   );
 }

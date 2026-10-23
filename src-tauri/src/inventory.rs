@@ -549,7 +549,7 @@ mod tests {
         let sales = account(&pool, "4000").await;
         let product = crate::sales::create_product(
             &pool,
-            crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales },
+            crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: true },
         )
         .await
         .unwrap()

@@ -19,6 +19,8 @@ pub struct TimeActivityInput {
     pub billable: bool,
     pub hourly_rate_cents: Option<i64>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -36,6 +38,8 @@ pub struct TimeActivityView {
     pub billable: bool,
     pub hourly_rate_cents: Option<i64>,
     pub description: Option<String>,
+    pub class_id: Option<i64>,
+    pub class_name: Option<String>,
 }
 
 pub async fn list_employees(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
@@ -80,10 +84,13 @@ fn validate(input: &TimeActivityInput, n: usize) -> Result<(), String> {
 }
 
 async fn write_activity(tx: &mut Transaction<'_, Sqlite>, input: &TimeActivityInput) -> Result<(), String> {
+    if let Some(class) = input.class_id {
+        crate::classes::check_usable(tx, class, "TIME: an entry").await?;
+    }
     sqlx::query(
         "INSERT INTO time_activities
-            (employee_id, activity_date, customer_id, product_service_id, minutes, billable, hourly_rate_cents, description)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            (employee_id, activity_date, customer_id, product_service_id, minutes, billable, hourly_rate_cents, description, class_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )
     .bind(input.employee_id)
     .bind(input.activity_date)
@@ -93,6 +100,7 @@ async fn write_activity(tx: &mut Transaction<'_, Sqlite>, input: &TimeActivityIn
     .bind(input.billable)
     .bind(if input.billable { input.hourly_rate_cents } else { None })
     .bind(input.description.as_deref().map(str::trim).filter(|d| !d.is_empty()))
+    .bind(input.class_id)
     .execute(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -120,8 +128,10 @@ pub async fn create_time_activities(pool: &SqlitePool, inputs: Vec<TimeActivityI
 pub async fn list_time_activities(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> Result<Vec<TimeActivityView>, String> {
     sqlx::query_as::<_, TimeActivityView>(
         "SELECT t.id, t.employee_id, e.name AS employee_name, t.activity_date, t.customer_id, c.name AS customer_name,
-                t.product_service_id, p.name AS service_name, t.minutes, t.billable, t.hourly_rate_cents, t.description
+                t.product_service_id, p.name AS service_name, t.minutes, t.billable, t.hourly_rate_cents, t.description,
+                t.class_id, k.full_name AS class_name
          FROM time_activities t
+         LEFT JOIN v_classes k ON k.id = t.class_id
          JOIN employees e ON e.id = t.employee_id
          LEFT JOIN customers c ON c.id = t.customer_id
          LEFT JOIN products_services p ON p.id = t.product_service_id
@@ -159,6 +169,7 @@ mod tests {
             billable,
             hourly_rate_cents: Some(12_500),
             description: Some("Implementation".into()),
+            class_id: None,
         };
 
         let saved = create_time_activities(&pool, vec![entry(12, 480, true), entry(13, 450, true), entry(14, 90, false)]).await.unwrap();

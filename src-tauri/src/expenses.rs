@@ -95,7 +95,8 @@ pub async fn list_vendors(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT v.id, v.name, v.email, v.is_active,
                 COALESCE((SELECT SUM(total_cents - amount_paid_cents) FROM bills
-                          WHERE vendor_id = v.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0) AS open_balance_cents
+                          WHERE vendor_id = v.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0)
+                - COALESCE((SELECT SUM(remaining_cents) FROM v_vendor_credit_balances WHERE vendor_id = v.id), 0) AS open_balance_cents
          FROM vendors v ORDER BY v.name COLLATE NOCASE",
     )
     .fetch_all(pool)
@@ -191,7 +192,7 @@ pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<Bil
     get_bill(pool, bill_id).await
 }
 
-async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
+pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
     let total = validate_bill(input)?;
     let vendor_name = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor_name).await?;

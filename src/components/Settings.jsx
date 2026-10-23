@@ -338,6 +338,43 @@ function PreferencesConsole() {
             ),
           })}
         </Group>
+        <Group title="Class tracking" id="class-tracking">
+          {field({
+            label: 'Use class tracking',
+            prefKey: 'class_tracking',
+            hint: 'Adds a Class column to sales, purchase, deposit and journal entry forms (manage the list in Accounting › Classes)',
+            children: ({ id, value, commit }) => (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                Track classes on transactions
+              </label>
+            ),
+          })}
+          {prefs.class_tracking === 'true' &&
+            field({
+              label: 'Assign classes',
+              prefKey: 'class_assign',
+              hint: 'One class per line, or one class for the whole transaction',
+              children: ({ id, value, commit, invalid }) => (
+                <select id={id} className="qb-input w-[220px]" value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+                  <option value="line">One to each line</option>
+                  <option value="transaction">One to the entire transaction</option>
+                </select>
+              ),
+            })}
+          {prefs.class_tracking === 'true' &&
+            field({
+              label: 'Warn when no class',
+              prefKey: 'class_prompt',
+              hint: 'Asks before saving income or expense lines that have no class',
+              children: ({ id, value, commit }) => (
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                  Warn me when a transaction is not assigned a class
+                </label>
+              ),
+            })}
+        </Group>
         <Group title="Automatic backups">
           {field({
             label: 'Daily backup',

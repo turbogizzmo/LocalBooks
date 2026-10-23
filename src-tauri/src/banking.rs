@@ -43,6 +43,8 @@ pub struct DepositOtherLine {
     pub account_id: i64,
     pub amount_cents: i64,
     pub memo: Option<String>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,17 +203,18 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     for line in &input.other_lines {
         line_number += 1;
         sqlx::query(
-            "INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
         .bind(deposit_id)
         .bind(line_number)
         .bind(line.account_id)
         .bind(line.amount_cents)
         .bind(clean(line.memo.as_deref()))
+        .bind(line.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-        credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()));
+        credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
 
     let mut lines = vec![JournalLine::debit(input.bank_account_id, total)];
@@ -335,8 +338,10 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: d(1),
                 due_date: d(31),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 80_000, income_account_id: services, product_service_id: None, class_id: None }],
+                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 80_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
+                tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -361,7 +366,7 @@ mod tests {
             deposit_date: d(4),
             memo: Some("Branch deposit".into()),
             items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
-            other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()) }],
+            other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None }],
         };
         let deposit_id = post_bank_deposit(&pool, deposit_input(waiting.iter().collect())).await.expect("deposit posts");
         assert_eq!(balance(&pool, checking).await, 80_125);

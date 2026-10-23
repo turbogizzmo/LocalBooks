@@ -6,10 +6,11 @@
 //! line can be renamed, moved or made inactive, but not deleted: posted lines keep their class
 //! forever. Inactive classes stay on the lines that already use them but cannot be chosen again.
 
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, rollback};
+use crate::ledger::{db_err, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +34,10 @@ pub struct ClassInput {
 }
 
 /// Tables whose lines may carry a class.
-const CLASS_USERS: &[&str] = &["journal_lines", "invoice_items", "sales_receipt_lines", "estimate_lines", "bill_lines", "expense_lines"];
+const CLASS_USERS: &[&str] = &[
+    "journal_lines", "invoice_items", "sales_receipt_lines", "estimate_lines", "bill_lines", "expense_lines",
+    "deposit_lines", "bank_transactions", "time_activities",
+];
 
 fn is_used_sql() -> String {
     CLASS_USERS.iter().map(|t| format!("EXISTS (SELECT 1 FROM {t} WHERE class_id = c.id)")).collect::<Vec<_>>().join(" OR ")
@@ -191,6 +195,160 @@ pub(crate) async fn check_usable(tx: &mut Transaction<'_, Sqlite>, class_id: i64
     }
 }
 
+// ------------------------------------------------------------------------------------------------
+// Reclassifying posted lines
+// ------------------------------------------------------------------------------------------------
+
+/// A posted income or expense line that can be moved to another class.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ReclassLine {
+    pub line_id: i64,
+    pub journal_entry_id: i64,
+    pub entry_number: i64,
+    pub entry_date: String,
+    pub source_type: String,
+    pub memo: Option<String>,
+    pub account_id: i64,
+    pub account_name: String,
+    /// Debit minus credit, in home currency.
+    pub amount_cents: i64,
+    /// The line's class now, after any earlier reclassification.
+    pub class_id: Option<i64>,
+    pub class_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReclassQuery {
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    #[serde(default)]
+    pub account_id: Option<i64>,
+    /// Only lines currently in this class (with its subclasses)...
+    #[serde(default)]
+    pub class_id: Option<i64>,
+    /// ...or, when true, only lines with no class.
+    #[serde(default)]
+    pub unclassified: bool,
+}
+
+/// Income and expense lines in the range that can be reclassified: posted, not voided, not a void's
+/// reversal, and not themselves part of a reclassifying entry.
+pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Result<Vec<ReclassLine>, String> {
+    sqlx::query_as::<_, ReclassLine>(
+        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, e.source_type,
+                COALESCE(l.memo, e.memo) AS memo, l.account_id, a.full_name AS account_name,
+                l.debit_cents - l.credit_cents AS amount_cents, x.class_id, k.full_name AS class_name
+         FROM journal_lines l
+         JOIN journal_entries e ON e.id = l.journal_entry_id
+         JOIN v_chart_of_accounts a ON a.id = l.account_id
+         JOIN v_line_effective_class x ON x.line_id = l.id
+         LEFT JOIN v_classes k ON k.id = x.class_id
+         WHERE e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
+           AND NOT EXISTS (SELECT 1 FROM class_reclassifications r WHERE r.journal_entry_id = e.id)
+           AND a.classification IN ('INCOME', 'EXPENSE')
+           AND e.entry_date BETWEEN ?1 AND ?2
+           AND (?3 IS NULL OR l.account_id = ?3)
+           AND (?4 IS NULL OR x.class_id IN (SELECT class_id FROM v_class_ancestry WHERE ancestor_id = ?4))
+           AND (?5 = 0 OR x.class_id IS NULL)
+         ORDER BY e.entry_date, e.entry_number, l.line_number",
+    )
+    .bind(query.start_date)
+    .bind(query.end_date)
+    .bind(query.account_id)
+    .bind(query.class_id)
+    .bind(query.unclassified)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// Moves posted lines to `to_class_id` (or to no class). Posted lines never change, so each line's
+/// amount is moved with a reclassifying journal entry on the line's own date: the same account,
+/// out of its current class and into the new one. Lines already in the target class are skipped.
+/// Returns how many lines moved.
+pub async fn reclassify(pool: &SqlitePool, line_ids: &[i64], to_class_id: Option<i64>) -> Result<usize, String> {
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    match write_reclassification(&mut tx, line_ids, to_class_id).await {
+        Ok(moved) => tx.commit().await.map(|()| moved).map_err(db_err),
+        Err(err) => Err(rollback(tx, err).await),
+    }
+}
+
+async fn write_reclassification(tx: &mut Transaction<'_, Sqlite>, line_ids: &[i64], to_class_id: Option<i64>) -> Result<usize, String> {
+    if line_ids.is_empty() {
+        return Err("RECLASS_NO_LINES: choose at least one line to reclassify".into());
+    }
+    if let Some(class) = to_class_id {
+        check_usable(tx, class, "RECLASS: the new class").await?;
+    }
+    let target_name: String = match to_class_id {
+        Some(id) => sqlx::query_scalar("SELECT full_name FROM v_classes WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)?,
+        None => "no class".into(),
+    };
+
+    // (date, lines to post, (line id, from class)) per entry date, in first-appearance order.
+    let mut by_date: Vec<(NaiveDate, Vec<JournalLine>, Vec<(i64, Option<i64>)>)> = Vec::new();
+    for &line_id in line_ids {
+        let row: Option<(NaiveDate, i64, i64, i64, Option<i64>, bool)> = sqlx::query_as(
+            "SELECT e.entry_date, l.account_id, l.debit_cents, l.credit_cents, x.class_id,
+                    (e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
+                     AND NOT EXISTS (SELECT 1 FROM class_reclassifications r WHERE r.journal_entry_id = e.id)
+                     AND a.classification IN ('INCOME', 'EXPENSE'))
+             FROM journal_lines l
+             JOIN journal_entries e ON e.id = l.journal_entry_id
+             JOIN v_chart_of_accounts a ON a.id = l.account_id
+             JOIN v_line_effective_class x ON x.line_id = l.id
+             WHERE l.id = ?1",
+        )
+        .bind(line_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        let (date, account, debit, credit, from, movable) = row.ok_or_else(|| format!("RECLASS_NOT_FOUND: line {line_id} does not exist"))?;
+        if !movable {
+            return Err(format!("RECLASS_NOT_ALLOWED: line {line_id} is not a posted income or expense line that can be reclassified"));
+        }
+        if from == to_class_id {
+            continue;
+        }
+        let (out_of, into) = if debit > 0 {
+            (JournalLine::credit(account, debit), JournalLine::debit(account, debit))
+        } else {
+            (JournalLine::debit(account, credit), JournalLine::credit(account, credit))
+        };
+        let group = match by_date.iter_mut().position(|(d, _, _)| *d == date) {
+            Some(i) => &mut by_date[i],
+            None => {
+                by_date.push((date, Vec::new(), Vec::new()));
+                by_date.last_mut().unwrap()
+            }
+        };
+        group.1.push(out_of.with_class(from));
+        group.1.push(into.with_class(to_class_id));
+        group.2.push((line_id, from));
+    }
+
+    let mut moved = 0;
+    for (date, lines, sources) in by_date {
+        let entry = JournalEntry { id: None, date, description: format!("Reclassify to {target_name}"), lines, currency: None };
+        let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Reclassification).await?;
+        for (line_id, from) in sources {
+            sqlx::query("INSERT INTO class_reclassifications (line_id, from_class_id, to_class_id, journal_entry_id) VALUES (?1, ?2, ?3, ?4)")
+                .bind(line_id)
+                .bind(from)
+                .bind(to_class_id)
+                .bind(entry_id)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
+            moved += 1;
+        }
+    }
+    Ok(moved)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,5 +413,49 @@ mod tests {
         let unused = create_class(&pool, input("Spare", None)).await.unwrap();
         delete_class(&pool, unused.id).await.unwrap();
         assert!(list_classes(&pool).await.unwrap().iter().all(|c| c.id != unused.id));
+    }
+
+    #[tokio::test]
+    async fn reclassifying_moves_lines_between_classes_and_voids_in_order() {
+        let pool = test_pool().await;
+        let account = |n: &'static str| sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n);
+        let (checking, rent) = (account("1010").fetch_one(&pool).await.unwrap(), account("6300").fetch_one(&pool).await.unwrap());
+        let east = create_class(&pool, input("East", None)).await.unwrap().id;
+        let west = create_class(&pool, input("West", None)).await.unwrap().id;
+        let date = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+        let lines = vec![JournalLine::debit(rent, 800).with_class(Some(east)), JournalLine::credit(checking, 800)];
+        let original = post_journal_entry(&pool, JournalEntry { id: None, date, description: "Rent".into(), lines, currency: None }).await.unwrap();
+        let class_net = |class: i64| {
+            sqlx::query_scalar::<_, i64>("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1 AND class_id = ?2").bind(rent).bind(class)
+        };
+        let query = ReclassQuery { start_date: date, end_date: date, account_id: None, class_id: None, unclassified: false };
+        let candidates = reclass_candidates(&pool, &query).await.unwrap();
+        assert_eq!(candidates.len(), 1, "only the expense line; the bank line is not income or expense");
+        let line = candidates[0].line_id;
+
+        // East → West, then West → no class: each move is its own entry and nothing doubles up.
+        set_class_active(&pool, east, false).await.unwrap(); // moving out of an inactive class is allowed
+        assert_eq!(reclassify(&pool, &[line], Some(west)).await.unwrap(), 1);
+        assert_eq!((class_net(east).fetch_one(&pool).await.unwrap(), class_net(west).fetch_one(&pool).await.unwrap()), (0, 800));
+        assert_eq!(reclassify(&pool, &[line], Some(west)).await.unwrap(), 0, "already in West");
+        assert_eq!(reclass_candidates(&pool, &query).await.unwrap()[0].class_id, Some(west));
+        assert_eq!(reclassify(&pool, &[line], None).await.unwrap(), 1);
+        assert_eq!(class_net(west).fetch_one(&pool).await.unwrap(), 0);
+        assert_eq!(reclass_candidates(&pool, &query).await.unwrap()[0].class_id, None);
+
+        // The original cannot be voided while moved; reclassifying entries are undone newest first.
+        let err = crate::ledger::void_transaction(&pool, original).await.unwrap_err();
+        assert!(err.starts_with("VOID_RECLASSIFIED"), "{err}");
+        let reclass_entries: Vec<i64> =
+            sqlx::query_scalar("SELECT DISTINCT journal_entry_id FROM class_reclassifications ORDER BY id").fetch_all(&pool).await.unwrap();
+        let err = crate::ledger::void_transaction(&pool, reclass_entries[0]).await.unwrap_err();
+        assert!(err.starts_with("VOID_RECLASS_ORDER"), "{err}");
+        crate::ledger::void_transaction(&pool, reclass_entries[1]).await.unwrap();
+        assert_eq!(reclass_candidates(&pool, &query).await.unwrap()[0].class_id, Some(west));
+        crate::ledger::void_transaction(&pool, reclass_entries[0]).await.unwrap();
+        assert_eq!(reclass_candidates(&pool, &query).await.unwrap()[0].class_id, Some(east));
+        crate::ledger::void_transaction(&pool, original).await.unwrap();
+        assert_eq!(class_net(east).fetch_one(&pool).await.unwrap(), 0);
+        assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
     }
 }

@@ -7,7 +7,9 @@ mod banking;
 mod classes;
 mod closing;
 mod commands;
+mod credits;
 mod db;
+mod edits;
 mod estimates;
 mod expenses;
 mod forensic;
@@ -16,17 +18,22 @@ mod instance;
 mod inventory;
 mod invoices;
 mod ledger;
+mod parties;
 mod mcp_server;
 mod preferences;
 mod qbw_import;
 mod reconcile;
+mod registers;
+mod report_center;
 mod reports;
 mod revaluation;
 mod sales;
+mod sales_tax;
 mod simplefin;
 mod statements;
 mod storage;
 mod timesheet;
+mod workflows;
 
 use tauri::Manager;
 
@@ -113,6 +120,26 @@ fn main() {
             commands::update_class,
             commands::set_class_active,
             commands::delete_class,
+            commands::list_reclass_lines,
+            commands::get_account_register,
+            commands::get_party,
+            commands::update_party,
+            commands::set_party_active,
+            commands::update_product,
+            commands::set_product_active,
+            commands::list_credit_memos,
+            commands::create_credit_memo,
+            commands::apply_customer_credit,
+            commands::list_customer_credit_applications,
+            commands::remove_customer_credit,
+            commands::refund_customer_credit,
+            commands::list_vendor_credits,
+            commands::create_vendor_credit,
+            commands::apply_vendor_credit,
+            commands::list_vendor_credit_applications,
+            commands::remove_vendor_credit,
+            commands::refund_vendor_credit,
+            commands::reclassify_lines,
             commands::get_dashboard,
             commands::post_journal_entry,
             commands::list_invoices,
@@ -153,6 +180,48 @@ fn main() {
             commands::cancel_reconciliation,
             commands::get_profit_and_loss,
             commands::get_profit_and_loss_by_class,
+            commands::get_profit_and_loss_periods,
+            commands::get_trial_balance_as_of,
+            commands::get_cash_flow,
+            commands::get_general_ledger,
+            commands::get_aging,
+            commands::get_summary_report,
+            commands::list_tax_rates,
+            commands::create_tax_rate,
+            commands::update_tax_rate,
+            commands::set_tax_rate_active,
+            commands::pay_sales_tax,
+            commands::list_sales_tax_payments,
+            commands::get_tax_liability,
+            commands::replace_invoice,
+            commands::replace_bill,
+            commands::replace_expense,
+            commands::replace_journal_entry,
+            commands::get_document_lines,
+            commands::get_customer_statement,
+            commands::list_statement_customers,
+            commands::get_1099_report,
+            commands::list_recurring,
+            commands::save_recurring,
+            commands::set_recurring_active,
+            commands::delete_recurring,
+            commands::enter_recurring,
+            commands::list_purchase_orders,
+            commands::get_purchase_order_lines,
+            commands::create_purchase_order,
+            commands::set_purchase_order_closed,
+            commands::bill_purchase_order,
+            commands::search_books,
+            commands::add_attachment,
+            commands::list_attachments,
+            commands::save_attachment,
+            commands::delete_attachment,
+            commands::list_budgets,
+            commands::create_budget,
+            commands::delete_budget,
+            commands::get_budget_amounts,
+            commands::set_budget_amounts,
+            commands::get_budget_vs_actual,
             commands::get_balance_sheet,
             commands::list_customers,
             commands::create_customer,

@@ -808,10 +808,11 @@ pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>,
         .collect())
 }
 
-/// Posts a pending bank line to the ledger against `category_account_id` and learns a matching rule.
-pub async fn approve(pool: &SqlitePool, transaction_id: i64, category_account_id: i64) -> Result<i64, String> {
+/// Posts a pending bank line to the ledger against `category_account_id` (and optional class) and
+/// learns a matching rule.
+pub async fn approve(pool: &SqlitePool, transaction_id: i64, category_account_id: i64, class_id: Option<i64>) -> Result<i64, String> {
     let mut tx = pool.begin().await.map_err(db_err)?;
-    match write_approval(&mut tx, transaction_id, category_account_id).await {
+    match write_approval(&mut tx, transaction_id, category_account_id, class_id).await {
         Ok(entry_id) => {
             tx.commit().await.map_err(db_err)?;
             Ok(entry_id)
@@ -824,6 +825,7 @@ async fn write_approval(
     tx: &mut Transaction<'_, Sqlite>,
     transaction_id: i64,
     category_account_id: i64,
+    class_id: Option<i64>,
 ) -> Result<i64, String> {
     let row: Option<(i64, NaiveDate, String, i64, String)> = sqlx::query_as(
         "SELECT bank_account_id, txn_date, description, amount_cents, status FROM bank_transactions WHERE id = ?1",
@@ -853,7 +855,7 @@ async fn write_approval(
             check_number: None,
             payment_method: None,
             memo: Some(description.clone()),
-            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id: None }],
+            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id }],
             currency: None,
         };
         (write_expense(tx, &expense).await?.1, "OUTFLOW")
@@ -863,20 +865,21 @@ async fn write_approval(
             deposit_date: date,
             memo: Some(description.clone()),
             items: Vec::new(),
-            other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()) }],
+            other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id }],
         };
         (write_deposit(tx, &deposit).await?.1, "INFLOW")
     };
 
     sqlx::query(
         "UPDATE bank_transactions
-         SET status = 'APPROVED', category_account_id = ?1, journal_entry_id = ?2,
+         SET status = 'APPROVED', category_account_id = ?1, journal_entry_id = ?2, class_id = ?4,
              reviewed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
          WHERE id = ?3",
     )
     .bind(category_account_id)
     .bind(entry_id)
     .bind(transaction_id)
+    .bind(class_id)
     .execute(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -1259,7 +1262,7 @@ mod tests {
         assert_eq!(pending.len(), 2);
         assert_eq!(pending[0].suggestion.as_ref().map(|s| s.origin.as_str()), Some("DEFAULT"));
 
-        approve(&pool, pending[0].id, meals).await.expect("approves");
+        approve(&pool, pending[0].id, meals, None).await.expect("approves");
         let (checking_balance, meals_balance): (i64, i64) = sqlx::query_as(
             "SELECT (SELECT balance_cents FROM v_account_balances WHERE account_id = ?1),
                     (SELECT balance_cents FROM v_account_balances WHERE account_id = ?2)",
@@ -1276,7 +1279,7 @@ mod tests {
         let learned = remaining[0].suggestion.as_ref().expect("suggestion");
         assert_eq!((learned.account_id, learned.origin.as_str()), (meals, "LEARNED"));
 
-        let err = approve(&pool, pending[0].id, meals).await.expect_err("already approved");
+        let err = approve(&pool, pending[0].id, meals, None).await.expect_err("already approved");
         assert!(err.starts_with("BANK_TXN_NOT_PENDING"), "{err}");
 
         exclude(&pool, remaining[0].id).await.expect("excludes");

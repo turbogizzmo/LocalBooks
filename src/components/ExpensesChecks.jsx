@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
+import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
-import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
+import { useFormClass } from './ClassSelect.jsx';
+import { api, errorText, PAYMENT_METHODS, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
-import { useCompany } from './PrintDocuments.jsx';
+import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
 const isSplitAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
 
-function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel }) {
+/** A new expense or check, or (with `editing` = { expense, lines }) a posted one being edited. */
+function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, editing = null }) {
   const payFrom = kind === 'CHECK' ? (a) => a.accountType === 'BANK' : (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
   const defaultPayFrom = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
@@ -21,23 +24,27 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     return numbers.length ? String(Math.max(...numbers) + 1) : '1001';
   }, [expenses]);
 
-  const [payee, setPayee] = useState('');
-  const [accountId, setAccountId] = useState(defaultPayFrom);
-  const [date, setDate] = useState(todayIso());
-  const [checkNumber, setCheckNumber] = useState(nextCheck);
-  const [method, setMethod] = useState('CREDIT_CARD');
-  const [memo, setMemo] = useState('');
+  const was = editing?.expense;
+  const [payee, setPayee] = useState(was?.payeeName ?? '');
+  const [accountId, setAccountId] = useState(was?.paymentAccountId ?? defaultPayFrom);
+  const [date, setDate] = useState(was?.expenseDate ?? todayIso());
+  const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : nextCheck);
+  const [method, setMethod] = useState(was?.paymentMethod ?? 'CREDIT_CARD');
+  const [memo, setMemo] = useState(was?.memo ?? '');
   const { homeCurrency } = useCompany();
-  const [currency, setCurrency] = useState('');
-  const [rate, setRate] = useState('');
+  const [currency, setCurrency] = useState(was?.currencyCode ?? '');
+  const [rate, setRate] = useState(was?.currencyCode ? formatRate(was.exchangeRateE6) : '');
   const rateE6 = currency ? parseRateE6(rate) : null;
-  const [rows, setRows] = useState(() => [blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+  const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
+  const formClass = useFormClass(accounts);
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
-  useEffect(() => setCheckNumber(nextCheck), [nextCheck]);
+  useEffect(() => {
+    if (!editing) setCheckNumber(nextCheck);
+  }, [nextCheck, editing]);
   useEffect(() => {
     if (accountId === null && defaultPayFrom !== null) setAccountId(defaultPayFrom);
   }, [defaultPayFrom, accountId]);
@@ -53,15 +60,19 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
 
   const { lines, invalid, total } = summarizeSplits(rows);
 
-  const save = async () => {
+  const [memorizing, setMemorizing] = useState(null);
+  const save = async (mode) => {
     if (accountId === null) return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : 'Choose the payment account.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
     if (lines.some((l) => l.accountId === accountId)) return setError('A split row cannot use the payment account itself.');
     if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
+    const postedLines = formClass.apply(lines);
+    const warning = formClass.missing(postedLines);
+    if (warning) return setError(warning);
     setBusy(true);
     try {
-      const posted = await api.postExpense({
+      const input = {
         kind,
         payeeName: payee.trim() || null,
         paymentAccountId: accountId,
@@ -69,9 +80,16 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         checkNumber: kind === 'CHECK' ? checkNumber.trim() || null : null,
         paymentMethod: kind === 'EXPENSE' ? method : null,
         memo: memo.trim() || null,
-        lines,
+        lines: postedLines,
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
-      });
+      };
+      if (mode === 'memorize') return setMemorizing({ ...input, checkNumber: null });
+      if (editing) {
+        await api.replaceExpense(was.id, input);
+        onPosted(`${kind === 'CHECK' ? 'Check' : 'Expense'} replaced: the original is voided and the edited one is posted.`);
+        return onCancel();
+      }
+      const posted = await api.postExpense(input);
       onPosted(
         `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : 'Expense'} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
           `Cr ${accountLabel(accounts, accountId)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`,
@@ -79,6 +97,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+      formClass.reset();
       setError(null);
       payeeRef.current?.focus();
     } catch (err) {
@@ -140,6 +159,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             </select>
           </label>
         )}
+        {formClass.header}
         <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
         <div className="ml-auto text-right">
           <div className="qb-label">Total</div>
@@ -155,11 +175,17 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy} title="Save as a recurring transaction">
+            Memorize…
+          </button>
           <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Posting…' : `Save & Post ${kind === 'CHECK' ? 'Check' : 'Expense'}`}
+            {busy ? 'Posting…' : editing ? 'Save changes' : `Save & Post ${kind === 'CHECK' ? 'Check' : 'Expense'}`}
           </button>
         </div>
       </div>
+      {memorizing && (
+        <MemorizeDialog kind="EXPENSE" payload={memorizing} date={date} defaultName={payee.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
+      )}
     </section>
   );
 }
@@ -170,6 +196,22 @@ export default function ExpensesChecks({ accounts, intent }) {
   const initialKind = intent?.action === 'check' ? 'CHECK' : intent?.action === 'expense' ? 'EXPENSE' : null;
   const [kind, setKind] = useState(initialKind);
   const [notice, setNotice] = useState(null);
+  const [editing, setEditing] = useState(null); // { expense, lines }
+  const [printing, setPrinting] = useState(null);
+  const company = useCompany();
+  const startEdit = (expense) =>
+    api.getDocumentLines('expense', expense.id).then(
+      (lines) => {
+        setEditing({ expense, lines });
+        setKind(expense.kind);
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
+  const printCheck = (expense) => {
+    setPrinting(expense);
+    // Let React render the check into the print root before the dialog opens.
+    setTimeout(() => printDocument(), 80);
+  };
 
   useEffect(() => {
     if (intent?.action === 'check') setKind('CHECK');
@@ -184,14 +226,24 @@ export default function ExpensesChecks({ accounts, intent }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {printing && (
+        <PrintPortal>
+          <CheckDocument company={company} check={printing} bankName={accountLabel(accounts, printing.paymentAccountId)} />
+        </PrintPortal>
+      )}
       {kind && (
         <ExpenseForm
+          key={editing ? `edit-${editing.expense.id}` : 'new'}
+          editing={editing}
           kind={kind}
           setKind={setKind}
           accounts={accounts}
           vendors={vendors.data ?? []}
           expenses={rows}
-          onCancel={() => setKind(null)}
+          onCancel={() => {
+            setKind(null);
+            setEditing(null);
+          }}
           onPosted={(text) => setNotice({ kind: 'success', text })}
         />
       )}
@@ -262,6 +314,8 @@ export default function ExpensesChecks({ accounts, intent }) {
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
                       items={[
+                        { label: 'Edit…', disabled: x.isVoided, onSelect: () => startEdit(x) },
+                        ...(x.kind === 'CHECK' ? [{ label: 'Print check', disabled: x.isVoided, onSelect: () => printCheck(x) }] : []),
                         voidItem({
                           journalEntryId: x.journalEntryId,
                           voided: x.isVoided,
