@@ -44,6 +44,7 @@ mod smtp;
 mod statements;
 mod storage;
 mod timesheet;
+mod windows;
 mod workflows;
 
 use tauri::Manager;
@@ -58,12 +59,18 @@ fn main() {
             if let Some(help) = menu.get(tauri::menu::HELP_SUBMENU_ID) {
                 menu.remove(&help)?;
             }
+            #[cfg(target_os = "macos")]
+            windows::add_new_window_item(handle, &menu)?;
             Ok(menu)
         })
         .plugin(tauri_plugin_dialog::init())
         // Signed updates from the GitHub releases (see plugins.updater in tauri.conf.json).
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_menu_event(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            windows::on_menu_event(_app, _event.id().as_ref());
+        })
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let config = db::DbConfig {
@@ -344,6 +351,7 @@ fn main() {
             commands::discard_ledger_batch,
             commands::start_over_ledger_batch,
             commands::reverse_qbw_batch,
+            commands::open_window,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")

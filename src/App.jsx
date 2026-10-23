@@ -38,12 +38,19 @@ import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
 import { setCurrencySymbol } from './lib/money.js';
+import { isMainWindow, NEW_WINDOW_REQUESTED, openWindow, startPage } from './lib/windows.js';
 
 const STORAGE_KEY = 'localbooks.view';
+// A window opened on a page (Window › New Window, or a register or report in its own window).
+const START = startPage();
+const MAIN_WINDOW = isMainWindow();
+const IS_MAC = /Mac/.test(navigator.userAgent);
 
 function initialView() {
+  if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && findNav(saved) && !findNav(saved).item.children) return saved;
@@ -56,7 +63,7 @@ function initialView() {
 export default function App() {
   const [view, setView] = useState(initialView);
   // An intent asks the destination view to open a specific entry form ({ action, nonce }).
-  const [intent, setIntent] = useState(null);
+  const [intent, setIntent] = useState(() => (START?.action ? { action: START.action, data: START.data, nonce: Date.now() } : null));
   const [creating, setCreating] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const accounts = useLedgerQuery(api.listAccounts);
@@ -84,6 +91,7 @@ export default function App() {
   const select = useCallback((id, action = null, data = null) => {
     setView(id);
     setIntent(action ? { action, data, nonce: Date.now() } : null);
+    if (!MAIN_WINDOW) return;
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch {
@@ -104,9 +112,35 @@ export default function App() {
     };
   }, []);
 
-  // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere; F1 toggles Help.
+  const [windowError, setWindowError] = useState(null);
+  const openNewWindow = useCallback((id) => {
+    setWindowError(null);
+    openWindow(id).catch((err) => setWindowError(String(err)));
+  }, []);
+
+  // Window › New Window (macOS menu) asks the focused window to open the page it shows.
+  useEffect(() => {
+    let unlisten;
+    let cancelled = false;
+    getCurrentWebviewWindow()
+      .listen(NEW_WINDOW_REQUESTED, () => openNewWindow(view))
+      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [view, openNewWindow]);
+
+  // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere; F1 toggles Help; Ctrl+Shift+N opens a new
+  // window (on macOS the Window menu's Cmd+Shift+N does).
   useEffect(() => {
     const onKey = (e) => {
+      if (!IS_MAC && e.ctrlKey && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        openNewWindow(view);
+        return;
+      }
       if (e.key === 'F1') {
         e.preventDefault();
         setHelpOpen((o) => !o);
@@ -119,7 +153,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [view, openNewWindow]);
 
   const dueRecurring = useDueRecurring();
   const { item, parent } = findNav(view);
@@ -173,6 +207,18 @@ export default function App() {
           )}
             <button
               type="button"
+              onClick={() => openNewWindow(view)}
+              title={`Open this page in a new window (${IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N'})`}
+              aria-label="Open this page in a new window"
+              className="flex flex-none items-center gap-1 rounded-xs px-2 py-0.5 text-sm font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                <path d="M5.5 1.5h9v9h-9zM10.5 13v1.5h-9v-9H3" />
+              </svg>
+              New window
+            </button>
+            <button
+              type="button"
               onClick={() => setHelpOpen((o) => !o)}
               aria-pressed={helpOpen}
               title="Help (F1)"
@@ -185,7 +231,9 @@ export default function App() {
             </button>
           </div>
         </header>
-        <UpdateBanner />
+        {/* Updates are checked and offered in the main window only. */}
+        {MAIN_WINDOW && <UpdateBanner />}
+        {windowError && <Notice kind="error" text={windowError} onDismiss={() => setWindowError(null)} />}
         {storage.data?.startupWarning && (
           <div className="no-print">
             <Notice kind="info" text={`${storage.data.startupWarning} Change it in Settings › File & Data Controls.`} />
