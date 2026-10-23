@@ -18,7 +18,7 @@ use crate::registers::{self, Register};
 use crate::edits::{self, DocumentLineView};
 use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInput, PurchaseOrderLineView, PurchaseOrderView, RecurringInput, RecurringView, SearchHit, Vendor1099Row};
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
-use crate::forms::{self, EmailDraft, FormKind, FormTemplate, RenderedForm};
+use crate::forms::{self, EmailDraft, FormKind, FormStyle, FormTemplate, Period, RenderedForm};
 use crate::mail_app::{self, ComposeOutcome};
 use crate::secrets::SecretStore;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
@@ -871,37 +871,68 @@ pub async fn get_invoice_detail(db: State<'_, Db>, invoice_id: i64) -> Result<In
 // ------------------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn get_form_template(db: State<'_, Db>, kind: FormKind) -> Result<FormTemplate, String> {
-    forms::get_template(&db.pool().await, kind).await
+pub async fn list_form_styles(db: State<'_, Db>) -> Result<Vec<FormStyle>, String> {
+    forms::list_styles(&db.pool().await).await
+}
+
+/// A new form style, optionally starting as a copy of another.
+#[tauri::command]
+pub async fn create_form_style(db: State<'_, Db>, name: String, copy_from: Option<i64>) -> Result<FormStyle, String> {
+    forms::create_style(&db.pool().await, &name, copy_from).await
 }
 
 #[tauri::command]
-pub async fn save_form_template(db: State<'_, Db>, kind: FormKind, template: FormTemplate) -> Result<FormTemplate, String> {
-    forms::save_template(&db.pool().await, kind, template).await
+pub async fn rename_form_style(db: State<'_, Db>, id: i64, name: String) -> Result<FormStyle, String> {
+    forms::rename_style(&db.pool().await, id, &name).await
 }
 
 #[tauri::command]
-pub async fn reset_form_template(db: State<'_, Db>, kind: FormKind) -> Result<FormTemplate, String> {
-    forms::reset_template(&db.pool().await, kind).await
+pub async fn set_default_form_style(db: State<'_, Db>, id: i64) -> Result<(), String> {
+    forms::set_default_style(&db.pool().await, id).await
 }
 
-/// Lays out a form with an unsaved template: a real document, or the sample without one.
 #[tauri::command]
-pub async fn preview_form(db: State<'_, Db>, kind: FormKind, template: FormTemplate, document_id: Option<i64>) -> Result<RenderedForm, String> {
-    Ok(forms::render(&db.pool().await, kind, document_id, Some(template), false).await?.form)
+pub async fn delete_form_style(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    forms::delete_style(&db.pool().await, id).await?;
+    // Customers who used the style go back to the default.
+    notify(&app);
+    Ok(())
 }
 
-/// Lays out a document with its saved template, for printing.
+/// A style's template for a form type (`style_id` None = the default style).
 #[tauri::command]
-pub async fn render_form(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<RenderedForm, String> {
-    Ok(forms::render(&db.pool().await, kind, Some(document_id), None, false).await?.form)
+pub async fn get_form_template(db: State<'_, Db>, style_id: Option<i64>, kind: FormKind) -> Result<FormTemplate, String> {
+    forms::get_template(&db.pool().await, style_id, kind).await
+}
+
+#[tauri::command]
+pub async fn save_form_template(db: State<'_, Db>, style_id: Option<i64>, kind: FormKind, template: FormTemplate) -> Result<FormTemplate, String> {
+    forms::save_template(&db.pool().await, style_id, kind, template).await
+}
+
+#[tauri::command]
+pub async fn reset_form_template(db: State<'_, Db>, style_id: Option<i64>, kind: FormKind) -> Result<FormTemplate, String> {
+    forms::reset_template(&db.pool().await, style_id, kind).await
+}
+
+/// Lays out a form with an unsaved template: a real document, or the sample without one. For a
+/// statement, `document_id` is the customer and `period` the statement period.
+#[tauri::command]
+pub async fn preview_form(db: State<'_, Db>, kind: FormKind, template: FormTemplate, document_id: Option<i64>, period: Option<Period>) -> Result<RenderedForm, String> {
+    Ok(forms::render(&db.pool().await, kind, document_id, period, Some(template), false).await?.form)
+}
+
+/// Lays out a document with its customer's form style, for printing.
+#[tauri::command]
+pub async fn render_form(db: State<'_, Db>, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<RenderedForm, String> {
+    Ok(forms::render(&db.pool().await, kind, Some(document_id), period, None, false).await?.form)
 }
 
 /// Prompts with the native Save dialog and writes the document's PDF there. Returns the saved
 /// path, or `None` if the user cancelled.
 #[tauri::command]
-pub async fn save_form_pdf(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<Option<String>, String> {
-    let (file_name, bytes) = forms::pdf_file(&db.pool().await, kind, document_id).await?;
+pub async fn save_form_pdf(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<Option<String>, String> {
+    let (file_name, bytes) = forms::pdf_file_for(&db.pool().await, kind, document_id, period).await?;
     let dialog_app = app.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&file_name).add_filter("PDF", &["pdf"]).blocking_save_file())
         .await

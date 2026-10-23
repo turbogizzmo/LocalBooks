@@ -1,12 +1,16 @@
-# Design your invoices and estimates
+# Design your forms
 
-**Settings › Custom Forms** sets how invoices and estimates look when you print them or save them as
-PDF files. Each form type has its own design, and the design is saved in your company file.
+**Settings › Custom Forms** sets how invoices, estimates, sales receipts and customer statements
+look when you print them or save them as PDF files. Each form type has its own design, and the
+design is saved in your company file.
 
 ## Change the design
 
-1. Go to **Settings › Custom Forms** and pick **Invoice** or **Estimate**.
+1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt** or
+   **Statement**.
 2. Change the layout on the left. The preview on the right updates as you go:
+   - **Layout**: **Classic** (company and title side by side over a rule), **Modern** (the title in
+     a colored band, banded rows) or **Compact** (smaller type, more lines per page).
    - **Title**, **Paper** (US Letter or A4), **Font** and **Accent color** (the title, rules and
      table header).
    - **Logo**: top right, top left or hidden, in three sizes. Upload the logo itself in
@@ -26,11 +30,25 @@ Messages can include placeholders that are filled in for each document: `{number
 `{date}`, `{due_date}`, `{total}`, `{balance}` and `{company}`. For example, *Please pay invoice
 {number} by {due_date}.*
 
+## Styles: several designs, one per customer
+
+A **style** is a full set of forms (invoice, estimate, sales receipt and statement). You start with
+one, **Standard**, which is the default. Use the **Style** row at the top of Custom Forms to add a
+**New** style, **Copy** the one you're looking at, **Rename** it, **Make default**, or **Delete** it.
+
+To give a customer their own style, open them in **Sales › Customers** and choose a **Form style**.
+Their forms then print, save and email in that style; every other customer gets the default.
+Deleting a style moves its customers back to the default.
+
 ## Print or save a PDF
 
-In **Sales › Invoices**, **Sales › Estimates** or **Sales › All Sales**, open a row's **Actions** menu
-and choose **Print…** or **Save as PDF…**. Both use the saved design, so the PDF matches the
-printout.
+In **Sales › Invoices**, **Sales › Estimates** or **Sales › All Sales** (invoices and sales
+receipts), open a row's **Actions** menu and choose **Print…** or **Save as PDF…**. Both use the
+saved design, so the PDF matches the printout.
+
+For statements, go to **Sales › Customer Statements**, pick the period, and click a customer to
+preview their statement; **Print…** and **Save as PDF…** are above the preview. Tick several
+customers and click **Print statements** to print them all at once.
 
 ## Email it
 

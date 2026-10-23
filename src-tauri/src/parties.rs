@@ -39,6 +39,8 @@ pub struct PartyDetails {
     pub tax_rate_id: Option<i64>,
     pub is_tax_exempt: bool,
     pub tax_exemption: Option<String>,
+    /// Customers only: the form style their forms use (`None` = the default style).
+    pub form_style_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +69,8 @@ pub struct PartyDetailsInput {
     pub is_tax_exempt: bool,
     #[serde(default)]
     pub tax_exemption: Option<String>,
+    #[serde(default)]
+    pub form_style_id: Option<i64>,
 }
 
 fn clean(text: &Option<String>) -> Option<String> {
@@ -76,9 +80,10 @@ fn clean(text: &Option<String>) -> Option<String> {
 pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64) -> Result<PartyDetails, String> {
     let sql = match table(kind)? {
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
-                               NULL AS tax_id, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption FROM customers WHERE id = ?1",
+                               NULL AS tax_id, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id
+                        FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, is_1099, is_active,
-                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption FROM vendors WHERE id = ?1",
+                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id FROM vendors WHERE id = ?1",
     };
     sqlx::query_as::<_, PartyDetails>(sql)
         .bind(id)
@@ -108,10 +113,16 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     if input.terms_days.is_some_and(|d| !(0..=365).contains(&d)) {
         return Err("PARTY_BAD_TERMS: terms are 0 to 365 days".into());
     }
+    if let Some(style) = input.form_style_id.filter(|_| t == "customers") {
+        let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM form_styles WHERE id = ?1").bind(style).fetch_optional(pool).await.map_err(db_err)?;
+        if exists.is_none() {
+            return Err("PARTY_BAD_FORM_STYLE: that form style no longer exists".into());
+        }
+    }
     let query = if t == "customers" {
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
-                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10 WHERE id = ?11",
+                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -123,6 +134,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(input.tax_rate_id)
         .bind(input.is_tax_exempt)
         .bind(clean(&input.tax_exemption))
+        .bind(input.form_style_id)
         .bind(id)
     } else {
         sqlx::query(
@@ -254,9 +266,13 @@ mod tests {
             tax_rate_id: None,
             is_tax_exempt: false,
             tax_exemption: None,
+            form_style_id: None,
         };
         let saved = update_party(&pool, "customer", acme.id, input("Acme Inc")).await.unwrap();
         assert_eq!((saved.name.as_str(), saved.company_name.as_deref(), saved.terms_days), ("Acme Inc", Some("Acme Corp"), Some(15)));
+        assert!(update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(999), ..input("Acme Inc") }).await.unwrap_err().starts_with("PARTY_BAD_FORM_STYLE"));
+        let styled = update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(1), ..input("Acme Inc") }).await.unwrap();
+        assert_eq!(styled.form_style_id, Some(1));
         assert!(update_party(&pool, "customer", acme.id, input("globex")).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
         assert!(!set_party_active(&pool, "customer", acme.id, false).await.unwrap().is_active);
 

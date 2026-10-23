@@ -405,10 +405,10 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Preferences', view: 'settings', action: 'preferences' },
   },
   {
-    id: 'custom-forms', area: 'company', views: ['settings', 'sales/invoices', 'sales/estimates'],
-    title: 'Design your invoice and estimate forms',
-    body: 'Settings › Custom Forms sets the title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices and estimates, with a live preview. Print… and Save as PDF… on a row use the saved design.',
-    keywords: 'form designer template layout customize logo color font pdf print invoice estimate',
+    id: 'custom-forms', area: 'company', views: ['settings', 'sales/invoices', 'sales/estimates', 'sales/all', 'sales/statements', 'sales/customers'],
+    title: 'Design your forms: invoices, estimates, sales receipts and statements',
+    body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts and customer statements, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style.',
+    keywords: 'form designer template style layout classic modern compact customize logo color font pdf print invoice estimate sales receipt statement',
     go: { label: 'Go to Custom Forms', view: 'settings', action: 'forms' },
   },
   {

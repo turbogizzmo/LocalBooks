@@ -18,6 +18,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const salesTax = useSalesTax();
+  const { data: formStyles } = useLedgerQuery(api.listFormStyles);
 
   useEffect(() => {
     api.getParty(kind, id).then(
@@ -45,6 +46,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         taxRateId: form.taxRateId ?? null,
         isTaxExempt: Boolean(form.isTaxExempt),
         taxExemption: form.taxExemption,
+        formStyleId: form.formStyleId ?? null,
       });
       onSaved(`Saved ${noun} ${saved.name}.`);
     } catch (err) {
@@ -105,6 +107,20 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
                 </label>
                 {form.isTaxExempt && field('Exemption (reason or certificate no.)', 'taxExemption')}
               </>
+            )}
+            {kind === 'customer' && (formStyles ?? []).length > 1 && (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Form style</span>
+                <select className="qb-input" value={form.formStyleId ?? ''} onChange={(e) => setForm((f) => ({ ...f, formStyleId: e.target.value === '' ? null : Number(e.target.value) }))}>
+                  <option value="">Default style (follows the default)</option>
+                  {formStyles.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                      {st.isDefault ? ' (the default now)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>
