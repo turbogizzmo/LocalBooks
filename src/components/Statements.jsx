@@ -1,95 +1,19 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
-import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { SOURCE_LABEL } from './JournalEntries.jsx';
-import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { FormSheet, useFormPrinter } from './FormPages.jsx';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
-import { formatDate, periodRange } from '../lib/dates.js';
-
-const AGING = ['Current', '1–30 days past due', '31–60 days', '61–90 days', 'Over 90 days'];
-
-const kindLabel = (row) => (row.sourceType === 'JOURNAL' ? 'Refund' : (SOURCE_LABEL[row.sourceType] ?? row.sourceType));
-
-/** One customer statement, as printed. */
-function CustomerStatementDoc({ company, s }) {
-  return (
-    <article className="doc doc-page-break">
-      <DocHeader company={company} title="Statement" subtitle={`${formatDate(s.startDate)} – ${formatDate(s.endDate)}`} />
-      <div className="doc-bill-to">
-        <div className="doc-label">To</div>
-        <div className="doc-company-name">{s.customerName}</div>
-        {s.companyName && <div>{s.companyName}</div>}
-        {s.billingAddress && <div className="doc-company-lines">{s.billingAddress}</div>}
-      </div>
-      <table className="doc-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Transaction</th>
-            <th>Details</th>
-            <th className="doc-num">Amount</th>
-            <th className="doc-num">Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{formatDate(s.startDate)}</td>
-            <td>Balance forward</td>
-            <td />
-            <td />
-            <td className="doc-num">{formatCents(s.openingBalanceCents)}</td>
-          </tr>
-          {s.rows.map((r, i) => (
-            <tr key={i}>
-              <td>{formatDate(r.date)}</td>
-              <td>
-                {kindLabel(r)}
-                {r.number ? ` #${r.number}` : ''}
-              </td>
-              <td>{r.partyName !== s.customerName ? r.partyName.slice(s.customerName.length + 1) : (r.memo ?? '')}</td>
-              <td className="doc-num">{formatCents(r.amountCents)}</td>
-              <td className="doc-num">{formatCents(r.balanceCents)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <table className="doc-totals">
-        <tbody>
-          <tr className="doc-grand">
-            <td>Amount due</td>
-            <td className="doc-num">{formatCents(s.closingBalanceCents)}</td>
-          </tr>
-        </tbody>
-      </table>
-      <table className="doc-table">
-        <thead>
-          <tr>
-            {AGING.map((a) => (
-              <th key={a} className="doc-num">{a}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {s.agingCents.map((c, i) => (
-              <td key={i} className="doc-num">{formatCents(c)}</td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-    </article>
-  );
-}
+import { periodRange } from '../lib/dates.js';
 
 /** Sales › Customer Statements: pick a period and customers, preview, and print or save as PDF. */
 export default function Statements() {
-  const company = useCompany();
   const [[start, end], setRange] = useState(() => periodRange('lastMonth'));
   const customers = useLedgerQuery(() => api.listStatementCustomers(start, end));
   const [picked, setPicked] = useState(() => new Set());
-  const [preview, setPreview] = useState(null);
-  const [printing, setPrinting] = useState(null);
+  const [preview, setPreview] = useState(null); // { customerId, form }
   const [notice, setNotice] = useState(null);
+  const [printPortal, forms] = useFormPrinter(setNotice);
+  const period = { startDate: start, endDate: end };
 
   useEffect(() => {
     if (start && end && start <= end) customers.reload();
@@ -106,32 +30,19 @@ export default function Statements() {
       else next.add(id);
       return next;
     });
+  // The statement as its customer's form style prints it.
   const show = async (id) => {
     try {
-      setPreview(await api.getCustomerStatement(id, start, end));
+      setPreview({ customerId: id, form: await api.renderForm('STATEMENT', id, period) });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
-  const print = async () => {
-    try {
-      const statements = await Promise.all([...picked].map((id) => api.getCustomerStatement(id, start, end)));
-      setPrinting(statements);
-      setTimeout(() => printDocument(), 120);
-    } catch (err) {
-      setNotice({ kind: 'error', text: errorText(err) });
-    }
-  };
+  const print = () => forms.printMany([...picked].map((id) => ({ kind: 'STATEMENT', id, period })));
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      {printing && (
-        <PrintPortal>
-          {printing.map((s) => (
-            <CustomerStatementDoc key={s.customerId} company={company} s={s} />
-          ))}
-        </PrintPortal>
-      )}
+      {printPortal}
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">Statement period from</span>
@@ -175,64 +86,31 @@ export default function Statements() {
             </table>
           </div>
         </section>
-        <section className="qb-panel min-h-0 overflow-auto scrollbar-thin p-3">
-          {!preview ? (
-            <div className="text-sm text-qb-ink-muted">Click a customer to preview their statement.</div>
-          ) : (
-            <div className="mx-auto max-w-[760px] text-sm">
-              <div className="mb-2 flex items-start justify-between border-b-[3px] border-double border-qb-ink pb-2">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-qb-ink-muted">{company.name}</div>
-                  <h2 className="text-xl font-semibold">Statement · {preview.customerName}</h2>
-                  <div className="text-qb-ink-muted">{formatDate(preview.startDate)} – {formatDate(preview.endDate)}</div>
-                </div>
-                <div className="text-right">
-                  <div className="qb-label">Amount due</div>
-                  <div className="num text-2xl font-semibold">{formatCents(preview.closingBalanceCents)}</div>
-                </div>
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-qb-border text-left text-xs uppercase text-qb-ink-muted">
-                    <th className="py-0.5">Date</th>
-                    <th>Transaction</th>
-                    <th>Details</th>
-                    <th className="text-right">Amount</th>
-                    <th className="text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-0.5">{formatDate(preview.startDate)}</td>
-                    <td>Balance forward</td>
-                    <td />
-                    <td />
-                    <td className="num text-right">{formatCents(preview.openingBalanceCents)}</td>
-                  </tr>
-                  {preview.rows.map((r, i) => (
-                    <tr key={i} className="border-t border-qb-border">
-                      <td className="py-0.5">{formatDate(r.date)}</td>
-                      <td>
-                        {kindLabel(r)}
-                        {r.number ? ` #${r.number}` : ''}
-                      </td>
-                      <td className="text-qb-ink-muted">{r.partyName !== preview.customerName ? r.partyName.slice(preview.customerName.length + 1) : (r.memo ?? '')}</td>
-                      <td className="num text-right">{formatCents(r.amountCents)}</td>
-                      <td className="num text-right font-semibold">{formatCents(r.balanceCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="mt-3 grid grid-cols-5 gap-2 border-t border-qb-border pt-2 text-xs">
-                {AGING.map((a, i) => (
-                  <div key={a}>
-                    <div className="text-qb-ink-muted">{a}</div>
-                    <div className="num font-semibold">{formatCents(preview.agingCents[i])}</div>
-                  </div>
+        <section className="qb-panel flex min-h-0 flex-col">
+          <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
+            <h2 className="text-md font-semibold">{preview ? preview.form.title : 'Statement preview'}</h2>
+            {preview && (
+              <span className="ml-auto flex gap-1">
+                <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => forms.print('STATEMENT', preview.customerId, period)}>
+                  Print…
+                </button>
+                <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => forms.savePdf('STATEMENT', preview.customerId, period)}>
+                  Save as PDF…
+                </button>
+              </span>
+            )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto bg-qb-canvas p-3 scrollbar-thin">
+            {!preview ? (
+              <div className="text-sm text-qb-ink-muted">Click a customer to preview their statement. It uses their form style (Settings › Custom Forms).</div>
+            ) : (
+              <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+                {preview.form.pages.map((page, i) => (
+                  <FormSheet key={i} page={page} logo={preview.form.logo} className="w-full shadow-md" />
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </section>
       </div>
     </div>
