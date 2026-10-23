@@ -18,6 +18,7 @@ use crate::registers::{self, Register};
 use crate::edits::{self, DocumentLineView};
 use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInput, PurchaseOrderLineView, PurchaseOrderView, RecurringInput, RecurringView, SearchHit, Vendor1099Row};
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
+use crate::forms::{self, FormKind, FormTemplate, RenderedForm};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
 use crate::storage::{self, StorageInfo};
@@ -860,6 +861,52 @@ pub async fn get_company_logo(db: State<'_, Db>) -> Result<Option<String>, Strin
 #[tauri::command]
 pub async fn get_invoice_detail(db: State<'_, Db>, invoice_id: i64) -> Result<InvoiceDetail, String> {
     invoices::invoice_detail(&db.pool().await, invoice_id).await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Form designer & PDF forms
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn get_form_template(db: State<'_, Db>, kind: FormKind) -> Result<FormTemplate, String> {
+    forms::get_template(&db.pool().await, kind).await
+}
+
+#[tauri::command]
+pub async fn save_form_template(db: State<'_, Db>, kind: FormKind, template: FormTemplate) -> Result<FormTemplate, String> {
+    forms::save_template(&db.pool().await, kind, template).await
+}
+
+#[tauri::command]
+pub async fn reset_form_template(db: State<'_, Db>, kind: FormKind) -> Result<FormTemplate, String> {
+    forms::reset_template(&db.pool().await, kind).await
+}
+
+/// Lays out a form with an unsaved template: a real document, or the sample without one.
+#[tauri::command]
+pub async fn preview_form(db: State<'_, Db>, kind: FormKind, template: FormTemplate, document_id: Option<i64>) -> Result<RenderedForm, String> {
+    Ok(forms::render(&db.pool().await, kind, document_id, Some(template), false).await?.form)
+}
+
+/// Lays out a document with its saved template, for printing.
+#[tauri::command]
+pub async fn render_form(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<RenderedForm, String> {
+    Ok(forms::render(&db.pool().await, kind, Some(document_id), None, false).await?.form)
+}
+
+/// Prompts with the native Save dialog and writes the document's PDF there. Returns the saved
+/// path, or `None` if the user cancelled.
+#[tauri::command]
+pub async fn save_form_pdf(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<Option<String>, String> {
+    let (file_name, bytes) = forms::pdf_file(&db.pool().await, kind, document_id).await?;
+    let dialog_app = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&file_name).add_filter("PDF", &["pdf"]).blocking_save_file())
+        .await
+        .map_err(|e| format!("EXPORT_DIALOG: {e}"))?;
+    let Some(target) = chosen else { return Ok(None) };
+    let path = target.into_path().map_err(|e| format!("EXPORT_BAD_PATH: {e}"))?;
+    export_engine::write_atomically(&path, &bytes)?;
+    Ok(Some(path.display().to_string()))
 }
 
 // ------------------------------------------------------------------------------------------------

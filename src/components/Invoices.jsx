@@ -6,7 +6,8 @@ import { DiscountField, documentTotals, parseDiscount, useFormTax } from './Sale
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { formMenuItems, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
@@ -382,7 +383,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
   const COLS = 9;
-  const [printPortal, printInvoice] = useInvoicePrinter((text) => onNotice({ kind: 'error', text }));
+  const [printPortal, forms] = useFormPrinter(onNotice);
   const voidInvoice = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     onNotice({ kind: 'success', text: 'Invoice voided: a reversing entry now offsets it.' });
@@ -455,7 +456,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
-                          { label: 'Print / Save PDF', onSelect: () => printInvoice(inv.id) },
+                          ...formMenuItems('INVOICE', inv.id, forms),
                           {
                             label: 'Edit…',
                             disabled: inv.isVoided || inv.amountPaidCents > 0,

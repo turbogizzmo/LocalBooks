@@ -4,6 +4,7 @@ import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
+import FormDesigner from './FormDesigner.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -250,7 +251,7 @@ function CompanyLogoField() {
               </button>
             )}
           </span>
-          <span className="text-2xs text-qb-ink-faint">PNG, JPEG, GIF or WebP under 512 KB · printed top-right on invoices and reports</span>
+          <span className="text-2xs text-qb-ink-faint">PNG, JPEG, GIF or WebP under 512 KB · printed on invoices, estimates and reports</span>
         </div>
       </div>
       <div className="truncate text-xs" title={state.message}>
@@ -854,7 +855,7 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', data: 'data', ai: 'ai', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', data: 'data', ai: 'ai', updates: 'updates' };
 
 export default function Settings({ companyName, intent }) {
   const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
@@ -874,6 +875,7 @@ export default function Settings({ companyName, intent }) {
       <div className="flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
         {[
           ['preferences', 'Preferences Console'],
+          ['forms', 'Custom Forms'],
           ['data', 'File & Data Controls'],
           ['ai', 'AI Access (MCP)'],
           ['updates', 'Updates'],
@@ -891,6 +893,7 @@ export default function Settings({ companyName, intent }) {
         ))}
       </div>
       {tab === 'preferences' && <PreferencesConsole />}
+      {tab === 'forms' && <FormDesigner />}
       {tab === 'data' && <FileAndData companyName={companyName} />}
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'updates' && <UpdatesPanel />}

@@ -34,8 +34,11 @@ Loss** for you. See [Record customer payments](customer-payments.md).
 
 ## Print or email it
 
-1. In the invoice list, open the row's **Actions** menu and choose **Print / Save PDF**.
-2. In the print dialog, print it or choose **Save as PDF** and attach the PDF to an email.
+1. In the invoice list, open the row's **Actions** menu.
+2. Choose **Print…** to print it, or **Save as PDF…** to save a PDF file to attach to an email.
+
+Invoices print with your company's form design. To change the title, colors, logo, columns or
+message, see [Design your invoices and estimates](custom-forms.md).
 
 ## Fix a mistake
 

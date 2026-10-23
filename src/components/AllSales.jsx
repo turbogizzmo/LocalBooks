@@ -7,7 +7,7 @@ import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import { useInvoicePrinter } from './PrintDocuments.jsx';
+import { formMenuItems, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -159,7 +159,7 @@ export default function AllSales({ accounts, intent }) {
   const openInvoices = live.filter((r) => r.kind === 'INVOICE' && r.balanceCents > 0);
   const overdue = openInvoices.filter((r) => r.dueDate < today);
   const paidRecent = live.filter((r) => (r.kind === 'PAYMENT' || r.kind === 'SALES_RECEIPT') && r.date >= since);
-  const [printPortal, printInvoice] = useInvoicePrinter((text) => setNotice({ kind: 'error', text }));
+  const [printPortal, forms] = useFormPrinter(setNotice);
   const voidRow = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Transaction voided: a reversing journal entry now offsets it.' });
@@ -265,7 +265,7 @@ export default function AllSales({ accounts, intent }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
-                          ...(r.kind === 'INVOICE' ? [{ label: 'Print / Save PDF', onSelect: () => printInvoice(r.id) }] : []),
+                          ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms) : []),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}
                       />

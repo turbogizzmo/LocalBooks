@@ -58,7 +58,7 @@ export const HELP_ARTICLES = [
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',
-    body: 'Fill in the invoice form at the top of Sales › Invoices: type the customer, then add lines with a quantity, rate and income account (decimals such as 1.5 hours are fine). Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF.',
+    body: 'Fill in the invoice form at the top of Sales › Invoices: type the customer, then add lines with a quantity, rate and income account (decimals such as 1.5 hours are fine). Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF with your form design.',
     keywords: 'bill customer charge billing new print pdf',
     go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
   },
@@ -405,6 +405,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Preferences', view: 'settings', action: 'preferences' },
   },
   {
+    id: 'custom-forms', area: 'company', views: ['settings', 'sales/invoices', 'sales/estimates'],
+    title: 'Design your invoice and estimate forms',
+    body: 'Settings › Custom Forms sets the title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices and estimates, with a live preview. Print… and Save as PDF… on a row use the saved design.',
+    keywords: 'form designer template layout customize logo color font pdf print invoice estimate',
+    go: { label: 'Go to Custom Forms', view: 'settings', action: 'forms' },
+  },
+  {
     id: 'closing-date', area: 'company', views: ['settings', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
     body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
@@ -453,7 +460,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
-  preferences: 'getting-started', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
 };
 

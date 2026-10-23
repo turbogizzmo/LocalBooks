@@ -214,7 +214,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | Group | Screens | What you can do |
 |---|---|---|
 | **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
-| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services | Invoices with inline line-item grid, full & partial payments, sales receipts, estimates → invoice conversion, printable invoices |
+| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services | Invoices with inline line-item grid, full & partial payments, sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files |
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |

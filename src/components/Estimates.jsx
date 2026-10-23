@@ -4,6 +4,7 @@ import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
+import { formMenuItems, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -153,9 +154,11 @@ export default function Estimates({ accounts, intent, navigate }) {
     setNotice({ kind: 'success', text: `Estimate #${closed.estimateNumber} converted to invoice #${closed.invoiceNumber} and posted to Accounts Receivable.` });
   };
   const rows = data ?? [];
+  const [printPortal, forms] = useFormPrinter(setNotice);
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {printPortal}
       {composing && <EstimateForm accounts={accounts} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load estimates: ${error}`} />}
@@ -215,6 +218,7 @@ export default function Estimates({ accounts, intent, navigate }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
+                          ...formMenuItems('ESTIMATE', e.id, forms),
                           {
                             label: 'Edit as invoice…',
                             disabled: !open || e.status === 'REJECTED',
