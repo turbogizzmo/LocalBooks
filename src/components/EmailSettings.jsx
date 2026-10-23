@@ -65,6 +65,18 @@ export default function EmailSettings() {
       setPassword('');
     }, 'Email settings saved.');
   const test = () => run(() => api.testSmtpSettings(draft, password || null), `Connected to ${draft.host} and signed in.`);
+  const sendTest = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const to = await api.sendSmtpTestEmail(draft, password || null);
+      setNotice({ kind: 'success', text: `Test email sent to ${to}. Check that inbox (and its spam folder).` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
   const forgetPassword = () =>
     run(async () => {
       const status = await api.saveSmtpSettings(saved.settings, '');
@@ -166,6 +178,9 @@ export default function EmailSettings() {
       <div className="flex justify-end gap-1">
         <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy || !draft.host.trim()} onClick={test}>
           Test connection
+        </button>
+        <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy || !draft.host.trim() || !draft.fromEmail.trim()} onClick={sendTest} title="Sends a short message to the from address">
+          Send test email
         </button>
         <button type="button" className="qb-btn qb-btn-primary h-row" disabled={busy || !dirty} onClick={save}>
           Save

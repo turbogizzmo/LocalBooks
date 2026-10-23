@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, errorText, printDocument } from '../lib/api.js';
+import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { formatDate } from '../lib/dates.js';
 import { PrintPortal } from './PrintDocuments.jsx';
 
 // The standard PDF fonts, as the screen and the print dialog show them.
@@ -56,6 +57,41 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
+const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement' };
+
+/** "Emailed 10/21/2026 to ap@acme.com" (sent_at is UTC; shown as the local date). */
+export function sentText(record) {
+  const local = new Date(record.sentAt ?? record.lastSentAt);
+  const day = Number.isNaN(local.getTime()) ? '' : formatDate(`${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`);
+  const how = record.method === 'MAIL_APP' ? ' (opened in mail app)' : '';
+  return `Emailed ${day} to ${record.recipients ?? record.lastRecipients}${how}`;
+}
+
+/** Each form's email status (last send, Email later) by document id, kept live. */
+export function useEmailStatuses(kind) {
+  const { data } = useLedgerQuery(useCallback(() => api.listEmailStatuses(kind), [kind]));
+  return new Map((data ?? []).map((s) => [s.documentId, s]));
+}
+
+/** The small marks beside a form's number: ✉ when emailed, a chip while it waits in Email later. */
+export function EmailMarks({ status }) {
+  if (!status) return null;
+  return (
+    <>
+      {status.lastSentAt && (
+        <span className="ml-1 text-qb-ink-muted" title={sentText(status) + (status.sendCount > 1 ? ` · sent ${status.sendCount} times` : '')} aria-label={sentText(status)}>
+          ✉
+        </span>
+      )}
+      {status.queued && (
+        <span className="ml-1 rounded-xs bg-qb-green-tint px-1 text-2xs font-semibold text-qb-green-active" title="Marked Email later: send it from Sales › Send Forms">
+          Email later
+        </span>
+      )}
+    </>
+  );
+}
+
 /** What the email dialog reports once the message is open in the mail app. */
 function composedText(outcome, fileName) {
   return outcome.kind === 'attached'
@@ -64,8 +100,9 @@ function composedText(outcome, fileName) {
 }
 
 /** Edits the email for a document, then hands it to the mail app with the PDF attached. */
-export function EmailFormDialog({ kind, id, onClose, onNotice }) {
+export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) {
   const [draft, setDraft] = useState(null);
+  const [history, setHistory] = useState([]);
   // Set when sending from LocalBooks (SMTP) is turned on: { fromEmail }.
   const [smtp, setSmtp] = useState(null);
   const [method, setMethod] = useState('MAIL_APP');
@@ -75,9 +112,10 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.getEmailDraft(kind, id), api.getSmtpSettings()])
-      .then(([d, status]) => {
+    Promise.all([api.getEmailDraft(kind, id, period), api.getSmtpSettings(), api.getEmailHistory(kind, id)])
+      .then(([d, status, sent]) => {
         if (cancelled) return;
+        setHistory(sent);
         if (status.settings.enabled) {
           setSmtp({ fromEmail: status.settings.fromEmail });
           setMethod('SMTP');
@@ -88,7 +126,7 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
     return () => {
       cancelled = true;
     };
-  }, [kind, id]);
+  }, [kind, id, period?.startDate, period?.endDate]);
   useEffect(() => {
     if (draft) toRef.current?.focus();
   }, [draft]);
@@ -105,10 +143,10 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
     try {
       const email = { to: draft.to, subject: draft.subject, body: draft.body };
       if (method === 'SMTP') {
-        await api.emailFormWithSmtp(kind, id, email);
+        await api.emailFormWithSmtp(kind, id, email, period);
         onNotice({ kind: 'success', text: `Sent ${draft.fileName} to ${draft.to}.` });
       } else {
-        const outcome = await api.emailFormWithMailApp(kind, id, email);
+        const outcome = await api.emailFormWithMailApp(kind, id, email, period);
         onNotice({ kind: 'success', text: composedText(outcome, draft.fileName) });
       }
       onClose();
@@ -123,7 +161,7 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
       <div role="dialog" aria-modal="true" aria-labelledby="email-form-title" className="w-[560px] rounded-xs bg-white shadow-popover">
         <div className="border-b border-qb-border px-3 py-1.5">
           <h2 id="email-form-title" className="text-md font-semibold">
-            Email {kind === 'INVOICE' ? 'invoice' : 'estimate'}
+            Email {FORM_NAMES[kind] ?? 'form'}
           </h2>
         </div>
         {!draft ? (
@@ -153,6 +191,14 @@ export function EmailFormDialog({ kind, id, onClose, onNotice }) {
                   <input type="radio" name="email-send-method" checked={method === 'MAIL_APP'} onChange={() => setMethod('MAIL_APP')} />
                   Open in my mail app instead
                 </label>
+              </div>
+            )}
+            {history.length > 0 && (
+              <div className="rounded-xs border border-qb-border bg-qb-canvas px-2 py-1 text-xs text-qb-ink-muted">
+                {history.slice(0, 3).map((h, i) => (
+                  <div key={i}>{sentText(h)}</div>
+                ))}
+                {history.length > 3 && <div>…and {history.length - 3} earlier</div>}
               </div>
             )}
             {error && <p className="font-semibold text-qb-negative">{error}</p>}
@@ -218,7 +264,7 @@ export function useFormPrinter(onNotice) {
   );
 
   const [emailing, setEmailing] = useState(null);
-  const email = useCallback((kind, id) => setEmailing({ kind, id }), []);
+  const email = useCallback((kind, id, period = null) => setEmailing({ kind, id, period }), []);
   const closeEmail = useCallback(() => setEmailing(null), []);
 
   const portal = (
@@ -228,17 +274,34 @@ export function useFormPrinter(onNotice) {
           {forms.flatMap((form, f) => form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />))}
         </PrintPortal>
       )}
-      {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} onClose={closeEmail} onNotice={onNotice} />}
+      {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} period={emailing.period} onClose={closeEmail} onNotice={onNotice} />}
     </>
   );
-  return [portal, { print, printMany, savePdf, email }];
+  const setLater = useCallback(
+    async (kind, id, queued) => {
+      try {
+        await api.setEmailLater(kind, id, queued);
+        onNotice({ kind: 'success', text: queued ? 'Marked Email later. Send it from Sales › Send Forms.' : 'Removed from Email later.' });
+      } catch (err) {
+        onNotice({ kind: 'error', text: errorText(err) });
+      }
+    },
+    [onNotice],
+  );
+  return [portal, { print, printMany, savePdf, email, setLater }];
 }
 
-/** Row-menu entries for a document's form; `withEmail` false leaves out Email…. */
-export function formMenuItems(kind, id, actions, withEmail = true) {
+/** Row-menu entries for a document's form; `status` is its entry from useEmailStatuses. */
+export function formMenuItems(kind, id, actions, status = null) {
   return [
     { label: 'Print…', onSelect: () => actions.print(kind, id) },
     { label: 'Save as PDF…', onSelect: () => actions.savePdf(kind, id) },
-    ...(withEmail ? [{ label: 'Email…', onSelect: () => actions.email(kind, id) }] : []),
-  ];
+    { label: 'Email…', onSelect: () => actions.email(kind, id) },
+    // Statements cover a period chosen when they are sent, so they are not queued.
+    kind === 'STATEMENT'
+      ? null
+      : status?.queued
+      ? { label: 'Remove from Email later', onSelect: () => actions.setLater(kind, id, false) }
+      : { label: 'Email later', hint: 'Queue it in Sales › Send Forms', onSelect: () => actions.setLater(kind, id, true) },
+  ].filter(Boolean);
 }

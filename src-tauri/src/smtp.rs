@@ -204,6 +204,25 @@ pub async fn test_connection(settings: SmtpSettings, secrets: &SecretStore, pass
     }
 }
 
+/// Sends a short message to the from address with these (possibly unsaved) settings; returns
+/// the address it went to.
+pub async fn send_test(settings: SmtpSettings, secrets: &SecretStore, password: Option<String>, company: &str) -> Result<String, String> {
+    let settings = settings.validated()?;
+    if settings.from_email.is_empty() {
+        return Err("SMTP_INCOMPLETE: enter the from address first".into());
+    }
+    let transport = transport(&settings, secrets, password).await?;
+    let from = mailbox(&settings)?;
+    let message = Message::builder()
+        .from(from.clone())
+        .to(from)
+        .subject(format!("LocalBooks test email from {company}"))
+        .body(format!("This is a test message from LocalBooks.\n\nIf you can read it, {company} can email invoices and estimates through {}.", settings.host))
+        .map_err(|e| format!("SMTP_MESSAGE: {e}"))?;
+    transport.send(message).await.map_err(|e| send_error(&e))?;
+    Ok(settings.from_email)
+}
+
 /// A message with a PDF attached.
 pub struct Outgoing {
     pub to: Vec<String>,
@@ -347,7 +366,10 @@ mod tests {
         let secrets = store("send");
         let relay = SmtpSettings { host: "127.0.0.1".into(), port, security: Security::None, username: String::new(), ..account() };
         save_settings(&pool, &secrets, relay.clone(), None).await.unwrap();
-        test_connection(relay, &secrets, None).await.unwrap();
+        test_connection(relay.clone(), &secrets, None).await.unwrap();
+        assert_eq!(send_test(relay, &secrets, None, "Acme").await.unwrap(), "billing@example.com");
+        assert!(received.lock().unwrap().contains("Subject: LocalBooks test email from Acme"));
+        received.lock().unwrap().clear();
 
         send(
             &pool,

@@ -37,7 +37,7 @@ export const SCREEN_HELP = {
   'accounting/classes': 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
   'accounting/reclassify': 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
-  'sales/statements': 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or save as PDF to email.',
+  'sales/statements': 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or open one to save it as PDF or email it.',
   'expenses/purchase-orders': 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
   'accounting/recurring': 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
   'accounting/budgets': 'Expected income and expenses for each account, month by month for a fiscal year. Compare a budget with your books in Reports › Budget vs. Actuals.',
@@ -137,8 +137,8 @@ export const HELP_ARTICLES = [
   {
     id: 'statements', area: 'sales', views: ['sales/statements', 'sales/customers', 'sales/invoices'],
     title: 'Send customer statements',
-    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment and credit, the amount due and its aging), tick the ones to send and print them or save them as PDF.',
-    keywords: 'statement customer statement balance forward account summary aging dunning',
+    body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment and credit, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one.',
+    keywords: 'statement customer statement balance forward account summary aging dunning email',
     go: { label: 'Go to Customer Statements', view: 'sales/statements' },
   },
   {
@@ -412,9 +412,16 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Custom Forms', view: 'settings', action: 'forms' },
   },
   {
+    id: 'send-forms', area: 'sales', views: ['sales/send-forms', 'sales/invoices', 'sales/estimates'],
+    title: 'Email forms in a batch (Email later and Send Forms)',
+    body: 'Tick Email later when you save an invoice or estimate, or choose Email later in a row’s menu; Unsent only shows them. Sales › Send Forms sends the ones you select: all at once over SMTP, or one message per form in your mail app. Each send is added to the form’s sent history (✉ in the list).',
+    keywords: 'email later batch send forms queue unsent history sent emailed',
+    go: { label: 'Go to Send Forms', view: 'sales/send-forms' },
+  },
+  {
     id: 'smtp', area: 'company', views: ['settings'],
     title: 'Send emailed forms from LocalBooks (SMTP)',
-    body: 'Settings › Email can send invoices and estimates through your email provider’s SMTP server instead of opening your mail app. Enter the server, security, port, username and password (often an app password), click Test connection, then Save. The password is kept in this computer’s Keychain or Credential Manager.',
+    body: 'Settings › Email can send invoices and estimates through your email provider’s SMTP server instead of opening your mail app. Enter the server, security, port, username and password (often an app password), click Test connection (or Send test email), then Save. The password is kept in this computer’s Keychain or Credential Manager.',
     keywords: 'smtp email server gmail outlook app password send mail settings',
     go: { label: 'Email settings', view: 'settings', action: 'email' },
   },
@@ -474,7 +481,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
-  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'send-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
 };
 
@@ -487,6 +494,7 @@ const SCREEN_GUIDES = {
   'banking/transfers': 'deposits-and-transfers', 'banking/reconcile': 'reconciling', 'accounting/journal': 'journal-entries-and-voids',
   'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'desktop-migration', reports: 'reports',
   'accounting/fx-revaluation': 'currency-revaluation',
+  'sales/send-forms': 'custom-forms',
   settings: 'getting-started',
 };
 

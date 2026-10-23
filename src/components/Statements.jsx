@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
-import { FormSheet, useFormPrinter } from './FormPages.jsx';
+import { EmailMarks, FormSheet, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { periodRange } from '../lib/dates.js';
@@ -13,6 +13,7 @@ export default function Statements() {
   const [preview, setPreview] = useState(null); // { customerId, form }
   const [notice, setNotice] = useState(null);
   const [printPortal, forms] = useFormPrinter(setNotice);
+  const emailed = useEmailStatuses('STATEMENT');
   const period = { startDate: start, endDate: end };
 
   useEffect(() => {
@@ -78,7 +79,10 @@ export default function Statements() {
                     <td className="qb-grid-cell w-[28px] text-center" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={picked.has(id)} onChange={() => toggle(id)} aria-label={`Select ${name}`} />
                     </td>
-                    <td className="qb-grid-cell font-semibold">{name}</td>
+                    <td className="qb-grid-cell font-semibold">
+                      {name}
+                      <EmailMarks status={emailed.get(id)} />
+                    </td>
                     <td className="qb-grid-cell num">{formatCents(balance)}</td>
                   </tr>
                 ))}
@@ -96,6 +100,9 @@ export default function Statements() {
                 </button>
                 <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => forms.savePdf('STATEMENT', preview.customerId, period)}>
                   Save as PDF…
+                </button>
+                <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => forms.email('STATEMENT', preview.customerId, period)}>
+                  Email…
                 </button>
               </span>
             )}
