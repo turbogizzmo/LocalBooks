@@ -241,6 +241,7 @@ export const api = {
   postLedgerBatch: (input) => invoke('post_ledger_batch', { input }),
   reverseLedgerBatch: (batchId) => invoke('reverse_ledger_batch', { batchId }),
   discardLedgerBatch: (batchId) => invoke('discard_ledger_batch', { batchId }),
+  startOverLedgerBatch: (batchId) => invoke('start_over_ledger_batch', { batchId }),
 };
 
 /** Opens the system print dialog (Print / Save as PDF), falling back to the browser's. */
