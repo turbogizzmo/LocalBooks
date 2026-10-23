@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText, printDocument } from '../lib/api.js';
 import { PrintPortal } from './PrintDocuments.jsx';
 
@@ -56,9 +56,98 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
+/** What the email dialog reports once the message is open in the mail app. */
+function composedText(outcome, fileName) {
+  return outcome.kind === 'attached'
+    ? `A new message is open in ${outcome.app} with ${fileName} attached. Review it there and send.`
+    : `Your mail app opened a new message. Attach ${fileName}, shown in your file manager, then send.`;
+}
+
+/** Edits the email for a document, then hands it to the mail app with the PDF attached. */
+export function EmailFormDialog({ kind, id, onClose, onNotice }) {
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const toRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getEmailDraft(kind, id)
+      .then((d) => !cancelled && setDraft(d))
+      .catch((err) => !cancelled && setError(errorText(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, id]);
+  useEffect(() => {
+    if (draft) toRef.current?.focus();
+  }, [draft]);
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !busy && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const set = (key) => (e) => setDraft((d) => ({ ...d, [key]: e.target.value }));
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const outcome = await api.emailFormWithMailApp(kind, id, { to: draft.to, subject: draft.subject, body: draft.body });
+      onNotice({ kind: 'success', text: composedText(outcome, draft.fileName) });
+      onClose();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-qb-nav/40 backdrop-blur-[2px]">
+      <div role="dialog" aria-modal="true" aria-labelledby="email-form-title" className="w-[560px] rounded-xs bg-white shadow-popover">
+        <div className="border-b border-qb-border px-3 py-1.5">
+          <h2 id="email-form-title" className="text-md font-semibold">
+            Email {kind === 'INVOICE' ? 'invoice' : 'estimate'}
+          </h2>
+        </div>
+        {!draft ? (
+          <div className="px-3 py-2 text-sm text-qb-ink-muted">{error ? <span className="font-semibold text-qb-negative">{error}</span> : 'Loading…'}</div>
+        ) : (
+          <div className="flex flex-col gap-1.5 px-3 py-2 text-sm">
+            <label className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-xs font-semibold text-qb-ink-muted">To</span>
+              <input ref={toRef} className="qb-input w-full" value={draft.to} onChange={set('to')} placeholder="customer@example.com, another@example.com" />
+            </label>
+            <label className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-xs font-semibold text-qb-ink-muted">Subject</span>
+              <input className="qb-input w-full" value={draft.subject} onChange={set('subject')} maxLength={200} />
+            </label>
+            <textarea aria-label="Message" rows={9} className="qb-input h-auto w-full py-0.5" value={draft.body} onChange={set('body')} />
+            <div className="flex items-center gap-1.5 text-xs text-qb-ink-muted">
+              <span className="rounded-xs border border-qb-border bg-qb-canvas px-1.5 py-0.5 font-semibold text-qb-ink">📎 {draft.fileName}</span>
+              <span>opens in your mail app as a new message for you to review and send</span>
+            </div>
+            {error && <p className="font-semibold text-qb-negative">{error}</p>}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 border-t border-qb-border px-3 py-1.5">
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={send} disabled={busy || !draft}>
+            {busy ? 'Opening…' : 'Open in mail app'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Prints and saves invoices and estimates with their designed form. Returns [portal element to
- * render, { print(kind, id), savePdf(kind, id) }]; results are reported through `onNotice`.
+ * Prints, saves and emails invoices and estimates with their designed form. Returns [elements to
+ * render, { print(kind, id), savePdf(kind, id), email(kind, id) }]; results are reported through
+ * `onNotice`.
  */
 export function useFormPrinter(onNotice) {
   const [form, setForm] = useState(null);
@@ -99,14 +188,23 @@ export function useFormPrinter(onNotice) {
     [onNotice],
   );
 
-  const portal = form ? (
-    <PrintPortal>
-      {form.pages.map((page, i) => (
-        <FormSheet key={i} page={page} logo={form.logo} />
-      ))}
-    </PrintPortal>
-  ) : null;
-  return [portal, { print, savePdf }];
+  const [emailing, setEmailing] = useState(null);
+  const email = useCallback((kind, id) => setEmailing({ kind, id }), []);
+  const closeEmail = useCallback(() => setEmailing(null), []);
+
+  const portal = (
+    <>
+      {form && (
+        <PrintPortal>
+          {form.pages.map((page, i) => (
+            <FormSheet key={i} page={page} logo={form.logo} />
+          ))}
+        </PrintPortal>
+      )}
+      {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} onClose={closeEmail} onNotice={onNotice} />}
+    </>
+  );
+  return [portal, { print, savePdf, email }];
 }
 
 /** Row-menu entries for a document's form. */
@@ -114,5 +212,6 @@ export function formMenuItems(kind, id, actions) {
   return [
     { label: 'Print…', onSelect: () => actions.print(kind, id) },
     { label: 'Save as PDF…', onSelect: () => actions.savePdf(kind, id) },
+    { label: 'Email…', onSelect: () => actions.email(kind, id) },
   ];
 }

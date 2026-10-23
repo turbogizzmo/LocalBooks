@@ -65,7 +65,7 @@ function useDocumentChoices(kind) {
 
 /**
  * Settings › Custom Forms: designs the printed invoice and estimate. Changes preview live with the
- * sample document or a real one and apply to printing and PDF files once saved.
+ * sample document or a real one and apply to printing, PDF files and email once saved.
  */
 export default function FormDesigner() {
   const [kind, setKind] = useState('INVOICE');
@@ -128,7 +128,7 @@ export default function FormDesigner() {
       const stored = await api.saveFormTemplate(kind, draft);
       setSaved(stored);
       setDraft(stored);
-      setNotice({ kind: 'success', text: `${KINDS.find((k) => k.id === kind).label} form saved. Printing and PDF files now use it.` });
+      setNotice({ kind: 'success', text: `${KINDS.find((k) => k.id === kind).label} form saved. Printing, PDF files and email now use it.` });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -288,6 +288,16 @@ export default function FormDesigner() {
                 {text('footer', { maxLength: 150, placeholder: 'e.g. your website' })}
               </Row>
               <p className="text-2xs text-qb-ink-faint">Placeholders: {PLACEHOLDERS}</p>
+            </Section>
+            <Section title="Email">
+              <Row label="Subject" htmlFor="form-emailSubject">
+                {text('emailSubject', { maxLength: 200 })}
+              </Row>
+              <label htmlFor="form-emailBody" className="text-xs font-semibold text-qb-ink-muted">
+                Message
+              </label>
+              <textarea id="form-emailBody" rows={6} maxLength={4000} className="qb-input h-auto w-full py-0.5" value={draft.emailBody} onChange={(e) => set('emailBody')(e.target.value)} />
+              <p className="text-2xs text-qb-ink-faint">Used by Email… on a row, with the PDF attached. You can edit it before sending.</p>
             </Section>
           </div>
           <div className="qb-panel flex min-h-0 flex-col bg-qb-canvas">

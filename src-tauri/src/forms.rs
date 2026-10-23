@@ -120,6 +120,9 @@ pub struct FormTemplate {
     pub terms: String,
     /// At the bottom of every page.
     pub footer: String,
+    /// The email a form is sent with; the same placeholders as the message.
+    pub email_subject: String,
+    pub email_body: String,
 }
 
 impl Default for FormTemplate {
@@ -148,6 +151,8 @@ impl Default for FormTemplate {
             message: String::new(),
             terms: String::new(),
             footer: String::new(),
+            email_subject: String::new(),
+            email_body: String::new(),
         }
     }
 }
@@ -158,7 +163,20 @@ impl FormTemplate {
             FormKind::Invoice => "Please reference invoice {number} with your payment. Thank you for your business.",
             FormKind::Estimate => "Thank you for the opportunity. This estimate is valid until the expiration date shown.",
         };
-        FormTemplate { title: kind.default_title().into(), message: message.into(), ..FormTemplate::default() }
+        let (subject, body) = match kind {
+            FormKind::Invoice => (
+                "Invoice {number} from {company}",
+                "Dear {customer},\n\nPlease find attached invoice {number} for {total}, due {due_date}.\n\nThank you for your business.\n{company}",
+            ),
+            FormKind::Estimate => ("Estimate {number} from {company}", "Dear {customer},\n\nPlease find attached estimate {number} for {total}.\n\nWe look forward to working with you.\n{company}"),
+        };
+        FormTemplate {
+            title: kind.default_title().into(),
+            message: message.into(),
+            email_subject: subject.into(),
+            email_body: body.into(),
+            ..FormTemplate::default()
+        }
     }
 
     /// Trims and checks every field; blank labels fall back to their defaults.
@@ -180,6 +198,8 @@ impl FormTemplate {
         field(&mut self.message, "", 600, "the message")?;
         field(&mut self.terms, "", 1000, "the terms")?;
         field(&mut self.footer, "", 150, "the footer")?;
+        field(&mut self.email_subject, &defaults.email_subject, 200, "the email subject")?;
+        field(&mut self.email_body, &defaults.email_body, 4000, "the email message")?;
         let color = self.accent_color.trim().to_ascii_lowercase();
         if Rgb::parse(&color).is_none() {
             return Err("FORM_BAD_COLOR: the accent color must be a hex color such as #2ca01c".into());
@@ -950,6 +970,30 @@ pub async fn pdf_file(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Re
     Ok((file_name(&rendered.form.title), bytes))
 }
 
+/// The email a document is sent with, before the user edits it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailDraft {
+    /// The customer's email address, or empty.
+    pub to: String,
+    pub subject: String,
+    pub body: String,
+    /// The attachment's file name.
+    pub file_name: String,
+}
+
+pub async fn email_draft(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Result<EmailDraft, String> {
+    let tpl = get_template(pool, kind).await?;
+    let company = load_company(pool).await?;
+    let doc = document(pool, kind, Some(document_id), &company.currency_symbol).await?;
+    Ok(EmailDraft {
+        to: doc.customer_email.clone().unwrap_or_default(),
+        subject: fill_placeholders(&tpl.email_subject, &doc, &company),
+        body: fill_placeholders(&tpl.email_body, &doc, &company),
+        file_name: file_name(&format!("{} {}", tpl.title, doc.number)),
+    })
+}
+
 /// "Invoice 1001" → "Invoice 1001.pdf", without characters file systems refuse.
 pub fn file_name(title: &str) -> String {
     let clean: String = title.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '-' } else { c }).collect();
@@ -1108,6 +1152,13 @@ mod tests {
         let (name, bytes) = pdf_file(&pool, FormKind::Invoice, invoice.id).await.unwrap();
         assert_eq!(name, format!("Statement of Work {}.pdf", invoice.invoice_number));
         assert!(bytes.starts_with(b"%PDF-1.4"));
+
+        let draft = email_draft(&pool, FormKind::Invoice, invoice.id).await.unwrap();
+        assert_eq!(draft.to, "ap@initech.test");
+        assert_eq!(draft.subject, format!("Invoice {} from {}", invoice.invoice_number, load_company(&pool).await.unwrap().name));
+        assert!(draft.body.starts_with("Dear Initech,\n\nPlease find attached invoice"), "{}", draft.body);
+        assert!(draft.body.contains("$150.00, due 10/31/2026"));
+        assert_eq!(draft.file_name, format!("Statement of Work {}.pdf", invoice.invoice_number));
 
         assert_eq!(reset_template(&pool, FormKind::Invoice).await.unwrap().title, "Invoice");
         assert_eq!(get_template(&pool, FormKind::Invoice).await.unwrap().title, "Invoice");
