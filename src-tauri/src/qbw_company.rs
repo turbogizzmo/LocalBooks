@@ -99,6 +99,9 @@ pub struct LedgerQuality {
     pub refined_pages: usize,
     /// Rows of line-item tables that could not be decoded.
     pub unreadable_lines: usize,
+    /// Lines read from rows damaged near their end (memo lost), kept because they make their
+    /// transaction balance exactly.
+    pub recovered_lines: usize,
     /// Decoded lines rejected by the checks (unknown account, odd amount, impossible date).
     pub rejected_lines: usize,
     pub rejected_by_reason: BTreeMap<&'static str, usize>,
@@ -206,6 +209,28 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
     accounts.into_values().collect()
 }
 
+/// Adds lines read from damaged rows to the transactions they make balance, and returns how many
+/// were used. A transaction takes one candidate whose amount is exactly what it lacks, or all its
+/// candidates when together they are; otherwise it is left as it is (and stays unbalanced).
+fn recover_damaged_lines(transactions: &mut BTreeMap<i64, SourceTransaction>, salvage: HashMap<i64, Vec<SourceLine>>) -> usize {
+    let mut used = 0;
+    for (tid, candidates) in salvage {
+        let Some(txn) = transactions.get_mut(&tid) else { continue };
+        let missing = -txn.imbalance_cents();
+        if missing == 0 {
+            continue;
+        }
+        let recovered: Vec<SourceLine> = match candidates.iter().position(|l| l.cents == missing) {
+            Some(i) => vec![candidates[i].clone()],
+            None if candidates.iter().map(|l| l.cents).sum::<i64>() == missing => candidates,
+            None => continue,
+        };
+        used += recovered.len();
+        txn.lines.extend(recovered);
+    }
+    used
+}
+
 /// Reads the general ledger. Blocking and CPU-bound.
 pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let (pages, catalog, page_stats, refined) = read_pages(path)?;
@@ -218,6 +243,9 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let latest = chrono::Local::now().date_naive().with_year(chrono::Local::now().year() + 1).unwrap_or(NaiveDate::MAX);
 
     let mut transactions: BTreeMap<i64, SourceTransaction> = BTreeMap::new();
+    // Lines whose row is damaged after its leading columns: used only when they make their
+    // transaction balance to the cent.
+    let mut salvage: HashMap<i64, Vec<SourceLine>> = HashMap::new();
     for (stem, kind) in TRANSACTION_TABLES {
         let Some(line_table) = catalog.table_id(&format!("abmc_{stem}_lineitem")) else { continue };
         let headers: HashMap<i64, Row> = rows_of(&pages, &catalog, &format!("abmc_{stem}_header"))
@@ -226,6 +254,16 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             .collect();
         let lines = table_rows(&pages, &catalog, line_table);
         quality.unreadable_lines += lines.unchained + lines.unwalkable;
+        for r in &lines.partial {
+            let (Some(tid), Some(account_id), Some(cents)) =
+                (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents())
+            else {
+                continue;
+            };
+            if cents != 0 && known_accounts.contains(&account_id) && r.get("is_no_post_bool").as_int() != Some(1) {
+                salvage.entry(tid).or_default().push(SourceLine { account_id, cents, memo: None });
+            }
+        }
         for r in lines.rows {
             if r.get("is_no_post_bool").as_int() == Some(1) {
                 continue;
@@ -288,6 +326,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         }
     }
 
+    quality.recovered_lines += recover_damaged_lines(&mut transactions, salvage);
+
     let mut totals: HashMap<i64, i64> = HashMap::new();
     for txn in transactions.values() {
         for line in &txn.lines {
@@ -312,6 +352,45 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
 mod tests {
     use super::*;
 
+    fn line(account_id: i64, cents: i64) -> SourceLine {
+        SourceLine { account_id, cents, memo: None }
+    }
+
+    fn txn(id: i64, lines: Vec<SourceLine>) -> SourceTransaction {
+        SourceTransaction { id, kind: "Check", date: NaiveDate::from_ymd_opt(2024, 7, 30).unwrap(), doc_num: None, name: None, memo: None, lines }
+    }
+
+    #[test]
+    fn damaged_lines_are_used_only_when_they_balance_their_transaction() {
+        let mut txns: BTreeMap<i64, SourceTransaction> = [
+            // Missing a -150000 line; one candidate matches exactly, another does not.
+            (1, txn(1, vec![line(7, 150_000)])),
+            // Missing -2700 in two lines that only balance together.
+            (2, txn(2, vec![line(10, 2_700)])),
+            // The candidate's amount is wrong: it must not be used.
+            (3, txn(3, vec![line(7, 1_998)])),
+            // Already balanced: a stray candidate must not unbalance it.
+            (4, txn(4, vec![line(7, 500), line(16, -500)])),
+        ]
+        .into_iter()
+        .collect();
+        let salvage: HashMap<i64, Vec<SourceLine>> = [
+            (1, vec![line(33, -1_000), line(16, -150_000)]),
+            (2, vec![line(23, -1_700), line(24, -1_000)]),
+            (3, vec![line(33, -1_997)]),
+            (4, vec![line(33, -500)]),
+            (9, vec![line(33, -10)]),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(recover_damaged_lines(&mut txns, salvage), 3);
+        assert_eq!(txns[&1].lines, vec![line(7, 150_000), line(16, -150_000)]);
+        assert_eq!(txns[&2].imbalance_cents(), 0);
+        assert_eq!(txns[&3].lines.len(), 1);
+        assert_eq!(txns[&3].imbalance_cents(), 1_998);
+        assert_eq!(txns[&4].lines.len(), 2);
+    }
+
     #[test]
     #[ignore]
     fn lists_unreadable_line_rows() {
@@ -333,6 +412,82 @@ mod tests {
         }
     }
 
+    /// Traces the transactions that do not balance: every line row of the involved transactions,
+    /// readable or not (unreadable rows are partially decoded), with page and sector-7 status.
+    #[test]
+    #[ignore]
+    fn traces_unbalanced_transactions() {
+        use crate::qbw_records::walk_prefix;
+        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+        let (pages, catalog, _, _) = read_pages(Path::new(&path)).unwrap();
+        let ledger = read_ledger(Path::new(&path)).unwrap();
+        let wanted: HashSet<i64> = ledger.unbalanced.iter().map(|t| t.id).collect();
+        let names: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.full_name.as_str())).collect();
+        for t in &ledger.unbalanced {
+            println!("txn {} {} #{:?} {} off {}", t.id, t.kind, t.doc_num, t.date, crate::ledger::format_cents(t.imbalance_cents()));
+        }
+        for page in &pages {
+            let Some(name) = catalog.names.get(&page.owner) else { continue };
+            if !name.ends_with("_lineitem") || CHUNK_KINDS.contains(&page.kind) {
+                continue;
+            }
+            let cols = &catalog.columns[&page.owner];
+            for r in &page.rows {
+                let bytes = page.row(r);
+                let full = if r.chained { walk_row(bytes, cols) } else { None };
+                let (prefix, stop) = walk_prefix(bytes, cols);
+                let get = |k: &str| -> Value {
+                    match &full {
+                        Some(v) => v.get(k).cloned().unwrap_or(Value::Null),
+                        None => prefix.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()).unwrap_or(Value::Null),
+                    }
+                };
+                let tid = get("transaction_id").as_int().unwrap_or(-1);
+                let interesting = wanted.contains(&tid) || full.is_none();
+                if !interesting {
+                    continue;
+                }
+                let zone = if r.start as usize >= S7_START { "s7" } else if (r.start + r.len) as usize > S7_START { "crosses" } else { "s0-6" };
+                let acct = get("account_id").as_int();
+                println!(
+                    "{} {name:<34} page {:>5} k{} row {:>4}+{:<4} chained {:<5} {zone:<7} {:?} | txn {tid} target {:?} acct {:?} ({}) amt {:?} date {:?} | stop {stop}/{} after {:?}",
+                    if full.is_some() { "OK  " } else { "FAIL" },
+                    page.number, page.kind, r.start, r.len, r.chained, page.sector7,
+                    get("target_id").as_int(), acct, acct.and_then(|a| names.get(&a)).unwrap_or(&"?"),
+                    get("amount_amt").as_cents().map(crate::ledger::format_cents), get("transaction_date").as_date(),
+                    bytes.len(), prefix.last().map(|(n, _)| n.as_str())
+                );
+            }
+        }
+    }
+
+    /// Lists transaction headers that decode but have no lines in the ledger (whole transactions
+    /// missing), with the header's own total where the table has one.
+    #[test]
+    #[ignore]
+    fn lists_headers_without_lines() {
+        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+        let (pages, catalog, _, _) = read_pages(Path::new(&path)).unwrap();
+        let ledger = read_ledger(Path::new(&path)).unwrap();
+        let have: HashSet<i64> = ledger.transactions.iter().chain(&ledger.unbalanced).map(|t| t.id).collect();
+        for (stem, kind) in TRANSACTION_TABLES {
+            let mut missing = Vec::new();
+            for h in rows_of(&pages, &catalog, &format!("abmc_{stem}_header")) {
+                let Some(tid) = h.get("transaction_id").as_int() else { continue };
+                if h.get("is_no_post_bool").as_int() == Some(1) || have.contains(&tid) {
+                    continue;
+                }
+                missing.push(format!("{tid} {:?} #{:?} {:?}", h.get("transaction_date").as_date(), text(&h, "doc_num"), text(&h, "memo")));
+            }
+            if !missing.is_empty() {
+                println!("{kind}: {} headers without lines", missing.len());
+                for m in missing.iter().take(12) {
+                    println!("   {m}");
+                }
+            }
+        }
+    }
+
     /// Ledger read of a real company file (read-only): set LOCALBOOKS_QBW_CHECK and run
     /// `cargo test --release -- --ignored reads_the_ledger_of_a_real --nocapture`.
     #[test]
@@ -342,7 +497,7 @@ mod tests {
         let started = std::time::Instant::now();
         let ledger = read_ledger(Path::new(&path)).unwrap();
         let q = &ledger.quality;
-        println!("read in {:.1}s; refined pages {}", started.elapsed().as_secs_f64(), q.refined_pages);
+        println!("read in {:.1}s; refined pages {}; recovered lines {}", started.elapsed().as_secs_f64(), q.refined_pages, q.recovered_lines);
         println!(
             "accounts {} (stored balances matched {}/{}), transactions {} balanced, {} unbalanced; unreadable lines {}, rejected {}",
             ledger.accounts.len(),

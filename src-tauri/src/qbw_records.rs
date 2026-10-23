@@ -289,6 +289,35 @@ fn walk_columns(r: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     (o == r.len()).then_some(out)
 }
 
+/// The values a walk reads before it fails, with the offset where it stopped. A row damaged near
+/// its end still yields its leading columns (ids, account, amount), which callers can use when
+/// another check confirms them.
+pub fn walk_prefix(row: &[u8], cols: &[Column]) -> (Vec<(String, Value)>, usize) {
+    let r = strip_extra(row);
+    let nullable = cols.iter().filter(|c| c.nullable).count();
+    let bitmap_len = nullable.div_ceil(8);
+    let Some(bitmap) = r.get(3..3 + bitmap_len) else { return (Vec::new(), 0) };
+    let (mut o, mut bit, mut out) = (3 + bitmap_len, 0, Vec::new());
+    for col in cols {
+        if col.nullable {
+            let present = bitmap[bit / 8] >> (7 - bit % 8) & 1 == 1;
+            bit += 1;
+            if !present {
+                out.push((col.name.clone(), Value::Null));
+                continue;
+            }
+        }
+        match read_value(&r, o, col) {
+            Some((v, next)) => {
+                out.push((col.name.clone(), v));
+                o = next;
+            }
+            None => break,
+        }
+    }
+    (out, o)
+}
+
 /// Decodes a row, dropping trailing columns for rows written under an older, shorter schema.
 pub fn walk_row(row: &[u8], cols: &[Column]) -> Option<HashMap<String, Value>> {
     let row = strip_extra(row);
@@ -300,10 +329,12 @@ pub struct TableRows {
     pub rows: Vec<Row>,
     pub unchained: usize,
     pub unwalkable: usize,
+    /// Leading columns of the rows that chain but do not walk to the end.
+    pub partial: Vec<Row>,
 }
 
 pub fn table_rows(pages: &[LogicalPage], catalog: &Catalog, table: u32) -> TableRows {
-    let mut out = TableRows { rows: Vec::new(), unchained: 0, unwalkable: 0 };
+    let mut out = TableRows { rows: Vec::new(), unchained: 0, unwalkable: 0, partial: Vec::new() };
     let Some(cols) = catalog.columns.get(&table) else { return out };
     for page in pages.iter().filter(|p| p.owner == table && !CHUNK_KINDS.contains(&p.kind)) {
         for span in &page.rows {
@@ -313,7 +344,11 @@ pub fn table_rows(pages: &[LogicalPage], catalog: &Catalog, table: u32) -> Table
             }
             match walk_row(page.row(span), cols) {
                 Some(values) => out.rows.push(Row { values }),
-                None => out.unwalkable += 1,
+                None => {
+                    out.unwalkable += 1;
+                    let (prefix, _) = walk_prefix(page.row(span), cols);
+                    out.partial.push(Row { values: prefix.into_iter().collect() });
+                }
             }
         }
     }

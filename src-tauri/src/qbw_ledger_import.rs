@@ -145,6 +145,15 @@ pub struct UnbalancedView {
     pub imbalance_cents: i64,
 }
 
+/// The copy taken just before the import posted, which "Start over" restores.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartOverPoint {
+    pub file_name: String,
+    /// Local time the copy was taken, `YYYY-MM-DDTHH:MM:SS`.
+    pub taken_at: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LedgerBatchSummary {
@@ -171,6 +180,8 @@ pub struct LedgerBatchSummary {
     pub by_kind: Vec<(String, i64)>,
     pub accounts: Vec<SourceAccountView>,
     pub unbalanced: Vec<UnbalancedView>,
+    /// Present while the pre-import copy exists on disk.
+    pub start_over: Option<StartOverPoint>,
 }
 
 pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBatchSummary, String> {
@@ -187,6 +198,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         rejected_lines: i64,
         accounts_matching_stored: i64,
         accounts_with_stored_balance: i64,
+        pre_post_backup: Option<String>,
     }
     let head: Head = sqlx::query_as("SELECT * FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
@@ -261,7 +273,43 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         by_kind,
         accounts,
         unbalanced,
+        start_over: head.pre_post_backup.as_deref().and_then(start_over_point),
     })
+}
+
+fn start_over_point(path: &str) -> Option<StartOverPoint> {
+    let meta = std::fs::metadata(path).ok()?;
+    let taken: chrono::DateTime<chrono::Local> = meta.modified().ok()?.into();
+    Some(StartOverPoint {
+        file_name: Path::new(path).file_name()?.to_string_lossy().into_owned(),
+        taken_at: taken.format("%Y-%m-%dT%H:%M:%S").to_string(),
+    })
+}
+
+/// Records the copy of the books taken just before this batch posted.
+pub async fn set_pre_post_backup(pool: &SqlitePool, batch_id: i64, path: &Path) -> Result<(), String> {
+    sqlx::query("UPDATE ledger_import_batches SET pre_post_backup = ?2 WHERE id = ?1")
+        .bind(batch_id)
+        .bind(path.display().to_string())
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// The pre-import copy "Start over" restores, when it was taken and still exists.
+pub async fn pre_post_backup(pool: &SqlitePool, batch_id: i64) -> Result<std::path::PathBuf, String> {
+    require_batch(pool, batch_id).await?;
+    let path: Option<String> = sqlx::query_scalar("SELECT pre_post_backup FROM ledger_import_batches WHERE id = ?1")
+        .bind(batch_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+    match path.map(std::path::PathBuf::from) {
+        Some(p) if p.is_file() => Ok(p),
+        Some(p) => Err(format!("QBW_NO_START_OVER: the copy taken before this import ({}) is no longer in the backups folder", p.display())),
+        None => Err("QBW_NO_START_OVER: this import was posted before LocalBooks kept a copy for Start over; use Reverse posted entries instead".into()),
+    }
 }
 
 pub async fn list_batches(pool: &SqlitePool) -> Result<Vec<LedgerBatchSummary>, String> {
@@ -780,6 +828,50 @@ mod tests {
         println!("LocalBooks accounts matching the file: {same}, differing: {differ}");
         let total: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM journal_lines").fetch_one(&pool).await.unwrap();
         assert_eq!(total, 0, "the books must balance");
+    }
+
+    #[tokio::test]
+    async fn start_over_puts_back_the_books_from_just_before_the_post() {
+        let dir = std::env::temp_dir().join(format!("localbooks-start-over-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = crate::db::Db::open_at(dir.join("live.db"), crate::db::test_config(&dir)).await.unwrap();
+        let pool = db.pool().await;
+        let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger()).await.unwrap();
+        auto_map_accounts(&pool, batch).await.unwrap();
+        let err = pre_post_backup(&pool, batch).await.unwrap_err();
+        assert!(err.starts_with("QBW_NO_START_OVER"), "{err}");
+
+        // What the post command does: copy the books, post, record the copy.
+        let copy = crate::backup::pre_import_snapshot(&db, batch).await.unwrap();
+        assert!(copy.file_name().unwrap().to_string_lossy().starts_with(&format!("pre-import-{batch}-")));
+        post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        set_pre_post_backup(&pool, batch, &copy).await.unwrap();
+        let posted = batch_summary(&pool, batch).await.unwrap();
+        assert_eq!((posted.live_entry_count, posted.postable_count), (2, 0));
+        assert!(posted.start_over.is_some());
+        let kinds: Vec<String> = crate::backup::list_backups(db.backups_dir()).unwrap().into_iter().map(|b| b.kind).collect();
+        assert!(kinds.contains(&"PRE_IMPORT".to_string()), "{kinds:?}");
+
+        let result = crate::backup::restore(&db, &pre_post_backup(&pool, batch).await.unwrap()).await.unwrap();
+        let pool = db.pool().await;
+        let entries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap();
+        assert_eq!(entries, 0, "no entries and no reversals remain");
+        let again = batch_summary(&pool, batch).await.unwrap();
+        assert_eq!((again.live_entry_count, again.postable_count), (0, 2));
+        assert!(again.accounts.iter().filter(|a| a.line_count > 0).all(|a| a.account_id.is_some()), "mapping kept");
+        assert!(again.start_over.is_none());
+        assert!(Path::new(&result.safety_backup.path).is_file());
+
+        // The restored books can post the import again.
+        let reposted = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        assert_eq!(reposted.entries_posted, 2);
+
+        // A recorded copy that has gone missing is reported, not restored.
+        set_pre_post_backup(&pool, batch, &dir.join("gone.db")).await.unwrap();
+        assert!(pre_post_backup(&pool, batch).await.unwrap_err().contains("no longer in the backups folder"));
+        drop(pool);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

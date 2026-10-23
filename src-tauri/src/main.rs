@@ -342,6 +342,7 @@ fn main() {
             commands::post_ledger_batch,
             commands::reverse_ledger_batch,
             commands::discard_ledger_batch,
+            commands::start_over_ledger_batch,
             commands::reverse_qbw_batch,
         ])
         .build(tauri::generate_context!())
