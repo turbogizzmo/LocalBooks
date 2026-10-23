@@ -59,6 +59,8 @@ fn main() {
             if let Some(help) = menu.get(tauri::menu::HELP_SUBMENU_ID) {
                 menu.remove(&help)?;
             }
+            #[cfg(target_os = "macos")]
+            windows::add_new_window_item(handle, &menu)?;
             Ok(menu)
         })
         .plugin(tauri_plugin_dialog::init())
@@ -70,8 +72,6 @@ fn main() {
             windows::on_menu_event(_app, _event.id().as_ref());
         })
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            windows::install_menu(app.handle())?;
             let data_dir = app.path().app_data_dir()?;
             let config = db::DbConfig {
                 config_dir: app.path().app_config_dir()?,

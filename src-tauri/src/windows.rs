@@ -71,17 +71,16 @@ pub fn focus(app: &AppHandle) {
     }
 }
 
-/// macOS: the standard menu bar, with New Window (Cmd+Shift+N) at the top of the Window menu.
+/// macOS: New Window (Cmd+Shift+N) at the top of the menu bar's Window menu. (Windows and Linux
+/// use the in-app button and Ctrl+Shift+N, which the page handles.)
 #[cfg(target_os = "macos")]
-pub fn install_menu(app: &AppHandle) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, WINDOW_SUBMENU_ID};
+pub fn add_new_window_item(app: &AppHandle, menu: &tauri::menu::Menu<tauri::Wry>) -> tauri::Result<()> {
+    use tauri::menu::{MenuItem, PredefinedMenuItem, WINDOW_SUBMENU_ID};
 
-    let menu = Menu::default(app)?;
     if let Some(window_menu) = menu.get(WINDOW_SUBMENU_ID).and_then(|item| item.as_submenu().cloned()) {
         window_menu.insert(&MenuItem::with_id(app, MENU_NEW_WINDOW, "New Window", true, Some("CmdOrCtrl+Shift+N"))?, 0)?;
         window_menu.insert(&PredefinedMenuItem::separator(app)?, 1)?;
     }
-    app.set_menu(menu)?;
     Ok(())
 }
 
