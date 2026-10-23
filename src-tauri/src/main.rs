@@ -357,6 +357,7 @@ fn main() {
             commands::get_ledger_batch,
             commands::set_ledger_account,
             commands::auto_map_ledger_accounts,
+            commands::import_ledger_lists,
             commands::post_ledger_batch,
             commands::reverse_ledger_batch,
             commands::discard_ledger_batch,

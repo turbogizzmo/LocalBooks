@@ -238,6 +238,7 @@ export const api = {
   getLedgerBatch: (batchId) => invoke('get_ledger_batch', { batchId }),
   setLedgerAccount: (batchId, sourceId, accountId) => invoke('set_ledger_account', { batchId, sourceId, accountId }),
   autoMapLedgerAccounts: (batchId) => invoke('auto_map_ledger_accounts', { batchId }),
+  importLedgerLists: (batchId) => invoke('import_ledger_lists', { batchId }),
   postLedgerBatch: (input) => invoke('post_ledger_batch', { input }),
   reverseLedgerBatch: (batchId) => invoke('reverse_ledger_batch', { batchId }),
   discardLedgerBatch: (batchId) => invoke('discard_ledger_batch', { batchId }),

@@ -116,6 +116,53 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
             .map_err(db_err)?;
         }
     }
+    for (kind, parties) in [("CUSTOMER", &ledger.customers), ("VENDOR", &ledger.vendors)] {
+        for p in parties {
+            sqlx::query(
+                "INSERT INTO ledger_import_parties
+                    (batch_id, kind, source_id, name, parent_source_id, company_name, email, phone, address, terms_days,
+                     tax_id, is_1099, is_active, balance_cents, notes)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            )
+            .bind(batch_id)
+            .bind(kind)
+            .bind(p.id)
+            .bind(&p.name)
+            .bind(p.parent_id)
+            .bind(&p.company_name)
+            .bind(&p.email)
+            .bind(&p.phone)
+            .bind(&p.address)
+            .bind(p.terms_days)
+            .bind(&p.tax_id)
+            .bind(p.is_1099 as i64)
+            .bind(p.active as i64)
+            .bind(p.balance_cents)
+            .bind(&p.notes)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        }
+    }
+    for item in &ledger.items {
+        sqlx::query(
+            "INSERT INTO ledger_import_items
+                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        )
+        .bind(batch_id)
+        .bind(item.id)
+        .bind(&item.name)
+        .bind(&item.description)
+        .bind(item.rate_cents)
+        .bind(item.income_account_id)
+        .bind(item.kind)
+        .bind(item.taxable as i64)
+        .bind(item.active as i64)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    }
     for (n, u) in ledger.unreadable.iter().enumerate() {
         sqlx::query(
             "INSERT INTO ledger_import_unreadable
@@ -179,6 +226,18 @@ pub struct UnbalancedView {
     pub imbalance_cents: i64,
 }
 
+/// How far a batch's customers, vendors and items have been brought into LocalBooks.
+#[derive(Debug, Clone, Default, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ListsView {
+    pub customers: i64,
+    pub customers_done: i64,
+    pub vendors: i64,
+    pub vendors_done: i64,
+    pub items: i64,
+    pub items_done: i64,
+}
+
 /// The copy taken just before the import posted, which "Start over" restores.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -215,6 +274,8 @@ pub struct LedgerBatchSummary {
     pub accounts: Vec<SourceAccountView>,
     pub unbalanced: Vec<UnbalancedView>,
     pub unreadable: Vec<UnreadableView>,
+    /// Customers, vendors and items read from the file, and how many are in LocalBooks.
+    pub lists: ListsView,
     /// Present while the pre-import copy exists on disk.
     pub start_over: Option<StartOverPoint>,
 }
@@ -296,6 +357,19 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let lists: ListsView = sqlx::query_as(
+        "SELECT
+            (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER') AS customers,
+            (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND party_id IS NOT NULL) AS customers_done,
+            (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR') AS vendors,
+            (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND party_id IS NOT NULL) AS vendors_done,
+            (SELECT COUNT(*) FROM ledger_import_items WHERE batch_id = ?1) AS items,
+            (SELECT COUNT(*) FROM ledger_import_items WHERE batch_id = ?1 AND product_id IS NOT NULL) AS items_done",
+    )
+    .bind(batch_id)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
     Ok(LedgerBatchSummary {
         id: batch_id,
         file_name: head.file_name,
@@ -319,6 +393,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         accounts,
         unbalanced,
         unreadable,
+        lists,
         start_over: head.pre_post_backup.as_deref().and_then(start_over_point),
     })
 }
@@ -579,6 +654,246 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ImportListsResult {
+    pub customers_matched: i64,
+    pub customers_created: i64,
+    pub vendors_matched: i64,
+    pub vendors_created: i64,
+    pub items_matched: i64,
+    pub items_created: i64,
+    /// Items whose account in the file is not an income account in LocalBooks (or is not mapped),
+    /// created against the fallback income account.
+    pub items_on_fallback_account: i64,
+}
+
+/// An email LocalBooks will store (it checks `%_@_%._%`); anything else goes to the notes.
+fn storable_email(email: Option<&str>) -> Option<&str> {
+    email.filter(|e| {
+        let Some((local, domain)) = e.split_once('@') else { return false };
+        !local.is_empty() && domain.split_once('.').is_some_and(|(a, b)| !a.is_empty() && !b.is_empty())
+    })
+}
+
+/// Brings the batch's customers, vendors and items into LocalBooks: each matches an existing
+/// record of the same name (names are unique, regardless of case), or is created with the file's
+/// details. Customers' jobs come after their customer. Items post to the LocalBooks account
+/// their own income account is mapped to, so map accounts first; an item whose account is not
+/// mapped uses the first active income account. Runs again safely: mapped rows are skipped.
+pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportListsResult, String> {
+    require_batch(pool, batch_id).await?;
+    #[derive(sqlx::FromRow)]
+    struct Party {
+        kind: String,
+        source_id: i64,
+        name: String,
+        parent_source_id: Option<i64>,
+        company_name: Option<String>,
+        email: Option<String>,
+        phone: Option<String>,
+        address: Option<String>,
+        terms_days: Option<i64>,
+        tax_id: Option<String>,
+        is_1099: i64,
+        is_active: i64,
+        notes: Option<String>,
+    }
+    let parties: Vec<Party> = sqlx::query_as(
+        "SELECT kind, source_id, name, parent_source_id, company_name, email, phone, address, terms_days, tax_id, is_1099,
+                is_active, notes
+         FROM ledger_import_parties WHERE batch_id = ?1 AND party_id IS NULL
+         ORDER BY kind, length(name) - length(replace(name, ':', '')), name",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let mut result = ImportListsResult::default();
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    for p in parties {
+        let table = if p.kind == "CUSTOMER" { "customers" } else { "vendors" };
+        let existing: Option<i64> = sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE"))
+            .bind(&p.name)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        let (id, created) = match existing {
+            Some(id) => (id, false),
+            None => {
+                let email = storable_email(p.email.as_deref());
+                let notes = match (p.email.as_deref().filter(|_| email.is_none()), p.notes.as_deref()) {
+                    (Some(e), Some(n)) => Some(format!("Email: {e}\n{n}")),
+                    (Some(e), None) => Some(format!("Email: {e}")),
+                    (None, n) => n.map(str::to_string),
+                };
+                let inserted = if p.kind == "CUSTOMER" {
+                    let parent: Option<i64> = match p.parent_source_id {
+                        Some(ps) => sqlx::query_scalar("SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND source_id = ?2")
+                            .bind(batch_id)
+                            .bind(ps)
+                            .fetch_optional(&mut *tx)
+                            .await
+                            .map_err(db_err)?
+                            .flatten(),
+                        None => None,
+                    };
+                    sqlx::query_scalar(
+                        "INSERT INTO customers (name, company_name, email, phone, billing_address, terms_days, notes, parent_id, is_active)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id",
+                    )
+                    .bind(&p.name)
+                    .bind(&p.company_name)
+                    .bind(email)
+                    .bind(&p.phone)
+                    .bind(&p.address)
+                    .bind(p.terms_days)
+                    .bind(&notes)
+                    .bind(parent)
+                    .bind(p.is_active)
+                    .fetch_one(&mut *tx)
+                    .await
+                } else {
+                    sqlx::query_scalar(
+                        "INSERT INTO vendors (name, company_name, email, phone, address, terms_days, tax_id, is_1099, notes, is_active)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id",
+                    )
+                    .bind(&p.name)
+                    .bind(&p.company_name)
+                    .bind(email)
+                    .bind(&p.phone)
+                    .bind(&p.address)
+                    .bind(p.terms_days)
+                    .bind(&p.tax_id)
+                    .bind(p.is_1099)
+                    .bind(&notes)
+                    .bind(p.is_active)
+                    .fetch_one(&mut *tx)
+                    .await
+                };
+                match inserted {
+                    Ok(id) => (id, true),
+                    Err(e) => return Err(ledger::rollback(tx, format!("{} ({} {})", db_err(e), p.kind.to_lowercase(), p.name)).await),
+                }
+            }
+        };
+        match (p.kind.as_str(), created) {
+            ("CUSTOMER", true) => result.customers_created += 1,
+            ("CUSTOMER", false) => result.customers_matched += 1,
+            (_, true) => result.vendors_created += 1,
+            (_, false) => result.vendors_matched += 1,
+        }
+        if let Err(e) = sqlx::query("UPDATE ledger_import_parties SET party_id = ?4, created_by_import = ?5 WHERE batch_id = ?1 AND kind = ?2 AND source_id = ?3")
+            .bind(batch_id)
+            .bind(&p.kind)
+            .bind(p.source_id)
+            .bind(id)
+            .bind(created as i64)
+            .execute(&mut *tx)
+            .await
+        {
+            return Err(ledger::rollback(tx, db_err(e)).await);
+        }
+    }
+
+    #[derive(sqlx::FromRow)]
+    struct Item {
+        source_id: i64,
+        name: String,
+        description: Option<String>,
+        rate_cents: i64,
+        /// The LocalBooks account the item's own account maps to, when that is an income account.
+        mapped_account: Option<i64>,
+        /// The item's account in the file, when it cannot be the item's LocalBooks account.
+        other_account: Option<String>,
+        is_taxable: i64,
+        is_active: i64,
+    }
+    // LocalBooks items post to income accounts only; the desktop program also allows expense and
+    // cost accounts (for example a "Parts" item). Those items use the fallback income account,
+    // and their description says which account they used in the file.
+    let items: Vec<Item> = sqlx::query_as(
+        "SELECT i.source_id, i.name, i.description, i.rate_cents,
+                CASE WHEN t.classification = 'INCOME' THEN a.account_id END AS mapped_account,
+                CASE WHEN a.account_id IS NULL OR t.classification <> 'INCOME' THEN a.full_name END AS other_account,
+                i.is_taxable, i.is_active
+         FROM ledger_import_items i
+         LEFT JOIN ledger_import_accounts a ON a.batch_id = i.batch_id AND a.source_id = i.income_source_account_id
+         LEFT JOIN chart_of_accounts c ON c.id = a.account_id
+         LEFT JOIN account_types t ON t.code = c.account_type
+         WHERE i.batch_id = ?1 AND i.product_id IS NULL ORDER BY i.name",
+    )
+    .bind(batch_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    let fallback: Option<i64> = sqlx::query_scalar(
+        "SELECT a.id FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type
+         WHERE a.is_active = 1 AND t.classification = 'INCOME' ORDER BY a.account_type <> 'INCOME', a.account_number, a.id LIMIT 1",
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    for item in items {
+        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM products_services WHERE name = ?1 COLLATE NOCASE")
+            .bind(&item.name)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        let (id, created) = match existing {
+            Some(id) => {
+                result.items_matched += 1;
+                (id, false)
+            }
+            None => {
+                let account = match item.mapped_account.or(fallback) {
+                    Some(a) => a,
+                    None => return Err(ledger::rollback(tx, "QBW_NO_INCOME_ACCOUNT: add an income account before bringing in items".into()).await),
+                };
+                let description = match (&item.other_account, &item.description) {
+                    (Some(other), Some(d)) => Some(format!("{d} (posted to {other} in the original file)")),
+                    (Some(other), None) => Some(format!("Posted to {other} in the original file")),
+                    (None, d) => d.clone(),
+                };
+                if item.mapped_account.is_none() {
+                    result.items_on_fallback_account += 1;
+                }
+                let inserted = sqlx::query_scalar(
+                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+                )
+                .bind(&item.name)
+                .bind(&description)
+                .bind(item.rate_cents.clamp(0, crate::ledger::MAX_LINE_CENTS))
+                .bind(account)
+                .bind(item.is_taxable)
+                .bind(item.is_active)
+                .fetch_one(&mut *tx)
+                .await;
+                match inserted {
+                    Ok(id) => {
+                        result.items_created += 1;
+                        (id, true)
+                    }
+                    Err(e) => return Err(ledger::rollback(tx, format!("{} (item {})", db_err(e), item.name)).await),
+                }
+            }
+        };
+        if let Err(e) = sqlx::query("UPDATE ledger_import_items SET product_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND source_id = ?2")
+            .bind(batch_id)
+            .bind(item.source_id)
+            .bind(id)
+            .bind(created as i64)
+            .execute(&mut *tx)
+            .await
+        {
+            return Err(ledger::rollback(tx, db_err(e)).await);
+        }
+    }
+    tx.commit().await.map_err(db_err)?;
+    Ok(result)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PostLedgerResult {
     pub entries_posted: i64,
     pub lines_posted: i64,
@@ -743,6 +1058,8 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
 pub struct ReverseLedgerResult {
     pub entries_voided: i64,
     pub accounts_deactivated: i64,
+    /// Customers, vendors and items the import created, now inactive.
+    pub list_records_deactivated: i64,
 }
 
 /// Undoes a posted import: voids every entry it posted and deactivates the accounts it created
@@ -781,6 +1098,18 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLe
         sqlx::query("UPDATE chart_of_accounts SET is_active = 0 WHERE id = ?1").bind(account).execute(pool).await.map_err(db_err)?;
         result.accounts_deactivated += 1;
     }
+    // Customers, vendors and items the import created go inactive too (their history is kept).
+    for sql in [
+        "UPDATE customers SET is_active = 0 WHERE is_active = 1 AND id IN
+             (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND created_by_import = 1)",
+        "UPDATE vendors SET is_active = 0 WHERE is_active = 1 AND id IN
+             (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND created_by_import = 1)",
+        "UPDATE products_services SET is_active = 0 WHERE is_active = 1 AND id IN
+             (SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND created_by_import = 1)",
+    ] {
+        let done = sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
+        result.list_records_deactivated += done.rows_affected() as i64;
+    }
     Ok(result)
 }
 
@@ -801,6 +1130,8 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     for sql in [
         "DELETE FROM ledger_import_lines WHERE batch_id = ?1",
         "DELETE FROM ledger_import_unreadable WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_parties WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_items WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",
@@ -814,7 +1145,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
 mod tests {
     use super::*;
     use crate::db::test_pool;
-    use crate::qbw_company::{LedgerQuality, LineOutcome, SourceAccount, SourceLine, SourceTransaction, UnreadableLine};
+    use crate::qbw_company::{LedgerQuality, LineOutcome, SourceAccount, SourceItem, SourceLine, SourceParty, SourceTransaction, UnreadableLine};
 
     fn account(id: i64, name: &str, kind: &'static str, parent: Option<i64>) -> SourceAccount {
         SourceAccount {
@@ -862,6 +1193,9 @@ mod tests {
                 cents: Some(-250),
                 outcome: LineOutcome::Recovered,
             }],
+            customers: vec![],
+            vendors: vec![],
+            items: vec![],
             quality: LedgerQuality::default(),
         }
     }
@@ -888,6 +1222,16 @@ mod tests {
         let started = std::time::Instant::now();
         let batch = stage(&pool, Path::new("/books/Books.qbw"), 0, &ledger).await.unwrap();
         let mapped = auto_map_accounts(&pool, batch).await.unwrap();
+        let lists = import_lists(&pool, batch).await.unwrap();
+        println!("lists: {lists:?}");
+        let (customers, active_customers, vendors, items): (i64, i64, i64, i64) = sqlx::query_as(
+            "SELECT (SELECT COUNT(*) FROM customers), (SELECT COUNT(*) FROM customers WHERE is_active = 1),
+                    (SELECT COUNT(*) FROM vendors), (SELECT COUNT(*) FROM products_services)",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        println!("LocalBooks now has {customers} customers ({active_customers} active), {vendors} vendors, {items} items");
         let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
         println!("staged, mapped {mapped:?}, posted {posted:?} in {:.1}s", started.elapsed().as_secs_f64());
 
@@ -970,6 +1314,9 @@ mod tests {
             transactions: vec![txn(10, "2023-03-01", &[(2, -12_000), (1, 12_000)])],
             unbalanced: vec![],
             unreadable: vec![],
+            customers: vec![],
+            vendors: vec![],
+            items: vec![],
             quality: LedgerQuality::default(),
         };
         let first = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
@@ -1007,6 +1354,9 @@ mod tests {
             transactions: vec![txn(11, "2023-03-02", &[(3, -500), (1, 500)])],
             unbalanced: vec![],
             unreadable: vec![],
+            customers: vec![],
+            vendors: vec![],
+            items: vec![],
             quality: LedgerQuality::default(),
         };
         let third = stage(&pool, Path::new("/books/Other.qbw"), 1, &tools).await.unwrap();
@@ -1014,6 +1364,81 @@ mod tests {
         let id = batch_summary(&pool, third).await.unwrap().accounts.into_iter().find(|a| a.full_name == "Tools").unwrap().account_id.unwrap();
         let name: String = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
         assert_eq!(name, "Tools (imported 2)");
+    }
+
+    fn party(id: i64, name: &str, parent: Option<i64>, email: Option<&str>) -> SourceParty {
+        SourceParty {
+            id,
+            name: name.into(),
+            parent_id: parent,
+            company_name: None,
+            email: email.map(Into::into),
+            phone: Some("555-0100".into()),
+            address: Some("1 Main St\nSpringfield".into()),
+            terms_days: Some(30),
+            tax_id: None,
+            is_1099: false,
+            active: true,
+            balance_cents: None,
+            notes: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn lists_are_matched_by_name_or_created_with_their_details() {
+        let pool = test_pool().await;
+        sqlx::query("INSERT INTO customers (name) VALUES ('Acme')").execute(&pool).await.unwrap();
+        let mut books = ledger();
+        books.customers = vec![
+            party(1, "Acme", None, None),
+            party(2, "Beta Co", None, Some("ap@beta.com")),
+            party(3, "Beta Co:Roof job", Some(2), Some("not an email")),
+        ];
+        books.vendors = vec![party(9, "Hosting Inc", None, Some("billing@hosting.example"))];
+        let item = |id, name: &str, account| SourceItem {
+            id,
+            name: name.into(),
+            description: Some("desc".into()),
+            rate_cents: 8_500,
+            income_account_id: account,
+            kind: "Service",
+            taxable: false,
+            active: true,
+        };
+        books.accounts.push(account(6, "Consulting Income", "INCOME", None));
+        books.transactions.push(txn(14, "2023-03-05", &[(4, -9_000), (6, 9_000)]));
+        books.items = vec![item(20, "Business Labor", Some(6)), item(21, "Mystery", Some(999)), item(22, "Parts kit", Some(2))];
+        let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &books).await.unwrap();
+        auto_map_accounts(&pool, batch).await.unwrap();
+
+        let r = import_lists(&pool, batch).await.unwrap();
+        assert_eq!((r.customers_matched, r.customers_created, r.vendors_created, r.items_created), (1, 2, 1, 3));
+        assert_eq!(r.items_on_fallback_account, 2, "the unmapped item and the one posting to an expense account");
+        let kit: String = sqlx::query_scalar("SELECT description FROM products_services WHERE name = 'Parts kit'").fetch_one(&pool).await.unwrap();
+        assert_eq!(kit, "desc (posted to Hosting in the original file)");
+        let (parent, notes, email): (Option<i64>, Option<String>, Option<String>) =
+            sqlx::query_as("SELECT parent_id, notes, email FROM customers WHERE name = 'Beta Co:Roof job'").fetch_one(&pool).await.unwrap();
+        let beta: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Beta Co'").fetch_one(&pool).await.unwrap();
+        assert_eq!(parent, Some(beta));
+        assert_eq!((email, notes.as_deref()), (None, Some("Email: not an email")));
+        let (terms, address): (Option<i64>, Option<String>) =
+            sqlx::query_as("SELECT terms_days, billing_address FROM customers WHERE id = ?1").bind(beta).fetch_one(&pool).await.unwrap();
+        assert_eq!((terms, address.as_deref()), (Some(30), Some("1 Main St\nSpringfield")));
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        let consulting = summary.accounts.iter().find(|a| a.full_name == "Consulting Income").unwrap().account_id.unwrap();
+        let labor_account: i64 = sqlx::query_scalar("SELECT income_account_id FROM products_services WHERE name = 'Business Labor'").fetch_one(&pool).await.unwrap();
+        assert_eq!(labor_account, consulting, "posts to the account its source account maps to");
+        assert_eq!((summary.lists.customers_done, summary.lists.vendors_done, summary.lists.items_done), (3, 1, 3));
+
+        // Again: nothing new.
+        let again = import_lists(&pool, batch).await.unwrap();
+        assert_eq!(again, ImportListsResult::default());
+
+        post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        let reversed = reverse_batch(&pool, batch).await.unwrap();
+        assert_eq!(reversed.list_records_deactivated, 6, "2 customers, 1 vendor, 3 items created by the import");
+        let acme: i64 = sqlx::query_scalar("SELECT is_active FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+        assert_eq!(acme, 1, "a matched customer is not the import's to deactivate");
     }
 
     #[tokio::test]

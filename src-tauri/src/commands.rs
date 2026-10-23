@@ -38,7 +38,7 @@ use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary
 use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView, LedgerVerification};
 use crate::mcp_server::{McpService, McpStatus};
 use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult, ReverseBatchResult};
-use crate::qbw_ledger_import::{self, AutoMapResult, LedgerBatchSummary, PostLedgerInput, PostLedgerResult, ReverseLedgerResult};
+use crate::qbw_ledger_import::{self, AutoMapResult, ImportListsResult, LedgerBatchSummary, PostLedgerInput, PostLedgerResult, ReverseLedgerResult};
 use crate::{qbw_backup, qbw_company};
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
@@ -1310,6 +1310,14 @@ pub async fn set_ledger_account(db: State<'_, Db>, batch_id: i64, source_id: i64
 #[tauri::command]
 pub async fn auto_map_ledger_accounts(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<AutoMapResult, String> {
     let result = qbw_ledger_import::auto_map_accounts(&db.pool().await, batch_id).await?;
+    notify(&app);
+    Ok(result)
+}
+
+/// Brings the import's customers, vendors and items into LocalBooks; emits `ledger-changed`.
+#[tauri::command]
+pub async fn import_ledger_lists(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<ImportListsResult, String> {
+    let result = qbw_ledger_import::import_lists(&db.pool().await, batch_id).await?;
     notify(&app);
     Ok(result)
 }
