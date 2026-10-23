@@ -38,6 +38,9 @@ Loss** for you. See [Record customer payments](customer-payments.md).
 2. Choose **Print…** to print it, **Save as PDF…** to save a PDF file, or **Email…** to open a
    new message in your mail app with the PDF attached.
 
+To email several invoices together, tick **Email later** when you post them, then send them from
+**Sales › Send Forms**.
+
 Invoices print with your company's form design. To change the title, colors, logo, columns or
 message, see [Design your invoices and estimates](custom-forms.md).
 

@@ -7,7 +7,7 @@ import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import { formMenuItems, useFormPrinter } from './FormPages.jsx';
+import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -160,6 +160,8 @@ export default function AllSales({ accounts, intent }) {
   const overdue = openInvoices.filter((r) => r.dueDate < today);
   const paidRecent = live.filter((r) => (r.kind === 'PAYMENT' || r.kind === 'SALES_RECEIPT') && r.date >= since);
   const [printPortal, forms] = useFormPrinter(setNotice);
+  const emailed = useEmailStatuses('INVOICE');
+  const receiptsEmailed = useEmailStatuses('SALES_RECEIPT');
   const voidRow = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Transaction voided: a reversing journal entry now offsets it.' });
@@ -214,7 +216,7 @@ export default function AllSales({ accounts, intent }) {
             <colgroup>
               <col className="w-[92px]" />
               <col className="w-[110px]" />
-              <col className="w-[64px]" />
+              <col className="w-[136px]" />
               <col />
               <col className="w-[92px]" />
               <col className="w-[112px]" />
@@ -248,7 +250,11 @@ export default function AllSales({ accounts, intent }) {
                   <tr key={`${r.kind}-${r.id}`} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
                     <td className="qb-grid-cell">{formatDate(r.date)}</td>
                     <td className="qb-grid-cell">{KIND_LABEL[r.kind]}</td>
-                    <td className="qb-grid-cell">{r.number}</td>
+                    <td className="qb-grid-cell">
+                      {r.number}
+                      {r.kind === 'INVOICE' && <EmailMarks status={emailed.get(r.id)} />}
+                      {r.kind === 'SALES_RECEIPT' && <EmailMarks status={receiptsEmailed.get(r.id)} />}
+                    </td>
                     <td className="qb-grid-cell" title={r.customerName}>{r.customerName || <span className="text-qb-ink-faint">—</span>}</td>
                     <td className={`qb-grid-cell ${isOverdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(r.dueDate)}</td>
                     <td className="qb-grid-cell num">{r.kind === 'INVOICE' ? formatMoney(r.balanceCents, r.currencyCode) : ''}</td>
@@ -265,8 +271,8 @@ export default function AllSales({ accounts, intent }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
-                          ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms) : []),
-                          ...(r.kind === 'SALES_RECEIPT' ? formMenuItems('SALES_RECEIPT', r.id, forms, false) : []),
+                          ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms, emailed.get(r.id)) : []),
+                          ...(r.kind === 'SALES_RECEIPT' ? formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id)) : []),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}
                       />

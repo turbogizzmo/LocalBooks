@@ -4,7 +4,7 @@ import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
-import { formMenuItems, useFormPrinter } from './FormPages.jsx';
+import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -26,6 +26,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const [memo, setMemo] = useState('');
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
+  const [emailLater, setEmailLater] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
   const formClass = useFormClass(accounts);
@@ -60,7 +61,8 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         taxRateId: tax.rateId,
         discountCents: discount,
       });
-      onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.`);
+      const queued = emailLater && (await api.setEmailLater('ESTIMATE', estimate.id, true).then(() => true, () => false));
+      onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.${queued ? ' Marked Email later.' : ''}`);
       setCustomer('');
       setMemo('');
       setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
@@ -119,7 +121,11 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         </button>
         <input className="qb-input w-[300px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Message displayed on estimate" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs" title="Queue the estimate in Sales › Send Forms after saving">
+            <input type="checkbox" checked={emailLater} onChange={(e) => setEmailLater(e.target.checked)} />
+            Email later
+          </label>
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
@@ -155,6 +161,9 @@ export default function Estimates({ accounts, intent, navigate }) {
   };
   const rows = data ?? [];
   const [printPortal, forms] = useFormPrinter(setNotice);
+  const emailed = useEmailStatuses('ESTIMATE');
+  const [unsentOnly, setUnsentOnly] = useState(false);
+  const shown = rows.filter((e) => !unsentOnly || emailed.get(e.id)?.queued);
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -166,8 +175,12 @@ export default function Estimates({ accounts, intent, navigate }) {
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Estimates</h2>
           <span className="text-xs text-qb-ink-muted">Non-posting quotes · ▾ to accept, reject, or turn into an invoice</span>
+          <label className="ml-auto flex items-center gap-1 text-xs" title="Estimates marked Email later that have not been emailed yet">
+            <input type="checkbox" checked={unsentOnly} onChange={(e) => setUnsentOnly(e.target.checked)} />
+            Unsent only
+          </label>
           {!composing && (
-            <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setComposing(true)}>
+            <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => setComposing(true)}>
               New estimate
             </button>
           )}
@@ -175,7 +188,7 @@ export default function Estimates({ accounts, intent, navigate }) {
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <table className="qb-grid">
             <colgroup>
-              <col className="w-[64px]" />
+              <col className="w-[136px]" />
               <col />
               <col className="w-[92px]" />
               <col className="w-[92px]" />
@@ -200,12 +213,20 @@ export default function Estimates({ accounts, intent, navigate }) {
                   <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No estimates yet.</td>
                 </tr>
               )}
-              {rows.map((e) => {
+              {unsentOnly && shown.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No estimates are waiting to be emailed.</td>
+                </tr>
+              )}
+              {shown.map((e) => {
                 const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
                 const open = e.status !== 'CONVERTED';
                 return (
                   <tr key={e.id} className="qb-grid-row">
-                    <td className="qb-grid-cell">{e.estimateNumber}</td>
+                    <td className="qb-grid-cell">
+                      {e.estimateNumber}
+                      <EmailMarks status={emailed.get(e.id)} />
+                    </td>
                     <td className="qb-grid-cell font-semibold">{e.customerName}</td>
                     <td className="qb-grid-cell">{formatDate(e.estimateDate)}</td>
                     <td className={`qb-grid-cell ${expired ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(e.expirationDate)}</td>
@@ -218,7 +239,7 @@ export default function Estimates({ accounts, intent, navigate }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
-                          ...formMenuItems('ESTIMATE', e.id, forms),
+                          ...formMenuItems('ESTIMATE', e.id, forms, emailed.get(e.id)),
                           {
                             label: 'Edit as invoice…',
                             disabled: !open || e.status === 'REJECTED',

@@ -7,7 +7,7 @@ import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { formMenuItems, useFormPrinter } from './FormPages.jsx';
+import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
@@ -384,6 +384,9 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const today = todayIso();
   const COLS = 9;
   const [printPortal, forms] = useFormPrinter(onNotice);
+  const emailed = useEmailStatuses('INVOICE');
+  const [unsentOnly, setUnsentOnly] = useState(false);
+  const shown = (data ?? []).filter((inv) => !unsentOnly || emailed.get(inv.id)?.queued);
   const voidInvoice = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     onNotice({ kind: 'success', text: 'Invoice voided: a reversing entry now offsets it.' });
@@ -395,12 +398,16 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
       <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
         <h2 className="text-md font-semibold">Invoices</h2>
         <span className="ml-2 text-xs text-qb-ink-muted">Click an open invoice to receive a full or partial payment</span>
+        <label className="ml-auto flex items-center gap-1 text-xs" title="Invoices marked Email later that have not been emailed yet">
+          <input type="checkbox" checked={unsentOnly} onChange={(e) => setUnsentOnly(e.target.checked)} />
+          Unsent only
+        </label>
       </div>
       {error && <Notice kind="error" text={error} />}
       <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
         <table className="qb-grid">
           <colgroup>
-            <col className="w-[64px]" />
+            <col className="w-[136px]" />
             <col />
             <col className="w-[92px]" />
             <col className="w-[92px]" />
@@ -429,7 +436,12 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                 <td colSpan={COLS} className="qb-grid-cell text-qb-ink-muted">No invoices yet.</td>
               </tr>
             )}
-            {(data ?? []).map((inv) => {
+            {unsentOnly && shown.length === 0 && (
+              <tr>
+                <td colSpan={COLS} className="qb-grid-cell text-qb-ink-muted">No invoices are waiting to be emailed.</td>
+              </tr>
+            )}
+            {shown.map((inv) => {
               const open = !inv.isVoided && (inv.status === 'UNPAID' || inv.status === 'PARTIAL');
               const overdue = open && inv.dueDate < today;
               const isActive = activeId === inv.id && open;
@@ -439,7 +451,10 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     className={`qb-grid-row ${isActive ? 'is-active' : ''} ${inv.isVoided ? 'text-qb-ink-faint' : ''}`}
                     onMouseDown={() => setActiveId(open && activeId !== inv.id ? inv.id : null)}
                   >
-                    <td className="qb-grid-cell">{inv.invoiceNumber}</td>
+                    <td className="qb-grid-cell">
+                      {inv.invoiceNumber}
+                      <EmailMarks status={emailed.get(inv.id)} />
+                    </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
                     <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                     <td className={`qb-grid-cell ${overdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
@@ -456,7 +471,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
-                          ...formMenuItems('INVOICE', inv.id, forms),
+                          ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
                           {
                             label: 'Edit…',
                             disabled: inv.isVoided || inv.amountPaidCents > 0,
@@ -619,6 +634,7 @@ export default function Invoices({ accounts, intent }) {
   };
 
   const [memorizing, setMemorizing] = useState(null);
+  const [emailLater, setEmailLater] = useState(false);
   const save = async (mode) => {
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
@@ -662,12 +678,14 @@ export default function Invoices({ accounts, intent }) {
         return;
       }
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
+      const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
       setNotice({
         kind: 'success',
         text: inv.currencyCode
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
-            (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : ''),
+            (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
+            (queued ? ' Marked Email later.' : ''),
       });
       reset();
     } catch (err) {
@@ -802,6 +820,12 @@ export default function Invoices({ accounts, intent }) {
               <span className="text-qb-ink-muted">Total </span>
               <span className="num font-semibold">{formatMoney(total, currency || null)}</span>
             </span>
+            {!editing && (
+              <label className="flex items-center gap-1 text-xs" title="Queue the invoice in Sales › Send Forms after posting">
+                <input type="checkbox" checked={emailLater} onChange={(e) => setEmailLater(e.target.checked)} />
+                Email later
+              </label>
+            )}
             <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
               Cancel
             </button>

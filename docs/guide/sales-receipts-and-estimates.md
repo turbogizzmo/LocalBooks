@@ -11,6 +11,9 @@ Use a sales receipt when the customer pays at the time of sale, so no invoice is
    money.
 4. Add the line items as on an invoice and check **Amount received**.
 5. Click **Save & Post to Ledger**.
+6. To send the customer a copy, open the receipt's menu in **All Sales** and choose **Email…**
+   (or **Email later**, to send it with others from **Sales › Send Forms**), **Print…** or
+   **Save as PDF…**.
 
 ## Quote a customer (estimate)
 

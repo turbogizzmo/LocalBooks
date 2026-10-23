@@ -10,6 +10,7 @@ mod commands;
 mod credits;
 mod db;
 mod edits;
+mod email_log;
 mod estimates;
 mod expenses;
 mod forensic;
@@ -305,6 +306,11 @@ fn main() {
             commands::get_smtp_settings,
             commands::save_smtp_settings,
             commands::test_smtp_settings,
+            commands::send_smtp_test_email,
+            commands::get_email_history,
+            commands::list_email_statuses,
+            commands::set_email_later,
+            commands::list_email_queue,
             commands::get_storage_status,
             commands::inspect_database_directory,
             commands::update_database_directory,
