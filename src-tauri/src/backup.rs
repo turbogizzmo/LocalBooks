@@ -401,7 +401,8 @@ mod tests {
         let tmp = TempDir::new("pre-upgrade");
         let live = tmp.0.join("Acme.localbooks");
         let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap();
-        let previous_version = latest - 1;
+        // Versions can skip a number while migrations are developed in parallel.
+        let previous_version = MIGRATOR.iter().map(|m| m.version).filter(|v| *v < latest).max().unwrap();
         {
             // A file from the previous release: every migration but the latest, with a sale posted
             // as that release's schema allows (plain SQL, since today's posting code writes newer columns).

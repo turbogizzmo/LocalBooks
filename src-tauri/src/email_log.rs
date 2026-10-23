@@ -140,7 +140,8 @@ pub struct QueuedForm {
 }
 
 pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
-    let rows: Vec<(String, i64, i64, String, Option<String>, String, i64, Option<String>, String)> = sqlx::query_as(
+    type Row = (String, i64, i64, String, Option<String>, String, i64, Option<String>, String);
+    let rows: Vec<Row> = sqlx::query_as(
         "SELECT q.form_type, q.document_id, i.invoice_number, COALESCE(c.name, i.customer_name), c.email, i.issue_date, i.total_cents, i.currency_code, q.queued_at
          FROM form_email_queue q JOIN invoices i ON q.form_type = 'INVOICE' AND i.id = q.document_id LEFT JOIN customers c ON c.id = i.customer_id
          UNION ALL
