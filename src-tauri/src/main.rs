@@ -19,6 +19,7 @@ mod instance;
 mod inventory;
 mod invoices;
 mod ledger;
+mod mail_app;
 mod parties;
 mod pdf;
 mod mcp_server;
@@ -291,6 +292,8 @@ fn main() {
             commands::preview_form,
             commands::render_form,
             commands::save_form_pdf,
+            commands::get_email_draft,
+            commands::email_form_with_mail_app,
             commands::get_storage_status,
             commands::inspect_database_directory,
             commands::update_database_directory,

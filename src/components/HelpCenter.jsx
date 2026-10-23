@@ -412,6 +412,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Custom Forms', view: 'settings', action: 'forms' },
   },
   {
+    id: 'email-form', area: 'sales', views: ['sales/invoices', 'sales/estimates', 'sales/all'],
+    title: 'Email an invoice or estimate',
+    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms.',
+    keywords: 'email send mail outlook attach pdf customer invoice estimate',
+    go: { label: 'Go to Invoices', view: 'sales/invoices' },
+  },
+  {
     id: 'closing-date', area: 'company', views: ['settings', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
     body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
@@ -460,7 +467,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
-  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
 };
 
