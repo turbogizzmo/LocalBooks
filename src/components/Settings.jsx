@@ -275,7 +275,7 @@ function PreferencesConsole() {
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-2">
       <div className="flex flex-col gap-2">
         <Group title="Company">
-          {field({ label: 'Company name', prefKey: 'company_name', hint: 'Shown on reports and in the sidebar', children: textInput({ maxLength: 100 }) })}
+          {field({ label: 'Company name', prefKey: 'company_name', hint: 'Shown on reports, in the sidebar and in the window title', children: textInput({ maxLength: 100 }) })}
           <CompanyLogoField />
           {field({ label: 'Legal name', prefKey: 'company_legal_name', children: textInput({ maxLength: 150 }) })}
           {field({ label: 'EIN', prefKey: 'company_ein', hint: 'Federal employer identification number', children: textInput({ placeholder: 'XX-XXXXXXX', maxLength: 10 }) })}

@@ -67,6 +67,8 @@ export default function App() {
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
+  // Which company is open, as the window title shows it: its name, or the file's name until it is named.
+  const openCompany = storage.data?.companyName ?? null;
   const company = {
     name: companyName,
     legalName: prefs.data?.company_legal_name ?? '',
@@ -126,7 +128,7 @@ export default function App() {
   return (
     <CompanyContext.Provider value={company}>
     <div className="flex h-full">
-      <Sidebar current={view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={companyName} storage={storage.data?.storage} />
+      <Sidebar current={view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
@@ -144,14 +146,26 @@ export default function App() {
           <GlobalSearch navigate={select} />
           {storage.data && (
             <span
-              className="flex min-w-0 max-w-[420px] items-center gap-1.5 text-xs text-qb-ink-muted"
+              className="flex min-w-0 max-w-[480px] items-center gap-1.5 text-xs text-qb-ink-muted"
               title={storage.data.path}
-              aria-label={`Company file: ${storage.data.fileName}`}
+              aria-label={`Company: ${openCompany ?? 'unnamed'}, file ${storage.data.fileName}`}
             >
               <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 flex-none" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                <path d="M4 1.5h5.5l3 3v10H4zM9.5 1.5v3h3" />
+                <path d="M2.5 14.5v-11l5-2v13M7.5 5.5h6v9M1 14.5h14M4.5 6h1M4.5 9h1M10 8h1.5M10 11h1.5" />
               </svg>
-              <span className="truncate font-semibold text-qb-ink">{storage.data.fileName}</span>
+              {openCompany ? (
+                <span className="truncate text-sm font-semibold text-qb-ink">{openCompany}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="flex-none font-semibold text-qb-link hover:underline"
+                  onClick={() => select('settings', 'preferences')}
+                  title="Give this company a name in Settings › Preferences"
+                >
+                  Name this company
+                </button>
+              )}
+              <span className="truncate">· {storage.data.fileName}</span>
               {storage.data.openedFromFile && (
                 <span className="flex-none rounded-sm border border-qb-border px-1 text-2xs uppercase tracking-wide">Opened file</span>
               )}
