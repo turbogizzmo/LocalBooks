@@ -110,6 +110,40 @@ pub struct LedgerQuality {
     pub accounts_with_stored_balance: usize,
 }
 
+/// What became of a line row that did not decode in full.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineOutcome {
+    /// Its leading columns made its transaction balance, so the line was used (memo lost).
+    Recovered,
+    /// It carries no amount (a blank or text line), so nothing is missing from the books.
+    NoAmount,
+    /// It could not be used; its transaction is unbalanced unless other lines make up for it.
+    Unreadable,
+}
+
+impl LineOutcome {
+    pub fn code(self) -> &'static str {
+        match self {
+            LineOutcome::Recovered => "RECOVERED",
+            LineOutcome::NoAmount => "NO_AMOUNT",
+            LineOutcome::Unreadable => "UNREADABLE",
+        }
+    }
+}
+
+/// A line row that did not decode in full, with whatever of it could be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnreadableLine {
+    pub kind: &'static str,
+    pub transaction_id: Option<i64>,
+    pub date: Option<NaiveDate>,
+    pub doc_num: Option<String>,
+    pub name: Option<String>,
+    pub account_id: Option<i64>,
+    pub cents: Option<i64>,
+    pub outcome: LineOutcome,
+}
+
 #[derive(Debug, Clone)]
 pub struct Ledger {
     pub accounts: Vec<SourceAccount>,
@@ -117,6 +151,8 @@ pub struct Ledger {
     pub transactions: Vec<SourceTransaction>,
     /// Transactions with a line missing or misread; they cannot be posted as they are.
     pub unbalanced: Vec<SourceTransaction>,
+    /// Line rows that did not decode in full, and what became of each.
+    pub unreadable: Vec<UnreadableLine>,
     pub quality: LedgerQuality,
 }
 
@@ -209,11 +245,15 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
     accounts.into_values().collect()
 }
 
-/// Adds lines read from damaged rows to the transactions they make balance, and returns how many
-/// were used. A transaction takes one candidate whose amount is exactly what it lacks, or all its
-/// candidates when together they are; otherwise it is left as it is (and stays unbalanced).
-fn recover_damaged_lines(transactions: &mut BTreeMap<i64, SourceTransaction>, salvage: HashMap<i64, Vec<SourceLine>>) -> usize {
-    let mut used = 0;
+/// Adds lines read from damaged rows to the transactions they make balance, and returns the
+/// lines used, by transaction. A transaction takes one candidate whose amount is exactly what it
+/// lacks, or all its candidates when together they are; otherwise it is left as it is (and stays
+/// unbalanced).
+fn recover_damaged_lines(
+    transactions: &mut BTreeMap<i64, SourceTransaction>,
+    salvage: HashMap<i64, Vec<SourceLine>>,
+) -> Vec<(i64, SourceLine)> {
+    let mut used = Vec::new();
     for (tid, candidates) in salvage {
         let Some(txn) = transactions.get_mut(&tid) else { continue };
         let missing = -txn.imbalance_cents();
@@ -225,7 +265,7 @@ fn recover_damaged_lines(transactions: &mut BTreeMap<i64, SourceTransaction>, sa
             None if candidates.iter().map(|l| l.cents).sum::<i64>() == missing => candidates,
             None => continue,
         };
-        used += recovered.len();
+        used.extend(recovered.iter().map(|l| (tid, l.clone())));
         txn.lines.extend(recovered);
     }
     used
@@ -246,6 +286,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     // Lines whose row is damaged after its leading columns: used only when they make their
     // transaction balance to the cent.
     let mut salvage: HashMap<i64, Vec<SourceLine>> = HashMap::new();
+    let mut unreadable: Vec<UnreadableLine> = Vec::new();
     for (stem, kind) in TRANSACTION_TABLES {
         let Some(line_table) = catalog.table_id(&format!("abmc_{stem}_lineitem")) else { continue };
         let headers: HashMap<i64, Row> = rows_of(&pages, &catalog, &format!("abmc_{stem}_header"))
@@ -254,15 +295,46 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             .collect();
         let lines = table_rows(&pages, &catalog, line_table);
         quality.unreadable_lines += lines.unchained + lines.unwalkable;
+        let party = |row: &Row| {
+            row.get("customer_id")
+                .as_int()
+                .and_then(|id| customers.get(&id))
+                .or_else(|| row.get("vendor_id").as_int().and_then(|id| vendors.get(&id)))
+                .cloned()
+        };
         for r in &lines.partial {
-            let (Some(tid), Some(account_id), Some(cents)) =
-                (r.get("transaction_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents())
-            else {
-                continue;
-            };
-            if cents != 0 && known_accounts.contains(&account_id) && r.get("is_no_post_bool").as_int() != Some(1) {
-                salvage.entry(tid).or_default().push(SourceLine { account_id, cents, memo: None });
+            let tid = r.get("transaction_id").as_int();
+            let account_id = r.get("account_id").as_int().filter(|a| known_accounts.contains(a));
+            let cents = r.get("amount_amt").as_cents();
+            let header = tid.and_then(|t| headers.get(&t));
+            unreadable.push(UnreadableLine {
+                kind,
+                transaction_id: tid,
+                date: header.and_then(|h| h.get("transaction_date").as_date()).or_else(|| r.get("transaction_date").as_date()),
+                doc_num: header.and_then(|h| text(h, "doc_num")),
+                name: header.and_then(party),
+                account_id,
+                cents,
+                outcome: if cents.unwrap_or(0) == 0 { LineOutcome::NoAmount } else { LineOutcome::Unreadable },
+            });
+            if let (Some(tid), Some(account_id), Some(cents)) = (tid, account_id, cents) {
+                if cents != 0 && r.get("is_no_post_bool").as_int() != Some(1) {
+                    salvage.entry(tid).or_default().push(SourceLine { account_id, cents, memo: None });
+                }
             }
+        }
+        // Rows whose length does not chain cannot be read at all.
+        for _ in 0..lines.unchained {
+            unreadable.push(UnreadableLine {
+                kind,
+                transaction_id: None,
+                date: None,
+                doc_num: None,
+                name: None,
+                account_id: None,
+                cents: None,
+                outcome: LineOutcome::Unreadable,
+            });
         }
         for r in lines.rows {
             if r.get("is_no_post_bool").as_int() == Some(1) {
@@ -303,13 +375,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                 }
             };
             let txn = transactions.entry(tid).or_insert_with(|| {
-                let source = header.unwrap_or(&r);
-                let name = source
-                    .get("customer_id")
-                    .as_int()
-                    .and_then(|id| customers.get(&id))
-                    .or_else(|| source.get("vendor_id").as_int().and_then(|id| vendors.get(&id)))
-                    .cloned();
+                let name = party(header.unwrap_or(&r));
                 SourceTransaction {
                     id: tid,
                     kind,
@@ -326,7 +392,14 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         }
     }
 
-    quality.recovered_lines += recover_damaged_lines(&mut transactions, salvage);
+    for (tid, line) in recover_damaged_lines(&mut transactions, salvage) {
+        quality.recovered_lines += 1;
+        if let Some(u) = unreadable.iter_mut().find(|u| {
+            u.outcome == LineOutcome::Unreadable && u.transaction_id == Some(tid) && u.account_id == Some(line.account_id) && u.cents == Some(line.cents)
+        }) {
+            u.outcome = LineOutcome::Recovered;
+        }
+    }
 
     let mut totals: HashMap<i64, i64> = HashMap::new();
     for txn in transactions.values() {
@@ -345,7 +418,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
     unbalanced.sort_by_key(|t| (t.date, t.id));
-    Ok(Ledger { accounts, transactions: balanced, unbalanced, quality })
+    unreadable.sort_by_key(|u| (u.date, u.transaction_id));
+    Ok(Ledger { accounts, transactions: balanced, unbalanced, unreadable, quality })
 }
 
 #[cfg(test)]
@@ -383,7 +457,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        assert_eq!(recover_damaged_lines(&mut txns, salvage), 3);
+        assert_eq!(recover_damaged_lines(&mut txns, salvage).len(), 3);
         assert_eq!(txns[&1].lines, vec![line(7, 150_000), line(16, -150_000)]);
         assert_eq!(txns[&2].imbalance_cents(), 0);
         assert_eq!(txns[&3].lines.len(), 1);
@@ -514,6 +588,9 @@ mod tests {
         }
         println!("by kind: {by_kind:?}");
         println!("rejected: {:?}", q.rejected_by_reason);
+        for u in &ledger.unreadable {
+            println!("  unreadable line: {:?}", u);
+        }
         if let (Some(first), Some(last)) = (ledger.transactions.first(), ledger.transactions.last()) {
             println!("dates {} .. {}", first.date, last.date);
         }

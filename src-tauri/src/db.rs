@@ -354,6 +354,7 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         .await
         .map_err(|e| format!("cannot open company file {}: {e}", path.display()))?;
 
+    refuse_newer_file(&pool, path).await?;
     if let Some(dir) = backups {
         if let Some(version) = pending_upgrade_from(&pool).await? {
             crate::backup::pre_upgrade_snapshot(&pool, path, dir, version).await.map_err(|e| {
@@ -369,6 +370,12 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
 /// The schema version of an existing company file that has migrations still to apply, or None for a
 /// new (empty) file or one that is up to date.
 async fn pending_upgrade_from(pool: &SqlitePool) -> Result<Option<i64>, String> {
+    let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap_or(0);
+    Ok(applied_schema(pool).await?.filter(|v| *v < latest))
+}
+
+/// The highest schema version the company file has applied, or `None` for a new file.
+async fn applied_schema(pool: &SqlitePool) -> Result<Option<i64>, String> {
     let has_table: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations')")
         .fetch_one(pool)
         .await
@@ -376,12 +383,23 @@ async fn pending_upgrade_from(pool: &SqlitePool) -> Result<Option<i64>, String> 
     if !has_table {
         return Ok(None);
     }
-    let current: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+    sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
         .fetch_one(pool)
         .await
-        .map_err(|e| format!("cannot read company file: {e}"))?;
+        .map_err(|e| format!("cannot read company file: {e}"))
+}
+
+/// Refuses a company file that a newer LocalBooks has already upgraded, in words a person can act
+/// on (the migrator's own error names a "missing" migration). The file is left untouched.
+async fn refuse_newer_file(pool: &SqlitePool, path: &Path) -> Result<(), String> {
     let latest = MIGRATOR.iter().map(|m| m.version).max().unwrap_or(0);
-    Ok(current.filter(|v| *v < latest))
+    match applied_schema(pool).await? {
+        Some(applied) if applied > latest => Err(format!(
+            "DB_NEWER_FILE: {} was updated by a newer version of LocalBooks (company file version {applied}; this copy of LocalBooks understands up to {latest}). Install the latest LocalBooks to open it. The file has not been changed.",
+            path.display()
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// Applies pending migrations with foreign-key enforcement off, as SQLite's table-rebuild procedure
@@ -422,6 +440,29 @@ mod migrate_tests {
     /// Released migrations are frozen: a company file that already applied one refuses to open if
     /// its SQL changes (sqlx compares checksums), which would stop the app for every existing user.
     /// Add a line here for each new migration; never edit an existing line or migration file.
+    #[tokio::test]
+    async fn a_file_upgraded_by_a_newer_version_is_refused_plainly_and_left_alone() {
+        let dir = std::env::temp_dir().join(format!("localbooks-newer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("books.db");
+        let pool = super::open(&path).await.unwrap();
+        sqlx::query("INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (9999, 'from the future', 1, x'00', 0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+
+        let err = super::open(&path).await.unwrap_err();
+        assert!(err.starts_with("DB_NEWER_FILE"), "{err}");
+        assert!(err.contains("Install the latest LocalBooks"), "{err}");
+        let pool = super::open_read_only_for_test(&path).await;
+        let newest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&pool).await.unwrap();
+        assert_eq!(newest, 9999, "nothing was rolled back or rewritten");
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn released_migrations_are_never_edited() {
         const RELEASED: &[(i64, &str)] = &[
@@ -458,6 +499,7 @@ mod migrate_tests {
             (31, "7c46a93c8c9ebc9be3cfdc5f"),
             (32, "7bc45918086695080c6dbd96"),
             (33, "56b136669141e6d545b88b7b"),
+            (34, "b9bb6b77a78ebbc83b7b878f"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()
@@ -551,6 +593,14 @@ pub(crate) async fn test_pool() -> SqlitePool {
         .expect("open in-memory database");
     migrate(&pool).await.expect("apply migrations");
     pool
+}
+
+#[cfg(test)]
+pub(crate) async fn open_read_only_for_test(path: &Path) -> SqlitePool {
+    SqlitePoolOptions::new()
+        .connect_with(SqliteConnectOptions::new().filename(path).read_only(true))
+        .await
+        .expect("open read-only")
 }
 
 #[cfg(test)]
