@@ -295,27 +295,23 @@ pub struct FormDoc {
 
 /// 123456 → "$1,234.56" (or "EUR 1,234.56" for a foreign-currency document), as the app shows it.
 pub fn format_money(cents: i64, currency_code: Option<&str>, symbol: &str) -> String {
-    let abs = cents.unsigned_abs();
-    let digits = (abs / 100).to_string();
-    let mut grouped = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(c);
-    }
-    let sign = if cents < 0 { "-" } else { "" };
     match currency_code {
-        Some(code) => format!("{sign}{code} {grouped}.{:02}", abs % 100),
-        None => format!("{sign}{symbol}{grouped}.{:02}", abs % 100),
+        Some(code) => crate::ledger::format_money(cents, &format!("{code} ")),
+        None => crate::ledger::format_money(cents, symbol),
     }
 }
 
 /// 15_000 → "1.5"; 1_234_0000 → "1,234".
 pub fn format_quantity(e4: i64) -> String {
     let abs = e4.unsigned_abs();
-    let whole = format_money(i64::try_from(abs / 10_000).unwrap_or(i64::MAX) * 100, None, "");
-    let whole = whole.trim_end_matches(".00");
+    let digits = (abs / 10_000).to_string();
+    let mut whole = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            whole.push(',');
+        }
+        whole.push(c);
+    }
     let frac = format!("{:04}", abs % 10_000);
     let frac = frac.trim_end_matches('0');
     format!("{}{whole}{}{frac}", if e4 < 0 { "-" } else { "" }, if frac.is_empty() { "" } else { "." })
@@ -589,6 +585,19 @@ impl Layout<'_> {
         pdf::wrap(self.font, bold, size, text, width)
     }
 
+    /// `label`, shortened with "…" so it and `value` fit side by side in `width`.
+    fn fit(&self, label: &str, bold: bool, size: f32, value: &str, width: f32) -> String {
+        let room = width - 3.0 * CELL_PAD - pdf::text_width(self.font, bold, size, &pdf::sanitize(value));
+        let mut text = pdf::sanitize(label);
+        if pdf::text_width(self.font, bold, size, &text) <= room {
+            return text;
+        }
+        while !text.is_empty() && pdf::text_width(self.font, bold, size, &format!("{text}…")) > room {
+            text.pop();
+        }
+        format!("{}…", text.trim_end())
+    }
+
     fn new_page(&mut self) {
         self.pages.push(Page { width: self.width, height: self.height, ops: Vec::new() });
         self.y = MARGIN;
@@ -697,7 +706,9 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
             }
         }
     }
-    let title_w = pdf::text_width(l.font, true, 24.0, &pdf::sanitize(&tpl.title)).max(120.0);
+    // The right column holds the title and, when it is placed there, the logo above it.
+    let right_logo_w = logo.filter(|_| tpl.logo == LogoPlacement::Right).map_or(0.0, |(lw, _)| lw);
+    let title_w = pdf::text_width(l.font, true, 24.0, &pdf::sanitize(&tpl.title)).max(120.0).max(right_logo_w);
     let company_w = (right - title_w - 24.0 - left_x).max(140.0);
     let name_lines = l.wrap(&company.name, true, 14.0, company_w);
     for (i, line) in name_lines.iter().enumerate() {
@@ -799,11 +810,13 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
             l.y += 4.0;
             l.line(label_x, right, l.y, accent, 1.0);
             l.y += 17.0;
-            l.text(label_x + CELL_PAD, l.y - 3.0, &row.label, true, 11.0, INK, Align::Left);
+            let label = l.fit(&row.label, true, 11.0, &row.value, right - label_x);
+            l.text(label_x + CELL_PAD, l.y - 3.0, &label, true, 11.0, INK, Align::Left);
             l.text(right - CELL_PAD, l.y - 3.0, &row.value, true, 11.0, INK, Align::Right);
         } else {
             l.y += 15.0;
-            l.text(label_x + CELL_PAD, l.y - 3.0, &row.label, false, BODY, INK, Align::Left);
+            let label = l.fit(&row.label, false, BODY, &row.value, right - label_x);
+            l.text(label_x + CELL_PAD, l.y - 3.0, &label, false, BODY, INK, Align::Left);
             l.text(right - CELL_PAD, l.y - 3.0, &row.value, false, BODY, INK, Align::Right);
         }
     }
@@ -883,9 +896,13 @@ pub struct Rendered {
     pub image: Option<PdfImage>,
 }
 
-fn decode_logo(data_url: Option<&str>) -> Option<PdfImage> {
+fn logo_bytes(data_url: Option<&str>) -> Option<Vec<u8>> {
     let (_, encoded) = data_url?.split_once("base64,")?;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).ok()?;
+    base64::engine::general_purpose::STANDARD.decode(encoded).ok()
+}
+
+fn decode_logo(data_url: Option<&str>) -> Option<PdfImage> {
+    let bytes = logo_bytes(data_url)?;
     match PdfImage::decode(&bytes) {
         Ok(image) => Some(image),
         Err(err) => {
@@ -905,22 +922,30 @@ async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, s
 }
 
 /// Lays out a document (or the sample, without one) with `template`, or the saved template.
-pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, template: Option<FormTemplate>) -> Result<Rendered, String> {
+/// `with_image` also decodes the logo for a PDF; the screen needs only its size.
+pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, template: Option<FormTemplate>, with_image: bool) -> Result<Rendered, String> {
     let tpl = match template {
         Some(t) => t.validated(kind)?,
         None => get_template(pool, kind).await?,
     };
     let company = load_company(pool).await?;
     let doc = document(pool, kind, document_id, &company.currency_symbol).await?;
-    let image = if tpl.logo == LogoPlacement::Hidden { None } else { decode_logo(company.logo.as_deref()) };
-    let pages = layout(&doc, &company, &tpl, image.as_ref().map(|i| (i.width, i.height)));
+    let logo = company.logo.as_deref().filter(|_| tpl.logo != LogoPlacement::Hidden);
+    let (image, size) = if with_image {
+        let image = decode_logo(logo);
+        let size = image.as_ref().map(|i| (i.width, i.height));
+        (image, size)
+    } else {
+        (None, logo_bytes(logo).as_deref().and_then(pdf::image_size))
+    };
+    let pages = layout(&doc, &company, &tpl, size);
     let title = format!("{} {}", tpl.title, doc.number);
-    Ok(Rendered { form: RenderedForm { title, pages, logo: image.as_ref().and(company.logo), customer_email: doc.customer_email }, image })
+    Ok(Rendered { form: RenderedForm { title, pages, logo: size.and(company.logo), customer_email: doc.customer_email }, image })
 }
 
 /// The PDF file for a document with its saved template: (suggested file name, bytes).
 pub async fn pdf_file(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Result<(String, Vec<u8>), String> {
-    let rendered = render(pool, kind, Some(document_id), None).await?;
+    let rendered = render(pool, kind, Some(document_id), None, true).await?;
     let bytes = pdf::write_pdf(&rendered.form.pages, rendered.image.as_ref(), &rendered.form.title);
     Ok((file_name(&rendered.form.title), bytes))
 }
@@ -1005,6 +1030,25 @@ mod tests {
     }
 
     #[test]
+    fn header_and_totals_text_stays_clear_of_the_logo_and_amounts() {
+        let company = Company { name: "Northwest Regional Landscaping and Snow Removal Cooperative".into(), address: "1234 Southeast Industrial Parkway, Building 7, Unit 12, Portland, OR 97214".into(), currency_symbol: "$".into(), ..Company::default() };
+        let mut doc = sample_doc(FormKind::Invoice, "$");
+        doc.totals.insert(0, TotalRow { label: "Sales tax (Multnomah County Combined Special District Rate)".into(), value: "$1,234.56".into(), grand: false, payment: false });
+        let tpl = FormTemplate { logo_size: LogoSize::Large, ..FormTemplate::default_for(FormKind::Invoice) };
+        let pages = layout(&doc, &company, &tpl, Some((1000, 200)));
+        let (logo_x, logo_bottom) = pages[0].ops.iter().find_map(|op| if let Op::Image { x, y, h, .. } = op { Some((*x, y + h)) } else { None }).unwrap();
+        for op in &pages[0].ops {
+            if let Op::Text { x, y, text, family, bold, size, align: Align::Left, .. } = op {
+                if *y < logo_bottom {
+                    assert!(x + pdf::text_width(*family, *bold, *size, text) <= logo_x, "{text:?} runs under the logo");
+                }
+            }
+        }
+        let tax = texts(&pages).into_iter().find(|t| t.starts_with("Sales tax")).unwrap();
+        assert!(tax.ends_with('…'), "{tax:?} should be shortened");
+    }
+
+    #[test]
     fn long_documents_paginate_and_stay_on_the_page() {
         let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
         let mut doc = sample_doc(FormKind::Estimate, "$");
@@ -1053,7 +1097,7 @@ mod tests {
         // Templates are per form type.
         assert_eq!(get_template(&pool, FormKind::Estimate).await.unwrap().title, "Estimate");
 
-        let rendered = render(&pool, FormKind::Invoice, Some(invoice.id), None).await.unwrap();
+        let rendered = render(&pool, FormKind::Invoice, Some(invoice.id), None, false).await.unwrap();
         assert_eq!(rendered.form.title, format!("Statement of Work {}", invoice.invoice_number));
         assert_eq!(rendered.form.customer_email.as_deref(), Some("ap@initech.test"));
         let all = texts(&rendered.form.pages);
@@ -1067,7 +1111,7 @@ mod tests {
 
         assert_eq!(reset_template(&pool, FormKind::Invoice).await.unwrap().title, "Invoice");
         assert_eq!(get_template(&pool, FormKind::Invoice).await.unwrap().title, "Invoice");
-        assert!(render(&pool, FormKind::Estimate, Some(999), None).await.is_err());
+        assert!(render(&pool, FormKind::Estimate, Some(999), None, false).await.is_err());
     }
 
     #[test]

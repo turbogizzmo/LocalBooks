@@ -65,9 +65,15 @@ export function useFormPrinter(onNotice) {
 
   useEffect(() => {
     if (!form) return undefined;
+    // Once printed, empty the print root so printing the screen itself works again.
+    const clear = () => setForm(null);
+    window.addEventListener('afterprint', clear);
     // Let React commit the pages (and the logo image decode) before the dialog snapshots the page.
     const timer = setTimeout(printDocument, 80);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('afterprint', clear);
+    };
   }, [form]);
 
   const print = useCallback(

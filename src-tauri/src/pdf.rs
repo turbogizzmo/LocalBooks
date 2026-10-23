@@ -293,17 +293,22 @@ const MAX_IMAGE_SIDE: u32 = 800;
 impl PdfImage {
     /// Decodes a PNG, JPEG, GIF or WebP file.
     pub fn decode(bytes: &[u8]) -> Result<PdfImage, String> {
-        use image::GenericImageView;
+        use image::{GenericImageView, ImageDecoder};
         let format = image::guess_format(bytes).map_err(|e| format!("PDF_IMAGE: {e}"))?;
+        // Small RGB or grayscale JPEGs go in unchanged (read from the header, without decoding);
+        // everything else is re-encoded losslessly.
+        if format == image::ImageFormat::Jpeg {
+            if let Ok(jpeg) = image::codecs::jpeg::JpegDecoder::new(std::io::Cursor::new(bytes)) {
+                let ((w, h), color) = (jpeg.dimensions(), jpeg.color_type());
+                if w > 0 && h > 0 && w.max(h) <= MAX_IMAGE_SIDE && matches!(color, image::ColorType::Rgb8 | image::ColorType::L8) {
+                    return Ok(PdfImage { width: w, height: h, data: ImageData::Jpeg { bytes: bytes.to_vec(), gray: color == image::ColorType::L8 }, alpha: None });
+                }
+            }
+        }
         let img = image::load_from_memory_with_format(bytes, format).map_err(|e| format!("PDF_IMAGE: the logo cannot be read: {e}"))?;
         let (w, h) = img.dimensions();
         if w == 0 || h == 0 {
             return Err("PDF_IMAGE: the logo is empty".into());
-        }
-        // Small RGB or grayscale JPEGs go in unchanged; everything else is re-encoded losslessly.
-        let color = img.color();
-        if format == image::ImageFormat::Jpeg && w.max(h) <= MAX_IMAGE_SIDE && matches!(color, image::ColorType::Rgb8 | image::ColorType::L8) {
-            return Ok(PdfImage { width: w, height: h, data: ImageData::Jpeg { bytes: bytes.to_vec(), gray: color == image::ColorType::L8 }, alpha: None });
         }
         let img = if w.max(h) > MAX_IMAGE_SIDE { img.resize(MAX_IMAGE_SIDE, MAX_IMAGE_SIDE, image::imageops::FilterType::Lanczos3) } else { img };
         let rgba = img.to_rgba8();
@@ -317,6 +322,11 @@ impl PdfImage {
         let opaque = alpha.iter().all(|&a| a == 255);
         Ok(PdfImage { width, height, data: ImageData::Rgb(rgb), alpha: (!opaque).then_some(alpha) })
     }
+}
+
+/// An image file's pixel size, read from its header.
+pub fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok().filter(|(w, h)| *w > 0 && *h > 0)
 }
 
 // ------------------------------------------------------------------------------------------------

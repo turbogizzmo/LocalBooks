@@ -885,13 +885,13 @@ pub async fn reset_form_template(db: State<'_, Db>, kind: FormKind) -> Result<Fo
 /// Lays out a form with an unsaved template: a real document, or the sample without one.
 #[tauri::command]
 pub async fn preview_form(db: State<'_, Db>, kind: FormKind, template: FormTemplate, document_id: Option<i64>) -> Result<RenderedForm, String> {
-    Ok(forms::render(&db.pool().await, kind, document_id, Some(template)).await?.form)
+    Ok(forms::render(&db.pool().await, kind, document_id, Some(template), false).await?.form)
 }
 
 /// Lays out a document with its saved template, for printing.
 #[tauri::command]
 pub async fn render_form(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<RenderedForm, String> {
-    Ok(forms::render(&db.pool().await, kind, Some(document_id), None).await?.form)
+    Ok(forms::render(&db.pool().await, kind, Some(document_id), None, false).await?.form)
 }
 
 /// Prompts with the native Save dialog and writes the document's PDF there. Returns the saved
