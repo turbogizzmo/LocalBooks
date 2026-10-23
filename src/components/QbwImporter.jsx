@@ -328,6 +328,55 @@ function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
 }
 
 /** Transactions with a line that could not be read: listed for manual entry, never posted. */
+const OUTCOMES = {
+  RECOVERED: ['Recovered', 'Account and amount read; its transaction balances. Only the line memo is missing.'],
+  NO_AMOUNT: ['No amount', 'A blank or text line: nothing is missing from the books.'],
+  UNREADABLE: ['Not read', 'Could not be used. If its transaction is listed above, enter that transaction by hand.'],
+};
+
+/** Line rows that did not decode in full, with whatever was read and what became of each. */
+function UnreadableList({ items }) {
+  return (
+    <table className="qb-grid">
+      <colgroup>
+        <col className="w-[110px]" />
+        <col className="w-[150px]" />
+        <col className="w-[80px]" />
+        <col />
+        <col className="w-[120px]" />
+        <col className="w-[120px]" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="qb-grid-head">Date</th>
+          <th className="qb-grid-head">Type</th>
+          <th className="qb-grid-head">Number</th>
+          <th className="qb-grid-head">Name · account</th>
+          <th className="qb-grid-head text-right">Amount</th>
+          <th className="qb-grid-head">Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((u, i) => {
+          const [label, help] = OUTCOMES[u.outcome] ?? [u.outcome, ''];
+          return (
+            <tr key={i}>
+              <td className="qb-grid-cell">{u.date ? formatDate(u.date) : '—'}</td>
+              <td className="qb-grid-cell">{u.kind}</td>
+              <td className="qb-grid-cell">{u.docNum ?? ''}</td>
+              <td className="qb-grid-cell">{[u.name, u.accountName].filter(Boolean).join(' · ') || '—'}</td>
+              <td className="qb-grid-cell num">{u.cents == null ? '—' : formatCents(Math.abs(u.cents))}</td>
+              <td className={`qb-grid-cell font-semibold ${u.outcome === 'UNREADABLE' ? 'text-qb-negative' : 'text-qb-ink-muted'}`} title={help}>
+                {label}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 function UnbalancedList({ items }) {
   return (
     <table className="qb-grid">
@@ -407,8 +456,29 @@ function LedgerReview({ summary, accounts, busy, run }) {
         <p className="border-b border-qb-border px-3 py-1 text-2xs text-qb-ink-faint">
           {summary.byKind.map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}${n === 1 ? '' : 's'}`).join(' · ')}. Read from{' '}
           {summary.decodedPages.toLocaleString()} of {summary.rowPages.toLocaleString()} data pages
-          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read`}.
+          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}.
         </p>
+        {summary.unreadable.length > 0 && (
+          <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
+            <summary className="cursor-pointer px-3 py-1.5 text-xs">
+              <strong>
+                {summary.unreadable.length} line{summary.unreadable.length === 1 ? '' : 's'} not read in full
+              </strong>
+              {': '}
+              {[
+                ['RECOVERED', 'recovered'],
+                ['NO_AMOUNT', 'with no amount'],
+                ['UNREADABLE', 'not read'],
+              ]
+                .map(([code, word]) => [summary.unreadable.filter((u) => u.outcome === code).length, word])
+                .filter(([n]) => n > 0)
+                .map(([n, word]) => `${n} ${word}`)
+                .join(', ')}
+              {summary.unbalanced.length === 0 && '. Every transaction still balances.'}
+            </summary>
+            <UnreadableList items={summary.unreadable} />
+          </details>
+        )}
         {summary.unbalanced.length > 0 && (
           <div className="border-b border-qb-border">
             <p className="px-3 py-1.5 text-xs">
@@ -432,7 +502,10 @@ function LedgerReview({ summary, accounts, busy, run }) {
               onClick={() =>
                 run(
                   () => api.autoMapLedgerAccounts(summary.id),
-                  (r) => `Matched ${r.matched} existing account${r.matched === 1 ? '' : 's'} and created ${r.created}.`,
+                  (r) =>
+                    `Matched ${r.matched} existing account${r.matched === 1 ? '' : 's'}` +
+                    (r.reactivated ? `, put back ${r.reactivated} from an earlier import` : '') +
+                    ` and created ${r.created}.`,
                 )
               }
             >

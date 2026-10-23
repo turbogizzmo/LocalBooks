@@ -116,6 +116,26 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
             .map_err(db_err)?;
         }
     }
+    for (n, u) in ledger.unreadable.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO ledger_import_unreadable
+                (batch_id, line_no, kind, source_txn_id, date, doc_num, name, source_account_id, cents, outcome)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        )
+        .bind(batch_id)
+        .bind(n as i64)
+        .bind(u.kind)
+        .bind(u.transaction_id)
+        .bind(u.date.map(|d| d.to_string()))
+        .bind(&u.doc_num)
+        .bind(&u.name)
+        .bind(u.account_id)
+        .bind(u.cents)
+        .bind(u.outcome.code())
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    }
     tx.commit().await.map_err(db_err)?;
     Ok(batch_id)
 }
@@ -133,6 +153,20 @@ pub struct SourceAccountView {
     pub line_count: i64,
     pub account_id: Option<i64>,
     pub created_by_import: bool,
+}
+
+/// A line row that did not decode in full (see `qbw_company::UnreadableLine`).
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadableView {
+    pub kind: String,
+    pub date: Option<String>,
+    pub doc_num: Option<String>,
+    pub name: Option<String>,
+    pub account_name: Option<String>,
+    pub cents: Option<i64>,
+    /// `RECOVERED`, `NO_AMOUNT` or `UNREADABLE`.
+    pub outcome: String,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -180,6 +214,7 @@ pub struct LedgerBatchSummary {
     pub by_kind: Vec<(String, i64)>,
     pub accounts: Vec<SourceAccountView>,
     pub unbalanced: Vec<UnbalancedView>,
+    pub unreadable: Vec<UnreadableView>,
     /// Present while the pre-import copy exists on disk.
     pub start_over: Option<StartOverPoint>,
 }
@@ -251,6 +286,16 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let unreadable: Vec<UnreadableView> = sqlx::query_as(
+        "SELECT u.kind, u.date, u.doc_num, u.name, a.full_name AS account_name, u.cents, u.outcome
+         FROM ledger_import_unreadable u
+         LEFT JOIN ledger_import_accounts a ON a.batch_id = u.batch_id AND a.source_id = u.source_account_id
+         WHERE u.batch_id = ?1 ORDER BY u.outcome = 'UNREADABLE' DESC, u.date, u.line_no",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     Ok(LedgerBatchSummary {
         id: batch_id,
         file_name: head.file_name,
@@ -273,6 +318,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         by_kind,
         accounts,
         unbalanced,
+        unreadable,
         start_over: head.pre_post_backup.as_deref().and_then(start_over_point),
     })
 }
@@ -368,6 +414,8 @@ pub async fn set_account(pool: &SqlitePool, batch_id: i64, source_id: i64, accou
 pub struct AutoMapResult {
     pub matched: i64,
     pub created: i64,
+    /// Accounts an earlier import created and a reversal deactivated, put back into use.
+    pub reactivated: i64,
 }
 
 /// Maps every unmapped source account that has lines: to an existing active account with the same
@@ -432,23 +480,41 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
         }
         let parent = s.parent_source_id.and_then(|p| mapped.get(&p).copied());
         // Same name, type and parent; receivables and payables fold into the system accounts.
-        let existing: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM chart_of_accounts
-             WHERE is_active = 1 AND account_type = ?2 AND name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?3, 0)
-             UNION ALL
-             SELECT id FROM chart_of_accounts
-             WHERE ?2 IN ('ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE') AND account_type = ?2 AND is_system = 1
-             LIMIT 1",
+        // 1. an active account with the same name, type and parent;
+        // 2. one an earlier import created for this source account (same type and parent, named
+        //    after it, possibly with an "(imported…)" suffix), even if a reversal deactivated it;
+        // 3. for receivables and payables, the system account.
+        let existing: Option<(i64, i64)> = sqlx::query_as(
+            "SELECT id, is_active FROM (
+                 SELECT id, is_active, 1 AS rank FROM chart_of_accounts
+                 WHERE is_active = 1 AND account_type = ?2 AND name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?3, 0)
+                 UNION ALL
+                 SELECT id, is_active, 2 FROM chart_of_accounts
+                 WHERE account_type = ?2 AND COALESCE(parent_id, 0) = COALESCE(?3, 0) AND is_system = 0
+                   AND description LIKE ?4 || '%'
+                   AND (name = ?1 COLLATE NOCASE OR name LIKE ?1 || ' (imported%)')
+                 UNION ALL
+                 SELECT id, is_active, 3 FROM chart_of_accounts
+                 WHERE ?2 IN ('ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE') AND account_type = ?2 AND is_system = 1
+             ) ORDER BY rank, is_active DESC, id LIMIT 1",
         )
         .bind(&s.name)
         .bind(&s.account_type)
         .bind(parent)
+        .bind(CREATED_NOTE)
         .fetch_optional(&mut *tx)
         .await
         .map_err(db_err)?;
         let account_id = match existing {
-            Some(id) => {
-                result.matched += 1;
+            Some((id, active)) => {
+                if active == 0 {
+                    if let Err(e) = sqlx::query("UPDATE chart_of_accounts SET is_active = 1 WHERE id = ?1").bind(id).execute(&mut *tx).await {
+                        return Err(ledger::rollback(tx, db_err(e)).await);
+                    }
+                    result.reactivated += 1;
+                } else {
+                    result.matched += 1;
+                }
                 id
             }
             None => {
@@ -457,16 +523,23 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
                 } else {
                     format!("{CREATED_NOTE} {file_name} ({})", s.full_name)
                 };
-                // A sibling of another type may already use the name.
-                let taken: Option<i64> = sqlx::query_scalar(
-                    "SELECT id FROM chart_of_accounts WHERE name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?2, 0)",
-                )
-                .bind(&s.name)
-                .bind(parent)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(db_err)?;
-                let name = if taken.is_some() { format!("{} (imported)", s.name) } else { s.name.clone() };
+                // Sibling names are unique (active or not, any type): take the first free one of
+                // "Name", "Name (imported)", "Name (imported 2)", …
+                let mut name = s.name.clone();
+                for n in 1.. {
+                    let taken: Option<i64> = sqlx::query_scalar(
+                        "SELECT id FROM chart_of_accounts WHERE name = ?1 COLLATE NOCASE AND COALESCE(parent_id, 0) = COALESCE(?2, 0)",
+                    )
+                    .bind(&name)
+                    .bind(parent)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(db_err)?;
+                    if taken.is_none() {
+                        break;
+                    }
+                    name = if n == 1 { format!("{} (imported)", s.name) } else { format!("{} (imported {n})", s.name) };
+                }
                 let id: i64 = match sqlx::query_scalar(
                     "INSERT INTO chart_of_accounts (name, account_type, parent_id, description) VALUES (?1, ?2, ?3, ?4) RETURNING id",
                 )
@@ -484,7 +557,8 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
                 id
             }
         };
-        let created = existing.is_none() as i64;
+        // Created now, or reactivated: this import owns it, so reversing it deactivates it again.
+        let created = existing.is_none_or(|(_, active)| active == 0) as i64;
         if let Err(e) = sqlx::query(
             "UPDATE ledger_import_accounts SET account_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND source_id = ?2",
         )
@@ -726,6 +800,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     let mut tx = pool.begin().await.map_err(db_err)?;
     for sql in [
         "DELETE FROM ledger_import_lines WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_unreadable WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",
@@ -739,7 +814,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
 mod tests {
     use super::*;
     use crate::db::test_pool;
-    use crate::qbw_company::{LedgerQuality, SourceAccount, SourceLine, SourceTransaction};
+    use crate::qbw_company::{LedgerQuality, LineOutcome, SourceAccount, SourceLine, SourceTransaction, UnreadableLine};
 
     fn account(id: i64, name: &str, kind: &'static str, parent: Option<i64>) -> SourceAccount {
         SourceAccount {
@@ -777,6 +852,16 @@ mod tests {
             // A check: debit Internet 120.00, credit Checking. Negative = debit, as in the file.
             transactions: vec![txn(10, "2023-03-01", &[(3, -12_000), (1, 12_000)]), txn(11, "2023-03-02", &[(4, -500), (1, 500)])],
             unbalanced: vec![txn(12, "2023-03-03", &[(3, -700)])],
+            unreadable: vec![UnreadableLine {
+                kind: "Check",
+                transaction_id: Some(13),
+                date: "2023-03-04".parse().ok(),
+                doc_num: Some("13".into()),
+                name: None,
+                account_id: Some(3),
+                cents: Some(-250),
+                outcome: LineOutcome::Recovered,
+            }],
             quality: LedgerQuality::default(),
         }
     }
@@ -875,11 +960,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
+        let pool = test_pool().await;
+        // A LocalBooks account of another type already holds the name, so the first import
+        // creates "Equipment (imported)".
+        sqlx::query("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Equipment', 'FIXED_ASSET')").execute(&pool).await.ok();
+        let books = || Ledger {
+            accounts: vec![account(1, "Riverside Bank", "BANK", None), account(2, "Equipment", "EXPENSE", None)],
+            transactions: vec![txn(10, "2023-03-01", &[(2, -12_000), (1, 12_000)])],
+            unbalanced: vec![],
+            unreadable: vec![],
+            quality: LedgerQuality::default(),
+        };
+        let first = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
+        auto_map_accounts(&pool, first).await.unwrap();
+        let mapped = |batch: i64| {
+            let pool = pool.clone();
+            async move {
+                batch_summary(&pool, batch).await.unwrap().accounts.into_iter().find(|a| a.full_name == "Equipment").unwrap().account_id.unwrap()
+            }
+        };
+        let equipment = mapped(first).await;
+        let name: String = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE id = ?1").bind(equipment).fetch_one(&pool).await.unwrap();
+        assert_eq!(name, "Equipment (imported)");
+        post_batch(&pool, &PostLedgerInput { batch_id: first }).await.unwrap();
+        reverse_batch(&pool, first).await.unwrap();
+        discard_batch(&pool, first).await.unwrap();
+
+        // Importing the same books again must not trip the sibling-name rule: the deactivated
+        // account is reused and reactivated.
+        let second = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
+        auto_map_accounts(&pool, second).await.unwrap();
+        assert_eq!(mapped(second).await, equipment);
+        let active: i64 = sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1").bind(equipment).fetch_one(&pool).await.unwrap();
+        assert_eq!(active, 1);
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: second }).await.unwrap();
+        assert_eq!(posted.entries_posted, 1);
+
+        // A taken "(imported)" name that is not the importer's own gets the next free suffix.
+        sqlx::query("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Tools', 'FIXED_ASSET'), ('Tools (imported)', 'OTHER_ASSET')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let tools = Ledger {
+            accounts: vec![account(1, "Riverside Bank", "BANK", None), account(3, "Tools", "EXPENSE", None)],
+            transactions: vec![txn(11, "2023-03-02", &[(3, -500), (1, 500)])],
+            unbalanced: vec![],
+            unreadable: vec![],
+            quality: LedgerQuality::default(),
+        };
+        let third = stage(&pool, Path::new("/books/Other.qbw"), 1, &tools).await.unwrap();
+        auto_map_accounts(&pool, third).await.unwrap();
+        let id = batch_summary(&pool, third).await.unwrap().accounts.into_iter().find(|a| a.full_name == "Tools").unwrap().account_id.unwrap();
+        let name: String = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+        assert_eq!(name, "Tools (imported 2)");
+    }
+
+    #[tokio::test]
     async fn a_ledger_maps_posts_once_and_reverses() {
         let pool = test_pool().await;
         let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger()).await.unwrap();
         let summary = batch_summary(&pool, batch).await.unwrap();
         assert_eq!((summary.transaction_count, summary.postable_count, summary.unbalanced.len()), (3, 2, 1));
+        let u = &summary.unreadable[0];
+        assert_eq!((u.outcome.as_str(), u.account_name.as_deref(), u.cents), ("RECOVERED", Some("Domain Names"), Some(-250)));
 
         let err = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap_err();
         assert!(err.starts_with("QBW_UNMAPPED"), "{err}");
@@ -887,7 +1031,7 @@ mod tests {
         let mapped = auto_map_accounts(&pool, batch).await.unwrap();
         // Receivables fold into the system account; the bank, the expense and its subaccount are
         // created; the unused account is left alone.
-        assert_eq!(mapped, AutoMapResult { matched: 1, created: 3 });
+        assert_eq!(mapped, AutoMapResult { matched: 1, created: 3, reactivated: 0 });
         let accounts = batch_summary(&pool, batch).await.unwrap().accounts;
         let id = |name: &str| accounts.iter().find(|a| a.full_name == name).unwrap().account_id;
         assert!(id("Unused").is_none());
