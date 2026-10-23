@@ -341,6 +341,7 @@ mod tests {
                 lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 80_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await

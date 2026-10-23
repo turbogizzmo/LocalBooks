@@ -15,6 +15,8 @@ use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::credits::{self, ApplyCreditInput, CreditApplicationView, CreditMemoInput, CreditMemoSummary, RefundCreditInput, VendorCreditInput, VendorCreditSummary};
 use crate::parties::{self, PartyDetails, PartyDetailsInput};
 use crate::registers::{self, Register};
+use crate::edits::{self, DocumentLineView};
+use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInput, PurchaseOrderLineView, PurchaseOrderView, RecurringInput, RecurringView, SearchHit, Vendor1099Row};
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
@@ -35,7 +37,7 @@ use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconcili
 use crate::reports::{self, AccountView, Dashboard};
 use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
-use crate::statements::{self, BalanceSheet, Basis, CashFlowStatement, ClassFilter, DatedTrialBalance, PeriodReportInput, ProfitAndLoss, ProfitAndLossByClass};
+use crate::statements::{self, BalanceSheet, Basis, BudgetAmount, BudgetView, CashFlowStatement, ClassFilter, DatedTrialBalance, PeriodReportInput, ProfitAndLoss, ProfitAndLossByClass};
 use crate::report_center::{self, AgingReport, GeneralLedger, SummaryReport};
 
 pub const LEDGER_CHANGED: &str = "ledger-changed";
@@ -1319,4 +1321,200 @@ pub async fn list_sales_tax_payments(db: State<'_, Db>) -> Result<Vec<SalesTaxPa
 #[tauri::command]
 pub async fn get_tax_liability(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<TaxLiabilityReport, String> {
     sales_tax::tax_liability(&db.pool().await, start_date, end_date).await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Editing, statements, 1099s, recurring, purchase orders, search, attachments, budgets
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn replace_invoice(app: AppHandle, db: State<'_, Db>, id: i64, input: InvoiceInput) -> Result<i64, String> {
+    let new_id = edits::replace_invoice(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(new_id)
+}
+
+#[tauri::command]
+pub async fn replace_bill(app: AppHandle, db: State<'_, Db>, id: i64, input: BillInput) -> Result<i64, String> {
+    let new_id = edits::replace_bill(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(new_id)
+}
+
+#[tauri::command]
+pub async fn replace_expense(app: AppHandle, db: State<'_, Db>, id: i64, input: ExpenseInput) -> Result<i64, String> {
+    let new_id = edits::replace_expense(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(new_id)
+}
+
+#[tauri::command]
+pub async fn replace_journal_entry(app: AppHandle, db: State<'_, Db>, id: i64, entry: JournalEntry) -> Result<i64, String> {
+    let new_id = edits::replace_journal_entry(&db.pool().await, id, entry).await?;
+    notify(&app);
+    Ok(new_id)
+}
+
+#[tauri::command]
+pub async fn get_document_lines(db: State<'_, Db>, kind: String, id: i64) -> Result<Vec<DocumentLineView>, String> {
+    edits::document_lines(&db.pool().await, &kind, id).await
+}
+
+#[tauri::command]
+pub async fn get_customer_statement(db: State<'_, Db>, customer_id: i64, start_date: NaiveDate, end_date: NaiveDate) -> Result<CustomerStatement, String> {
+    workflows::customer_statement(&db.pool().await, customer_id, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn list_statement_customers(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<Vec<(i64, String, i64)>, String> {
+    workflows::statement_customers(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_1099_report(db: State<'_, Db>, year: i32) -> Result<Vec<Vendor1099Row>, String> {
+    workflows::vendors_1099(&db.pool().await, year).await
+}
+
+#[tauri::command]
+pub async fn list_recurring(db: State<'_, Db>) -> Result<Vec<RecurringView>, String> {
+    workflows::list_recurring(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn save_recurring(app: AppHandle, db: State<'_, Db>, id: Option<i64>, input: RecurringInput) -> Result<i64, String> {
+    let id = workflows::save_recurring(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn set_recurring_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<(), String> {
+    workflows::set_recurring_active(&db.pool().await, id, active).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_recurring(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    workflows::delete_recurring(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn enter_recurring(app: AppHandle, db: State<'_, Db>, as_of: Option<NaiveDate>, only: Option<i64>) -> Result<usize, String> {
+    let entered = workflows::enter_due(&db.pool().await, as_of.unwrap_or_else(|| Local::now().date_naive()), only).await?;
+    notify(&app);
+    Ok(entered)
+}
+
+#[tauri::command]
+pub async fn list_purchase_orders(db: State<'_, Db>) -> Result<Vec<PurchaseOrderView>, String> {
+    workflows::list_purchase_orders(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn get_purchase_order_lines(db: State<'_, Db>, id: i64) -> Result<Vec<PurchaseOrderLineView>, String> {
+    workflows::purchase_order_lines(&db.pool().await, id).await
+}
+
+#[tauri::command]
+pub async fn create_purchase_order(app: AppHandle, db: State<'_, Db>, input: PurchaseOrderInput) -> Result<i64, String> {
+    let id = workflows::create_purchase_order(&db.pool().await, input).await?;
+    notify(&app);
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn set_purchase_order_closed(app: AppHandle, db: State<'_, Db>, id: i64, closed: bool) -> Result<(), String> {
+    workflows::set_purchase_order_closed(&db.pool().await, id, closed).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bill_purchase_order(app: AppHandle, db: State<'_, Db>, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
+    let bill = workflows::bill_purchase_order(&db.pool().await, id, bill_date, due_date, bill_number).await?;
+    notify(&app);
+    Ok(bill)
+}
+
+#[tauri::command]
+pub async fn search_books(db: State<'_, Db>, query: String) -> Result<Vec<SearchHit>, String> {
+    workflows::search(&db.pool().await, &query).await
+}
+
+/// Attaches a file chosen in the open dialog (read here, so the page never handles file bytes).
+#[tauri::command]
+pub async fn add_attachment(app: AppHandle, db: State<'_, Db>, journal_entry_id: i64, path: String) -> Result<AttachmentView, String> {
+    let meta = std::fs::metadata(&path).map_err(|e| format!("ATTACH_READ: cannot read {path}: {e}"))?;
+    if meta.len() as usize > workflows::MAX_ATTACHMENT_BYTES {
+        return Err("ATTACH_SIZE: attach files of up to 25 MB".into());
+    }
+    let content = std::fs::read(&path).map_err(|e| format!("ATTACH_READ: cannot read {path}: {e}"))?;
+    let saved = workflows::add_attachment(&db.pool().await, journal_entry_id, &path, &content).await?;
+    notify(&app);
+    Ok(saved)
+}
+
+#[tauri::command]
+pub async fn list_attachments(db: State<'_, Db>, journal_entry_id: i64) -> Result<Vec<AttachmentView>, String> {
+    workflows::list_attachments(&db.pool().await, journal_entry_id).await
+}
+
+/// Saves a copy of an attachment where the user chooses.
+#[tauri::command]
+pub async fn save_attachment(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<Option<String>, String> {
+    let (name, content) = workflows::attachment_content(&db.pool().await, id).await?;
+    let dialog_app = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&name).blocking_save_file())
+        .await
+        .map_err(|e| format!("ATTACH_DIALOG: {e}"))?;
+    let Some(target) = chosen else { return Ok(None) };
+    let path = target.into_path().map_err(|e| format!("ATTACH_BAD_PATH: {e}"))?;
+    export_engine::write_atomically(&path, &content)?;
+    Ok(Some(path.display().to_string()))
+}
+
+#[tauri::command]
+pub async fn delete_attachment(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    workflows::delete_attachment(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_budgets(db: State<'_, Db>) -> Result<Vec<BudgetView>, String> {
+    statements::list_budgets(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn create_budget(app: AppHandle, db: State<'_, Db>, name: String, in_year: NaiveDate) -> Result<BudgetView, String> {
+    let budget = statements::create_budget(&db.pool().await, &name, in_year).await?;
+    notify(&app);
+    Ok(budget)
+}
+
+#[tauri::command]
+pub async fn delete_budget(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    statements::delete_budget(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_budget_amounts(db: State<'_, Db>, id: i64) -> Result<Vec<BudgetAmount>, String> {
+    statements::budget_amounts(&db.pool().await, id).await
+}
+
+#[tauri::command]
+pub async fn set_budget_amounts(app: AppHandle, db: State<'_, Db>, id: i64, amounts: Vec<BudgetAmount>) -> Result<(), String> {
+    statements::set_budget_amounts(&db.pool().await, id, &amounts).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_budget_vs_actual(db: State<'_, Db>, id: i64, from_period: i64, to_period: i64) -> Result<ProfitAndLossByClass, String> {
+    statements::budget_vs_actual(&db.pool().await, id, from_period, to_period).await
 }

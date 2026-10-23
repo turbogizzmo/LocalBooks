@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { AgingReport, CashFlowReport, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
+import { AgingReport, BudgetVsActualReport, CashFlowReport, Vendors1099Report, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -271,6 +271,7 @@ const REPORT_GROUPS = [
       ['plc', 'Profit and Loss by Class'],
       ['bs', 'Balance Sheet'],
       ['cf', 'Statement of Cash Flows'],
+      ['bva', 'Budget vs. Actuals'],
     ],
   },
   {
@@ -295,7 +296,13 @@ const REPORT_GROUPS = [
       ['sales-tax', 'Sales Tax Liability'],
     ],
   },
-  { title: 'Expenses and vendors', reports: [['expenses-vendor', 'Expenses by Vendor Summary']] },
+  {
+    title: 'Expenses and vendors',
+    reports: [
+      ['expenses-vendor', 'Expenses by Vendor Summary'],
+      ['1099', '1099 Summary'],
+    ],
+  },
   {
     title: 'For my accountant',
     reports: [
@@ -345,6 +352,8 @@ export default function Reports({ navigate, intent }) {
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
+        {report === 'bva' && <BudgetVsActualReport navigate={navigate} />}
+        {report === '1099' && <Vendors1099Report />}
       </div>
     </div>
   );

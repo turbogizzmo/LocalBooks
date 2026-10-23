@@ -2,9 +2,11 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
+import { MemorizeDialog } from './Recurring.jsx';
+import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents, parseMoneyToCents } from '../lib/money.js';
+import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
 export const SOURCE_LABEL = {
@@ -16,10 +18,15 @@ export const SOURCE_LABEL = {
 let nextKey = 1;
 const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit: '', credit: '', memo: '' });
 
-function JournalForm({ accounts, onPosted, onCancel }) {
-  const [date, setDate] = useState(todayIso());
-  const [memo, setMemo] = useState('');
-  const [rows, setRows] = useState(() => [blankRow(), blankRow(), blankRow(), blankRow()]);
+/** A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited. */
+function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
+  const [date, setDate] = useState(editing?.entry.entryDate ?? todayIso());
+  const [memo, setMemo] = useState(editing?.entry.memo ?? '');
+  const [rows, setRows] = useState(() =>
+    editing
+      ? editing.lines.map((l) => ({ ...blankRow(), accountId: l.accountId, classId: l.classId ?? null, debit: l.debitCents ? centsToInput(l.debitCents) : '', credit: l.creditCents ? centsToInput(l.creditCents) : '', memo: l.memo ?? '' }))
+      : [blankRow(), blankRow(), blankRow(), blankRow()],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const dateRef = useRef(null);
@@ -44,7 +51,8 @@ function JournalForm({ accounts, onPosted, onCancel }) {
   const invalid = used.filter((p) => !p.valid).length;
   const ready = used.length >= 2 && invalid === 0 && difference === 0 && totalDebit > 0;
 
-  const save = async () => {
+  const [memorizing, setMemorizing] = useState(null);
+  const save = async (mode) => {
     if (invalid > 0) return setError(`${invalid} line(s) need an account and exactly one of debit or credit.`);
     if (used.length < 2) return setError('A journal entry needs at least two lines.');
     if (difference !== 0) return setError(`Debits and credits are out of balance by ${formatCents(Math.abs(difference))}.`);
@@ -54,8 +62,14 @@ function JournalForm({ accounts, onPosted, onCancel }) {
     );
     const warning = formClass.missing(lines, 'class_id');
     if (warning) return setError(warning);
+    if (mode === 'memorize') return setMemorizing({ id: null, date, description: memo.trim(), lines });
     setBusy(true);
     try {
+      if (editing) {
+        await api.replaceJournalEntry(editing.entry.id, { id: null, date, description: memo.trim(), lines });
+        onPosted(`Journal entry #${editing.entry.entryNumber} replaced: the original is voided and the edited entry is posted.`);
+        return onCancel();
+      }
       await api.postJournalEntry({ id: null, date, description: memo.trim(), lines });
       onPosted(`Journal entry posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
       setRows([blankRow(), blankRow(), blankRow(), blankRow()]);
@@ -72,7 +86,7 @@ function JournalForm({ accounts, onPosted, onCancel }) {
   return (
     <section className="qb-panel flex-none">
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
-        <h2 className="mr-2 self-center text-md font-semibold">Journal entry</h2>
+        <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : 'Journal entry'}</h2>
         <label>
           <span className="qb-label">Journal date</span>
           <input ref={dateRef} type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -154,11 +168,17 @@ function JournalForm({ accounts, onPosted, onCancel }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy || !ready} title="Save as a recurring transaction">
+            Memorize…
+          </button>
           <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy || !ready}>
-            {busy ? 'Posting…' : 'Save & Post'}
+            {busy ? 'Posting…' : editing ? 'Save changes' : 'Save & Post'}
           </button>
         </div>
       </div>
+      {memorizing && (
+        <MemorizeDialog kind="JOURNAL" payload={memorizing} date={date} defaultName={memo.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
+      )}
     </section>
   );
 }
@@ -172,6 +192,7 @@ export function EntryLines({ entryId }) {
   if (error) return <div className="px-2 py-0.5 text-sm text-qb-negative">{error}</div>;
   if (!lines) return <div className="px-2 py-0.5 text-sm text-qb-ink-muted">Loading…</div>;
   return (
+    <>
     <table className="w-full text-sm">
       <tbody>
         {lines.map((l) => (
@@ -186,18 +207,34 @@ export function EntryLines({ entryId }) {
         ))}
       </tbody>
     </table>
+    <Attachments entryId={entryId} />
+    </>
   );
 }
 
 export default function JournalEntries({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listJournalEntries);
   const [composing, setComposing] = useState(intent?.action === 'journal-entry');
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState(intent?.action === 'open-entry' ? intent.data.entryId : null);
   const [filter, setFilter] = useState('ALL');
   const [notice, setNotice] = useState(null);
+  const [editing, setEditing] = useState(null); // { entry, lines }
+  const startEdit = (entry) =>
+    api.getJournalEntryLines(entry.id).then(
+      (lines) => {
+        setEditing({ entry, lines });
+        setComposing(true);
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
 
   useEffect(() => {
     if (intent?.action === 'journal-entry') setComposing(true);
+    if (intent?.action === 'open-entry') {
+      setFilter('ALL');
+      setExpanded(intent.data.entryId);
+      setTimeout(() => document.getElementById(`entry-${intent.data.entryId}`)?.scrollIntoView({ block: 'center' }), 50);
+    }
   }, [intent]);
 
   const voidEntry = async (journalEntryId) => {
@@ -208,7 +245,18 @@ export default function JournalEntries({ accounts, intent }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      {composing && <JournalForm accounts={accounts} onCancel={() => setComposing(false)} onPosted={(text) => setNotice({ kind: 'success', text })} />}
+      {composing && (
+        <JournalForm
+          key={editing ? `edit-${editing.entry.id}` : 'new'}
+          editing={editing}
+          accounts={accounts}
+          onCancel={() => {
+            setComposing(false);
+            setEditing(null);
+          }}
+          onPosted={(text) => setNotice({ kind: 'success', text })}
+        />
+      )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load the journal: ${error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
@@ -256,7 +304,7 @@ export default function JournalEntries({ accounts, intent }) {
               )}
               {rows.map((e) => (
                 <Fragment key={e.id}>
-                  <tr className={`qb-grid-row cursor-pointer ${expanded === e.id ? 'is-active' : ''} ${e.isVoided ? 'text-qb-ink-faint' : ''}`} onClick={() => setExpanded(expanded === e.id ? null : e.id)}>
+                  <tr id={`entry-${e.id}`} className={`qb-grid-row cursor-pointer ${expanded === e.id ? 'is-active' : ''} ${e.isVoided ? 'text-qb-ink-faint' : ''}`} onClick={() => setExpanded(expanded === e.id ? null : e.id)}>
                     <td className="qb-grid-cell">{formatDate(e.entryDate)}</td>
                     <td className="qb-grid-cell">{e.entryNumber}</td>
                     <td className="qb-grid-cell">{e.reversesEntryId !== null ? 'Void reversal' : (SOURCE_LABEL[e.sourceType] ?? e.sourceType)}</td>
@@ -275,6 +323,7 @@ export default function JournalEntries({ accounts, intent }) {
                       {e.reversesEntryId === null && (
                         <RowMenu
                           items={[
+                            ...(e.sourceType === 'JOURNAL' ? [{ label: 'Edit…', disabled: e.isVoided, onSelect: () => startEdit(e) }] : []),
                             voidItem({
                               journalEntryId: e.id,
                               voided: e.isVoided,

@@ -33,6 +33,40 @@ export function taxOn(lines, rate, amountOf = (l) => l.amount) {
   return mulDivRound(taxable, rate.ratePpm, 1_000_000) ?? 0;
 }
 
+/** "10%" → percent of the subtotal, "25.00" → an amount; returns cents or null when unreadable. */
+export function parseDiscount(text, subtotal) {
+  const t = String(text ?? '').trim();
+  if (t === '') return 0;
+  if (t.endsWith('%')) {
+    const ppm = parsePercentToPpm(t);
+    return ppm === null ? null : mulDivRound(subtotal, ppm, 1_000_000);
+  }
+  return parseMoneyToCents(t);
+}
+
+/**
+ * A sales document's totals exactly as the ledger posts them: the discount comes off the subtotal
+ * before tax, reducing the taxable amount in proportion.
+ */
+export function documentTotals(payload, rate, discountCents = 0) {
+  const subtotal = payload.reduce((s, l) => s + (l.amountCents ?? 0), 0);
+  const discount = Math.max(0, Math.min(discountCents ?? 0, subtotal));
+  let taxable = payload.filter((l) => l.isTaxable).reduce((s, l) => s + (l.amountCents ?? 0), 0);
+  if (discount > 0 && subtotal > 0) taxable -= mulDivRound(discount, taxable, subtotal) ?? 0;
+  const tax = rate ? (mulDivRound(taxable, rate.ratePpm, 1_000_000) ?? 0) : 0;
+  return { subtotal, discount, tax, total: subtotal - discount + tax };
+}
+
+/** The Discount field for a sales form: an amount, or a percentage such as 10%. */
+export function DiscountField({ value, onChange, invalid }) {
+  return (
+    <label>
+      <span className="qb-label">Discount</span>
+      <input className="qb-input num w-[90px]" value={value} onChange={(e) => onChange(e.target.value)} placeholder="0.00 or %" inputMode="decimal" aria-invalid={invalid} />
+    </label>
+  );
+}
+
 /** Tax rate dropdown for a sales form ("No tax" plus the active rates). */
 export function TaxRatePicker({ rates, value, onChange, className = 'qb-input w-[170px]' }) {
   return (

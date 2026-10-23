@@ -2,8 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
+import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -16,15 +17,16 @@ export const isCategory = (a) =>
 const isPaymentAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PARTIAL');
 
-function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
+/** A new bill, or (with `editing` = { bill, lines }) a posted bill being edited. */
+function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const today = todayIso();
-  const [vendor, setVendor] = useState('');
-  const [billNumber, setBillNumber] = useState('');
-  const [billDate, setBillDate] = useState(today);
-  const [dueDate, setDueDate] = useState(addDays(today, 30));
-  const [total, setTotal] = useState('');
-  const [rows, setRows] = useState(() => [blankSplit(null)]);
+  const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
+  const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
+  const [billDate, setBillDate] = useState(editing?.bill.billDate ?? today);
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(today, 30));
+  const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
+  const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const formClass = useFormClass(accounts);
@@ -45,7 +47,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
     }
   };
 
-  const post = async () => {
+  const [memorizing, setMemorizing] = useState(null);
+  const post = async (mode) => {
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -67,16 +70,15 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
     if (warning) return setError(warning);
     setBusy(true);
     try {
-      const bill = await api.postVendorBill({
-        vendorName: vendor.trim(),
-        billNumber: billNumber.trim() || null,
-        billDate,
-        dueDate,
-        memo: null,
-        totalCents,
-        lines: postedLines,
-      });
-      onPosted(`Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`);
+      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines };
+      if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
+      const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
+      onPosted(
+        editing
+          ? `Bill from ${input.vendorName} replaced: the original is voided and the edited bill is posted.`
+          : `Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`,
+      );
+      if (editing) return onCancelEdit();
       setVendor('');
       setBillNumber('');
       setTotal('');
@@ -94,7 +96,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
   return (
     <section className="qb-panel flex-none">
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
-        <h2 className="mr-2 self-center text-md font-semibold">New bill</h2>
+        <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>
           <span className="qb-label">Vendor</span>
           <input ref={vendorRef} className="qb-input w-[200px]" value={vendor} onChange={(e) => setVendor(e.target.value)} list="bill-vendors" placeholder="Vendor" />
@@ -141,13 +143,24 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted }) {
           <span className={`text-sm ${unallocated === 0 ? 'text-qb-green-active' : unallocated === null ? 'text-qb-ink-muted' : 'text-qb-negative'}`}>
             {unallocated === null ? 'Enter the bill total' : unallocated === 0 ? '✓ Fully allocated' : `Unallocated ${formatCents(unallocated)}`}
           </span>
+          {editing && (
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancelEdit} disabled={busy}>
+              Cancel edit
+            </button>
+          )}
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={() => post('memorize')} disabled={busy} title="Save as a recurring transaction">
+            Memorize…
+          </button>
           <button type="button" className="qb-btn qb-btn-primary" onClick={post} disabled={busy}>
-            {busy ? 'Posting…' : 'Post Bill'}
+            {busy ? 'Posting…' : editing ? 'Save changes' : 'Post Bill'}
           </button>
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses stockItems={stockItems.data ?? []} />
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+      {memorizing && (
+        <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
+      )}
     </section>
   );
 }
@@ -279,7 +292,16 @@ export default function Bills({ accounts, intent }) {
   const [notice, setNotice] = useState(null);
   const [paying, setPaying] = useState(intent?.action === 'pay-bills');
   const [payments, setPayments] = useState({});
+  const [editing, setEditing] = useState(null); // { bill, lines }
   const vendorRef = useRef(null);
+  const startEdit = (bill) =>
+    api.getDocumentLines('bill', bill.id).then(
+      (lines) => {
+        setPaying(false);
+        setEditing({ bill, lines });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const today = todayIso();
 
   useEffect(() => {
@@ -337,10 +359,13 @@ export default function Bills({ accounts, intent }) {
         />
       ) : (
         <NewBill
+          key={editing ? `edit-${editing.bill.id}` : 'new'}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
           vendorRef={vendorRef}
+          editing={editing}
+          onCancelEdit={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
         />
       )}
@@ -395,6 +420,12 @@ export default function Bills({ accounts, intent }) {
                 const isOverdue = isOpen(b) && b.dueDate < today;
                 const livePayments = (payments[b.id] ?? []).filter((p) => !p.isVoided);
                 const items = [
+                  {
+                    label: 'Edit…',
+                    disabled: b.isVoided || b.amountPaidCents > 0,
+                    hint: b.amountPaidCents > 0 ? 'Void its payments and remove its credits first' : undefined,
+                    onSelect: () => startEdit(b),
+                  },
                   voidItem({
                     journalEntryId: b.journalEntryId,
                     voided: b.isVoided,

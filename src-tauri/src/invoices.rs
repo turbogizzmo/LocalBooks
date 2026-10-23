@@ -52,6 +52,9 @@ pub struct InvoiceInput {
     /// Sales tax rate applied to the taxable lines.
     #[serde(default)]
     pub tax_rate_id: Option<i64>,
+    /// Taken off the subtotal before tax.
+    #[serde(default)]
+    pub discount_cents: i64,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -59,6 +62,7 @@ pub struct InvoiceInput {
 pub struct InvoiceSummary {
     pub id: i64,
     pub invoice_number: i64,
+    pub tax_rate_id: Option<i64>,
     pub customer_id: Option<i64>,
     /// The customer's current name (renaming a customer renames it on its invoices too).
     pub customer_name: String,
@@ -80,19 +84,20 @@ pub struct InvoiceSummary {
     pub home_balance_cents: i64,
     pub tax_cents: i64,
     pub tax_rate_name: Option<String>,
+    pub discount_cents: i64,
     /// Credit memos applied to this invoice (included in amount paid).
     pub credits_applied_cents: i64,
 }
 
 const SUMMARY_SELECT: &str = "
-    SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name) AS customer_name, i.issue_date, i.due_date, i.total_cents,
+    SELECT i.id, i.invoice_number, i.tax_rate_id, i.customer_id, COALESCE(c.name, i.customer_name) AS customer_name, i.issue_date, i.due_date, i.total_cents,
            i.amount_paid_cents, i.total_cents - i.amount_paid_cents AS balance_cents, i.status,
            i.journal_entry_id,
            (SELECT MAX(payment_date) FROM invoice_payments WHERE invoice_id = i.id AND is_voided = 0) AS last_payment_date,
            (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) AS item_count,
            i.is_voided, i.currency_code, i.exchange_rate_e6,
            b.home_total_cents, CASE WHEN i.is_voided = 1 THEN 0 ELSE b.home_open_cents END AS home_balance_cents,
-           i.tax_cents, t.name AS tax_rate_name,
+           i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents
     FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id";
@@ -229,9 +234,11 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
     for line in input.lines.iter().filter(|l| l.is_taxable) {
         taxable += line_amount(line.quantity_e4, line.rate_cents)?;
     }
+    let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
+    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "INV").await?;
     let tax_cents = tax.map_or(0, |t| t.cents);
-    let total = subtotal.checked_add(tax_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("INV_AMOUNT_TOO_LARGE: the invoice total is too large")?;
+    let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("INV_AMOUNT_TOO_LARGE: the invoice total must be above zero and in range")?;
     let customer = input.customer_name.trim();
     let customer_id = crate::sales::find_or_create_named(tx, crate::sales::Party::Customer, customer).await?;
 
@@ -248,6 +255,7 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
     let ar_account = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
     let mut lines = vec![JournalLine::debit(ar_account, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
+    lines.extend(discount.and_then(|d| d.line()));
     lines.extend(tax.and_then(|t| t.line(false)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
@@ -264,8 +272,8 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
     let (invoice_id, invoice_number): (i64, i64) = sqlx::query_as(
         "INSERT INTO invoices
             (invoice_number, customer_name, issue_date, due_date, total_cents, status, customer_id,
-             currency_code, exchange_rate_e6, home_total_cents, tax_rate_id, tax_cents)
-         VALUES ((SELECT COALESCE(MAX(invoice_number), 1000) + 1 FROM invoices), ?1, ?2, ?3, ?4, 'DRAFT', ?5, ?6, ?7, ?8, ?9, ?10)
+             currency_code, exchange_rate_e6, home_total_cents, tax_rate_id, tax_cents, discount_cents)
+         VALUES ((SELECT COALESCE(MAX(invoice_number), 1000) + 1 FROM invoices), ?1, ?2, ?3, ?4, 'DRAFT', ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          RETURNING id, invoice_number",
     )
     .bind(customer)
@@ -278,6 +286,7 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
     .bind(home_total)
     .bind(tax.and_then(|t| t.rate_id))
     .bind(tax_cents)
+    .bind(input.discount_cents)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -538,6 +547,10 @@ pub struct InvoiceItemView {
     pub quantity_e4: i64,
     pub rate_cents: i64,
     pub amount_cents: i64,
+    pub income_account_id: i64,
+    pub product_service_id: Option<i64>,
+    pub class_id: Option<i64>,
+    pub is_taxable: bool,
 }
 
 /// Everything needed to print an invoice.
@@ -552,7 +565,8 @@ pub struct InvoiceDetail {
 pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceDetail, String> {
     let invoice = get_summary(pool, invoice_id).await?;
     let items = sqlx::query_as::<_, InvoiceItemView>(
-        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents FROM invoice_items WHERE invoice_id = ?1 ORDER BY line_number",
+        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable
+         FROM invoice_items WHERE invoice_id = ?1 ORDER BY line_number",
     )
     .bind(invoice_id)
     .fetch_all(pool)
@@ -655,6 +669,7 @@ mod tests {
                 lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -682,6 +697,7 @@ mod tests {
             ],
             currency: None,
             tax_rate_id: None,
+            discount_cents: 0,
         };
         let invoice = create_and_post_invoice(&pool, input).await.expect("invoice posts");
 
@@ -780,6 +796,7 @@ mod tests {
             ],
             currency: None,
             tax_rate_id: None,
+            discount_cents: 0,
         };
 
         let err = create_and_post_invoice(&pool, input).await.expect_err("expense account rejected");
@@ -835,6 +852,7 @@ mod tests {
                 ],
                 currency: None,
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -871,6 +889,7 @@ mod tests {
                 lines: vec![InvoiceLineInput{ description: "Project".into(), quantity_e4: 10_000, rate_cents: 100_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 }),
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -924,6 +943,7 @@ mod tests {
                 lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: Some(ForeignCurrency { code: "GBP".into(), exchange_rate_e6: 1_270_000 }),
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await

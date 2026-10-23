@@ -192,7 +192,7 @@ pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<Bil
     get_bill(pool, bill_id).await
 }
 
-async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
+pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
     let total = validate_bill(input)?;
     let vendor_name = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor_name).await?;

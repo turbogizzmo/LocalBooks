@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { taxOn, useFormTax } from './SalesTax.jsx';
+import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { depositFilter, StatusBadge } from './Invoices.jsx';
@@ -39,14 +39,16 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
-  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
-  const total = subtotal + taxCents;
+  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const [discountText, setDiscountText] = useState('');
+  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
 
   const save = async () => {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (depositId === null) return setError('Choose where the money was deposited.');
+    if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     const postedLines = formClass.apply(payload);
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
@@ -61,6 +63,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         memo: memo || null,
         lines: postedLines,
         taxRateId: tax.rateId,
+        discountCents: discount,
       });
       onPosted(`Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.`);
     } catch (err) {
@@ -105,10 +108,17 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         </label>
         {formClass.header}
         {tax.picker}
+        <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
         <div className="ml-auto text-right">
           <div className="qb-label">Amount received</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
-          {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatCents(taxCents)} sales tax</div>}
+          {(taxCents > 0 || discount > 0) && (
+            <div className="text-xs text-qb-ink-muted">
+              {discount > 0 && `less ${formatCents(discount)} discount`}
+              {discount > 0 && taxCents > 0 && ' · '}
+              {taxCents > 0 && `incl. ${formatCents(taxCents)} sales tax`}
+            </div>
+          )}
         </div>
       </div>
       <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} />

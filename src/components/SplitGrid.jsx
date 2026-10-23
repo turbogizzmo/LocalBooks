@@ -1,9 +1,21 @@
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
-import { formatCents, formatMoney, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
 export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, memo: '', amount: '', qty: '', rate: '' });
+
+/** Split rows for a posted bill's or expense's lines, to edit it. */
+export const splitRowsFrom = (lines) =>
+  lines.map((l) => ({
+    ...blankSplit(l.accountId),
+    productId: l.productServiceId ?? null,
+    classId: l.classId ?? null,
+    memo: l.memo ?? '',
+    amount: l.quantityE4 ? '' : centsToInput(l.amountCents),
+    qty: l.quantityE4 ? formatQuantity(l.quantityE4).replace(/,/g, '') : '',
+    rate: l.quantityE4 && l.rateCents ? centsToInput(l.rateCents) : '',
+  }));
 
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is

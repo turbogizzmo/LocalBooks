@@ -194,6 +194,68 @@ pub(crate) async fn document_tax(tx: &mut Transaction<'_, Sqlite>, rate_id: Opti
 }
 
 // ------------------------------------------------------------------------------------------------
+// Discounts (taken off before tax)
+// ------------------------------------------------------------------------------------------------
+
+/// A discount off a sales document's subtotal: debited to Discounts Given, in the lines' class
+/// when they all share one.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DocumentDiscount {
+    pub cents: i64,
+    pub account_id: i64,
+    pub class_id: Option<i64>,
+}
+
+impl DocumentDiscount {
+    pub fn line(&self) -> Option<JournalLine> {
+        (self.cents > 0).then(|| JournalLine::debit(self.account_id, self.cents).with_memo(Some("Discount")).with_class(self.class_id))
+    }
+}
+
+/// The taxable amount after a discount taken off the whole subtotal (the taxable share of it).
+pub(crate) fn taxable_after_discount(taxable: i64, discount: i64, subtotal: i64) -> i64 {
+    if discount == 0 || subtotal == 0 {
+        return taxable;
+    }
+    taxable - mul_div_round(discount, taxable, subtotal).unwrap_or(0)
+}
+
+/// Validates a discount and finds (or creates) the Discounts Given account it is debited to.
+pub(crate) async fn document_discount(
+    tx: &mut Transaction<'_, Sqlite>,
+    discount_cents: i64,
+    subtotal: i64,
+    classes: impl Iterator<Item = Option<i64>>,
+    code: &str,
+) -> Result<Option<DocumentDiscount>, String> {
+    if discount_cents == 0 {
+        return Ok(None);
+    }
+    if discount_cents < 0 || discount_cents > subtotal {
+        return Err(format!("{code}_BAD_DISCOUNT: a discount is between zero and the subtotal"));
+    }
+    let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'INCOME' AND name = 'Discounts Given' AND parent_id IS NULL")
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    let account_id = match existing {
+        Some(id) => id,
+        None => sqlx::query_scalar(
+            "INSERT INTO chart_of_accounts (account_number, name, account_type, description)
+             VALUES (CASE WHEN EXISTS (SELECT 1 FROM chart_of_accounts WHERE account_number = '4950') THEN NULL ELSE '4950' END,
+                     'Discounts Given', 'INCOME', 'Discounts taken off invoices and sales receipts') RETURNING id",
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?,
+    };
+    let mut classes = classes;
+    let first = classes.next().flatten();
+    let class_id = if classes.all(|c| c == first) { first } else { None };
+    Ok(Some(DocumentDiscount { cents: discount_cents, account_id, class_id }))
+}
+
+// ------------------------------------------------------------------------------------------------
 // Paying the agency
 // ------------------------------------------------------------------------------------------------
 

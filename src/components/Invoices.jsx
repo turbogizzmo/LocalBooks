@@ -2,8 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { taxOn, useFormTax } from './SalesTax.jsx';
+import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
+import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany, useInvoicePrinter } from './PrintDocuments.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
@@ -376,7 +377,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
   );
 }
 
-function InvoiceList({ accounts, onNotice, data, error }) {
+function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
@@ -455,6 +456,12 @@ function InvoiceList({ accounts, onNotice, data, error }) {
                       <RowMenu
                         items={[
                           { label: 'Print / Save PDF', onSelect: () => printInvoice(inv.id) },
+                          {
+                            label: 'Edit…',
+                            disabled: inv.isVoided || inv.amountPaidCents > 0,
+                            hint: inv.amountPaidCents > 0 ? 'Remove its payments and credits first' : undefined,
+                            onSelect: () => onEdit(inv),
+                          },
                           voidItem({
                             journalEntryId: inv.journalEntryId,
                             voided: inv.isVoided,
@@ -508,6 +515,9 @@ export default function Invoices({ accounts, intent }) {
   const [notice, setNotice] = useState(null);
   // Set while the form holds an estimate's lines: posting then marks that estimate converted.
   const [fromEstimate, setFromEstimate] = useState(null);
+  // Set while the form holds a posted invoice being edited: saving replaces it.
+  const [editing, setEditing] = useState(null);
+  const [discountText, setDiscountText] = useState('');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
 
@@ -557,9 +567,42 @@ export default function Invoices({ accounts, intent }) {
     if (t && fromDate) setDueDate(addDays(fromDate, t.days));
   };
 
-  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
-  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
-  const total = subtotal + taxCents;
+  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+
+  const loadForEdit = (inv) => {
+    api.getInvoiceDetail(inv.id).then(
+      ({ invoice, items }) => {
+        setReceiving(false);
+        setFromEstimate(null);
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber });
+        setCustomer(invoice.customerName);
+        setIssueDate(invoice.issueDate);
+        setDueDate(invoice.dueDate);
+        setTerms('custom');
+        setCurrency(invoice.currencyCode ?? '');
+        setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
+        setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
+        tax.set(invoice.taxRateId ?? null);
+        setLines([
+          ...items.map((l) => ({
+            ...blankLine(l.incomeAccountId),
+            productId: l.productServiceId,
+            classId: l.classId ?? null,
+            isTaxable: Boolean(l.isTaxable),
+            description: l.description,
+            qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
+            rate: centsToInput(l.rateCents),
+          })),
+          blankLine(defaultAccountId),
+        ]);
+        setNotice(null);
+        customerRef.current?.focus();
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
+  };
 
   const reset = () => {
     setCustomer('');
@@ -568,11 +611,14 @@ export default function Invoices({ accounts, intent }) {
     setDueDate(addDays(todayIso(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
+    setEditing(null);
+    setDiscountText('');
     formClass.reset();
     tax.reset();
   };
 
-  const save = async () => {
+  const [memorizing, setMemorizing] = useState(null);
+  const save = async (mode) => {
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
     if (invalidCount > 0) {
@@ -580,6 +626,7 @@ export default function Invoices({ accounts, intent }) {
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
+    if (discountCents === null) return setNotice({ kind: 'error', text: 'Enter the discount as an amount or a percentage such as 10%.' });
     // The product travels with each line: tracked stock records its cost of goods sold.
     const postedLines = formClass.apply(
       payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId, isTaxable }) => ({
@@ -603,8 +650,16 @@ export default function Invoices({ accounts, intent }) {
         dueDate,
         lines: postedLines,
         taxRateId: tax.rateId,
+        discountCents: discount,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
       };
+      if (mode === 'memorize') return setMemorizing(input);
+      if (editing) {
+        await api.replaceInvoice(editing.id, input);
+        setNotice({ kind: 'success', text: `Invoice #${editing.number} replaced: the original is voided and the edited invoice is posted.` });
+        reset();
+        return;
+      }
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
       setNotice({
         kind: 'success',
@@ -632,6 +687,13 @@ export default function Invoices({ accounts, intent }) {
             setReceiving(false);
             setNotice({ kind: 'success', text });
           }}
+        />
+      )}
+      {editing && (
+        <Notice
+          kind="info"
+          text={`Editing invoice #${editing.number}. Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
+          onDismiss={reset}
         />
       )}
       {fromEstimate && (
@@ -701,6 +763,7 @@ export default function Invoices({ accounts, intent }) {
           </label>
           {formClass.header}
           {tax.picker}
+          <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
           {!receiving && (
             <button type="button" className="qb-btn qb-btn-secondary self-center" onClick={() => setReceiving(true)}>
               Receive payment
@@ -710,7 +773,13 @@ export default function Invoices({ accounts, intent }) {
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
             <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
-            {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatMoney(taxCents, currency || null)} sales tax</div>}
+            {(taxCents > 0 || discount > 0) && (
+              <div className="text-xs text-qb-ink-muted">
+                {discount > 0 && `less ${formatMoney(discount, currency || null)} discount`}
+                {discount > 0 && taxCents > 0 && ' · '}
+                {taxCents > 0 && `incl. ${formatMoney(taxCents, currency || null)} sales tax`}
+              </div>
+            )}
             {currency && parseRateE6(rate) !== null && total > 0 && (
               <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(total, parseRateE6(rate)))} in {homeCurrency}</div>
             )}
@@ -735,15 +804,31 @@ export default function Invoices({ accounts, intent }) {
             <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
               Cancel
             </button>
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy} title="Save as a recurring invoice">
+              Memorize…
+            </button>
             <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-              {busy ? 'Posting…' : 'Save & Post to Ledger'}
+              {busy ? 'Posting…' : editing ? 'Save changes' : 'Save & Post to Ledger'}
             </button>
           </div>
         </div>
+        {memorizing && (
+          <MemorizeDialog
+            kind="INVOICE"
+            payload={memorizing}
+            date={issueDate}
+            defaultName={customer.trim()}
+            onClose={() => setMemorizing(null)}
+            onSaved={(text) => {
+              setMemorizing(null);
+              setNotice({ kind: 'success', text });
+            }}
+          />
+        )}
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       </section>
 
-      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} />
+      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={loadForEdit} />
     </div>
   );
 }

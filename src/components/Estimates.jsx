@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { taxOn, useFormTax } from './SalesTax.jsx';
+import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -36,15 +36,17 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
-  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
-  const total = subtotal + taxCents;
+  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const [discountText, setDiscountText] = useState('');
+  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
 
   const save = async () => {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (expires && expires < date) return setError('The expiration date is before the estimate date.');
+    if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     setBusy(true);
     try {
       const estimate = await api.createEstimate({
@@ -55,6 +57,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         // Estimates do not post, so there is no missing-class warning; the class carries to the invoice.
         lines: formClass.apply(payload),
         taxRateId: tax.rateId,
+        discountCents: discount,
       });
       onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.`);
       setCustomer('');
@@ -62,6 +65,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
       setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
       formClass.reset();
       tax.reset();
+      setDiscountText('');
       setError(null);
       customerRef.current?.focus();
     } catch (err) {
@@ -94,10 +98,17 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         </label>
         {formClass.header}
         {tax.picker}
+        <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
         <div className="ml-auto text-right">
           <div className="qb-label">Total</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
-          {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatCents(taxCents)} sales tax</div>}
+          {(taxCents > 0 || discount > 0) && (
+            <div className="text-xs text-qb-ink-muted">
+              {discount > 0 && `less ${formatCents(discount)} discount`}
+              {discount > 0 && taxCents > 0 && ' · '}
+              {taxCents > 0 && `incl. ${formatCents(taxCents)} sales tax`}
+            </div>
+          )}
         </div>
       </div>
       <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} />

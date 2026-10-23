@@ -393,3 +393,139 @@ export function SalesTaxLiabilityReport() {
     />
   );
 }
+
+export function Vendors1099Report() {
+  const thisYear = Number(todayIso().slice(0, 4));
+  const [year, setYear] = useState(thisYear - 1);
+  const [all, setAll] = useState(false);
+  const { data, error, reload } = useLedgerQuery(() => api.get1099Report(year));
+  useEffect(() => {
+    reload();
+  }, [year, reload]);
+  const shown = (data ?? []).filter((r) => all || r.overThreshold);
+  const total = shown.reduce((s, r) => s + r.paidCents, 0);
+  const columns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Paid', align: 'right' }];
+  const rows = [
+    ...shown.map((r) => ({ cells: [r.vendorName, r.taxId ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
+    ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', formatCents(total)] }] : []),
+  ];
+  return (
+    <TableReport
+      title="1099 Summary"
+      subtitle={`Payments in ${year} to vendors marked “Track payments for a 1099”`}
+      columns={columns}
+      rows={rows}
+      error={error}
+      toolbar={
+        <>
+          <label>
+            <span className="qb-label">Calendar year</span>
+            <select className="qb-input w-[100px]" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {Array.from({ length: 6 }, (_, i) => thisYear - i).map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1 self-center text-sm">
+            <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
+            Include vendors under the $600 threshold
+          </label>
+        </>
+      }
+      footer="Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors."
+      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
+    />
+  );
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** The name of fiscal month `period` (1-12) of a fiscal year starting on `start`. */
+export function fiscalMonthLabel(start, period) {
+  const m = (Number(start.slice(5, 7)) - 1 + period - 1) % 12;
+  const y = Number(start.slice(0, 4)) + Math.floor((Number(start.slice(5, 7)) - 1 + period - 1) / 12);
+  return `${MONTH_NAMES[m].slice(0, 3)} ${y}`;
+}
+
+export function BudgetVsActualReport({ navigate }) {
+  const budgets = useLedgerQuery(api.listBudgets);
+  const [budgetId, setBudgetId] = useState(null);
+  const [[from, to], setPeriods] = useState([1, 12]);
+  const list = budgets.data ?? [];
+  const budget = list.find((b) => b.id === budgetId) ?? list[0];
+  const { data, error, reload } = useLedgerQuery(() => (budget ? api.getBudgetVsActual(budget.id, from, to) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [budget?.id, from, to, reload]);
+  const [notice, setNotice] = useState(null);
+  const company = useCompany();
+  if (budgets.data && list.length === 0) {
+    return <Notice kind="info" text="There are no budgets yet. Create one under Accounting › Budgets, then come back to compare it with actual income and expenses." />;
+  }
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  return (
+    <>
+      <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
+        <label>
+          <span className="qb-label">Budget</span>
+          <select className="qb-input w-[220px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))}>
+            {list.map((b) => (
+              <option key={b.id} value={b.id}>{b.name} (FY from {formatDate(b.fiscalYearStart)})</option>
+            ))}
+          </select>
+        </label>
+        {budget && (
+          <>
+            <label>
+              <span className="qb-label">From month</span>
+              <select className="qb-input w-[110px]" value={from} onChange={(e) => setPeriods([Number(e.target.value), Math.max(Number(e.target.value), to)])}>
+                {months.map((m) => (
+                  <option key={m} value={m}>{fiscalMonthLabel(budget.fiscalYearStart, m)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="qb-label">To month</span>
+              <select className="qb-input w-[110px]" value={to} onChange={(e) => setPeriods([Math.min(from, Number(e.target.value)), Number(e.target.value)])}>
+                {months.map((m) => (
+                  <option key={m} value={m}>{fiscalMonthLabel(budget.fiscalYearStart, m)}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        <div className="ml-auto">
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() =>
+              saveText(
+                toCsv([
+                  [company.name],
+                  ['Budget vs. Actuals'],
+                  [budget?.name ?? ''],
+                  [],
+                  ['Account', ...data.columns.map((c) => c.label)],
+                  ...data.lines.map((l) => [`${'  '.repeat(l.depth)}${l.label}`, ...l.amountsCents.map((a, i) => (data.columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a)))]),
+                ]),
+                'Budget-vs-Actuals.csv',
+                setNotice,
+              )
+            }
+          />
+        </div>
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {error && <Notice kind="error" text={error} />}
+      {data && (
+        <Statement
+          title="Budget vs. Actuals"
+          subtitle={`${budget.name} · ${rangeText(data.startDate, data.endDate)}`}
+          lines={data.lines}
+          columns={data.columns}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate, includeSubaccounts: line.kind === 'subtotal' })}
+          footer="Accrual basis · posted transactions only · Over budget is actual less budget"
+        />
+      )}
+    </>
+  );
+}

@@ -289,3 +289,68 @@
   border-bottom: 3px double #393a3d;
   border-top: 1px solid #393a3d;
 }
+
+/* Voucher checks: the check face fills the top third of a letter page; two stubs follow. */
+.check {
+  font-size: 10pt;
+}
+
+.check-face {
+  height: 3.3in;
+  padding: 0.25in 0.35in;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.check-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.check-number {
+  font-weight: 700;
+}
+
+.check-payee {
+  border-bottom: 1px solid #393a3d;
+  padding-bottom: 2pt;
+}
+
+.check-amount {
+  border: 1px solid #393a3d;
+  padding: 1pt 6pt;
+  font-variant-numeric: tabular-nums;
+}
+
+.check-words {
+  border-bottom: 1px solid #393a3d;
+  padding-bottom: 2pt;
+}
+
+.check-signature {
+  border-top: 1px solid #393a3d;
+  min-width: 2.6in;
+  text-align: center;
+  padding-top: 2pt;
+  font-size: 8pt;
+}
+
+.check-stub {
+  height: 3.3in;
+  padding: 0.25in 0.35in;
+  box-sizing: border-box;
+  border-top: 1px dashed #8d9096;
+}
+
+.check-stub-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2pt 0;
+}
+
+.check-muted {
+  color: #6b6c72;
+}

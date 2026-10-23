@@ -245,3 +245,90 @@ export function useInvoicePrinter(onError) {
   ) : null;
   return [portal, print];
 }
+
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+function under1000(n) {
+  const words = [];
+  if (n >= 100) {
+    words.push(`${ONES[Math.floor(n / 100)]} Hundred`);
+    n %= 100;
+  }
+  if (n >= 20) {
+    words.push(TENS[Math.floor(n / 10)] + (n % 10 ? `-${ONES[n % 10]}` : ''));
+  } else if (n > 0) {
+    words.push(ONES[n]);
+  }
+  return words.join(' ');
+}
+
+/** 1234.56 → "One Thousand Two Hundred Thirty-Four and 56/100", as written on a check. */
+export function amountInWords(cents) {
+  let dollars = Math.floor(Math.abs(cents) / 100);
+  const rest = String(Math.abs(cents) % 100).padStart(2, '0');
+  if (dollars === 0) return `Zero and ${rest}/100`;
+  const parts = [];
+  for (const scale of ['', ' Thousand', ' Million', ' Billion']) {
+    const chunk = dollars % 1000;
+    if (chunk) parts.unshift(`${under1000(chunk)}${scale}`);
+    dollars = Math.floor(dollars / 1000);
+    if (!dollars) break;
+  }
+  return `${parts.join(' ')} and ${rest}/100`;
+}
+
+/** A voucher check: the check on top, then two stubs with the payee, amount and memo. */
+export function CheckDocument({ company, check, bankName }) {
+  const amount = formatMoney(check.totalCents, check.currencyCode);
+  const stub = (
+    <div className="check-stub">
+      <div className="check-stub-row">
+        <span>{check.payeeName ?? ''}</span>
+        <span>{formatDate(check.expenseDate)}</span>
+      </div>
+      <div className="check-stub-row">
+        <span>{check.memo ?? ''}</span>
+        <span className="doc-num">{amount}</span>
+      </div>
+      <div className="check-stub-row check-muted">
+        <span>{bankName}</span>
+        <span>{check.checkNumber ? `Check #${check.checkNumber}` : ''}</span>
+      </div>
+    </div>
+  );
+  return (
+    <article className="doc check">
+      <section className="check-face">
+        <div className="check-row">
+          <div>
+            <div className="doc-company-name">{company.name}</div>
+            <div className="doc-company-lines">{company.address}</div>
+          </div>
+          <div className="check-number">{check.checkNumber ?? ''}</div>
+        </div>
+        <div className="check-row check-date">
+          <span />
+          <span>Date {formatDate(check.expenseDate)}</span>
+        </div>
+        <div className="check-row check-payee">
+          <span>
+            Pay to the order of <strong>{check.payeeName ?? ''}</strong>
+          </span>
+          <span className="check-amount">**{amount}</span>
+        </div>
+        <div className="check-words">
+          {amountInWords(check.totalCents)}
+          {' '}
+          {'*'.repeat(12)} Dollars
+        </div>
+        <div className="check-row check-bottom">
+          <span>Memo {check.memo ?? ''}</span>
+          <span className="check-signature">Authorized signature</span>
+        </div>
+      </section>
+      {stub}
+      {stub}
+    </article>
+  );
+}

@@ -24,12 +24,18 @@ impl Party {
 }
 
 /// Returns the id of the customer/vendor named `name` (case-insensitive), creating it if needed.
+///
+/// A customer name written "Customer:Job" is a job of that customer: the customer is found or
+/// created first, and the job is stored under its full name with the customer as its parent.
 pub(crate) async fn find_or_create_named(tx: &mut Transaction<'_, Sqlite>, party: Party, name: &str) -> Result<i64, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err(format!("PARTY_NO_NAME: enter a {} name", if matches!(party, Party::Customer) { "customer" } else { "vendor" }));
     }
     let table = party.table();
+    if matches!(party, Party::Customer) {
+        return customer_path(tx, name).await;
+    }
     sqlx::query(&format!("INSERT OR IGNORE INTO {table} (name) VALUES (?1)"))
         .bind(name)
         .execute(&mut **tx)
@@ -40,6 +46,32 @@ pub(crate) async fn find_or_create_named(tx: &mut Transaction<'_, Sqlite>, party
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)
+}
+
+/// "Acme : Kitchen" → "Acme:Kitchen"; an empty part is refused.
+pub(crate) fn job_name(name: &str) -> Result<String, String> {
+    let parts: Vec<&str> = name.split(':').map(str::trim).collect();
+    if parts.iter().any(|p| p.is_empty()) {
+        return Err("PARTY_BAD_JOB: write a job as Customer:Job".into());
+    }
+    Ok(parts.join(":"))
+}
+
+/// Finds or creates the customer at `name`, and each customer above it for a job.
+async fn customer_path(tx: &mut Transaction<'_, Sqlite>, name: &str) -> Result<i64, String> {
+    let full = job_name(name)?;
+    let mut parent: Option<i64> = None;
+    let mut prefix = String::new();
+    for part in full.split(':') {
+        if !prefix.is_empty() {
+            prefix.push(':');
+        }
+        prefix.push_str(part);
+        sqlx::query("INSERT OR IGNORE INTO customers (name, parent_id) VALUES (?1, ?2)").bind(&prefix).bind(parent).execute(&mut **tx).await.map_err(db_err)?;
+        let id: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = ?1 COLLATE NOCASE").bind(&prefix).fetch_one(&mut **tx).await.map_err(db_err)?;
+        parent = Some(id);
+    }
+    Ok(parent.expect("at least one part"))
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -118,6 +150,8 @@ pub struct SalesReceiptInput {
     pub lines: Vec<SalesLineInput>,
     #[serde(default)]
     pub tax_rate_id: Option<i64>,
+    #[serde(default)]
+    pub discount_cents: i64,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -176,8 +210,8 @@ pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String>
 }
 
 pub async fn create_customer(pool: &SqlitePool, name: &str, email: Option<&str>) -> Result<PartyView, String> {
-    create_party(pool, Party::Customer, name, email).await?;
-    list_customers(pool).await?.into_iter().find(|c| c.name.eq_ignore_ascii_case(name.trim()))
+    let id = create_party(pool, Party::Customer, name, email).await?;
+    list_customers(pool).await?.into_iter().find(|c| c.id == id)
         .ok_or_else(|| "PARTY_NOT_FOUND: customer was not saved".into())
 }
 
@@ -186,17 +220,36 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
     if name.is_empty() {
         return Err("PARTY_NO_NAME: enter a name".into());
     }
-    let table = party.table();
-    sqlx::query_scalar(&format!("INSERT INTO {table} (name, email) VALUES (?1, ?2) RETURNING id"))
-        .bind(name)
-        .bind(clean(email))
-        .fetch_one(pool)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::Database(db) if db.message().contains("UNIQUE") => format!("PARTY_DUPLICATE: '{name}' already exists"),
-            sqlx::Error::Database(db) if db.message().contains("CHECK") => "PARTY_BAD_EMAIL: enter a valid email address".into(),
-            other => db_err(other),
-        })
+    let full = if matches!(party, Party::Customer) { job_name(name)? } else { name.to_string() };
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    // A job's customer is created first if needed.
+    let parent = match full.rsplit_once(':').filter(|_| matches!(party, Party::Customer)) {
+        Some((above, _)) => Some(customer_path(&mut tx, above).await?),
+        None => None,
+    };
+    let created = match party {
+        Party::Customer => sqlx::query_scalar("INSERT INTO customers (name, email, parent_id) VALUES (?1, ?2, ?3) RETURNING id").bind(&full).bind(clean(email)).bind(parent),
+        Party::Vendor => sqlx::query_scalar("INSERT INTO vendors (name, email) VALUES (?1, ?2) RETURNING id").bind(&full).bind(clean(email)),
+    }
+    .fetch_one(&mut *tx)
+    .await;
+    let id = match created {
+        Ok(id) => id,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Err(party_err(e, name));
+        }
+    };
+    tx.commit().await.map_err(db_err)?;
+    Ok(id)
+}
+
+fn party_err(e: sqlx::Error, name: &str) -> String {
+    match e {
+        sqlx::Error::Database(db) if db.message().contains("UNIQUE") => format!("PARTY_DUPLICATE: '{name}' already exists"),
+        sqlx::Error::Database(db) if db.message().contains("CHECK") => "PARTY_BAD_EMAIL: enter a valid email address".into(),
+        other => db_err(other),
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -286,17 +339,19 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     for line in input.lines.iter().filter(|l| l.is_taxable) {
         taxable += line_amount(line.quantity_e4, line.rate_cents)?;
     }
+    let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
+    let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
     let tax_cents = tax.map_or(0, |t| t.cents);
-    let total = subtotal.checked_add(tax_cents).filter(|t| *t <= crate::ledger::MAX_LINE_CENTS).ok_or("SR_TOO_LARGE: the receipt total is too large")?;
+    let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= crate::ledger::MAX_LINE_CENTS).ok_or("SR_TOO_LARGE: the receipt total must be above zero and in range")?;
     let customer_id = match clean(input.customer_name.as_deref()) {
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
         None => None,
     };
 
     let (receipt_id, receipt_number): (i64, i64) = sqlx::query_as(
-        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents)
-         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents, discount_cents)
+         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          RETURNING id, receipt_number",
     )
     .bind(customer_id)
@@ -308,6 +363,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     .bind(total)
     .bind(tax.and_then(|t| t.rate_id))
     .bind(tax_cents)
+    .bind(input.discount_cents)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -356,6 +412,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
+    lines.extend(discount.and_then(|d| d.line()));
     lines.extend(tax.and_then(|t| t.line(false)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
@@ -459,6 +516,7 @@ mod tests {
                 memo: Some("Counter sale".into()),
                 lines: vec![line(Some(widget.id), 3, 1_999, sales), line(None, 1, 5_000, services)],
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -487,6 +545,7 @@ mod tests {
                 memo: None,
                 lines: vec![line(None, 1, 5_000, rent)],
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -519,6 +578,7 @@ mod tests {
                 lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
                 currency: None,
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await
@@ -541,6 +601,7 @@ mod tests {
                 memo: None,
                 lines: vec![line(None, 2, 2_500, services)],
                 tax_rate_id: None,
+                discount_cents: 0,
             },
         )
         .await

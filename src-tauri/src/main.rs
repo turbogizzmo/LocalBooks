@@ -9,6 +9,7 @@ mod closing;
 mod commands;
 mod credits;
 mod db;
+mod edits;
 mod estimates;
 mod expenses;
 mod forensic;
@@ -32,6 +33,7 @@ mod simplefin;
 mod statements;
 mod storage;
 mod timesheet;
+mod workflows;
 
 use tauri::Manager;
 
@@ -191,6 +193,35 @@ fn main() {
             commands::pay_sales_tax,
             commands::list_sales_tax_payments,
             commands::get_tax_liability,
+            commands::replace_invoice,
+            commands::replace_bill,
+            commands::replace_expense,
+            commands::replace_journal_entry,
+            commands::get_document_lines,
+            commands::get_customer_statement,
+            commands::list_statement_customers,
+            commands::get_1099_report,
+            commands::list_recurring,
+            commands::save_recurring,
+            commands::set_recurring_active,
+            commands::delete_recurring,
+            commands::enter_recurring,
+            commands::list_purchase_orders,
+            commands::get_purchase_order_lines,
+            commands::create_purchase_order,
+            commands::set_purchase_order_closed,
+            commands::bill_purchase_order,
+            commands::search_books,
+            commands::add_attachment,
+            commands::list_attachments,
+            commands::save_attachment,
+            commands::delete_attachment,
+            commands::list_budgets,
+            commands::create_budget,
+            commands::delete_budget,
+            commands::get_budget_amounts,
+            commands::set_budget_amounts,
+            commands::get_budget_vs_actual,
             commands::get_balance_sheet,
             commands::list_customers,
             commands::create_customer,

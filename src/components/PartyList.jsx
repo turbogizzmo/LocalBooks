@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
@@ -159,7 +159,24 @@ export default function PartyList({ kind }) {
     }
   };
 
-  const rows = (data ?? []).filter((p) => (showInactive || p.isActive) && p.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const nameRef = useRef(null);
+  // Jobs are customers named "Customer:Job"; ordering by each part keeps a job under its customer.
+  const byPath = (a, b) => {
+    const pa = a.name.split(':');
+    const pb = b.name.split(':');
+    for (let i = 0; i < Math.min(pa.length, pb.length); i += 1) {
+      const c = pa[i].localeCompare(pb[i], undefined, { sensitivity: 'base' });
+      if (c) return c;
+    }
+    return pa.length - pb.length;
+  };
+  const rows = (data ?? [])
+    .filter((p) => (showInactive || p.isActive) && p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort(kind === 'customer' ? byPath : () => 0);
+  const addJob = (p) => {
+    setName(`${p.name}:`);
+    nameRef.current?.focus();
+  };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
 
@@ -210,7 +227,7 @@ export default function PartyList({ kind }) {
               <tbody>
                 <tr className="bg-qb-row-selected">
                   <td className="qb-grid-cell-edit">
-                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`New ${cfg.noun} name`} aria-label="Name" />
+                    <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'customer' ? 'New customer, or Customer:Job' : `New ${cfg.noun} name`} aria-label="Name" />
                   </td>
                   <td className="qb-grid-cell-edit">
                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" aria-label="Email" />
@@ -231,8 +248,9 @@ export default function PartyList({ kind }) {
                 )}
                 {rows.map((p) => (
                   <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setEditing(p.id)}>
-                    <td className="qb-grid-cell font-semibold">
-                      {p.name}
+                    <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
+                      {p.name.split(':').at(-1)}
+                      {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
                     </td>
                     <td className="qb-grid-cell text-qb-ink-muted">{p.email ?? ''}</td>
@@ -244,6 +262,7 @@ export default function PartyList({ kind }) {
                         label={`Actions for ${p.name}`}
                         items={[
                           { label: 'Edit…', onSelect: () => setEditing(p.id) },
+                          ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
                         ]}
                       />

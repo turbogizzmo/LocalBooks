@@ -90,10 +90,15 @@ pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64) -> Result<PartyDe
 
 pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDetailsInput) -> Result<PartyDetails, String> {
     let t = table(kind)?;
-    let name = input.name.trim();
-    if name.is_empty() {
+    let typed = input.name.trim();
+    if typed.is_empty() {
         return Err("PARTY_NO_NAME: enter a name".into());
     }
+    // Customers may be jobs ("Customer:Job"); renaming one renames its jobs too.
+    let full = if t == "customers" { crate::sales::job_name(typed)? } else { typed.to_string() };
+    let name = full.as_str();
+    let old_name: Option<String> = sqlx::query_scalar(&format!("SELECT name FROM {t} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?;
+    let old_name = old_name.ok_or_else(|| format!("PARTY_NOT_FOUND: that {kind} does not exist"))?;
     let email = clean(&input.email);
     if let Some(e) = &email {
         if !(e.contains('@') && e.rsplit('@').next().is_some_and(|d| d.contains('.'))) {
@@ -141,6 +146,33 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     })?;
     if done.rows_affected() == 0 {
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
+    }
+    if t == "customers" && old_name != name {
+        let mut tx = pool.begin().await.map_err(db_err)?;
+        let result = async {
+            // The jobs move with their customer...
+            sqlx::query("UPDATE customers SET name = ?1 || substr(name, length(?2) + 1) WHERE substr(name, 1, length(?2) + 1) = ?2 || ':'")
+                .bind(name)
+                .bind(&old_name)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+            // ...and a job renamed under another customer moves to it.
+            let parent = match name.rsplit_once(':') {
+                Some((above, _)) => Some(crate::sales::find_or_create_named(&mut tx, crate::sales::Party::Customer, above).await?),
+                None => None,
+            };
+            if parent == Some(id) {
+                return Err("PARTY_BAD_JOB: a customer cannot be its own job".to_string());
+            }
+            sqlx::query("UPDATE customers SET parent_id = ?1 WHERE id = ?2").bind(parent).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+            Ok(())
+        }
+        .await;
+        match result {
+            Ok(()) => tx.commit().await.map_err(db_err)?,
+            Err(err) => return Err(crate::ledger::rollback(tx, err).await),
+        }
     }
     get_party(pool, kind, id).await
 }
@@ -227,6 +259,14 @@ mod tests {
         assert_eq!((saved.name.as_str(), saved.company_name.as_deref(), saved.terms_days), ("Acme Inc", Some("Acme Corp"), Some(15)));
         assert!(update_party(&pool, "customer", acme.id, input("globex")).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
         assert!(!set_party_active(&pool, "customer", acme.id, false).await.unwrap().is_active);
+
+        // Jobs: typed as Customer:Job, renamed with their customer.
+        let job = crate::sales::create_customer(&pool, "Acme Inc : Kitchen", None).await.unwrap();
+        assert_eq!(job.name, "Acme Inc:Kitchen");
+        let parent: Option<i64> = sqlx::query_scalar("SELECT parent_id FROM customers WHERE id = ?1").bind(job.id).fetch_one(&pool).await.unwrap();
+        assert_eq!(parent, Some(acme.id));
+        update_party(&pool, "customer", acme.id, input("Acme Holdings")).await.unwrap();
+        assert_eq!(get_party(&pool, "customer", job.id).await.unwrap().name, "Acme Holdings:Kitchen");
 
         let staples = crate::expenses::create_vendor(&pool, "Staples", None).await.unwrap();
         let vendor = update_party(&pool, "vendor", staples.id, PartyDetailsInput { tax_id: Some("12-3456789".into()), is_1099: true, ..input("Staples") }).await.unwrap();

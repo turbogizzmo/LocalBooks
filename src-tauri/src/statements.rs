@@ -711,6 +711,147 @@ pub async fn cash_flow(pool: &SqlitePool, start_date: NaiveDate, end_date: Naive
     })
 }
 
+// ------------------------------------------------------------------------------------------------
+// Budgets
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetView {
+    pub id: i64,
+    pub name: String,
+    pub fiscal_year_start: NaiveDate,
+}
+
+/// One budget amount: income or expense expected for an account in a month of the fiscal year
+/// (period 1 = the first month), on the account's normal side (income and expenses positive).
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetAmount {
+    pub account_id: i64,
+    pub period: i64,
+    pub amount_cents: i64,
+}
+
+pub async fn list_budgets(pool: &SqlitePool) -> Result<Vec<BudgetView>, String> {
+    sqlx::query_as("SELECT id, name, fiscal_year_start FROM budgets ORDER BY fiscal_year_start DESC, name COLLATE NOCASE").fetch_all(pool).await.map_err(db_err)
+}
+
+/// Creates a budget for the fiscal year containing `in_year`.
+pub async fn create_budget(pool: &SqlitePool, name: &str, in_year: NaiveDate) -> Result<BudgetView, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("BUDGET_NAME_REQUIRED: name the budget".into());
+    }
+    let (start, _) = fiscal_year_bounds(in_year, fiscal_start_month(pool).await?);
+    let id: i64 = sqlx::query_scalar("INSERT INTO budgets (name, fiscal_year_start) VALUES (?1, ?2) RETURNING id")
+        .bind(name)
+        .bind(start)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| {
+            let msg = db_err(e);
+            if msg.contains("UNIQUE") { format!("BUDGET_DUPLICATE: there is already a budget named '{name}'") } else { msg }
+        })?;
+    Ok(BudgetView { id, name: name.into(), fiscal_year_start: start })
+}
+
+pub async fn delete_budget(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    sqlx::query("DELETE FROM budgets WHERE id = ?1").bind(id).execute(pool).await.map(|_| ()).map_err(db_err)
+}
+
+pub async fn budget_amounts(pool: &SqlitePool, id: i64) -> Result<Vec<BudgetAmount>, String> {
+    sqlx::query_as("SELECT account_id, period, amount_cents FROM budget_amounts WHERE budget_id = ?1").bind(id).fetch_all(pool).await.map_err(db_err)
+}
+
+/// Saves budget amounts (zero removes one). Only income and expense accounts are budgeted.
+pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmount]) -> Result<(), String> {
+    let chart = Chart::load(pool).await?;
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    for a in amounts {
+        let pl = chart.accounts.iter().any(|acct| acct.id == a.account_id && PL_TYPES.contains(&acct.account_type.as_str()));
+        if !pl || !(1..=12).contains(&a.period) {
+            let _ = tx.rollback().await;
+            return Err("BUDGET_BAD_AMOUNT: budget income and expense accounts by month (1 to 12)".into());
+        }
+        let sql = if a.amount_cents == 0 {
+            "DELETE FROM budget_amounts WHERE budget_id = ?1 AND account_id = ?2 AND period = ?3"
+        } else {
+            "INSERT INTO budget_amounts (budget_id, account_id, period, amount_cents) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (budget_id, account_id, period) DO UPDATE SET amount_cents = excluded.amount_cents"
+        };
+        if let Err(e) = sqlx::query(sql).bind(id).bind(a.account_id).bind(a.period).bind(a.amount_cents).execute(&mut *tx).await {
+            let _ = tx.rollback().await;
+            return Err(db_err(e));
+        }
+    }
+    tx.commit().await.map_err(db_err)
+}
+
+/// Budget vs. Actual: actual income and expenses for fiscal months `from_period`..=`to_period` of
+/// the budget's year beside the budget, with the amount over budget and the percent of budget
+/// (basis points: 112.5% = 11250).
+pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i64, to_period: i64) -> Result<ProfitAndLossByClass, String> {
+    if !(1..=12).contains(&from_period) || !(from_period..=12).contains(&to_period) {
+        return Err("RPT_BAD_RANGE: choose months 1 to 12 of the fiscal year".into());
+    }
+    let start: NaiveDate = sqlx::query_scalar("SELECT fiscal_year_start FROM budgets WHERE id = ?1")
+        .bind(budget_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or("BUDGET_NOT_FOUND: that budget does not exist")?;
+    let from = start.checked_add_months(chrono::Months::new(from_period as u32 - 1)).ok_or("RPT_BAD_RANGE: date out of range")?;
+    let end = start.checked_add_months(chrono::Months::new(to_period as u32)).and_then(|d| d.pred_opt()).ok_or("RPT_BAD_RANGE: date out of range")?;
+    let chart = Chart::load(pool).await?;
+    let actual = debit_net(pool, Some(from), end).await?;
+    let rows: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT account_id, SUM(amount_cents) FROM budget_amounts WHERE budget_id = ?1 AND period BETWEEN ?2 AND ?3 GROUP BY account_id",
+    )
+    .bind(budget_id)
+    .bind(from_period)
+    .bind(to_period)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    // Budgets are entered on the natural side; the builder works from debit-net movement.
+    let budget: HashMap<i64, i64> = rows
+        .into_iter()
+        .filter_map(|(id, natural)| chart.accounts.iter().find(|a| a.id == id).map(|a| (id, if a.is_debit_normal { natural } else { -natural })))
+        .collect();
+    let mut union: HashMap<i64, i64> = HashMap::new();
+    for m in [&actual, &budget] {
+        for (id, net) in m.iter() {
+            if PL_TYPES.contains(&chart.accounts.iter().find(|a| a.id == *id).map_or("", |a| a.account_type.as_str())) {
+                *union.entry(*id).or_insert(0) += net.abs();
+            }
+        }
+    }
+    let shape = chart.natural(&union);
+    let shaped = build_pl(Builder::new(&chart, shape.clone()), None);
+    let columns_of = |m: &HashMap<i64, i64>| build_pl(Builder { chart: &chart, shape: shape.clone(), natural: chart.natural(m), lines: Vec::new() }, Some(shaped.has_net_other));
+    let (a, b) = (columns_of(&actual), columns_of(&budget));
+    let lines = shaped
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let (act, bud) = (a.lines[i].amount_cents, b.lines[i].amount_cents);
+            let over = act.zip(bud).map(|(x, y)| x - y);
+            let pct = act.zip(bud).and_then(|(x, y)| if y == 0 { None } else { mul_div_round(x, 10_000, y) });
+            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: vec![act, bud, over, pct] }
+        })
+        .collect();
+    let column = |label: &str, kind| ClassColumn { class_id: None, label: label.into(), kind, depth: 0, is_total: false };
+    Ok(ProfitAndLossByClass {
+        start_date: from,
+        end_date: end,
+        columns: vec![column("Actual", "period"), column("Budget", "period"), column("$ Over Budget", "change"), column("% of Budget", "percent")],
+        lines,
+        currency_symbol: currency_symbol(pool).await?,
+    })
+}
+
 /// One column of a multi-period Profit & Loss.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
