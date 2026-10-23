@@ -414,9 +414,9 @@ export const HELP_ARTICLES = [
   {
     id: 'email-form', area: 'sales', views: ['sales/invoices', 'sales/estimates', 'sales/all'],
     title: 'Email an invoice or estimate',
-    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms.',
-    keywords: 'email send mail outlook attach pdf customer invoice estimate',
-    go: { label: 'Go to Invoices', view: 'sales/invoices' },
+    body: 'Choose Email… in a row’s Actions menu, check the address, subject and message, and click Open in mail app: a new message opens in your mail app with the PDF attached for you to send. Set the default subject and message in Settings › Custom Forms; to send directly from LocalBooks instead, set up your email server in Settings › Email.',
+    keywords: 'email send mail outlook smtp server attach pdf customer invoice estimate',
+    go: { label: 'Email settings', view: 'settings', action: 'email' },
   },
   {
     id: 'closing-date', area: 'company', views: ['settings', 'accounting/journal'],
