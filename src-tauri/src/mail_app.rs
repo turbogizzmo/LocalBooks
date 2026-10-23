@@ -181,12 +181,11 @@ mod platform {
     use std::path::Path;
     use std::process::Command;
     use std::time::Duration;
+    use windows_sys::Win32::Foundation::FreeLibrary;
+    use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     use windows_sys::Win32::System::Mapi::{MapiFileDescW, MapiMessageW, MapiRecipDescW, MAPI_DIALOG, MAPI_LOGON_UI, MAPI_TO, MAPI_USER_ABORT, SUCCESS_SUCCESS};
 
-    #[link(name = "mapi32")]
-    extern "system" {
-        fn MAPISendMailW(session: usize, ui_param: usize, message: *const MapiMessageW, flags: u32, reserved: u32) -> u32;
-    }
+    type SendMailW = unsafe extern "system" fn(session: usize, ui_param: usize, message: *const MapiMessageW, flags: u32, reserved: u32) -> u32;
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain(std::iter::once(0)).collect()
@@ -214,8 +213,28 @@ mod platform {
             lpFiles: &mut file,
             ..Default::default()
         };
-        // SAFETY: every pointer refers to a buffer above that outlives the call.
-        let code = unsafe { MAPISendMailW(0, 0, &mapi, MAPI_DIALOG | MAPI_LOGON_UI, 0) };
+        // MAPISendMailW is exported by the mapi32.dll stub (which forwards to the default mail
+        // app) but not by the SDK's import library, so it is looked up at run time.
+        let dll = wide("mapi32.dll");
+        // SAFETY: a NUL-terminated name; the module is freed below.
+        let module = unsafe { LoadLibraryW(dll.as_ptr()) };
+        if module.is_null() {
+            return Err("mapi32.dll is not available".into());
+        }
+        // SAFETY: a NUL-terminated ASCII name in a loaded module.
+        let Some(proc) = (unsafe { GetProcAddress(module, c"MAPISendMailW".as_ptr().cast()) }) else {
+            // SAFETY: loaded above and not used after this.
+            unsafe { FreeLibrary(module) };
+            return Err("the mail app does not offer MAPISendMailW".into());
+        };
+        // SAFETY: MAPISendMailW has this signature (mapi.h); every pointer in `mapi` refers to a
+        // buffer above that outlives the call, after which the module is freed.
+        let code = unsafe {
+            let send: SendMailW = std::mem::transmute(proc);
+            let code = send(0, 0, &mapi, MAPI_DIALOG | MAPI_LOGON_UI, 0);
+            FreeLibrary(module);
+            code
+        };
         match code {
             SUCCESS_SUCCESS | MAPI_USER_ABORT => Ok(()),
             other => Err(format!("MAPISendMailW returned {other}")),
