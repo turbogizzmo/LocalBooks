@@ -49,6 +49,18 @@ mod workflows;
 
 use tauri::Manager;
 
+/// Where the company file, backups and settings live. Development builds (`tauri dev`, debug)
+/// keep their own under a `dev-builds` folder, so a build from an older branch can never open,
+/// upgrade or lock the books the installed app uses.
+fn data_dirs(app: &tauri::App) -> tauri::Result<(std::path::PathBuf, std::path::PathBuf)> {
+    let (data, config) = (app.path().app_data_dir()?, app.path().app_config_dir()?);
+    if cfg!(debug_assertions) {
+        Ok((data.join("dev-builds"), config.join("dev-builds")))
+    } else {
+        Ok((data, config))
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .menu(|handle| {
@@ -72,16 +84,15 @@ fn main() {
             windows::on_menu_event(_app, _event.id().as_ref());
         })
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            let (data_dir, config_dir) = data_dirs(app)?;
             let config = db::DbConfig {
-                config_dir: app.path().app_config_dir()?,
+                config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),
                 backups_dir: data_dir.join("backups"),
             };
             // A double-clicked .localbooks file arrives as a launch argument on Windows and Linux.
             // If LocalBooks is already running, hand the file (or a plain launch) to it and quit.
             let launch_file = storage::company_file_from_args(std::env::args_os());
-            let config_dir = app.path().app_config_dir()?;
             if instance::hand_off(&config_dir, &instance::request_for(launch_file.as_deref())) {
                 std::process::exit(0);
             }
@@ -107,7 +118,7 @@ fn main() {
                 let handle = pool_handle.clone();
                 Box::pin(async move { handle.state::<db::Db>().pool().await })
             });
-            app.manage(mcp_server::McpService::new(app.path().app_config_dir()?, pools));
+            app.manage(mcp_server::McpService::new(config_dir.clone(), pools));
             let mcp_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { mcp_handle.state::<mcp_server::McpService>().start_if_enabled().await });
 
