@@ -35,7 +35,8 @@ for a high-density, keyboard-friendly interface.
 
 ## Why LocalBooks
 
-- **Your books are a file you own.** Back it up, copy it, archive it; nothing leaves your computer.
+- **Your books are a file you own.** Back it up, copy it, archive it; nothing leaves your computer
+  unless you send it (an emailed invoice, a bank sync you turn on).
 - **The ledger cannot be corrupted by the UI.** Double-entry rules are enforced in Rust *and*
   again by database triggers, so even a bug in a screen cannot persist an unbalanced entry.
 - **Familiar workflow.** Invoices, receive payment, bills, pay bills, expenses, checks, deposits,
@@ -220,7 +221,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
-| **Settings** | Preferences Console · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, backups & restore, open company file, company file location, local read-only AI access |
+| **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access |
 
 ### `+ New` quick-create matrix
 
