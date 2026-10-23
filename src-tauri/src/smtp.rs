@@ -130,7 +130,7 @@ pub async fn save_settings(pool: &SqlitePool, secrets: &SecretStore, settings: S
         } else if !settings.username.is_empty() {
             secrets.put(&settings.secret_key(), &password).await?;
         }
-    } else if previous.secret_key() != settings.secret_key() && !settings.username.is_empty() {
+    } else if previous.secret_key() != settings.secret_key() && !settings.username.is_empty() && previous.username == settings.username {
         // Same account, new server name or port: carry the saved password over.
         if let Some(saved) = secrets.get(&previous.secret_key()).await? {
             secrets.put(&settings.secret_key(), &saved).await?;
@@ -283,6 +283,10 @@ mod tests {
         // A new port keeps the password; clearing it removes it.
         let moved = save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, None).await.unwrap();
         assert!(moved.has_password);
+        // A different account does not inherit the password.
+        let other = save_settings(&pool, &secrets, SmtpSettings { port: 2525, username: "someone@example.com".into(), ..account() }, None).await.unwrap();
+        assert!(!other.has_password);
+        save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some("hunter2".into())).await.unwrap();
         let cleared = save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some(String::new())).await.unwrap();
         assert!(!cleared.has_password);
         let err = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![] }).await.unwrap_err();
