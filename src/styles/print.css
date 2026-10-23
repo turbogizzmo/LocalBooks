@@ -17,6 +17,12 @@
   display: none;
 }
 
+/* Designed forms (invoices, estimates): one SVG per page, laid out at the paper size. */
+.form-sheet {
+  display: block;
+  height: auto;
+}
+
 @media print {
   html,
   body {
@@ -58,6 +64,16 @@
   }
   #root tr {
     break-inside: avoid;
+  }
+
+  /* A form page fills the printable width (its own margins are inside it), one per sheet. */
+  #print-root .form-sheet {
+    width: 100%;
+    break-after: page;
+    break-inside: avoid;
+  }
+  #print-root .form-sheet:last-child {
+    break-after: auto;
   }
 }
 

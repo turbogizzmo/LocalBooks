@@ -13,12 +13,14 @@ mod edits;
 mod estimates;
 mod expenses;
 mod forensic;
+mod forms;
 mod export_engine;
 mod instance;
 mod inventory;
 mod invoices;
 mod ledger;
 mod parties;
+mod pdf;
 mod mcp_server;
 mod preferences;
 mod qbw_backup;
@@ -283,6 +285,12 @@ fn main() {
             commands::report_csv,
             commands::save_report_to_disk,
             commands::print_report,
+            commands::get_form_template,
+            commands::save_form_template,
+            commands::reset_form_template,
+            commands::preview_form,
+            commands::render_form,
+            commands::save_form_pdf,
             commands::get_storage_status,
             commands::inspect_database_directory,
             commands::update_database_directory,
