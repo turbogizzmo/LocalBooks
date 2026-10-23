@@ -15,3 +15,7 @@ src-tauri/gen/
 *.db-shm
 *.db-journal
 *.db.lock
+*.QBB
+*.qbb
+*.QBW
+*.qbw

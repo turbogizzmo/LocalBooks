@@ -161,7 +161,7 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
     }
     progress(Progress { stage: "Extracting line items", done: pages, total: pages });
 
-    Ok(Extraction {
+    let extraction = Extraction {
         file_size_bytes: store.size_bytes() as i64,
         page_count: pages as i64,
         attributed_tables: attribution.len() as i64,
@@ -169,7 +169,29 @@ pub fn extract(path: &Path, progress: &mut dyn FnMut(Progress)) -> Result<Extrac
         skipped_line_count: skipped,
         ignored_line_count: ignored,
         lines,
-    })
+    };
+    ensure_found(path, &extraction)?;
+    Ok(extraction)
+}
+
+/// Refuses an extraction with no invoice lines, so an unreadable file never stages as an empty
+/// import. No transaction headers at all means the parser could not find the file's tables,
+/// which happens on file versions it does not support yet.
+fn ensure_found(path: &Path, extraction: &Extraction) -> Result<(), String> {
+    if !extraction.lines.is_empty() {
+        return Ok(());
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if extraction.header_count == 0 {
+        Err(format!(
+            "QBW_UNSUPPORTED_VERSION: no transactions could be read from {name}. It was most likely saved by a version of the desktop program this importer cannot read yet. Nothing was imported"
+        ))
+    } else {
+        Err(format!(
+            "QBW_NO_INVOICES: {name} has {} transactions but no invoice lines this importer can read. Nothing was imported",
+            extraction.header_count
+        ))
+    }
 }
 
 fn not_a_company_file(path: &Path) -> String {
@@ -888,6 +910,23 @@ mod tests {
         let err = extract(&dir.join("missing.qbw"), &mut |_| {}).unwrap_err();
         assert!(err.starts_with("QBW_READ"), "{err}");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn extractions_with_no_invoice_lines_are_refused() {
+        let path = Path::new("/books/Books.qbw");
+        let mut x = extraction(vec![]);
+        x.header_count = 0;
+        let err = ensure_found(path, &x).unwrap_err();
+        assert!(err.starts_with("QBW_UNSUPPORTED_VERSION"), "{err}");
+        assert!(err.contains("Books.qbw"), "{err}");
+
+        x.header_count = 12;
+        let err = ensure_found(path, &x).unwrap_err();
+        assert!(err.starts_with("QBW_NO_INVOICES"), "{err}");
+
+        let x = extraction(vec![line("INV0000000000001", Some("2012-03-05"), 125_000, INVENTORY, 1)]);
+        assert_eq!(ensure_found(path, &x), Ok(()));
     }
 
     #[tokio::test]
