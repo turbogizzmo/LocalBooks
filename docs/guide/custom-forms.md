@@ -17,6 +17,7 @@ PDF files. Each form type has its own design, and the design is saved in your co
      labels. On invoices you can also hide the payments and credits listed above the balance due.
    - **Messages**: a message to the customer, terms or payment instructions, and a footer for
      every page.
+   - **Email**: the subject and message used when you email the form.
 3. To see a real document, choose it under **Preview with**.
 4. Click **Save form**. **Undo changes** goes back to the last saved design, and **Reset to
    standard** restores the built-in one.
@@ -30,6 +31,20 @@ Messages can include placeholders that are filled in for each document: `{number
 In **Sales › Invoices**, **Sales › Estimates** or **Sales › All Sales**, open a row's **Actions** menu
 and choose **Print…** or **Save as PDF…**. Both use the saved design, so the PDF matches the
 printout.
+
+## Email it
+
+Open the row's **Actions** menu and choose **Email…**. Check the address (it starts as the
+customer's email from **Sales › Customers**; separate several with commas), the subject and the
+message, then click **Open in mail app**. A new message opens in your mail app with the PDF
+attached. Review it there and send it. LocalBooks doesn't send anything itself.
+
+- On a Mac, Apple Mail and Microsoft Outlook get the attachment directly. The first time, macOS asks
+  whether LocalBooks may control the mail app: choose **OK**.
+- On Windows, mail apps that support Simple MAPI (such as Outlook and Thunderbird) get the
+  attachment directly.
+- With any other mail app, the message opens with the address, subject and text filled in, and the
+  PDF is shown in Finder or File Explorer for you to drag into the message.
 
 Forms print in Helvetica, Times or Courier, the fonts every PDF reader has. Characters those fonts
 don't have (for example Chinese or Arabic text) print as **?**.

@@ -78,6 +78,8 @@ export const api = {
   previewForm: (kind, template, documentId = null) => invoke('preview_form', { kind, template, documentId }),
   renderForm: (kind, documentId) => invoke('render_form', { kind, documentId }),
   saveFormPdf: (kind, documentId) => invoke('save_form_pdf', { kind, documentId }),
+  getEmailDraft: (kind, documentId) => invoke('get_email_draft', { kind, documentId }),
+  emailFormWithMailApp: (kind, documentId, email) => invoke('email_form_with_mail_app', { kind, documentId, email }),
   getEstimateDetail: (estimateId) => invoke('get_estimate_detail', { estimateId }),
   invoiceFromEstimate: (estimateId, input) => invoke('invoice_from_estimate', { estimateId, input }),
   createProduct: (input) => invoke('create_product', { input }),

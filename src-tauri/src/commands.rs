@@ -18,7 +18,8 @@ use crate::registers::{self, Register};
 use crate::edits::{self, DocumentLineView};
 use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInput, PurchaseOrderLineView, PurchaseOrderView, RecurringInput, RecurringView, SearchHit, Vendor1099Row};
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
-use crate::forms::{self, FormKind, FormTemplate, RenderedForm};
+use crate::forms::{self, EmailDraft, FormKind, FormTemplate, RenderedForm};
+use crate::mail_app::{self, ComposeOutcome};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
 use crate::storage::{self, StorageInfo};
@@ -907,6 +908,49 @@ pub async fn save_form_pdf(app: AppHandle, db: State<'_, Db>, kind: FormKind, do
     let path = target.into_path().map_err(|e| format!("EXPORT_BAD_PATH: {e}"))?;
     export_engine::write_atomically(&path, &bytes)?;
     Ok(Some(path.display().to_string()))
+}
+
+/// The email for a document: the customer's address and the form's subject and message.
+#[tauri::command]
+pub async fn get_email_draft(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<EmailDraft, String> {
+    forms::email_draft(&db.pool().await, kind, document_id).await
+}
+
+/// The message the user confirmed in the email dialog.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailInput {
+    pub to: String,
+    pub subject: String,
+    pub body: String,
+}
+
+impl EmailInput {
+    fn checked(self) -> Result<(Vec<String>, String, String), String> {
+        let to = mail_app::parse_recipients(&self.to)?;
+        let subject = self.subject.split_whitespace().collect::<Vec<_>>().join(" ");
+        if subject.chars().count() > 200 {
+            return Err("MAIL_SUBJECT_TOO_LONG: keep the subject under 200 characters".into());
+        }
+        if self.body.chars().count() > 20_000 {
+            return Err("MAIL_BODY_TOO_LONG: keep the message under 20,000 characters".into());
+        }
+        Ok((to, subject, self.body))
+    }
+}
+
+/// Opens a new message in the user's mail app with the document's PDF attached.
+#[tauri::command]
+pub async fn email_form_with_mail_app(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, email: EmailInput) -> Result<ComposeOutcome, String> {
+    let (to, subject, body) = email.checked()?;
+    let (file_name, bytes) = forms::pdf_file(&db.pool().await, kind, document_id).await?;
+    let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
+    tauri::async_runtime::spawn_blocking(move || {
+        let attachment = mail_app::stage_attachment(&outgoing, &file_name, &bytes)?;
+        mail_app::compose(&mail_app::Compose { to, subject, body, attachment })
+    })
+    .await
+    .map_err(|e| format!("MAIL_OPEN: {e}"))?
 }
 
 // ------------------------------------------------------------------------------------------------
