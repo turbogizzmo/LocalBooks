@@ -32,6 +32,8 @@ use crate::invoices::{self, ArAging, InvoiceDetail, InvoiceInput, InvoiceSummary
 use crate::ledger::{self, AuditEntry, JournalEntry, JournalEntryView, JournalLineView, LedgerVerification};
 use crate::mcp_server::{McpService, McpStatus};
 use crate::qbw_import::{self, BatchListItem, BatchSummary, PostBatchInput, PostBatchResult, ReverseBatchResult};
+use crate::qbw_ledger_import::{self, AutoMapResult, LedgerBatchSummary, PostLedgerInput, PostLedgerResult, ReverseLedgerResult};
+use crate::{qbw_backup, qbw_company};
 use crate::timesheet::{self, TimeActivityInput, TimeActivityView};
 use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconciliation, UnreconciledLine};
 use crate::reports::{self, AccountView, Dashboard};
@@ -946,32 +948,83 @@ pub async fn print_report(window: tauri::WebviewWindow) -> Result<(), String> {
 
 pub const QBW_PROGRESS: &str = "qbw-import-progress";
 
-/// Reads a .qbw company file into a new staging batch, reporting progress as
-/// `qbw-import-progress` events. Nothing is posted to the ledger.
+/// What a company file was read into: invoice lines (files openqbw reads) or the full ledger
+/// (newer files, read by the record-layer decoder).
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum IngestResult {
+    Invoices { batch: BatchSummary },
+    Ledger { batch: LedgerBatchSummary },
+}
+
+/// Reads a .qbw company file, or the company file inside a .qbb backup, into a new staging batch,
+/// reporting progress as `qbw-import-progress` events. Nothing is posted to the ledger.
+///
+/// The invoice-line reader runs first, so files it supports import as before; when it finds
+/// nothing (newer file versions), the record-layer decoder reads the whole ledger instead.
 #[tauri::command]
-pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<BatchSummary, String> {
+pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<IngestResult, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file".into());
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file or a .qbb backup".into());
     }
+    let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
+    let progress = |stage: &'static str, done: u64, total: u64| {
+        let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage, done, total });
+    };
+
+    // A backup holds the company file compressed; unpack it next to LocalBooks' own cache.
+    let unpacked = if qbw_backup::is_backup(&path) {
+        progress("Unpacking backup", 0, 1);
+        let dir = app.path().app_cache_dir().map_err(|e| format!("QBW_UNPACK: {e}"))?;
+        let source = path.clone();
+        let unpacked = tauri::async_runtime::spawn_blocking(move || qbw_backup::unpack(&source, &dir))
+            .await
+            .map_err(|e| format!("QBW_UNPACK: the backup could not be unpacked ({e})"))??;
+        progress("Unpacking backup", 1, 1);
+        Some(unpacked)
+    } else {
+        None
+    };
+    let company = unpacked.as_ref().map_or(path.clone(), |u| u.path.clone());
+
     let emitter = app.clone();
-    let source = path.clone();
-    // A panic inside the parser surfaces here as a join error instead of taking the app down.
+    let source = company.clone();
+    // A panic inside a parser surfaces here as a join error instead of taking the app down.
     let extraction = tauri::async_runtime::spawn_blocking(move || {
         qbw_import::extract(&source, &mut |p| {
             let _ = emitter.emit(QBW_PROGRESS, p);
         })
     })
     .await
-    .map_err(|e| format!("QBW_PARSE_FAILED: the .qbw file could not be read ({e})"))??;
-
-    let staged = (extraction.lines.len() as u64).max(1);
-    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: 0, total: staged });
+    .map_err(|e| format!("QBW_PARSE_FAILED: the .qbw file could not be read ({e})"))?;
     let pool = db.pool().await;
-    let batch_id = qbw_import::stage(&pool, &path, &extraction).await?;
-    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: staged, total: staged });
-    qbw_import::batch_summary(&pool, batch_id).await
+    match extraction {
+        Ok(extraction) => {
+            let staged = (extraction.lines.len() as u64).max(1);
+            progress("Staging rows", 0, staged);
+            let batch_id = qbw_import::stage(&pool, &path, &extraction).await?;
+            progress("Staging rows", staged, staged);
+            Ok(IngestResult::Invoices { batch: qbw_import::batch_summary(&pool, batch_id).await? })
+        }
+        Err(err) if err.starts_with("QBW_UNSUPPORTED_VERSION") || err.starts_with("QBW_NO_INVOICES") => {
+            progress("Decoding the full ledger", 0, 1);
+            let source = company.clone();
+            let ledger = tauri::async_runtime::spawn_blocking(move || qbw_company::read_ledger(&source))
+                .await
+                .map_err(|e| format!("QBW_PARSE_FAILED: the company file could not be decoded ({e})"))??;
+            progress("Decoding the full ledger", 1, 1);
+            if ledger.transactions.is_empty() {
+                return Err(err);
+            }
+            progress("Staging rows", 0, 1);
+            let batch_id = qbw_ledger_import::stage(&pool, &path, file_size, &ledger).await?;
+            progress("Staging rows", 1, 1);
+            Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await? })
+        }
+        Err(err) => Err(err),
+    }
 }
 
 #[tauri::command]
@@ -1015,6 +1068,48 @@ pub async fn reverse_qbw_batch(app: AppHandle, db: State<'_, Db>, batch_id: i64)
 #[tauri::command]
 pub async fn discard_qbw_batch(db: State<'_, Db>, batch_id: i64) -> Result<(), String> {
     qbw_import::discard_batch(&db.pool().await, batch_id).await
+}
+
+#[tauri::command]
+pub async fn list_ledger_batches(db: State<'_, Db>) -> Result<Vec<LedgerBatchSummary>, String> {
+    qbw_ledger_import::list_batches(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn get_ledger_batch(db: State<'_, Db>, batch_id: i64) -> Result<LedgerBatchSummary, String> {
+    qbw_ledger_import::batch_summary(&db.pool().await, batch_id).await
+}
+
+#[tauri::command]
+pub async fn set_ledger_account(db: State<'_, Db>, batch_id: i64, source_id: i64, account_id: Option<i64>) -> Result<(), String> {
+    qbw_ledger_import::set_account(&db.pool().await, batch_id, source_id, account_id).await
+}
+
+/// Matches or creates an account for every used source account; emits `ledger-changed`.
+#[tauri::command]
+pub async fn auto_map_ledger_accounts(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<AutoMapResult, String> {
+    let result = qbw_ledger_import::auto_map_accounts(&db.pool().await, batch_id).await?;
+    notify(&app);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn post_ledger_batch(app: AppHandle, db: State<'_, Db>, input: PostLedgerInput) -> Result<PostLedgerResult, String> {
+    let result = qbw_ledger_import::post_batch(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn reverse_ledger_batch(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<ReverseLedgerResult, String> {
+    let result = qbw_ledger_import::reverse_batch(&db.pool().await, batch_id).await?;
+    notify(&app);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn discard_ledger_batch(db: State<'_, Db>, batch_id: i64) -> Result<(), String> {
+    qbw_ledger_import::discard_batch(&db.pool().await, batch_id).await
 }
 
 // ------------------------------------------------------------------------------------------------
