@@ -411,6 +411,44 @@ function UnbalancedList({ items }) {
   );
 }
 
+/** Customers, vendors and items from the file, brought in as LocalBooks records. */
+function ListsPanel({ summary, busy, accountsReady, run }) {
+  const l = summary.lists;
+  if (!l || l.customers + l.vendors + l.items === 0) return null;
+  const all = l.customers + l.vendors + l.items;
+  const done = l.customersDone + l.vendorsDone + l.itemsDone;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-qb-border px-3 py-2 text-xs">
+      <span className="font-semibold">Customers, vendors and items</span>
+      <span className="text-qb-ink-muted">
+        {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items in the file
+        {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
+      </span>
+      {done < all && (
+        <button
+          type="button"
+          className="qb-btn qb-btn-secondary ml-auto h-row px-2 text-xs"
+          disabled={busy || !accountsReady}
+          title={accountsReady ? 'Matches existing records by name and creates the rest, with addresses, emails and terms' : 'Map the accounts first: items post to them'}
+          onClick={() =>
+            run(
+              () => api.importLedgerLists(summary.id),
+              (r) =>
+                `Customers: ${r.customersCreated} added, ${r.customersMatched} already there. Vendors: ${r.vendorsCreated} added, ${r.vendorsMatched} already there. ` +
+                `Items: ${r.itemsCreated} added, ${r.itemsMatched} already there` +
+                (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
+                '.',
+            )
+          }
+        >
+          Bring in customers, vendors and items
+        </button>
+      )}
+      {done === all && <span className="ml-auto text-qb-green-active">✓ All in LocalBooks</span>}
+    </div>
+  );
+}
+
 /** Steps 2 and 3 for a full-ledger import. */
 function LedgerReview({ summary, accounts, busy, run }) {
   const used = summary.accounts.filter((a) => a.lineCount > 0);
@@ -514,6 +552,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           )}
         </div>
         <LedgerAccountGrid summary={summary} accounts={accounts} busy={busy} onMap={(sourceId, id) => run(() => api.setLedgerAccount(summary.id, sourceId, id))} />
+        <ListsPanel summary={summary} busy={busy} accountsReady={unmapped === 0} run={run} />
       </Step>
 
       <Step number={3} title="Post to your books" state={step3}>
@@ -675,7 +714,11 @@ export default function QbwImporter({ accounts }) {
       return;
     run(
       () => (b.kind === 'ledger' ? api.reverseLedgerBatch(b.id) : api.reverseQbwBatch(b.id)),
-      (r) => `Reversed ${r.entriesVoided.toLocaleString()} entries${r.accountsDeactivated ? ` and deactivated ${r.accountsDeactivated} accounts the importer created` : ''}. Your balances are back to where they were.`,
+      (r) =>
+        `Reversed ${r.entriesVoided.toLocaleString()} entries` +
+        (r.accountsDeactivated ? `, deactivated ${r.accountsDeactivated} accounts the importer created` : '') +
+        (r.listRecordsDeactivated ? ` and ${r.listRecordsDeactivated} customers, vendors and items it added` : '') +
+        '. Your balances are back to where they were.',
     );
   };
 

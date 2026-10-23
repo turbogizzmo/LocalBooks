@@ -144,9 +144,50 @@ pub struct UnreadableLine {
     pub outcome: LineOutcome,
 }
 
+/// A customer or vendor from the file's name lists, with its current contact details.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceParty {
+    pub id: i64,
+    /// Customers: the `Customer:Job` path; vendors: the name.
+    pub name: String,
+    pub parent_id: Option<i64>,
+    pub company_name: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub terms_days: Option<i64>,
+    /// Vendors only.
+    pub tax_id: Option<String>,
+    pub is_1099: bool,
+    pub active: bool,
+    /// What the party owes (customers) or is owed (vendors) per the file, in cents.
+    pub balance_cents: Option<i64>,
+    /// Details that have no field of their own (extra email addresses, alternate phones).
+    pub notes: Option<String>,
+}
+
+/// An item (service or product) from the file's item list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceItem {
+    pub id: i64,
+    /// `Parent:Item` path.
+    pub name: String,
+    pub description: Option<String>,
+    pub rate_cents: i64,
+    /// The account the item posts sales to (a source account id).
+    pub income_account_id: Option<i64>,
+    pub kind: &'static str,
+    /// Its sales tax code is a taxable one.
+    pub taxable: bool,
+    pub active: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct Ledger {
     pub accounts: Vec<SourceAccount>,
+    pub customers: Vec<SourceParty>,
+    pub vendors: Vec<SourceParty>,
+    pub items: Vec<SourceItem>,
     /// Transactions whose lines balance, ordered by date.
     pub transactions: Vec<SourceTransaction>,
     /// Transactions with a line missing or misread; they cannot be posted as they are.
@@ -269,6 +310,144 @@ fn recover_damaged_lines(
         txn.lines.extend(recovered);
     }
     used
+}
+
+/// The current version of each name's contact record (rows carry an `expired_date` once replaced).
+fn current_contacts(pages: &[LogicalPage], catalog: &Catalog) -> HashMap<i64, Row> {
+    let mut by_name: HashMap<i64, Row> = HashMap::new();
+    for r in rows_of(pages, catalog, "abmc_contacts") {
+        let Some(id) = r.get("name_id").as_int() else { continue };
+        let rank = |row: &Row| (matches!(row.get("expired_date"), Value::Null), row.get("db_modified_tms").as_date());
+        if by_name.get(&id).is_none_or(|old| rank(&r) > rank(old)) {
+            by_name.insert(id, r);
+        }
+    }
+    by_name
+}
+
+/// A plausible single email address, as LocalBooks stores one.
+fn plain_email(candidate: &str) -> Option<String> {
+    let e = candidate.trim();
+    let (local, domain) = e.split_once('@')?;
+    (!local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !e.contains(char::is_whitespace)).then(|| e.to_string())
+}
+
+/// Parent paths for a list keyed by id: `Parent:Child`, following `parent_id` (cycles cut).
+fn paths(names: &BTreeMap<i64, (String, Option<i64>)>) -> HashMap<i64, String> {
+    names
+        .keys()
+        .map(|&id| {
+            let mut parts = Vec::new();
+            let mut seen = HashSet::new();
+            let mut cur = Some(id);
+            while let Some(c) = cur.filter(|c| seen.insert(*c)) {
+                let Some((name, parent)) = names.get(&c) else { break };
+                parts.push(name.replace(':', "-"));
+                cur = parent.filter(|p| *p > 0);
+            }
+            parts.reverse();
+            (id, parts.join(":"))
+        })
+        .collect()
+}
+
+fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<SourceParty> {
+    let (user, internal, id_col) =
+        if vendor { ("abmc_vendor_user", "abmc_vendor_internal", "vendor_id") } else { ("abmc_customer_user", "abmc_customer_internal", "customer_id") };
+    let contacts = current_contacts(pages, catalog);
+    let terms: HashMap<i64, i64> = rows_of(pages, catalog, "abmc_terms")
+        .iter()
+        .filter_map(|r| Some((r.get("terms_id").as_int()?, r.get("standard_due_days").as_int()?)))
+        .filter(|(_, d)| (0..=365).contains(d))
+        .collect();
+    let balances: HashMap<i64, i64> = rows_of(pages, catalog, internal)
+        .iter()
+        .filter_map(|r| Some((r.get(id_col).as_int()?, r.get("end_balance_amt").as_cents().unwrap_or(0))))
+        .collect();
+    let users: Vec<Row> = rows_of(pages, catalog, user);
+    let names: BTreeMap<i64, (String, Option<i64>)> = users
+        .iter()
+        .filter_map(|r| Some((r.get(id_col).as_int()?, (text(r, "name")?, if vendor { None } else { r.get("parent_id").as_int() }))))
+        .collect();
+    let full = paths(&names);
+    let mut out = Vec::new();
+    for r in &users {
+        let Some(id) = r.get(id_col).as_int() else { continue };
+        let Some(name) = full.get(&id).cloned() else { continue };
+        let contact = contacts.get(&id);
+        let field = |c: &str| contact.and_then(|row| text(row, c));
+        let mut notes = Vec::new();
+        let mut email = None;
+        for (i, candidate) in field("email").unwrap_or_default().split([',', ';']).filter(|s| !s.trim().is_empty()).enumerate() {
+            match (i, plain_email(candidate)) {
+                (0, Some(e)) => email = Some(e),
+                _ => notes.push(format!("Email: {}", candidate.trim())),
+            }
+        }
+        for (label, c) in [("Phone 2", "telephone_num2"), ("Mobile", "cellular_num"), ("Fax", "fax_num")] {
+            if let Some(v) = field(c) {
+                notes.push(format!("{label}: {v}"));
+            }
+        }
+        let address: Vec<String> = (1..=5).filter_map(|n| field(&format!("address_line{n}"))).collect();
+        let person = [field("first_name"), field("last_name")].into_iter().flatten().collect::<Vec<_>>().join(" ");
+        let balance = balances.get(&id).copied();
+        let hidden = r.get("is_hidden_bool").as_int() == Some(1) || r.get("is_deleted_bool").as_int() == Some(1);
+        out.push(SourceParty {
+            id,
+            name,
+            parent_id: if vendor { None } else { r.get("parent_id").as_int().filter(|p| *p > 0 && names.contains_key(p)) },
+            company_name: field("company_name").or_else(|| (!person.is_empty()).then_some(person)),
+            email,
+            phone: field("telephone_num1"),
+            address: (!address.is_empty()).then(|| address.join("\n")),
+            terms_days: r.get("terms_id").as_int().and_then(|t| terms.get(&t).copied()),
+            tax_id: if vendor { text(r, "tax_identifier") } else { None },
+            is_1099: vendor && r.get("is_1099_vendor_bool").as_int() == Some(1),
+            // As in Intuit's own conversion: an inactive name that still has a balance comes in active.
+            active: !hidden || balance.is_some_and(|b| b != 0),
+            balance_cents: balance,
+            notes: (!notes.is_empty()).then(|| notes.join("\n")),
+        });
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
+    let taxable_codes: HashSet<i64> = rows_of(pages, catalog, "abmc_sales_tax_code")
+        .iter()
+        .filter(|r| r.get("is_taxable_bool").as_int() == Some(1))
+        .filter_map(|r| r.get("sales_tax_code_id").as_int())
+        .collect();
+    let users = rows_of(pages, catalog, "abmc_item_user");
+    let names: BTreeMap<i64, (String, Option<i64>)> =
+        users.iter().filter_map(|r| Some((r.get("item_id").as_int()?, (text(r, "name")?, r.get("parent_id").as_int())))).collect();
+    let full = paths(&names);
+    let mut out: Vec<SourceItem> = users
+        .iter()
+        .filter_map(|r| {
+            let id = r.get("item_id").as_int()?;
+            Some(SourceItem {
+                id,
+                name: full.get(&id)?.clone(),
+                description: text(r, "description"),
+                rate_cents: r.get("sales_price_amt").as_cents().map(i64::abs).unwrap_or(0),
+                income_account_id: r.get("post_account_id").as_int(),
+                kind: match r.get("item_type").as_int() {
+                    Some(0) => "Service",
+                    Some(1) => "Inventory part",
+                    Some(3) => "Non-inventory part",
+                    Some(4) => "Other charge",
+                    _ => "Item",
+                },
+                taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
+                active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
 }
 
 /// Reads the general ledger. Blocking and CPU-bound.
@@ -419,7 +598,10 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     balanced.sort_by_key(|t| (t.date, t.id));
     unbalanced.sort_by_key(|t| (t.date, t.id));
     unreadable.sort_by_key(|u| (u.date, u.transaction_id));
-    Ok(Ledger { accounts, transactions: balanced, unbalanced, unreadable, quality })
+    let customers = read_parties(&pages, &catalog, false);
+    let vendors = read_parties(&pages, &catalog, true);
+    let items = read_items(&pages, &catalog);
+    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality })
 }
 
 #[cfg(test)]
@@ -590,6 +772,19 @@ mod tests {
         println!("rejected: {:?}", q.rejected_by_reason);
         for u in &ledger.unreadable {
             println!("  unreadable line: {:?}", u);
+        }
+        println!(
+            "lists: {} customers ({} active), {} vendors, {} items",
+            ledger.customers.len(),
+            ledger.customers.iter().filter(|c| c.active).count(),
+            ledger.vendors.len(),
+            ledger.items.len()
+        );
+        for c in ledger.customers.iter().filter(|c| c.balance_cents.is_some_and(|b| b != 0)).take(5) {
+            println!("  customer with balance: {:?}", c);
+        }
+        for i in ledger.items.iter().take(4) {
+            println!("  item: {:?}", i);
         }
         if let (Some(first), Some(last)) = (ledger.transactions.first(), ledger.transactions.last()) {
             println!("dates {} .. {}", first.date, last.date);
