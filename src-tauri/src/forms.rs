@@ -1446,7 +1446,8 @@ pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>,
 }
 
 
-/// [`pdf_file`] for a statement period.
+/// The PDF file for a document with its customer's form style: (suggested file name, bytes).
+/// `period` is for statements (see `document`).
 pub async fn pdf_file_for(pool: &SqlitePool, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<(String, Vec<u8>), String> {
     let rendered = render(pool, kind, Some(document_id), period, None, true).await?;
     let bytes = pdf::write_pdf(&rendered.form.pages, rendered.image.as_ref(), &rendered.form.title);
