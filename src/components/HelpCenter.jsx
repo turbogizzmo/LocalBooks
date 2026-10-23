@@ -463,8 +463,15 @@ export const HELP_ARTICLES = [
   {
     id: 'shortcuts', area: 'company', views: [],
     title: 'Keyboard shortcuts',
-    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, and F1 to open or close Help. Esc closes Help and other panels.',
-    keywords: 'keyboard shortcut hotkey keys f1 new',
+    body: 'Press Ctrl+Alt+N (⌘⌥N on a Mac) to open + New from anywhere, Ctrl+Shift+N (⇧⌘N) to open a new window, and F1 to open or close Help. Esc closes Help and other panels.',
+    keywords: 'keyboard shortcut hotkey keys f1 new window',
+    go: null,
+  },
+  {
+    id: 'windows', area: 'company', views: [],
+    title: 'Work in more than one window',
+    body: 'Choose New window at the top of any screen (Window › New Window on a Mac, or Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away.',
+    keywords: 'window windows multiple new window side by side second monitor register report open',
     go: null,
   },
 ];
@@ -482,7 +489,7 @@ const ARTICLE_GUIDES = {
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
   preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'send-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
-  'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting',
+  'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting', windows: 'getting-started',
 };
 
 /** The main guide for each screen, offered at the top of Help. */

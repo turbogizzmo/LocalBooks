@@ -6,6 +6,7 @@ import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { openWindow } from '../lib/windows.js';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -87,6 +88,20 @@ export default function Register({ accounts, intent }) {
             <input type="checkbox" className="accent-qb-green" checked={subaccounts} onChange={(e) => setSubaccounts(e.target.checked)} />
             Include subaccounts
           </label>
+        )}
+        {accountId !== null && (
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary h-row-lg self-end px-2"
+            title="Keep this register open in a window of its own"
+            onClick={() =>
+              openWindow('accounting/register', 'open', { accountId, startDate: start, endDate: end, includeSubaccounts: subaccounts }).catch((err) =>
+                setNotice({ kind: 'error', text: String(err) }),
+              )
+            }
+          >
+            Open in new window
+          </button>
         )}
         {data && (
           <div className="ml-auto text-right">

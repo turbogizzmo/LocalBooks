@@ -22,6 +22,7 @@ use crate::forms::{self, EmailDraft, FormKind, FormStyle, FormTemplate, Period, 
 use crate::email_log::{self, EmailStatus, QueuedForm, SentRecord};
 use crate::mail_app::{self, ComposeOutcome};
 use crate::secrets::SecretStore;
+use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus};
@@ -791,17 +792,30 @@ pub async fn update_database_directory(app: AppHandle, db: State<'_, Db>, new_pa
 /// Emitted when a different company file becomes the live one; the window reloads its state.
 pub const COMPANY_FILE_CHANGED: &str = "company-file-changed";
 
-/// Titles the main window after the open company ("Acme Ltd — LocalBooks"), or plain "LocalBooks"
-/// for the usual company file before it is named.
+/// Titles every LocalBooks window after the open company ("Acme Ltd — LocalBooks"), or plain
+/// "LocalBooks" for the usual company file before it is named.
 pub async fn refresh_window_title(app: &AppHandle) {
-    let status = app.state::<Db>().status().await;
-    let title = match status.company_name {
-        Some(name) => format!("{name} — LocalBooks"),
-        None => "LocalBooks".to_string(),
-    };
-    if let Some(window) = app.get_webview_window("main") {
+    let title = window_title(app).await;
+    for window in app.webview_windows().values() {
         let _ = window.set_title(&title);
     }
+}
+
+/// The title every LocalBooks window shows for the open company.
+pub async fn window_title(app: &AppHandle) -> String {
+    let Some(db) = app.try_state::<Db>() else { return "LocalBooks".to_string() };
+    match db.status().await.company_name {
+        Some(name) => format!("{name} — LocalBooks"),
+        None => "LocalBooks".to_string(),
+    }
+}
+
+/// Window › New Window, or a register or report opened in its own window: another window on the
+/// open company, starting on `view` (a navigation id) with the given request, if any.
+#[tauri::command]
+pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<String>, data: Option<serde_json::Value>) -> Result<String, String> {
+    let title = window_title(&app).await;
+    windows::open(&app, &title, view.as_deref(), action.as_deref(), data.as_ref())
 }
 
 /// Makes `path` the live company file for this session and tells the window to reload.
@@ -825,11 +839,7 @@ pub async fn handle_hand_off(app: &AppHandle, request: crate::instance::HandOff)
             let _ = app.emit(COMPANY_FILE_CHANGED, ());
         }
     }
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    windows::focus(app);
 }
 
 /// File › Open: opens a company file (a `.localbooks` file or a LocalBooks backup) in place.

@@ -7,6 +7,7 @@ import { AgingReport, BudgetVsActualReport, CashFlowReport, Vendors1099Report, G
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
+import { openWindow } from '../lib/windows.js';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -336,6 +337,16 @@ export default function Reports({ navigate, intent }) {
             ))}
           </div>
         ))}
+        <div className="border-t border-qb-border px-2 pt-1.5">
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary h-row w-full justify-center text-xs"
+            title="Keep this report open in a window of its own"
+            onClick={() => openWindow('reports', 'open', { report }).catch(() => {})}
+          >
+            Open report in new window
+          </button>
+        </div>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-auto scrollbar-thin">
         {report === 'pl' && <ProfitAndLoss key="pl" navigate={navigate} />}

@@ -42,4 +42,17 @@ straight away.
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
+## Work in more than one window
+
+Like classic desktop accounting software, LocalBooks can show the same company in several windows,
+for example a report on one screen while you enter transactions on another.
+
+- Choose **New window** at the top of any screen to open that screen in another window. On a Mac,
+  **Window › New Window** (⇧⌘N) does the same; on Windows and Linux, press **Ctrl+Shift+N**.
+- In an account register or in Reports, choose **Open in new window** to keep that register (with
+  its dates) or report open on its own.
+
+Every window shows the same books: when you save a change in one, the others update straight away.
+Closing a window leaves the others open; LocalBooks quits when you close the last one.
+
 Next: [Create and send an invoice](invoices.md) · [Back up, restore and open company files](backups-and-company-files.md)
