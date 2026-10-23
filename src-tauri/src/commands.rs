@@ -710,6 +710,7 @@ pub async fn inspect_company_file(source_path: String) -> Result<CompanyFileInfo
 pub async fn import_company_file(app_handle: AppHandle, source_path: String) -> Result<RestoreResult, String> {
     let db = app_handle.state::<Db>();
     let result = backup::restore(&db, &PathBuf::from(source_path)).await?;
+    refresh_window_title(&app_handle).await;
     notify(&app_handle);
     Ok(result)
 }
@@ -790,14 +791,13 @@ pub async fn update_database_directory(app: AppHandle, db: State<'_, Db>, new_pa
 /// Emitted when a different company file becomes the live one; the window reloads its state.
 pub const COMPANY_FILE_CHANGED: &str = "company-file-changed";
 
-/// Titles the main window after the open company file ("Acme Ltd.localbooks — LocalBooks"), or
-/// plain "LocalBooks" for the usual company file.
+/// Titles the main window after the open company ("Acme Ltd — LocalBooks"), or plain "LocalBooks"
+/// for the usual company file before it is named.
 pub async fn refresh_window_title(app: &AppHandle) {
     let status = app.state::<Db>().status().await;
-    let title = if status.opened_from_file || !status.is_default {
-        format!("{} — LocalBooks", status.file_name)
-    } else {
-        "LocalBooks".to_string()
+    let title = match status.company_name {
+        Some(name) => format!("{name} — LocalBooks"),
+        None => "LocalBooks".to_string(),
     };
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_title(&title);
@@ -1082,6 +1082,9 @@ pub async fn get_preferences(db: State<'_, Db>) -> Result<std::collections::BTre
 #[tauri::command]
 pub async fn set_preference(app: AppHandle, db: State<'_, Db>, key: String, value: String) -> Result<String, String> {
     let stored = preferences::set(&db.pool().await, &key, &value).await?;
+    if key == "company_name" {
+        refresh_window_title(&app).await;
+    }
     notify(&app);
     Ok(stored)
 }

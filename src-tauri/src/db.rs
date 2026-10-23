@@ -39,6 +39,8 @@ pub struct Db {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageStatus {
+    /// What to call the open company in the window title and header (see [`company_display_name`]).
+    pub company_name: Option<String>,
     pub path: String,
     pub file_name: String,
     pub opened_from_file: bool,
@@ -180,13 +182,15 @@ impl Db {
     pub async fn status(&self) -> StorageStatus {
         let live = self.live.read().await;
         let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&live.pool).await.unwrap_or_else(|_| "unknown".into());
+        let is_default = live.path == self.config.default_path;
         StorageStatus {
+            company_name: company_display_name(&live.pool, &live.path, is_default).await,
             path: live.path.display().to_string(),
             file_name: live.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             opened_from_file: live.opened_from_file,
             directory: live.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
             storage: live.storage.clone(),
-            is_default: live.path == self.config.default_path,
+            is_default,
             journal_mode,
             startup_warning: self.startup_warning.lock().expect("warning mutex").clone(),
         }
@@ -270,6 +274,32 @@ impl Db {
         let mut live = self.live.write().await;
         live.pool.close().await;
         live.lock = None;
+    }
+}
+
+/// The company name new files start with, until the user names theirs in Preferences.
+pub const PLACEHOLDER_COMPANY_NAME: &str = "LocalBooks Ledger";
+
+/// The name that tells the user which company is open: the Company name preference once it has been
+/// set; otherwise the file's own name ("Acme Ltd.localbooks" → "Acme Ltd", or the folder's name for
+/// a `localbooks.db` kept elsewhere). None for the usual company file that was never named.
+pub async fn company_display_name(pool: &SqlitePool, path: &Path, is_default: bool) -> Option<String> {
+    let named: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'")
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+    if let Some(name) = named.map(|n| n.trim().to_string()).filter(|n| !n.is_empty() && n != PLACEHOLDER_COMPANY_NAME) {
+        return Some(name);
+    }
+    if is_default {
+        return None;
+    }
+    let stem = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty());
+    let generic = Path::new(DB_FILE_NAME).file_stem().map(|s| s.to_string_lossy().into_owned());
+    match stem {
+        Some(stem) if Some(&stem) != generic.as_ref() => Some(stem),
+        _ => path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()),
     }
 }
 
@@ -582,6 +612,7 @@ mod tests {
         let db = Db::startup(cfg.clone()).await.unwrap();
         post_one(&db).await;
         assert!(db.status().await.is_default);
+        assert_eq!(db.status().await.company_name, None, "the usual file has no name until the user sets one");
         assert_eq!(db.status().await.journal_mode, "wal");
 
         // Move the current books to a new folder: same data, new location, old file untouched.
@@ -589,6 +620,7 @@ mod tests {
         std::fs::create_dir_all(&moved_dir).unwrap();
         let status = db.relocate(&moved_dir, RelocateMode::parse(Some("MOVE"), false).unwrap()).await.unwrap();
         assert!(!status.is_default);
+        assert_eq!(status.company_name.as_deref(), Some("shared"), "a localbooks.db elsewhere is called by its folder");
         assert_eq!(entries(&db).await, 1);
         post_one(&db).await;
         assert!(cfg.default_path.exists());
@@ -647,6 +679,9 @@ mod tests {
         let status = db.status().await;
         assert!(status.opened_from_file && !status.is_default);
         assert_eq!(status.file_name, "Acme Ltd.localbooks");
+        assert_eq!(status.company_name.as_deref(), Some("Acme Ltd"), "an unnamed file is called by its file name");
+        crate::preferences::set(&db.pool().await, "company_name", "Acme Holdings").await.unwrap();
+        assert_eq!(db.status().await.company_name.as_deref(), Some("Acme Holdings"), "a named company is called by its name");
         assert_eq!(entries(&db).await, 2);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
 
