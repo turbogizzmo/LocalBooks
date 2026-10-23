@@ -50,6 +50,16 @@ use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .menu(|handle| {
+            let menu = tauri::menu::Menu::default(handle)?;
+            // Tauri's default Help menu is empty on macOS, so the system fills it with a search box
+            // that only finds Apple's own help topics. Drop it there (elsewhere it holds About).
+            #[cfg(target_os = "macos")]
+            if let Some(help) = menu.get(tauri::menu::HELP_SUBMENU_ID) {
+                menu.remove(&help)?;
+            }
+            Ok(menu)
+        })
         .plugin(tauri_plugin_dialog::init())
         // Signed updates from the GitHub releases (see plugins.updater in tauri.conf.json).
         .plugin(tauri_plugin_updater::Builder::new().build())
