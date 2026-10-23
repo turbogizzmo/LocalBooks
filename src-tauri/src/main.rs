@@ -37,7 +37,9 @@ mod reports;
 mod revaluation;
 mod sales;
 mod sales_tax;
+mod secrets;
 mod simplefin;
+mod smtp;
 mod statements;
 mod storage;
 mod timesheet;
@@ -79,7 +81,7 @@ fn main() {
                 }
             };
             app.manage(database);
-            app.manage(simplefin::SimpleFin::new(simplefin::SecretStore::for_this_computer(&config_dir))?);
+            app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request.
             let pool_handle = app.handle().clone();
@@ -294,6 +296,10 @@ fn main() {
             commands::save_form_pdf,
             commands::get_email_draft,
             commands::email_form_with_mail_app,
+            commands::email_form_with_smtp,
+            commands::get_smtp_settings,
+            commands::save_smtp_settings,
+            commands::test_smtp_settings,
             commands::get_storage_status,
             commands::inspect_database_directory,
             commands::update_database_directory,

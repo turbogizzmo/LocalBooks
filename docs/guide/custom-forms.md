@@ -46,6 +46,21 @@ attached. Review it there and send it. LocalBooks doesn't send anything itself.
 - With any other mail app, the message opens with the address, subject and text filled in, and the
   PDF is shown in Finder or File Explorer for you to drag into the message.
 
+## Send from LocalBooks instead (SMTP)
+
+If you'd rather LocalBooks sent the message itself, go to **Settings › Email**:
+
+1. Choose **Send them from LocalBooks (SMTP)**.
+2. Enter your email provider's SMTP server, security and port (usually STARTTLS on 587, or SSL/TLS
+   on 465), your username and password, and the from address and name. Many providers (Gmail,
+   iCloud, Outlook.com) require an *app password* created in your account's security settings.
+3. Click **Test connection**, then **Save**.
+
+**Email…** then shows **Send**, which sends the message with the PDF attached. You can still choose
+**Open in my mail app instead** for any message. With **Copy to me** on, you get a blind copy of
+every message you send. The password is kept in this computer's Keychain or Credential Manager, not
+in the company file, so on another computer you enter it again.
+
 Forms print in Helvetica, Times or Courier, the fonts every PDF reader has. Characters those fonts
 don't have (for example Chinese or Arabic text) print as **?**.
 
