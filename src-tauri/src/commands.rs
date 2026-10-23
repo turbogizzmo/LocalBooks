@@ -19,6 +19,7 @@ use crate::edits::{self, DocumentLineView};
 use crate::workflows::{self, AttachmentView, CustomerStatement, PurchaseOrderInput, PurchaseOrderLineView, PurchaseOrderView, RecurringInput, RecurringView, SearchHit, Vendor1099Row};
 use crate::sales_tax::{self, SalesTaxPaymentInput, SalesTaxPaymentView, TaxLiabilityReport, TaxRateInput, TaxRateView};
 use crate::forms::{self, EmailDraft, FormKind, FormStyle, FormTemplate, Period, RenderedForm};
+use crate::email_log::{self, EmailStatus, QueuedForm, SentRecord};
 use crate::mail_app::{self, ComposeOutcome};
 use crate::secrets::SecretStore;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
@@ -945,8 +946,8 @@ pub async fn save_form_pdf(app: AppHandle, db: State<'_, Db>, kind: FormKind, do
 
 /// The email for a document: the customer's address and the form's subject and message.
 #[tauri::command]
-pub async fn get_email_draft(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<EmailDraft, String> {
-    forms::email_draft(&db.pool().await, kind, document_id).await
+pub async fn get_email_draft(db: State<'_, Db>, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<EmailDraft, String> {
+    forms::email_draft(&db.pool().await, kind, document_id, period).await
 }
 
 /// The message the user confirmed in the email dialog.
@@ -974,25 +975,78 @@ impl EmailInput {
 
 /// Opens a new message in the user's mail app with the document's PDF attached.
 #[tauri::command]
-pub async fn email_form_with_mail_app(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, email: EmailInput) -> Result<ComposeOutcome, String> {
+pub async fn email_form_with_mail_app(
+    app: AppHandle,
+    db: State<'_, Db>,
+    kind: FormKind,
+    document_id: i64,
+    period: Option<Period>,
+    email: EmailInput,
+) -> Result<ComposeOutcome, String> {
     let (to, subject, body) = email.checked()?;
-    let (file_name, bytes) = forms::pdf_file(&db.pool().await, kind, document_id).await?;
+    let pool = db.pool().await;
+    let (file_name, bytes) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
     let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
-    tauri::async_runtime::spawn_blocking(move || {
+    let message = mail_app::Compose { to: to.clone(), subject: subject.clone(), body, attachment: Default::default() };
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         let attachment = mail_app::stage_attachment(&outgoing, &file_name, &bytes)?;
-        mail_app::compose(&mail_app::Compose { to, subject, body, attachment })
+        mail_app::compose(&mail_app::Compose { attachment, ..message })
     })
     .await
-    .map_err(|e| format!("MAIL_OPEN: {e}"))?
+    .map_err(|e| format!("MAIL_OPEN: {e}"))??;
+    record_sent(&app, &pool, kind, document_id, &to, email_log::Method::MailApp, &subject).await;
+    Ok(outcome)
+}
+
+/// Adds the send to the form's history. The message has already gone out (or is open in the mail
+/// app), so a failure here is logged rather than reported as a failed send.
+async fn record_sent(app: &AppHandle, pool: &sqlx::SqlitePool, kind: FormKind, document_id: i64, to: &[String], method: email_log::Method, subject: &str) {
+    match email_log::record(pool, kind, document_id, to, method, subject).await {
+        Ok(()) => notify(app),
+        Err(err) => eprintln!("could not record the emailed form in its history: {err}"),
+    }
+}
+
+#[tauri::command]
+pub async fn get_email_history(db: State<'_, Db>, kind: FormKind, document_id: i64) -> Result<Vec<SentRecord>, String> {
+    email_log::history(&db.pool().await, kind, document_id).await
+}
+
+/// The forms of a type that were emailed or are marked Email later.
+#[tauri::command]
+pub async fn list_email_statuses(db: State<'_, Db>, kind: FormKind) -> Result<Vec<EmailStatus>, String> {
+    email_log::statuses(&db.pool().await, kind).await
+}
+
+#[tauri::command]
+pub async fn set_email_later(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, queued: bool) -> Result<(), String> {
+    email_log::set_queued(&db.pool().await, kind, document_id, queued).await?;
+    notify(&app);
+    Ok(())
+}
+
+/// The "Email later" queue, for Send Forms.
+#[tauri::command]
+pub async fn list_email_queue(db: State<'_, Db>) -> Result<Vec<QueuedForm>, String> {
+    email_log::queue(&db.pool().await).await
 }
 
 /// Sends the document's PDF to the customer through the company's email server.
 #[tauri::command]
-pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, email: EmailInput) -> Result<(), String> {
+pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormKind, document_id: i64, period: Option<Period>, email: EmailInput) -> Result<(), String> {
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
-    let (file_name, pdf) = forms::pdf_file(&pool, kind, document_id).await?;
-    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to, subject, body, file_name, pdf }).await
+    let (file_name, pdf) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
+    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf }).await?;
+    record_sent(&app, &pool, kind, document_id, &to, email_log::Method::Smtp, &subject).await;
+    Ok(())
+}
+
+/// Sends a short test message to the from address with the settings as entered.
+#[tauri::command]
+pub async fn send_smtp_test_email(app: AppHandle, db: State<'_, Db>, settings: SmtpSettings, password: Option<String>) -> Result<String, String> {
+    let company = forms::load_company(&db.pool().await).await?;
+    smtp::send_test(settings, &smtp_secrets(&app)?, password, &company.name).await
 }
 
 fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {

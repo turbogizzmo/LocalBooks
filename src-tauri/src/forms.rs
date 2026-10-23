@@ -31,7 +31,7 @@ impl FormKind {
     #[cfg(test)]
     pub const ALL: [FormKind; 4] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement];
 
-    fn key(self) -> &'static str {
+    pub(crate) fn key(self) -> &'static str {
         match self {
             FormKind::Invoice => "INVOICE",
             FormKind::Estimate => "ESTIMATE",
@@ -878,6 +878,9 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
 fn fill_placeholders(text: &str, doc: &FormDoc, company: &Company) -> String {
     [
         ("{number}", doc.number.as_str()),
+        ("{invoice_number}", doc.number.as_str()),
+        ("{amount}", doc.total.as_str()),
+        ("{balance_due}", doc.balance.as_str()),
         ("{customer}", doc.customer_name.as_str()),
         ("{date}", doc.date.as_str()),
         ("{due_date}", doc.due_date.as_str()),
@@ -1442,12 +1445,9 @@ pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>,
     Ok(Rendered { form: RenderedForm { title, pages, logo: size.and(company.logo), customer_email: doc.customer_email }, image })
 }
 
-/// The PDF file for a document with its customer's form style: (suggested file name, bytes).
-pub async fn pdf_file(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Result<(String, Vec<u8>), String> {
-    pdf_file_for(pool, kind, document_id, None).await
-}
 
-/// [`pdf_file`] for a statement period.
+/// The PDF file for a document with its customer's form style: (suggested file name, bytes).
+/// `period` is for statements (see `document`).
 pub async fn pdf_file_for(pool: &SqlitePool, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<(String, Vec<u8>), String> {
     let rendered = render(pool, kind, Some(document_id), period, None, true).await?;
     let bytes = pdf::write_pdf(&rendered.form.pages, rendered.image.as_ref(), &rendered.form.title);
@@ -1466,9 +1466,10 @@ pub struct EmailDraft {
     pub file_name: String,
 }
 
-pub async fn email_draft(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Result<EmailDraft, String> {
+/// The email a form is sent with; `period` is for statements (see `document`).
+pub async fn email_draft(pool: &SqlitePool, kind: FormKind, document_id: i64, period: Option<Period>) -> Result<EmailDraft, String> {
     let company = load_company(pool).await?;
-    let doc = document(pool, kind, Some(document_id), None, &company.currency_symbol).await?;
+    let doc = document(pool, kind, Some(document_id), period, &company.currency_symbol).await?;
     let tpl = get_template(pool, Some(customer_style(pool, doc.customer_id).await?), kind).await?;
     Ok(EmailDraft {
         to: doc.customer_email.clone().unwrap_or_default(),
@@ -1633,11 +1634,11 @@ mod tests {
             assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
         }
 
-        let (name, bytes) = pdf_file(&pool, FormKind::Invoice, invoice.id).await.unwrap();
+        let (name, bytes) = pdf_file_for(&pool, FormKind::Invoice, invoice.id, None).await.unwrap();
         assert_eq!(name, format!("Statement of Work {}.pdf", invoice.invoice_number));
         assert!(bytes.starts_with(b"%PDF-1.4"));
 
-        let draft = email_draft(&pool, FormKind::Invoice, invoice.id).await.unwrap();
+        let draft = email_draft(&pool, FormKind::Invoice, invoice.id, None).await.unwrap();
         assert_eq!(draft.to, "ap@initech.test");
         assert_eq!(draft.subject, format!("Invoice {} from {}", invoice.invoice_number, load_company(&pool).await.unwrap().name));
         assert!(draft.body.starts_with("Dear Initech,\n\nPlease find attached invoice"), "{}", draft.body);
@@ -1722,7 +1723,7 @@ mod tests {
         let title = |id| async move { render(pool_ref, FormKind::Invoice, Some(id), None, None, false).await.unwrap().form.title };
         assert_eq!(title(styled.id).await, format!("Bill {}", styled.invoice_number));
         assert_eq!(title(plain.id).await, format!("Tax Invoice {}", plain.invoice_number));
-        assert_eq!(email_draft(&pool, FormKind::Invoice, styled.id).await.unwrap().file_name, format!("Bill {}.pdf", styled.invoice_number));
+        assert_eq!(email_draft(&pool, FormKind::Invoice, styled.id, None).await.unwrap().file_name, format!("Bill {}.pdf", styled.invoice_number));
 
         assert!(delete_style(&pool, standard).await.unwrap_err().starts_with("FORM_STYLE_DEFAULT"));
         set_default_style(&pool, modern.id).await.unwrap();
@@ -1771,6 +1772,12 @@ mod tests {
         for expected in ["10/01/2026 – 10/31/2026", "Balance forward", &format!("Invoice #{}", invoice.invoice_number), "$400.00", "Amount due"] {
             assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
         }
+        sqlx::query("UPDATE customers SET email = 'ap@initech.test' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
+        let receipt_mail = email_draft(&pool, FormKind::SalesReceipt, receipt.id, None).await.unwrap();
+        assert_eq!((receipt_mail.to.as_str(), receipt_mail.file_name.clone()), ("ap@initech.test", format!("Sales Receipt {}.pdf", receipt.receipt_number)));
+        let statement_mail = email_draft(&pool, FormKind::Statement, customer, Some(period)).await.unwrap();
+        assert!(statement_mail.body.contains("The amount due is $400.00"), "{}", statement_mail.body);
+        assert_eq!(statement_mail.file_name, "Statement 2026-10-31 · Initech.pdf");
         let (name, bytes) = pdf_file_for(&pool, FormKind::Statement, customer, Some(period)).await.unwrap();
         assert_eq!(name, "Statement 2026-10-31 · Initech.pdf");
         assert!(bytes.starts_with(b"%PDF-1.4"));
