@@ -65,7 +65,8 @@ pub async fn account_register(
             .map_err(db_err)?;
     let (account_name, account_type_name, normal) = head.ok_or_else(|| format!("REG_NOT_FOUND: account {account_id} does not exist"))?;
     let debit_normal = normal == "DEBIT";
-    let accounts = if include_subaccounts {
+    // The register's account ids: the account itself, or it and every subaccount below it.
+    let scope = if include_subaccounts {
         "SELECT account_id FROM v_account_ancestry WHERE ancestor_id = ?1"
     } else {
         "SELECT ?1"
@@ -73,7 +74,7 @@ pub async fn account_register(
 
     let opening: i64 = match start_date {
         Some(start) => sqlx::query_scalar(&format!(
-            "SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id IN ({accounts}) AND entry_date < ?2"
+            "SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id IN ({scope}) AND entry_date < ?2"
         ))
         .bind(account_id)
         .bind(start)
@@ -87,7 +88,7 @@ pub async fn account_register(
                 p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
                 (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
                  FROM journal_lines o JOIN v_chart_of_accounts o_a ON o_a.id = o.account_id
-                 WHERE o.journal_entry_id = e.id AND o.account_id NOT IN ({accounts})) AS split,
+                 WHERE o.journal_entry_id = e.id AND o.account_id NOT IN ({scope})) AS split,
                 k.full_name AS class_name, l.debit_cents, l.credit_cents,
                 e.is_voided, e.reverses_entry_id IS NOT NULL AS is_reversal,
                 l.reconciliation_id IS NOT NULL AS cleared, l.reconciled_at IS NOT NULL AS reconciled
@@ -96,7 +97,7 @@ pub async fn account_register(
          JOIN v_chart_of_accounts a ON a.id = l.account_id
          LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id
          LEFT JOIN v_classes k ON k.id = l.class_id
-         WHERE e.status = 'POSTED' AND l.account_id IN ({accounts})
+         WHERE e.status = 'POSTED' AND l.account_id IN ({scope})
            AND (?2 IS NULL OR e.entry_date >= ?2) AND (?3 IS NULL OR e.entry_date <= ?3)
          ORDER BY e.entry_date, e.entry_number, l.line_number"
     ))
