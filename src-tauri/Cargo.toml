@@ -11,8 +11,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 base64 = "0.23"
+cfb = "0.14"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
+flate2 = "1"
 hmac = "=0.12.1"
 libc = "0.2"
 openqbw = "=0.1.5"

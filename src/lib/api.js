@@ -209,6 +209,13 @@ export const api = {
   postQbwBatch: (input) => invoke('post_qbw_batch', { input }),
   discardQbwBatch: (batchId) => invoke('discard_qbw_batch', { batchId }),
   reverseQbwBatch: (batchId) => invoke('reverse_qbw_batch', { batchId }),
+  listLedgerBatches: () => invoke('list_ledger_batches'),
+  getLedgerBatch: (batchId) => invoke('get_ledger_batch', { batchId }),
+  setLedgerAccount: (batchId, sourceId, accountId) => invoke('set_ledger_account', { batchId, sourceId, accountId }),
+  autoMapLedgerAccounts: (batchId) => invoke('auto_map_ledger_accounts', { batchId }),
+  postLedgerBatch: (input) => invoke('post_ledger_batch', { input }),
+  reverseLedgerBatch: (batchId) => invoke('reverse_ledger_batch', { batchId }),
+  discardLedgerBatch: (batchId) => invoke('discard_ledger_batch', { batchId }),
 };
 
 /** Opens the system print dialog (Print / Save as PDF), falling back to the browser's. */

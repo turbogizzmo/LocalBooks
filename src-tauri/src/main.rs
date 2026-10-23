@@ -21,7 +21,12 @@ mod ledger;
 mod parties;
 mod mcp_server;
 mod preferences;
+mod qbw_backup;
+mod qbw_company;
 mod qbw_import;
+mod qbw_ledger_import;
+mod qbw_pages;
+mod qbw_records;
 mod reconcile;
 mod registers;
 mod report_center;
@@ -292,6 +297,13 @@ fn main() {
             commands::auto_create_qbw_accounts,
             commands::post_qbw_batch,
             commands::discard_qbw_batch,
+            commands::list_ledger_batches,
+            commands::get_ledger_batch,
+            commands::set_ledger_account,
+            commands::auto_map_ledger_accounts,
+            commands::post_ledger_batch,
+            commands::reverse_ledger_batch,
+            commands::discard_ledger_batch,
             commands::reverse_qbw_batch,
         ])
         .build(tauri::generate_context!())
