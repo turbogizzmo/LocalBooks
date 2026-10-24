@@ -34,6 +34,7 @@ import Recurring, { useDueRecurring } from './components/Recurring.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
+import { useCompanyFileActions } from './components/CompanyFiles.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
@@ -111,6 +112,9 @@ export default function App() {
       unlisten?.();
     };
   }, []);
+
+  // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
+  const companyFiles = useCompanyFileActions();
 
   const [windowError, setWindowError] = useState(null);
   const openNewWindow = useCallback((id) => {
@@ -234,6 +238,7 @@ export default function App() {
         {/* Updates are checked and offered in the main window only. */}
         {MAIN_WINDOW && <UpdateBanner />}
         {windowError && <Notice kind="error" text={windowError} onDismiss={() => setWindowError(null)} />}
+        {companyFiles.error && <Notice kind="error" text={companyFiles.error} onDismiss={companyFiles.clearError} />}
         {storage.data?.startupWarning && (
           <div className="no-print">
             <Notice kind="info" text={`${storage.data.startupWarning} Change it in Settings › File & Data Controls.`} />
@@ -282,6 +287,7 @@ export default function App() {
           onNavigate={(viewId, action) => select(viewId, action)}
         />
       )}
+      {companyFiles.dialog}
       {creating && (
         <QuickCreateModal
           onClose={() => setCreating(false)}
