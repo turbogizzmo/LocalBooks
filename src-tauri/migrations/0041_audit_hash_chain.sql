@@ -29,6 +29,10 @@ ALTER TABLE ledger_audit_log ADD COLUMN actor TEXT;
 ALTER TABLE ledger_audit_log ADD COLUMN prev_hash TEXT CHECK (prev_hash IS NULL OR (length(prev_hash) = 64 AND prev_hash NOT GLOB '*[^0-9a-f]*'));
 ALTER TABLE ledger_audit_log ADD COLUMN row_hash TEXT CHECK (row_hash IS NULL OR (length(row_hash) = 64 AND row_hash NOT GLOB '*[^0-9a-f]*'));
 
+-- Sealing runs on every write; this keeps finding unsealed rows proportional to how many there are
+-- (normally a handful) rather than to the size of the trail.
+CREATE INDEX ix_ledger_audit_unsealed ON ledger_audit_log (id) WHERE row_hash IS NULL;
+
 -- Rows written before the chain existed were not attributed to anyone.
 DROP TRIGGER trg_ledger_audit_no_update;
 UPDATE ledger_audit_log SET actor = 'unrecorded (before audit chain)';

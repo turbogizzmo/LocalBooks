@@ -98,12 +98,11 @@ pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, Stri
             .flatten();
         let prev = match prev {
             Some(prev) => prev,
-            None if sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE id < ?1")
+            None if !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM ledger_audit_log WHERE id < ?1)")
                 .bind(id)
                 .fetch_one(&mut *conn)
                 .await
-                .map_err(db_err)?
-                == 0 =>
+                .map_err(db_err)? =>
             {
                 GENESIS.to_string()
             }
