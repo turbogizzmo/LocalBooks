@@ -36,12 +36,13 @@ const ACCOUNT_TYPES: [&str; 15] = [
 ];
 
 /// Transaction kinds by line-item table, with a readable name.
-const TRANSACTION_TABLES: [(&str, &str); 13] = [
+const TRANSACTION_TABLES: [(&str, &str); 14] = [
     ("invoice", "Invoice"),
     ("credit_memo", "Credit memo"),
     ("sales_receipt", "Sales receipt"),
     ("received_payment", "Payment"),
     ("deposit", "Deposit"),
+    ("transfer", "Transfer"),
     ("check", "Check"),
     ("credit_cardcharge", "Credit card charge"),
     ("bill", "Bill"),
@@ -606,6 +607,22 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     for t in &mut balanced {
         t.document = documents.remove(&t.id);
     }
+    // Estimates and purchase orders post nothing: they come along as transactions without lines.
+    for (id, document) in documents {
+        let (kind, date, doc_num, name, memo) = match &document {
+            crate::qbw_documents::SourceDocument::Estimate { customer_id, date, number, memo, .. } => {
+                ("Estimate", *date, number.clone(), customers.get(customer_id).cloned(), memo.clone())
+            }
+            crate::qbw_documents::SourceDocument::PurchaseOrder { vendor_id, date, number, memo, .. } => {
+                ("Purchase order", *date, number.clone(), vendors.get(vendor_id).cloned(), memo.clone())
+            }
+            _ => continue,
+        };
+        if (earliest..=latest).contains(&date) {
+            balanced.push(SourceTransaction { id, kind, date, doc_num, name, memo, lines: Vec::new(), document: Some(document) });
+        }
+    }
+    balanced.sort_by_key(|t| (t.date, t.id));
     unreadable.sort_by_key(|u| (u.date, u.transaction_id));
     let customers = read_parties(&pages, &catalog, false);
     let vendors = read_parties(&pages, &catalog, true);

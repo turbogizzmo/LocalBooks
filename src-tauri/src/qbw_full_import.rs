@@ -6,7 +6,9 @@
 //! links); credit memos are applied to the invoices they were applied to; deposits sweep those
 //! payments out of Undeposited Funds. On the purchase side, bills and vendor credits become
 //! documents, bill payments (and checks that paid bills) one payment per bill, and checks and
-//! card charges LocalBooks checks and expenses. Every document posts exactly the source file's own ledger
+//! card charges LocalBooks checks and expenses. Transfers become transfers; estimates and purchase
+//! orders, which post nothing, become open estimates and purchase orders (as in Intuit's own
+//! conversion, an estimate's link to the invoice it became is not kept). Every document posts exactly the source file's own ledger
 //! lines, so account balances come out the same as a journal import.
 //!
 //! A transaction that cannot be a document (its form does not add up, it applies to something that
@@ -41,8 +43,9 @@ pub(crate) struct Staged {
 /// What one staged transaction became.
 pub(crate) struct Outcome {
     pub source_id: i64,
-    /// The transaction's entry (the first, when a payment split into several).
-    pub entry_id: i64,
+    /// The transaction's entry (the first, when a payment split into several); none for estimates
+    /// and purchase orders, which post nothing.
+    pub entry_id: Option<i64>,
     pub posted_as: &'static str,
     pub fallback_reason: Option<String>,
     pub entries: i64,
@@ -65,6 +68,12 @@ pub struct FullImportCounts {
     pub checks: i64,
     /// Card charges and other expenses.
     pub expenses: i64,
+    pub transfers: i64,
+    pub estimates: i64,
+    pub purchase_orders: i64,
+    /// Estimates and purchase orders that could not be brought in (they post nothing, so nothing
+    /// else is missing).
+    pub not_imported: i64,
     pub journal_entries: i64,
     /// Documents that had to post as journal entries instead.
     pub fell_back: i64,
@@ -830,6 +839,111 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     Ok((entry, id, kind))
 }
 
+/// A transfer between two balance-sheet accounts.
+async fn write_transfer(tx: &mut Transaction<'_, Sqlite>, t: &Staged, books: &Books) -> Result<i64, String> {
+    let [(a, a_cents, _), (b, b_cents, _)] = t.lines.as_slice() else {
+        return Err("it has more than two lines".into());
+    };
+    if a_cents + b_cents != 0 || a == b {
+        return Err("it is not a move between two accounts".into());
+    }
+    let (from, to, amount) = if *a_cents > 0 { (*a, *b, *a_cents) } else { (*b, *a, *b_cents) };
+    for account in [from, to] {
+        let allowed = books.accounts.get(&account).is_some_and(|(kind, system)| {
+            !system && matches!(kind.as_str(), "BANK" | "CREDIT_CARD" | "OTHER_CURRENT_ASSET" | "OTHER_CURRENT_LIABILITY" | "LONG_TERM_LIABILITY")
+        });
+        if !allowed {
+            return Err(format!("LocalBooks transfers cannot use one of its accounts ({})", books.kind(account).to_lowercase().replace('_', " ")));
+        }
+    }
+    let id: i64 =
+        sqlx::query_scalar("INSERT INTO transfers (transfer_date, from_account_id, to_account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id")
+            .bind(t.date)
+            .bind(from)
+            .bind(to)
+            .bind(amount)
+            .bind(&t.memo)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(db_err)?;
+    let entry = post(tx, t, describe(t), &t.lines, EntrySource::Transfer(id)).await?;
+    sqlx::query("UPDATE transfers SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    Ok(entry)
+}
+
+/// An open estimate. It posts nothing; its lines keep the item, quantity and rate.
+async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, doc: &SourceDocument, map: &HashMap<i64, i64>, books: &Books) -> Result<(), String> {
+    let SourceDocument::Estimate { customer_id, date, number: doc_num, expires, memo, lines } = doc else { unreachable!() };
+    let (customer, _) = books.customer(*customer_id)?.clone();
+    // Lines are positive here, so the total is their sum (sales tax included).
+    let total: i64 = lines.iter().map(|l| l.cents).sum();
+    let form = form(lines, map, books, 1, total)?;
+    let number = number(tx, "estimates", "estimate_number", 1000, doc_num.as_deref()).await?;
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO estimates (estimate_number, customer_id, estimate_date, expiration_date, memo, total_cents, tax_cents)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+    )
+    .bind(number)
+    .bind(customer)
+    .bind(date)
+    .bind(expires.filter(|e| e >= date))
+    .bind(memo)
+    .bind(total)
+    .bind(form.tax)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    insert_lines(tx, "estimate_lines", "estimate_id", id, &form.lines).await
+}
+
+/// An open (or, when received, closed) purchase order. It posts nothing.
+async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, doc: &SourceDocument, map: &HashMap<i64, i64>, books: &Books) -> Result<(), String> {
+    let SourceDocument::PurchaseOrder { vendor_id, date, number: doc_num, expected, memo, received, lines } = doc else { unreachable!() };
+    let (vendor, _) = books.vendor(*vendor_id)?.clone();
+    if lines.is_empty() {
+        return Err("it has no lines".into());
+    }
+    let number = number(tx, "purchase_orders", "po_number", 0, doc_num.as_deref()).await?;
+    let total: i64 = lines.iter().map(|l| l.cents).sum();
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO purchase_orders (po_number, vendor_id, po_date, expected_date, memo, total_cents, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+    )
+    .bind(number)
+    .bind(vendor)
+    .bind(date)
+    .bind(expected)
+    .bind(memo)
+    .bind(total)
+    .bind(if *received { "CLOSED" } else { "OPEN" })
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    for (n, l) in lines.iter().enumerate() {
+        let account = *map.get(&l.account_id).ok_or("a line's account is not mapped")?;
+        let product = l.item_id.and_then(|i| books.products.get(&i));
+        let (quantity, rate) = match line_amount(l.quantity_e4, l.rate_cents) {
+            Ok(a) if a == l.cents => (Some(l.quantity_e4), Some(l.rate_cents)),
+            _ => (None, None),
+        };
+        sqlx::query(
+            "INSERT INTO purchase_order_lines (purchase_order_id, line_number, account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .bind(id)
+        .bind(n as i64 + 1)
+        .bind(account)
+        .bind(product.map(|p| p.0))
+        .bind(l.description.clone().or_else(|| product.map(|p| p.1.clone())))
+        .bind(quantity)
+        .bind(rate)
+        .bind(l.cents)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    }
+    Ok(())
+}
+
 /// Posts the staged transactions: documents first, then the payments that pay them, the credits
 /// applied to them and the deposits that sweep the payments. Fails (and the caller rolls back)
 /// only when a transaction cannot be posted even as a journal entry.
@@ -866,7 +980,7 @@ pub(crate) async fn post_all(
         let entry = post(tx, t, describe(t), &t.lines, EntrySource::Journal).await.map_err(|e| format!("{e} (imported {})", describe(t)))?;
         counts.journal_entries += 1;
         counts.fell_back += reason.is_some() as i64;
-        Ok(Outcome { source_id: t.source_id, entry_id: entry, posted_as: "JOURNAL", fallback_reason: reason, entries: 1 })
+        Ok(Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "JOURNAL", fallback_reason: reason, entries: 1 })
     }
 
     let phase = |t: &Staged| match &t.document {
@@ -883,7 +997,7 @@ pub(crate) async fn post_all(
                     Ok((entry, id)) => {
                         written.invoices.insert(t.source_id, (id, t.date));
                         counts.invoices += 1;
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as: "INVOICE", fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "INVOICE", fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -891,7 +1005,7 @@ pub(crate) async fn post_all(
                     Ok((entry, id)) => {
                         written.credit_memos.insert(t.source_id, (id, t.date));
                         counts.credit_memos += 1;
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as: "CREDIT_MEMO", fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "CREDIT_MEMO", fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -899,7 +1013,7 @@ pub(crate) async fn post_all(
                     Ok((entry, id, total, into)) => {
                         written.deposited.insert(t.source_id, vec![(id, total, into, true)]);
                         counts.sales_receipts += 1;
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as: "SALES_RECEIPT", fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "SALES_RECEIPT", fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -908,14 +1022,14 @@ pub(crate) async fn post_all(
                         counts.payments += rows.len() as i64;
                         counts.journal_entries += entries.len() as i64 - rows.len() as i64;
                         written.deposited.insert(t.source_id, rows.into_iter().map(|(row, cents)| (row, cents, into, false)).collect());
-                        Outcome { source_id: t.source_id, entry_id: entries[0], posted_as: "PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
                 Some(doc @ SourceDocument::Deposit { .. }) => match attempt!(write_deposit(tx, t, doc, &books, &written).await) {
                     Ok((entry, _linked)) => {
                         counts.deposits += 1;
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as: "DEPOSIT", fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "DEPOSIT", fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -927,7 +1041,7 @@ pub(crate) async fn post_all(
                         } else {
                             counts.vendor_credits += 1;
                         }
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as, fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as, fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
@@ -936,7 +1050,7 @@ pub(crate) async fn post_all(
                         Ok((entries, rows, note)) => {
                             counts.bill_payments += rows;
                             counts.journal_entries += entries.len() as i64 - rows;
-                            Outcome { source_id: t.source_id, entry_id: entries[0], posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                            Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
                         }
                         Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                     }
@@ -947,9 +1061,40 @@ pub(crate) async fn post_all(
                         Ok((entries, rows, note)) => {
                             counts.bill_payments += rows;
                             counts.journal_entries += entries.len() as i64 - rows;
-                            Outcome { source_id: t.source_id, entry_id: entries[0], posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                            Outcome { source_id: t.source_id, entry_id: Some(entries[0]), posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
                         }
                         Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                    }
+                }
+                Some(SourceDocument::Transfer) => match attempt!(write_transfer(tx, t, &books).await) {
+                    Ok(entry) => {
+                        counts.transfers += 1;
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "TRANSFER", fallback_reason: None, entries: 1 }
+                    }
+                    Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                },
+                // Estimates and purchase orders post nothing: one that cannot be brought in is only listed.
+                Some(doc @ (SourceDocument::Estimate { .. } | SourceDocument::PurchaseOrder { .. })) => {
+                    let is_estimate = matches!(doc, SourceDocument::Estimate { .. });
+                    let written = if is_estimate {
+                        attempt!(write_estimate(tx, doc, map, &books).await)
+                    } else {
+                        attempt!(write_purchase_order(tx, doc, map, &books).await)
+                    };
+                    match written {
+                        Ok(()) => {
+                            if is_estimate {
+                                counts.estimates += 1;
+                            } else {
+                                counts.purchase_orders += 1;
+                            }
+                            let posted_as = if is_estimate { "ESTIMATE" } else { "PURCHASE_ORDER" };
+                            Outcome { source_id: t.source_id, entry_id: None, posted_as, fallback_reason: None, entries: 0 }
+                        }
+                        Err(reason) => {
+                            counts.not_imported += 1;
+                            Outcome { source_id: t.source_id, entry_id: None, posted_as: "NOT_IMPORTED", fallback_reason: Some(reason), entries: 0 }
+                        }
                     }
                 }
                 Some(doc @ SourceDocument::Expense { .. }) => match attempt!(write_expense(tx, t, doc, &books).await) {
@@ -959,7 +1104,7 @@ pub(crate) async fn post_all(
                         } else {
                             counts.expenses += 1;
                         }
-                        Outcome { source_id: t.source_id, entry_id: entry, posted_as, fallback_reason: None, entries: 1 }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as, fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },

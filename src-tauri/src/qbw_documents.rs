@@ -1,6 +1,7 @@
 //! Documents read from a desktop company file, for the full import: invoices, credit memos, sales
 //! receipts, received payments and the deposits that swept them; bills (and vendor credits), bill
-//! payments, checks and card charges; with the links between them.
+//! payments, checks and card charges; transfers; and the non-posting estimates and purchase
+//! orders; with the links between them.
 //!
 //! The file keeps payment applications in `abmc_transaction_link`, the same model as the
 //! QuickBooks SDK's `AppliedToTxn`: rows come in sibling pairs, and the row whose
@@ -70,6 +71,22 @@ pub enum SourceDocument {
     /// A check or card charge, with the bills it paid when it paid any.
     #[serde(rename_all = "camelCase")]
     Expense { vendor_id: Option<i64>, number: Option<String>, applied_to: Vec<Applied> },
+    /// Money moved between two balance-sheet accounts (its lines are the ledger lines).
+    Transfer,
+    /// Estimates and purchase orders post nothing, so they carry their own date and memo; their
+    /// line amounts are positive.
+    #[serde(rename_all = "camelCase")]
+    Estimate { customer_id: i64, date: chrono::NaiveDate, number: Option<String>, expires: Option<chrono::NaiveDate>, memo: Option<String>, lines: Vec<DocumentLine> },
+    #[serde(rename_all = "camelCase")]
+    PurchaseOrder {
+        vendor_id: i64,
+        date: chrono::NaiveDate,
+        number: Option<String>,
+        expected: Option<chrono::NaiveDate>,
+        memo: Option<String>,
+        received: bool,
+        lines: Vec<DocumentLine>,
+    },
 }
 
 /// LocalBooks' payment method for the name the file uses.
@@ -129,9 +146,12 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool) -> Vec<DocumentLine> {
 /// receivables or payables account.
 pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i64) -> bool) -> HashMap<i64, SourceDocument> {
     let lines_of = |table: &str| -> BTreeMap<i64, Vec<Row>> {
+        // Estimates and purchase orders are non-posting throughout; elsewhere a non-posting row
+        // is a memo or subtotal line.
+        let non_posting = table.contains("estimate") || table.contains("purchase_order");
         let mut by: BTreeMap<i64, Vec<Row>> = BTreeMap::new();
         for r in rows_of(pages, catalog, table) {
-            if r.get("is_no_post_bool").as_int() == Some(1) {
+            if !non_posting && r.get("is_no_post_bool").as_int() == Some(1) {
                 continue;
             }
             if let Some(t) = r.get("transaction_id").as_int() {
@@ -229,6 +249,40 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
             out.insert(tid, SourceDocument::Expense { vendor_id: h.get("vendor_id").as_int(), number: text(&h, "doc_num"), applied_to });
         }
     }
+    for (tid, _) in headers_of("abmc_transfer_header") {
+        out.insert(tid, SourceDocument::Transfer);
+    }
+    // Lines of non-posting documents, as positive amounts.
+    let positive = |rows: &[Row]| -> Vec<DocumentLine> {
+        let refs: Vec<&Row> = rows.iter().collect();
+        form_lines(&refs, &|_| false).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
+    };
+    let estimate_headers = headers_of("abmc_estimate_header");
+    for (tid, rows) in lines_of("abmc_estimate_lineitem") {
+        let Some(h) = estimate_headers.get(&tid) else { continue };
+        let (Some(customer_id), Some(date)) = (h.get("customer_id").as_int(), h.get("transaction_date").as_date()) else { continue };
+        out.insert(
+            tid,
+            SourceDocument::Estimate { customer_id, date, number: text(h, "doc_num"), expires: h.get("due_date").as_date(), memo: text(h, "memo"), lines: positive(&rows) },
+        );
+    }
+    let order_headers = headers_of("abmc_purchase_order_header");
+    for (tid, rows) in lines_of("abmc_purchase_order_lineitem") {
+        let Some(h) = order_headers.get(&tid) else { continue };
+        let (Some(vendor_id), Some(date)) = (h.get("vendor_id").as_int(), h.get("transaction_date").as_date()) else { continue };
+        out.insert(
+            tid,
+            SourceDocument::PurchaseOrder {
+                vendor_id,
+                date,
+                number: text(h, "doc_num"),
+                expected: h.get("expected_date").as_date(),
+                memo: text(h, "memo"),
+                received: h.get("is_received_bool").as_int() == Some(1),
+                lines: positive(&rows),
+            },
+        );
+    }
     // Deposits: group the payment → deposit links by deposit.
     let mut deposits: BTreeMap<i64, Vec<Applied>> = BTreeMap::new();
     for ((kind, payment), links) in &applied {
@@ -297,6 +351,9 @@ mod tests {
                 SourceDocument::Bill { .. } => "bill",
                 SourceDocument::BillPayment { .. } => "bill payment",
                 SourceDocument::Expense { .. } => "expense",
+                SourceDocument::Transfer => "transfer",
+                SourceDocument::Estimate { .. } => "estimate",
+                SourceDocument::PurchaseOrder { .. } => "purchase order",
             };
             *counts.entry(kind).or_default() += 1;
             match doc {
@@ -458,5 +515,23 @@ mod tests {
             *signs.entry((t.kind, side > 0)).or_default() += 1;
         }
         println!("kind, pays out (credit to bank/card/AP): {signs:?}");
+    }
+
+    /// Prints the transfer, estimate and purchase-order tables: columns and row counts.
+    #[test]
+    #[ignore]
+    fn explores_transfers_estimates_and_orders() {
+        use crate::qbw_company::{read_pages, rows_of};
+        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+        let (pages, catalog, _, _) = read_pages(std::path::Path::new(&path)).unwrap();
+        let mut names: Vec<&String> =
+            catalog.names.values().filter(|n| n.starts_with("abmc_") && (n.contains("transfer") || n.contains("estimate") || n.contains("purchase_order") || n.contains("sales_order"))).collect();
+        names.sort();
+        for name in names {
+            let id = catalog.table_id(name).unwrap();
+            let cols: Vec<&str> = catalog.columns[&id].iter().map(|c| c.name.as_str()).collect();
+            let rows = rows_of(&pages, &catalog, name);
+            println!("{name} ({} rows): {}", rows.len(), cols.join(", "));
+        }
     }
 }
