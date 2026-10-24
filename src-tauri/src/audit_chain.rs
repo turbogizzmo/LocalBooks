@@ -349,6 +349,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_unreadable_record_never_blocks_a_write() {
+        let dir = std::env::temp_dir().join(format!("localbooks-anchor-damaged-{}-{:?}", std::process::id(), std::thread::current().id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(ANCHORS_FILE);
+        std::fs::write(&path, b"not json").unwrap();
+        install_test_anchor_store(path);
+        let pool = test_pool().await;
+        post(&pool, 1_000).await;
+        post(&pool, 2_000).await;
+        let unsealed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE row_hash IS NULL").fetch_one(&pool).await.unwrap();
+        assert_eq!(unsealed, 0, "rows are still sealed even though the record can't be read");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
     async fn rewriting_the_trail_inside_the_file_breaks_the_chain() {
         let pool = test_pool().await;
         let first = post(&pool, 1_000).await;
