@@ -741,31 +741,31 @@ ENDTRNS\n";
     }
 
     /// Reads every IIF sample in Intuit's import kit: set LOCALBOOKS_IIF_DIR to the unpacked kit.
+    /// Each must read with every transaction balanced, no line unreadable, and every transaction
+    /// of a known kind, or hold nothing LocalBooks imports.
     #[test]
     #[ignore]
     fn reads_the_import_kit_samples() {
         let dir = std::env::var("LOCALBOOKS_IIF_DIR").expect("set LOCALBOOKS_IIF_DIR");
         let mut stack = vec![std::path::PathBuf::from(dir)];
+        let mut files = 0;
         while let Some(path) = stack.pop() {
             if path.is_dir() {
                 stack.extend(std::fs::read_dir(&path).unwrap().filter_map(Result::ok).map(|e| e.path()));
             } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iif")) {
-                match read(&std::fs::read(&path).unwrap()) {
-                    Ok(l) => println!(
-                        "{}: {} accounts, {} customers, {} vendors, {} items, {} balanced, {} unbalanced, {} unreadable; docs {:?}",
-                        path.file_name().unwrap().to_string_lossy(),
-                        l.accounts.len(),
-                        l.customers.len(),
-                        l.vendors.len(),
-                        l.items.len(),
-                        l.transactions.len(),
-                        l.unbalanced.len(),
-                        l.unreadable.len(),
-                        l.transactions.iter().map(|t| (t.kind, t.document.is_some())).collect::<Vec<_>>()
-                    ),
-                    Err(e) => println!("{}: {e}", path.display()),
-                }
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                let ledger = match read(&std::fs::read(&path).unwrap()) {
+                    Ok(ledger) => ledger,
+                    // The kit also has files of records LocalBooks has no use for (timer activities).
+                    Err(e) if e.starts_with("IIF_EMPTY") => continue,
+                    Err(e) => panic!("{name}: {e}"),
+                };
+                assert!(ledger.unbalanced.is_empty(), "{name}: unbalanced transactions");
+                assert!(ledger.unreadable.is_empty(), "{name}: unreadable lines");
+                assert!(ledger.transactions.iter().all(|t| t.kind != "Other"), "{name}: unknown transaction type");
+                files += 1;
             }
         }
+        assert!(files > 0, "no .iif files under LOCALBOOKS_IIF_DIR");
     }
 }
