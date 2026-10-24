@@ -9,7 +9,8 @@ import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
-const EXTENSIONS = ['qbw', 'qbb', 'qbm'];
+const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif'];
+const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export' };
 const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
@@ -119,7 +120,7 @@ function ChooseFile({ busy, onFile }) {
   }, [busy, onFile]);
 
   const browse = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Desktop company file or backup (.qbw, .qbb)', extensions: EXTENSIONS }] });
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Company file, backup or export (.qbw, .qbb, .iif, .qif)', extensions: EXTENSIONS }] });
     if (typeof path === 'string') onFile(path);
   };
 
@@ -131,10 +132,11 @@ function ChooseFile({ busy, onFile }) {
         }`}
       >
         <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4 text-md" onClick={browse} disabled={busy}>
-          Choose a company file or backup…
+          Choose a file…
         </button>
         <div className="text-xs text-qb-ink-muted">
-          A .qbw company file or a .qbb backup, or drag it here. It is only read, never changed, and nothing is added to your books yet.
+          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, or a Quicken .qif export. You can also drag it here. It is only
+          read, never changed, and nothing is added to your books yet.
         </div>
       </div>
     </div>
@@ -164,14 +166,32 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
         {batches.map((b) => {
           const key = `${b.kind}-${b.id}`;
           const isOpen = openKey === key;
-          const status = b.liveEntryCount > 0 ? `Posted · ${b.liveEntryCount.toLocaleString()} entries` : b.postedAt ? 'Reversed' : 'Not posted yet';
-          const tone = b.liveEntryCount > 0 ? 'text-qb-green-active' : b.postedAt ? 'text-qb-ink-muted' : 'text-qb-info';
+          // In effect: posted entries, or the lists a lists-only file added.
+          const live = b.liveEntryCount > 0 || b.listsAdded;
+          const status = b.listsAdded
+            ? 'Lists added'
+            : b.liveEntryCount > 0
+              ? `Posted · ${b.liveEntryCount.toLocaleString()} entries`
+              : b.postedAt
+                ? 'Reversed'
+                : b.listsOnly
+                  ? 'Not added yet'
+                  : 'Not posted yet';
+          const tone = live ? 'text-qb-green-active' : b.postedAt ? 'text-qb-ink-muted' : 'text-qb-info';
           return (
             <tr key={key} className={isOpen ? 'bg-qb-green-tint' : ''}>
               <td className="qb-grid-cell">
                 <div className="font-semibold">{b.fileName}</div>
                 <div className="text-2xs text-qb-ink-faint">
-                  {b.kind !== 'ledger' ? 'Invoice lines' : b.liveEntryCount === 0 ? 'Company file' : b.mode === 'FULL' ? 'Company file · full import' : 'Company file · journal import'}
+                  {b.kind !== 'ledger'
+                    ? 'Invoice lines'
+                    : b.listsOnly
+                      ? 'Lists only'
+                      : b.liveEntryCount === 0
+                        ? 'Company file'
+                        : b.mode === 'FULL'
+                          ? 'Company file · full import'
+                          : 'Company file · journal import'}
                 </div>
               </td>
               <td className="qb-grid-cell text-qb-ink-muted">{STAMP.format(new Date(b.importedAt))}</td>
@@ -182,7 +202,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                   <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={busy || isOpen} onClick={() => onOpen(b)}>
                     {isOpen ? 'Open below' : 'Open'}
                   </button>
-                  {b.liveEntryCount > 0 && b.kind === 'ledger' && (
+                  {live && b.kind === 'ledger' && (
                     <button
                       type="button"
                       className="qb-btn qb-btn-secondary h-row px-2 text-xs text-qb-negative"
@@ -197,21 +217,23 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                       Start over…
                     </button>
                   )}
-                  {b.liveEntryCount > 0 && b.mode !== 'FULL' && (
+                  {((b.liveEntryCount > 0 && b.mode !== 'FULL') || b.listsAdded) && (
                     <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs text-qb-negative" disabled={busy} onClick={() => onReverse(b)}>
-                      Reverse posted entries…
+                      {b.listsAdded ? 'Reverse added lists…' : 'Reverse posted entries…'}
                     </button>
                   )}
                   <button
                     type="button"
                     className="qb-btn qb-btn-secondary h-row px-2 text-xs"
-                    disabled={busy || b.liveEntryCount > 0}
+                    disabled={busy || live}
                     title={
-                      b.liveEntryCount === 0
+                      !live
                         ? 'Delete this import (your books are not affected)'
-                        : b.mode === 'FULL'
-                          ? 'Start over first'
-                          : 'Reverse the posted entries first'
+                        : b.listsAdded
+                          ? 'Reverse the added lists first'
+                          : b.mode === 'FULL'
+                            ? 'Start over first'
+                            : 'Reverse the posted entries first'
                     }
                     onClick={() => onDelete(b)}
                   >
@@ -271,9 +293,12 @@ function MappingGrid({ summary, accounts, onMap, busy }) {
   );
 }
 
+/** Source accounts the import brings in: those with lines, or every one from a file of lists only. */
+const usedAccounts = (summary) => (summary.listsOnly ? summary.accounts : summary.accounts.filter((a) => a.lineCount > 0));
+
 /** Source accounts of a full-ledger import, each mapped to a LocalBooks account. */
 function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
-  const used = summary.accounts.filter((a) => a.lineCount > 0);
+  const used = usedAccounts(summary);
   return (
     <table className="qb-grid">
       <colgroup>
@@ -286,7 +311,7 @@ function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
       </colgroup>
       <thead>
         <tr>
-          <th className="qb-grid-head">Account in the company file</th>
+          <th className="qb-grid-head">Account in the file</th>
           <th className="qb-grid-head">Type</th>
           <th className="qb-grid-head text-right">Lines</th>
           <th className="qb-grid-head text-right">Read</th>
@@ -432,7 +457,7 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
         {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items in the file
         {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
       </span>
-      {done < all && (
+      {done < all && !summary.listsOnly && (
         <button
           type="button"
           className="qb-btn qb-btn-secondary ml-auto h-row px-2 text-xs"
@@ -547,18 +572,55 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const documents = summary.documents ?? [];
   const [mode, setMode] = useState(documents.length > 0 ? 'FULL' : 'JOURNAL');
   const fallbacks = summary.fallbacks ?? [];
-  const used = summary.accounts.filter((a) => a.lineCount > 0);
+  const used = usedAccounts(summary);
   const unmapped = used.filter((a) => !a.accountId).length;
   const matched = summary.accountsMatchingStored;
   const withStored = summary.accountsWithStoredBalance;
   const step2 = unmapped === 0 ? 'done' : 'active';
-  const step3 = summary.liveEntryCount > 0 && summary.postableCount === 0 ? 'done' : unmapped === 0 && summary.postableCount > 0 ? 'active' : 'locked';
+  const step3 = summary.listsOnly
+    ? summary.listsAdded
+      ? 'done'
+      : 'active'
+    : summary.liveEntryCount > 0 && summary.postableCount === 0
+      ? 'done'
+      : unmapped === 0 && summary.postableCount > 0
+        ? 'active'
+        : 'locked';
+
+  // A file of lists only: add its accounts, customers, vendors and items, and post nothing.
+  const addLists = () => {
+    const l = summary.lists;
+    if (
+      !window.confirm(
+        `Add this file’s lists to your books?\n\n${countOf(used.length, ['account', 'accounts'])}, ${countOf(l.customers, ['customer', 'customers'])}, ` +
+          `${countOf(l.vendors, ['vendor', 'vendors'])} and ${countOf(l.items, ['item', 'items'])}: each matches an existing record of the same name or is created. ` +
+          'No transactions are posted. You can undo it later with "Reverse added lists" or "Start over".',
+      )
+    )
+      return;
+    run(
+      () => api.postLedgerBatch({ batchId: summary.id, mode: 'JOURNAL' }),
+      (r) => {
+        const a = r.accounts;
+        const li = r.lists;
+        if (!a || !li) return 'These lists are already in your books.';
+        return (
+          `Accounts: ${a.created} added, ${a.matched} already there` +
+          (a.reactivated ? `, ${a.reactivated} put back` : '') +
+          `. Customers: ${li.customersCreated} added, ${li.customersMatched} already there. Vendors: ${li.vendorsCreated} added, ${li.vendorsMatched} already there. ` +
+          `Items: ${li.itemsCreated} added, ${li.itemsMatched} already there` +
+          (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
+          '.'
+        );
+      },
+    );
+  };
 
   const post = () => {
     const question =
       mode === 'FULL'
         ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
-        : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
+        : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
     if (!window.confirm(question)) return;
     run(
       () => api.postLedgerBatch({ batchId: summary.id, mode }),
@@ -604,7 +666,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
             ['Transactions', (summary.transactionCount - summary.unbalanced.length).toLocaleString()],
             ['Lines', summary.lineCount.toLocaleString()],
             ['Dates', summary.firstDate ? `${formatDate(summary.firstDate)} – ${formatDate(summary.lastDate)}` : 'none'],
-            ['Accounts used', used.length.toLocaleString()],
+            [summary.listsOnly ? 'Accounts' : 'Accounts used', used.length.toLocaleString()],
             ['Balances matching the file', withStored ? `${matched} of ${withStored}` : '—'],
           ].map(([k, v]) => (
             <div key={k} className="min-w-0">
@@ -614,9 +676,14 @@ function LedgerReview({ summary, accounts, busy, run }) {
           ))}
         </dl>
         <p className="border-b border-qb-border px-3 py-1 text-2xs text-qb-ink-faint">
-          {summary.byKind.map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}${n === 1 ? '' : 's'}`).join(' · ')}. Read from{' '}
-          {summary.decodedPages.toLocaleString()} of {summary.rowPages.toLocaleString()} data pages
-          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}.
+          {summary.listsOnly
+            ? 'Lists only: no transactions.'
+            : `${summary.byKind.map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}${n === 1 ? '' : 's'}`).join(' · ')}.`}{' '}
+          {summary.sourceFormat === 'QBW'
+            ? `Read from ${summary.decodedPages.toLocaleString()} of ${summary.rowPages.toLocaleString()} data pages`
+            : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
+          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
+          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}.
         </p>
         {summary.unreadable.length > 0 && (
           <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
@@ -677,8 +744,27 @@ function LedgerReview({ summary, accounts, busy, run }) {
         <ListsPanel summary={summary} busy={busy} accountsReady={unmapped === 0} run={run} />
       </Step>
 
-      <Step number={3} title="Post to your books" state={step3}>
+      <Step number={3} title={summary.listsOnly ? 'Add lists to your books' : 'Post to your books'} state={step3}>
         <div className="flex flex-col gap-2 px-3 py-2">
+          {summary.listsOnly && summary.listsAdded && (
+            <Notice
+              kind="success"
+              text={`This file’s lists are in your books: ${countOf(used.length, ['account', 'accounts'])} and ${countOf(
+                summary.lists.customersDone + summary.lists.vendorsDone + summary.lists.itemsDone,
+                ['customer, vendor or item', 'customers, vendors and items'],
+              )}. No transactions were posted. Use “Reverse added lists” or “Start over” above to undo it.`}
+            />
+          )}
+          {summary.listsOnly && !summary.listsAdded && (
+            <div className="flex items-center gap-3">
+              <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4" disabled={busy} onClick={addLists}>
+                Add lists to your books…
+              </button>
+              <span className="text-xs text-qb-ink-muted">
+                This file has no transactions.{unmapped > 0 && ' Accounts you have not chosen in step 2 are matched by name or created.'}
+              </span>
+            </div>
+          )}
           {summary.liveEntryCount > 0 && summary.mode === 'FULL' && (
             <Notice
               kind="success"
@@ -788,7 +874,7 @@ export default function QbwImporter({ accounts }) {
     async (path) => {
       const ext = path.split('.').pop()?.toLowerCase();
       if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file or a .qbb backup.' });
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
         return;
       }
       setBusy(true);
@@ -804,10 +890,13 @@ export default function QbwImporter({ accounts }) {
         await refreshBatches();
         if (result.kind === 'ledger') {
           const complete = batch.transactionCount - batch.unbalanced.length;
+          const l = batch.lists;
           setNotice({
             kind: 'success',
-            text:
-              `Read the full ledger: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
+            text: batch.listsOnly
+              ? `Read the ${FORMAT_NAMES[batch.sourceFormat]}: lists only, with ${batch.accounts.length} accounts, ${l.customers} customers, ${l.vendors} vendors and ${l.items} items, and no transactions. Nothing is in your books yet: review step 2 below, then add the lists in step 3.`
+              :
+              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
               (batch.unbalanced.length ? ` ${batch.unbalanced.length} could not be read completely and are listed below.` : '') +
               ' Nothing is in your books yet: review step 2 below.',
           });
@@ -850,17 +939,21 @@ export default function QbwImporter({ accounts }) {
   const reverse = (b) => {
     if (
       !window.confirm(
-        `Reverse the import of ${b.fileName}?\n\nEach of its ${b.liveEntryCount.toLocaleString()} entries gets a reversing entry, so your balances return to what they were before the import. Accounts the importer created are deactivated. This can take a moment for large imports.`,
+        b.listsAdded
+          ? `Reverse the lists added from ${b.fileName}?\n\nThe accounts, customers, vendors and items the import created are deactivated (accounts used since stay active). Records that were already in your books are left alone.`
+          : `Reverse the import of ${b.fileName}?\n\nEach of its ${b.liveEntryCount.toLocaleString()} entries gets a reversing entry, so your balances return to what they were before the import. Accounts the importer created are deactivated. This can take a moment for large imports.`,
       )
     )
       return;
     run(
       () => (b.kind === 'ledger' ? api.reverseLedgerBatch(b.id) : api.reverseQbwBatch(b.id)),
       (r) =>
-        `Reversed ${r.entriesVoided.toLocaleString()} entries` +
-        (r.accountsDeactivated ? `, deactivated ${r.accountsDeactivated} accounts the importer created` : '') +
-        (r.listRecordsDeactivated ? ` and ${r.listRecordsDeactivated} customers, vendors and items it added` : '') +
-        '. Your balances are back to where they were.',
+        b.listsAdded
+          ? `Deactivated ${r.accountsDeactivated} accounts and ${r.listRecordsDeactivated} customers, vendors and items the import created.`
+          : `Reversed ${r.entriesVoided.toLocaleString()} entries` +
+            (r.accountsDeactivated ? `, deactivated ${r.accountsDeactivated} accounts the importer created` : '') +
+            (r.listRecordsDeactivated ? ` and ${r.listRecordsDeactivated} customers, vendors and items it added` : '') +
+            '. Your balances are back to where they were.',
     );
   };
 
@@ -871,7 +964,9 @@ export default function QbwImporter({ accounts }) {
     if (
       !window.confirm(
         `Start over: put your books back to how they were just before ${b.fileName} was posted (${when})?\n\n` +
-          `This removes the ${b.liveEntryCount.toLocaleString()} imported entries, with no reversing entries left behind. The accounts set up for the import stay, so it can be posted again.\n\n` +
+          (b.listsAdded
+            ? 'This removes the customers, vendors and items it added, and the accounts it created then. Accounts set up in step 2 before that stay, so the lists can be added again.\n\n'
+            : `This removes the ${b.liveEntryCount.toLocaleString()} imported entries, with no reversing entries left behind. The accounts set up for the import stay, so it can be posted again.\n\n`) +
           `It also undoes ANYTHING else recorded since ${when}: invoices, payments, edits, other imports.\n\n` +
           `Your books as they are now are saved as a backup first (Settings › Backups), so this can be undone.`,
       )
@@ -939,9 +1034,10 @@ export default function QbwImporter({ accounts }) {
           <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · built on the open-source OpenQBW work</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Reads desktop company files (.qbw) and backups (.qbb). Newer files come in as the <strong>full ledger</strong>: the chart of accounts and every
-          transaction, each posted as a balanced entry. Files the newer reader does not cover bring in <strong>invoice line amounts only</strong>, posted
-          against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed
+          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports and Quicken .qif exports. Newer company files and both exports
+          come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
+          as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
+          <strong>invoice line amounts only</strong>, posted against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed
           below.
         </p>
       </section>
@@ -970,7 +1066,7 @@ export default function QbwImporter({ accounts }) {
 
       <Step
         number={1}
-        title="Choose a company file"
+        title="Choose a file"
         state={progress ? 'active' : step1}
         aside={
           summary &&

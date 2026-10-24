@@ -254,6 +254,8 @@ pub struct StartOverPoint {
 pub struct LedgerBatchSummary {
     pub id: i64,
     pub file_name: String,
+    /// `QBW` (a company file or backup), `IIF` or `QIF`, from the file's extension.
+    pub source_format: String,
     pub source_path: String,
     pub file_size_bytes: i64,
     pub imported_at: String,
@@ -288,6 +290,11 @@ pub struct LedgerBatchSummary {
     pub posted_as: Vec<(String, i64)>,
     /// Documents a full import had to post as journal entries, and why.
     pub fallbacks: Vec<FallbackView>,
+    /// The file has lists but no transactions: posting it adds its accounts, customers, vendors
+    /// and items, and nothing else.
+    pub lists_only: bool,
+    /// A lists-only batch whose lists were added and not reversed since.
+    pub lists_added: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -316,6 +323,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         accounts_with_stored_balance: i64,
         pre_post_backup: Option<String>,
         mode: String,
+        lists_added: i64,
     }
     let head: Head = sqlx::query_as("SELECT * FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
@@ -420,11 +428,14 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .await
     .map_err(db_err)?;
     Ok(LedgerBatchSummary {
+        lists_only: transaction_count == 0,
+        lists_added: head.lists_added != 0,
         mode: head.mode,
         documents,
         posted_as,
         fallbacks,
         id: batch_id,
+        source_format: source_format(&head.file_name).into(),
         file_name: head.file_name,
         source_path: head.source_path,
         file_size_bytes: head.file_size_bytes,
@@ -546,9 +557,10 @@ pub struct AutoMapResult {
     pub reactivated: i64,
 }
 
-/// Maps every unmapped source account that has lines: to an existing active account with the same
-/// full name and type, receivables and payables to the system accounts, and otherwise to a new
-/// account of the same type under the (already mapped) parent. Parents are handled first.
+/// Maps every unmapped source account that has lines (every account, when the file has no
+/// transactions): to an existing active account with the same full name and type, receivables and
+/// payables to the system accounts, and otherwise to a new account of the same type under the
+/// (already mapped) parent. Parents are handled first.
 pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoMapResult, String> {
     require_batch(pool, batch_id).await?;
     let file_name: String = sqlx::query_scalar("SELECT file_name FROM ledger_import_batches WHERE id = ?1")
@@ -573,7 +585,9 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
                  -- Estimates and purchase orders have no ledger lines; their form lines name accounts too.
                  OR EXISTS (SELECT 1 FROM ledger_import_transactions t, json_each(t.document, '$.lines') j
                             WHERE t.batch_id = a.batch_id AND json_extract(t.document, '$.type') IN ('estimate', 'purchaseOrder')
-                              AND json_extract(j.value, '$.accountId') = a.source_id)) AS used
+                              AND json_extract(j.value, '$.accountId') = a.source_id)
+                 -- A file of lists only brings its whole chart of accounts.
+                 OR NOT EXISTS (SELECT 1 FROM ledger_import_transactions t WHERE t.batch_id = a.batch_id)) AS used
          FROM ledger_import_accounts a WHERE a.batch_id = ?1",
     )
     .bind(batch_id)
@@ -958,6 +972,9 @@ pub struct PostLedgerResult {
     pub skipped_already_posted: i64,
     /// What a full import made of the transactions.
     pub full: Option<FullImportCounts>,
+    /// For a file of lists only: the accounts, and the customers, vendors and items, it added.
+    pub accounts: Option<AutoMapResult>,
+    pub lists: Option<ImportListsResult>,
 }
 
 /// How a batch posts: every transaction as a journal entry, or sales documents as LocalBooks
@@ -978,6 +995,15 @@ pub struct PostLedgerInput {
     pub mode: ImportMode,
 }
 
+/// The kind of file a batch was read from, by its extension.
+fn source_format(file_name: &str) -> &'static str {
+    match std::path::Path::new(file_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
+        Some("iif") => "IIF",
+        Some("qif") => "QIF",
+        _ => "QBW",
+    }
+}
+
 pub(crate) fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, memo: Option<&str>) -> String {
     let mut parts = vec![match doc_num {
         Some(n) => format!("{kind} #{n}"),
@@ -990,10 +1016,14 @@ pub(crate) fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, me
 
 /// Posts every balanced, unposted source transaction of the batch as one journal entry each, all
 /// inside a single transaction. Refuses while a used account is unmapped, and when the same books
-/// are already posted from another import.
+/// are already posted from another import. A batch with no transactions adds its lists instead
+/// (see `add_lists`).
 pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<PostLedgerResult, String> {
     let batch_id = input.batch_id;
     require_batch(pool, batch_id).await?;
+    if is_lists_only(pool, batch_id).await? {
+        return add_lists(pool, batch_id).await;
+    }
     let duplicate: Option<String> = sqlx::query_scalar(
         "SELECT o.file_name FROM ledger_import_batches b JOIN ledger_import_batches o ON o.fingerprint = b.fingerprint AND o.id <> b.id
          WHERE b.id = ?1 AND EXISTS (
@@ -1173,6 +1203,57 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     Ok(result)
 }
 
+async fn is_lists_only(pool: &SqlitePool, batch_id: i64) -> Result<bool, String> {
+    sqlx::query_scalar("SELECT NOT EXISTS (SELECT 1 FROM ledger_import_transactions WHERE batch_id = ?1)")
+        .bind(batch_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)
+}
+
+/// "Posts" a batch with lists but no transactions: matches or creates every account, then adds
+/// the customers, vendors and items, the way a full import adds lists first. Posts no entries.
+/// Does nothing while the lists are already added; after a Reverse it puts back what that
+/// deactivated (records inactive in the file stay inactive).
+async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult, String> {
+    let added: i64 = sqlx::query_scalar("SELECT lists_added FROM ledger_import_batches WHERE id = ?1")
+        .bind(batch_id)
+        .fetch_one(pool)
+        .await
+        .map_err(db_err)?;
+    if added != 0 {
+        return Ok(PostLedgerResult::default());
+    }
+    let reactivated = sqlx::query(
+        "UPDATE chart_of_accounts SET is_active = 1 WHERE is_active = 0 AND id IN
+             (SELECT account_id FROM ledger_import_accounts WHERE batch_id = ?1 AND created_by_import = 1)",
+    )
+    .bind(batch_id)
+    .execute(pool)
+    .await
+    .map_err(db_err)?
+    .rows_affected() as i64;
+    for sql in [
+        "UPDATE customers SET is_active = 1 WHERE is_active = 0 AND id IN
+             (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND created_by_import = 1 AND is_active = 1)",
+        "UPDATE vendors SET is_active = 1 WHERE is_active = 0 AND id IN
+             (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND created_by_import = 1 AND is_active = 1)",
+        "UPDATE products_services SET is_active = 1 WHERE is_active = 0 AND id IN
+             (SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND created_by_import = 1 AND is_active = 1)",
+    ] {
+        sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
+    }
+    let mut accounts = auto_map_accounts(pool, batch_id).await?;
+    accounts.reactivated += reactivated;
+    let lists = import_lists(pool, batch_id).await?;
+    sqlx::query("UPDATE ledger_import_batches SET lists_added = 1, posted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
+        .bind(batch_id)
+        .execute(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(PostLedgerResult { accounts: Some(accounts), lists: Some(lists), ..Default::default() })
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReverseLedgerResult {
@@ -1183,14 +1264,20 @@ pub struct ReverseLedgerResult {
 }
 
 /// Undoes a posted import: voids every entry it posted and deactivates the accounts it created
-/// once they have no other activity.
+/// once they have no other activity. A lists-only import has no entries: its accounts, customers,
+/// vendors and items are deactivated.
 pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLedgerResult, String> {
-    let mode: Option<String> = sqlx::query_scalar("SELECT mode FROM ledger_import_batches WHERE id = ?1")
+    require_batch(pool, batch_id).await?;
+    let (mode, lists_added): (String, i64) = sqlx::query_as("SELECT mode, lists_added FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
-        .fetch_optional(pool)
+        .fetch_one(pool)
         .await
         .map_err(db_err)?;
-    if mode.as_deref() == Some("FULL") {
+    let lists_only = is_lists_only(pool, batch_id).await?;
+    if lists_only && lists_added == 0 {
+        return Err("QBW_NOTHING_TO_REVERSE: this import's lists are not in your books".into());
+    }
+    if mode == "FULL" {
         // Its invoices, payments and deposits are linked to one another; voiding entries one by one
         // would leave documents behind, so the undo is putting back the books from before the post.
         return Err("QBW_FULL_USE_START_OVER: a full import is undone with Start over, which puts back the books from just before it posted".into());
@@ -1203,7 +1290,7 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLe
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    if entries.is_empty() {
+    if entries.is_empty() && !lists_only {
         return Err("QBW_NOTHING_TO_REVERSE: this import has no posted entries in effect".into());
     }
     let mut result = ReverseLedgerResult::default();
@@ -1240,13 +1327,17 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLe
         let done = sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
         result.list_records_deactivated += done.rows_affected() as i64;
     }
+    if lists_only {
+        sqlx::query("UPDATE ledger_import_batches SET lists_added = 0 WHERE id = ?1").bind(batch_id).execute(pool).await.map_err(db_err)?;
+    }
     Ok(result)
 }
 
-/// Deletes a batch's staged rows. Refuses while it has posted entries in effect.
+/// Deletes a batch's staged rows. Refuses while it has posted entries (or added lists) in effect.
 pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
     let live: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
+        "SELECT COUNT(*) + COALESCE((SELECT lists_added FROM ledger_import_batches WHERE id = ?1), 0)
+         FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
          WHERE t.batch_id = ?1 AND e.is_voided = 0",
     )
     .bind(batch_id)
@@ -1947,7 +2038,7 @@ mod tests {
         assert_eq!(parent, id("Hosting"));
 
         let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
-        assert_eq!(posted, PostLedgerResult { entries_posted: 2, lines_posted: 4, skipped_unbalanced: 1, skipped_already_posted: 0, full: None });
+        assert_eq!(posted, PostLedgerResult { entries_posted: 2, lines_posted: 4, skipped_unbalanced: 1, skipped_already_posted: 0, ..Default::default() });
         assert_eq!(balance(&pool, domains).await, 12_000);
         assert_eq!(balance(&pool, id("Riverside Bank").unwrap()).await, -12_500);
         let memo: String = sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = (SELECT journal_entry_id FROM ledger_import_transactions WHERE source_id = 10)")
@@ -1970,6 +2061,91 @@ mod tests {
         assert_eq!(reversed.entries_voided, 2);
         assert_eq!(reversed.accounts_deactivated, 3);
         assert_eq!(balance(&pool, domains).await, 0);
+        discard_batch(&pool, batch).await.unwrap();
+    }
+
+    /// Intuit's "Import First - List Declarations" kind of file: lists, no transactions.
+    const LISTS_IIF: &str = "!ACCNT\tNAME\tACCNTTYPE\tDESC\tACCNUM\tEXTRA\r
+ACCNT\tChecking\tBANK\t\t1000\t\r
+ACCNT\tAccounts Receivable\tAR\t\t1200\t\r
+ACCNT\tConstruction:Labor\tINC\t\t4100\t\r
+ACCNT\tRepairs\tEXP\t\t6100\t\r
+!CUST\tNAME\tBADDR1\tBADDR2\tPHONE1\tTERMS\r
+CUST\tCustomer\tJoe Customer\t444 Road Rd\t5554443333\tNet 30\r
+!VEND\tNAME\tADDR1\tTAXID\t1099\r
+VEND\tVendor\tJon Vendor\t12-3456789\tY\r
+!INVITEM\tNAME\tINVITEMTYPE\tDESC\tACCNT\tPRICE\tTAXABLE\r
+INVITEM\tFraming\tSERV\tFraming labor\tConstruction:Labor\t55\tN\r
+";
+
+    #[tokio::test]
+    async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
+        let pool = test_pool().await;
+        let books = crate::iif_import::read(LISTS_IIF.as_bytes()).unwrap();
+        assert!(books.transactions.is_empty());
+        let batch = stage(&pool, Path::new("/books/Lists.iif"), 1, &books).await.unwrap();
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        assert!(summary.lists_only && !summary.lists_added);
+        assert_eq!((summary.transaction_count, summary.postable_count, summary.accounts.len()), (0, 0, 5), "Construction is added as Labor's parent");
+
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+        assert_eq!(posted.entries_posted, 0);
+        let accounts = posted.accounts.unwrap();
+        assert_eq!(accounts.matched + accounts.created, 5, "every account is mapped, used or not");
+        let lists = posted.lists.unwrap();
+        assert_eq!((lists.customers_created, lists.vendors_created, lists.items_created), (1, 1, 1));
+        let labor: i64 = sqlx::query_scalar("SELECT a.id FROM chart_of_accounts a JOIN chart_of_accounts p ON p.id = a.parent_id WHERE a.name = 'Labor' AND p.name = 'Construction'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let framing: i64 = sqlx::query_scalar("SELECT income_account_id FROM products_services WHERE name = 'Framing'").fetch_one(&pool).await.unwrap();
+        assert_eq!(framing, labor);
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        assert!(summary.lists_added && summary.posted_at.is_some());
+        assert_eq!(summary.live_entry_count, 0);
+        assert!(discard_batch(&pool, batch).await.is_err(), "reverse first");
+
+        // Again: nothing new, nothing duplicated.
+        let count = |sql: &'static str| {
+            let pool = pool.clone();
+            async move { sqlx::query_scalar::<_, i64>(sql).fetch_one(&pool).await.unwrap() }
+        };
+        let before = (
+            count("SELECT COUNT(*) FROM chart_of_accounts").await,
+            count("SELECT COUNT(*) FROM customers").await,
+            count("SELECT COUNT(*) FROM vendors").await,
+            count("SELECT COUNT(*) FROM products_services").await,
+        );
+        let again = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+        assert_eq!(again, PostLedgerResult::default());
+        let after = (
+            count("SELECT COUNT(*) FROM chart_of_accounts").await,
+            count("SELECT COUNT(*) FROM customers").await,
+            count("SELECT COUNT(*) FROM vendors").await,
+            count("SELECT COUNT(*) FROM products_services").await,
+        );
+        assert_eq!(before, after);
+
+        let reversed = reverse_batch(&pool, batch).await.unwrap();
+        assert_eq!((reversed.entries_voided, reversed.list_records_deactivated), (0, 3));
+        assert_eq!(reversed.accounts_deactivated, accounts.created);
+        assert_eq!(count("SELECT is_active FROM products_services WHERE name = 'Framing'").await, 0);
+        assert!(!batch_summary(&pool, batch).await.unwrap().lists_added);
+        assert!(reverse_batch(&pool, batch).await.is_err(), "nothing left to reverse");
+
+        // Adding them again puts back what the reversal deactivated, without duplicates.
+        let readded = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+        assert_eq!(readded.accounts.unwrap().reactivated, accounts.created);
+        assert_eq!(readded.lists.unwrap(), ImportListsResult::default());
+        assert_eq!(count("SELECT is_active FROM products_services WHERE name = 'Framing'").await, 1);
+        assert_eq!(count("SELECT is_active FROM vendors WHERE name = 'Vendor'").await, 1);
+        assert_eq!(after, (
+            count("SELECT COUNT(*) FROM chart_of_accounts").await,
+            count("SELECT COUNT(*) FROM customers").await,
+            count("SELECT COUNT(*) FROM vendors").await,
+            count("SELECT COUNT(*) FROM products_services").await,
+        ));
+        reverse_batch(&pool, batch).await.unwrap();
         discard_batch(&pool, batch).await.unwrap();
     }
 }
