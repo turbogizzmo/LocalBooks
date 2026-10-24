@@ -27,6 +27,8 @@ mod mcp_server;
 mod preferences;
 mod qbw_backup;
 mod qbw_company;
+mod qbw_documents;
+mod qbw_full_import;
 mod qbw_import;
 mod qbw_ledger_import;
 mod qbw_pages;

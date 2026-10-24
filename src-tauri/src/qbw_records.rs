@@ -105,6 +105,15 @@ impl Value {
         }
     }
 
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Value::Numeric(n) => Some(n.coefficient as f64 * 100f64.powi(n.exponent) * if n.negative { -1.0 } else { 1.0 }),
+            Value::Float(f) => Some(*f),
+            Value::Int(v) => Some(*v as f64),
+            _ => None,
+        }
+    }
+
     pub fn as_date(&self) -> Option<NaiveDate> {
         match self {
             Value::Date(d) => Some(*d),
