@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -802,10 +802,43 @@ function LedgerReview({ summary, accounts, busy, run }) {
   );
 }
 
+/**
+ * What outlives the screen. The wizard unmounts when you go elsewhere, but a file being read keeps
+ * going in the backend; coming back follows that read (its progress, then its result) instead of
+ * offering to start again, and reopens the import that was open.
+ */
+let reading = null;
+let lastOpened = null;
+
+/** Starts reading a file, collecting its progress whether or not the screen is showing. */
+function startReading(path, ext) {
+  const first = ext === 'qbb' ? 'Unpacking backup' : 'Reading file';
+  const subscribers = new Set();
+  const r = {
+    progress: { stage: first, done: 0, total: 1 },
+    seen: ext === 'qbb' ? [first] : [],
+    subscribe: (fn) => {
+      subscribers.add(fn);
+      return () => subscribers.delete(fn);
+    },
+  };
+  let unlisten;
+  // Events travel separately from the command's reply; listening stops once it returns.
+  const listening = listen(QBW_PROGRESS, (e) => {
+    r.progress = e.payload;
+    if (!r.seen.includes(e.payload.stage)) r.seen = [...r.seen, e.payload.stage];
+    subscribers.forEach((fn) => fn(r));
+  })
+    .then((fn) => (unlisten = fn))
+    .catch(() => {});
+  r.promise = listening.then(() => api.ingestRawQbw(path)).finally(() => unlisten?.());
+  return r;
+}
+
 /** Reads a desktop company file or backup into a holding area, maps what it found, then posts balanced entries. */
 export default function QbwImporter({ accounts }) {
   const [batches, setBatches] = useState([]);
-  const [opened, setOpened] = useState(null);
+  const [opened, setOpened] = useState(() => lastOpened);
   const [summary, setSummary] = useState(null);
   const [progress, setProgress] = useState(null);
   const [seenStages, setSeenStages] = useState([]);
@@ -813,7 +846,6 @@ export default function QbwImporter({ accounts }) {
   const [busy, setBusy] = useState(false);
   const [offsetId, setOffsetId] = useState(null);
   const [fallbackDate, setFallbackDate] = useState('');
-  const ingesting = useRef(false);
   const list = accounts ?? [];
 
   useEffect(() => {
@@ -850,42 +882,27 @@ export default function QbwImporter({ accounts }) {
     refreshBatches();
   }, [refreshBatches]);
   useEffect(() => {
+    lastOpened = opened;
     loadSummary(opened);
   }, [opened, loadSummary]);
 
-  useEffect(() => {
-    let unlisten;
-    let cancelled = false;
-    // Events travel separately from the command's reply; ignore any that land after it returns.
-    listen(QBW_PROGRESS, (e) => {
-      if (!ingesting.current) return;
-      setProgress(e.payload);
-      setSeenStages((seen) => (seen.includes(e.payload.stage) ? seen : [...seen, e.payload.stage]));
-    })
-      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
-  const ingest = useCallback(
-    async (path) => {
-      const ext = path.split('.').pop()?.toLowerCase();
-      if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
-        return;
-      }
+  // Shows a read's progress, then what it found. Also used when coming back to a read that
+  // started before the screen was left.
+  const follow = useCallback(
+    async (r) => {
       setBusy(true);
       setNotice(null);
-      ingesting.current = true;
-      setSeenStages(ext === 'qbb' ? ['Unpacking backup'] : []);
-      setProgress({ stage: ext === 'qbb' ? 'Unpacking backup' : 'Reading file', done: 0, total: 1 });
+      const show = ({ progress: p, seen }) => {
+        setProgress(p);
+        setSeenStages(seen);
+      };
+      show(r);
+      const unsubscribe = r.subscribe(show);
       try {
-        const result = await api.ingestRawQbw(path);
+        const result = await r.promise;
         const batch = result.batch;
-        setOpened({ kind: result.kind, id: batch.id });
+        lastOpened = { kind: result.kind, id: batch.id };
+        setOpened(lastOpened);
         setSummary(batch);
         await refreshBatches();
         if (result.kind === 'ledger') {
@@ -911,12 +928,30 @@ export default function QbwImporter({ accounts }) {
       } catch (err) {
         setNotice({ kind: 'error', text: errorText(err) });
       } finally {
-        ingesting.current = false;
+        unsubscribe();
+        if (reading === r) reading = null;
         setBusy(false);
         setProgress(null);
       }
     },
     [refreshBatches],
+  );
+
+  useEffect(() => {
+    if (reading) follow(reading);
+  }, [follow]);
+
+  const ingest = useCallback(
+    async (path) => {
+      const ext = path.split('.').pop()?.toLowerCase();
+      if (!EXTENSIONS.includes(ext)) {
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
+        return;
+      }
+      reading = startReading(path, ext);
+      follow(reading);
+    },
+    [follow],
   );
 
   const run = async (fn, success) => {
@@ -992,15 +1027,32 @@ export default function QbwImporter({ accounts }) {
     }
   };
 
-  const remove = (b) => {
+  // Closes the open import. Its summary goes in the same update, so no render pairs a closed
+  // import with the summary of the one that was open.
+  const close = () => {
+    setOpened(null);
+    setSummary(null);
+  };
+
+  const remove = async (b) => {
     if (!window.confirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`)) return;
-    run(() => (b.kind === 'ledger' ? api.discardLedgerBatch(b.id) : api.discardQbwBatch(b.id)), () => 'Import deleted.').then(() => {
-      if (opened && b.kind === opened.kind && b.id === opened.id) setOpened(null);
-    });
+    setBusy(true);
+    setNotice(null);
+    try {
+      await (b.kind === 'ledger' ? api.discardLedgerBatch(b.id) : api.discardQbwBatch(b.id));
+      if (opened && b.kind === opened.kind && b.id === opened.id) close();
+      setNotice({ kind: 'success', text: 'Import deleted.' });
+      await refreshBatches();
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const isLedger = opened?.kind === 'ledger';
-  const invoiceSummary = !isLedger ? summary : null;
+  // Only an invoice-lines summary has labels; anything else is not shown as one.
+  const invoiceSummary = !isLedger && summary?.labels ? summary : null;
   const unmapped = invoiceSummary?.labels.filter((l) => !l.accountId).length ?? 0;
   const postable = invoiceSummary ? invoiceSummary.invoiceCount - invoiceSummary.alreadyPostedInvoiceCount : 0;
   const ready = invoiceSummary && invoiceSummary.lineCount > 0 && unmapped === 0 && offsetId != null && postable > 0;
@@ -1056,7 +1108,10 @@ export default function QbwImporter({ accounts }) {
             batches={batches}
             openKey={opened ? `${opened.kind}-${opened.id}` : null}
             busy={busy}
-            onOpen={(b) => setOpened({ kind: b.kind, id: b.id })}
+            onOpen={(b) => {
+              setSummary(null);
+              setOpened({ kind: b.kind, id: b.id });
+            }}
             onReverse={reverse}
             onStartOver={startOver}
             onDelete={remove}
@@ -1071,7 +1126,7 @@ export default function QbwImporter({ accounts }) {
         aside={
           summary &&
           !progress && (
-            <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={busy} onClick={() => setOpened(null)}>
+            <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={busy} onClick={close}>
               Import another file
             </button>
           )
@@ -1086,7 +1141,7 @@ export default function QbwImporter({ accounts }) {
         )}
       </Step>
 
-      {isLedger && summary ? (
+      {isLedger && summary?.accounts ? (
         <LedgerReview summary={summary} accounts={list} busy={busy} run={run} />
       ) : (
         <>
