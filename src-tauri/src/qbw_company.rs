@@ -36,12 +36,13 @@ const ACCOUNT_TYPES: [&str; 15] = [
 ];
 
 /// Transaction kinds by line-item table, with a readable name.
-const TRANSACTION_TABLES: [(&str, &str); 13] = [
+const TRANSACTION_TABLES: [(&str, &str); 14] = [
     ("invoice", "Invoice"),
     ("credit_memo", "Credit memo"),
     ("sales_receipt", "Sales receipt"),
     ("received_payment", "Payment"),
     ("deposit", "Deposit"),
+    ("transfer", "Transfer"),
     ("check", "Check"),
     ("credit_cardcharge", "Credit card charge"),
     ("bill", "Bill"),
@@ -76,6 +77,8 @@ pub struct SourceLine {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceTransaction {
+    /// Document details for the kinds a full import recreates natively (see `qbw_documents`).
+    pub document: Option<crate::qbw_documents::SourceDocument>,
     pub id: i64,
     pub kind: &'static str,
     pub date: NaiveDate,
@@ -223,11 +226,11 @@ pub fn read_pages(path: &Path) -> Result<(Vec<LogicalPage>, Catalog, DecodeStats
     Ok((pages, catalog, stats, refined))
 }
 
-fn text(row: &Row, column: &str) -> Option<String> {
+pub(crate) fn text(row: &Row, column: &str) -> Option<String> {
     row.get(column).as_text().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-fn rows_of(pages: &[LogicalPage], catalog: &Catalog, table: &str) -> Vec<Row> {
+pub(crate) fn rows_of(pages: &[LogicalPage], catalog: &Catalog, table: &str) -> Vec<Row> {
     catalog.table_id(table).map(|id| table_rows(pages, catalog, id).rows).unwrap_or_default()
 }
 
@@ -563,6 +566,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                     name,
                     memo: header.and_then(|h| text(h, "memo")),
                     lines: Vec::new(),
+                    document: None,
                 }
             });
             if cents != 0 {
@@ -597,6 +601,28 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
     unbalanced.sort_by_key(|t| (t.date, t.id));
+    let arap: HashSet<i64> =
+        accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
+    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a));
+    for t in &mut balanced {
+        t.document = documents.remove(&t.id);
+    }
+    // Estimates and purchase orders post nothing: they come along as transactions without lines.
+    for (id, document) in documents {
+        let (kind, date, doc_num, name, memo) = match &document {
+            crate::qbw_documents::SourceDocument::Estimate { customer_id, date, number, memo, .. } => {
+                ("Estimate", *date, number.clone(), customers.get(customer_id).cloned(), memo.clone())
+            }
+            crate::qbw_documents::SourceDocument::PurchaseOrder { vendor_id, date, number, memo, .. } => {
+                ("Purchase order", *date, number.clone(), vendors.get(vendor_id).cloned(), memo.clone())
+            }
+            _ => continue,
+        };
+        if (earliest..=latest).contains(&date) {
+            balanced.push(SourceTransaction { id, kind, date, doc_num, name, memo, lines: Vec::new(), document: Some(document) });
+        }
+    }
+    balanced.sort_by_key(|t| (t.date, t.id));
     unreadable.sort_by_key(|u| (u.date, u.transaction_id));
     let customers = read_parties(&pages, &catalog, false);
     let vendors = read_parties(&pages, &catalog, true);
@@ -613,7 +639,7 @@ mod tests {
     }
 
     fn txn(id: i64, lines: Vec<SourceLine>) -> SourceTransaction {
-        SourceTransaction { id, kind: "Check", date: NaiveDate::from_ymd_opt(2024, 7, 30).unwrap(), doc_num: None, name: None, memo: None, lines }
+        SourceTransaction { id, kind: "Check", date: NaiveDate::from_ymd_opt(2024, 7, 30).unwrap(), doc_num: None, name: None, memo: None, lines, document: None }
     }
 
     #[test]

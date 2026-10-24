@@ -170,7 +170,9 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
             <tr key={key} className={isOpen ? 'bg-qb-green-tint' : ''}>
               <td className="qb-grid-cell">
                 <div className="font-semibold">{b.fileName}</div>
-                <div className="text-2xs text-qb-ink-faint">{b.kind === 'ledger' ? 'Full ledger' : 'Invoice lines'}</div>
+                <div className="text-2xs text-qb-ink-faint">
+                  {b.kind !== 'ledger' ? 'Invoice lines' : b.liveEntryCount === 0 ? 'Company file' : b.mode === 'FULL' ? 'Company file · full import' : 'Company file · journal import'}
+                </div>
               </td>
               <td className="qb-grid-cell text-qb-ink-muted">{STAMP.format(new Date(b.importedAt))}</td>
               <td className="qb-grid-cell num">{b.lineCount.toLocaleString()}</td>
@@ -195,7 +197,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                       Start over…
                     </button>
                   )}
-                  {b.liveEntryCount > 0 && (
+                  {b.liveEntryCount > 0 && b.mode !== 'FULL' && (
                     <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs text-qb-negative" disabled={busy} onClick={() => onReverse(b)}>
                       Reverse posted entries…
                     </button>
@@ -204,7 +206,13 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                     type="button"
                     className="qb-btn qb-btn-secondary h-row px-2 text-xs"
                     disabled={busy || b.liveEntryCount > 0}
-                    title={b.liveEntryCount > 0 ? 'Reverse the posted entries first' : 'Delete this import (your books are not affected)'}
+                    title={
+                      b.liveEntryCount === 0
+                        ? 'Delete this import (your books are not affected)'
+                        : b.mode === 'FULL'
+                          ? 'Start over first'
+                          : 'Reverse the posted entries first'
+                    }
                     onClick={() => onDelete(b)}
                   >
                     Delete import
@@ -449,8 +457,96 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
   );
 }
 
+/** Sales document types read from the file, as `SourceDocument` tags them. */
+const DOCUMENT_WORDS = {
+  invoice: ['invoice', 'invoices'],
+  creditMemo: ['credit memo', 'credit memos'],
+  salesReceipt: ['sales receipt', 'sales receipts'],
+  payment: ['payment', 'payments'],
+  deposit: ['deposit', 'deposits'],
+  bill: ['bill', 'bills'],
+  billPayment: ['bill payment', 'bill payments'],
+  expense: ['check or card charge', 'checks and card charges'],
+  transfer: ['transfer', 'transfers'],
+  estimate: ['estimate', 'estimates'],
+  purchaseOrder: ['purchase order', 'purchase orders'],
+};
+
+const countOf = (n, [one, many]) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+function FallbackList({ items }) {
+  return (
+    <table className="qb-grid">
+      <colgroup>
+        <col className="w-[110px]" />
+        <col className="w-[140px]" />
+        <col className="w-[90px]" />
+        <col className="w-[200px]" />
+        <col />
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="qb-grid-head">Date</th>
+          <th className="qb-grid-head">Type</th>
+          <th className="qb-grid-head">Number</th>
+          <th className="qb-grid-head">Name</th>
+          <th className="qb-grid-head">Why it is not a LocalBooks document</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((t, i) => (
+          <tr key={i}>
+            <td className="qb-grid-cell">{formatDate(t.date)}</td>
+            <td className="qb-grid-cell">{t.kind}</td>
+            <td className="qb-grid-cell">{t.docNum ?? ''}</td>
+            <td className="qb-grid-cell">{t.name ?? ''}</td>
+            <td className="qb-grid-cell">{t.reason}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ModeChoice({ mode, setMode, documents, busy }) {
+  const docs = documents.filter(([type]) => DOCUMENT_WORDS[type]).map(([type, n]) => countOf(n, DOCUMENT_WORDS[type]));
+  const options = [
+    [
+      'FULL',
+      'Full import',
+      docs.length
+        ? `${docs.join(', ')} come in as LocalBooks documents, so open invoices and bills, customer and vendor balances, and A/R and A/P aging carry over. Customers, vendors and items are brought in first. Anything that cannot be a document posts as a journal entry and is listed. Undo with Start over.`
+        : 'No sales documents were found in this file, so a full import posts the same journal entries.',
+    ],
+    ['JOURNAL', 'Journal import', 'Every transaction becomes one journal entry. Account balances are the same, but invoices and payments are not recreated. Undo with Reverse or Start over.'],
+  ];
+  return (
+    <fieldset className="grid gap-2 sm:grid-cols-2" disabled={busy}>
+      <legend className="sr-only">How to bring in the transactions</legend>
+      {options.map(([value, title, text]) => (
+        <label
+          key={value}
+          className={`flex cursor-pointer gap-2 rounded border px-3 py-2 text-xs ${mode === value ? 'border-qb-green bg-qb-green-tint' : 'border-qb-border'}`}
+        >
+          <input type="radio" name="ledger-import-mode" value={value} checked={mode === value} onChange={() => setMode(value)} className="mt-0.5" />
+          <span>
+            <span className="block font-semibold">
+              {title}
+              {value === 'FULL' && docs.length > 0 && <span className="ml-1 font-normal text-qb-ink-muted">(recommended)</span>}
+            </span>
+            <span className="text-qb-ink-muted">{text}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 /** Steps 2 and 3 for a full-ledger import. */
 function LedgerReview({ summary, accounts, busy, run }) {
+  const documents = summary.documents ?? [];
+  const [mode, setMode] = useState(documents.length > 0 ? 'FULL' : 'JOURNAL');
+  const fallbacks = summary.fallbacks ?? [];
   const used = summary.accounts.filter((a) => a.lineCount > 0);
   const unmapped = used.filter((a) => !a.accountId).length;
   const matched = summary.accountsMatchingStored;
@@ -459,18 +555,44 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const step3 = summary.liveEntryCount > 0 && summary.postableCount === 0 ? 'done' : unmapped === 0 && summary.postableCount > 0 ? 'active' : 'locked';
 
   const post = () => {
-    if (
-      !window.confirm(
-        `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`,
-      )
-    )
-      return;
+    const question =
+      mode === 'FULL'
+        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
+        : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
+    if (!window.confirm(question)) return;
     run(
-      () => api.postLedgerBatch({ batchId: summary.id }),
-      (r) =>
-        `Posted ${r.entriesPosted.toLocaleString()} entries (${r.linesPosted.toLocaleString()} lines).` +
-        (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
-        (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : ''),
+      () => api.postLedgerBatch({ batchId: summary.id, mode }),
+      (r) => {
+        const f = r.full;
+        const made = f
+          ? [
+              [f.invoices, DOCUMENT_WORDS.invoice],
+              [f.creditMemos, DOCUMENT_WORDS.creditMemo],
+              [f.salesReceipts, DOCUMENT_WORDS.salesReceipt],
+              [f.payments, DOCUMENT_WORDS.payment],
+              [f.deposits, DOCUMENT_WORDS.deposit],
+              [f.bills, DOCUMENT_WORDS.bill],
+              [f.vendorCredits, ['vendor credit', 'vendor credits']],
+              [f.billPayments, DOCUMENT_WORDS.billPayment],
+              [f.checks, ['check', 'checks']],
+              [f.expenses, ['card charge', 'card charges']],
+              [f.transfers, DOCUMENT_WORDS.transfer],
+              [f.estimates, DOCUMENT_WORDS.estimate],
+              [f.purchaseOrders, DOCUMENT_WORDS.purchaseOrder],
+              [f.journalEntries, ['journal entry', 'journal entries']],
+            ]
+              .filter(([n]) => n > 0)
+              .map(([n, words]) => countOf(n, words))
+          : [];
+        return (
+          (f ? `Brought in ${made.join(', ')}.` : `Posted ${r.entriesPosted.toLocaleString()} entries (${r.linesPosted.toLocaleString()} lines).`) +
+          (f?.creditsApplied ? ` Applied ${countOf(f.creditsApplied, ['credit', 'credits'])} to invoices.` : '') +
+          (f?.fellBack ? ` ${countOf(f.fellBack, ['document', 'documents'])} posted as journal entries instead (listed in step 3).` : '') +
+          (f?.notImported ? ` ${countOf(f.notImported, ['estimate or purchase order', 'estimates and purchase orders'])} could not be brought in (listed in step 3; they post nothing).` : '') +
+          (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
+          (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '')
+        );
+      },
     );
   };
 
@@ -557,13 +679,33 @@ function LedgerReview({ summary, accounts, busy, run }) {
 
       <Step number={3} title="Post to your books" state={step3}>
         <div className="flex flex-col gap-2 px-3 py-2">
-          {summary.liveEntryCount > 0 && (
+          {summary.liveEntryCount > 0 && summary.mode === 'FULL' && (
+            <Notice
+              kind="success"
+              text={`This import is in your books: ${(summary.postedAs ?? [])
+                .map(([as, n]) => `${n.toLocaleString()} ${as.toLowerCase().replaceAll('_', ' ')}${n === 1 ? '' : 's'}`)
+                .join(', ')}. Use “Start over” above to undo it.`}
+            />
+          )}
+          {summary.liveEntryCount > 0 && summary.mode !== 'FULL' && (
             <Notice kind="success" text={`${summary.liveEntryCount.toLocaleString()} entries from this import are in your books. Use “Reverse posted entries” above to undo them.`} />
           )}
+          {fallbacks.length > 0 && (
+            <details className="rounded border border-qb-border">
+              <summary className="cursor-pointer px-3 py-1.5 text-xs">
+                <strong>{countOf(fallbacks.length, ['document', 'documents'])} not brought in as LocalBooks documents.</strong> Those that post are in your
+                books as journal entries; estimates and purchase orders post nothing. The reasons are below.
+              </summary>
+              <FallbackList items={fallbacks} />
+            </details>
+          )}
+          {summary.postableCount > 0 && summary.liveEntryCount === 0 && <ModeChoice mode={mode} setMode={setMode} documents={documents} busy={busy} />}
           {summary.postableCount > 0 && (
             <div className="flex items-center gap-3">
               <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4" disabled={busy || unmapped > 0} onClick={post}>
-                Post {summary.postableCount.toLocaleString()} entries…
+                {mode === 'FULL' && summary.liveEntryCount === 0
+                  ? `Bring in ${summary.postableCount.toLocaleString()} transactions…`
+                  : `Post ${summary.postableCount.toLocaleString()} entries…`}
               </button>
               {unmapped > 0 && <span className="text-xs text-qb-ink-muted">Finish step 2 first.</span>}
             </div>
