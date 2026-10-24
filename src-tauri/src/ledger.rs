@@ -862,8 +862,8 @@ pub struct LedgerVerification {
     pub migrations_recorded: i64,
     /// Audit records verified through the hash chain.
     pub audit_records_sealed: i64,
-    /// Whether this computer holds a record of the chain to compare the file against.
-    pub audit_trail_anchored: bool,
+    /// The day this computer started keeping a record of the audit trail (YYYY-MM-DD), if it has one.
+    pub audit_trail_recorded_since: Option<String>,
     pub findings: Vec<AuditFinding>,
 }
 
@@ -934,7 +934,7 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
         voids_checked,
         migrations_recorded,
         audit_records_sealed: chain.records_sealed,
-        audit_trail_anchored: chain.anchored,
+        audit_trail_recorded_since: chain.recorded_since,
         findings,
     })
 }

@@ -105,11 +105,11 @@ function Corrections({ onChanged }) {
 function Verification({ result, onDismiss, onChanged }) {
   const [reviewing, setReviewing] = useState(false);
   if (result.error) return <Notice kind="error" text={`Verification could not run: ${result.error}`} onDismiss={onDismiss} />;
-  const { entriesChecked, voidsChecked, migrationsRecorded, auditRecordsSealed, auditTrailAnchored, findings } = result.data;
+  const { entriesChecked, voidsChecked, migrationsRecorded, auditRecordsSealed, auditTrailRecordedSince, findings } = result.data;
   if (findings.length === 0) {
-    const chain = auditTrailAnchored
-      ? `${auditRecordsSealed.toLocaleString()} audit records verified against this computer's record of the audit trail.`
-      : `${auditRecordsSealed.toLocaleString()} audit records are consistent; this computer has no earlier record of this file's audit trail to compare against.`;
+    const chain = auditTrailRecordedSince
+      ? `${auditRecordsSealed.toLocaleString()} audit records are linked and consistent, and match the record this computer has kept of this file's audit trail since ${auditTrailRecordedSince} (changes made outside the app before then can't be compared).`
+      : `${auditRecordsSealed.toLocaleString()} audit records are linked and consistent; this computer has no record of this file's audit trail to compare against.`;
     return (
       <Notice
         kind="success"

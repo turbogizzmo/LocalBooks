@@ -25,8 +25,9 @@ caught even if someone also edited the snapshots.
 - "Audit record missing" means the file is behind what this computer last recorded: records were
   removed, or you opened an older copy of the file. Restoring a backup from inside LocalBooks
   doesn't cause this.
-- On a computer that has never had the file open (or for a brand-new file), the green message says
-  there's no earlier record to compare against; the links are still checked.
+- The green message says since when this computer has kept its record of the file. The record starts
+  the first time the file is opened on this computer, so it can only catch changes made after that
+  day. Changes made earlier, or on another computer, are caught only if they broke the links.
 
 ## Review corrections
 

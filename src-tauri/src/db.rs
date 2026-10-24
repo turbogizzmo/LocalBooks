@@ -319,7 +319,10 @@ impl Db {
                 live.pool = pool;
                 if swapped.is_ok() {
                     // The replacement's audit trail may be behind this computer's record of the old one.
-                    crate::audit_chain::reanchor(&live.pool).await?;
+                    // The swap has happened either way, so a failure here must not report it as failed.
+                    if let Err(err) = crate::audit_chain::reanchor(&live.pool).await {
+                        eprintln!("LocalBooks: could not record the restored file's audit trail: {err}");
+                    }
                 }
                 swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
             }
@@ -468,8 +471,15 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
     }
     migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
     // Seal anything written outside a write transaction (the migration records) into the audit chain.
-    let tx = crate::ledger::begin_write(&pool).await.map_err(|e| format!("cannot open company file {}: {e}", path.display()))?;
-    crate::ledger::commit_write(tx).await.map_err(|e| format!("cannot seal the audit trail of {}: {e}", path.display()))?;
+    // Best effort: the books must still open (and be verifiable) if sealing fails; the next write
+    // transaction seals them instead.
+    let sealed = match crate::ledger::begin_write(&pool).await {
+        Ok(tx) => crate::ledger::commit_write(tx).await,
+        Err(e) => Err(e),
+    };
+    if let Err(e) = sealed {
+        eprintln!("LocalBooks: could not seal the audit trail of {}: {e}", path.display());
+    }
 
     Ok(pool)
 }

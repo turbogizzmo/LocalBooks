@@ -29,7 +29,31 @@ const ANCHORS_FILE: &str = "audit-anchors.json";
 
 static ANCHORS: OnceLock<SecretStore> = OnceLock::new();
 /// The record per file id as this process last read or wrote it, so commits never move it back.
-static ANCHORED: Mutex<Option<HashMap<String, (i64, String)>>> = Mutex::const_new(None);
+static ANCHORED: Mutex<Option<HashMap<String, Record>>> = Mutex::const_new(None);
+
+/// What this computer keeps about one file's chain: its newest sealed row, and the day this computer
+/// first started keeping the record. Only changes made after that day can be checked against it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Record {
+    row_id: i64,
+    row_hash: String,
+    since: String,
+}
+
+impl Record {
+    fn encode(&self) -> String {
+        format!("{}:{}:{}", self.row_id, self.row_hash, self.since)
+    }
+
+    fn decode(value: &str) -> Result<Record, String> {
+        let damaged = || "AUDIT_ANCHOR_DAMAGED: the audit trail record on this computer is unreadable".to_string();
+        let mut parts = value.splitn(3, ':');
+        let row_id = parts.next().and_then(|id| id.parse().ok()).ok_or_else(damaged)?;
+        let row_hash = parts.next().filter(|h| h.len() == 64).ok_or_else(damaged)?.to_string();
+        let since = parts.next().unwrap_or_default().to_string();
+        Ok(Record { row_id, row_hash, since })
+    }
+}
 
 /// Where chain heads are recorded. Installed once at startup; without it (tests, the command-line
 /// tools) rows are still sealed but nothing is recorded outside the file.
@@ -132,7 +156,7 @@ pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, Stri
 /// so advancing blindly would overwrite the evidence. Call inside the write transaction, after [`seal`].
 pub async fn continues_record(conn: &mut SqliteConnection, head: &Option<ChainHead>) -> Result<bool, String> {
     let Some(head) = head else { return Ok(true) };
-    let Some((row_id, row_hash)) = recorded_cached(&head.file_id).await? else { return Ok(true) };
+    let Some(Record { row_id, row_hash, .. }) = recorded_cached(&head.file_id).await? else { return Ok(true) };
     let current: Option<String> = sqlx::query_scalar("SELECT row_hash FROM ledger_audit_log WHERE id = ?1")
         .bind(row_id)
         .fetch_optional(&mut *conn)
@@ -156,11 +180,18 @@ async fn record(head: &ChainHead, replace: bool) -> Result<(), String> {
     let Some(store) = anchor_store() else { return Ok(()) };
     let mut anchored = ANCHORED.lock().await;
     let anchored = anchored.get_or_insert_with(HashMap::new);
-    if !replace && anchored.get(&head.file_id).is_some_and(|(newest, _)| *newest >= head.row_id) {
+    let known = match anchored.get(&head.file_id) {
+        Some(known) => Some(known.clone()),
+        None => recorded(&head.file_id).await?,
+    };
+    if !replace && known.as_ref().is_some_and(|k| k.row_id >= head.row_id) {
         return Ok(());
     }
-    store.put(&head.file_id, &format!("{}:{}", head.row_id, head.row_hash)).await?;
-    anchored.insert(head.file_id.clone(), (head.row_id, head.row_hash.clone()));
+    // The day the record was started stays put, even when a restore moves the head back.
+    let since = known.map(|k| k.since).filter(|s| !s.is_empty()).unwrap_or_else(|| chrono::Local::now().date_naive().to_string());
+    let record = Record { row_id: head.row_id, row_hash: head.row_hash.clone(), since };
+    store.put(&head.file_id, &record.encode()).await?;
+    anchored.insert(head.file_id.clone(), record);
     Ok(())
 }
 
@@ -177,7 +208,7 @@ pub async fn reanchor(pool: &SqlitePool) -> Result<(), String> {
 }
 
 /// The record for `file_id`, read from the store once per process and then kept in memory.
-async fn recorded_cached(file_id: &str) -> Result<Option<(i64, String)>, String> {
+async fn recorded_cached(file_id: &str) -> Result<Option<Record>, String> {
     if anchor_store().is_none() {
         return Ok(None);
     }
@@ -193,12 +224,9 @@ async fn recorded_cached(file_id: &str) -> Result<Option<(i64, String)>, String>
     Ok(stored)
 }
 
-async fn recorded(file_id: &str) -> Result<Option<(i64, String)>, String> {
+async fn recorded(file_id: &str) -> Result<Option<Record>, String> {
     let Some(store) = anchor_store() else { return Ok(None) };
-    let Some(value) = store.get(file_id).await? else { return Ok(None) };
-    let (id, hash) = value.split_once(':').ok_or("AUDIT_ANCHOR_DAMAGED: the audit trail record on this computer is unreadable")?;
-    let id = id.parse().map_err(|_| "AUDIT_ANCHOR_DAMAGED: the audit trail record on this computer is unreadable".to_string())?;
-    Ok(Some((id, hash.to_string())))
+    store.get(file_id).await?.map(|value| Record::decode(&value)).transpose()
 }
 
 /// Outcome of checking the chain.
@@ -208,8 +236,9 @@ pub struct ChainVerification {
     pub records_sealed: i64,
     /// Rows written but not sealed yet (only the newest rows, outside a write transaction).
     pub records_pending: i64,
-    /// Whether this computer holds a record of the chain to compare against.
-    pub anchored: bool,
+    /// The day this computer started keeping a record of the chain (YYYY-MM-DD), when it has one.
+    /// Changes made before then cannot be checked against it, only for internal consistency.
+    pub recorded_since: Option<String>,
     /// (audit row id, problem)
     pub problems: Vec<(i64, String)>,
 }
@@ -248,7 +277,7 @@ pub async fn verify(pool: &SqlitePool) -> Result<ChainVerification, String> {
     }
 
     let anchor = recorded(&file_id).await?;
-    if let Some((anchored_id, anchored_hash)) = &anchor {
+    if let Some(Record { row_id: anchored_id, row_hash: anchored_hash, .. }) = &anchor {
         match hashes.get(anchored_id) {
             None => problems.push((
                 *anchored_id,
@@ -263,7 +292,8 @@ pub async fn verify(pool: &SqlitePool) -> Result<ChainVerification, String> {
     }
     problems.sort();
     problems.dedup();
-    Ok(ChainVerification { records_sealed: sealed, records_pending: pending, anchored: anchor.is_some(), problems })
+    let recorded_since = anchor.map(|a| a.since).map(|s| if s.is_empty() { "an unknown date".to_string() } else { s });
+    Ok(ChainVerification { records_sealed: sealed, records_pending: pending, recorded_since, problems })
 }
 
 #[cfg(test)]
@@ -342,7 +372,8 @@ mod tests {
         post(&pool, 1_000).await;
         let last = post(&pool, 2_000).await;
         let chain = verify(&pool).await.unwrap();
-        assert!(chain.anchored && chain.problems.is_empty(), "{chain:?}");
+        assert!(chain.recorded_since.is_some() && chain.problems.is_empty(), "{chain:?}");
+        assert_eq!(chain.recorded_since.as_deref(), Some(chrono::Local::now().date_naive().to_string().as_str()));
 
         // Remove the newest POST record and rebuild the hashes so the chain is internally consistent.
         sqlx::query("DROP TRIGGER trg_ledger_audit_no_delete").execute(&pool).await.unwrap();
