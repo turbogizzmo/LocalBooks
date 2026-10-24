@@ -23,6 +23,7 @@ use sqlx::SqlitePool;
 
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 use crate::qbw_company::Ledger;
+use crate::qbw_full_import::{FullImportCounts, Outcome, Staged};
 
 /// Description given to accounts the importer creates (also how a reversal finds them).
 const CREATED_NOTE: &str = "Created by the desktop migration wizard from";
@@ -86,8 +87,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
     }
     for t in ledger.transactions.iter().chain(&ledger.unbalanced) {
         sqlx::query(
-            "INSERT INTO ledger_import_transactions (batch_id, source_id, kind, date, doc_num, name, memo, imbalance_cents)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO ledger_import_transactions (batch_id, source_id, kind, date, doc_num, name, memo, imbalance_cents, document)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(batch_id)
         .bind(t.id)
@@ -97,6 +98,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
         .bind(&t.name)
         .bind(&t.memo)
         .bind(t.imbalance_cents())
+        .bind(t.document.as_ref().map(|d| serde_json::to_string(d).expect("documents serialize")))
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -278,6 +280,24 @@ pub struct LedgerBatchSummary {
     pub lists: ListsView,
     /// Present while the pre-import copy exists on disk.
     pub start_over: Option<StartOverPoint>,
+    /// How the batch was last posted: `JOURNAL` or `FULL`.
+    pub mode: String,
+    /// Sales documents a full import would create, by type (`invoice`, `payment`, ...).
+    pub documents: Vec<(String, i64)>,
+    /// What the posted transactions became (`INVOICE`, `PAYMENT`, `JOURNAL`, ...).
+    pub posted_as: Vec<(String, i64)>,
+    /// Documents a full import had to post as journal entries, and why.
+    pub fallbacks: Vec<FallbackView>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct FallbackView {
+    pub kind: String,
+    pub date: String,
+    pub doc_num: Option<String>,
+    pub name: Option<String>,
+    pub reason: String,
 }
 
 pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBatchSummary, String> {
@@ -295,6 +315,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         accounts_matching_stored: i64,
         accounts_with_stored_balance: i64,
         pre_post_backup: Option<String>,
+        mode: String,
     }
     let head: Head = sqlx::query_as("SELECT * FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
@@ -370,7 +391,36 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
+    let documents: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT json_extract(document, '$.type'), COUNT(*) FROM ledger_import_transactions
+         WHERE batch_id = ?1 AND document IS NOT NULL AND imbalance_cents = 0 GROUP BY 1 ORDER BY 2 DESC",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let posted_as: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT t.posted_as, COUNT(*) FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
+         WHERE t.batch_id = ?1 AND e.is_voided = 0 AND t.posted_as IS NOT NULL GROUP BY 1 ORDER BY 2 DESC",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let fallbacks: Vec<FallbackView> = sqlx::query_as(
+        "SELECT t.kind, t.date, t.doc_num, t.name, t.fallback_reason AS reason
+         FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
+         WHERE t.batch_id = ?1 AND e.is_voided = 0 AND t.fallback_reason IS NOT NULL ORDER BY t.date, t.source_id",
+    )
+    .bind(batch_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
     Ok(LedgerBatchSummary {
+        mode: head.mode,
+        documents,
+        posted_as,
+        fallbacks,
         id: batch_id,
         file_name: head.file_name,
         source_path: head.source_path,
@@ -899,15 +949,29 @@ pub struct PostLedgerResult {
     pub lines_posted: i64,
     pub skipped_unbalanced: i64,
     pub skipped_already_posted: i64,
+    /// What a full import made of the transactions.
+    pub full: Option<FullImportCounts>,
+}
+
+/// How a batch posts: every transaction as a journal entry, or sales documents as LocalBooks
+/// invoices, credit memos, sales receipts, payments and deposits (see `qbw_full_import`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ImportMode {
+    #[default]
+    Journal,
+    Full,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostLedgerInput {
     pub batch_id: i64,
+    #[serde(default)]
+    pub mode: ImportMode,
 }
 
-fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, memo: Option<&str>) -> String {
+pub(crate) fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, memo: Option<&str>) -> String {
     let mut parts = vec![match doc_num {
         Some(n) => format!("{kind} #{n}"),
         None => kind.to_string(),
@@ -973,10 +1037,11 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         memo: Option<String>,
         imbalance_cents: i64,
         live: i64,
+        document: Option<String>,
     }
     let txns: Vec<Txn> = sqlx::query_as(
         "SELECT t.source_id, t.kind, t.date, t.doc_num, t.name, t.memo, t.imbalance_cents,
-                (t.journal_entry_id IS NOT NULL AND e.is_voided = 0) AS live
+                (t.journal_entry_id IS NOT NULL AND e.is_voided = 0) AS live, t.document
          FROM ledger_import_transactions t LEFT JOIN journal_entries e ON e.id = t.journal_entry_id
          WHERE t.batch_id = ?1 ORDER BY t.date, t.source_id",
     )
@@ -993,11 +1058,15 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     .await
     .map_err(db_err)?
     {
-        lines.entry(txn).or_default().push((account, cents, memo));
+        // Unmapped accounts only occur on unbalanced transactions, which are never posted.
+        lines.entry(txn).or_default().push((map.get(&account).copied().unwrap_or(0), cents, memo));
     }
 
+    if input.mode == ImportMode::Full {
+        import_lists(pool, batch_id).await?;
+    }
     let mut result = PostLedgerResult::default();
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut staged = Vec::with_capacity(txns.len());
     for t in txns {
         if t.imbalance_cents != 0 {
             result.skipped_unbalanced += 1;
@@ -1007,38 +1076,78 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             result.skipped_already_posted += 1;
             continue;
         }
-        let Some(source_lines) = lines.get(&t.source_id) else { continue };
+        let Some(source_lines) = lines.remove(&t.source_id) else { continue };
         let date: NaiveDate = t.date.parse().map_err(|_| format!("QBW_BAD_DATE: staged date '{}' is not a date", t.date))?;
-        let entry_lines: Vec<JournalLine> = source_lines
-            .iter()
-            .map(|(account, cents, memo)| {
-                let mut line = if *cents < 0 { JournalLine::debit(map[account], -cents) } else { JournalLine::credit(map[account], *cents) };
-                line.memo = memo.clone();
-                line
-            })
-            .collect();
-        let entry = JournalEntry {
-            id: None,
-            date,
-            description: describe(&t.kind, t.doc_num.as_deref(), t.name.as_deref(), t.memo.as_deref()),
-            lines: entry_lines,
-            currency: None,
+        let document = match (input.mode, &t.document) {
+            (ImportMode::Full, Some(json)) => serde_json::from_str(json).ok(),
+            _ => None,
         };
-        let entry_id = match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
-            Ok(id) => id,
-            Err(err) => return Err(ledger::rollback(tx, format!("{err} (imported {})", entry.description)).await),
-        };
-        if let Err(e) = sqlx::query("UPDATE ledger_import_transactions SET journal_entry_id = ?3 WHERE batch_id = ?1 AND source_id = ?2")
-            .bind(batch_id)
-            .bind(t.source_id)
-            .bind(entry_id)
-            .execute(&mut *tx)
-            .await
+        staged.push(Staged { source_id: t.source_id, kind: t.kind, date, doc_num: t.doc_num, name: t.name, memo: t.memo, lines: source_lines, document });
+    }
+    if input.mode == ImportMode::Full && result.skipped_already_posted > 0 {
+        return Err("QBW_FULL_AFTER_POST: this import is already posted as journal entries; use Start over before a full import".into());
+    }
+
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let outcomes = match input.mode {
+        ImportMode::Journal => {
+            let mut outcomes = Vec::with_capacity(staged.len());
+            for t in &staged {
+                let entry = JournalEntry {
+                    id: None,
+                    date: t.date,
+                    description: describe(&t.kind, t.doc_num.as_deref(), t.name.as_deref(), t.memo.as_deref()),
+                    lines: t
+                        .lines
+                        .iter()
+                        .map(|(account, cents, memo)| {
+                            let mut line = if *cents < 0 { JournalLine::debit(*account, -cents) } else { JournalLine::credit(*account, *cents) };
+                            line.memo = memo.clone();
+                            line
+                        })
+                        .collect(),
+                    currency: None,
+                };
+                match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
+                    Ok(id) => outcomes.push(Outcome { source_id: t.source_id, entry_id: id, posted_as: "JOURNAL", fallback_reason: None, entries: 1 }),
+                    Err(err) => return Err(ledger::rollback(tx, format!("{err} (imported {})", entry.description)).await),
+                }
+            }
+            outcomes
+        }
+        ImportMode::Full => match crate::qbw_full_import::post_all(&mut tx, batch_id, &map, &staged).await {
+            Ok((outcomes, counts)) => {
+                result.full = Some(counts);
+                outcomes
+            }
+            Err(err) => return Err(ledger::rollback(tx, err).await),
+        },
+    };
+    let line_counts: HashMap<i64, usize> = staged.iter().map(|t| (t.source_id, t.lines.len())).collect();
+    for o in &outcomes {
+        if let Err(e) = sqlx::query(
+            "UPDATE ledger_import_transactions SET journal_entry_id = ?3, posted_as = ?4, fallback_reason = ?5 WHERE batch_id = ?1 AND source_id = ?2",
+        )
+        .bind(batch_id)
+        .bind(o.source_id)
+        .bind(o.entry_id)
+        .bind(o.posted_as)
+        .bind(&o.fallback_reason)
+        .execute(&mut *tx)
+        .await
         {
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
-        result.entries_posted += 1;
-        result.lines_posted += source_lines.len() as i64;
+        result.entries_posted += o.entries;
+        result.lines_posted += line_counts[&o.source_id] as i64;
+    }
+    if let Err(e) = sqlx::query("UPDATE ledger_import_batches SET mode = ?2 WHERE id = ?1")
+        .bind(batch_id)
+        .bind(if input.mode == ImportMode::Full { "FULL" } else { "JOURNAL" })
+        .execute(&mut *tx)
+        .await
+    {
+        return Err(ledger::rollback(tx, db_err(e)).await);
     }
     if result.entries_posted > 0 {
         if let Err(e) = sqlx::query("UPDATE ledger_import_batches SET posted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
@@ -1065,6 +1174,16 @@ pub struct ReverseLedgerResult {
 /// Undoes a posted import: voids every entry it posted and deactivates the accounts it created
 /// once they have no other activity.
 pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLedgerResult, String> {
+    let mode: Option<String> = sqlx::query_scalar("SELECT mode FROM ledger_import_batches WHERE id = ?1")
+        .bind(batch_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    if mode.as_deref() == Some("FULL") {
+        // Its invoices, payments and deposits are linked to one another; voiding entries one by one
+        // would leave documents behind, so the undo is putting back the books from before the post.
+        return Err("QBW_FULL_USE_START_OVER: a full import is undone with Start over, which puts back the books from just before it posted".into());
+    }
     let entries: Vec<i64> = sqlx::query_scalar(
         "SELECT t.journal_entry_id FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
          WHERE t.batch_id = ?1 AND e.is_voided = 0 ORDER BY t.journal_entry_id",
@@ -1168,6 +1287,7 @@ mod tests {
             name: Some("Vendor".into()),
             memo: None,
             lines: lines.iter().map(|&(account_id, cents)| SourceLine { account_id, cents, memo: None }).collect(),
+            document: None,
         }
     }
 
@@ -1211,6 +1331,122 @@ mod tests {
         .unwrap()
     }
 
+    /// A full import: an invoice with sales tax, a prepayment dated before it, a second payment,
+    /// a deposit with a fee taken out, and an invoice whose customer is missing (falls back).
+    #[tokio::test]
+    async fn a_full_import_recreates_invoices_payments_and_deposits() {
+        use crate::qbw_documents::{Applied, DocumentLine, SourceDocument};
+        let pool = test_pool().await;
+        let doc = |id: i64, kind: &'static str, date: &str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+            kind,
+            document: Some(document),
+            ..txn(id, date, lines)
+        };
+        let invoice = |customer_id| SourceDocument::Invoice {
+            customer_id,
+            number: Some("501".into()),
+            due_date: "2024-02-09".parse().ok(),
+            lines: vec![
+                DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6 },
+                DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8 },
+            ],
+        };
+        let payment = |cents| SourceDocument::Payment {
+            customer_id: 100,
+            reference: Some("1234".into()),
+            method: "CHECK".into(),
+            applied_to: vec![Applied { transaction_id: 20, cents }],
+        };
+        let ledger = Ledger {
+            accounts: vec![
+                account(1, "Riverside Bank", "BANK", None),
+                account(4, "Accounts Receivable", "ACCOUNTS_RECEIVABLE", None),
+                account(6, "Consulting Income", "INCOME", None),
+                account(7, "Undeposited Funds", "OTHER_CURRENT_ASSET", None),
+                account(8, "Sales Tax Payable", "OTHER_CURRENT_LIABILITY", None),
+                account(9, "Merchant Fees", "EXPENSE", None),
+            ],
+            transactions: vec![
+                doc(21, "Payment", "2024-01-05", &[(7, -6_000), (4, 6_000)], payment(6_000)),
+                doc(20, "Invoice", "2024-01-10", &[(4, -11_000), (6, 10_000), (8, 1_000)], invoice(100)),
+                doc(22, "Payment", "2024-01-20", &[(7, -5_000), (4, 5_000)], payment(5_000)),
+                doc(
+                    23,
+                    "Deposit",
+                    "2024-01-21",
+                    &[(1, -10_900), (9, -100), (7, 6_000), (7, 5_000)],
+                    SourceDocument::Deposit { payments: vec![Applied { transaction_id: 21, cents: 6_000 }, Applied { transaction_id: 22, cents: 5_000 }] },
+                ),
+                doc(24, "Invoice", "2024-01-25", &[(4, -2_000), (6, 2_000)], invoice(999)),
+            ],
+            unbalanced: vec![],
+            unreadable: vec![],
+            customers: vec![SourceParty {
+                id: 100,
+                name: "Acme Hosting".into(),
+                parent_id: None,
+                company_name: None,
+                email: None,
+                phone: None,
+                address: None,
+                terms_days: Some(30),
+                tax_id: None,
+                is_1099: false,
+                active: true,
+                balance_cents: Some(2_000),
+                notes: None,
+            }],
+            vendors: vec![],
+            items: vec![SourceItem {
+                id: 200,
+                name: "Consulting".into(),
+                description: None,
+                rate_cents: 5_000,
+                income_account_id: Some(6),
+                kind: "Service",
+                taxable: true,
+                active: true,
+            }],
+            quality: LedgerQuality::default(),
+        };
+        let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
+        auto_map_accounts(&pool, batch).await.unwrap();
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        assert_eq!(summary.documents.iter().map(|d| d.1).sum::<i64>(), 5);
+
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+        let full = posted.full.unwrap();
+        assert_eq!((full.invoices, full.payments, full.deposits, full.fell_back), (1, 2, 1, 1), "{full:?}");
+
+        let (number, status, total, tax, items): (i64, String, i64, i64, i64) = sqlx::query_as(
+            "SELECT invoice_number, status, total_cents, tax_cents, (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) FROM invoices i",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!((number, status.as_str(), total, tax, items), (501, "PAID", 11_000, 1_000, 1), "the prepayment applies too");
+        let (deposit_total, linked): (i64, i64) =
+            sqlx::query_as("SELECT d.total_cents, (SELECT COUNT(invoice_payment_id) FROM deposit_lines WHERE deposit_id = d.id) FROM deposits d")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((deposit_total, linked), (11_000, 2), "the deposit is gross, with both payments swept out of Undeposited Funds");
+        assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty());
+
+        // The books match the file exactly: the bank got the net, the fee is an expense.
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+        assert_eq!(balance(&pool, mapped("Riverside Bank")).await, 10_900);
+        assert_eq!(balance(&pool, mapped("Merchant Fees")).await, 100);
+        assert_eq!(balance(&pool, mapped("Accounts Receivable")).await, 2_000);
+
+        assert_eq!(summary.mode, "FULL");
+        assert_eq!(summary.fallbacks.len(), 1);
+        assert_eq!(summary.fallbacks[0].reason, "its customer was not imported");
+        let err = reverse_batch(&pool, batch).await.unwrap_err();
+        assert!(err.starts_with("QBW_FULL_USE_START_OVER"), "{err}");
+    }
+
     /// Full pipeline on a real company file into a fresh test database: set LOCALBOOKS_QBW_CHECK
     /// and run `cargo test --release -- --ignored posts_a_real --nocapture`.
     #[tokio::test]
@@ -1232,7 +1468,8 @@ mod tests {
         .await
         .unwrap();
         println!("LocalBooks now has {customers} customers ({active_customers} active), {vendors} vendors, {items} items");
-        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        let mode = if std::env::var("LOCALBOOKS_QBW_MODE").as_deref() == Ok("full") { ImportMode::Full } else { ImportMode::Journal };
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode }).await.unwrap();
         println!("staged, mapped {mapped:?}, posted {posted:?} in {:.1}s", started.elapsed().as_secs_f64());
 
         // LocalBooks' balance per mapped account against the file's stored balance (negated:
@@ -1255,6 +1492,42 @@ mod tests {
             }
         }
         println!("LocalBooks accounts matching the file: {same}, differing: {differ}");
+        if mode == ImportMode::Full {
+            let fallbacks: Vec<(String, String, i64)> = sqlx::query_as(
+                "SELECT kind, fallback_reason, COUNT(*) FROM ledger_import_transactions
+                 WHERE batch_id = ?1 AND fallback_reason IS NOT NULL GROUP BY kind, fallback_reason ORDER BY 3 DESC LIMIT 25",
+            )
+            .bind(batch)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            for (kind, reason, n) in fallbacks {
+                println!("  fell back: {n:>5} {kind}: {reason}");
+            }
+            let (open, open_cents): (i64, i64) = sqlx::query_as(
+                "SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE status IN ('UNPAID', 'PARTIAL')",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let (linked, deposit_lines): (i64, i64) =
+                sqlx::query_as("SELECT COUNT(invoice_payment_id) + COUNT(sales_receipt_id), COUNT(*) FROM deposit_lines").fetch_one(&pool).await.unwrap();
+            println!("open invoices: {open}, {}; deposit lines linked to a payment or receipt: {linked}/{deposit_lines}", crate::ledger::format_cents(open_cents));
+            let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
+            let uf: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l JOIN chart_of_accounts a ON a.id = l.account_id
+                 WHERE a.is_system = 1 AND a.account_type = 'OTHER_CURRENT_ASSET'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            println!(
+                "waiting to be deposited: {} items, {}; Undeposited Funds balance {}",
+                waiting.len(),
+                crate::ledger::format_cents(waiting.iter().map(|w| w.amount_cents).sum()),
+                crate::ledger::format_cents(uf)
+            );
+        }
         let total: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM journal_lines").fetch_one(&pool).await.unwrap();
         assert_eq!(total, 0, "the books must balance");
     }
@@ -1274,7 +1547,7 @@ mod tests {
         // What the post command does: copy the books, post, record the copy.
         let copy = crate::backup::pre_import_snapshot(&db, batch).await.unwrap();
         assert!(copy.file_name().unwrap().to_string_lossy().starts_with(&format!("pre-import-{batch}-")));
-        post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
         set_pre_post_backup(&pool, batch, &copy).await.unwrap();
         let posted = batch_summary(&pool, batch).await.unwrap();
         assert_eq!((posted.live_entry_count, posted.postable_count), (2, 0));
@@ -1293,7 +1566,7 @@ mod tests {
         assert!(Path::new(&result.safety_backup.path).is_file());
 
         // The restored books can post the import again.
-        let reposted = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        let reposted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
         assert_eq!(reposted.entries_posted, 2);
 
         // A recorded copy that has gone missing is reported, not restored.
@@ -1330,7 +1603,7 @@ mod tests {
         let equipment = mapped(first).await;
         let name: String = sqlx::query_scalar("SELECT name FROM chart_of_accounts WHERE id = ?1").bind(equipment).fetch_one(&pool).await.unwrap();
         assert_eq!(name, "Equipment (imported)");
-        post_batch(&pool, &PostLedgerInput { batch_id: first }).await.unwrap();
+        post_batch(&pool, &PostLedgerInput { batch_id: first, mode: ImportMode::Journal }).await.unwrap();
         reverse_batch(&pool, first).await.unwrap();
         discard_batch(&pool, first).await.unwrap();
 
@@ -1341,7 +1614,7 @@ mod tests {
         assert_eq!(mapped(second).await, equipment);
         let active: i64 = sqlx::query_scalar("SELECT is_active FROM chart_of_accounts WHERE id = ?1").bind(equipment).fetch_one(&pool).await.unwrap();
         assert_eq!(active, 1);
-        let posted = post_batch(&pool, &PostLedgerInput { batch_id: second }).await.unwrap();
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: second, mode: ImportMode::Journal }).await.unwrap();
         assert_eq!(posted.entries_posted, 1);
 
         // A taken "(imported)" name that is not the importer's own gets the next free suffix.
@@ -1434,7 +1707,7 @@ mod tests {
         let again = import_lists(&pool, batch).await.unwrap();
         assert_eq!(again, ImportListsResult::default());
 
-        post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
         let reversed = reverse_batch(&pool, batch).await.unwrap();
         assert_eq!(reversed.list_records_deactivated, 6, "2 customers, 1 vendor, 3 items created by the import");
         let acme: i64 = sqlx::query_scalar("SELECT is_active FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
@@ -1450,7 +1723,7 @@ mod tests {
         let u = &summary.unreadable[0];
         assert_eq!((u.outcome.as_str(), u.account_name.as_deref(), u.cents), ("RECOVERED", Some("Domain Names"), Some(-250)));
 
-        let err = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap_err();
+        let err = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap_err();
         assert!(err.starts_with("QBW_UNMAPPED"), "{err}");
 
         let mapped = auto_map_accounts(&pool, batch).await.unwrap();
@@ -1464,8 +1737,8 @@ mod tests {
         let parent: Option<i64> = sqlx::query_scalar("SELECT parent_id FROM chart_of_accounts WHERE id = ?1").bind(domains).fetch_one(&pool).await.unwrap();
         assert_eq!(parent, id("Hosting"));
 
-        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
-        assert_eq!(posted, PostLedgerResult { entries_posted: 2, lines_posted: 4, skipped_unbalanced: 1, skipped_already_posted: 0 });
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+        assert_eq!(posted, PostLedgerResult { entries_posted: 2, lines_posted: 4, skipped_unbalanced: 1, skipped_already_posted: 0, full: None });
         assert_eq!(balance(&pool, domains).await, 12_000);
         assert_eq!(balance(&pool, id("Riverside Bank").unwrap()).await, -12_500);
         let memo: String = sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = (SELECT journal_entry_id FROM ledger_import_transactions WHERE source_id = 10)")
@@ -1475,11 +1748,11 @@ mod tests {
         assert_eq!(memo, "Check #10 · Vendor");
 
         // Posting again posts nothing new; a second import of the same books is refused.
-        let again = post_batch(&pool, &PostLedgerInput { batch_id: batch }).await.unwrap();
+        let again = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
         assert_eq!(again.entries_posted, 0);
         let second = stage(&pool, Path::new("/books/Books copy.qbw"), 1, &ledger()).await.unwrap();
         auto_map_accounts(&pool, second).await.unwrap();
-        let err = post_batch(&pool, &PostLedgerInput { batch_id: second }).await.unwrap_err();
+        let err = post_batch(&pool, &PostLedgerInput { batch_id: second, mode: ImportMode::Journal }).await.unwrap_err();
         assert!(err.starts_with("QBW_ALREADY_IMPORTED"), "{err}");
         discard_batch(&pool, second).await.unwrap();
 
