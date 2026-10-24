@@ -4,7 +4,9 @@
 //! Invoices, credit memos and sales receipts become documents with their form lines; received
 //! payments become one LocalBooks payment per invoice they paid (the file's `AppliedToTxn`
 //! links); credit memos are applied to the invoices they were applied to; deposits sweep those
-//! payments out of Undeposited Funds. Every document posts exactly the source file's own ledger
+//! payments out of Undeposited Funds. On the purchase side, bills and vendor credits become
+//! documents, bill payments (and checks that paid bills) one payment per bill, and checks and
+//! card charges LocalBooks checks and expenses. Every document posts exactly the source file's own ledger
 //! lines, so account balances come out the same as a journal import.
 //!
 //! A transaction that cannot be a document (its form does not add up, it applies to something that
@@ -56,6 +58,13 @@ pub struct FullImportCounts {
     pub payments: i64,
     pub deposits: i64,
     pub credits_applied: i64,
+    pub bills: i64,
+    pub vendor_credits: i64,
+    /// Bill payment rows, one per bill paid.
+    pub bill_payments: i64,
+    pub checks: i64,
+    /// Card charges and other expenses.
+    pub expenses: i64,
     pub journal_entries: i64,
     /// Documents that had to post as journal entries instead.
     pub fell_back: i64,
@@ -67,6 +76,8 @@ struct Books {
     accounts: HashMap<i64, (String, bool)>,
     /// source customer → (customer, name)
     customers: HashMap<i64, (i64, String)>,
+    /// source vendor → (vendor, name)
+    vendors: HashMap<i64, (i64, String)>,
     /// source item → (product, name)
     products: HashMap<i64, (i64, String)>,
 }
@@ -82,6 +93,18 @@ impl Books {
 
     fn customer(&self, source: i64) -> Result<&(i64, String), String> {
         self.customers.get(&source).ok_or_else(|| "its customer was not imported".to_string())
+    }
+
+    fn vendor(&self, source: i64) -> Result<&(i64, String), String> {
+        self.vendors.get(&source).ok_or_else(|| "its vendor was not imported".to_string())
+    }
+
+    /// LocalBooks' rule for what a bill line may post to: an expense-side account or an asset
+    /// (not a system account).
+    fn is_bill_category(&self, account: i64) -> bool {
+        self.accounts.get(&account).is_some_and(|(t, system)| {
+            !system && matches!(t.as_str(), "COST_OF_GOODS_SOLD" | "EXPENSE" | "OTHER_EXPENSE" | "FIXED_ASSET" | "OTHER_ASSET" | "OTHER_CURRENT_ASSET")
+        })
     }
 }
 
@@ -104,6 +127,17 @@ async fn load_books(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Result<B
     .into_iter()
     .map(|(s, id, name)| (s, (id, name)))
     .collect();
+    let vendors = sqlx::query_as::<_, (i64, i64, String)>(
+        "SELECT p.source_id, v.id, v.name FROM ledger_import_parties p JOIN vendors v ON v.id = p.party_id
+         WHERE p.batch_id = ?1 AND p.kind = 'VENDOR'",
+    )
+    .bind(batch_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?
+    .into_iter()
+    .map(|(s, id, name)| (s, (id, name)))
+    .collect();
     let products = sqlx::query_as::<_, (i64, i64, String)>(
         "SELECT i.source_id, p.id, p.name FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id WHERE i.batch_id = ?1",
     )
@@ -114,7 +148,7 @@ async fn load_books(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Result<B
     .into_iter()
     .map(|(s, id, name)| (s, (id, name)))
     .collect();
-    Ok(Books { accounts, customers, products })
+    Ok(Books { accounts, customers, vendors, products })
 }
 
 fn entry_lines(lines: &[(i64, i64, Option<String>)]) -> Vec<JournalLine> {
@@ -216,9 +250,24 @@ async fn number(tx: &mut Transaction<'_, Sqlite>, table: &str, column: &str, bas
 
 /// Lines on receivables accounts, and their account when there is just one.
 fn receivable(t: &Staged, books: &Books) -> (i64, Option<i64>) {
-    let ar: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| books.kind(l.0) == "ACCOUNTS_RECEIVABLE").collect();
-    let accounts: HashSet<i64> = ar.iter().map(|l| l.0).collect();
-    (ar.iter().map(|l| l.1).sum(), if accounts.len() == 1 { accounts.into_iter().next() } else { None })
+    control(t, books, "ACCOUNTS_RECEIVABLE")
+}
+
+/// Lines on accounts of one type (receivables or payables), and their account when there is just one.
+fn control(t: &Staged, books: &Books, account_type: &str) -> (i64, Option<i64>) {
+    let lines: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| books.kind(l.0) == account_type).collect();
+    let accounts: HashSet<i64> = lines.iter().map(|l| l.0).collect();
+    (lines.iter().map(|l| l.1).sum(), if accounts.len() == 1 { accounts.into_iter().next() } else { None })
+}
+
+/// The one credit of a bill payment, check or card charge: the account the money came out of.
+fn single_credit(t: &Staged) -> Result<(i64, i64), String> {
+    let credits: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| l.1 > 0).collect();
+    match credits.as_slice() {
+        [(account, cents, _)] => Ok((*account, *cents)),
+        [] => Err("it puts money in rather than paying it out".into()),
+        _ => Err("the money came out of more than one account".into()),
+    }
 }
 
 async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, id: i64, lines: &[FormLine]) -> Result<(), String> {
@@ -251,6 +300,8 @@ struct Written {
     credit_memos: HashMap<i64, (i64, NaiveDate)>,
     /// receipt or payment → its rows: (payment row or receipt, amount, deposit account, is a receipt)
     deposited: HashMap<i64, Vec<(i64, i64, i64, bool)>>,
+    /// bill → LocalBooks bill
+    bills: HashMap<i64, i64>,
 }
 
 async fn write_invoice(
@@ -547,6 +598,238 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     Ok((entry, linked))
 }
 
+/// A bill, or a vendor credit when it debits payables. Its lines are the file's form lines; the
+/// entry is the file's own.
+async fn write_bill(
+    tx: &mut Transaction<'_, Sqlite>,
+    t: &Staged,
+    doc: &SourceDocument,
+    map: &HashMap<i64, i64>,
+    books: &Books,
+) -> Result<(i64, i64, &'static str), String> {
+    let SourceDocument::Bill { vendor_id, number: doc_num, due_date, lines } = doc else { unreachable!() };
+    let (vendor, vendor_name) = books.vendor(*vendor_id)?.clone();
+    let (ap_cents, ap) = control(t, books, "ACCOUNTS_PAYABLE");
+    ap.ok_or("it does not post to one payables account")?;
+    // A bill credits payables and debits its lines; a vendor credit the other way round.
+    let sign = if ap_cents > 0 { -1 } else { 1 };
+    let total = ap_cents.abs();
+    if total == 0 {
+        return Err("its total is zero".into());
+    }
+    let mut rows = Vec::with_capacity(lines.len());
+    for l in lines {
+        let account = *map.get(&l.account_id).ok_or("a line's account is not mapped")?;
+        let amount = l.cents * sign;
+        if amount <= 0 {
+            return Err(if sign < 0 { "it has a credit line (bills have no discount)".into() } else { "it has a debit line".into() });
+        }
+        if sign < 0 && !books.is_bill_category(account) {
+            return Err(format!("a line posts to an account bills cannot use ({})", books.kind(account).to_lowercase().replace('_', " ")));
+        }
+        let product = l.item_id.and_then(|i| books.products.get(&i));
+        let (quantity, rate) = match line_amount(l.quantity_e4, l.rate_cents) {
+            Ok(a) if a == amount && product.is_some() => (Some(l.quantity_e4), Some(l.rate_cents)),
+            _ => (None, None),
+        };
+        let memo = l.description.clone().or_else(|| product.map(|p| p.1.clone())).unwrap_or_default();
+        rows.push((account, amount, memo, quantity, rate, product.map(|p| p.0)));
+    }
+    if rows.iter().map(|r| r.1).sum::<i64>() != total {
+        return Err("its lines do not add up to its total".into());
+    }
+    if sign > 0 {
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO vendor_credits (vendor_id, reference, credit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+        )
+        .bind(vendor)
+        .bind(doc_num)
+        .bind(t.date)
+        .bind(&t.memo)
+        .bind(total)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        for (n, (account, amount, memo, _, _, _)) in rows.iter().enumerate() {
+            sqlx::query("INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)")
+                .bind(id)
+                .bind(n as i64 + 1)
+                .bind(account)
+                .bind(amount)
+                .bind(Some(memo.as_str()).filter(|m| !m.is_empty()))
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
+        }
+        let entry = post(tx, t, format!("Vendor credit - {vendor_name}"), &t.lines, EntrySource::VendorCredit(id)).await?;
+        sqlx::query("UPDATE vendor_credits SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+        return Ok((entry, id, "VENDOR_CREDIT"));
+    }
+    let due = due_date.filter(|d| *d >= t.date).unwrap_or(t.date);
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO bills (vendor_id, bill_number, bill_date, due_date, memo, total_cents, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'DRAFT') RETURNING id",
+    )
+    .bind(vendor)
+    .bind(doc_num)
+    .bind(t.date)
+    .bind(due)
+    .bind(&t.memo)
+    .bind(total)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    for (n, (account, amount, memo, quantity, rate, product)) in rows.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .bind(id)
+        .bind(n as i64 + 1)
+        .bind(memo.trim())
+        .bind(account)
+        .bind(amount)
+        .bind(quantity)
+        .bind(rate)
+        .bind(product)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    }
+    let reference = doc_num.as_deref().map(|n| format!(" #{n}")).unwrap_or_default();
+    let entry = post(tx, t, format!("Bill{reference} - {vendor_name}"), &t.lines, EntrySource::Bill(id)).await?;
+    sqlx::query("UPDATE bills SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    Ok((entry, id, "BILL"))
+}
+
+/// A bill payment (or a check that paid bills) becomes one LocalBooks payment per bill; whatever it
+/// did not pay on an imported bill posts as a journal entry. Returns the entries, the number of
+/// payment rows, and a note when part of it could not be applied.
+async fn write_bill_payment(
+    tx: &mut Transaction<'_, Sqlite>,
+    t: &Staged,
+    reference: Option<&str>,
+    applied_to: &[crate::qbw_documents::Applied],
+    books: &Books,
+    written: &Written,
+) -> Result<(Vec<i64>, i64, Option<String>), String> {
+    let (from, total) = single_credit(t)?;
+    if !matches!(books.kind(from), "BANK" | "CREDIT_CARD") {
+        return Err("it was not paid from a bank or card account".into());
+    }
+    let (ap_cents, ap) = control(t, books, "ACCOUNTS_PAYABLE");
+    let ap = ap.ok_or("it does not debit one payables account")?;
+    if -ap_cents != total || t.lines.len() != t.lines.iter().filter(|l| l.0 == from || l.0 == ap).count() {
+        return Err("it posts to accounts other than payables and the account it was paid from".into());
+    }
+    let (mut entries, mut rows, mut applied) = (Vec::new(), 0, 0);
+    let mut skipped: Vec<&str> = Vec::new();
+    for a in applied_to {
+        let Some(&bill) = written.bills.get(&a.transaction_id) else {
+            skipped.push("what it paid did not import as a bill");
+            continue;
+        };
+        let (vendor, open): (String, i64) =
+            sqlx::query_as("SELECT v.name, b.total_cents - b.amount_paid_cents FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1")
+                .bind(bill)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_err)?;
+        // Like received payments, a bill payment may predate its bill; over-applications stay unapplied.
+        let cents = a.cents.min(open).min(total - applied);
+        if cents < a.cents {
+            skipped.push(if cents < open { "its applications add up to more than the payment" } else { "it pays more than the bill's open balance" });
+        }
+        if cents <= 0 {
+            continue;
+        }
+        let row: i64 = sqlx::query_scalar(
+            "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+        )
+        .bind(bill)
+        .bind(t.date)
+        .bind(cents)
+        .bind(from)
+        .bind(reference)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        let lines = [(ap, -cents, None), (from, cents, None)];
+        let entry = post(tx, t, format!("Bill payment - {vendor}"), &lines, EntrySource::BillPayment(row)).await?;
+        sqlx::query("UPDATE bill_payments SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(row).execute(&mut **tx).await.map_err(db_err)?;
+        ledger::recompute_paid(tx, "bills", "bill_payments", "bill_id", bill).await?;
+        entries.push(entry);
+        rows += 1;
+        applied += cents;
+    }
+    skipped.dedup();
+    if rows == 0 {
+        return Err(if skipped.is_empty() { "it was not applied to a bill".into() } else { skipped.join("; ") });
+    }
+    let unapplied = total - applied;
+    let mut note = None;
+    if unapplied > 0 {
+        let lines = [(ap, -unapplied, None), (from, unapplied, None)];
+        entries.push(post(tx, t, format!("{} (unapplied)", describe(t)), &lines, EntrySource::Journal).await?);
+        note = Some(format!(
+            "{} of it posted as a journal entry: {}",
+            ledger::format_cents(unapplied),
+            if skipped.is_empty() { "it was not applied to a bill".to_string() } else { skipped.join("; ") }
+        ));
+    }
+    Ok((entries, rows, note))
+}
+
+/// A check (from a bank account) or card charge becomes a LocalBooks check or expense with its
+/// split lines.
+async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &SourceDocument, books: &Books) -> Result<(i64, i64, &'static str), String> {
+    let SourceDocument::Expense { vendor_id, number, .. } = doc else { unreachable!() };
+    if t.lines.iter().any(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")) && !t.lines.iter().any(|l| l.1 > 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")) {
+        return Err("it is a refund or card credit, which has no LocalBooks form".into());
+    }
+    let (from, total) = single_credit(t)?;
+    let is_check = t.kind == "Check";
+    match (is_check, books.kind(from)) {
+        (true, "BANK") | (false, "BANK" | "CREDIT_CARD") => {}
+        (true, _) => return Err("it was not written from a bank account".into()),
+        (false, _) => return Err("it was not paid from a bank or card account".into()),
+    }
+    if t.lines.iter().any(|l| l.0 != from && (l.1 > 0 || matches!(books.kind(l.0), "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE"))) {
+        return Err("it posts to receivables or payables, or has a line the other way".into());
+    }
+    let vendor = vendor_id.and_then(|v| books.vendors.get(&v)).map(|v| v.0);
+    let kind = if is_check { "CHECK" } else { "EXPENSE" };
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO expenses (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
+    )
+    .bind(kind)
+    .bind(vendor)
+    .bind(from)
+    .bind(t.date)
+    .bind(if is_check { number.as_deref() } else { None })
+    .bind(if is_check { "CHECK" } else if books.kind(from) == "CREDIT_CARD" { "CREDIT_CARD" } else { "OTHER" })
+    .bind(&t.memo)
+    .bind(total)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    for (n, (account, cents, memo)) in t.lines.iter().filter(|l| l.0 != from).enumerate() {
+        sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .bind(id)
+            .bind(n as i64 + 1)
+            .bind(account)
+            .bind(-cents)
+            .bind(memo)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+    }
+    let source = if is_check { EntrySource::Check(id) } else { EntrySource::Expense(id) };
+    let entry = post(tx, t, describe(t), &t.lines, source).await?;
+    sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
+    Ok((entry, id, kind))
+}
+
 /// Posts the staged transactions: documents first, then the payments that pay them, the credits
 /// applied to them and the deposits that sweep the payments. Fails (and the caller rolls back)
 /// only when a transaction cannot be posted even as a journal entry.
@@ -587,7 +870,8 @@ pub(crate) async fn post_all(
     }
 
     let phase = |t: &Staged| match &t.document {
-        Some(SourceDocument::Payment { .. }) => 1,
+        Some(SourceDocument::Payment { .. } | SourceDocument::BillPayment { .. }) => 1,
+        Some(SourceDocument::Expense { applied_to, .. }) if !applied_to.is_empty() => 1,
         Some(SourceDocument::Deposit { .. }) => 3,
         _ => 0,
     };
@@ -632,6 +916,50 @@ pub(crate) async fn post_all(
                     Ok((entry, _linked)) => {
                         counts.deposits += 1;
                         Outcome { source_id: t.source_id, entry_id: entry, posted_as: "DEPOSIT", fallback_reason: None, entries: 1 }
+                    }
+                    Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                },
+                Some(doc @ SourceDocument::Bill { .. }) => match attempt!(write_bill(tx, t, doc, map, &books).await) {
+                    Ok((entry, id, posted_as)) => {
+                        if posted_as == "BILL" {
+                            written.bills.insert(t.source_id, id);
+                            counts.bills += 1;
+                        } else {
+                            counts.vendor_credits += 1;
+                        }
+                        Outcome { source_id: t.source_id, entry_id: entry, posted_as, fallback_reason: None, entries: 1 }
+                    }
+                    Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                },
+                Some(SourceDocument::BillPayment { reference, applied_to, .. }) => {
+                    match attempt!(write_bill_payment(tx, t, reference.as_deref(), applied_to, &books, &written).await) {
+                        Ok((entries, rows, note)) => {
+                            counts.bill_payments += rows;
+                            counts.journal_entries += entries.len() as i64 - rows;
+                            Outcome { source_id: t.source_id, entry_id: entries[0], posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                        }
+                        Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                    }
+                }
+                // A check that paid bills is a bill payment written as a check.
+                Some(SourceDocument::Expense { number, applied_to, .. }) if !applied_to.is_empty() => {
+                    match attempt!(write_bill_payment(tx, t, number.as_deref(), applied_to, &books, &written).await) {
+                        Ok((entries, rows, note)) => {
+                            counts.bill_payments += rows;
+                            counts.journal_entries += entries.len() as i64 - rows;
+                            Outcome { source_id: t.source_id, entry_id: entries[0], posted_as: "BILL_PAYMENT", fallback_reason: note, entries: entries.len() as i64 }
+                        }
+                        Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
+                    }
+                }
+                Some(doc @ SourceDocument::Expense { .. }) => match attempt!(write_expense(tx, t, doc, &books).await) {
+                    Ok((entry, _, posted_as)) => {
+                        if posted_as == "CHECK" {
+                            counts.checks += 1;
+                        } else {
+                            counts.expenses += 1;
+                        }
+                        Outcome { source_id: t.source_id, entry_id: entry, posted_as, fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
