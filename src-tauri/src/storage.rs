@@ -365,6 +365,71 @@ pub fn describe_recent(list: &[RecentCompany]) -> Vec<RecentCompanyView> {
 }
 
 // ------------------------------------------------------------------------------------------------
+// Find a company file
+// ------------------------------------------------------------------------------------------------
+
+/// A company file found on disk by [`find_company_files`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundCompanyFile {
+    pub path: String,
+    pub file_name: String,
+    pub location: String,
+    pub last_modified: Option<String>,
+    pub file_size: u64,
+}
+
+/// Folders never searched: app bundles, caches, build output, and the like.
+const SKIPPED_FOLDERS: &[&str] = &["Library", "node_modules", "target", "Applications", "System", "private", "proc", "dev"];
+
+/// Looks for company files (`*.localbooks`, and `localbooks.db` kept in a folder) under each of
+/// `roots`, at most `max_depth` folders deep, skipping hidden and system folders. Stops after
+/// `limit` files or at `deadline`, so a huge or slow (network) folder cannot hang the search.
+/// Newest first.
+pub fn find_company_files(roots: &[PathBuf], max_depth: usize, limit: usize, deadline: std::time::Instant) -> Vec<FoundCompanyFile> {
+    let mut found = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut pending: Vec<(PathBuf, usize)> = roots.iter().map(|r| (r.clone(), 0)).collect();
+    let mut modified = std::collections::HashMap::new();
+    while let Some((dir, depth)) = pending.pop() {
+        if found.len() >= limit || std::time::Instant::now() >= deadline {
+            break;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Ok(kind) = entry.file_type() else { continue };
+            let path = entry.path();
+            if kind.is_dir() {
+                if depth < max_depth && !name.starts_with('.') && !SKIPPED_FOLDERS.contains(&name.as_str()) && !name.ends_with(".app") {
+                    pending.push((path, depth + 1));
+                }
+            } else if kind.is_file() && (is_company_file(&path) || name == DB_FILE_NAME) {
+                let key = path.canonicalize().unwrap_or_else(|_| path.clone());
+                if !seen.insert(key) {
+                    continue;
+                }
+                let meta = entry.metadata().ok();
+                let time = meta.as_ref().and_then(|m| m.modified().ok());
+                found.push(FoundCompanyFile {
+                    path: path.display().to_string(),
+                    file_name: name,
+                    location: dir.display().to_string(),
+                    last_modified: time.map(|t| chrono::DateTime::<chrono::Local>::from(t).format("%Y-%m-%d %H:%M").to_string()),
+                    file_size: meta.map_or(0, |m| m.len()),
+                });
+                modified.insert(path.display().to_string(), time);
+                if found.len() >= limit {
+                    break;
+                }
+            }
+        }
+    }
+    found.sort_by(|a, b| modified[&b.path].cmp(&modified[&a.path]).then_with(|| a.path.cmp(&b.path)));
+    found
+}
+
+// ------------------------------------------------------------------------------------------------
 // Single-user lock for shared locations
 // ------------------------------------------------------------------------------------------------
 
@@ -629,6 +694,39 @@ mod tests {
         assert_eq!(list.iter().filter(|r| r.path.ends_with("Acme.localbooks")).count(), 1, "one entry per file");
         assert_eq!(list.len(), MAX_RECENT_COMPANIES);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn finds_company_files_in_ordinary_folders_only() {
+        let root = std::env::temp_dir().join(format!("localbooks-find-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for dir in ["Documents/Clients/2026", ".hidden", "node_modules/pkg", "Shared Books", "a/b/c/d"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        for file in [
+            "Documents/Acme.localbooks",
+            "Documents/Clients/2026/Beta Ltd.LOCALBOOKS",
+            "Shared Books/localbooks.db",
+            "Documents/notes.db",
+            ".hidden/Secret.localbooks",
+            "node_modules/pkg/x.localbooks",
+            "a/b/c/d/Deep.localbooks",
+        ] {
+            std::fs::write(root.join(file), b"x").unwrap();
+        }
+        let far = std::time::Instant::now() + Duration::from_secs(30);
+        let names = |found: Vec<FoundCompanyFile>| {
+            let mut names: Vec<String> = found.into_iter().map(|f| f.file_name).collect();
+            names.sort();
+            names
+        };
+        assert_eq!(names(find_company_files(&[root.clone()], 3, 100, far)), ["Acme.localbooks", "Beta Ltd.LOCALBOOKS", "localbooks.db"]);
+        assert_eq!(names(find_company_files(&[root.clone()], 4, 100, far)).len(), 4, "deeper search finds a/b/c/d");
+        assert_eq!(find_company_files(&[root.clone()], 4, 2, far).len(), 2, "stops at the limit");
+        assert!(find_company_files(&[root.clone()], 4, 100, std::time::Instant::now()).is_empty(), "stops at the deadline");
+        // The same folder searched twice lists each file once.
+        assert_eq!(find_company_files(&[root.clone(), root.join("Documents")], 3, 100, far).len(), 3);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

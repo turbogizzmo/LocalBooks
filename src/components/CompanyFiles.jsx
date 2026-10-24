@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { FolderOpen, Plus, Search } from 'lucide-react';
 import Notice from './Notice.jsx';
 import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
 
@@ -151,6 +152,7 @@ export default function NoCompanyOpen() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openError, setOpenError] = useState(null);
+  const [finding, setFinding] = useState(false);
   const actions = useCompanyFileActions();
 
   useEffect(() => {
@@ -202,24 +204,25 @@ export default function NoCompanyOpen() {
   };
 
   const error = openError ?? actions.error ?? loadError;
+  const tile = 'flex h-[84px] w-[150px] flex-col items-center justify-center gap-1 rounded-xs border border-qb-border-strong bg-white px-2 text-center text-sm font-semibold leading-tight shadow-sm hover:bg-qb-row-hover disabled:opacity-50';
 
   return (
     <div className="flex h-full items-center justify-center bg-qb-canvas p-4">
-      <section className="qb-panel flex w-full max-w-[820px] flex-col" aria-labelledby="no-company-title">
-        <h1 id="no-company-title" className="border-b border-qb-border px-3 py-2 text-lg font-semibold">
+      <section className="qb-panel flex w-full max-w-[860px] flex-col" aria-labelledby="no-company-title">
+        <h1 id="no-company-title" className="px-3 pt-3 text-[28px] font-light leading-tight">
           No Company Open
         </h1>
         {screen?.warning && <Notice kind="info" text={screen.warning} />}
         {error && <Notice kind="error" text={error} onDismiss={() => (setOpenError(null), actions.clearError(), setLoadError(null))} />}
-        <div className="flex gap-3 px-3 py-2">
+        <div className="px-3 pb-1 pt-1 text-sm font-semibold">Select a company that you’ve previously opened and click Open</div>
+        <div className="flex gap-3 px-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="text-sm font-semibold">Select a company that you’ve previously opened and click Open</div>
-            <div className="max-h-[320px] min-h-[180px] overflow-auto border border-qb-border scrollbar-thin">
+            <div className="h-[200px] overflow-auto border border-qb-border scrollbar-thin">
               <table className="qb-grid">
                 <colgroup>
                   <col />
-                  <col className="w-[140px]" />
-                  <col className="w-[80px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[90px]" />
                   {editing && <col className="w-[80px]" />}
                 </colgroup>
                 <thead>
@@ -234,7 +237,7 @@ export default function NoCompanyOpen() {
                   {screen && recent.length === 0 && (
                     <tr>
                       <td colSpan={editing ? 4 : 3} className="qb-grid-cell text-qb-ink-muted">
-                        No company files opened yet. Create a new company or open an existing one.
+                        No company files opened yet. Create a new company, open an existing one, or find a company file.
                       </td>
                     </tr>
                   )}
@@ -274,35 +277,136 @@ export default function NoCompanyOpen() {
               </table>
             </div>
             <div className="min-h-[18px] break-all text-xs text-qb-ink-muted">
-              {current && (
-                <>
-                  <span className="font-semibold">Location:</span> {current.path}
-                </>
-              )}
+              <span className="font-semibold uppercase tracking-wide">Location:</span> {current?.location ?? ''}
             </div>
             {editing && (
               <div className="text-xs text-qb-ink-muted">Removing a company takes it off this list only. The company file itself is not deleted.</div>
             )}
           </div>
-          <div className="flex w-[260px] flex-none flex-col gap-1.5 pt-5">
-            <button type="button" className="qb-btn qb-btn-secondary h-row-lg justify-start px-3 text-left" onClick={actions.newCompany} disabled={busy}>
-              Create a new company
+          <div className="flex w-[120px] flex-none flex-col items-center gap-2">
+            <button type="button" className="qb-btn qb-btn-primary h-row-lg w-full" onClick={() => openRecent(current)} disabled={!current || current.missing || busy}>
+              {busy ? 'Opening…' : 'Open'}
             </button>
-            <button type="button" className="qb-btn qb-btn-secondary h-row-lg justify-start px-3 text-left" onClick={actions.openOrRestore} disabled={busy}>
-              Open or restore an existing company
+            <button type="button" className="text-sm text-qb-link hover:underline disabled:opacity-50" onClick={() => setEditing((e) => !e)} disabled={recent.length === 0 && !editing}>
+              {editing ? 'Done Editing' : 'Edit List'}
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 border-t border-qb-border px-3 py-2">
-          <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4" onClick={() => openRecent(current)} disabled={!current || current.missing || busy}>
-            {busy ? 'Opening…' : 'Open'}
+        <div className="flex flex-wrap gap-2 px-3 pb-3 pt-2">
+          <button type="button" className={tile} onClick={actions.newCompany} disabled={busy}>
+            <Plus className="h-6 w-6 text-qb-green-active" aria-hidden="true" />
+            Create a new company
           </button>
-          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => setEditing((e) => !e)} disabled={recent.length === 0 && !editing}>
-            {editing ? 'Done Editing' : 'Edit List'}
+          <button type="button" className={tile} onClick={actions.openOrRestore} disabled={busy}>
+            <FolderOpen className="h-6 w-6 text-qb-green-active" aria-hidden="true" />
+            Open or restore an existing company
+          </button>
+          <button type="button" className={tile} onClick={() => setFinding(true)} disabled={busy}>
+            <Search className="h-6 w-6 text-qb-green-active" aria-hidden="true" />
+            Find a company file
           </button>
         </div>
       </section>
       {actions.dialog}
+      {finding && <FindCompanyDialog onClose={() => setFinding(false)} />}
+    </div>
+  );
+}
+
+/** Find a Company File: searches this computer for company files and opens the one picked. */
+function FindCompanyDialog({ onClose }) {
+  const [found, setFound] = useState(null);
+  const [error, setError] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.findCompanyFiles().then(
+      (files) => {
+        setFound(files);
+        setSelected(files[0]?.path ?? null);
+      },
+      (err) => setError(errorText(err)),
+    );
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !busy && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const openFile = async (path) => {
+    if (!path || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.openCompanyFile(path);
+      // The window reloads on the company opened.
+    } catch (err) {
+      setError(`This file can't be opened: ${errorText(err)}`);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30" role="dialog" aria-modal="true" aria-label="Find a company file">
+      <div className="qb-panel flex w-[720px] flex-col p-3 shadow-panel">
+        <h2 className="mb-1 text-md font-semibold">Find a company file</h2>
+        <p className="mb-2 text-sm text-qb-ink-muted">
+          {found === null && !error
+            ? 'Searching your home folder, synced folders and connected drives…'
+            : `Found ${found?.length ?? 0} company file${found?.length === 1 ? '' : 's'} on this computer.`}
+        </p>
+        <div className="h-[260px] overflow-auto border border-qb-border scrollbar-thin">
+          <table className="qb-grid">
+            <colgroup>
+              <col className="w-[220px]" />
+              <col />
+              <col className="w-[130px]" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="qb-grid-head">File</th>
+                <th className="qb-grid-head">Location</th>
+                <th className="qb-grid-head">Last modified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {found?.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="qb-grid-cell text-qb-ink-muted">
+                    No company files found. Use Open or restore an existing company to browse for one.
+                  </td>
+                </tr>
+              )}
+              {(found ?? []).map((f) => (
+                <tr
+                  key={f.path}
+                  className={`qb-grid-row cursor-default ${f.path === selected ? 'bg-qb-green-tint' : ''}`}
+                  aria-selected={f.path === selected}
+                  onClick={() => setSelected(f.path)}
+                  onDoubleClick={() => openFile(f.path)}
+                  title={f.path}
+                >
+                  <td className="qb-grid-cell truncate">{f.fileName}</td>
+                  <td className="qb-grid-cell truncate text-xs">{f.location}</td>
+                  <td className="qb-grid-cell">{f.lastModified ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {error && <div className="mt-2 text-sm text-qb-negative">{error}</div>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={() => openFile(selected)} disabled={!selected || busy}>
+            {busy ? 'Opening…' : 'Open'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

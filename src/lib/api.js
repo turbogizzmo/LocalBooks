@@ -216,6 +216,7 @@ export const api = {
   openCompanyFile: (path) => invoke('open_company_file', { path }),
   getStartScreen: () => invoke('get_start_screen'),
   forgetRecentCompany: (path) => invoke('forget_recent_company', { path }),
+  findCompanyFiles: () => invoke('find_company_files'),
   createCompanyFile: (path, companyName) => invoke('create_company_file', { path, companyName }),
   restoreBackupAs: (sourcePath, destinationPath) => invoke('restore_backup_as', { sourcePath, destinationPath }),
   closeCompanyFile: () => invoke('close_company_file'),

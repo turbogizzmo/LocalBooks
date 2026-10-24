@@ -905,6 +905,24 @@ pub async fn forget_recent_company(app: AppHandle, db: State<'_, Db>, path: Stri
     Ok(recent)
 }
 
+/// Find a Company File: searches this computer's usual places for company files: the home folder
+/// (Documents, Desktop, Downloads, …), iCloud Drive and other synced folders, and on macOS any
+/// connected drive under /Volumes. Bounded in depth, count and time.
+#[tauri::command]
+pub async fn find_company_files(app: AppHandle) -> Result<Vec<storage::FoundCompanyFile>, String> {
+    let home = app.path().home_dir().map_err(|e| format!("FIND_NO_HOME: {e}"))?;
+    let mut roots = vec![home.join("Library").join("Mobile Documents").join("com~apple~CloudDocs"), home.join("Library").join("CloudStorage"), home];
+    if cfg!(target_os = "macos") {
+        if let Ok(volumes) = std::fs::read_dir("/Volumes") {
+            roots.extend(volumes.flatten().map(|v| v.path()).filter(|p| p.is_dir() && !p.is_symlink()));
+        }
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    tauri::async_runtime::spawn_blocking(move || storage::find_company_files(&roots, 8, 500, deadline))
+        .await
+        .map_err(|e| format!("FIND_FAILED: {e}"))
+}
+
 /// `path` as a company file name: `.localbooks` is added when no extension was typed.
 fn with_company_extension(path: PathBuf) -> PathBuf {
     if path.extension().is_none() {

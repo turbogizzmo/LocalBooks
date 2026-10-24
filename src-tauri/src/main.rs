@@ -291,6 +291,7 @@ fn main() {
             commands::open_company_file,
             commands::get_start_screen,
             commands::forget_recent_company,
+            commands::find_company_files,
             commands::create_company_file,
             commands::restore_backup_as,
             commands::close_company_file,
