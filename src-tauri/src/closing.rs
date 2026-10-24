@@ -130,7 +130,7 @@ pub struct ClosingInput {
 }
 
 pub async fn set_closing_date(pool: &SqlitePool, input: &ClosingInput) -> Result<ClosingStatus, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let (current_date, current_hash) = current(&mut tx).await?.unwrap_or((None, None));
     if let Some(hash) = &current_hash {
         let given = input.current_passcode.as_deref().unwrap_or_default();
@@ -159,7 +159,7 @@ pub async fn set_closing_date(pool: &SqlitePool, input: &ClosingInput) -> Result
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     status(pool).await
 }
 

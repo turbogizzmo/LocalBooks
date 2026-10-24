@@ -160,7 +160,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
     }
     if t == "customers" && old_name != name {
-        let mut tx = pool.begin().await.map_err(db_err)?;
+        let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
         let result = async {
             // The jobs move with their customer...
             sqlx::query("UPDATE customers SET name = ?1 || substr(name, length(?2) + 1) WHERE substr(name, 1, length(?2) + 1) = ?2 || ':'")
@@ -182,7 +182,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         }
         .await;
         match result {
-            Ok(()) => tx.commit().await.map_err(db_err)?,
+            Ok(()) => crate::ledger::commit_write(tx).await.map_err(db_err)?,
             Err(err) => return Err(crate::ledger::rollback(tx, err).await),
         }
     }

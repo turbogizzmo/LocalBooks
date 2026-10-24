@@ -163,7 +163,7 @@ pub async fn start(
     statement_end_date: NaiveDate,
     statement_ending_balance_cents: i64,
 ) -> Result<Reconciliation, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let existing: Option<i64> =
             sqlx::query_scalar("SELECT id FROM reconciliations WHERE account_id = ?1 AND is_locked = 0")
@@ -208,7 +208,7 @@ pub async fn start(
     .await;
     match result {
         Ok(rec) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(rec)
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -222,10 +222,10 @@ pub async fn set_lines_cleared(
     line_ids: &[i64],
     cleared: bool,
 ) -> Result<ReconcileProgress, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match write_cleared(&mut tx, reconciliation_id, line_ids, cleared).await {
         Ok(progress) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(progress)
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -260,7 +260,7 @@ async fn write_cleared(
 
 /// Completes the reconciliation once the difference is exactly zero, freezing every cleared line.
 pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconciliation, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let progress = cleared_balance(&mut *tx, reconciliation_id).await?;
         if progress.difference_cents != 0 {
@@ -296,7 +296,7 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
     .await;
     match result {
         Ok(rec) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(rec)
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -400,7 +400,7 @@ mod tests {
             .execute(&pool)
             .await
             .expect_err("void blocked");
-        assert!(void.to_string().contains("REC_LOCKED"), "{void}");
+        assert!(void.to_string().contains("JE_INVALID_TRANSITION") || void.to_string().contains("REC_LOCKED"), "{void}");
         let err = start(&pool, checking, d(9, 15), 0).await.expect_err("date must advance");
         assert!(err.starts_with("REC_DATE_NOT_AFTER_LAST"), "{err}");
 

@@ -105,12 +105,15 @@ function Corrections({ onChanged }) {
 function Verification({ result, onDismiss, onChanged }) {
   const [reviewing, setReviewing] = useState(false);
   if (result.error) return <Notice kind="error" text={`Verification could not run: ${result.error}`} onDismiss={onDismiss} />;
-  const { entriesChecked, voidsChecked, migrationsRecorded, findings } = result.data;
+  const { entriesChecked, voidsChecked, migrationsRecorded, auditRecordsSealed, auditTrailAnchored, findings } = result.data;
   if (findings.length === 0) {
+    const chain = auditTrailAnchored
+      ? `${auditRecordsSealed.toLocaleString()} audit records verified against this computer's record of the audit trail.`
+      : `${auditRecordsSealed.toLocaleString()} audit records are consistent; this computer has no earlier record of this file's audit trail to compare against.`;
     return (
       <Notice
         kind="success"
-        text={`✓ Ledger intact: all ${entriesChecked.toLocaleString()} posted entries match their posting snapshots, ${voidsChecked.toLocaleString()} voids link to their reversals, ${migrationsRecorded} schema migrations recorded.`}
+        text={`✓ Ledger intact: all ${entriesChecked.toLocaleString()} posted entries match their posting snapshots, ${voidsChecked.toLocaleString()} voids link to their reversals, ${migrationsRecorded} schema migrations recorded. ${chain}`}
         onDismiss={onDismiss}
       />
     );
@@ -120,8 +123,8 @@ function Verification({ result, onDismiss, onChanged }) {
       <Notice kind="error" text={`${findings.length} integrity problem${findings.length === 1 ? '' : 's'} found in ${entriesChecked.toLocaleString()} posted entries.`} onDismiss={onDismiss} />
       <ul className="max-h-[120px] overflow-auto border border-qb-negative/30 bg-white px-2 py-1 text-xs scrollbar-thin">
         {findings.map((f) => (
-          <li key={`${f.entryId}-${f.problem}`}>
-            <span className="font-semibold">Entry #{f.entryNumber ?? `id ${f.entryId}`}</span>: {f.problem}
+          <li key={`${f.auditRecordId ?? ''}-${f.entryId}-${f.problem}`}>
+            <span className="font-semibold">{f.auditRecordId ? `Audit record ${f.auditRecordId}` : `Entry #${f.entryNumber ?? `id ${f.entryId}`}`}</span>: {f.problem}
           </li>
         ))}
       </ul>

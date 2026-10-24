@@ -716,10 +716,10 @@ pub async fn import_file(pool: &SqlitePool, path: &Path, bank_account_id: i64, g
         rows
     };
 
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match write_import(&mut tx, &rows, bank_account_id).await {
         Ok(summary) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(summary)
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -811,10 +811,10 @@ pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>,
 /// Posts a pending bank line to the ledger against `category_account_id` (and optional class) and
 /// learns a matching rule.
 pub async fn approve(pool: &SqlitePool, transaction_id: i64, category_account_id: i64, class_id: Option<i64>) -> Result<i64, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match write_approval(&mut tx, transaction_id, category_account_id, class_id).await {
         Ok(entry_id) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(entry_id)
         }
         Err(err) => Err(rollback(tx, err).await),

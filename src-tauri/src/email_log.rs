@@ -40,7 +40,7 @@ pub struct SentRecord {
 
 /// Records a send and takes the form off the "Email later" queue.
 pub async fn record(pool: &SqlitePool, kind: FormKind, document_id: i64, recipients: &[String], method: Method, subject: &str) -> Result<(), String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     sqlx::query("INSERT INTO form_email_log (form_type, document_id, recipients, method, subject) VALUES (?1, ?2, ?3, ?4, ?5)")
         .bind(kind.key())
         .bind(document_id)
@@ -51,7 +51,7 @@ pub async fn record(pool: &SqlitePool, kind: FormKind, document_id: i64, recipie
         .await
         .map_err(db_err)?;
     sqlx::query("DELETE FROM form_email_queue WHERE form_type = ?1 AND document_id = ?2").bind(kind.key()).bind(document_id).execute(&mut *tx).await.map_err(db_err)?;
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 /// A form's sent history, newest first.
