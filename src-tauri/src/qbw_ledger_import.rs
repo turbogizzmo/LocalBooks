@@ -326,7 +326,8 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     let (transaction_count, first_date, last_date, postable_count, live_entry_count): (i64, Option<String>, Option<String>, i64, i64) =
         sqlx::query_as(
             "SELECT COUNT(*), MIN(t.date), MAX(t.date),
-                    COALESCE(SUM(t.imbalance_cents = 0 AND (t.journal_entry_id IS NULL OR e.is_voided = 1)), 0),
+                    COALESCE(SUM(t.imbalance_cents = 0 AND (t.journal_entry_id IS NULL OR e.is_voided = 1)
+                                 AND EXISTS (SELECT 1 FROM ledger_import_lines l WHERE l.batch_id = t.batch_id AND l.source_txn_id = t.source_id)), 0),
                     COALESCE(SUM(t.journal_entry_id IS NOT NULL AND e.is_voided = 0), 0)
              FROM ledger_import_transactions t LEFT JOIN journal_entries e ON e.id = t.journal_entry_id
              WHERE t.batch_id = ?1",
@@ -400,17 +401,19 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .await
     .map_err(db_err)?;
     let posted_as: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT t.posted_as, COUNT(*) FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
-         WHERE t.batch_id = ?1 AND e.is_voided = 0 AND t.posted_as IS NOT NULL GROUP BY 1 ORDER BY 2 DESC",
+        "SELECT t.posted_as, COUNT(*) FROM ledger_import_transactions t LEFT JOIN journal_entries e ON e.id = t.journal_entry_id
+         WHERE t.batch_id = ?1 AND t.posted_as IS NOT NULL AND t.posted_as <> 'NOT_IMPORTED' AND (e.id IS NULL OR e.is_voided = 0)
+         GROUP BY 1 ORDER BY 2 DESC",
     )
     .bind(batch_id)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
     let fallbacks: Vec<FallbackView> = sqlx::query_as(
-        "SELECT t.kind, t.date, t.doc_num, t.name, t.fallback_reason AS reason
-         FROM ledger_import_transactions t JOIN journal_entries e ON e.id = t.journal_entry_id
-         WHERE t.batch_id = ?1 AND e.is_voided = 0 AND t.fallback_reason IS NOT NULL ORDER BY t.date, t.source_id",
+        "SELECT t.kind, t.date, t.doc_num, t.name,
+                CASE WHEN t.posted_as = 'NOT_IMPORTED' THEN 'not brought in: ' || t.fallback_reason ELSE t.fallback_reason END AS reason
+         FROM ledger_import_transactions t LEFT JOIN journal_entries e ON e.id = t.journal_entry_id
+         WHERE t.batch_id = ?1 AND (e.id IS NULL OR e.is_voided = 0) AND t.fallback_reason IS NOT NULL ORDER BY t.date, t.source_id",
     )
     .bind(batch_id)
     .fetch_all(pool)
@@ -566,7 +569,11 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
     }
     let sources: Vec<Source> = sqlx::query_as(
         "SELECT a.source_id, a.name, a.full_name, a.account_type, a.parent_source_id, a.is_active, a.account_id,
-                EXISTS (SELECT 1 FROM ledger_import_lines l WHERE l.batch_id = a.batch_id AND l.source_account_id = a.source_id) AS used
+                (EXISTS (SELECT 1 FROM ledger_import_lines l WHERE l.batch_id = a.batch_id AND l.source_account_id = a.source_id)
+                 -- Estimates and purchase orders have no ledger lines; their form lines name accounts too.
+                 OR EXISTS (SELECT 1 FROM ledger_import_transactions t, json_each(t.document, '$.lines') j
+                            WHERE t.batch_id = a.batch_id AND json_extract(t.document, '$.type') IN ('estimate', 'purchaseOrder')
+                              AND json_extract(j.value, '$.accountId') = a.source_id)) AS used
          FROM ledger_import_accounts a WHERE a.batch_id = ?1",
     )
     .bind(batch_id)
@@ -1076,12 +1083,16 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             result.skipped_already_posted += 1;
             continue;
         }
-        let Some(source_lines) = lines.remove(&t.source_id) else { continue };
+        let source_lines = lines.remove(&t.source_id).unwrap_or_default();
         let date: NaiveDate = t.date.parse().map_err(|_| format!("QBW_BAD_DATE: staged date '{}' is not a date", t.date))?;
         let document = match (input.mode, &t.document) {
             (ImportMode::Full, Some(json)) => serde_json::from_str(json).ok(),
             _ => None,
         };
+        // Only a full import brings in what posts nothing (estimates, purchase orders).
+        if source_lines.is_empty() && document.is_none() {
+            continue;
+        }
         staged.push(Staged { source_id: t.source_id, kind: t.kind, date, doc_num: t.doc_num, name: t.name, memo: t.memo, lines: source_lines, document });
     }
     if input.mode == ImportMode::Full && result.skipped_already_posted > 0 {
@@ -1109,7 +1120,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
                     currency: None,
                 };
                 match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
-                    Ok(id) => outcomes.push(Outcome { source_id: t.source_id, entry_id: id, posted_as: "JOURNAL", fallback_reason: None, entries: 1 }),
+                    Ok(id) => outcomes.push(Outcome { source_id: t.source_id, entry_id: Some(id), posted_as: "JOURNAL", fallback_reason: None, entries: 1 }),
                     Err(err) => return Err(ledger::rollback(tx, format!("{err} (imported {})", entry.description)).await),
                 }
             }
@@ -1533,6 +1544,109 @@ mod tests {
         assert_eq!(balance(&pool, mapped("Visa")).await, -900);
         assert_eq!(balance(&pool, mapped("Office Expense")).await, 5_900);
         assert_eq!(balance(&pool, mapped("Accounts Payable")).await, 0);
+    }
+
+    /// Transfers, estimates and purchase orders in a full import. Estimates and purchase orders
+    /// post nothing: one that cannot be brought in is listed, and none counts as postable.
+    #[tokio::test]
+    async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
+        use crate::qbw_documents::{DocumentLine, SourceDocument};
+        let pool = test_pool().await;
+        let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id };
+        let estimate = |customer_id| SourceDocument::Estimate {
+            customer_id,
+            date: "2024-04-01".parse().unwrap(),
+            number: Some("77".into()),
+            expires: "2024-05-01".parse().ok(),
+            memo: Some("Spring work".into()),
+            lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8 }],
+        };
+        let lineless = |id, kind, document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-04-01", &[]) };
+        let party = |id, name: &str| SourceParty {
+            id,
+            name: name.into(),
+            parent_id: None,
+            company_name: None,
+            email: None,
+            phone: None,
+            address: None,
+            terms_days: None,
+            tax_id: None,
+            is_1099: false,
+            active: true,
+            balance_cents: None,
+            notes: None,
+        };
+        let ledger = Ledger {
+            accounts: vec![
+                account(1, "Riverside Bank", "BANK", None),
+                account(2, "Savings", "BANK", None),
+                account(4, "Accounts Receivable", "ACCOUNTS_RECEIVABLE", None),
+                account(6, "Consulting Income", "INCOME", None),
+                account(8, "Sales Tax Payable", "OTHER_CURRENT_LIABILITY", None),
+                account(10, "Office Expense", "EXPENSE", None),
+            ],
+            transactions: vec![
+                SourceTransaction { kind: "Transfer", document: Some(SourceDocument::Transfer), ..txn(40, "2024-04-02", &[(2, -20_000), (1, 20_000)]) },
+                SourceTransaction { kind: "Transfer", document: Some(SourceDocument::Transfer), ..txn(41, "2024-04-03", &[(4, -500), (1, 500)]) },
+                lineless(42, "Estimate", estimate(100)),
+                lineless(43, "Estimate", estimate(999)),
+                lineless(
+                    44,
+                    "Purchase order",
+                    SourceDocument::PurchaseOrder {
+                        vendor_id: 300,
+                        date: "2024-04-01".parse().unwrap(),
+                        number: Some("PO-5".into()),
+                        expected: None,
+                        memo: None,
+                        received: true,
+                        lines: vec![line(None, 3_000, 10)],
+                    },
+                ),
+            ],
+            unbalanced: vec![],
+            unreadable: vec![],
+            customers: vec![party(100, "Acme Hosting")],
+            vendors: vec![party(300, "Paper Supply Co")],
+            items: vec![SourceItem {
+                id: 200,
+                name: "Consulting".into(),
+                description: None,
+                rate_cents: 1_000,
+                income_account_id: Some(6),
+                kind: "Service",
+                taxable: true,
+                active: true,
+            }],
+            quality: LedgerQuality::default(),
+        };
+        let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
+        auto_map_accounts(&pool, batch).await.unwrap();
+        assert_eq!(batch_summary(&pool, batch).await.unwrap().postable_count, 2, "only the transfers post");
+
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+        let full = posted.full.unwrap();
+        assert_eq!((full.transfers, full.estimates, full.purchase_orders, full.not_imported, full.fell_back), (1, 1, 1, 1, 1), "{full:?}");
+        assert_eq!(posted.entries_posted, 2);
+
+        let (number, total, tax, status, lines): (i64, i64, i64, String, i64) = sqlx::query_as(
+            "SELECT estimate_number, total_cents, tax_cents, status, (SELECT COUNT(*) FROM estimate_lines WHERE estimate_id = e.id) FROM estimates e",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!((number, total, tax, status.as_str(), lines), (77, 3_240, 240, "PENDING", 1));
+        let (po_number, po_status, po_total): (i64, String, i64) = sqlx::query_as("SELECT po_number, status, total_cents FROM purchase_orders").fetch_one(&pool).await.unwrap();
+        assert_eq!((po_number, po_status.as_str(), po_total), (1, "CLOSED", 3_000), "PO-5 is not a number, so it gets the next one");
+        let (from, to, amount): (i64, i64, i64) = sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents FROM transfers").fetch_one(&pool).await.unwrap();
+
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+        assert_eq!((from, to, amount), (mapped("Riverside Bank"), mapped("Savings"), 20_000));
+        assert_eq!(summary.postable_count, 0);
+        let reasons: Vec<&str> = summary.fallbacks.iter().map(|f| f.reason.as_str()).collect();
+        assert_eq!(reasons, ["not brought in: its customer was not imported", "LocalBooks transfers cannot use one of its accounts (accounts receivable)"]);
     }
 
     /// Full pipeline on a real company file into a fresh test database: set LOCALBOOKS_QBW_CHECK

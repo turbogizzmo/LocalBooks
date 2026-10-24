@@ -467,6 +467,9 @@ const DOCUMENT_WORDS = {
   bill: ['bill', 'bills'],
   billPayment: ['bill payment', 'bill payments'],
   expense: ['check or card charge', 'checks and card charges'],
+  transfer: ['transfer', 'transfers'],
+  estimate: ['estimate', 'estimates'],
+  purchaseOrder: ['purchase order', 'purchase orders'],
 };
 
 const countOf = (n, [one, many]) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
@@ -487,7 +490,7 @@ function FallbackList({ items }) {
           <th className="qb-grid-head">Type</th>
           <th className="qb-grid-head">Number</th>
           <th className="qb-grid-head">Name</th>
-          <th className="qb-grid-head">Posted as a journal entry because</th>
+          <th className="qb-grid-head">Why it is not a LocalBooks document</th>
         </tr>
       </thead>
       <tbody>
@@ -554,7 +557,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const post = () => {
     const question =
       mode === 'FULL'
-        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks and card charges as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
+        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
         : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
     if (!window.confirm(question)) return;
     run(
@@ -573,6 +576,9 @@ function LedgerReview({ summary, accounts, busy, run }) {
               [f.billPayments, DOCUMENT_WORDS.billPayment],
               [f.checks, ['check', 'checks']],
               [f.expenses, ['card charge', 'card charges']],
+              [f.transfers, DOCUMENT_WORDS.transfer],
+              [f.estimates, DOCUMENT_WORDS.estimate],
+              [f.purchaseOrders, DOCUMENT_WORDS.purchaseOrder],
               [f.journalEntries, ['journal entry', 'journal entries']],
             ]
               .filter(([n]) => n > 0)
@@ -582,6 +588,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
           (f ? `Brought in ${made.join(', ')}.` : `Posted ${r.entriesPosted.toLocaleString()} entries (${r.linesPosted.toLocaleString()} lines).`) +
           (f?.creditsApplied ? ` Applied ${countOf(f.creditsApplied, ['credit', 'credits'])} to invoices.` : '') +
           (f?.fellBack ? ` ${countOf(f.fellBack, ['document', 'documents'])} posted as journal entries instead (listed in step 3).` : '') +
+          (f?.notImported ? ` ${countOf(f.notImported, ['estimate or purchase order', 'estimates and purchase orders'])} could not be brought in (listed in step 3; they post nothing).` : '') +
           (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
           (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '')
         );
@@ -686,8 +693,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           {fallbacks.length > 0 && (
             <details className="rounded border border-qb-border">
               <summary className="cursor-pointer px-3 py-1.5 text-xs">
-                <strong>{countOf(fallbacks.length, ['document', 'documents'])} posted as journal entries</strong> instead of as LocalBooks documents. Their
-                amounts are in your books; the reasons are below.
+                <strong>{countOf(fallbacks.length, ['document', 'documents'])} not brought in as LocalBooks documents.</strong> Those that post are in your
+                books as journal entries; estimates and purchase orders post nothing. The reasons are below.
               </summary>
               <FallbackList items={fallbacks} />
             </details>
