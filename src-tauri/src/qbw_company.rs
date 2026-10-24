@@ -600,8 +600,9 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
         transactions.into_values().filter(|t| !t.lines.is_empty()).partition(|t| t.imbalance_cents() == 0);
     balanced.sort_by_key(|t| (t.date, t.id));
     unbalanced.sort_by_key(|t| (t.date, t.id));
-    let receivables: HashSet<i64> = accounts.iter().filter(|a| a.account_type == "ACCOUNTS_RECEIVABLE").map(|a| a.id).collect();
-    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| receivables.contains(&a));
+    let arap: HashSet<i64> =
+        accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
+    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a));
     for t in &mut balanced {
         t.document = documents.remove(&t.id);
     }

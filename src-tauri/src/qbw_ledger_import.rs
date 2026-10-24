@@ -1447,6 +1447,94 @@ mod tests {
         assert!(err.starts_with("QBW_FULL_USE_START_OVER"), "{err}");
     }
 
+    /// The purchase side of a full import: a bill paid by a bill payment dated before it, a check,
+    /// a card charge, and a card credit (no LocalBooks form, so a journal entry).
+    #[tokio::test]
+    async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
+        use crate::qbw_documents::{Applied, DocumentLine, SourceDocument};
+        let pool = test_pool().await;
+        let doc = |id: i64, kind: &'static str, date: &str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+            kind,
+            document: Some(document),
+            ..txn(id, date, lines)
+        };
+        let expense = |number: Option<&str>| SourceDocument::Expense { vendor_id: Some(300), number: number.map(str::to_string), applied_to: vec![] };
+        let ledger = Ledger {
+            accounts: vec![
+                account(1, "Riverside Bank", "BANK", None),
+                account(5, "Accounts Payable", "ACCOUNTS_PAYABLE", None),
+                account(10, "Office Expense", "EXPENSE", None),
+                account(11, "Visa", "CREDIT_CARD", None),
+                account(12, "Supplies", "EXPENSE", None),
+            ],
+            transactions: vec![
+                doc(
+                    31,
+                    "Bill payment",
+                    "2024-02-05",
+                    &[(1, 5_000), (5, -5_000)],
+                    SourceDocument::BillPayment { vendor_id: Some(300), reference: Some("990".into()), applied_to: vec![Applied { transaction_id: 30, cents: 5_000 }] },
+                ),
+                doc(
+                    30,
+                    "Bill",
+                    "2024-02-10",
+                    &[(5, 5_000), (10, -5_000)],
+                    SourceDocument::Bill {
+                        vendor_id: 300,
+                        number: Some("B-7".into()),
+                        due_date: "2024-03-10".parse().ok(),
+                        lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10 }],
+                    },
+                ),
+                doc(32, "Check", "2024-02-12", &[(1, 2_500), (12, -2_500)], expense(Some("1001"))),
+                doc(33, "Credit card charge", "2024-02-13", &[(11, 1_200), (10, -1_200)], expense(None)),
+                doc(34, "Credit card charge", "2024-02-14", &[(11, -300), (10, 300)], expense(None)),
+            ],
+            unbalanced: vec![],
+            unreadable: vec![],
+            customers: vec![],
+            vendors: vec![SourceParty {
+                id: 300,
+                name: "Paper Supply Co".into(),
+                parent_id: None,
+                company_name: None,
+                email: None,
+                phone: None,
+                address: None,
+                terms_days: None,
+                tax_id: None,
+                is_1099: false,
+                active: true,
+                balance_cents: Some(0),
+                notes: None,
+            }],
+            items: vec![],
+            quality: LedgerQuality::default(),
+        };
+        let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
+        auto_map_accounts(&pool, batch).await.unwrap();
+        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+        let full = posted.full.unwrap();
+        assert_eq!((full.bills, full.bill_payments, full.checks, full.expenses, full.fell_back), (1, 1, 1, 1, 1), "{full:?}");
+
+        let (status, bill_number, lines): (String, Option<String>, i64) =
+            sqlx::query_as("SELECT status, bill_number, (SELECT COUNT(*) FROM bill_lines WHERE bill_id = b.id) FROM bills b").fetch_one(&pool).await.unwrap();
+        assert_eq!((status.as_str(), bill_number.as_deref(), lines), ("PAID", Some("B-7"), 1), "the payment dated before the bill still applies");
+        let checks: Vec<(String, Option<String>, i64)> =
+            sqlx::query_as("SELECT kind, check_number, total_cents FROM expenses ORDER BY id").fetch_all(&pool).await.unwrap();
+        assert_eq!(checks, vec![("CHECK".into(), Some("1001".into()), 2_500), ("EXPENSE".into(), None, 1_200)]);
+
+        let summary = batch_summary(&pool, batch).await.unwrap();
+        assert_eq!(summary.fallbacks.len(), 1);
+        assert_eq!(summary.fallbacks[0].reason, "it is a refund or card credit, which has no LocalBooks form");
+        let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+        assert_eq!(balance(&pool, mapped("Riverside Bank")).await, -7_500);
+        assert_eq!(balance(&pool, mapped("Visa")).await, -900);
+        assert_eq!(balance(&pool, mapped("Office Expense")).await, 5_900);
+        assert_eq!(balance(&pool, mapped("Accounts Payable")).await, 0);
+    }
+
     /// Full pipeline on a real company file into a fresh test database: set LOCALBOOKS_QBW_CHECK
     /// and run `cargo test --release -- --ignored posts_a_real --nocapture`.
     #[tokio::test]
@@ -1513,6 +1601,13 @@ mod tests {
             let (linked, deposit_lines): (i64, i64) =
                 sqlx::query_as("SELECT COUNT(invoice_payment_id) + COUNT(sales_receipt_id), COUNT(*) FROM deposit_lines").fetch_one(&pool).await.unwrap();
             println!("open invoices: {open}, {}; deposit lines linked to a payment or receipt: {linked}/{deposit_lines}", crate::ledger::format_cents(open_cents));
+            let (bills, bills_cents): (i64, i64) = sqlx::query_as(
+                "SELECT COUNT(*), COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM bills WHERE status IN ('UNPAID', 'PARTIAL')",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            println!("open bills: {bills}, {}", crate::ledger::format_cents(bills_cents));
             let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
             let uf: i64 = sqlx::query_scalar(
                 "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l JOIN chart_of_accounts a ON a.id = l.account_id

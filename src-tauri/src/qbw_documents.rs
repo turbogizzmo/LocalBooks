@@ -1,5 +1,6 @@
-//! Sales documents read from a desktop company file, for the full import: invoices, credit memos,
-//! received payments and the deposits that swept them, with the links between them.
+//! Documents read from a desktop company file, for the full import: invoices, credit memos, sales
+//! receipts, received payments and the deposits that swept them; bills (and vendor credits), bill
+//! payments, checks and card charges; with the links between them.
 //!
 //! The file keeps payment applications in `abmc_transaction_link`, the same model as the
 //! QuickBooks SDK's `AppliedToTxn`: rows come in sibling pairs, and the row whose
@@ -11,7 +12,7 @@
 //! | 4 | received payment → invoice |
 //! | 3 | credit memo → invoice |
 //! | 9 | received payment → deposit (Undeposited Funds swept to the bank) |
-//! | 6 | bill payment or check → bill (purchases; a later phase) |
+//! | 6 | bill payment or check → bill |
 //! | 12 | lines within one invoice (internal; ignored) |
 //!
 //! Signs follow the ledger lines: negative is a debit, positive a credit.
@@ -61,6 +62,14 @@ pub enum SourceDocument {
     /// The payments a deposit swept out of Undeposited Funds (its other lines are in the ledger lines).
     #[serde(rename_all = "camelCase")]
     Deposit { payments: Vec<Applied> },
+    /// A bill, or a vendor credit when it debits payables (the file keeps both in one table).
+    #[serde(rename_all = "camelCase")]
+    Bill { vendor_id: i64, number: Option<String>, due_date: Option<chrono::NaiveDate>, lines: Vec<DocumentLine> },
+    #[serde(rename_all = "camelCase")]
+    BillPayment { vendor_id: Option<i64>, reference: Option<String>, applied_to: Vec<Applied> },
+    /// A check or card charge, with the bills it paid when it paid any.
+    #[serde(rename_all = "camelCase")]
+    Expense { vendor_id: Option<i64>, number: Option<String>, applied_to: Vec<Applied> },
 }
 
 /// LocalBooks' payment method for the name the file uses.
@@ -97,9 +106,9 @@ fn quantity_and_rate(row: &Row, amount_cents: i64) -> (i64, i64) {
     (10_000, amount)
 }
 
-/// Form lines of an invoice or credit memo: the lines with an amount that do not post to the
-/// receivables account, in their order on the form.
-fn form_lines(rows: &[&Row], receivables: &dyn Fn(i64) -> bool) -> Vec<DocumentLine> {
+/// Form lines of a document: the lines with an amount that do not post to receivables or
+/// payables, in their order on the form.
+fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool) -> Vec<DocumentLine> {
     let mut sorted: Vec<&&Row> = rows.iter().collect();
     sorted.sort_by_key(|r| (r.get("txn_line_order").as_int().unwrap_or(i64::MAX), r.get("target_id").as_int().unwrap_or(0)));
     sorted
@@ -107,7 +116,7 @@ fn form_lines(rows: &[&Row], receivables: &dyn Fn(i64) -> bool) -> Vec<DocumentL
         .filter_map(|r| {
             let account_id = r.get("account_id").as_int()?;
             let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0)?;
-            if receivables(account_id) {
+            if arap(account_id) {
                 return None;
             }
             let (quantity_e4, rate_cents) = quantity_and_rate(r, cents);
@@ -116,9 +125,9 @@ fn form_lines(rows: &[&Row], receivables: &dyn Fn(i64) -> bool) -> Vec<DocumentL
         .collect()
 }
 
-/// Reads the sales documents, keyed by transaction id. `receivables` says whether a source
-/// account is an accounts-receivable account.
-pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, receivables: &dyn Fn(i64) -> bool) -> HashMap<i64, SourceDocument> {
+/// Reads the documents, keyed by transaction id. `arap` says whether a source account is a
+/// receivables or payables account.
+pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i64) -> bool) -> HashMap<i64, SourceDocument> {
     let lines_of = |table: &str| -> BTreeMap<i64, Vec<Row>> {
         let mut by: BTreeMap<i64, Vec<Row>> = BTreeMap::new();
         for r in rows_of(pages, catalog, table) {
@@ -161,7 +170,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, receivables: &dy
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, receivables) },
+            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap) },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -174,7 +183,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, receivables: &dy
             SourceDocument::CreditMemo {
                 customer_id,
                 number: text(h, "doc_num"),
-                lines: form_lines(&refs, receivables),
+                lines: form_lines(&refs, arap),
                 applied_to: applied.remove(&(3, tid)).unwrap_or_default(),
             },
         );
@@ -190,7 +199,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, receivables: &dy
                 customer_id: h.get("customer_id").as_int(),
                 number: text(h, "doc_num"),
                 method: method_of(h),
-                lines: form_lines(&refs, receivables),
+                lines: form_lines(&refs, arap),
             },
         );
     }
@@ -200,6 +209,25 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, receivables: &dy
             tid,
             SourceDocument::Payment { customer_id, reference: text(&h, "doc_num"), method: method_of(&h), applied_to: applied.remove(&(4, tid)).unwrap_or_default() },
         );
+    }
+    let bill_headers = headers_of("abmc_bill_header");
+    for (tid, rows) in lines_of("abmc_bill_lineitem") {
+        let Some(h) = bill_headers.get(&tid) else { continue };
+        let Some(vendor_id) = h.get("vendor_id").as_int() else { continue };
+        let refs: Vec<&Row> = rows.iter().collect();
+        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap) });
+    }
+    for table in ["abmc_bill_check_header", "abmc_bill_ccard_header"] {
+        for (tid, h) in headers_of(table) {
+            let applied_to = applied.remove(&(6, tid)).unwrap_or_default();
+            out.insert(tid, SourceDocument::BillPayment { vendor_id: h.get("vendor_id").as_int(), reference: text(&h, "doc_num"), applied_to });
+        }
+    }
+    for table in ["abmc_check_header", "abmc_credit_cardcharge_header"] {
+        for (tid, h) in headers_of(table) {
+            let applied_to = applied.remove(&(6, tid)).unwrap_or_default();
+            out.insert(tid, SourceDocument::Expense { vendor_id: h.get("vendor_id").as_int(), number: text(&h, "doc_num"), applied_to });
+        }
     }
     // Deposits: group the payment → deposit links by deposit.
     let mut deposits: BTreeMap<i64, Vec<Applied>> = BTreeMap::new();
@@ -266,6 +294,9 @@ mod tests {
                 SourceDocument::SalesReceipt { .. } => "sales receipt",
                 SourceDocument::Payment { .. } => "payment",
                 SourceDocument::Deposit { .. } => "deposit",
+                SourceDocument::Bill { .. } => "bill",
+                SourceDocument::BillPayment { .. } => "bill payment",
+                SourceDocument::Expense { .. } => "expense",
             };
             *counts.entry(kind).or_default() += 1;
             match doc {
@@ -282,7 +313,7 @@ mod tests {
                 SourceDocument::Payment { customer_id, .. } => {
                     *customer_ar.entry(*customer_id).or_default() += ar_of(t);
                 }
-                SourceDocument::SalesReceipt { .. } | SourceDocument::Deposit { .. } => {}
+                _ => {}
             }
         }
         for t in &ledger.transactions {
@@ -312,6 +343,30 @@ mod tests {
         println!("form lines not balancing A/R: {form_mismatch}; over-applied: {over_applied}; applied to unknown: {dangling}");
         println!("open invoices: {open_invoices}, open total {}", crate::ledger::format_cents(open.values().filter(|o| **o > 0).sum()));
         println!("customers with stored balance matching: {customers_matching}/{}", stored.len());
+        let ap: std::collections::HashSet<i64> = ledger.accounts.iter().filter(|a| a.account_type == "ACCOUNTS_PAYABLE").map(|a| a.id).collect();
+        let mut open_bills: HashMap<i64, i64> = HashMap::new();
+        for t in &ledger.transactions {
+            if let Some(SourceDocument::Bill { .. }) = &t.document {
+                let owed: i64 = t.lines.iter().filter(|l| ap.contains(&l.account_id)).map(|l| l.cents).sum();
+                if owed > 0 {
+                    open_bills.insert(t.id, owed);
+                }
+            }
+        }
+        for t in &ledger.transactions {
+            if let Some(SourceDocument::BillPayment { applied_to, .. } | SourceDocument::Expense { applied_to, .. }) = &t.document {
+                for a in applied_to {
+                    if let Some(o) = open_bills.get_mut(&a.transaction_id) {
+                        *o -= a.cents;
+                    }
+                }
+            }
+        }
+        println!(
+            "open bills: {}, open total {}",
+            open_bills.values().filter(|o| **o > 0).count(),
+            crate::ledger::format_cents(open_bills.values().filter(|o| **o > 0).sum())
+        );
         for (c, b) in stored.iter().filter(|(c, b)| customer_ar.get(c).copied().unwrap_or(0) != **b).take(10) {
             println!("  customer {c}: stored {b} computed {:?}", customer_ar.get(c));
         }
@@ -361,5 +416,47 @@ mod tests {
             }
         }
         println!("payment applications by target kind: {targets:?}");
+    }
+
+    /// Prints the purchase tables' columns and how transaction links pair up by kind, to find
+    /// where vendor credits, card credits and bill payments live.
+    #[test]
+    #[ignore]
+    fn explores_purchase_tables() {
+        use crate::qbw_company::{read_ledger, read_pages, rows_of};
+        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
+        let (pages, catalog, _, _) = read_pages(std::path::Path::new(&path)).unwrap();
+        for stem in ["bill", "bill_check", "bill_ccard", "check", "credit_cardcharge"] {
+            for part in ["header", "lineitem"] {
+                let name = format!("abmc_{stem}_{part}");
+                let Some(id) = catalog.table_id(&name) else { continue };
+                let cols: Vec<&str> = catalog.columns[&id].iter().map(|c| c.name.as_str()).collect();
+                println!("{name}: {}", cols.join(", "));
+            }
+        }
+        let mut names: Vec<&String> = catalog.names.values().filter(|n| n.contains("credit") || n.contains("vendor") || n.contains("bill")).collect();
+        names.sort();
+        println!("tables: {names:?}");
+        let ledger = read_ledger(std::path::Path::new(&path)).unwrap();
+        let kinds: HashMap<i64, &str> = ledger.transactions.iter().chain(&ledger.unbalanced).map(|t| (t.id, t.kind)).collect();
+        let mut pairs: BTreeMap<(i64, &str, &str), usize> = BTreeMap::new();
+        for r in rows_of(&pages, &catalog, "abmc_transaction_link") {
+            if r.get("is_t1_source_bool").as_int() != Some(1) {
+                continue;
+            }
+            let k = |c: &str| r.get(c).as_int().and_then(|t| kinds.get(&t).copied()).unwrap_or("?");
+            *pairs.entry((r.get("link_type").as_int().unwrap_or(-1), k("transaction_id"), k("transaction_2_id"))).or_default() += 1;
+        }
+        for ((t, a, b), n) in pairs {
+            println!("link {t:>3}: {a} -> {b}: {n}");
+        }
+        // Sign of bill and card-charge totals: credits show up as the other sign on A/P or the card.
+        let mut signs: BTreeMap<(&str, bool), usize> = BTreeMap::new();
+        let types: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.account_type)).collect();
+        for t in &ledger.transactions {
+            let side: i64 = t.lines.iter().filter(|l| matches!(types.get(&l.account_id), Some(&"ACCOUNTS_PAYABLE") | Some(&"CREDIT_CARD") | Some(&"BANK"))).map(|l| l.cents).sum();
+            *signs.entry((t.kind, side > 0)).or_default() += 1;
+        }
+        println!("kind, pays out (credit to bank/card/AP): {signs:?}");
     }
 }

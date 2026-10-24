@@ -464,6 +464,9 @@ const DOCUMENT_WORDS = {
   salesReceipt: ['sales receipt', 'sales receipts'],
   payment: ['payment', 'payments'],
   deposit: ['deposit', 'deposits'],
+  bill: ['bill', 'bills'],
+  billPayment: ['bill payment', 'bill payments'],
+  expense: ['check or card charge', 'checks and card charges'],
 };
 
 const countOf = (n, [one, many]) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
@@ -509,7 +512,7 @@ function ModeChoice({ mode, setMode, documents, busy }) {
       'FULL',
       'Full import',
       docs.length
-        ? `${docs.join(', ')} come in as LocalBooks documents, so open invoices, customer balances and A/R aging carry over. Customers, vendors and items are brought in first. Anything that cannot be a document posts as a journal entry and is listed. Undo with Start over.`
+        ? `${docs.join(', ')} come in as LocalBooks documents, so open invoices and bills, customer and vendor balances, and A/R and A/P aging carry over. Customers, vendors and items are brought in first. Anything that cannot be a document posts as a journal entry and is listed. Undo with Start over.`
         : 'No sales documents were found in this file, so a full import posts the same journal entries.',
     ],
     ['JOURNAL', 'Journal import', 'Every transaction becomes one journal entry. Account balances are the same, but invoices and payments are not recreated. Undo with Reverse or Start over.'],
@@ -551,7 +554,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const post = () => {
     const question =
       mode === 'FULL'
-        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments and deposits as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
+        ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks and card charges as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
         : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
     if (!window.confirm(question)) return;
     run(
@@ -565,6 +568,11 @@ function LedgerReview({ summary, accounts, busy, run }) {
               [f.salesReceipts, DOCUMENT_WORDS.salesReceipt],
               [f.payments, DOCUMENT_WORDS.payment],
               [f.deposits, DOCUMENT_WORDS.deposit],
+              [f.bills, DOCUMENT_WORDS.bill],
+              [f.vendorCredits, ['vendor credit', 'vendor credits']],
+              [f.billPayments, DOCUMENT_WORDS.billPayment],
+              [f.checks, ['check', 'checks']],
+              [f.expenses, ['card charge', 'card charges']],
               [f.journalEntries, ['journal entry', 'journal entries']],
             ]
               .filter(([n]) => n > 0)
@@ -668,7 +676,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
             <Notice
               kind="success"
               text={`This import is in your books: ${(summary.postedAs ?? [])
-                .map(([as, n]) => `${n.toLocaleString()} ${as.toLowerCase().replace('_', ' ')}${n === 1 ? '' : 's'}`)
+                .map(([as, n]) => `${n.toLocaleString()} ${as.toLowerCase().replaceAll('_', ' ')}${n === 1 ? '' : 's'}`)
                 .join(', ')}. Use “Start over” above to undo it.`}
             />
           )}
