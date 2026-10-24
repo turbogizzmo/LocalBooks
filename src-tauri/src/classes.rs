@@ -96,7 +96,7 @@ async fn check_parent(tx: &mut Transaction<'_, Sqlite>, parent_id: Option<i64>) 
 
 pub async fn create_class(pool: &SqlitePool, input: ClassInput) -> Result<ClassView, String> {
     let name = clean_name(&input)?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     if let Err(err) = check_parent(&mut tx, input.parent_id).await {
         return Err(rollback(tx, err).await);
     }
@@ -109,14 +109,14 @@ pub async fn create_class(pool: &SqlitePool, input: ClassInput) -> Result<ClassV
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, name_err(err, name)).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_class(pool, id).await
 }
 
 /// Renames a class or moves it under another parent (or to the top level).
 pub async fn update_class(pool: &SqlitePool, id: i64, input: ClassInput) -> Result<ClassView, String> {
     let name = clean_name(&input)?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     if let Err(err) = check_parent(&mut tx, input.parent_id).await {
         return Err(rollback(tx, err).await);
     }
@@ -133,14 +133,14 @@ pub async fn update_class(pool: &SqlitePool, id: i64, input: ClassInput) -> Resu
     if updated == 0 {
         return Err(rollback(tx, format!("CLASS_NOT_FOUND: class {id} does not exist")).await);
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_class(pool, id).await
 }
 
 /// Makes a class inactive together with all of its subclasses, or active again (which needs an
 /// active parent). Lines that already use an inactive class keep it.
 pub async fn set_class_active(pool: &SqlitePool, id: i64, active: bool) -> Result<ClassView, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let parent: Option<Option<i64>> =
             sqlx::query_scalar("SELECT parent_id FROM classes WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?;
@@ -161,7 +161,7 @@ pub async fn set_class_active(pool: &SqlitePool, id: i64, active: bool) -> Resul
     if let Err(err) = result {
         return Err(rollback(tx, err).await);
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_class(pool, id).await
 }
 
@@ -269,9 +269,9 @@ pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Resu
 /// out of its current class and into the new one. Lines already in the target class are skipped.
 /// Returns how many lines moved.
 pub async fn reclassify(pool: &SqlitePool, line_ids: &[i64], to_class_id: Option<i64>) -> Result<usize, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match write_reclassification(&mut tx, line_ids, to_class_id).await {
-        Ok(moved) => tx.commit().await.map(|()| moved).map_err(db_err),
+        Ok(moved) => crate::ledger::commit_write(tx).await.map(|()| moved).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }

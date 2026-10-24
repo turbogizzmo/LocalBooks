@@ -151,7 +151,7 @@ pub async fn post(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, 
         .collect::<Vec<_>>()
         .join(", ");
 
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let live: Option<i64> = sqlx::query_scalar(
             "SELECT r.id FROM fx_revaluations r JOIN journal_entries e ON e.id = r.journal_entry_id WHERE r.as_of = ?1 AND e.is_voided = 0",
@@ -200,7 +200,7 @@ pub async fn post(pool: &SqlitePool, as_of: NaiveDate, rates: &BTreeMap<String, 
     .await;
     let id = match result {
         Ok(id) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             id
         }
         Err(err) => return Err(ledger::rollback(tx, err).await),
@@ -216,14 +216,14 @@ pub async fn void(pool: &SqlitePool, id: i64) -> Result<(), String> {
         .await
         .map_err(db_err)?;
     let (entry, reversal) = pair.ok_or("FX_REVAL_NOT_FOUND: that revaluation does not exist")?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         ledger::void_in_tx(&mut tx, reversal).await?;
         ledger::void_in_tx(&mut tx, entry).await
     }
     .await;
     match result {
-        Ok(()) => tx.commit().await.map_err(db_err),
+        Ok(()) => crate::ledger::commit_write(tx).await.map_err(db_err),
         Err(err) => Err(ledger::rollback(tx, err).await),
     }
 }

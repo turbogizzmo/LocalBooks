@@ -307,7 +307,7 @@ fn duplicate_name(err: sqlx::Error, name: &str) -> String {
 /// A new style; with `copy_from`, it starts as a copy of that style's templates.
 pub async fn create_style(pool: &SqlitePool, name: &str, copy_from: Option<i64>) -> Result<FormStyle, String> {
     let name = style_name(name)?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let id: i64 = sqlx::query_scalar("INSERT INTO form_styles (name) VALUES (?1) RETURNING id")
         .bind(&name)
         .fetch_one(&mut *tx)
@@ -321,7 +321,7 @@ pub async fn create_style(pool: &SqlitePool, name: &str, copy_from: Option<i64>)
             .await
             .map_err(db_err)?;
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     find_style(pool, id).await
 }
 
@@ -336,10 +336,10 @@ pub async fn rename_style(pool: &SqlitePool, id: i64, name: &str) -> Result<Form
 
 pub async fn set_default_style(pool: &SqlitePool, id: i64) -> Result<(), String> {
     find_style(pool, id).await?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     sqlx::query("UPDATE form_styles SET is_default = 0 WHERE is_default = 1").execute(&mut *tx).await.map_err(db_err)?;
     sqlx::query("UPDATE form_styles SET is_default = 1 WHERE id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 /// Deletes a style and its templates; its customers go back to the default style.
@@ -347,11 +347,11 @@ pub async fn delete_style(pool: &SqlitePool, id: i64) -> Result<(), String> {
     if find_style(pool, id).await?.is_default {
         return Err("FORM_STYLE_DEFAULT: make another style the default before deleting this one".into());
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     sqlx::query("UPDATE customers SET form_style_id = NULL WHERE form_style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     sqlx::query("DELETE FROM form_templates WHERE style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     sqlx::query("DELETE FROM form_styles WHERE id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 /// `style` itself, or the default style when `None`.

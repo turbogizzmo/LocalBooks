@@ -67,12 +67,12 @@ async fn get_estimate(pool: &SqlitePool, id: i64) -> Result<EstimateSummary, Str
 }
 
 pub async fn create_estimate(pool: &SqlitePool, input: EstimateInput) -> Result<EstimateSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let id = match write_estimate(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_estimate(pool, id).await
 }
 
@@ -179,7 +179,7 @@ pub async fn convert_to_invoice(
     issue_date: NaiveDate,
     due_date: NaiveDate,
 ) -> Result<EstimateSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
@@ -224,7 +224,7 @@ pub async fn convert_to_invoice(
     .await;
     match result {
         Ok(()) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             get_estimate(pool, estimate_id).await
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -285,7 +285,7 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
 /// marks the estimate converted, in one transaction: the estimate is never marked converted for an
 /// invoice that did not post.
 pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;
         let invoice_id = write_invoice(&mut tx, &input).await?;
@@ -300,7 +300,7 @@ pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: I
     .await;
     match result {
         Ok(invoice_id) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             crate::invoices::get_summary(pool, invoice_id).await
         }
         Err(err) => Err(rollback(tx, err).await),

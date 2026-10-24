@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod accounts;
+mod audit_chain;
 mod backup;
 mod bank;
 mod banking;
@@ -94,6 +95,7 @@ fn main() {
         })
         .setup(|app| {
             let (data_dir, config_dir) = data_dirs(app)?;
+            audit_chain::install_anchor_store(&config_dir);
             let config = db::DbConfig {
                 config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),

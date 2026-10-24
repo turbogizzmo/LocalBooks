@@ -205,7 +205,7 @@ pub struct AppliedCorrection {
 /// Posts the reviewed correction for one entry and records a FORENSIC_HEAL event, atomically.
 pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -> Result<AppliedCorrection, String> {
     // Reserve the writer before reading: competing corrections must revalidate after this commits.
-    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let payload: Option<String> = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1")
         .bind(input.entry_id)
         .fetch_optional(&mut *tx)
@@ -259,7 +259,7 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
     .await;
     match recorded {
         Ok(number) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(AppliedCorrection { correction_entry_id: correction_id, correction_entry_number: number })
         }
         Err(err) => Err(ledger::rollback(tx, err).await),

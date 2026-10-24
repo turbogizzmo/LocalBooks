@@ -12,6 +12,23 @@ example by editing the company file with another tool).
 3. Otherwise each problem is listed by entry number, such as "Differs from its posting snapshot" or
    "Snapshotted at posting but no longer in the ledger (deleted)".
 
+## How the audit trail protects itself
+
+Every audit record is linked to the one before it with a cryptographic fingerprint, and records who
+wrote it (your computer's user name and the LocalBooks version). After each save, LocalBooks also
+keeps a note of the newest record outside the company file, in your computer's keychain. The check
+recomputes the links and compares them with that note, so rewriting or removing audit records is
+caught even if someone also edited the snapshots.
+
+- "Audit record was changed after it was sealed" or "does not link to the one before it" means the
+  audit trail itself was edited outside the app.
+- "Audit record missing" means the file is behind what this computer last recorded: records were
+  removed, or you opened an older copy of the file. Restoring a backup from inside LocalBooks
+  doesn't cause this.
+- The green message says since when this computer has kept its record of the file. The record starts
+  the first time the file is opened on this computer, so it can only catch changes made after that
+  day. Changes made earlier, or on another computer, are caught only if they broke the links.
+
 ## Review corrections
 
 1. Under the list of problems, click **Review corrections…**. Each affected entry shows one of:
@@ -27,4 +44,5 @@ The correction is dated today, follows the closing date like any entry, and is r
 trail. The altered rows stay in the books as evidence.
 
 > **Tip:** Nothing posts automatically. The snapshots live in the same file as your books and could
-> also have been altered, so check every proposed correction before posting it.
+> also have been altered (the audit trail check above will usually show it), so check every proposed
+> correction before posting it.
