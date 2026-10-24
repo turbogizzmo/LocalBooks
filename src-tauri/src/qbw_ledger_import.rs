@@ -254,6 +254,8 @@ pub struct StartOverPoint {
 pub struct LedgerBatchSummary {
     pub id: i64,
     pub file_name: String,
+    /// `QBW` (a company file or backup), `IIF` or `QIF`, from the file's extension.
+    pub source_format: String,
     pub source_path: String,
     pub file_size_bytes: i64,
     pub imported_at: String,
@@ -425,6 +427,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         posted_as,
         fallbacks,
         id: batch_id,
+        source_format: source_format(&head.file_name).into(),
         file_name: head.file_name,
         source_path: head.source_path,
         file_size_bytes: head.file_size_bytes,
@@ -976,6 +979,15 @@ pub struct PostLedgerInput {
     pub batch_id: i64,
     #[serde(default)]
     pub mode: ImportMode,
+}
+
+/// The kind of file a batch was read from, by its extension.
+fn source_format(file_name: &str) -> &'static str {
+    match std::path::Path::new(file_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
+        Some("iif") => "IIF",
+        Some("qif") => "QIF",
+        _ => "QBW",
+    }
 }
 
 pub(crate) fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, memo: Option<&str>) -> String {

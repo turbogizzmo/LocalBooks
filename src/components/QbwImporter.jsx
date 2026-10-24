@@ -9,7 +9,8 @@ import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
-const EXTENSIONS = ['qbw', 'qbb', 'qbm'];
+const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif'];
+const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export' };
 const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
@@ -119,7 +120,7 @@ function ChooseFile({ busy, onFile }) {
   }, [busy, onFile]);
 
   const browse = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Desktop company file or backup (.qbw, .qbb)', extensions: EXTENSIONS }] });
+    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Company file, backup or export (.qbw, .qbb, .iif, .qif)', extensions: EXTENSIONS }] });
     if (typeof path === 'string') onFile(path);
   };
 
@@ -131,10 +132,11 @@ function ChooseFile({ busy, onFile }) {
         }`}
       >
         <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4 text-md" onClick={browse} disabled={busy}>
-          Choose a company file or backup…
+          Choose a file…
         </button>
         <div className="text-xs text-qb-ink-muted">
-          A .qbw company file or a .qbb backup, or drag it here. It is only read, never changed, and nothing is added to your books yet.
+          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, or a Quicken .qif export. You can also drag it here. It is only
+          read, never changed, and nothing is added to your books yet.
         </div>
       </div>
     </div>
@@ -286,7 +288,7 @@ function LedgerAccountGrid({ summary, accounts, onMap, busy }) {
       </colgroup>
       <thead>
         <tr>
-          <th className="qb-grid-head">Account in the company file</th>
+          <th className="qb-grid-head">Account in the file</th>
           <th className="qb-grid-head">Type</th>
           <th className="qb-grid-head text-right">Lines</th>
           <th className="qb-grid-head text-right">Read</th>
@@ -558,7 +560,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
     const question =
       mode === 'FULL'
         ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
-        : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the company file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
+        : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
     if (!window.confirm(question)) return;
     run(
       () => api.postLedgerBatch({ batchId: summary.id, mode }),
@@ -614,9 +616,12 @@ function LedgerReview({ summary, accounts, busy, run }) {
           ))}
         </dl>
         <p className="border-b border-qb-border px-3 py-1 text-2xs text-qb-ink-faint">
-          {summary.byKind.map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}${n === 1 ? '' : 's'}`).join(' · ')}. Read from{' '}
-          {summary.decodedPages.toLocaleString()} of {summary.rowPages.toLocaleString()} data pages
-          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}.
+          {summary.byKind.map(([k, n]) => `${n.toLocaleString()} ${k.toLowerCase()}${n === 1 ? '' : 's'}`).join(' · ')}.{' '}
+          {summary.sourceFormat === 'QBW'
+            ? `Read from ${summary.decodedPages.toLocaleString()} of ${summary.rowPages.toLocaleString()} data pages`
+            : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
+          {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
+          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}.
         </p>
         {summary.unreadable.length > 0 && (
           <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
@@ -788,7 +793,7 @@ export default function QbwImporter({ accounts }) {
     async (path) => {
       const ext = path.split('.').pop()?.toLowerCase();
       if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file or a .qbb backup.' });
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
         return;
       }
       setBusy(true);
@@ -807,7 +812,7 @@ export default function QbwImporter({ accounts }) {
           setNotice({
             kind: 'success',
             text:
-              `Read the full ledger: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
+              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
               (batch.unbalanced.length ? ` ${batch.unbalanced.length} could not be read completely and are listed below.` : '') +
               ' Nothing is in your books yet: review step 2 below.',
           });
@@ -939,9 +944,10 @@ export default function QbwImporter({ accounts }) {
           <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · built on the open-source OpenQBW work</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Reads desktop company files (.qbw) and backups (.qbb). Newer files come in as the <strong>full ledger</strong>: the chart of accounts and every
-          transaction, each posted as a balanced entry. Files the newer reader does not cover bring in <strong>invoice line amounts only</strong>, posted
-          against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed
+          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports and Quicken .qif exports. Newer company files and both exports
+          come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
+          as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
+          <strong>invoice line amounts only</strong>, posted against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed
           below.
         </p>
       </section>
@@ -970,7 +976,7 @@ export default function QbwImporter({ accounts }) {
 
       <Step
         number={1}
-        title="Choose a company file"
+        title="Choose a file"
         state={progress ? 'active' : step1}
         aside={
           summary &&
