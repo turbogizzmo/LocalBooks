@@ -395,7 +395,7 @@ mod tests {
         // and a new statement must end after the last one.
         let err = set_lines_cleared(&pool, rec.id, &[lines[0].line_id], false).await.expect_err("frozen");
         assert!(err.starts_with("REC_LOCKED") || err.starts_with("REC_LINE_UNAVAILABLE"), "{err}");
-        let void = sqlx::query("UPDATE journal_entries SET status = 'VOID', voided_at = 'now' WHERE id = ?1")
+        let void = sqlx::query("UPDATE journal_entries SET status = 'VOID', voided_at = '2026-10-01T00:00:00.000Z' WHERE id = ?1")
             .bind(deposit)
             .execute(&pool)
             .await

@@ -1006,6 +1006,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn schema_rejects_foreign_unbalanced_entry_when_posting_draft() {
+        let fx = setup().await;
+        let draft: i64 = sqlx::query_scalar(
+            "INSERT INTO journal_entries (entry_number, entry_date, memo, foreign_currency_code, exchange_rate_e6)
+             VALUES (1, '2026-10-13', 'Foreign mismatch', 'EUR', 1100000)
+             RETURNING id",
+        )
+        .fetch_one(&fx.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO journal_lines
+                (journal_entry_id, line_number, account_id, debit_cents, credit_cents, foreign_debit_cents, foreign_credit_cents)
+             VALUES (?1, 1, ?2, 10000, 0, 10000, 0)",
+        )
+        .bind(draft)
+        .bind(fx.checking)
+        .execute(&fx.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO journal_lines
+                (journal_entry_id, line_number, account_id, debit_cents, credit_cents, foreign_debit_cents, foreign_credit_cents)
+             VALUES (?1, 2, ?2, 0, 10000, 0, 9900)",
+        )
+        .bind(draft)
+        .bind(fx.sales)
+        .execute(&fx.pool)
+        .await
+        .unwrap();
+        let err = sqlx::query(
+            "UPDATE journal_entries
+             SET status = 'POSTED', posted_at = '2026-10-13T10:00:00.000Z'
+             WHERE id = ?1",
+        )
+        .bind(draft)
+        .execute(&fx.pool)
+        .await
+        .map_err(db_err)
+        .unwrap_err();
+        assert!(err.starts_with("JE_FOREIGN_UNBALANCED"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_invalid_voided_at_format() {
+        let fx = setup().await;
+        let posted = post_journal_entry(
+            &fx.pool,
+            JournalEntry {
+                id: None,
+                date: date(),
+                description: "To void".into(),
+                lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+                currency: None,
+            },
+        )
+        .await
+        .unwrap();
+        let err = sqlx::query("UPDATE journal_entries SET status = 'VOID', voided_at = 'x' WHERE id = ?1")
+            .bind(posted)
+            .execute(&fx.pool)
+            .await
+            .map_err(db_err)
+            .unwrap_err();
+        assert!(err.starts_with("JE_VOIDED_AT_INVALID"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
     async fn rejects_line_with_both_debit_and_credit() {
         let fx = setup().await;
         let entry = JournalEntry {
