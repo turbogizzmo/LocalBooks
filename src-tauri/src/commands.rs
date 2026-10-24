@@ -26,6 +26,7 @@ use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
+use crate::{iif_import, qif_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
 use crate::storage::{self, RecentCompany, RecentCompanyView, StorageInfo};
 use crate::export_engine;
@@ -1324,8 +1325,9 @@ pub enum IngestResult {
     Ledger { batch: LedgerBatchSummary },
 }
 
-/// Reads a .qbw company file, or the company file inside a .qbb backup, into a new staging batch,
-/// reporting progress as `qbw-import-progress` events. Nothing is posted to the ledger.
+/// Reads a .qbw company file, the company file inside a .qbb backup, or an .iif (QuickBooks) or
+/// .qif (Quicken) export into a new staging batch, reporting progress as `qbw-import-progress`
+/// events. Nothing is posted to the ledger.
 ///
 /// The invoice-line reader runs first, so files it supports import as before; when it finds
 /// nothing (newer file versions), the record-layer decoder reads the whole ledger instead.
@@ -1333,13 +1335,40 @@ pub enum IngestResult {
 pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<IngestResult, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file or a .qbb backup".into());
+    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif") {
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, or an .iif or .qif export".into());
     }
     let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
     let progress = |stage: &'static str, done: u64, total: u64| {
         let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage, done, total });
     };
+
+    // IIF and QIF exports are text: read straight into a ledger and stage it like a company file.
+    if matches!(ext.as_str(), "iif" | "qif") {
+        progress("Reading file", 0, 1);
+        let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
+        let account = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported account".into());
+        let is_iif = ext == "iif";
+        let ledger = tauri::async_runtime::spawn_blocking(move || if is_iif { iif_import::read(&bytes) } else { qif_import::read(&bytes, &account) })
+            .await
+            .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??;
+        progress("Reading file", 1, 1);
+        // A file of lists alone imports (it adds its lists); one with nothing at all does not.
+        if ledger.transactions.is_empty()
+            && ledger.unbalanced.is_empty()
+            && ledger.accounts.is_empty()
+            && ledger.customers.is_empty()
+            && ledger.vendors.is_empty()
+            && ledger.items.is_empty()
+        {
+            return Err(format!("{}_EMPTY: this file has no accounts, lists or transactions to import", ext.to_ascii_uppercase()));
+        }
+        let pool = db.pool().await;
+        progress("Staging rows", 0, 1);
+        let batch_id = qbw_ledger_import::stage(&pool, &path, file_size, &ledger).await?;
+        progress("Staging rows", 1, 1);
+        return Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await? });
+    }
 
     // A backup holds the company file compressed; unpack it next to LocalBooks' own cache.
     let unpacked = if qbw_backup::is_backup(&path) {
@@ -1475,7 +1504,7 @@ pub async fn post_ledger_batch(app: AppHandle, db: State<'_, Db>, input: PostLed
     let pool = db.pool().await;
     let posted = qbw_ledger_import::post_batch(&pool, &input).await;
     match &posted {
-        Ok(result) if result.entries_posted > 0 => {
+        Ok(result) if result.entries_posted > 0 || result.lists.is_some() => {
             if let Err(e) = qbw_ledger_import::set_pre_post_backup(&pool, input.batch_id, &snapshot).await {
                 let _ = std::fs::remove_file(&snapshot);
                 notify(&app);
