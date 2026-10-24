@@ -40,7 +40,11 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   - Investment accounts are skipped, because LocalBooks doesn't track securities.
 - **Dates:** IIF dates are always month first. QIF dates are read month first unless a date in the
   file can only be day first (such as `25/04/2024`).
-- A file with lists but no transactions can't be imported on its own yet.
+- **Lists only:** a file with lists but no transactions (such as Intuit's "Import First - List
+  Declarations" IIF) imports too. Step 2 shows every account in the file. Step 3 becomes **Add lists
+  to your books…**, which matches or creates the accounts, customers, vendors and items and posts
+  nothing. **Reverse added lists…** deactivates what it created; **Start over…** puts back the
+  books from just before the lists were added.
 
 ## 1. Choose the file
 

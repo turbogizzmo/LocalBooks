@@ -1338,11 +1338,15 @@ pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String
             .await
             .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??;
         progress("Reading file", 1, 1);
-        if ledger.transactions.is_empty() && ledger.unbalanced.is_empty() {
-            return Err(format!(
-                "{}_NO_TRANSACTIONS: this file has lists but no transactions. Importing lists on their own is not supported yet; export them together with transactions.",
-                ext.to_ascii_uppercase()
-            ));
+        // A file of lists alone imports (it adds its lists); one with nothing at all does not.
+        if ledger.transactions.is_empty()
+            && ledger.unbalanced.is_empty()
+            && ledger.accounts.is_empty()
+            && ledger.customers.is_empty()
+            && ledger.vendors.is_empty()
+            && ledger.items.is_empty()
+        {
+            return Err(format!("{}_EMPTY: this file has no accounts, lists or transactions to import", ext.to_ascii_uppercase()));
         }
         let pool = db.pool().await;
         progress("Staging rows", 0, 1);
@@ -1485,7 +1489,7 @@ pub async fn post_ledger_batch(app: AppHandle, db: State<'_, Db>, input: PostLed
     let pool = db.pool().await;
     let posted = qbw_ledger_import::post_batch(&pool, &input).await;
     match &posted {
-        Ok(result) if result.entries_posted > 0 => {
+        Ok(result) if result.entries_posted > 0 || result.lists.is_some() => {
             if let Err(e) = qbw_ledger_import::set_pre_post_backup(&pool, input.batch_id, &snapshot).await {
                 let _ = std::fs::remove_file(&snapshot);
                 notify(&app);

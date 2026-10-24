@@ -495,8 +495,8 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   and portable files (`.qbm`) must be restored to a `.qbw` in the program that created them first.
   Review imported totals against that program's reports.
 - **IIF and QIF imports.** IIF files don't link payments to invoices, so payments apply to the
-  oldest open invoices, as QuickBooks does. QIF investment accounts are skipped, and a file with
-  lists but no transactions can't be imported on its own.
+  oldest open invoices, as QuickBooks does. QIF investment accounts are skipped. A file with lists
+  but no transactions adds its accounts, customers, vendors and items and posts nothing.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.
