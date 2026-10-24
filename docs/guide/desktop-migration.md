@@ -42,34 +42,68 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   file can only be day first (such as `25/04/2024`).
 - A file with lists but no transactions can't be imported on its own yet.
 
-## 1. Choose the file
+## 1. Choose a file
 
 1. Go to **Accounting › Desktop Migration Wizard**.
 2. Click **Choose a file…**, or drag the file onto the box.
-3. Wait while the progress bar works through the file; large files take a minute or more. The file
-   is only read, never changed, and nothing is added to your books yet.
+3. Wait while the progress bar works through the file; large files take a few minutes. Keep
+   LocalBooks open. The file is only read, never changed, and nothing is added to your books yet.
 
-## 2. Review what was found
+To bring in a different file later, click **Import another file**.
 
-1. Check the figures: **Invoices**, **Invoice lines**, **Total**, **Dates** and **Ignored**. Ignored
-   lines are matches outside invoice tables, or amounts that couldn't be decoded.
-2. For each line type, choose an income account under **Post to this LocalBooks income account**,
-   or click **Create an income account for each**.
+## 2. Review what was read and choose accounts
+
+1. Check the figures: **Transactions**, **Lines**, **Dates**, **Accounts used** and **Balances
+   matching the file**. Each account's **Read** balance should equal **File's balance**; a
+   difference is shown in red.
+2. If the heading says some lines were **not read in full**, open it. Each line is marked
+   **Recovered**, **No amount** or **Not read**. Only **Not read** lines can leave something out; if
+   their transaction is listed, enter it by hand after posting. Transactions listed as **could not
+   be read completely** are never posted.
+3. For each source account, choose a LocalBooks account under **Post to this LocalBooks account**.
+   Or click **Match existing accounts and create the rest** to map by name and create what's missing.
+   Every account must have a LocalBooks account before you can post.
+4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**.
+   It matches existing records by name and adds the rest.
 
 ## 3. Post to your books
 
-1. Under **Balance each invoice against**, keep **Opening Balance Equity** unless your accountant
-   says otherwise. The file has no customer payments, so these sales shouldn't sit in Accounts
-   Receivable.
-2. Optionally set a **Date for invoices without one**; leave it blank to skip them.
-3. Click **Post … entries**, check the count and total in the confirmation, and confirm.
+1. Choose how to bring in the transactions:
+   - **Full import** (recommended when the file has sales documents) makes LocalBooks invoices,
+     credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges,
+     transfers, estimates and purchase orders, so open invoices and bills, customer and vendor
+     balances, and A/R and A/P aging carry over. Anything that can't be a document posts as a
+     journal entry and is listed under **not brought in as LocalBooks documents**.
+   - **Journal import** turns every transaction into one journal entry. Account balances are the
+     same, but invoices and payments aren't recreated.
+2. Click **Bring in … transactions…** (Full) or **Post … entries…** (Journal), check the count in the
+   confirmation, and confirm.
+3. Compare the account balances with a trial balance from the original program.
+
+### Older files that only yield invoice lines
+
+Some older `.qbw` files can't be read as a full ledger. For these the wizard finds invoice line
+amounts only, not accounts, customers or payments, and steps 2 and 3 change:
+
+1. In step 2, check **Invoices**, **Invoice lines**, **Total**, **Dates** and **Ignored**. Ignored
+   lines are matches outside invoice tables, or amounts that couldn't be decoded.
+2. Under **Post to this LocalBooks income account**, choose an account for each line type, or click
+   **Create an income account for each**.
+3. In step 3, keep **Opening Balance Equity** under **Balance each invoice against** unless your
+   accountant says otherwise. The file has no customer payments, so these sales shouldn't sit in
+   Accounts Receivable.
+4. Optionally set a **Date for invoices without one**; leave it blank to skip them.
+5. Click **Post … entries…**, check the count and total in the confirmation, and confirm.
 
 ## Undo or tidy up
 
 Every import is listed under **Your imports**:
 
-- **Open** continues an import you haven't posted yet.
-- **Reverse posted entries…** voids everything the import posted and deactivates the accounts it
-  created, returning your balances to where they were.
+- **Open** continues an import you haven't posted yet, or reviews one you have.
+- **Start over…** puts your books back to the copy saved just before the import was posted. It is
+  the way to undo a **Full import**. If no copy was saved, the button is disabled; use **Reverse
+  posted entries…** instead where it is offered.
+- **Reverse posted entries…** voids everything a journal or invoice-line import posted and
+  deactivates the accounts it created, returning your balances to where they were.
 - **Delete import** removes the import's staged lines. Your books aren't affected. An import with
-  posted entries must be reversed first.
+  posted entries must be undone first (**Start over…** or **Reverse posted entries…**).
