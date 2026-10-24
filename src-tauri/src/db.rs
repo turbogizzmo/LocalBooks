@@ -227,7 +227,9 @@ impl Db {
         match closed {
             Some(live) => {
                 live.pool.close().await;
+                let path = live.path.clone();
                 drop(live); // releases the shared-location lock, if any
+                checkpoint_closed(&path).await;
                 true
             }
             None => false,
@@ -463,6 +465,22 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
     migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
 
     Ok(pool)
+}
+
+/// Folds a closed company file's write-ahead log back into the file and removes it. The pool's
+/// connections close together, so none of them sees itself as the last one and the log can be
+/// left behind (seen on Linux and Windows); one connection opened and closed on its own does it.
+/// Best effort: the data is safe either way, the next open replays the log.
+async fn checkpoint_closed(path: &Path) {
+    if !PathBuf::from(format!("{}-wal", path.display())).exists() {
+        return;
+    }
+    let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));
+    if let Ok(mut conn) = sqlx::SqliteConnection::connect_with(&options).await {
+        // Reading the file attaches the log; as the only connection, closing then removes it.
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&mut conn).await;
+        let _ = conn.close().await;
+    }
 }
 
 /// The schema version of an existing company file that has migrations still to apply, or None for a
