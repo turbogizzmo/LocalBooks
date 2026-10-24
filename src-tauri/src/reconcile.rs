@@ -400,7 +400,7 @@ mod tests {
             .execute(&pool)
             .await
             .expect_err("void blocked");
-        assert!(void.to_string().contains("REC_LOCKED"), "{void}");
+        assert!(void.to_string().contains("JE_INVALID_TRANSITION"), "{void}");
         let err = start(&pool, checking, d(9, 15), 0).await.expect_err("date must advance");
         assert!(err.starts_with("REC_DATE_NOT_AFTER_LAST"), "{err}");
 

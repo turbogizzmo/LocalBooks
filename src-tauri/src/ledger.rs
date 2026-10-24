@@ -845,7 +845,7 @@ pub struct LedgerVerification {
 /// it was posted. The ledger is intact when every posted entry has an identical snapshot, balances,
 /// every void links to its reversal, and no snapshotted entry has disappeared.
 pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification, String> {
-    let checks: [(&str, &str); 5] = [
+    let checks: [(&str, &str); 6] = [
         (
             "Posted without a posting snapshot",
             "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
@@ -871,6 +871,12 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
             "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
              WHERE e.is_voided = 1
                AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'VOID' AND a.target_entity_id = e.id)",
+        ),
+        (
+            "Status set to VOID outside the legacy voiding path",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             WHERE e.status = 'VOID'
+               AND NOT EXISTS (SELECT 1 FROM legacy_status_voids l WHERE l.journal_entry_id = e.id)",
         ),
         (
             "Snapshotted at posting but no longer in the ledger (deleted)",
@@ -1330,6 +1336,25 @@ mod tests {
         sqlx::query("DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1").bind(untouched).execute(&fx.pool).await.unwrap();
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
         assert!(verification.findings.iter().any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
+    }
+
+    #[tokio::test]
+    async fn verification_flags_non_legacy_status_void_rows() {
+        let fx = setup().await;
+        let entry = post_sale(&fx, 1_000, "Status void tamper").await;
+        assert!(verify_ledger_audit(&fx.pool).await.unwrap().intact);
+
+        sqlx::query("DROP TRIGGER trg_je_status_transition").execute(&fx.pool).await.unwrap();
+        sqlx::query("UPDATE journal_entries SET status = 'VOID', voided_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
+            .bind(entry)
+            .execute(&fx.pool)
+            .await
+            .unwrap();
+
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        assert!(verification.findings.iter().any(
+            |f| f.entry_id == entry && f.problem == "Status set to VOID outside the legacy voiding path"
+        ));
     }
 
     /// The snapshot format from before classes existed (migration 0013), kept to prove that entries
