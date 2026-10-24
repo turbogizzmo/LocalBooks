@@ -6,6 +6,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
+import FileDentist from './FileDentist.jsx';
 import { NewCompanyDialog } from './CompanyFiles.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -668,7 +669,15 @@ function FileAndData({ companyName }) {
     }
   };
 
-  const KIND = { AUTO: 'Automatic', MANUAL: 'Manual', PRE_RESTORE: 'Before restore', PRE_UPGRADE: 'Before upgrade', EXPORT: 'Exported' };
+  const KIND = {
+    AUTO: 'Automatic',
+    MANUAL: 'Manual',
+    PRE_RESTORE: 'Before restore',
+    PRE_UPGRADE: 'Before upgrade',
+    PRE_IMPORT: 'Before import',
+    PRE_REBUILD: 'Before rebuild',
+    EXPORT: 'Exported',
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -698,6 +707,7 @@ function FileAndData({ companyName }) {
         {pending && <RestoreConfirm info={pending.info} busy={busy} onConfirm={restore} onCancel={() => setPending(null)} />}
         {creatingCompany && <NewCompanyDialog onClose={() => setCreatingCompany(false)} />}
       </Group>
+      <FileDentist onRebuilt={backups.reload} />
       <CompanyFileLocation />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel flex min-h-0 flex-col">

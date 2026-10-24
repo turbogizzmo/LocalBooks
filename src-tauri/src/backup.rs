@@ -29,7 +29,7 @@ const AUTO_BACKUP_INTERVAL: Duration = Duration::from_secs(20 * 60 * 60);
 pub struct BackupFile {
     pub path: String,
     pub file_name: String,
-    /// `AUTO`, `MANUAL`, `PRE_RESTORE`, `PRE_UPGRADE`, `PRE_IMPORT` or `EXPORT`
+    /// `AUTO`, `MANUAL`, `PRE_RESTORE`, `PRE_UPGRADE`, `PRE_IMPORT`, `PRE_REBUILD` or `EXPORT`
     pub kind: String,
     pub size_bytes: u64,
     pub modified: String,
@@ -269,6 +269,8 @@ fn kind_of(file_name: &str) -> &'static str {
         "PRE_UPGRADE"
     } else if file_name.starts_with("pre-import-") {
         "PRE_IMPORT"
+    } else if file_name.starts_with("pre-rebuild-") {
+        "PRE_REBUILD"
     } else {
         "MANUAL"
     }
@@ -281,6 +283,14 @@ pub async fn pre_import_snapshot(db: &Db, batch_id: i64) -> Result<PathBuf, Stri
     let path = db.backups_dir().join(format!("pre-import-{batch_id}-{}.db", stamp()));
     snapshot(&db.pool().await, &db.path().await?, &path).await?;
     Ok(path)
+}
+
+/// Saves a verified copy of the live books before File Dentist rebuilds them:
+/// `pre-rebuild-<timestamp>.db`.
+pub async fn pre_rebuild_snapshot(db: &Db) -> Result<BackupFile, String> {
+    let path = db.backups_dir().join(format!("pre-rebuild-{}.db", stamp()));
+    snapshot(&db.pool().await, &db.path().await?, &path).await?;
+    describe(&path, "PRE_REBUILD")
 }
 
 /// Copies of a company file taken before a newer LocalBooks upgraded it; the newest few are kept.

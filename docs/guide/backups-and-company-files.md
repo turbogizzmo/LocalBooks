@@ -25,6 +25,30 @@ Controls**.
 > the backup was taken isn't kept. To undo just one desktop migration import, use **Reverse posted
 > entries** on the import screen instead.
 
+## Check and repair the file (File Dentist)
+
+**File Dentist** checks the company file for damage and repairs what can be repaired safely.
+
+1. Click **Run Check-up**. It only reads, so it's safe any time. It checks:
+   - the file structure
+   - the schema version
+   - the database safeguards that enforce double-entry
+   - record links
+   - that debits equal credits
+   - the posting history
+   - stored totals, such as amounts paid and stock on hand
+2. Each check shows **OK**, **Attention** or **Problem**, and says what to do next. Click
+   **Details** to see the specific records.
+3. If a check says **Rebuild fixes this**, click **Rebuild…**, then **Back up and rebuild**. A
+   "Before rebuild" snapshot is saved first. Rebuild restores missing or changed safeguards and
+   indexes, then compacts the file. The check-up runs again when it's done.
+
+Rebuild never changes your transactions. When a problem is in the data itself (broken links,
+unbalanced or changed entries, totals that disagree), the file was edited outside LocalBooks. Fix it
+with a reviewed correction on the Audit Log (see [Verify and correct the ledger](ledger-integrity.md)),
+or restore a backup taken before it happened. If the file structure is damaged, Rebuild is turned
+off: restore the most recent backup that passes the check-up.
+
 ## Open another company file
 
 - Double-click a `.localbooks` file, or click **Open Company File…** and choose one.

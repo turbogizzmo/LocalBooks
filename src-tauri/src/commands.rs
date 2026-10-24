@@ -24,6 +24,7 @@ use crate::mail_app::{self, ComposeOutcome};
 use crate::secrets::SecretStore;
 use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
+use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
 use crate::storage::{self, RecentCompany, RecentCompanyView, StorageInfo};
@@ -561,6 +562,20 @@ pub async fn list_audit_log(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec
 #[tauri::command]
 pub async fn verify_ledger_integrity(db: State<'_, Db>) -> Result<LedgerVerification, String> {
     ledger::verify_ledger_audit(&db.pool().await).await
+}
+
+/// File Dentist check-up of the live company file (read-only).
+#[tauri::command]
+pub async fn file_dentist_checkup(db: State<'_, Db>) -> Result<CheckupReport, String> {
+    file_dentist::checkup_live(&db).await
+}
+
+/// File Dentist rebuild: snapshot, restore this build's safeguards and indexes, compact, re-check.
+#[tauri::command]
+pub async fn file_dentist_rebuild(app: AppHandle, db: State<'_, Db>) -> Result<RebuildResult, String> {
+    let result = file_dentist::rebuild_live(&db).await?;
+    notify(&app);
+    Ok(result)
 }
 
 /// For each entry that no longer matches its posting snapshot: the correcting entry that would
