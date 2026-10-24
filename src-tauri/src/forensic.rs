@@ -67,7 +67,11 @@ type Nets = BTreeMap<i64, i64>;
 fn snapshot_nets(snapshot: &Value) -> Nets {
     let mut nets = Nets::new();
     for line in snapshot["lines"].as_array().into_iter().flatten() {
-        let (Some(account), Some(debit), Some(credit)) = (line["accountId"].as_i64(), line["debitCents"].as_i64(), line["creditCents"].as_i64()) else {
+        let (Some(account), Some(debit), Some(credit)) = (
+            line["accountId"].as_i64(),
+            line["debitCents"].as_i64(),
+            line["creditCents"].as_i64(),
+        ) else {
             continue;
         };
         *nets.entry(account).or_insert(0) += debit - credit;
@@ -86,9 +90,18 @@ async fn live_nets(conn: &mut SqliteConnection, entry_id: i64) -> Result<Nets, S
     Ok(rows.into_iter().collect())
 }
 
-async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Value) -> Result<CorrectionProposal, String> {
+async fn propose_for(
+    conn: &mut SqliteConnection,
+    entry_id: i64,
+    snapshot: &Value,
+) -> Result<CorrectionProposal, String> {
     let entry_number = snapshot["entryNumber"].as_i64();
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = ?1)").bind(entry_id).fetch_one(&mut *conn).await.map_err(db_err)?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = ?1)")
+            .bind(entry_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(db_err)?;
     let mut proposal = CorrectionProposal {
         entry_id,
         entry_number,
@@ -114,15 +127,21 @@ async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Valu
     if let Some(number) = corrected {
         proposal.status = CorrectionStatus::Corrected;
         proposal.corrected_by_entry_number = Some(number);
-        proposal.explanation = format!("Corrected by entry #{number}. The altered rows are kept as evidence.");
+        proposal.explanation =
+            format!("Corrected by entry #{number}. The altered rows are kept as evidence.");
         return Ok(proposal);
     }
 
     let recorded = snapshot_nets(snapshot);
-    let live = if exists { live_nets(conn, entry_id).await? } else { Nets::new() };
+    let live = if exists {
+        live_nets(conn, entry_id).await?
+    } else {
+        Nets::new()
+    };
     let mut deltas = Nets::new();
     for account in recorded.keys().chain(live.keys()) {
-        let delta = recorded.get(account).copied().unwrap_or(0) - live.get(account).copied().unwrap_or(0);
+        let delta =
+            recorded.get(account).copied().unwrap_or(0) - live.get(account).copied().unwrap_or(0);
         if delta != 0 {
             deltas.insert(*account, delta);
         }
@@ -146,7 +165,12 @@ async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Valu
     }
 
     for (account, delta) in &deltas {
-        let name: Option<String> = sqlx::query_scalar("SELECT full_name FROM v_chart_of_accounts WHERE id = ?1").bind(account).fetch_optional(&mut *conn).await.map_err(db_err)?;
+        let name: Option<String> =
+            sqlx::query_scalar("SELECT full_name FROM v_chart_of_accounts WHERE id = ?1")
+                .bind(account)
+                .fetch_optional(&mut *conn)
+                .await
+                .map_err(db_err)?;
         let Some(account_name) = name else {
             proposal.status = CorrectionStatus::MissingAccount;
             proposal.lines.clear();
@@ -154,7 +178,12 @@ async fn propose_for(conn: &mut SqliteConnection, entry_id: i64, snapshot: &Valu
             return Ok(proposal);
         };
         let (debit_cents, credit_cents) = if *delta > 0 { (*delta, 0) } else { (0, -delta) };
-        proposal.lines.push(CorrectionLine { account_id: *account, account_name, debit_cents, credit_cents });
+        proposal.lines.push(CorrectionLine {
+            account_id: *account,
+            account_name,
+            debit_cents,
+            credit_cents,
+        });
     }
     proposal.explanation = if exists {
         "Restores each account to the amount recorded when this entry was posted.".into()
@@ -180,7 +209,8 @@ pub async fn propose_corrections(pool: &SqlitePool) -> Result<Vec<CorrectionProp
     let mut conn = pool.acquire().await.map_err(db_err)?;
     let mut proposals = Vec::with_capacity(snapshots.len());
     for (entry_id, payload) in snapshots {
-        let snapshot: Value = serde_json::from_str(&payload).map_err(|e| format!("AUDIT_SNAPSHOT: entry {entry_id}: {e}"))?;
+        let snapshot: Value = serde_json::from_str(&payload)
+            .map_err(|e| format!("AUDIT_SNAPSHOT: entry {entry_id}: {e}"))?;
         proposals.push(propose_for(&mut conn, entry_id, &snapshot).await?);
     }
     Ok(proposals)
@@ -203,7 +233,10 @@ pub struct AppliedCorrection {
 }
 
 /// Posts the reviewed correction for one entry and records a FORENSIC_HEAL event, atomically.
-pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -> Result<AppliedCorrection, String> {
+pub async fn apply_correction(
+    pool: &SqlitePool,
+    input: &ApplyCorrectionInput,
+) -> Result<AppliedCorrection, String> {
     // Reserve the writer before reading: competing corrections must revalidate after this commits.
     let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.map_err(db_err)?;
     let payload: Option<String> = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1")
@@ -211,17 +244,31 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
         .fetch_optional(&mut *tx)
         .await
         .map_err(db_err)?;
-    let snapshot: Value = serde_json::from_str(&payload.ok_or("HEAL_NO_SNAPSHOT: that entry has no posting snapshot")?).map_err(|e| format!("AUDIT_SNAPSHOT: {e}"))?;
+    let snapshot: Value = serde_json::from_str(
+        &payload.ok_or("HEAL_NO_SNAPSHOT: that entry has no posting snapshot")?,
+    )
+    .map_err(|e| format!("AUDIT_SNAPSHOT: {e}"))?;
     let proposal = propose_for(&mut tx, input.entry_id, &snapshot).await?;
     if proposal.status != CorrectionStatus::Fixable {
         return Err(format!("HEAL_NOT_FIXABLE: {}", proposal.explanation));
     }
-    let key = |lines: &[CorrectionLine]| lines.iter().map(|l| (l.account_id, l.debit_cents, l.credit_cents)).collect::<Vec<_>>();
+    let key = |lines: &[CorrectionLine]| {
+        lines
+            .iter()
+            .map(|l| (l.account_id, l.debit_cents, l.credit_cents))
+            .collect::<Vec<_>>()
+    };
     if key(&proposal.lines) != key(&input.lines) {
-        return Err("HEAL_STALE: the ledger changed since this correction was reviewed; review it again".into());
+        return Err(
+            "HEAL_STALE: the ledger changed since this correction was reviewed; review it again"
+                .into(),
+        );
     }
 
-    let label = proposal.entry_number.map(|n| format!("#{n}")).unwrap_or_else(|| format!("id {}", input.entry_id));
+    let label = proposal
+        .entry_number
+        .map(|n| format!("#{n}"))
+        .unwrap_or_else(|| format!("id {}", input.entry_id));
     let entry = JournalEntry {
         id: None,
         date: input.date,
@@ -234,7 +281,8 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
         currency: None,
     };
 
-    let correction_id = match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
+    let correction_id = match ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await
+    {
         Ok(id) => id,
         Err(err) => return Err(ledger::rollback(tx, err).await),
     };
@@ -248,8 +296,9 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
             "correctionEntryNumber": number,
             "lines": proposal.lines,
         });
-        sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('FORENSIC_HEAL', ?1, ?2)")
+        sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, actor, payload_snapshot) VALUES ('FORENSIC_HEAL', ?1, ?2, ?3)")
             .bind(input.entry_id)
+            .bind(format!("forensic::apply_reviewed_correction@{}", env!("CARGO_PKG_VERSION")))
             .bind(payload.to_string())
             .execute(&mut *tx)
             .await
@@ -260,7 +309,18 @@ pub async fn apply_correction(pool: &SqlitePool, input: &ApplyCorrectionInput) -
     match recorded {
         Ok(number) => {
             tx.commit().await.map_err(db_err)?;
-            Ok(AppliedCorrection { correction_entry_id: correction_id, correction_entry_number: number })
+            ledger::seal_ledger_audit_chain(
+                pool,
+                &format!(
+                    "forensic::apply_reviewed_correction@{}",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
+            .await?;
+            Ok(AppliedCorrection {
+                correction_entry_id: correction_id,
+                correction_entry_number: number,
+            })
         }
         Err(err) => Err(ledger::rollback(tx, err).await),
     }
@@ -273,11 +333,26 @@ mod tests {
     use crate::ledger::post_journal_entry;
 
     async fn account(pool: &SqlitePool, number: &str) -> i64 {
-        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
+            .bind(number)
+            .fetch_one(pool)
+            .await
+            .unwrap()
     }
 
     async fn post(pool: &SqlitePool, lines: Vec<JournalLine>) -> i64 {
-        post_journal_entry(pool, JournalEntry { id: None, date: "2026-05-01".parse().unwrap(), description: "original".into(), lines, currency: None }).await.unwrap()
+        post_journal_entry(
+            pool,
+            JournalEntry {
+                id: None,
+                date: "2026-05-01".parse().unwrap(),
+                description: "original".into(),
+                lines,
+                currency: None,
+            },
+        )
+        .await
+        .unwrap()
     }
 
     async fn balance(pool: &SqlitePool, account: i64) -> i64 {
@@ -285,11 +360,20 @@ mod tests {
     }
 
     async fn tamper(pool: &SqlitePool, sql: &str) {
-        for s in ["PRAGMA foreign_keys = OFF", "DROP TRIGGER IF EXISTS trg_jl_update_draft_only", "DROP TRIGGER IF EXISTS trg_jl_delete_draft_only", "DROP TRIGGER IF EXISTS trg_je_no_delete_posted", "DROP TRIGGER IF EXISTS trg_je_posted_header_immutable"] {
+        for s in [
+            "PRAGMA foreign_keys = OFF",
+            "DROP TRIGGER IF EXISTS trg_jl_update_draft_only",
+            "DROP TRIGGER IF EXISTS trg_jl_delete_draft_only",
+            "DROP TRIGGER IF EXISTS trg_je_no_delete_posted",
+            "DROP TRIGGER IF EXISTS trg_je_posted_header_immutable",
+        ] {
             sqlx::query(s).execute(pool).await.unwrap();
         }
         sqlx::query(sql).execute(pool).await.unwrap();
-        sqlx::query("PRAGMA foreign_keys = ON").execute(pool).await.unwrap();
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     fn today() -> NaiveDate {
@@ -299,97 +383,303 @@ mod tests {
     #[tokio::test]
     async fn reviewed_corrections_restore_balanced_changes_and_refuse_the_rest() {
         let pool = test_pool().await;
-        let (checking, sales, services, savings) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "4100").await, account(&pool, "1020").await);
-        let moved = post(&pool, vec![JournalLine::debit(checking, 50_000), JournalLine::credit(sales, 50_000)]).await;
-        let deleted = post(&pool, vec![JournalLine::debit(savings, 7_000), JournalLine::credit(services, 7_000)]).await;
-        let skewed = post(&pool, vec![JournalLine::debit(checking, 3_000), JournalLine::credit(sales, 3_000)]).await;
-        let redated = post(&pool, vec![JournalLine::debit(checking, 1_000), JournalLine::credit(sales, 1_000)]).await;
-        assert!(propose_corrections(&pool).await.unwrap().is_empty(), "an intact ledger needs no corrections");
+        let (checking, sales, services, savings) = (
+            account(&pool, "1010").await,
+            account(&pool, "4000").await,
+            account(&pool, "4100").await,
+            account(&pool, "1020").await,
+        );
+        let moved = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 50_000),
+                JournalLine::credit(sales, 50_000),
+            ],
+        )
+        .await;
+        let deleted = post(
+            &pool,
+            vec![
+                JournalLine::debit(savings, 7_000),
+                JournalLine::credit(services, 7_000),
+            ],
+        )
+        .await;
+        let skewed = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 3_000),
+                JournalLine::credit(sales, 3_000),
+            ],
+        )
+        .await;
+        let redated = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 1_000),
+                JournalLine::credit(sales, 1_000),
+            ],
+        )
+        .await;
+        assert!(
+            propose_corrections(&pool).await.unwrap().is_empty(),
+            "an intact ledger needs no corrections"
+        );
 
         // Outside edits: income moved to another account, an entry deleted, an amount skewed, a date changed.
         tamper(&pool, &format!("UPDATE journal_lines SET account_id = {services} WHERE journal_entry_id = {moved} AND account_id = {sales}")).await;
-        tamper(&pool, &format!("DELETE FROM journal_lines WHERE journal_entry_id = {deleted}")).await;
-        tamper(&pool, &format!("DELETE FROM journal_entries WHERE id = {deleted}")).await;
+        tamper(
+            &pool,
+            &format!("DELETE FROM journal_lines WHERE journal_entry_id = {deleted}"),
+        )
+        .await;
+        tamper(
+            &pool,
+            &format!("DELETE FROM journal_entries WHERE id = {deleted}"),
+        )
+        .await;
         tamper(&pool, &format!("UPDATE journal_lines SET debit_cents = 3500 WHERE journal_entry_id = {skewed} AND debit_cents > 0")).await;
-        tamper(&pool, &format!("UPDATE journal_entries SET entry_date = '2026-01-01' WHERE id = {redated}")).await;
+        tamper(
+            &pool,
+            &format!("UPDATE journal_entries SET entry_date = '2026-01-01' WHERE id = {redated}"),
+        )
+        .await;
 
         let proposals = propose_corrections(&pool).await.unwrap();
         let find = |id: i64| proposals.iter().find(|p| p.entry_id == id).unwrap().clone();
 
         let p = find(moved);
         assert_eq!(p.status, CorrectionStatus::Fixable);
-        let lines: Vec<(i64, i64, i64)> = p.lines.iter().map(|l| (l.account_id, l.debit_cents, l.credit_cents)).collect();
-        assert!(lines.contains(&(sales, 0, 50_000)) && lines.contains(&(services, 50_000, 0)), "{lines:?}");
+        let lines: Vec<(i64, i64, i64)> = p
+            .lines
+            .iter()
+            .map(|l| (l.account_id, l.debit_cents, l.credit_cents))
+            .collect();
+        assert!(
+            lines.contains(&(sales, 0, 50_000)) && lines.contains(&(services, 50_000, 0)),
+            "{lines:?}"
+        );
 
         let d = find(deleted);
-        assert_eq!((d.status, d.entry_deleted, d.entry_number), (CorrectionStatus::Fixable, true, Some(2)));
+        assert_eq!(
+            (d.status, d.entry_deleted, d.entry_number),
+            (CorrectionStatus::Fixable, true, Some(2))
+        );
 
         let s = find(skewed);
-        assert_eq!((s.status, s.imbalance_cents), (CorrectionStatus::OutOfBalance, 500));
+        assert_eq!(
+            (s.status, s.imbalance_cents),
+            (CorrectionStatus::OutOfBalance, 500)
+        );
         assert!(s.lines.is_empty());
         assert_eq!(find(redated).status, CorrectionStatus::NoBalanceEffect);
 
         // A correction posts only exactly as reviewed, and only once.
-        let stale = ApplyCorrectionInput { entry_id: moved, lines: vec![], date: today() };
-        assert!(apply_correction(&pool, &stale).await.unwrap_err().starts_with("HEAL_STALE"));
-        let (sales_before, services_before) = (balance(&pool, sales).await, balance(&pool, services).await);
-        let applied = apply_correction(&pool, &ApplyCorrectionInput { entry_id: moved, lines: p.lines.clone(), date: today() }).await.unwrap();
-        assert_eq!(balance(&pool, sales).await, sales_before - 50_000, "sales gets its income back");
+        let stale = ApplyCorrectionInput {
+            entry_id: moved,
+            lines: vec![],
+            date: today(),
+        };
+        assert!(apply_correction(&pool, &stale)
+            .await
+            .unwrap_err()
+            .starts_with("HEAL_STALE"));
+        let (sales_before, services_before) =
+            (balance(&pool, sales).await, balance(&pool, services).await);
+        let applied = apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: moved,
+                lines: p.lines.clone(),
+                date: today(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            balance(&pool, sales).await,
+            sales_before - 50_000,
+            "sales gets its income back"
+        );
         assert_eq!(balance(&pool, services).await, services_before + 50_000);
-        assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: moved, lines: p.lines.clone(), date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
+        assert!(apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: moved,
+                lines: p.lines.clone(),
+                date: today()
+            }
+        )
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
         let after = propose_corrections(&pool).await.unwrap();
         let corrected = after.iter().find(|p| p.entry_id == moved).unwrap();
-        assert_eq!((corrected.status, corrected.corrected_by_entry_number), (CorrectionStatus::Corrected, Some(applied.correction_entry_number)));
+        assert_eq!(
+            (corrected.status, corrected.corrected_by_entry_number),
+            (
+                CorrectionStatus::Corrected,
+                Some(applied.correction_entry_number)
+            )
+        );
 
         let heal: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL' AND target_entity_id = ?1").bind(moved).fetch_one(&pool).await.unwrap();
         let heal: Value = serde_json::from_str(&heal).unwrap();
         assert_eq!(heal["correctionEntryId"], applied.correction_entry_id);
 
         // Corrections respect the closing date like every other entry, and nothing is recorded.
-        crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: Some(today()), current_passcode: None, new_passcode: None }).await.unwrap();
-        let err = apply_correction(&pool, &ApplyCorrectionInput { entry_id: deleted, lines: d.lines.clone(), date: today() }).await.unwrap_err();
+        crate::closing::set_closing_date(
+            &pool,
+            &crate::closing::ClosingInput {
+                lock_date: Some(today()),
+                current_passcode: None,
+                new_passcode: None,
+            },
+        )
+        .await
+        .unwrap();
+        let err = apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: deleted,
+                lines: d.lines.clone(),
+                date: today(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err, crate::closing::CLOSED_MESSAGE);
-        let heals: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL'").fetch_one(&pool).await.unwrap();
-        assert_eq!(heals, 1, "the refused correction left no FORENSIC_HEAL event");
-        crate::closing::set_closing_date(&pool, &crate::closing::ClosingInput { lock_date: None, current_passcode: None, new_passcode: None }).await.unwrap();
+        let heals: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            heals, 1,
+            "the refused correction left no FORENSIC_HEAL event"
+        );
+        crate::closing::set_closing_date(
+            &pool,
+            &crate::closing::ClosingInput {
+                lock_date: None,
+                current_passcode: None,
+                new_passcode: None,
+            },
+        )
+        .await
+        .unwrap();
 
         // The deleted entry's effect is re-recorded; savings returns to its posted amount.
-        apply_correction(&pool, &ApplyCorrectionInput { entry_id: deleted, lines: d.lines.clone(), date: today() }).await.unwrap();
+        apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: deleted,
+                lines: d.lines.clone(),
+                date: today(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(balance(&pool, savings).await, 7_000);
 
         // Out-of-balance and date-only changes cannot be "healed" with an entry.
-        assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: skewed, lines: vec![], date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
-        assert!(apply_correction(&pool, &ApplyCorrectionInput { entry_id: redated, lines: vec![], date: today() }).await.unwrap_err().starts_with("HEAL_NOT_FIXABLE"));
+        assert!(apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: skewed,
+                lines: vec![],
+                date: today()
+            }
+        )
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
+        assert!(apply_correction(
+            &pool,
+            &ApplyCorrectionInput {
+                entry_id: redated,
+                lines: vec![],
+                date: today()
+            }
+        )
+        .await
+        .unwrap_err()
+        .starts_with("HEAL_NOT_FIXABLE"));
     }
 
     #[tokio::test]
     async fn concurrent_corrections_post_only_once() {
         let pool = test_pool().await;
-        let (checking, sales, services) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "4100").await);
-        let id = post(&pool, vec![JournalLine::debit(checking, 100), JournalLine::credit(sales, 100)]).await;
+        let (checking, sales, services) = (
+            account(&pool, "1010").await,
+            account(&pool, "4000").await,
+            account(&pool, "4100").await,
+        );
+        let id = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 100),
+                JournalLine::credit(sales, 100),
+            ],
+        )
+        .await;
         tamper(&pool, &format!("UPDATE journal_lines SET account_id = {services} WHERE journal_entry_id = {id} AND account_id = {sales}")).await;
         let proposal = propose_corrections(&pool).await.unwrap().remove(0);
-        let input = ApplyCorrectionInput { entry_id: id, lines: proposal.lines, date: today() };
-        let (first, second) = tokio::join!(apply_correction(&pool, &input), apply_correction(&pool, &input));
-        assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1, "{first:?}, {second:?}");
+        let input = ApplyCorrectionInput {
+            entry_id: id,
+            lines: proposal.lines,
+            date: today(),
+        };
+        let (first, second) = tokio::join!(
+            apply_correction(&pool, &input),
+            apply_correction(&pool, &input)
+        );
+        assert_eq!(
+            usize::from(first.is_ok()) + usize::from(second.is_ok()),
+            1,
+            "{first:?}, {second:?}"
+        );
         let error = first.err().or_else(|| second.err()).unwrap();
         assert!(error.starts_with("HEAL_NOT_FIXABLE"), "{error}");
         assert_eq!(balance(&pool, sales).await, -100);
         assert_eq!(balance(&pool, services).await, 0);
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL'").fetch_one(&pool).await.unwrap();
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'FORENSIC_HEAL'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         assert_eq!(count, 1);
     }
 
     #[tokio::test]
     async fn voided_correction_can_be_reviewed_and_reapplied() {
         let pool = test_pool().await;
-        let (checking, sales, services) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "4100").await);
-        let id = post(&pool, vec![JournalLine::debit(checking, 100), JournalLine::credit(sales, 100)]).await;
+        let (checking, sales, services) = (
+            account(&pool, "1010").await,
+            account(&pool, "4000").await,
+            account(&pool, "4100").await,
+        );
+        let id = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 100),
+                JournalLine::credit(sales, 100),
+            ],
+        )
+        .await;
         tamper(&pool, &format!("UPDATE journal_lines SET account_id = {services} WHERE journal_entry_id = {id} AND account_id = {sales}")).await;
         let proposal = propose_corrections(&pool).await.unwrap().remove(0);
-        let input = ApplyCorrectionInput { entry_id: id, lines: proposal.lines, date: today() };
+        let input = ApplyCorrectionInput {
+            entry_id: id,
+            lines: proposal.lines,
+            date: today(),
+        };
         let first = apply_correction(&pool, &input).await.unwrap();
-        ledger::void_transaction(&pool, first.correction_entry_id).await.unwrap();
+        ledger::void_transaction(&pool, first.correction_entry_id)
+            .await
+            .unwrap();
         assert_eq!(balance(&pool, sales).await, 0);
         let proposal = propose_corrections(&pool).await.unwrap().remove(0);
         assert_eq!(proposal.status, CorrectionStatus::Fixable);
@@ -400,7 +690,10 @@ mod tests {
         assert_eq!(balance(&pool, services).await, 0);
         let proposal = propose_corrections(&pool).await.unwrap().remove(0);
         assert_eq!(proposal.status, CorrectionStatus::Corrected);
-        assert_eq!(proposal.corrected_by_entry_number, Some(second.correction_entry_number));
+        assert_eq!(
+            proposal.corrected_by_entry_number,
+            Some(second.correction_entry_number)
+        );
     }
 
     #[tokio::test]
@@ -408,11 +701,27 @@ mod tests {
         let pool = test_pool().await;
         let checking = account(&pool, "1010").await;
         let sales = account(&pool, "4000").await;
-        let id = post(&pool, vec![JournalLine::debit(checking, 100), JournalLine::credit(sales, 100)]).await;
+        let id = post(
+            &pool,
+            vec![
+                JournalLine::debit(checking, 100),
+                JournalLine::credit(sales, 100),
+            ],
+        )
+        .await;
         ledger::void_transaction(&pool, id).await.unwrap();
-        let kinds: Vec<String> = sqlx::query_scalar("SELECT DISTINCT action_type FROM ledger_audit_log ORDER BY 1").fetch_all(&pool).await.unwrap();
+        let kinds: Vec<String> =
+            sqlx::query_scalar("SELECT DISTINCT action_type FROM ledger_audit_log ORDER BY 1")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
         assert_eq!(kinds, ["MIGRATION", "POST", "VOID"]);
-        assert!(sqlx::query("DELETE FROM ledger_audit_log").execute(&pool).await.map_err(db_err).unwrap_err().starts_with("AUDIT_IMMUTABLE"));
+        assert!(sqlx::query("DELETE FROM ledger_audit_log")
+            .execute(&pool)
+            .await
+            .map_err(db_err)
+            .unwrap_err()
+            .starts_with("AUDIT_IMMUTABLE"));
         assert!(ledger::verify_ledger_audit(&pool).await.unwrap().intact);
     }
 }

@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteLockingMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::sqlite::{
+    SqliteConnectOptions, SqliteJournalMode, SqliteLockingMode, SqlitePoolOptions,
+    SqliteSynchronous,
+};
 use sqlx::{Connection, SqlitePool};
 
 use crate::storage::{self, FileLock, StorageInfo, DB_FILE_NAME};
@@ -42,7 +45,8 @@ pub struct Db {
 }
 
 /// Returned by operations that need an open company file while none is.
-pub const NO_COMPANY_OPEN: &str = "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
+pub const NO_COMPANY_OPEN: &str =
+    "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,8 +81,12 @@ impl RelocateMode {
             (None | Some("OPEN"), true) => Ok(Self::OpenExisting),
             (None | Some("NEW"), false) => Ok(Self::StartNew),
             (Some("MOVE"), false) => Ok(Self::MoveCurrent),
-            (Some("MOVE" | "NEW"), true) => Err("STORAGE_EXISTS: that folder already has a company file; open it instead".into()),
-            (Some("OPEN"), false) => Err("STORAGE_NO_FILE: there is no company file in that folder to open".into()),
+            (Some("MOVE" | "NEW"), true) => Err(
+                "STORAGE_EXISTS: that folder already has a company file; open it instead".into(),
+            ),
+            (Some("OPEN"), false) => {
+                Err("STORAGE_NO_FILE: there is no company file in that folder to open".into())
+            }
             (Some(other), _) => Err(format!("STORAGE_BAD_MODE: unknown mode '{other}'")),
         }
     }
@@ -90,19 +98,39 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     // and keeps working if the drive letter changes.
     let path = &storage::resolve_network_path(path);
     let dir = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     let storage = storage::classify(dir);
-    let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
+    let lock = if storage.is_shared() {
+        Some(FileLock::acquire(path)?)
+    } else {
+        None
+    };
     let pool = open_for(path, &storage, backups).await?;
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false })
+    Ok(Live {
+        path: path.to_path_buf(),
+        pool,
+        storage,
+        lock,
+        opened_from_file: false,
+    })
 }
 
 impl Db {
     fn with(live: Option<Live>, config: DbConfig) -> Db {
         let closed = SqlitePoolOptions::new()
             .max_connections(1)
-            .connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
-        Db { live: tokio::sync::RwLock::new(live), closed, config, startup_warning: std::sync::Mutex::new(None) }
+            .connect_lazy_with(
+                SqliteConnectOptions::new()
+                    .filename(":memory:")
+                    .pragma("query_only", "ON"),
+            );
+        Db {
+            live: tokio::sync::RwLock::new(live),
+            closed,
+            config,
+            startup_warning: std::sync::Mutex::new(None),
+        }
     }
 
     /// Opens the company file at `path` (creating and migrating it if new).
@@ -127,7 +155,10 @@ impl Db {
                 if !dir.is_dir() {
                     Some(format!("The company file location {} is not available (is the drive connected?). Showing the local company file instead.", dir.display()))
                 } else if !target.is_file() {
-                    Some(format!("No company file was found in {}. Showing the local company file instead.", dir.display()))
+                    Some(format!(
+                        "No company file was found in {}. Showing the local company file instead.",
+                        dir.display()
+                    ))
                 } else {
                     match Db::open_at(target, config.clone()).await {
                         Ok(db) => return Ok(db),
@@ -174,7 +205,11 @@ impl Db {
     /// leaves the current books in use.
     pub async fn mount(&self, path: &Path) -> Result<StorageStatus, String> {
         if let Ok(current) = self.path().await {
-            let same = path.canonicalize().ok().zip(current.canonicalize().ok()).is_some_and(|(a, b)| a == b);
+            let same = path
+                .canonicalize()
+                .ok()
+                .zip(current.canonicalize().ok())
+                .is_some_and(|(a, b)| a == b);
             if same {
                 return self.require_status().await;
             }
@@ -260,7 +295,12 @@ impl Db {
 
     /// The open company file, or [`NO_COMPANY_OPEN`].
     pub async fn path(&self) -> Result<PathBuf, String> {
-        self.live.read().await.as_ref().map(|live| live.path.clone()).ok_or_else(|| NO_COMPANY_OPEN.to_string())
+        self.live
+            .read()
+            .await
+            .as_ref()
+            .map(|live| live.path.clone())
+            .ok_or_else(|| NO_COMPANY_OPEN.to_string())
     }
 
     pub fn backups_dir(&self) -> &Path {
@@ -271,14 +311,25 @@ impl Db {
     pub async fn status(&self) -> Option<StorageStatus> {
         let live = self.live.read().await;
         let live = live.as_ref()?;
-        let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&live.pool).await.unwrap_or_else(|_| "unknown".into());
+        let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&live.pool)
+            .await
+            .unwrap_or_else(|_| "unknown".into());
         let is_default = live.path == self.config.default_path;
         Some(StorageStatus {
             company_name: company_display_name(&live.pool, &live.path, is_default).await,
             path: live.path.display().to_string(),
-            file_name: live.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            file_name: live
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             opened_from_file: live.opened_from_file,
-            directory: live.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+            directory: live
+                .path
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
             storage: live.storage.clone(),
             is_default,
             journal_mode,
@@ -287,7 +338,9 @@ impl Db {
     }
 
     async fn require_status(&self) -> Result<StorageStatus, String> {
-        self.status().await.ok_or_else(|| NO_COMPANY_OPEN.to_string())
+        self.status()
+            .await
+            .ok_or_else(|| NO_COMPANY_OPEN.to_string())
     }
 
     /// A problem to show on the No Company Open screen (or in the app's banner), if any.
@@ -307,23 +360,32 @@ impl Db {
             for suffix in ["-wal", "-shm", "-journal"] {
                 let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
                 if sidecar.exists() {
-                    std::fs::remove_file(&sidecar).map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
+                    std::fs::remove_file(&sidecar)
+                        .map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
                 }
             }
             Ok::<(), String>(())
         };
-        let swapped = remove_sidecars(&path)
-            .and_then(|()| std::fs::rename(staged, &path).map_err(|e| format!("cannot replace the company file: {e}")));
+        let swapped = remove_sidecars(&path).and_then(|()| {
+            std::fs::rename(staged, &path)
+                .map_err(|e| format!("cannot replace the company file: {e}"))
+        });
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
-                swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
+                swapped.map_err(|e| {
+                    format!("RESTORE_SWAP: {e}; your current books were left in place")
+                })
             }
             Err(open_err) => {
                 std::fs::copy(fallback, &path).map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
                 remove_sidecars(&path)?;
-                live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
-                Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
+                live.pool = open_for(&path, &storage, None).await.map_err(|e| {
+                    format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}")
+                })?;
+                Err(format!(
+                    "RESTORE_FAILED: {open_err}; your previous books were put back"
+                ))
             }
         }
     }
@@ -331,20 +393,34 @@ impl Db {
     /// Switches the live company file to `new_dir/localbooks.db` and records it in `config.json`.
     /// An existing file there must pass the same checks as a restore; the new file is fully opened
     /// before the old one is closed, so a failure leaves the current books in use.
-    pub async fn relocate(&self, new_dir: &Path, mode: RelocateMode) -> Result<StorageStatus, String> {
+    pub async fn relocate(
+        &self,
+        new_dir: &Path,
+        mode: RelocateMode,
+    ) -> Result<StorageStatus, String> {
         let resolved = storage::resolve_network_path(new_dir);
         let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;
         let target = new_dir.join(DB_FILE_NAME);
         let current = self.path().await?;
-        let same = |a: &Path, b: &Path| a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y);
+        let same = |a: &Path, b: &Path| {
+            a.canonicalize()
+                .ok()
+                .zip(b.canonicalize().ok())
+                .is_some_and(|(x, y)| x == y)
+        };
         if same(&target, &current) || (target == current) {
-            return Err("STORAGE_UNCHANGED: LocalBooks is already using the company file in that folder".into());
+            return Err(
+                "STORAGE_UNCHANGED: LocalBooks is already using the company file in that folder"
+                    .into(),
+            );
         }
 
         match mode {
             RelocateMode::OpenExisting => {
-                crate::backup::inspect(&target).await.map_err(|e| format!("{e} (the company file there was not opened)"))?;
+                crate::backup::inspect(&target)
+                    .await
+                    .map_err(|e| format!("{e} (the company file there was not opened)"))?;
             }
             RelocateMode::MoveCurrent => {
                 crate::backup::snapshot(&self.pool().await, &current, &target).await?;
@@ -356,7 +432,9 @@ impl Db {
         let next = open_live(&target, Some(&self.config.backups_dir)).await?;
         let status = self.replace_live(next).await?;
         let directory = (target != self.config.default_path).then(|| new_dir.to_path_buf());
-        storage::update_config(&self.config.config_dir, |config| config.database_directory = directory)?;
+        storage::update_config(&self.config.config_dir, |config| {
+            config.database_directory = directory
+        })?;
         Ok(status)
     }
 
@@ -383,23 +461,39 @@ pub const PLACEHOLDER_COMPANY_NAME: &str = "LocalBooks Ledger";
 /// The name that tells the user which company is open: the Company name preference once it has been
 /// set; otherwise the file's own name ("Acme Ltd.localbooks" → "Acme Ltd", or the folder's name for
 /// a `localbooks.db` kept elsewhere). None for the usual company file that was never named.
-pub async fn company_display_name(pool: &SqlitePool, path: &Path, is_default: bool) -> Option<String> {
-    let named: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'")
-        .fetch_optional(pool)
-        .await
-        .ok()
-        .flatten();
-    if let Some(name) = named.map(|n| n.trim().to_string()).filter(|n| !n.is_empty() && n != PLACEHOLDER_COMPANY_NAME) {
+pub async fn company_display_name(
+    pool: &SqlitePool,
+    path: &Path,
+    is_default: bool,
+) -> Option<String> {
+    let named: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'company_name'")
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+    if let Some(name) = named
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty() && n != PLACEHOLDER_COMPANY_NAME)
+    {
         return Some(name);
     }
     if is_default {
         return None;
     }
-    let stem = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty());
-    let generic = Path::new(DB_FILE_NAME).file_stem().map(|s| s.to_string_lossy().into_owned());
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().trim().to_string())
+        .filter(|s| !s.is_empty());
+    let generic = Path::new(DB_FILE_NAME)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned());
     match stem {
         Some(stem) if Some(&stem) != generic.as_ref() => Some(stem),
-        _ => path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()),
+        _ => path
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned()),
     }
 }
 
@@ -431,9 +525,14 @@ pub async fn open(path: &Path) -> Result<SqlitePool, String> {
 /// When an existing company file needs schema upgrades (a newer LocalBooks opening it for the first
 /// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
 /// undone by restoring it.
-async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) -> Result<SqlitePool, String> {
+async fn open_for(
+    path: &Path,
+    storage: &StorageInfo,
+    backups: Option<&Path>,
+) -> Result<SqlitePool, String> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     }
 
     let base = SqliteConnectOptions::new()
@@ -443,7 +542,11 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         .synchronous(SqliteSynchronous::Full)
         .busy_timeout(Duration::from_secs(5));
     let (options, connections) = if storage.is_shared() {
-        (base.journal_mode(SqliteJournalMode::Delete).locking_mode(SqliteLockingMode::Exclusive), 1)
+        (
+            base.journal_mode(SqliteJournalMode::Delete)
+                .locking_mode(SqliteLockingMode::Exclusive),
+            1,
+        )
     } else {
         (base.journal_mode(SqliteJournalMode::Wal), 4)
     };
@@ -462,7 +565,9 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
             })?;
         }
     }
-    migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
+    migrate(&pool)
+        .await
+        .map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
 
     Ok(pool)
 }
@@ -475,10 +580,14 @@ async fn checkpoint_closed(path: &Path) {
     if !PathBuf::from(format!("{}-wal", path.display())).exists() {
         return;
     }
-    let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .busy_timeout(Duration::from_secs(5));
     if let Ok(mut conn) = sqlx::SqliteConnection::connect_with(&options).await {
         // Reading the file attaches the log; as the only connection, closing then removes it.
-        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&mut conn).await;
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&mut conn)
+            .await;
         let _ = conn.close().await;
     }
 }
@@ -526,17 +635,29 @@ pub async fn migrate(pool: &SqlitePool) -> Result<(), String> {
 }
 
 /// [`migrate`] with a given set of migrations (tests use it to build files from earlier releases).
-pub(crate) async fn migrate_with(pool: &SqlitePool, migrator: &sqlx::migrate::Migrator) -> Result<(), String> {
+pub(crate) async fn migrate_with(
+    pool: &SqlitePool,
+    migrator: &sqlx::migrate::Migrator,
+) -> Result<(), String> {
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
-    sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await.map_err(|e| e.to_string())?;
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| e.to_string())?;
     // `run_direct` takes the connection itself rather than an `Acquire` impl, which keeps this
     // future provably `Send` when a restore runs it inside a Tauri command.
-    let migrated = migrator.run_direct(&mut *conn).await.map_err(|e| e.to_string());
+    let migrated = migrator
+        .run_direct(&mut *conn)
+        .await
+        .map_err(|e| e.to_string());
     let violations = sqlx::query("SELECT 1 FROM pragma_foreign_key_check LIMIT 1")
         .fetch_optional(&mut *conn)
         .await
         .map_err(|e| e.to_string());
-    if let Err(e) = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await {
+    if let Err(e) = sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *conn)
+        .await
+    {
         // Never hand a connection without enforcement back to the pool.
         let _ = conn.detach().close().await;
         migrated?;
@@ -546,7 +667,13 @@ pub(crate) async fn migrate_with(pool: &SqlitePool, migrator: &sqlx::migrate::Mi
     if violations?.is_some() {
         return Err("foreign key check failed after migration".into());
     }
-    record_migrations(&mut conn).await
+    record_migrations(&mut conn).await?;
+    drop(conn);
+    crate::ledger::seal_ledger_audit_chain(
+        pool,
+        &format!("db::migrate@{}", env!("CARGO_PKG_VERSION")),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -573,7 +700,10 @@ mod migrate_tests {
         assert!(err.starts_with("DB_NEWER_FILE"), "{err}");
         assert!(err.contains("Install the latest LocalBooks"), "{err}");
         let pool = super::open_read_only_for_test(&path).await;
-        let newest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&pool).await.unwrap();
+        let newest: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(newest, 9999, "nothing was rolled back or rewritten");
         pool.close().await;
         let _ = std::fs::remove_dir_all(&dir);
@@ -620,14 +750,30 @@ mod migrate_tests {
             (36, "d307ef0d4f24a13e8ab2065e"),
             (37, "2da2eb42ab82f41f19fd011d"),
             (38, "3e495b0ee917b7be5d03953b"),
+            (39, "d626b82a201d7b7e0395dd7d"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()
-            .map(|m| (m.version, m.checksum.iter().take(12).map(|b| format!("{b:02x}")).collect()))
+            .map(|m| {
+                (
+                    m.version,
+                    m.checksum
+                        .iter()
+                        .take(12)
+                        .map(|b| format!("{b:02x}"))
+                        .collect(),
+                )
+            })
             .collect();
         for (version, pinned) in RELEASED {
-            let found = actual.iter().find(|(v, _)| v == version).unwrap_or_else(|| panic!("migration {version} was removed"));
-            assert_eq!(&found.1, pinned, "migration {version} was edited after release; add a new migration instead");
+            let found = actual
+                .iter()
+                .find(|(v, _)| v == version)
+                .unwrap_or_else(|| panic!("migration {version} was removed"));
+            assert_eq!(
+                &found.1, pinned,
+                "migration {version} was edited after release; add a new migration instead"
+            );
         }
         for (version, checksum) in &actual {
             assert!(
@@ -642,15 +788,22 @@ mod migrate_tests {
     #[tokio::test]
     #[ignore]
     async fn upgrades_a_copy_of_a_real_company_file() {
-        let path = std::env::var("LOCALBOOKS_UPGRADE_CHECK").expect("set LOCALBOOKS_UPGRADE_CHECK to a copied company file");
+        let path = std::env::var("LOCALBOOKS_UPGRADE_CHECK")
+            .expect("set LOCALBOOKS_UPGRADE_CHECK to a copied company file");
         let path = Path::new(&path);
-        let before = crate::backup::inspect(path).await.expect("the copy is a valid company file");
+        let before = crate::backup::inspect(path)
+            .await
+            .expect("the copy is a valid company file");
         let pool = open(path).await.expect("migrations apply");
         let verification = crate::ledger::verify_ledger_audit(&pool).await.unwrap();
         let tb = crate::reports::trial_balance(&pool).await.unwrap();
         println!(
             "upgraded from schema {:?}: {} posted entries, intact = {}, trial balance {} / {}",
-            before.schema_version, verification.entries_checked, verification.intact, tb.total_debit_cents, tb.total_credit_cents
+            before.schema_version,
+            verification.entries_checked,
+            verification.intact,
+            tb.total_debit_cents,
+            tb.total_credit_cents
         );
         assert!(verification.intact, "{:?}", verification.findings);
         assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
@@ -660,13 +813,26 @@ mod migrate_tests {
     #[tokio::test]
     async fn every_migration_is_recorded_once_in_the_audit_trail() {
         let pool = test_pool().await;
-        let applied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1").fetch_one(&pool).await.unwrap();
+        let applied: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let logged = || async {
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION'").fetch_one(&pool).await.unwrap()
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'MIGRATION'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
         };
         assert_eq!(logged().await, applied);
         migrate(&pool).await.unwrap();
-        assert_eq!(logged().await, applied, "re-running migrations adds no duplicate events");
+        assert_eq!(
+            logged().await,
+            applied,
+            "re-running migrations adds no duplicate events"
+        );
         let latest: String = sqlx::query_scalar(
             "SELECT json_extract(payload_snapshot, '$.description') FROM ledger_audit_log
              WHERE action_type = 'MIGRATION' ORDER BY target_entity_id DESC LIMIT 1",
@@ -674,8 +840,16 @@ mod migrate_tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        let newest = MIGRATOR.iter().map(|m| (m.version, m.description.to_string())).max().unwrap().1;
-        assert_eq!(latest, newest, "the newest migration is recorded with its description");
+        let newest = MIGRATOR
+            .iter()
+            .map(|m| (m.version, m.description.to_string()))
+            .max()
+            .unwrap()
+            .1;
+        assert_eq!(
+            latest, newest,
+            "the newest migration is recorded with its description"
+        );
     }
 }
 
@@ -683,8 +857,8 @@ mod migrate_tests {
 /// recorded there, so the trail shows which schema each part of the history was written under.
 async fn record_migrations(conn: &mut sqlx::SqliteConnection) -> Result<(), String> {
     sqlx::query(
-        "INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot)
-         SELECT 'MIGRATION', m.version, json_object(
+        "INSERT INTO ledger_audit_log (action_type, target_entity_id, actor, payload_snapshot)
+         SELECT 'MIGRATION', m.version, ?1, json_object(
                     'version', m.version, 'description', m.description, 'checksum', lower(hex(m.checksum)),
                     'installedOn', m.installed_on, 'executionTimeNs', m.execution_time)
          FROM _sqlx_migrations m
@@ -692,6 +866,7 @@ async fn record_migrations(conn: &mut sqlx::SqliteConnection) -> Result<(), Stri
            AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'MIGRATION' AND a.target_entity_id = m.version)
          ORDER BY m.version",
     )
+    .bind(format!("db::migrate@{}", env!("CARGO_PKG_VERSION")))
     .execute(conn)
     .await
     .map(|_| ())
@@ -740,7 +915,11 @@ mod tests {
     struct TempDir(PathBuf);
     impl TempDir {
         fn new(tag: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("localbooks-{tag}-{}-{}", std::process::id(), chrono::Local::now().format("%H%M%S%f")));
+            let dir = std::env::temp_dir().join(format!(
+                "localbooks-{tag}-{}-{}",
+                std::process::id(),
+                chrono::Local::now().format("%H%M%S%f")
+            ));
             std::fs::create_dir_all(&dir).unwrap();
             Self(dir)
         }
@@ -752,14 +931,25 @@ mod tests {
     }
 
     async fn entries(db: &Db) -> i64 {
-        sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries").fetch_one(&db.pool().await).await.unwrap()
+        sqlx::query_scalar("SELECT COUNT(*) FROM journal_entries")
+            .fetch_one(&db.pool().await)
+            .await
+            .unwrap()
     }
 
     async fn post_one(db: &Db) {
         let pool = db.pool().await;
         let id = |n: &'static str| {
             let pool = pool.clone();
-            async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
+            async move {
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT id FROM chart_of_accounts WHERE account_number = ?1",
+                )
+                .bind(n)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+            }
         };
         let (checking, services) = (id("1010").await, id("4100").await);
         crate::ledger::post_journal_entry(
@@ -768,7 +958,10 @@ mod tests {
                 id: None,
                 date: chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
                 description: String::new(),
-                lines: vec![crate::ledger::JournalLine::debit(checking, 100), crate::ledger::JournalLine::credit(services, 100)],
+                lines: vec![
+                    crate::ledger::JournalLine::debit(checking, 100),
+                    crate::ledger::JournalLine::credit(services, 100),
+                ],
                 currency: None,
             },
         )
@@ -783,19 +976,38 @@ mod tests {
         let db = Db::startup(cfg.clone()).await.unwrap();
         post_one(&db).await;
         assert!(db.status().await.unwrap().is_default);
-        assert_eq!(db.status().await.unwrap().company_name, None, "the usual file has no name until the user sets one");
+        assert_eq!(
+            db.status().await.unwrap().company_name,
+            None,
+            "the usual file has no name until the user sets one"
+        );
         assert_eq!(db.status().await.unwrap().journal_mode, "wal");
 
         // Move the current books to a new folder: same data, new location, old file untouched.
         let moved_dir = tmp.0.join("shared");
         std::fs::create_dir_all(&moved_dir).unwrap();
-        let status = db.relocate(&moved_dir, RelocateMode::parse(Some("MOVE"), false).unwrap()).await.unwrap();
+        let status = db
+            .relocate(
+                &moved_dir,
+                RelocateMode::parse(Some("MOVE"), false).unwrap(),
+            )
+            .await
+            .unwrap();
         assert!(!status.is_default);
-        assert_eq!(status.company_name.as_deref(), Some("shared"), "a localbooks.db elsewhere is called by its folder");
+        assert_eq!(
+            status.company_name.as_deref(),
+            Some("shared"),
+            "a localbooks.db elsewhere is called by its folder"
+        );
         assert_eq!(entries(&db).await, 1);
         post_one(&db).await;
         assert!(cfg.default_path.exists());
-        assert_eq!(storage::read_config(&cfg.config_dir).database_directory.as_deref(), Some(moved_dir.as_path()));
+        assert_eq!(
+            storage::read_config(&cfg.config_dir)
+                .database_directory
+                .as_deref(),
+            Some(moved_dir.as_path())
+        );
 
         // A restart honours config.json.
         db.shutdown().await;
@@ -808,26 +1020,50 @@ mod tests {
         let new_dir = tmp.0.join("second-company");
         std::fs::create_dir_all(&new_dir).unwrap();
         assert!(RelocateMode::parse(Some("OPEN"), false).is_err());
-        db.relocate(&new_dir, RelocateMode::parse(None, false).unwrap()).await.unwrap();
+        db.relocate(&new_dir, RelocateMode::parse(None, false).unwrap())
+            .await
+            .unwrap();
         assert_eq!(entries(&db).await, 0);
-        let accounts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chart_of_accounts").fetch_one(&db.pool().await).await.unwrap();
+        let accounts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chart_of_accounts")
+            .fetch_one(&db.pool().await)
+            .await
+            .unwrap();
         assert!(accounts > 20);
 
         // Open an existing company file (the moved one) after it passes inspection.
         assert!(RelocateMode::parse(Some("MOVE"), true).is_err());
-        db.relocate(&moved_dir, RelocateMode::parse(None, true).unwrap()).await.unwrap();
+        db.relocate(&moved_dir, RelocateMode::parse(None, true).unwrap())
+            .await
+            .unwrap();
         assert_eq!(entries(&db).await, 2);
-        assert!(db.relocate(&moved_dir, RelocateMode::OpenExisting).await.unwrap_err().starts_with("STORAGE_UNCHANGED"));
+        assert!(db
+            .relocate(&moved_dir, RelocateMode::OpenExisting)
+            .await
+            .unwrap_err()
+            .starts_with("STORAGE_UNCHANGED"));
 
         // A damaged file is refused and the current books stay open.
         let bad_dir = tmp.0.join("bad");
         std::fs::create_dir_all(&bad_dir).unwrap();
-        std::fs::write(bad_dir.join(DB_FILE_NAME), b"not a database at all, just text").unwrap();
-        assert!(db.relocate(&bad_dir, RelocateMode::OpenExisting).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
+        std::fs::write(
+            bad_dir.join(DB_FILE_NAME),
+            b"not a database at all, just text",
+        )
+        .unwrap();
+        assert!(db
+            .relocate(&bad_dir, RelocateMode::OpenExisting)
+            .await
+            .unwrap_err()
+            .starts_with("RESTORE_NOT_SQLITE"));
         assert_eq!(entries(&db).await, 2);
 
         // Going back to the default folder clears the override.
-        db.relocate(cfg.default_path.parent().unwrap(), RelocateMode::OpenExisting).await.unwrap();
+        db.relocate(
+            cfg.default_path.parent().unwrap(),
+            RelocateMode::OpenExisting,
+        )
+        .await
+        .unwrap();
         assert!(db.status().await.unwrap().is_default);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
     }
@@ -846,13 +1082,25 @@ mod tests {
         drop(maker);
 
         // Launched with the file: it opens in place, and the saved location is untouched.
-        let db = Db::startup_with_file(cfg.clone(), Some(acme.clone())).await.unwrap();
+        let db = Db::startup_with_file(cfg.clone(), Some(acme.clone()))
+            .await
+            .unwrap();
         let status = db.status().await.unwrap();
         assert!(status.opened_from_file && !status.is_default);
         assert_eq!(status.file_name, "Acme Ltd.localbooks");
-        assert_eq!(status.company_name.as_deref(), Some("Acme Ltd"), "an unnamed file is called by its file name");
-        crate::preferences::set(&db.pool().await, "company_name", "Acme Holdings").await.unwrap();
-        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme Holdings"), "a named company is called by its name");
+        assert_eq!(
+            status.company_name.as_deref(),
+            Some("Acme Ltd"),
+            "an unnamed file is called by its file name"
+        );
+        crate::preferences::set(&db.pool().await, "company_name", "Acme Holdings")
+            .await
+            .unwrap();
+        assert_eq!(
+            db.status().await.unwrap().company_name.as_deref(),
+            Some("Acme Holdings"),
+            "a named company is called by its name"
+        );
         assert_eq!(entries(&db).await, 2);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
 
@@ -869,17 +1117,26 @@ mod tests {
         // A file that is not a company file is refused and the open books stay in use.
         let fake = tmp.0.join("Fake.localbooks");
         std::fs::write(&fake, b"definitely not sqlite").unwrap();
-        assert!(db.mount(&fake).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
+        assert!(db
+            .mount(&fake)
+            .await
+            .unwrap_err()
+            .starts_with("RESTORE_NOT_SQLITE"));
         assert_eq!(db.status().await.unwrap().file_name, "Beta.localbooks");
         db.shutdown().await;
         drop(db);
 
         // A launch file that cannot be opened falls back to the usual books and says why.
-        let db = Db::startup_with_file(cfg.clone(), Some(tmp.0.join("Gone.localbooks"))).await.unwrap();
+        let db = Db::startup_with_file(cfg.clone(), Some(tmp.0.join("Gone.localbooks")))
+            .await
+            .unwrap();
         let status = db.status().await.unwrap();
         assert!(status.is_default && !status.opened_from_file);
         let warning = status.startup_warning.unwrap();
-        assert!(warning.contains("Gone.localbooks") && warning.contains("does not exist"), "{warning}");
+        assert!(
+            warning.contains("Gone.localbooks") && warning.contains("does not exist"),
+            "{warning}"
+        );
     }
 
     #[tokio::test]
@@ -890,24 +1147,45 @@ mod tests {
         post_one(&db).await;
 
         let acme = tmp.0.join("clients").join("Acme Ltd.localbooks");
-        assert!(db.create(&acme, "   ").await.unwrap_err().starts_with("NEW_COMPANY_NAME"));
+        assert!(db
+            .create(&acme, "   ")
+            .await
+            .unwrap_err()
+            .starts_with("NEW_COMPANY_NAME"));
         let status = db.create(&acme, " Acme Ltd ").await.unwrap();
-        assert_eq!((status.company_name.as_deref(), status.file_name.as_str()), (Some("Acme Ltd"), "Acme Ltd.localbooks"));
+        assert_eq!(
+            (status.company_name.as_deref(), status.file_name.as_str()),
+            (Some("Acme Ltd"), "Acme Ltd.localbooks")
+        );
         assert!(status.opened_from_file && !status.is_default);
         assert_eq!(entries(&db).await, 0, "a new company starts empty");
-        let accounts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chart_of_accounts").fetch_one(&db.pool().await).await.unwrap();
+        let accounts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chart_of_accounts")
+            .fetch_one(&db.pool().await)
+            .await
+            .unwrap();
         assert!(accounts > 20, "with the default chart of accounts");
-        assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default(), "creating a company does not change the saved location");
+        assert_eq!(
+            storage::read_config(&cfg.config_dir),
+            AppConfig::default(),
+            "creating a company does not change the saved location"
+        );
 
         // An existing file is never replaced, and the open company stays open.
-        assert!(db.create(&cfg.default_path, "Other").await.unwrap_err().starts_with("NEW_COMPANY_EXISTS"));
+        assert!(db
+            .create(&cfg.default_path, "Other")
+            .await
+            .unwrap_err()
+            .starts_with("NEW_COMPANY_EXISTS"));
         assert_eq!(db.status().await.unwrap().file_name, "Acme Ltd.localbooks");
 
         // Switching back finds the first company's books intact.
         db.mount(&cfg.default_path).await.unwrap();
         assert_eq!(entries(&db).await, 1);
         db.mount(&acme).await.unwrap();
-        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme Ltd"));
+        assert_eq!(
+            db.status().await.unwrap().company_name.as_deref(),
+            Some("Acme Ltd")
+        );
     }
 
     #[tokio::test]
@@ -928,11 +1206,23 @@ mod tests {
 
         assert!(db.close().await);
         assert!(!db.is_open().await && db.status().await.is_none());
-        assert!(!storage::lock_path(&shared).exists(), "closing releases the lock");
+        assert!(
+            !storage::lock_path(&shared).exists(),
+            "closing releases the lock"
+        );
         // Nothing reaches a company file while none is open.
         assert!(db.path().await.unwrap_err().starts_with("NO_COMPANY_OPEN"));
-        assert!(crate::backup::backup_now(&db).await.unwrap_err().starts_with("NO_COMPANY_OPEN"));
-        assert!(sqlx::query("CREATE TABLE stray (x)").execute(&db.pool().await).await.is_err(), "the closed placeholder refuses writes");
+        assert!(crate::backup::backup_now(&db)
+            .await
+            .unwrap_err()
+            .starts_with("NO_COMPANY_OPEN"));
+        assert!(
+            sqlx::query("CREATE TABLE stray (x)")
+                .execute(&db.pool().await)
+                .await
+                .is_err(),
+            "the closed placeholder refuses writes"
+        );
         assert!(crate::backup::auto_backup(&db).await.unwrap().is_none());
 
         // The closed file opens anywhere else at once (here: another Db, as on another computer).
@@ -965,19 +1255,34 @@ mod tests {
         // A file the operating system hands over still opens.
         let acme = tmp.0.join("Acme.localbooks");
         Db::closed(cfg.clone()).create(&acme, "Acme").await.unwrap();
-        let db = Db::startup_with_file(cfg.clone(), Some(acme)).await.unwrap();
-        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme"));
+        let db = Db::startup_with_file(cfg.clone(), Some(acme))
+            .await
+            .unwrap();
+        assert_eq!(
+            db.status().await.unwrap().company_name.as_deref(),
+            Some("Acme")
+        );
     }
 
     #[tokio::test]
     async fn startup_falls_back_when_the_configured_folder_is_missing() {
         let tmp = TempDir::new("fallback");
         let cfg = test_config(&tmp.0);
-        storage::write_config(&cfg.config_dir, &AppConfig { database_directory: Some(tmp.0.join("unplugged-nas")), ..AppConfig::default() }).unwrap();
+        storage::write_config(
+            &cfg.config_dir,
+            &AppConfig {
+                database_directory: Some(tmp.0.join("unplugged-nas")),
+                ..AppConfig::default()
+            },
+        )
+        .unwrap();
         let db = Db::startup(cfg.clone()).await.unwrap();
         let status = db.status().await.unwrap();
         assert!(status.is_default);
         assert!(status.startup_warning.unwrap().contains("is not available"));
-        assert!(!tmp.0.join("unplugged-nas").exists(), "never creates an empty company file on a missing drive");
+        assert!(
+            !tmp.0.join("unplugged-nas").exists(),
+            "never creates an empty company file on a missing drive"
+        );
     }
 }

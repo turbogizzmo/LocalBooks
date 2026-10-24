@@ -9,10 +9,14 @@
 //! so the UI can match on the prefix and show the remainder to the user.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::{Sqlite, SqlitePool, Transaction};
+
+use crate::secrets::SecretStore;
 
 /// Per-line ceiling ($1 trillion), mirrored by the `journal_lines` CHECK constraints.
 pub const MAX_LINE_CENTS: i64 = 100_000_000_000_000;
@@ -27,7 +31,11 @@ pub fn mul_div_round(a: i64, b: i64, divisor: i64) -> Option<i64> {
     let product = a as i128 * b as i128;
     let d = divisor as i128;
     let half = d / 2;
-    let rounded = if product >= 0 { (product + half) / d } else { (product - half) / d };
+    let rounded = if product >= 0 {
+        (product + half) / d
+    } else {
+        (product - half) / d
+    };
     i64::try_from(rounded).ok()
 }
 
@@ -54,7 +62,10 @@ pub struct ForeignCurrency {
 impl ForeignCurrency {
     pub fn validate(&self) -> Result<(), String> {
         if self.code.len() != 3 || !self.code.chars().all(|c| c.is_ascii_uppercase()) {
-            return Err(format!("FX_BAD_CODE: '{}' is not a three-letter currency code", self.code));
+            return Err(format!(
+                "FX_BAD_CODE: '{}' is not a three-letter currency code",
+                self.code
+            ));
         }
         if !(1..=1_000_000_000_000).contains(&self.exchange_rate_e6) {
             return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
@@ -82,12 +93,21 @@ pub fn convert_lines(lines: &[JournalLine], rate_e6: i64) -> Result<Vec<(i64, i6
     let credits: i64 = home.iter().map(|l| l.1).sum();
     let diff = debits - credits;
     if diff != 0 {
-        let (side_is_credit, delta) = if diff > 0 { (true, diff) } else { (false, -diff) };
+        let (side_is_credit, delta) = if diff > 0 {
+            (true, diff)
+        } else {
+            (false, -diff)
+        };
         let idx = home
             .iter()
             .enumerate()
             .filter(|(_, l)| if side_is_credit { l.1 > 0 } else { l.0 > 0 })
-            .max_by_key(|(i, l)| (if side_is_credit { l.1 } else { l.0 }, std::cmp::Reverse(*i)))
+            .max_by_key(|(i, l)| {
+                (
+                    if side_is_credit { l.1 } else { l.0 },
+                    std::cmp::Reverse(*i),
+                )
+            })
             .map(|(i, _)| i)
             .ok_or_else(|| "FX_UNBALANCED: cannot balance the converted entry".to_string())?;
         if side_is_credit {
@@ -113,11 +133,23 @@ pub struct JournalLine {
 
 impl JournalLine {
     pub fn debit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: cents, credit: 0, memo: None, class_id: None }
+        Self {
+            account_id,
+            debit: cents,
+            credit: 0,
+            memo: None,
+            class_id: None,
+        }
     }
 
     pub fn credit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: 0, credit: cents, memo: None, class_id: None }
+        Self {
+            account_id,
+            debit: 0,
+            credit: cents,
+            memo: None,
+            class_id: None,
+        }
     }
 
     pub fn with_class(mut self, class_id: Option<i64>) -> Self {
@@ -126,7 +158,10 @@ impl JournalLine {
     }
 
     pub fn with_memo(mut self, memo: Option<&str>) -> Self {
-        self.memo = memo.map(str::trim).filter(|m| !m.is_empty()).map(str::to_string);
+        self.memo = memo
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(str::to_string);
         self
     }
 }
@@ -167,7 +202,9 @@ pub enum EntrySource {
 impl EntrySource {
     fn type_code(self) -> &'static str {
         match self {
-            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => "JOURNAL",
+            EntrySource::Journal | EntrySource::Reversal(_) | EntrySource::Reclassification => {
+                "JOURNAL"
+            }
             EntrySource::Invoice(_) => "INVOICE",
             EntrySource::ReceivePayment(_) => "RECEIVE_PAYMENT",
             EntrySource::Expense(_) => "EXPENSE",
@@ -260,7 +297,9 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
             ));
         }
         if line.debit == 0 && line.credit == 0 {
-            return Err(format!("JE_LINE_EMPTY: line {n} has neither a debit nor a credit"));
+            return Err(format!(
+                "JE_LINE_EMPTY: line {n} has neither a debit nor a credit"
+            ));
         }
         if line.debit > MAX_LINE_CENTS || line.credit > MAX_LINE_CENTS {
             return Err(format!(
@@ -268,12 +307,12 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
                 format_cents(MAX_LINE_CENTS)
             ));
         }
-        debits = debits
-            .checked_add(line.debit)
-            .ok_or_else(|| "JE_OVERFLOW: total debits exceed the representable range".to_string())?;
-        credits = credits
-            .checked_add(line.credit)
-            .ok_or_else(|| "JE_OVERFLOW: total credits exceed the representable range".to_string())?;
+        debits = debits.checked_add(line.debit).ok_or_else(|| {
+            "JE_OVERFLOW: total debits exceed the representable range".to_string()
+        })?;
+        credits = credits.checked_add(line.credit).ok_or_else(|| {
+            "JE_OVERFLOW: total credits exceed the representable range".to_string()
+        })?;
     }
 
     if debits != credits {
@@ -296,6 +335,216 @@ pub(crate) fn db_err(err: sqlx::Error) -> String {
     }
 }
 
+const LEDGER_AUDIT_ANCHOR_SERVICE: &str = "com.localbooks.ledger-audit-anchor";
+const LEDGER_AUDIT_ANCHOR_FILE: &str = "ledger-audit-anchor.json";
+const LEDGER_AUDIT_ANCHOR_WHAT: &str = "the ledger audit anchor";
+const LEDGER_AUDIT_ANCHOR_KEY_PREFIX: &str = "ledger-audit-anchor:";
+
+fn sha256_hex(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn audit_actor(actor: &str) -> String {
+    let trimmed = actor.trim();
+    if trimmed.is_empty() {
+        "unknown".into()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn anchor_key_for_db(db_identity: &str) -> String {
+    format!(
+        "{LEDGER_AUDIT_ANCHOR_KEY_PREFIX}{}",
+        sha256_hex(db_identity)
+    )
+}
+
+async fn audit_db_identity(pool: &SqlitePool) -> Result<Option<String>, String> {
+    let rows: Vec<(i64, String, String)> = sqlx::query_as("PRAGMA database_list")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let file = rows
+        .into_iter()
+        .find(|(_, name, _)| name == "main")
+        .map(|(_, _, file)| file)
+        .unwrap_or_default();
+    if file.is_empty() {
+        return Ok(None);
+    }
+    let path = PathBuf::from(file);
+    let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+    Ok(Some(canonical.to_string_lossy().to_string()))
+}
+
+fn anchor_store_for_identity(db_identity: &str) -> SecretStore {
+    let path = PathBuf::from(db_identity);
+    let config_dir = path
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    SecretStore::for_this_computer(
+        &config_dir,
+        LEDGER_AUDIT_ANCHOR_SERVICE,
+        LEDGER_AUDIT_ANCHOR_FILE,
+        LEDGER_AUDIT_ANCHOR_WHAT,
+    )
+}
+
+async fn audit_anchor(pool: &SqlitePool) -> Result<Option<(SecretStore, String)>, String> {
+    let Some(identity) = audit_db_identity(pool).await? else {
+        return Ok(None);
+    };
+    Ok(Some((
+        anchor_store_for_identity(&identity),
+        anchor_key_for_db(&identity),
+    )))
+}
+
+/// Hashes every audit row that has not yet been chained, in id order.
+pub async fn seal_ledger_audit_chain(pool: &SqlitePool, actor: &str) -> Result<(), String> {
+    let actor = audit_actor(actor);
+    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut prev = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT row_hash FROM ledger_audit_log WHERE row_hash IS NOT NULL ORDER BY id DESC LIMIT 1",
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_err)?
+    .flatten()
+    .unwrap_or_default();
+    let rows: Vec<(i64, String, String, i64, String, String)> = sqlx::query_as(
+        "SELECT id, timestamp, action_type, target_entity_id, COALESCE(NULLIF(actor, ''), ?1), payload_snapshot
+         FROM ledger_audit_log
+         WHERE row_hash IS NULL
+         ORDER BY id",
+    )
+    .bind(&actor)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    for (id, timestamp, action_type, target_entity_id, row_actor, payload_snapshot) in rows {
+        let row_hash = sha256_hex(&format!(
+            "{prev}|{id}|{timestamp}|{action_type}|{target_entity_id}|{row_actor}|{payload_snapshot}"
+        ));
+        sqlx::query(
+            "UPDATE ledger_audit_log
+             SET actor = ?1, prev_hash = ?2, row_hash = ?3
+             WHERE id = ?4 AND row_hash IS NULL",
+        )
+        .bind(row_actor)
+        .bind(&prev)
+        .bind(&row_hash)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+        prev = row_hash;
+    }
+    tx.commit().await.map_err(db_err)?;
+    if prev.is_empty() {
+        return Ok(());
+    }
+    if let Some((store, key)) = audit_anchor(pool).await? {
+        store.put(&key, &prev).await?;
+    }
+    Ok(())
+}
+
+async fn verify_ledger_audit_chain(pool: &SqlitePool) -> Result<Vec<AuditFinding>, String> {
+    let anchor = audit_anchor(pool).await?;
+    let anchor_exists = if let Some((store, key)) = &anchor {
+        store.get(key).await?.is_some()
+    } else {
+        false
+    };
+    if !anchor_exists {
+        seal_ledger_audit_chain(
+            pool,
+            &format!("ledger::verify_ledger_audit@{}", env!("CARGO_PKG_VERSION")),
+        )
+        .await?;
+    }
+
+    let rows: Vec<(i64, Option<i64>, String, String, String, i64, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT id, CASE WHEN action_type IN ('POST', 'VOID', 'FORENSIC_HEAL') THEN target_entity_id ELSE NULL END,
+                timestamp, action_type, actor, target_entity_id, payload_snapshot, prev_hash, row_hash
+         FROM ledger_audit_log
+         ORDER BY id",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let mut findings = Vec::new();
+    let mut prev = String::new();
+    let mut head = None::<String>;
+    for (
+        id,
+        entry_id,
+        timestamp,
+        action_type,
+        actor,
+        target_entity_id,
+        payload_snapshot,
+        prev_hash,
+        row_hash,
+    ) in rows
+    {
+        let row_hash = match row_hash {
+            Some(h) => h,
+            None => {
+                findings.push(AuditFinding {
+                    entry_id: entry_id.unwrap_or(0),
+                    entry_number: None,
+                    problem: format!("Audit row {id} is missing row_hash"),
+                });
+                continue;
+            }
+        };
+        if prev_hash.as_deref().unwrap_or_default() != prev {
+            findings.push(AuditFinding {
+                entry_id: entry_id.unwrap_or(0),
+                entry_number: None,
+                problem: format!("Audit row {id} has an invalid prev_hash"),
+            });
+            prev = row_hash.clone();
+            head = Some(row_hash);
+            continue;
+        }
+        let expected = sha256_hex(&format!(
+            "{prev}|{id}|{timestamp}|{action_type}|{target_entity_id}|{actor}|{payload_snapshot}"
+        ));
+        if row_hash != expected {
+            findings.push(AuditFinding {
+                entry_id: entry_id.unwrap_or(0),
+                entry_number: None,
+                problem: format!("Audit row {id} has an invalid row_hash"),
+            });
+        }
+        prev = row_hash.clone();
+        head = Some(row_hash);
+    }
+    if let Some(head) = head {
+        if let Some((store, key)) = anchor {
+            match store.get(&key).await? {
+                Some(anchor) if anchor != head => findings.push(AuditFinding {
+                    entry_id: 0,
+                    entry_number: None,
+                    problem: "Audit chain head does not match external anchor".into(),
+                }),
+                Some(_) => {}
+                None => {
+                    store.put(&key, &head).await?;
+                }
+            }
+        }
+    }
+    Ok(findings)
+}
+
 /// Validates `entry` and posts it atomically. Nothing is written unless every check passes.
 /// The app's commands use [`post_journal_entry`] because they need the new id.
 #[cfg_attr(not(test), allow(dead_code))]
@@ -308,7 +557,15 @@ pub async fn post_journal_entry(pool: &SqlitePool, entry: JournalEntry) -> Resul
     let mut tx = pool.begin().await.map_err(db_err)?;
 
     match post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
-        Ok(id) => tx.commit().await.map(|()| id).map_err(db_err),
+        Ok(id) => {
+            tx.commit().await.map_err(db_err)?;
+            seal_ledger_audit_chain(
+                pool,
+                &format!("ledger::post_journal_entry@{}", env!("CARGO_PKG_VERSION")),
+            )
+            .await?;
+            Ok(id)
+        }
         Err(err) => Err(rollback(tx, err).await),
     }
 }
@@ -332,13 +589,18 @@ pub async fn post_entry_in_tx(
     crate::closing::check_open(tx, entry.date).await?;
     if let Some(currency) = &entry.currency {
         currency.validate()?;
-        let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'")
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(db_err)?
-            .unwrap_or_else(|| "USD".into());
+        let home: String = sqlx::query_scalar(
+            "SELECT value FROM system_preferences WHERE key = 'home_currency_code'",
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?
+        .unwrap_or_else(|| "USD".into());
         if currency.code == home {
-            return Err(format!("FX_IS_HOME: {} is the home currency; record it without an exchange rate", currency.code));
+            return Err(format!(
+                "FX_IS_HOME: {} is the home currency; record it without an exchange rate",
+                currency.code
+            ));
         }
     }
     write_entry(tx, entry, source).await
@@ -406,8 +668,12 @@ async fn write_entry(
         }
         // A reversal must carry the original's classes even if one has since been made inactive, and
         // a reclassification moves lines out of a class that may be inactive (it checks the target).
-        let carries_existing = source.reverses().is_some() || source == EntrySource::Reclassification;
-        if let Some(class_id) = line.class_id.filter(|c| !carries_existing && checked_classes.insert(*c)) {
+        let carries_existing =
+            source.reverses().is_some() || source == EntrySource::Reclassification;
+        if let Some(class_id) = line
+            .class_id
+            .filter(|c| !carries_existing && checked_classes.insert(*c))
+        {
             crate::classes::check_usable(tx, class_id, &format!("JE: line {n}")).await?;
         }
 
@@ -443,12 +709,13 @@ async fn write_entry(
     .map_err(db_err)?;
 
     if posted.rows_affected() != 1 {
-        return Err(format!("JE_POST_FAILED: entry {entry_id} could not be moved to POSTED"));
+        return Err(format!(
+            "JE_POST_FAILED: entry {entry_id} could not be moved to POSTED"
+        ));
     }
 
     Ok(entry_id)
 }
-
 
 // ------------------------------------------------------------------------------------------------
 // Voiding
@@ -461,7 +728,14 @@ async fn write_entry(
 pub async fn void_transaction(pool: &SqlitePool, journal_entry_id: i64) -> Result<(), String> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     match void_in_tx(&mut tx, journal_entry_id).await {
-        Ok(()) => tx.commit().await.map_err(db_err),
+        Ok(()) => {
+            tx.commit().await.map_err(db_err)?;
+            seal_ledger_audit_chain(
+                pool,
+                &format!("ledger::void_transaction@{}", env!("CARGO_PKG_VERSION")),
+            )
+            .await
+        }
         Err(err) => Err(rollback(tx, err).await),
     }
 }
@@ -475,7 +749,11 @@ pub(crate) async fn recompute_paid(
     fk: &str,
     document_id: i64,
 ) -> Result<(), String> {
-    let credit_table = if document_table == "bills" { "vendor_credit_applications" } else { "credit_applications" };
+    let credit_table = if document_table == "bills" {
+        "vendor_credit_applications"
+    } else {
+        "credit_applications"
+    };
     let (total, paid): (i64, i64) = sqlx::query_as(&format!(
         "SELECT d.total_cents,
                 COALESCE((SELECT SUM(amount_cents) FROM {payment_table} WHERE {fk} = d.id AND is_voided = 0), 0)
@@ -486,18 +764,29 @@ pub(crate) async fn recompute_paid(
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    let status = if paid == 0 { "UNPAID" } else if paid < total { "PARTIAL" } else { "PAID" };
-    sqlx::query(&format!("UPDATE {document_table} SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3"))
-        .bind(paid)
-        .bind(status)
-        .bind(document_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    let status = if paid == 0 {
+        "UNPAID"
+    } else if paid < total {
+        "PARTIAL"
+    } else {
+        "PAID"
+    };
+    sqlx::query(&format!(
+        "UPDATE {document_table} SET amount_paid_cents = ?1, status = ?2 WHERE id = ?3"
+    ))
+    .bind(paid)
+    .bind(status)
+    .bind(document_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
     Ok(())
 }
 
-pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
+pub(crate) async fn void_in_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+    journal_entry_id: i64,
+) -> Result<(), String> {
     let header: Option<(i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>)> = sqlx::query_as(
         "SELECT entry_number, entry_date, memo, source_type, source_id, status, is_voided, reverses_entry_id
          FROM journal_entries WHERE id = ?1",
@@ -506,16 +795,22 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (number, date, memo, source_type, source_id, status, is_voided, reverses) =
-        header.ok_or_else(|| format!("VOID_NOT_FOUND: journal entry {journal_entry_id} does not exist"))?;
+    let (number, date, memo, source_type, source_id, status, is_voided, reverses) = header
+        .ok_or_else(|| {
+            format!("VOID_NOT_FOUND: journal entry {journal_entry_id} does not exist")
+        })?;
     if status != "POSTED" {
-        return Err(format!("VOID_NOT_POSTED: entry #{number} is {status}; only posted entries can be voided"));
+        return Err(format!(
+            "VOID_NOT_POSTED: entry #{number} is {status}; only posted entries can be voided"
+        ));
     }
     if is_voided {
         return Err(format!("VOID_ALREADY: entry #{number} is already voided"));
     }
     if reverses.is_some() {
-        return Err(format!("VOID_REVERSAL: entry #{number} is itself a void reversal and cannot be voided"));
+        return Err(format!(
+            "VOID_REVERSAL: entry #{number} is itself a void reversal and cannot be voided"
+        ));
     }
 
     let (reconciled, ticked): (i64, i64) = sqlx::query_as(
@@ -641,14 +936,24 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     let reversal = JournalEntry {
         id: None,
         date,
-        description: format!("VOID of entry #{number}{}", memo.map(|m| format!(": {m}")).unwrap_or_default()),
+        description: format!(
+            "VOID of entry #{number}{}",
+            memo.map(|m| format!(": {m}")).unwrap_or_default()
+        ),
         lines: lines
             .into_iter()
-            .map(|(account_id, debit, credit, memo, class_id)| JournalLine { account_id, debit: credit, credit: debit, memo, class_id })
+            .map(|(account_id, debit, credit, memo, class_id)| JournalLine {
+                account_id,
+                debit: credit,
+                credit: debit,
+                memo,
+                class_id,
+            })
             .collect(),
         currency: None,
     };
-    let reversal_id = post_entry_in_tx(tx, &reversal, EntrySource::Reversal(journal_entry_id)).await?;
+    let reversal_id =
+        post_entry_in_tx(tx, &reversal, EntrySource::Reversal(journal_entry_id)).await?;
     // Stock that moved with this entry moves back (refused if later sales already used it).
     crate::inventory::reverse_for_entry(tx, journal_entry_id, reversal_id, date).await?;
 
@@ -661,28 +966,60 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     let flag = |table: &'static str| format!("UPDATE {table} SET is_voided = 1 WHERE id = ?1");
     match source_type.as_str() {
         "INVOICE" => {
-            sqlx::query(&flag("invoices")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("invoices"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "SALES_RECEIPT" => {
-            sqlx::query(&flag("sales_receipts")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("sales_receipts"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "BILL" => {
-            sqlx::query(&flag("bills")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("bills"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "EXPENSE" | "CHECK" => {
-            sqlx::query(&flag("expenses")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("expenses"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "TRANSFER" => {
-            sqlx::query(&flag("transfers")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("transfers"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "CREDIT_MEMO" => {
-            sqlx::query(&flag("credit_memos")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("credit_memos"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "VENDOR_CREDIT" => {
-            sqlx::query(&flag("vendor_credits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("vendor_credits"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
         }
         "DEPOSIT" => {
-            sqlx::query(&flag("deposits")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
+            sqlx::query(&flag("deposits"))
+                .bind(doc)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
             sqlx::query("UPDATE deposit_lines SET is_voided = 1 WHERE deposit_id = ?1")
                 .bind(doc)
                 .execute(&mut **tx)
@@ -690,21 +1027,31 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
                 .map_err(db_err)?;
         }
         "RECEIVE_PAYMENT" => {
-            sqlx::query(&flag("invoice_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
-            let invoice_id: i64 = sqlx::query_scalar("SELECT invoice_id FROM invoice_payments WHERE id = ?1")
+            sqlx::query(&flag("invoice_payments"))
                 .bind(doc)
-                .fetch_one(&mut **tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(db_err)?;
+            let invoice_id: i64 =
+                sqlx::query_scalar("SELECT invoice_id FROM invoice_payments WHERE id = ?1")
+                    .bind(doc)
+                    .fetch_one(&mut **tx)
+                    .await
+                    .map_err(db_err)?;
             recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice_id).await?;
         }
         "BILL_PAYMENT" => {
-            sqlx::query(&flag("bill_payments")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
-            let bill_id: i64 = sqlx::query_scalar("SELECT bill_id FROM bill_payments WHERE id = ?1")
+            sqlx::query(&flag("bill_payments"))
                 .bind(doc)
-                .fetch_one(&mut **tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(db_err)?;
+            let bill_id: i64 =
+                sqlx::query_scalar("SELECT bill_id FROM bill_payments WHERE id = ?1")
+                    .bind(doc)
+                    .fetch_one(&mut **tx)
+                    .await
+                    .map_err(db_err)?;
             recompute_paid(tx, "bills", "bill_payments", "bill_id", bill_id).await?;
         }
         _ => {}
@@ -772,7 +1119,10 @@ pub struct AuditEntry {
     pub detail: String,
 }
 
-pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<JournalEntryView>, String> {
+pub async fn list_journal_entries(
+    pool: &SqlitePool,
+    limit: i64,
+) -> Result<Vec<JournalEntryView>, String> {
     sqlx::query_as::<_, JournalEntryView>(
         "SELECT e.id, e.entry_number, e.entry_date, e.memo, e.source_type, e.source_id,
                 COALESCE((SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id), 0) AS total_cents,
@@ -791,7 +1141,10 @@ pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<J
     .map_err(db_err)
 }
 
-pub async fn journal_entry_lines(pool: &SqlitePool, journal_entry_id: i64) -> Result<Vec<JournalLineView>, String> {
+pub async fn journal_entry_lines(
+    pool: &SqlitePool,
+    journal_entry_id: i64,
+) -> Result<Vec<JournalLineView>, String> {
     sqlx::query_as::<_, JournalLineView>(
         "SELECT l.line_number, l.account_id, c.full_name AS account_name, l.debit_cents, l.credit_cents, l.memo,
                 l.class_id, k.full_name AS class_name
@@ -881,9 +1234,18 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
     ];
 
     let mut findings = Vec::new();
+    findings.extend(verify_ledger_audit_chain(pool).await?);
     for (problem, sql) in checks {
-        let rows: Vec<(i64, Option<i64>)> = sqlx::query_as(sql).fetch_all(pool).await.map_err(db_err)?;
-        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding { entry_id, entry_number, problem: problem.into() }));
+        let rows: Vec<(i64, Option<i64>)> =
+            sqlx::query_as(sql).fetch_all(pool).await.map_err(db_err)?;
+        findings.extend(
+            rows.into_iter()
+                .map(|(entry_id, entry_number)| AuditFinding {
+                    entry_id,
+                    entry_number,
+                    problem: problem.into(),
+                }),
+        );
     }
     findings.sort_by_key(|f| (f.entry_id, f.problem.clone()));
 
@@ -895,7 +1257,13 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    Ok(LedgerVerification { intact: findings.is_empty(), entries_checked, voids_checked, migrations_recorded, findings })
+    Ok(LedgerVerification {
+        intact: findings.is_empty(),
+        entries_checked,
+        voids_checked,
+        migrations_recorded,
+        findings,
+    })
 }
 
 #[cfg(test)]
@@ -913,7 +1281,11 @@ mod tests {
         let pool = test_pool().await;
         let checking = account_id(&pool, "1010").await;
         let sales = account_id(&pool, "4000").await;
-        Fixture { pool, checking, sales }
+        Fixture {
+            pool,
+            checking,
+            sales,
+        }
     }
 
     async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
@@ -947,18 +1319,22 @@ mod tests {
             id: None,
             date: date(),
             description: "Cash sale".into(),
-            lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            lines: vec![
+                JournalLine::debit(fx.checking, 10_000),
+                JournalLine::credit(fx.sales, 10_000),
+            ],
             currency: None,
         };
 
-        post_transaction(&fx.pool, entry).await.expect("balanced entry posts");
+        post_transaction(&fx.pool, entry)
+            .await
+            .expect("balanced entry posts");
 
-        let (status, number, memo, entry_date): (String, i64, Option<String>, String) = sqlx::query_as(
-            "SELECT status, entry_number, memo, entry_date FROM journal_entries",
-        )
-        .fetch_one(&fx.pool)
-        .await
-        .expect("read header");
+        let (status, number, memo, entry_date): (String, i64, Option<String>, String) =
+            sqlx::query_as("SELECT status, entry_number, memo, entry_date FROM journal_entries")
+                .fetch_one(&fx.pool)
+                .await
+                .expect("read header");
         assert_eq!(status, "POSTED");
         assert_eq!(number, 1);
         assert_eq!(memo.as_deref(), Some("Cash sale"));
@@ -971,18 +1347,20 @@ mod tests {
                 .expect("sum lines");
         assert_eq!((debits, credits), (10_000, 10_000));
 
-        let checking_balance: i64 =
-            sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-                .bind(fx.checking)
-                .fetch_one(&fx.pool)
-                .await
-                .expect("checking balance");
-        let sales_balance: i64 =
-            sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-                .bind(fx.sales)
-                .fetch_one(&fx.pool)
-                .await
-                .expect("sales balance");
+        let checking_balance: i64 = sqlx::query_scalar(
+            "SELECT balance_cents FROM v_account_balances WHERE account_id = ?1",
+        )
+        .bind(fx.checking)
+        .fetch_one(&fx.pool)
+        .await
+        .expect("checking balance");
+        let sales_balance: i64 = sqlx::query_scalar(
+            "SELECT balance_cents FROM v_account_balances WHERE account_id = ?1",
+        )
+        .bind(fx.sales)
+        .fetch_one(&fx.pool)
+        .await
+        .expect("sales balance");
         assert_eq!(checking_balance, 10_000);
         assert_eq!(sales_balance, 10_000);
     }
@@ -994,14 +1372,22 @@ mod tests {
             id: None,
             date: date(),
             description: "Unbalanced".into(),
-            lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 9_900)],
+            lines: vec![
+                JournalLine::debit(fx.checking, 10_000),
+                JournalLine::credit(fx.sales, 9_900),
+            ],
             currency: None,
         };
 
-        let err = post_transaction(&fx.pool, entry).await.expect_err("unbalanced entry must be rejected");
+        let err = post_transaction(&fx.pool, entry)
+            .await
+            .expect_err("unbalanced entry must be rejected");
 
         assert!(err.starts_with("JE_UNBALANCED"), "unexpected error: {err}");
-        assert!(err.contains("$100.00") && err.contains("$99.00") && err.contains("$1.00"), "{err}");
+        assert!(
+            err.contains("$100.00") && err.contains("$99.00") && err.contains("$1.00"),
+            "{err}"
+        );
         assert_eq!(row_counts(&fx.pool).await, (0, 0));
     }
 
@@ -1013,16 +1399,27 @@ mod tests {
             date: date(),
             description: "Two-sided line".into(),
             lines: vec![
-                JournalLine { account_id: fx.checking, debit: 10_000, credit: 10_000, memo: None, class_id: None },
+                JournalLine {
+                    account_id: fx.checking,
+                    debit: 10_000,
+                    credit: 10_000,
+                    memo: None,
+                    class_id: None,
+                },
                 JournalLine::debit(fx.sales, 5_000),
                 JournalLine::credit(fx.sales, 5_000),
             ],
             currency: None,
         };
 
-        let err = post_transaction(&fx.pool, entry).await.expect_err("two-sided line must be rejected");
+        let err = post_transaction(&fx.pool, entry)
+            .await
+            .expect_err("two-sided line must be rejected");
 
-        assert!(err.starts_with("JE_LINE_BOTH_SIDES: line 1"), "unexpected error: {err}");
+        assert!(
+            err.starts_with("JE_LINE_BOTH_SIDES: line 1"),
+            "unexpected error: {err}"
+        );
         assert_eq!(row_counts(&fx.pool).await, (0, 0));
     }
 
@@ -1038,13 +1435,21 @@ mod tests {
             id: None,
             date: date(),
             description: "Posts to inactive account".into(),
-            lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            lines: vec![
+                JournalLine::debit(fx.checking, 10_000),
+                JournalLine::credit(fx.sales, 10_000),
+            ],
             currency: None,
         };
 
-        let err = post_transaction(&fx.pool, entry).await.expect_err("inactive account must be rejected");
+        let err = post_transaction(&fx.pool, entry)
+            .await
+            .expect_err("inactive account must be rejected");
 
-        assert!(err.starts_with("JE_INACTIVE_ACCOUNT: line 2"), "unexpected error: {err}");
+        assert!(
+            err.starts_with("JE_INACTIVE_ACCOUNT: line 2"),
+            "unexpected error: {err}"
+        );
         // The DRAFT header and line 1 were written before the failure; rollback must remove both.
         assert_eq!(row_counts(&fx.pool).await, (0, 0));
     }
@@ -1059,18 +1464,23 @@ mod tests {
 
     #[tokio::test]
     async fn voiding_reverses_unwinds_documents_and_audits() {
-        use crate::invoices::{create_and_post_invoice, list_invoices, record_payment, InvoiceInput, InvoiceLineInput, PaymentInput};
+        use crate::invoices::{
+            create_and_post_invoice, list_invoices, record_payment, InvoiceInput, InvoiceLineInput,
+            PaymentInput,
+        };
         let fx = setup().await;
         let services = account_id(&fx.pool, "4100").await;
         let ar = account_id(&fx.pool, "1200").await;
         let bal = |account: i64| {
             let pool = fx.pool.clone();
             async move {
-                sqlx::query_scalar::<_, i64>("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-                    .bind(account)
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap()
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT balance_cents FROM v_account_balances WHERE account_id = ?1",
+                )
+                .bind(account)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
             }
         };
 
@@ -1080,7 +1490,15 @@ mod tests {
                 customer_name: "Acme".into(),
                 issue_date: date(),
                 due_date: date(),
-                lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+                lines: vec![InvoiceLineInput {
+                    description: "Work".into(),
+                    quantity_e4: 10000,
+                    rate_cents: 50_000,
+                    income_account_id: services,
+                    product_service_id: None,
+                    class_id: None,
+                    is_taxable: false,
+                }],
                 currency: None,
                 tax_rate_id: None,
                 discount_cents: 0,
@@ -1090,23 +1508,44 @@ mod tests {
         .unwrap();
         let paid = record_payment(
             &fx.pool,
-            PaymentInput { invoice_id: invoice.id, deposit_account_id: fx.checking, payment_date: date(), amount_cents: 50_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+            PaymentInput {
+                invoice_id: invoice.id,
+                deposit_account_id: fx.checking,
+                payment_date: date(),
+                amount_cents: 50_000,
+                payment_method: "ACH".into(),
+                reference: None,
+                exchange_rate_e6: None,
+            },
         )
         .await
         .unwrap();
         assert_eq!(paid.status, "PAID");
 
         // An invoice with payments cannot be voided until the payment is.
-        let err = void_transaction(&fx.pool, invoice.journal_entry_id.unwrap()).await.expect_err("has payments");
+        let err = void_transaction(&fx.pool, invoice.journal_entry_id.unwrap())
+            .await
+            .expect_err("has payments");
         assert!(err.starts_with("VOID_HAS_PAYMENTS"), "{err}");
 
-        let payment_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoice_payments").fetch_one(&fx.pool).await.unwrap();
-        void_transaction(&fx.pool, payment_entry).await.expect("payment voids");
+        let payment_entry: i64 =
+            sqlx::query_scalar("SELECT journal_entry_id FROM invoice_payments")
+                .fetch_one(&fx.pool)
+                .await
+                .unwrap();
+        void_transaction(&fx.pool, payment_entry)
+            .await
+            .expect("payment voids");
         let reopened = list_invoices(&fx.pool).await.unwrap().remove(0);
-        assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", 50_000));
+        assert_eq!(
+            (reopened.status.as_str(), reopened.balance_cents),
+            ("UNPAID", 50_000)
+        );
         assert_eq!((bal(fx.checking).await, bal(ar).await), (0, 50_000));
 
-        void_transaction(&fx.pool, invoice.journal_entry_id.unwrap()).await.expect("invoice voids");
+        void_transaction(&fx.pool, invoice.journal_entry_id.unwrap())
+            .await
+            .expect("invoice voids");
         assert_eq!((bal(ar).await, bal(services).await), (0, 0));
         assert!(list_invoices(&fx.pool).await.unwrap()[0].is_voided);
 
@@ -1119,24 +1558,38 @@ mod tests {
         .unwrap();
         assert_eq!((posted, voided, reversals), (4, 2, 2));
 
-        let err = void_transaction(&fx.pool, payment_entry).await.expect_err("double void");
-        assert!(err.starts_with("VOID_ALREADY"), "{err}");
-        let reversal: i64 = sqlx::query_scalar("SELECT id FROM journal_entries WHERE reverses_entry_id = ?1")
-            .bind(payment_entry)
-            .fetch_one(&fx.pool)
+        let err = void_transaction(&fx.pool, payment_entry)
             .await
-            .unwrap();
-        assert!(void_transaction(&fx.pool, reversal).await.unwrap_err().starts_with("VOID_REVERSAL"));
+            .expect_err("double void");
+        assert!(err.starts_with("VOID_ALREADY"), "{err}");
+        let reversal: i64 =
+            sqlx::query_scalar("SELECT id FROM journal_entries WHERE reverses_entry_id = ?1")
+                .bind(payment_entry)
+                .fetch_one(&fx.pool)
+                .await
+                .unwrap();
+        assert!(void_transaction(&fx.pool, reversal)
+            .await
+            .unwrap_err()
+            .starts_with("VOID_REVERSAL"));
 
         let log = list_audit_log(&fx.pool, 50).await.unwrap();
         assert_eq!(log.iter().filter(|a| a.action == "VOID").count(), 2);
         assert_eq!(log.iter().filter(|a| a.action == "POST").count(), 4);
-        assert!(sqlx::query("DELETE FROM audit_log").execute(&fx.pool).await.unwrap_err().to_string().contains("AUDIT_IMMUTABLE"));
+        assert!(sqlx::query("DELETE FROM audit_log")
+            .execute(&fx.pool)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("AUDIT_IMMUTABLE"));
 
         let register = list_journal_entries(&fx.pool, 10).await.unwrap();
         let original = register.iter().find(|e| e.id == payment_entry).unwrap();
         assert!(original.is_voided && original.reversed_by_entry_number.is_some());
-        assert_eq!(journal_entry_lines(&fx.pool, reversal).await.unwrap()[0].credit_cents, 50_000);
+        assert_eq!(
+            journal_entry_lines(&fx.pool, reversal).await.unwrap()[0].credit_cents,
+            50_000
+        );
     }
 
     #[tokio::test]
@@ -1144,18 +1597,44 @@ mod tests {
         let fx = setup().await;
         let entry = post_journal_entry(
             &fx.pool,
-            JournalEntry { id: None, date: date(), description: "Sale".into(), lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)], currency: None },
+            JournalEntry {
+                id: None,
+                date: date(),
+                description: "Sale".into(),
+                lines: vec![
+                    JournalLine::debit(fx.checking, 10_000),
+                    JournalLine::credit(fx.sales, 10_000),
+                ],
+                currency: None,
+            },
         )
         .await
         .unwrap();
-        let rec = crate::reconcile::start(&fx.pool, fx.checking, date(), 10_000).await.unwrap();
-        let lines = crate::reconcile::unreconciled_lines(&fx.pool, fx.checking).await.unwrap();
-        crate::reconcile::set_lines_cleared(&fx.pool, rec.id, &[lines[0].line_id], true).await.unwrap();
-        assert!(void_transaction(&fx.pool, entry).await.unwrap_err().starts_with("VOID_CLEARED"));
+        let rec = crate::reconcile::start(&fx.pool, fx.checking, date(), 10_000)
+            .await
+            .unwrap();
+        let lines = crate::reconcile::unreconciled_lines(&fx.pool, fx.checking)
+            .await
+            .unwrap();
+        crate::reconcile::set_lines_cleared(&fx.pool, rec.id, &[lines[0].line_id], true)
+            .await
+            .unwrap();
+        assert!(void_transaction(&fx.pool, entry)
+            .await
+            .unwrap_err()
+            .starts_with("VOID_CLEARED"));
 
         crate::reconcile::lock(&fx.pool, rec.id).await.unwrap();
-        assert!(void_transaction(&fx.pool, entry).await.unwrap_err().starts_with("VOID_RECONCILED"));
-        let still_posted: bool = sqlx::query_scalar("SELECT is_voided FROM journal_entries WHERE id = ?1").bind(entry).fetch_one(&fx.pool).await.unwrap();
+        assert!(void_transaction(&fx.pool, entry)
+            .await
+            .unwrap_err()
+            .starts_with("VOID_RECONCILED"));
+        let still_posted: bool =
+            sqlx::query_scalar("SELECT is_voided FROM journal_entries WHERE id = ?1")
+                .bind(entry)
+                .fetch_one(&fx.pool)
+                .await
+                .unwrap();
         assert!(!still_posted);
     }
 
@@ -1174,22 +1653,40 @@ mod tests {
         let credits: i64 = home.iter().map(|l| l.1).sum();
         assert_eq!(debits, credits);
         assert_eq!(home[3].1, 10_849);
-        assert_eq!(home.iter().map(|l| l.0).collect::<Vec<_>>(), vec![3_617, 3_616, 3_616, 0]);
-        assert!(convert_lines(&[JournalLine::debit(1, 1), JournalLine::credit(2, 1)], 100_000).unwrap_err().starts_with("FX_ROUNDS_TO_ZERO"));
+        assert_eq!(
+            home.iter().map(|l| l.0).collect::<Vec<_>>(),
+            vec![3_617, 3_616, 3_616, 0]
+        );
+        assert!(convert_lines(
+            &[JournalLine::debit(1, 1), JournalLine::credit(2, 1)],
+            100_000
+        )
+        .unwrap_err()
+        .starts_with("FX_ROUNDS_TO_ZERO"));
     }
 
     #[tokio::test]
     async fn foreign_journal_entry_posts_home_amounts_and_keeps_foreign_detail() {
         let fx = setup().await;
-        let eur = |rate| Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate });
+        let eur = |rate| {
+            Some(ForeignCurrency {
+                code: "EUR".into(),
+                exchange_rate_e6: rate,
+            })
+        };
         let entry = |currency| JournalEntry {
             id: None,
             date: date(),
             description: "Euro sale".into(),
-            lines: vec![JournalLine::debit(fx.checking, 10_000), JournalLine::credit(fx.sales, 10_000)],
+            lines: vec![
+                JournalLine::debit(fx.checking, 10_000),
+                JournalLine::credit(fx.sales, 10_000),
+            ],
             currency,
         };
-        let id = post_journal_entry(&fx.pool, entry(eur(1_087_500))).await.expect("posts");
+        let id = post_journal_entry(&fx.pool, entry(eur(1_087_500)))
+            .await
+            .expect("posts");
         let rows: Vec<(i64, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
             "SELECT debit_cents, credit_cents, foreign_debit_cents, foreign_credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
         )
@@ -1197,19 +1694,58 @@ mod tests {
         .fetch_all(&fx.pool)
         .await
         .unwrap();
-        assert_eq!(rows, vec![(10_875, 0, Some(10_000), Some(0)), (0, 10_875, Some(0), Some(10_000))]);
-        let (code, rate): (Option<String>, Option<i64>) =
-            sqlx::query_as("SELECT foreign_currency_code, exchange_rate_e6 FROM journal_entries WHERE id = ?1").bind(id).fetch_one(&fx.pool).await.unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                (10_875, 0, Some(10_000), Some(0)),
+                (0, 10_875, Some(0), Some(10_000))
+            ]
+        );
+        let (code, rate): (Option<String>, Option<i64>) = sqlx::query_as(
+            "SELECT foreign_currency_code, exchange_rate_e6 FROM journal_entries WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_one(&fx.pool)
+        .await
+        .unwrap();
         assert_eq!((code.as_deref(), rate), (Some("EUR"), Some(1_087_500)));
 
-        let usd = Some(ForeignCurrency { code: "USD".into(), exchange_rate_e6: 1_000_000 });
-        assert!(post_journal_entry(&fx.pool, entry(usd)).await.unwrap_err().starts_with("FX_IS_HOME"));
-        assert!(post_journal_entry(&fx.pool, entry(Some(ForeignCurrency { code: "eur".into(), exchange_rate_e6: 1 }))).await.unwrap_err().starts_with("FX_BAD_CODE"));
-        assert!(post_journal_entry(&fx.pool, entry(eur(0))).await.unwrap_err().starts_with("FX_BAD_RATE"));
+        let usd = Some(ForeignCurrency {
+            code: "USD".into(),
+            exchange_rate_e6: 1_000_000,
+        });
+        assert!(post_journal_entry(&fx.pool, entry(usd))
+            .await
+            .unwrap_err()
+            .starts_with("FX_IS_HOME"));
+        assert!(post_journal_entry(
+            &fx.pool,
+            entry(Some(ForeignCurrency {
+                code: "eur".into(),
+                exchange_rate_e6: 1
+            }))
+        )
+        .await
+        .unwrap_err()
+        .starts_with("FX_BAD_CODE"));
+        assert!(post_journal_entry(&fx.pool, entry(eur(0)))
+            .await
+            .unwrap_err()
+            .starts_with("FX_BAD_RATE"));
 
         // The home currency is locked once foreign transactions exist.
-        assert!(crate::preferences::set(&fx.pool, "home_currency_code", "CAD").await.unwrap_err().starts_with("PREF_HOME_CURRENCY_LOCKED"));
-        assert_eq!(crate::preferences::set(&fx.pool, "home_currency_code", "usd").await.unwrap(), "USD");
+        assert!(
+            crate::preferences::set(&fx.pool, "home_currency_code", "CAD")
+                .await
+                .unwrap_err()
+                .starts_with("PREF_HOME_CURRENCY_LOCKED")
+        );
+        assert_eq!(
+            crate::preferences::set(&fx.pool, "home_currency_code", "usd")
+                .await
+                .unwrap(),
+            "USD"
+        );
     }
 
     async fn post_sale(fx: &Fixture, cents: i64, memo: &str) -> i64 {
@@ -1219,7 +1755,10 @@ mod tests {
                 id: None,
                 date: date(),
                 description: memo.into(),
-                lines: vec![JournalLine::debit(fx.checking, cents).with_memo(Some("deposit")), JournalLine::credit(fx.sales, cents)],
+                lines: vec![
+                    JournalLine::debit(fx.checking, cents).with_memo(Some("deposit")),
+                    JournalLine::credit(fx.sales, cents),
+                ],
                 currency: None,
             },
         )
@@ -1228,7 +1767,11 @@ mod tests {
     }
 
     async fn sql_err(pool: &SqlitePool, sql: &str) -> String {
-        sqlx::query(sql).execute(pool).await.map(|_| String::new()).unwrap_or_else(db_err)
+        sqlx::query(sql)
+            .execute(pool)
+            .await
+            .map(|_| String::new())
+            .unwrap_or_else(db_err)
     }
 
     #[tokio::test]
@@ -1249,6 +1792,19 @@ mod tests {
         assert_eq!(snapshot["lines"][0]["accountId"], fx.checking);
         assert_eq!(snapshot["lines"][0]["memo"], "deposit");
         assert_eq!(snapshot["lines"][1]["creditCents"], 12_345);
+        let (actor, prev_hash, row_hash): (String, Option<String>, Option<String>) =
+            sqlx::query_as(
+                "SELECT actor, prev_hash, row_hash
+             FROM ledger_audit_log
+             WHERE action_type = 'POST' AND target_entity_id = ?1",
+            )
+            .bind(kept)
+            .fetch_one(&fx.pool)
+            .await
+            .unwrap();
+        assert!(actor.starts_with("ledger::post_journal_entry@"), "{actor}");
+        assert_eq!(prev_hash.as_deref(), Some(""));
+        assert_eq!(row_hash.as_ref().map(String::len), Some(64));
 
         let void: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'VOID' AND target_entity_id = ?1")
             .bind(voided)
@@ -1256,30 +1812,70 @@ mod tests {
             .await
             .unwrap();
         let void: serde_json::Value = serde_json::from_str(&void).unwrap();
-        let reversal: i64 = sqlx::query_scalar("SELECT id FROM journal_entries WHERE reverses_entry_id = ?1").bind(voided).fetch_one(&fx.pool).await.unwrap();
-        assert_eq!(void["reversalEntryId"], reversal, "the void links to the correcting entry");
+        let reversal: i64 =
+            sqlx::query_scalar("SELECT id FROM journal_entries WHERE reverses_entry_id = ?1")
+                .bind(voided)
+                .fetch_one(&fx.pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            void["reversalEntryId"], reversal,
+            "the void links to the correcting entry"
+        );
         assert_eq!(void["amountCents"], 500);
+        let actor: String =
+            sqlx::query_scalar("SELECT actor FROM ledger_audit_log WHERE action_type = 'VOID' AND target_entity_id = ?1")
+                .bind(voided)
+                .fetch_one(&fx.pool)
+                .await
+                .unwrap();
+        assert!(actor.starts_with("ledger::void_transaction@"), "{actor}");
 
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
         assert!(verification.intact, "{:?}", verification.findings);
-        assert_eq!((verification.entries_checked, verification.voids_checked), (3, 1));
+        assert_eq!(
+            (verification.entries_checked, verification.voids_checked),
+            (3, 1)
+        );
 
-        assert!(sql_err(&fx.pool, "UPDATE ledger_audit_log SET payload_snapshot = '{}'").await.starts_with("AUDIT_IMMUTABLE"));
-        assert!(sql_err(&fx.pool, "DELETE FROM ledger_audit_log").await.starts_with("AUDIT_IMMUTABLE"));
+        assert!(sql_err(
+            &fx.pool,
+            "UPDATE ledger_audit_log SET payload_snapshot = '{}'"
+        )
+        .await
+        .starts_with("AUDIT_IMMUTABLE"));
+        assert!(sql_err(&fx.pool, "DELETE FROM ledger_audit_log")
+            .await
+            .starts_with("AUDIT_IMMUTABLE"));
     }
 
     #[tokio::test]
     async fn posted_memos_and_account_types_with_history_are_locked() {
         let fx = setup().await;
         let entry = post_sale(&fx, 1_000, "Original memo").await;
-        let err = sql_err(&fx.pool, &format!("UPDATE journal_entries SET memo = 'Edited' WHERE id = {entry}")).await;
+        let err = sql_err(
+            &fx.pool,
+            &format!("UPDATE journal_entries SET memo = 'Edited' WHERE id = {entry}"),
+        )
+        .await;
         assert!(err.starts_with("JE_IMMUTABLE"), "{err}");
 
-        let err = sql_err(&fx.pool, &format!("UPDATE chart_of_accounts SET account_type = 'EXPENSE' WHERE id = {}", fx.checking)).await;
+        let err = sql_err(
+            &fx.pool,
+            &format!(
+                "UPDATE chart_of_accounts SET account_type = 'EXPENSE' WHERE id = {}",
+                fx.checking
+            ),
+        )
+        .await;
         assert!(err.starts_with("COA_TYPE_LOCKED"), "{err}");
 
         // Renaming is allowed, and recorded with before/after values.
-        sqlx::query("UPDATE chart_of_accounts SET name = 'Operating Checking' WHERE id = ?1").bind(fx.checking).execute(&fx.pool).await.unwrap();
+        sqlx::query("UPDATE chart_of_accounts SET name = 'Operating Checking' WHERE id = ?1")
+            .bind(fx.checking)
+            .execute(&fx.pool)
+            .await
+            .unwrap();
         let change: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'ACCOUNT_CHANGE' AND target_entity_id = ?1")
             .bind(fx.checking)
             .fetch_one(&fx.pool)
@@ -1291,7 +1887,11 @@ mod tests {
 
         // An account with no posted history can still change type.
         let unused = account_id(&fx.pool, "4100").await;
-        sqlx::query("UPDATE chart_of_accounts SET account_type = 'OTHER_INCOME' WHERE id = ?1").bind(unused).execute(&fx.pool).await.unwrap();
+        sqlx::query("UPDATE chart_of_accounts SET account_type = 'OTHER_INCOME' WHERE id = ?1")
+            .bind(unused)
+            .execute(&fx.pool)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -1314,22 +1914,67 @@ mod tests {
             sqlx::query(sql).execute(&fx.pool).await.unwrap();
         }
         sqlx::query("UPDATE journal_lines SET debit_cents = 9000 WHERE journal_entry_id = ?1 AND debit_cents > 0").bind(altered).execute(&fx.pool).await.unwrap();
-        sqlx::query("DELETE FROM journal_lines WHERE journal_entry_id = ?1").bind(deleted).execute(&fx.pool).await.unwrap();
-        sqlx::query("DELETE FROM journal_entries WHERE id = ?1").bind(deleted).execute(&fx.pool).await.unwrap();
+        sqlx::query("DELETE FROM journal_lines WHERE journal_entry_id = ?1")
+            .bind(deleted)
+            .execute(&fx.pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM journal_entries WHERE id = ?1")
+            .bind(deleted)
+            .execute(&fx.pool)
+            .await
+            .unwrap();
 
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
-        let problems: Vec<(i64, &str)> = verification.findings.iter().map(|f| (f.entry_id, f.problem.as_str())).collect();
-        assert!(problems.contains(&(altered, "Differs from its posting snapshot (changed after posting)")), "{problems:?}");
-        assert!(problems.contains(&(altered, "Debits do not equal credits")), "{problems:?}");
-        assert!(problems.contains(&(deleted, "Snapshotted at posting but no longer in the ledger (deleted)")), "{problems:?}");
+        let problems: Vec<(i64, &str)> = verification
+            .findings
+            .iter()
+            .map(|f| (f.entry_id, f.problem.as_str()))
+            .collect();
+        assert!(
+            problems.contains(&(
+                altered,
+                "Differs from its posting snapshot (changed after posting)"
+            )),
+            "{problems:?}"
+        );
+        assert!(
+            problems.contains(&(altered, "Debits do not equal credits")),
+            "{problems:?}"
+        );
+        assert!(
+            problems.contains(&(
+                deleted,
+                "Snapshotted at posting but no longer in the ledger (deleted)"
+            )),
+            "{problems:?}"
+        );
         assert!(!problems.iter().any(|(id, _)| *id == untouched));
-        let deleted_number = verification.findings.iter().find(|f| f.entry_id == deleted).unwrap().entry_number;
-        assert_eq!(deleted_number, Some(2), "the snapshot still knows the deleted entry's number");
+        let deleted_number = verification
+            .findings
+            .iter()
+            .find(|f| f.entry_id == deleted)
+            .unwrap()
+            .entry_number;
+        assert_eq!(
+            deleted_number,
+            Some(2),
+            "the snapshot still knows the deleted entry's number"
+        );
 
         // Erasing the snapshot itself is caught as an entry posted without one.
-        sqlx::query("DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1").bind(untouched).execute(&fx.pool).await.unwrap();
+        sqlx::query(
+            "DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1",
+        )
+        .bind(untouched)
+        .execute(&fx.pool)
+        .await
+        .unwrap();
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
-        assert!(verification.findings.iter().any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
+        assert!(verification
+            .findings
+            .iter()
+            .any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
     }
 
     /// The snapshot format from before classes existed (migration 0013), kept to prove that entries
@@ -1344,12 +1989,35 @@ mod tests {
     async fn classes_join_the_snapshot_without_changing_unclassified_ones() {
         let fx = setup().await;
         let rent = account_id(&fx.pool, "6300").await;
-        let east = crate::classes::create_class(&fx.pool, crate::classes::ClassInput { name: "East".into(), parent_id: None }).await.unwrap().id;
+        let east = crate::classes::create_class(
+            &fx.pool,
+            crate::classes::ClassInput {
+                name: "East".into(),
+                parent_id: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id;
         let post = |lines: Vec<JournalLine>| {
-            post_journal_entry(&fx.pool, JournalEntry { id: None, date: date(), description: "Caf\u{e9} \"rent\" \u{1F680}".into(), lines, currency: None })
+            post_journal_entry(
+                &fx.pool,
+                JournalEntry {
+                    id: None,
+                    date: date(),
+                    description: "Caf\u{e9} \"rent\" \u{1F680}".into(),
+                    lines,
+                    currency: None,
+                },
+            )
         };
 
-        let plain = post(vec![JournalLine::debit(rent, 1_250).with_memo(Some("tab\there")), JournalLine::credit(fx.checking, 1_250)]).await.unwrap();
+        let plain = post(vec![
+            JournalLine::debit(rent, 1_250).with_memo(Some("tab\there")),
+            JournalLine::credit(fx.checking, 1_250),
+        ])
+        .await
+        .unwrap();
         let (live, old): (String, String) = sqlx::query_as(&format!(
             "SELECT json_extract(snapshot, '$.lines'), ({PRE_CLASS_LINES_SQL}) FROM v_entry_snapshot WHERE entry_id = ?1"
         ))
@@ -1359,7 +2027,12 @@ mod tests {
         .unwrap();
         assert_eq!(live, old);
 
-        let classed = post(vec![JournalLine::debit(rent, 700).with_class(Some(east)), JournalLine::credit(fx.checking, 700)]).await.unwrap();
+        let classed = post(vec![
+            JournalLine::debit(rent, 700).with_class(Some(east)),
+            JournalLine::credit(fx.checking, 700),
+        ])
+        .await
+        .unwrap();
         let snapshot: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1")
             .bind(classed)
             .fetch_one(&fx.pool)
@@ -1371,19 +2044,37 @@ mod tests {
 
         // The void's reversing entry carries the class, so the class nets to zero.
         void_transaction(&fx.pool, classed).await.unwrap();
-        let east_net: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) - SUM(credit_cents) FROM v_posted_lines WHERE class_id = ?1")
-            .bind(east)
-            .fetch_one(&fx.pool)
-            .await
-            .unwrap();
+        let east_net: i64 = sqlx::query_scalar(
+            "SELECT SUM(debit_cents) - SUM(credit_cents) FROM v_posted_lines WHERE class_id = ?1",
+        )
+        .bind(east)
+        .fetch_one(&fx.pool)
+        .await
+        .unwrap();
         assert_eq!(east_net, 0);
         assert!(verify_ledger_audit(&fx.pool).await.unwrap().intact);
 
         // Moving a posted line to another class (bypassing the triggers) is detected.
-        let west = crate::classes::create_class(&fx.pool, crate::classes::ClassInput { name: "West".into(), parent_id: None }).await.unwrap().id;
-        sqlx::query("DROP TRIGGER trg_jl_update_draft_only").execute(&fx.pool).await.unwrap();
+        let west = crate::classes::create_class(
+            &fx.pool,
+            crate::classes::ClassInput {
+                name: "West".into(),
+                parent_id: None,
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+        sqlx::query("DROP TRIGGER trg_jl_update_draft_only")
+            .execute(&fx.pool)
+            .await
+            .unwrap();
         sqlx::query("UPDATE journal_lines SET class_id = ?1 WHERE journal_entry_id = ?2 AND class_id IS NOT NULL").bind(west).bind(classed).execute(&fx.pool).await.unwrap();
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
-        assert!(verification.findings.iter().any(|f| f.entry_id == classed && f.problem.starts_with("Differs from its posting snapshot")));
+        assert!(verification
+            .findings
+            .iter()
+            .any(|f| f.entry_id == classed
+                && f.problem.starts_with("Differs from its posting snapshot")));
     }
 }
