@@ -398,7 +398,7 @@ fn file_size(path: &std::path::Path) -> u64 {
 
 /// Check-up of the live company file.
 pub async fn checkup_live(db: &Db) -> Result<CheckupReport, String> {
-    checkup(&db.pool().await, file_size(&db.path().await)).await
+    checkup(&db.pool().await, file_size(&db.path().await?)).await
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -454,7 +454,7 @@ pub async fn rebuild_pool(pool: &SqlitePool) -> Result<Vec<String>, String> {
 /// Saves a verified snapshot, rebuilds the live file, and checks it again.
 pub async fn rebuild_live(db: &Db) -> Result<RebuildResult, String> {
     let pool = db.pool().await;
-    let path = db.path().await;
+    let path = db.path().await?;
     let size_before = file_size(&path);
     if check_integrity(&pool).await?.status != CheckStatus::Pass {
         return Err("REBUILD_CORRUPT: the file is damaged at a level Rebuild cannot repair; restore a backup instead".into());

@@ -7,6 +7,7 @@ import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
+import { NewCompanyDialog } from './CompanyFiles.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -638,6 +639,19 @@ function FileAndData({ companyName }) {
     }
   };
 
+  const [creatingCompany, setCreatingCompany] = useState(false);
+  // Closes the books and every other window; this window shows the No Company Open screen.
+  const closeCompany = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api.closeCompanyFile();
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+      setBusy(false);
+    }
+  };
+
   const restore = async () => {
     setBusy(true);
     try {
@@ -678,6 +692,12 @@ function FileAndData({ companyName }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={openCompanyFile} disabled={busy}>
             Open Company File…
           </button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => setCreatingCompany(true)} disabled={busy}>
+            New Company…
+          </button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={closeCompany} disabled={busy}>
+            Close Company
+          </button>
           <span className="text-xs text-qb-ink-muted">
             Backups are taken live: keep working while they run. Restores are checked for integrity, schema version, broken links and
             unbalanced entries before anything is replaced. Backups are saved as .localbooks files, which open in LocalBooks with a
@@ -685,6 +705,7 @@ function FileAndData({ companyName }) {
           </span>
         </div>
         {pending && <RestoreConfirm info={pending.info} busy={busy} onConfirm={restore} onCancel={() => setPending(null)} />}
+        {creatingCompany && <NewCompanyDialog onClose={() => setCreatingCompany(false)} />}
       </Group>
       <FileDentist onRebuilt={backups.reload} />
       <CompanyFileLocation />

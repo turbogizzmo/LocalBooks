@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 export const LEDGER_CHANGED = 'ledger-changed';
-/** A different company file became the live one (double-click, File › Open). */
+/** A different company file became the live one (double-click, File › Open), or none is (Close Company). */
 export const COMPANY_FILE_CHANGED = 'company-file-changed';
 
 export const api = {
@@ -216,6 +216,12 @@ export const api = {
   getStorageStatus: () => invoke('get_storage_status'),
   getStartupFailure: () => invoke('get_startup_failure'),
   openCompanyFile: (path) => invoke('open_company_file', { path }),
+  getStartScreen: () => invoke('get_start_screen'),
+  forgetRecentCompany: (path) => invoke('forget_recent_company', { path }),
+  findCompanyFiles: () => invoke('find_company_files'),
+  createCompanyFile: (path, companyName) => invoke('create_company_file', { path, companyName }),
+  restoreBackupAs: (sourcePath, destinationPath) => invoke('restore_backup_as', { sourcePath, destinationPath }),
+  closeCompanyFile: () => invoke('close_company_file'),
   getClosingStatus: () => invoke('get_closing_status'),
   setClosingDate: (input) => invoke('set_closing_date', { input }),
   getMcpStatus: () => invoke('get_mcp_status'),

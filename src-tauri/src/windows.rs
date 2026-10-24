@@ -71,6 +71,22 @@ pub fn focus(app: &AppHandle) {
     }
 }
 
+/// File › Close Company: closes every window but one (the main window, or the focused one if the
+/// main window was closed), which then shows the No Company Open screen.
+pub fn close_extra(app: &AppHandle) {
+    let windows = app.webview_windows();
+    let keep = if windows.contains_key(MAIN) {
+        Some(MAIN.to_string())
+    } else {
+        windows.values().find(|w| w.is_focused().unwrap_or(false)).or_else(|| windows.values().next()).map(|w| w.label().to_string())
+    };
+    for (label, window) in &windows {
+        if Some(label) != keep.as_ref() {
+            let _ = window.destroy();
+        }
+    }
+}
+
 /// macOS: New Window (Cmd+Shift+N) at the top of the menu bar's Window menu. (Windows and Linux
 /// use the in-app button and Ctrl+Shift+N, which the page handles.)
 #[cfg(target_os = "macos")]
