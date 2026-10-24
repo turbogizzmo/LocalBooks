@@ -114,7 +114,7 @@ pub struct PaymentInput {
     pub amount_cents: i64,
     pub payment_method: String,
     pub reference: Option<String>,
-    /// Payment-date exchange rate for a foreign-currency invoice; defaults to the invoice's rate.
+    /// Payment-date exchange rate for a foreign-currency invoice.
     #[serde(default)]
     pub exchange_rate_e6: Option<i64>,
 }
@@ -432,8 +432,10 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     // rate (cumulatively, so the last payment clears A/R exactly), and the realized difference.
     let new_paid = paid + input.amount_cents;
     let fx = match (&currency_code, invoice_rate) {
-        (Some(_), Some(invoice_rate)) => {
-            let rate = input.exchange_rate_e6.unwrap_or(invoice_rate);
+        (Some(code), Some(_invoice_rate)) => {
+            let rate = input
+                .exchange_rate_e6
+                .ok_or_else(|| format!("FX_RATE_REQUIRED: invoice #{number} is in {code}; provide exchange_rate_e6"))?;
             if rate <= 0 {
                 return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
             }
@@ -897,6 +899,22 @@ mod tests {
         assert_eq!((invoice.currency_code.as_deref(), invoice.total_cents, invoice.home_total_cents), (Some("EUR"), 100_000, 108_000));
         assert_eq!((balance(&pool, ar).await, balance(&pool, services).await), (108_000, 108_000));
 
+        let missing_rate = record_payment(
+            &pool,
+            PaymentInput {
+                invoice_id: invoice.id,
+                deposit_account_id: checking,
+                payment_date: d(9),
+                amount_cents: 100,
+                payment_method: "WIRE".into(),
+                reference: None,
+                exchange_rate_e6: None,
+            },
+        )
+        .await
+        .expect_err("foreign invoice payments must include an explicit rate");
+        assert!(missing_rate.starts_with("FX_RATE_REQUIRED"), "{missing_rate}");
+
         let pay = |day, cents, rate| PaymentInput {
             invoice_id: invoice.id,
             deposit_account_id: checking,
@@ -950,7 +968,7 @@ mod tests {
         .unwrap();
         record_payment(
             &pool,
-            PaymentInput { invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+            PaymentInput { invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
         )
         .await
         .unwrap();
