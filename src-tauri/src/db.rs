@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteLockingMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Connection, SqlitePool};
 
-use crate::storage::{self, AppConfig, FileLock, StorageInfo, DB_FILE_NAME};
+use crate::storage::{self, FileLock, StorageInfo, DB_FILE_NAME};
 
 /// Fixed locations the app needs besides the company file itself.
 #[derive(Debug, Clone)]
@@ -30,11 +30,19 @@ struct Live {
 
 /// The live company file. Commands borrow a pool clone per call; a restore or relocation swaps the
 /// pool under the write lock, so no command ever sees a half-replaced database.
+///
+/// After File › Close Company no company file is open (`live` is `None`). Commands then get
+/// `closed`, an empty in-memory database that refuses writes, so a stray request fails ("no such
+/// table") instead of reading or writing some other company's books.
 pub struct Db {
-    live: tokio::sync::RwLock<Live>,
+    live: tokio::sync::RwLock<Option<Live>>,
+    closed: SqlitePool,
     config: DbConfig,
     startup_warning: std::sync::Mutex<Option<String>>,
 }
+
+/// Returned by operations that need an open company file while none is.
+pub const NO_COMPANY_OPEN: &str = "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,10 +98,22 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
 }
 
 impl Db {
+    fn with(live: Option<Live>, config: DbConfig) -> Db {
+        let closed = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
+        Db { live: tokio::sync::RwLock::new(live), closed, config, startup_warning: std::sync::Mutex::new(None) }
+    }
+
     /// Opens the company file at `path` (creating and migrating it if new).
     pub async fn open_at(path: PathBuf, config: DbConfig) -> Result<Db, String> {
         let live = open_live(&path, Some(&config.backups_dir)).await?;
-        Ok(Db { live: tokio::sync::RwLock::new(live), config, startup_warning: std::sync::Mutex::new(None) })
+        Ok(Db::with(Some(live), config))
+    }
+
+    /// No company file open: LocalBooks starts on the No Company Open screen.
+    pub fn closed(config: DbConfig) -> Db {
+        Db::with(None, config)
     }
 
     /// Startup: honour `config.json` when its folder and company file are available; otherwise open
@@ -124,10 +144,17 @@ impl Db {
     /// Startup when the operating system launched LocalBooks to open `file`: that file is opened in
     /// place. If it cannot be (missing, not a company file, damaged), the usual company file opens
     /// instead and the reason is shown.
+    ///
+    /// Without a file, a company that was closed when LocalBooks last quit stays closed.
     pub async fn startup_with_file(config: DbConfig, file: Option<PathBuf>) -> Result<Db, String> {
-        let Some(file) = file else { return Db::startup(config).await };
+        let Some(file) = file else {
+            if storage::read_config(&config.config_dir).start_with_no_company {
+                return Ok(Db::closed(config));
+            }
+            return Db::startup(config).await;
+        };
         match open_company_file(&file, &config.backups_dir).await {
-            Ok(live) => Ok(Db { live: tokio::sync::RwLock::new(live), config, startup_warning: std::sync::Mutex::new(None) }),
+            Ok(live) => Ok(Db::with(Some(live), config)),
             Err(err) => {
                 let db = Db::startup(config).await?;
                 let mut warning = db.startup_warning.lock().expect("warning mutex");
@@ -146,19 +173,74 @@ impl Db {
     /// same checks as a restore; it is fully opened before the current file is closed, so a failure
     /// leaves the current books in use.
     pub async fn mount(&self, path: &Path) -> Result<StorageStatus, String> {
-        let current = self.path().await;
-        let same = path.canonicalize().ok().zip(current.canonicalize().ok()).is_some_and(|(a, b)| a == b);
-        if same {
-            return Ok(self.status().await);
+        if let Ok(current) = self.path().await {
+            let same = path.canonicalize().ok().zip(current.canonicalize().ok()).is_some_and(|(a, b)| a == b);
+            if same {
+                return self.require_status().await;
+            }
         }
         let next = open_company_file(path, &self.config.backups_dir).await?;
+        self.replace_live(next).await
+    }
+
+    /// Makes `next` the live company file, closing the current one (if any) and its lock.
+    async fn replace_live(&self, next: Live) -> Result<StorageStatus, String> {
         {
             let mut live = self.live.write().await;
-            live.pool.close().await;
-            *live = next;
+            if let Some(current) = live.take() {
+                current.pool.close().await;
+            }
+            *live = Some(next);
         }
         *self.startup_warning.lock().expect("warning mutex") = None;
-        Ok(self.status().await)
+        self.require_status().await
+    }
+
+    /// File › New Company: creates an empty company file at `path` (schema applied, default chart
+    /// of accounts), names it `company_name`, and makes it the live company file for this session.
+    /// An existing file at `path` is never replaced.
+    pub async fn create(&self, path: &Path, company_name: &str) -> Result<StorageStatus, String> {
+        let name = company_name.trim();
+        if name.is_empty() {
+            return Err("NEW_COMPANY_NAME: enter a name for the new company".into());
+        }
+        let path = storage::resolve_network_path(path);
+        if path.exists() {
+            return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (LocalBooks never replaces a company file)", path.display()));
+        }
+        let mut next = open_live(&path, None).await?;
+        if let Err(err) = crate::preferences::set(&next.pool, "company_name", name).await {
+            next.pool.close().await;
+            drop(next);
+            remove_with_sidecars(&path);
+            return Err(err);
+        }
+        next.opened_from_file = true;
+        self.replace_live(next).await
+    }
+
+    /// File › Close Company: closes the company file (checkpointing it) and releases its lock, so
+    /// it can be opened elsewhere. Whether a company was open.
+    pub async fn close(&self) -> bool {
+        let closed = self.live.write().await.take();
+        *self.startup_warning.lock().expect("warning mutex") = None;
+        match closed {
+            Some(live) => {
+                live.pool.close().await;
+                drop(live); // releases the shared-location lock, if any
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub async fn is_open(&self) -> bool {
+        self.live.read().await.is_some()
+    }
+
+    /// The folder holding `config.json`.
+    pub fn config_dir(&self) -> &Path {
+        &self.config.config_dir
     }
 
     /// Records a problem to show in the app's banner (used when a file handed over by the operating
@@ -168,22 +250,28 @@ impl Db {
     }
 
     pub async fn pool(&self) -> SqlitePool {
-        self.live.read().await.pool.clone()
+        match self.live.read().await.as_ref() {
+            Some(live) => live.pool.clone(),
+            None => self.closed.clone(),
+        }
     }
 
-    pub async fn path(&self) -> PathBuf {
-        self.live.read().await.path.clone()
+    /// The open company file, or [`NO_COMPANY_OPEN`].
+    pub async fn path(&self) -> Result<PathBuf, String> {
+        self.live.read().await.as_ref().map(|live| live.path.clone()).ok_or_else(|| NO_COMPANY_OPEN.to_string())
     }
 
     pub fn backups_dir(&self) -> &Path {
         &self.config.backups_dir
     }
 
-    pub async fn status(&self) -> StorageStatus {
+    /// The open company file, or `None` when no company is open.
+    pub async fn status(&self) -> Option<StorageStatus> {
         let live = self.live.read().await;
+        let live = live.as_ref()?;
         let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode").fetch_one(&live.pool).await.unwrap_or_else(|_| "unknown".into());
         let is_default = live.path == self.config.default_path;
-        StorageStatus {
+        Some(StorageStatus {
             company_name: company_display_name(&live.pool, &live.path, is_default).await,
             path: live.path.display().to_string(),
             file_name: live.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -193,13 +281,23 @@ impl Db {
             is_default,
             journal_mode,
             startup_warning: self.startup_warning.lock().expect("warning mutex").clone(),
-        }
+        })
+    }
+
+    async fn require_status(&self) -> Result<StorageStatus, String> {
+        self.status().await.ok_or_else(|| NO_COMPANY_OPEN.to_string())
+    }
+
+    /// A problem to show on the No Company Open screen (or in the app's banner), if any.
+    pub fn warning(&self) -> Option<String> {
+        self.startup_warning.lock().expect("warning mutex").clone()
     }
 
     /// Replaces the live database file with `staged` (a migrated, closed SQLite file) and reopens it.
     /// If the replacement cannot be opened, `fallback` (a snapshot of the previous file) is put back.
     pub async fn swap_in(&self, staged: &Path, fallback: &Path) -> Result<(), String> {
-        let mut live = self.live.write().await;
+        let mut guard = self.live.write().await;
+        let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
         live.pool.close().await;
         let path = live.path.clone();
         let storage = live.storage.clone();
@@ -236,7 +334,7 @@ impl Db {
         let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;
         let target = new_dir.join(DB_FILE_NAME);
-        let current = self.path().await;
+        let current = self.path().await?;
         let same = |a: &Path, b: &Path| a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y);
         if same(&target, &current) || (target == current) {
             return Err("STORAGE_UNCHANGED: LocalBooks is already using the company file in that folder".into());
@@ -254,26 +352,26 @@ impl Db {
         }
 
         let next = open_live(&target, Some(&self.config.backups_dir)).await?;
-        {
-            let mut live = self.live.write().await;
-            live.pool.close().await;
-            *live = next;
-        }
-        let config = if target == self.config.default_path {
-            AppConfig::default()
-        } else {
-            AppConfig { database_directory: Some(new_dir.to_path_buf()) }
-        };
-        storage::write_config(&self.config.config_dir, &config)?;
-        *self.startup_warning.lock().expect("warning mutex") = None;
-        Ok(self.status().await)
+        let status = self.replace_live(next).await?;
+        let directory = (target != self.config.default_path).then(|| new_dir.to_path_buf());
+        storage::update_config(&self.config.config_dir, |config| config.database_directory = directory)?;
+        Ok(status)
     }
 
     /// Closes the pool (checkpointing the journal) and releases any shared-location lock.
     pub async fn shutdown(&self) {
         let mut live = self.live.write().await;
-        live.pool.close().await;
-        live.lock = None;
+        if let Some(live) = live.as_mut() {
+            live.pool.close().await;
+            live.lock = None;
+        }
+    }
+}
+
+/// Removes a company file that was never used, with SQLite's journal files.
+fn remove_with_sidecars(path: &Path) {
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
     }
 }
 
@@ -616,6 +714,7 @@ pub(crate) fn test_config(root: &Path) -> DbConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::AppConfig;
 
     struct TempDir(PathBuf);
     impl TempDir {
@@ -662,9 +761,9 @@ mod tests {
         let cfg = test_config(&tmp.0);
         let db = Db::startup(cfg.clone()).await.unwrap();
         post_one(&db).await;
-        assert!(db.status().await.is_default);
-        assert_eq!(db.status().await.company_name, None, "the usual file has no name until the user sets one");
-        assert_eq!(db.status().await.journal_mode, "wal");
+        assert!(db.status().await.unwrap().is_default);
+        assert_eq!(db.status().await.unwrap().company_name, None, "the usual file has no name until the user sets one");
+        assert_eq!(db.status().await.unwrap().journal_mode, "wal");
 
         // Move the current books to a new folder: same data, new location, old file untouched.
         let moved_dir = tmp.0.join("shared");
@@ -681,7 +780,7 @@ mod tests {
         db.shutdown().await;
         drop(db);
         let db = Db::startup(cfg.clone()).await.unwrap();
-        assert_eq!(db.path().await, moved_dir.join(DB_FILE_NAME));
+        assert_eq!(db.path().await.unwrap(), moved_dir.join(DB_FILE_NAME));
         assert_eq!(entries(&db).await, 2);
 
         // Start a new, empty company file elsewhere: migrated schema, seeded chart, no entries.
@@ -708,7 +807,7 @@ mod tests {
 
         // Going back to the default folder clears the override.
         db.relocate(cfg.default_path.parent().unwrap(), RelocateMode::OpenExisting).await.unwrap();
-        assert!(db.status().await.is_default);
+        assert!(db.status().await.unwrap().is_default);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
     }
 
@@ -727,12 +826,12 @@ mod tests {
 
         // Launched with the file: it opens in place, and the saved location is untouched.
         let db = Db::startup_with_file(cfg.clone(), Some(acme.clone())).await.unwrap();
-        let status = db.status().await;
+        let status = db.status().await.unwrap();
         assert!(status.opened_from_file && !status.is_default);
         assert_eq!(status.file_name, "Acme Ltd.localbooks");
         assert_eq!(status.company_name.as_deref(), Some("Acme Ltd"), "an unnamed file is called by its file name");
         crate::preferences::set(&db.pool().await, "company_name", "Acme Holdings").await.unwrap();
-        assert_eq!(db.status().await.company_name.as_deref(), Some("Acme Holdings"), "a named company is called by its name");
+        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme Holdings"), "a named company is called by its name");
         assert_eq!(entries(&db).await, 2);
         assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default());
 
@@ -750,25 +849,112 @@ mod tests {
         let fake = tmp.0.join("Fake.localbooks");
         std::fs::write(&fake, b"definitely not sqlite").unwrap();
         assert!(db.mount(&fake).await.unwrap_err().starts_with("RESTORE_NOT_SQLITE"));
-        assert_eq!(db.status().await.file_name, "Beta.localbooks");
+        assert_eq!(db.status().await.unwrap().file_name, "Beta.localbooks");
         db.shutdown().await;
         drop(db);
 
         // A launch file that cannot be opened falls back to the usual books and says why.
         let db = Db::startup_with_file(cfg.clone(), Some(tmp.0.join("Gone.localbooks"))).await.unwrap();
-        let status = db.status().await;
+        let status = db.status().await.unwrap();
         assert!(status.is_default && !status.opened_from_file);
         let warning = status.startup_warning.unwrap();
         assert!(warning.contains("Gone.localbooks") && warning.contains("does not exist"), "{warning}");
     }
 
     #[tokio::test]
+    async fn new_company_files_are_created_named_and_never_replace_a_file() {
+        let tmp = TempDir::new("create");
+        let cfg = test_config(&tmp.0);
+        let db = Db::startup(cfg.clone()).await.unwrap();
+        post_one(&db).await;
+
+        let acme = tmp.0.join("clients").join("Acme Ltd.localbooks");
+        assert!(db.create(&acme, "   ").await.unwrap_err().starts_with("NEW_COMPANY_NAME"));
+        let status = db.create(&acme, " Acme Ltd ").await.unwrap();
+        assert_eq!((status.company_name.as_deref(), status.file_name.as_str()), (Some("Acme Ltd"), "Acme Ltd.localbooks"));
+        assert!(status.opened_from_file && !status.is_default);
+        assert_eq!(entries(&db).await, 0, "a new company starts empty");
+        let accounts: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM chart_of_accounts").fetch_one(&db.pool().await).await.unwrap();
+        assert!(accounts > 20, "with the default chart of accounts");
+        assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default(), "creating a company does not change the saved location");
+
+        // An existing file is never replaced, and the open company stays open.
+        assert!(db.create(&cfg.default_path, "Other").await.unwrap_err().starts_with("NEW_COMPANY_EXISTS"));
+        assert_eq!(db.status().await.unwrap().file_name, "Acme Ltd.localbooks");
+
+        // Switching back finds the first company's books intact.
+        db.mount(&cfg.default_path).await.unwrap();
+        assert_eq!(entries(&db).await, 1);
+        db.mount(&acme).await.unwrap();
+        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme Ltd"));
+    }
+
+    #[tokio::test]
+    async fn closing_releases_the_file_and_its_lock_and_refuses_company_work() {
+        let tmp = TempDir::new("close");
+        let cfg = test_config(&tmp.0);
+        let db = Db::closed(cfg.clone());
+        assert!(!db.is_open().await && db.status().await.is_none());
+        assert!(!db.close().await, "nothing to close");
+
+        // A company in a synced folder is opened single-user, with a lock file.
+        let shared = tmp.0.join("Dropbox").join("Shared Co.localbooks");
+        let status = db.create(&shared, "Shared Co").await.unwrap();
+        assert_eq!(status.storage.kind, storage::StorageKind::Synced);
+        assert_eq!(status.journal_mode, "delete");
+        assert!(storage::lock_path(&shared).exists());
+        post_one(&db).await;
+
+        assert!(db.close().await);
+        assert!(!db.is_open().await && db.status().await.is_none());
+        assert!(!storage::lock_path(&shared).exists(), "closing releases the lock");
+        // Nothing reaches a company file while none is open.
+        assert!(db.path().await.unwrap_err().starts_with("NO_COMPANY_OPEN"));
+        assert!(crate::backup::backup_now(&db).await.unwrap_err().starts_with("NO_COMPANY_OPEN"));
+        assert!(sqlx::query("CREATE TABLE stray (x)").execute(&db.pool().await).await.is_err(), "the closed placeholder refuses writes");
+        assert!(crate::backup::auto_backup(&db).await.unwrap().is_none());
+
+        // The closed file opens anywhere else at once (here: another Db, as on another computer).
+        let other = Db::closed(test_config(&tmp.0.join("other")));
+        other.mount(&shared).await.unwrap();
+        assert_eq!(entries(&other).await, 1);
+        assert!(storage::lock_path(&shared).exists());
+        other.close().await;
+        assert!(!storage::lock_path(&shared).exists());
+
+        // A local company file is checkpointed on close (no WAL left behind) and reopens.
+        let local = tmp.0.join("Local Co.localbooks");
+        db.create(&local, "Local Co").await.unwrap();
+        post_one(&db).await;
+        db.close().await;
+        assert!(!PathBuf::from(format!("{}-wal", local.display())).exists());
+        db.mount(&local).await.unwrap();
+        assert_eq!(entries(&db).await, 1);
+    }
+
+    #[tokio::test]
+    async fn a_company_closed_at_quit_stays_closed_at_the_next_launch() {
+        let tmp = TempDir::new("start-closed");
+        let cfg = test_config(&tmp.0);
+        storage::update_config(&cfg.config_dir, |c| c.start_with_no_company = true).unwrap();
+        let db = Db::startup_with_file(cfg.clone(), None).await.unwrap();
+        assert!(!db.is_open().await);
+        assert!(!cfg.default_path.exists(), "no company file is created");
+
+        // A file the operating system hands over still opens.
+        let acme = tmp.0.join("Acme.localbooks");
+        Db::closed(cfg.clone()).create(&acme, "Acme").await.unwrap();
+        let db = Db::startup_with_file(cfg.clone(), Some(acme)).await.unwrap();
+        assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme"));
+    }
+
+    #[tokio::test]
     async fn startup_falls_back_when_the_configured_folder_is_missing() {
         let tmp = TempDir::new("fallback");
         let cfg = test_config(&tmp.0);
-        storage::write_config(&cfg.config_dir, &AppConfig { database_directory: Some(tmp.0.join("unplugged-nas")) }).unwrap();
+        storage::write_config(&cfg.config_dir, &AppConfig { database_directory: Some(tmp.0.join("unplugged-nas")), ..AppConfig::default() }).unwrap();
         let db = Db::startup(cfg.clone()).await.unwrap();
-        let status = db.status().await;
+        let status = db.status().await.unwrap();
         assert!(status.is_default);
         assert!(status.startup_warning.unwrap().contains("is not available"));
         assert!(!tmp.0.join("unplugged-nas").exists(), "never creates an empty company file on a missing drive");

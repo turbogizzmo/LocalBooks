@@ -234,6 +234,13 @@ pub struct AppConfig {
     /// Folder holding `localbooks.db`; `None` means the default app-data folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database_directory: Option<PathBuf>,
+    /// Company files opened on this computer, most recent first (see [`add_recent`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_companies: Vec<RecentCompany>,
+    /// The company was closed (File › Close Company) when LocalBooks last quit, so the next launch
+    /// starts on the No Company Open screen, as classic desktop accounting software does.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub start_with_no_company: bool,
 }
 
 pub fn config_path(config_dir: &Path) -> PathBuf {
@@ -252,6 +259,109 @@ pub fn write_config(config_dir: &Path, config: &AppConfig) -> Result<(), String>
     std::fs::create_dir_all(config_dir).map_err(|e| format!("STORAGE_CONFIG: cannot create {}: {e}", config_dir.display()))?;
     let body = serde_json::to_vec_pretty(config).map_err(|e| e.to_string())?;
     crate::export_engine::write_atomically(&config_path(config_dir), &body).map_err(|e| e.replace("EXPORT_WRITE", "STORAGE_CONFIG"))
+}
+
+/// Reads `config.json`, applies `change`, and writes it back, keeping every other setting.
+pub fn update_config(config_dir: &Path, change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    let mut config = read_config(config_dir);
+    change(&mut config);
+    write_config(config_dir, &config)
+}
+
+// ------------------------------------------------------------------------------------------------
+// Recent company files (File › Open Previous Company, the No Company Open screen)
+// ------------------------------------------------------------------------------------------------
+
+/// How many company files the recent list keeps.
+pub const MAX_RECENT_COMPANIES: usize = 10;
+
+/// A company file opened on this computer, as remembered in `config.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentCompany {
+    pub path: PathBuf,
+    /// The company's name when it was last open; `None` for a file that was never named.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub company_name: Option<String>,
+    /// Local time it was last opened, `YYYY-MM-DD HH:MM`.
+    pub last_opened: String,
+    /// Size in bytes when it was last opened.
+    #[serde(default)]
+    pub file_size: u64,
+}
+
+impl RecentCompany {
+    /// An entry for `path` opened now, with its current size on disk.
+    pub fn opened_now(path: &Path, company_name: Option<String>) -> RecentCompany {
+        RecentCompany {
+            path: path.to_path_buf(),
+            company_name,
+            last_opened: chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
+            file_size: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        }
+    }
+}
+
+/// Whether two paths name the same file (spelled the same, or the same file once resolved).
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b || a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y)
+}
+
+/// Puts `entry` at the top of the list, replacing any older entry for the same file, and keeps at
+/// most [`MAX_RECENT_COMPANIES`].
+pub fn add_recent(list: &mut Vec<RecentCompany>, entry: RecentCompany) {
+    list.retain(|r| !same_file(&r.path, &entry.path));
+    list.insert(0, entry);
+    list.truncate(MAX_RECENT_COMPANIES);
+}
+
+/// Takes `path` off the list (the file itself is never touched). Whether it was there.
+pub fn remove_recent(list: &mut Vec<RecentCompany>, path: &Path) -> bool {
+    let before = list.len();
+    list.retain(|r| !same_file(&r.path, path));
+    list.len() != before
+}
+
+/// A recent company file as the No Company Open screen and the File menu show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentCompanyView {
+    pub path: String,
+    /// The company's name, or the file's name for one that was never named.
+    pub company_name: String,
+    pub file_name: String,
+    /// The folder that holds it.
+    pub location: String,
+    pub last_opened: String,
+    /// When the file was last changed on disk, `YYYY-MM-DD HH:MM`; `None` when it is missing.
+    pub last_modified: Option<String>,
+    /// Current size in bytes (the remembered size when the file is missing).
+    pub file_size: u64,
+    /// The file is no longer there (moved, deleted, or on a drive that is not connected). Missing
+    /// entries stay listed, so a reconnected drive brings them back; Edit List removes them.
+    pub missing: bool,
+}
+
+/// The recent list with each file's current state on disk.
+pub fn describe_recent(list: &[RecentCompany]) -> Vec<RecentCompanyView> {
+    list.iter()
+        .map(|r| {
+            let meta = std::fs::metadata(&r.path).ok().filter(|m| m.is_file());
+            let file_name = r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            RecentCompanyView {
+                path: r.path.display().to_string(),
+                company_name: r.company_name.clone().unwrap_or_else(|| file_name.clone()),
+                location: r.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+                file_name,
+                last_opened: r.last_opened.clone(),
+                last_modified: meta
+                    .as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .map(|t| chrono::DateTime::<chrono::Local>::from(t).format("%Y-%m-%d %H:%M").to_string()),
+                file_size: meta.as_ref().map_or(r.file_size, |m| m.len()),
+                missing: meta.is_none(),
+            }
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -458,9 +568,87 @@ mod tests {
     fn config_round_trips_and_defaults() {
         let dir = std::env::temp_dir().join(format!("localbooks-config-{}", std::process::id()));
         assert_eq!(read_config(&dir), AppConfig::default());
-        let cfg = AppConfig { database_directory: Some(PathBuf::from("/Volumes/Accounting/Books")) };
+        let cfg = AppConfig { database_directory: Some(PathBuf::from("/Volumes/Accounting/Books")), ..AppConfig::default() };
         write_config(&dir, &cfg).unwrap();
         assert_eq!(read_config(&dir), cfg);
+
+        // Updating one setting keeps the others.
+        update_config(&dir, |c| c.start_with_no_company = true).unwrap();
+        let read = read_config(&dir);
+        assert!(read.start_with_no_company);
+        assert_eq!(read.database_directory, cfg.database_directory);
+        // A config.json from before the recent list existed still reads.
+        std::fs::write(config_path(&dir), br#"{"database_directory":"/Volumes/Accounting/Books"}"#).unwrap();
+        assert_eq!(read_config(&dir), cfg);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn recent(path: &str, opened: &str) -> RecentCompany {
+        RecentCompany { path: PathBuf::from(path), company_name: Some(format!("Co {path}")), last_opened: opened.into(), file_size: 4096 }
+    }
+
+    #[test]
+    fn recent_list_moves_reopened_files_to_the_top_without_duplicates() {
+        let mut list = Vec::new();
+        add_recent(&mut list, recent("/books/a.localbooks", "2026-10-01 09:00"));
+        add_recent(&mut list, recent("/books/b.localbooks", "2026-10-02 09:00"));
+        add_recent(&mut list, recent("/books/c.localbooks", "2026-10-03 09:00"));
+        let paths = |list: &[RecentCompany]| list.iter().map(|r| r.path.display().to_string()).collect::<Vec<_>>();
+        assert_eq!(paths(&list), ["/books/c.localbooks", "/books/b.localbooks", "/books/a.localbooks"], "newest first");
+
+        // Reopening a file moves it to the top and refreshes what is remembered, once.
+        let mut renamed = recent("/books/a.localbooks", "2026-10-04 09:00");
+        renamed.company_name = Some("Acme Holdings".into());
+        add_recent(&mut list, renamed.clone());
+        assert_eq!(paths(&list), ["/books/a.localbooks", "/books/c.localbooks", "/books/b.localbooks"]);
+        assert_eq!(list[0], renamed);
+
+        // Removing takes the entry off the list only.
+        assert!(remove_recent(&mut list, Path::new("/books/c.localbooks")));
+        assert!(!remove_recent(&mut list, Path::new("/books/c.localbooks")));
+        assert_eq!(paths(&list), ["/books/a.localbooks", "/books/b.localbooks"]);
+    }
+
+    #[test]
+    fn recent_list_is_capped_and_dedupes_the_same_file_spelled_differently() {
+        let dir = std::env::temp_dir().join(format!("localbooks-recent-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        let file = dir.join("Acme.localbooks");
+        std::fs::write(&file, b"x").unwrap();
+
+        let mut list = Vec::new();
+        for n in 0..MAX_RECENT_COMPANIES + 3 {
+            add_recent(&mut list, recent(&format!("/books/{n}.localbooks"), "2026-10-01 09:00"));
+        }
+        assert_eq!(list.len(), MAX_RECENT_COMPANIES);
+        assert_eq!(list[0].path, PathBuf::from(format!("/books/{}.localbooks", MAX_RECENT_COMPANIES + 2)));
+        assert!(!list.iter().any(|r| r.path == Path::new("/books/0.localbooks")), "the oldest fall off");
+
+        add_recent(&mut list, RecentCompany::opened_now(&file, None));
+        add_recent(&mut list, RecentCompany::opened_now(&dir.join("sub").join("..").join("Acme.localbooks"), None));
+        assert_eq!(list.iter().filter(|r| r.path.ends_with("Acme.localbooks")).count(), 1, "one entry per file");
+        assert_eq!(list.len(), MAX_RECENT_COMPANIES);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn recent_list_marks_missing_files_and_reports_the_current_ones() {
+        let dir = std::env::temp_dir().join(format!("localbooks-recent-view-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let here = dir.join("Here.localbooks");
+        std::fs::write(&here, vec![0u8; 1234]).unwrap();
+        let gone = dir.join("Gone.localbooks");
+
+        let list = vec![RecentCompany::opened_now(&here, None), recent(&gone.display().to_string(), "2026-09-30 17:45")];
+        let views = describe_recent(&list);
+        assert_eq!(views[0].company_name, "Here.localbooks", "an unnamed file is listed by its file name");
+        assert_eq!(views[0].file_size, 1234);
+        assert_eq!(views[0].location, dir.display().to_string());
+        assert!(!views[0].missing && views[0].last_modified.is_some());
+
+        assert!(views[1].missing, "a file that is gone stays listed, marked missing");
+        assert_eq!((views[1].last_modified.as_deref(), views[1].file_size), (None, 4096), "its remembered size is kept");
+        assert_eq!(views[1].last_opened, "2026-09-30 17:45");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

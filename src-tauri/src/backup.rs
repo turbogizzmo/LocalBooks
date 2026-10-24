@@ -231,7 +231,7 @@ fn stamp() -> String {
 pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
     let info = inspect(source).await?;
     let dir = db.backups_dir().to_path_buf();
-    let live_path = db.path().await;
+    let live_path = db.path().await?;
 
     // 1. Safety net: snapshot the books being replaced.
     let safety_path = dir.join(format!("pre-restore-{}.db", stamp()));
@@ -279,7 +279,7 @@ fn kind_of(file_name: &str) -> &'static str {
 /// the import restores it.
 pub async fn pre_import_snapshot(db: &Db, batch_id: i64) -> Result<PathBuf, String> {
     let path = db.backups_dir().join(format!("pre-import-{batch_id}-{}.db", stamp()));
-    snapshot(&db.pool().await, &db.path().await, &path).await?;
+    snapshot(&db.pool().await, &db.path().await?, &path).await?;
     Ok(path)
 }
 
@@ -325,12 +325,15 @@ pub fn list_backups(dir: &Path) -> Result<Vec<BackupFile>, String> {
 /// Takes a manual snapshot into the backups folder.
 pub async fn backup_now(db: &Db) -> Result<BackupFile, String> {
     let path = db.backups_dir().join(format!("manual-{}.db", stamp()));
-    snapshot(&db.pool().await, &db.path().await, &path).await?;
+    snapshot(&db.pool().await, &db.path().await?, &path).await?;
     describe(&path, "MANUAL")
 }
 
 /// Daily automatic backup, honouring the `auto_backup_*` preferences. Returns the new file, if any.
 pub async fn auto_backup(db: &Db) -> Result<Option<BackupFile>, String> {
+    if !db.is_open().await {
+        return Ok(None);
+    }
     let pool = db.pool().await;
     if preferences::get(&pool, "auto_backup_enabled").await? != "true" {
         return Ok(None);
@@ -347,7 +350,7 @@ pub async fn auto_backup(db: &Db) -> Result<Option<BackupFile>, String> {
         None
     } else {
         let path = dir.join(format!("auto-{}.db", stamp()));
-        snapshot(&pool, &db.path().await, &path).await?;
+        snapshot(&pool, &db.path().await?, &path).await?;
         Some(describe(&path, "AUTO")?)
     };
 

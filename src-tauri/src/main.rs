@@ -16,6 +16,7 @@ mod expenses;
 mod forensic;
 mod forms;
 mod export_engine;
+mod file_menu;
 mod instance;
 mod inventory;
 mod invoices;
@@ -73,15 +74,17 @@ fn main() {
             }
             #[cfg(target_os = "macos")]
             windows::add_new_window_item(handle, &menu)?;
+            file_menu::add_company_items(handle, &menu)?;
             Ok(menu)
         })
         .plugin(tauri_plugin_dialog::init())
         // Signed updates from the GitHub releases (see plugins.updater in tauri.conf.json).
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .on_menu_event(|_app, _event| {
+        .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
-            windows::on_menu_event(_app, _event.id().as_ref());
+            windows::on_menu_event(app, event.id().as_ref());
+            file_menu::on_menu_event(app, event.id().as_ref());
         })
         .setup(|app| {
             let (data_dir, config_dir) = data_dirs(app)?;
@@ -136,7 +139,7 @@ fn main() {
             }
 
             let title_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move { commands::refresh_window_title(&title_handle).await });
+            tauri::async_runtime::spawn(async move { commands::company_changed(&title_handle).await });
 
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();
@@ -286,6 +289,11 @@ fn main() {
             commands::propose_forensic_corrections,
             commands::apply_forensic_correction,
             commands::open_company_file,
+            commands::get_start_screen,
+            commands::forget_recent_company,
+            commands::create_company_file,
+            commands::restore_backup_as,
+            commands::close_company_file,
             commands::get_closing_status,
             commands::set_closing_date,
             commands::get_startup_failure,
