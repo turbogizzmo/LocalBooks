@@ -47,9 +47,9 @@ async fn check_money_account(tx: &mut Transaction<'_, Sqlite>, account_id: i64, 
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match work(&mut tx).await {
-        Ok(value) => tx.commit().await.map(|()| value).map_err(db_err),
+        Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }

@@ -767,7 +767,7 @@ pub async fn budget_amounts(pool: &SqlitePool, id: i64) -> Result<Vec<BudgetAmou
 /// Saves budget amounts (zero removes one). Only income and expense accounts are budgeted.
 pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmount]) -> Result<(), String> {
     let chart = Chart::load(pool).await?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for a in amounts {
         let pl = chart.accounts.iter().any(|acct| acct.id == a.account_id && PL_TYPES.contains(&acct.account_type.as_str()));
         if !pl || !(1..=12).contains(&a.period) {
@@ -785,7 +785,7 @@ pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmo
             return Err(db_err(e));
         }
     }
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 /// Budget vs. Actual: actual income and expenses for fiscal months `from_period`..=`to_period` of

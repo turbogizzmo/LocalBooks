@@ -98,7 +98,7 @@ fn unique(err: sqlx::Error, name: &str) -> String {
 
 pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<TaxRateView, String> {
     let name = validate_rate(&input)?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let account = liability_account(&mut tx, input.liability_account_id).await?;
         let vendor = agency(&mut tx, &input.agency_name).await?;
@@ -114,7 +114,7 @@ pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<T
     .await;
     match result {
         Ok(id) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             get_rate(pool, id).await
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -124,7 +124,7 @@ pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<T
 /// Changes a rate for documents from now on; documents already posted keep the tax they posted.
 pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) -> Result<TaxRateView, String> {
     let name = validate_rate(&input)?;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let account = liability_account(&mut tx, input.liability_account_id).await?;
         let vendor = agency(&mut tx, &input.agency_name).await?;
@@ -141,7 +141,7 @@ pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) ->
     .await;
     match result {
         Ok(_) => {
-            tx.commit().await.map_err(db_err)?;
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
             get_rate(pool, id).await
         }
         Err(err) => Err(rollback(tx, err).await),
@@ -292,7 +292,7 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
     if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
         return Err("TAX_BAD_AMOUNT: enter the amount paid".into());
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let rate: Option<(String, i64, Option<String>)> = match input.tax_rate_id {
             Some(id) => sqlx::query_as("SELECT r.name, r.liability_account_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1")
@@ -337,7 +337,7 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
     }
     .await;
     match result {
-        Ok(id) => tx.commit().await.map(|()| id).map_err(db_err),
+        Ok(id) => crate::ledger::commit_write(tx).await.map(|()| id).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }

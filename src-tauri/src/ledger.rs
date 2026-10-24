@@ -288,6 +288,31 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
     Ok(EntryTotals { debits, credits })
 }
 
+/// Starts a write transaction with `BEGIN IMMEDIATE`, taking the write lock up front. Write paths read
+/// before they write (closing date, balances, ...); under WAL a plain deferred transaction that reads
+/// and then writes after another connection commits fails at once with SQLITE_BUSY_SNAPSHOT, which
+/// `busy_timeout` does not retry. Taking the lock first makes concurrent writers wait their turn.
+pub(crate) async fn begin_write(pool: &SqlitePool) -> Result<Transaction<'static, Sqlite>, sqlx::Error> {
+    pool.begin_with("BEGIN IMMEDIATE").await
+}
+
+/// Commits a write transaction opened with [`begin_write`]: seals the audit rows it wrote into the
+/// hash chain first (see `audit_chain`), then records the new chain head outside the company file.
+pub(crate) async fn commit_write(mut tx: Transaction<'static, Sqlite>) -> Result<(), sqlx::Error> {
+    let head = crate::audit_chain::seal(&mut tx).await.map_err(sqlx::Error::Protocol)?;
+    // A chain that no longer holds the recorded head keeps the old record, as evidence for verify.
+    // The record is best effort: if it can't be read, the write still commits and the record stays put.
+    let advance = crate::audit_chain::continues_record(&mut tx, &head).await.unwrap_or_else(|err| {
+        eprintln!("LocalBooks: could not read the audit trail record; leaving it unchanged: {err}");
+        false
+    });
+    tx.commit().await?;
+    if advance {
+        crate::audit_chain::anchor(head).await;
+    }
+    Ok(())
+}
+
 pub(crate) fn db_err(err: sqlx::Error) -> String {
     match err {
         // Trigger and constraint messages already carry our JE_/COA_ codes; pass them through as-is.
@@ -305,10 +330,10 @@ pub async fn post_transaction(pool: &SqlitePool, entry: JournalEntry) -> Result<
 
 /// Same as [`post_transaction`], returning the id of the posted entry.
 pub async fn post_journal_entry(pool: &SqlitePool, entry: JournalEntry) -> Result<i64, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = begin_write(&pool).await.map_err(db_err)?;
 
     match post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
-        Ok(id) => tx.commit().await.map(|()| id).map_err(db_err),
+        Ok(id) => commit_write(tx).await.map(|()| id).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }
@@ -351,8 +376,7 @@ async fn write_entry(
 ) -> Result<i64, String> {
     let memo = Some(entry.description.trim()).filter(|s| !s.is_empty());
 
-    // For standalone posts the header insert is the transaction's first statement, so the write
-    // lock is taken up front instead of upgrading from a read lock later (SQLITE_BUSY under WAL).
+    // Callers open the transaction with `begin_write`, so the write lock is already held here.
     // Journal lines always hold home-currency amounts; foreign amounts are kept alongside.
     let home_amounts: Vec<(i64, i64)> = match &entry.currency {
         Some(currency) => convert_lines(&entry.lines, currency.exchange_rate_e6)?,
@@ -459,9 +483,9 @@ async fn write_entry(
 /// marked void. Refused when any line is reconciled or ticked in a reconciliation, when an invoice
 /// or bill still has payments, or when a payment has already been banked in a deposit.
 pub async fn void_transaction(pool: &SqlitePool, journal_entry_id: i64) -> Result<(), String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = begin_write(&pool).await.map_err(db_err)?;
     match void_in_tx(&mut tx, journal_entry_id).await {
-        Ok(()) => tx.commit().await.map_err(db_err),
+        Ok(()) => commit_write(tx).await.map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }
@@ -828,6 +852,8 @@ pub struct AuditFinding {
     pub entry_id: i64,
     pub entry_number: Option<i64>,
     pub problem: String,
+    /// Set for problems with the audit trail itself (see `audit_chain`) rather than with an entry.
+    pub audit_record_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -838,6 +864,10 @@ pub struct LedgerVerification {
     pub entries_checked: i64,
     pub voids_checked: i64,
     pub migrations_recorded: i64,
+    /// Audit records verified through the hash chain.
+    pub audit_records_sealed: i64,
+    /// The day this computer started keeping a record of the audit trail (YYYY-MM-DD), if it has one.
+    pub audit_trail_recorded_since: Option<String>,
     pub findings: Vec<AuditFinding>,
 }
 
@@ -845,7 +875,7 @@ pub struct LedgerVerification {
 /// it was posted. The ledger is intact when every posted entry has an identical snapshot, balances,
 /// every void links to its reversal, and no snapshotted entry has disappeared.
 pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification, String> {
-    let checks: [(&str, &str); 5] = [
+    let checks: [(&str, &str); 6] = [
         (
             "Posted without a posting snapshot",
             "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
@@ -873,6 +903,11 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
                AND NOT EXISTS (SELECT 1 FROM ledger_audit_log a WHERE a.action_type = 'VOID' AND a.target_entity_id = e.id)",
         ),
         (
+            "Removed from balances by a status change (no reversing entry)",
+            "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
+             WHERE e.status = 'VOID' AND e.id NOT IN (SELECT entry_id FROM legacy_status_voids)",
+        ),
+        (
             "Snapshotted at posting but no longer in the ledger (deleted)",
             "SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
              FROM ledger_audit_log a
@@ -883,9 +918,11 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
     let mut findings = Vec::new();
     for (problem, sql) in checks {
         let rows: Vec<(i64, Option<i64>)> = sqlx::query_as(sql).fetch_all(pool).await.map_err(db_err)?;
-        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding { entry_id, entry_number, problem: problem.into() }));
+        findings.extend(rows.into_iter().map(|(entry_id, entry_number)| AuditFinding { entry_id, entry_number, problem: problem.into(), audit_record_id: None }));
     }
-    findings.sort_by_key(|f| (f.entry_id, f.problem.clone()));
+    let chain = crate::audit_chain::verify(pool).await?;
+    findings.extend(chain.problems.into_iter().map(|(record, problem)| AuditFinding { entry_id: 0, entry_number: None, problem, audit_record_id: Some(record) }));
+    findings.sort_by_key(|f| (f.audit_record_id.is_some(), f.entry_id, f.audit_record_id, f.problem.clone()));
 
     let (entries_checked, voids_checked, migrations_recorded): (i64, i64, i64) = sqlx::query_as(
         "SELECT (SELECT COUNT(*) FROM journal_entries WHERE status <> 'DRAFT'),
@@ -895,7 +932,15 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    Ok(LedgerVerification { intact: findings.is_empty(), entries_checked, voids_checked, migrations_recorded, findings })
+    Ok(LedgerVerification {
+        intact: findings.is_empty(),
+        entries_checked,
+        voids_checked,
+        migrations_recorded,
+        audit_records_sealed: chain.records_sealed,
+        audit_trail_recorded_since: chain.recorded_since,
+        findings,
+    })
 }
 
 #[cfg(test)]
@@ -1330,6 +1375,65 @@ mod tests {
         sqlx::query("DELETE FROM ledger_audit_log WHERE action_type = 'POST' AND target_entity_id = ?1").bind(untouched).execute(&fx.pool).await.unwrap();
         let verification = verify_ledger_audit(&fx.pool).await.unwrap();
         assert!(verification.findings.iter().any(|f| f.entry_id == untouched && f.problem == "Posted without a posting snapshot"));
+    }
+
+    #[tokio::test]
+    async fn posted_entries_cannot_leave_the_ledger_by_status_change() {
+        let fx = setup().await;
+        let id = post_sale(&fx, 50_000, "Sale").await;
+
+        let err = sql_err(&fx.pool, &format!("UPDATE journal_entries SET status = 'VOID', voided_at = 'x' WHERE id = {id}")).await;
+        assert!(err.starts_with("JE_INVALID_TRANSITION"), "{err}");
+        let err = sql_err(&fx.pool, &format!("UPDATE journal_entries SET status = 'DRAFT', posted_at = NULL WHERE id = {id}")).await;
+        assert!(err.starts_with("JE_INVALID_TRANSITION"), "{err}");
+        let err = sql_err(&fx.pool, &format!("INSERT INTO legacy_status_voids (entry_id) VALUES ({id})")).await;
+        assert!(err.starts_with("AUDIT_IMMUTABLE"), "{err}");
+
+        // Forced through with the trigger removed, the verifier now catches it.
+        sqlx::query("DROP TRIGGER trg_je_status_transition").execute(&fx.pool).await.unwrap();
+        sqlx::query("UPDATE journal_entries SET status = 'VOID', voided_at = 'x' WHERE id = ?1").bind(id).execute(&fx.pool).await.unwrap();
+        let verification = verify_ledger_audit(&fx.pool).await.unwrap();
+        assert!(!verification.intact);
+        assert!(verification
+            .findings
+            .iter()
+            .any(|f| f.entry_id == id && f.problem == "Removed from balances by a status change (no reversing entry)"));
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_unbalanced_or_missing_foreign_amounts() {
+        let fx = setup().await;
+        let draft = |n: i64, currency: bool| {
+            format!(
+                "INSERT INTO journal_entries (entry_number, entry_date, foreign_currency_code, exchange_rate_e6) VALUES ({n}, '2026-10-13', {}, {}) RETURNING id",
+                if currency { "'EUR'" } else { "NULL" },
+                if currency { "1100000" } else { "NULL" }
+            )
+        };
+        let lines = |id: i64, fd: &str, fc: &str| {
+            format!(
+                "INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit_cents, foreign_debit_cents, foreign_credit_cents) VALUES ({id}, 1, {}, 1100, {fd}, 0);
+                 INSERT INTO journal_lines (journal_entry_id, line_number, account_id, credit_cents, foreign_debit_cents, foreign_credit_cents) VALUES ({id}, 2, {}, 1100, 0, {fc});",
+                fx.checking, fx.sales
+            )
+        };
+        let post = |id: i64| format!("UPDATE journal_entries SET status = 'POSTED', posted_at = 'now' WHERE id = {id}");
+
+        let unbalanced: i64 = sqlx::query_scalar(&draft(901, true)).fetch_one(&fx.pool).await.unwrap();
+        sqlx::raw_sql(&lines(unbalanced, "1000", "999")).execute(&fx.pool).await.unwrap();
+        assert!(sql_err(&fx.pool, &post(unbalanced)).await.starts_with("JE_FOREIGN_UNBALANCED"));
+
+        let missing: i64 = sqlx::query_scalar(&draft(902, true)).fetch_one(&fx.pool).await.unwrap();
+        sqlx::raw_sql(&lines(missing, "NULL", "1000")).execute(&fx.pool).await.unwrap();
+        assert!(sql_err(&fx.pool, &post(missing)).await.starts_with("JE_FOREIGN_MISSING"));
+
+        let home: i64 = sqlx::query_scalar(&draft(903, false)).fetch_one(&fx.pool).await.unwrap();
+        sqlx::raw_sql(&lines(home, "1000", "1000")).execute(&fx.pool).await.unwrap();
+        assert!(sql_err(&fx.pool, &post(home)).await.starts_with("JE_FOREIGN_ON_HOME"));
+
+        let good: i64 = sqlx::query_scalar(&draft(904, true)).fetch_one(&fx.pool).await.unwrap();
+        sqlx::raw_sql(&lines(good, "1000", "1000")).execute(&fx.pool).await.unwrap();
+        assert_eq!(sql_err(&fx.pool, &post(good)).await, "");
     }
 
     /// The snapshot format from before classes existed (migration 0013), kept to prove that entries

@@ -115,13 +115,13 @@ pub async fn create_time_activities(pool: &SqlitePool, inputs: Vec<TimeActivityI
     for (idx, input) in inputs.iter().enumerate() {
         validate(input, idx + 1)?;
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
         if let Err(err) = write_activity(&mut tx, input).await {
             return Err(rollback(tx, err).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(inputs.len())
 }
 

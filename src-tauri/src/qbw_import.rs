@@ -228,7 +228,7 @@ pub fn display_label(raw: &str) -> String {
 
 /// Stores an extraction as a new staging batch and returns its id.
 pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extraction) -> Result<i64, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let file_name = source_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO staging_import_batches
@@ -282,7 +282,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, extraction: &Extractio
     .execute(&mut *tx)
     .await
     .map_err(db_err)?;
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(batch_id)
 }
 
@@ -501,7 +501,7 @@ pub async fn set_mapping(pool: &SqlitePool, batch_id: i64, raw_label: &str, acco
 /// Creates an Income account for every unmapped label (reusing a top-level account that already
 /// has the generated name) and maps the label to it. Returns how many accounts were created.
 pub async fn auto_create_accounts(pool: &SqlitePool, batch_id: i64) -> Result<i64, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let unmapped: Vec<String> = sqlx::query_scalar(
         "SELECT raw_account_label FROM staging_account_map WHERE batch_id = ?1 AND account_id IS NULL ORDER BY raw_account_label",
     )
@@ -555,7 +555,7 @@ pub async fn auto_create_accounts(pool: &SqlitePool, batch_id: i64) -> Result<i6
             .await
             .map_err(db_err)?;
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(created)
 }
 
@@ -670,7 +670,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
     }
 
     let mut result = PostBatchResult::default();
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for (qb_id, inv) in invoices {
         if inv.already_posted {
             result.skipped_already_posted += 1;
@@ -734,7 +734,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostBatchInput) -> Result<Pos
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
 }
 
@@ -789,7 +789,7 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseBa
 
 /// Deletes a batch's staged rows. Posted journal entries are unaffected (void them in the ledger).
 pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for sql in [
         "DELETE FROM staging_raw_transactions WHERE batch_id = ?1",
         "DELETE FROM staging_account_map WHERE batch_id = ?1",
@@ -797,7 +797,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     ] {
         sqlx::query(sql).bind(batch_id).execute(&mut *tx).await.map_err(db_err)?;
     }
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 #[cfg(test)]

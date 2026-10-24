@@ -219,12 +219,12 @@ pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<In
 
 /// Creates the invoice and posts it to the ledger atomically; the invoice comes back UNPAID.
 pub async fn create_and_post_invoice(pool: &SqlitePool, input: InvoiceInput) -> Result<InvoiceSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let invoice_id = match write_invoice(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_summary(pool, invoice_id).await
 }
 
@@ -369,13 +369,13 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
     if inputs.is_empty() {
         return Err("INV_NOTHING_TO_APPLY: enter an amount for at least one invoice".into());
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
         if let Err(err) = write_payment(&mut tx, input).await {
             return Err(rollback(tx, err).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(inputs.len())
 }
 
@@ -432,8 +432,11 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     // rate (cumulatively, so the last payment clears A/R exactly), and the realized difference.
     let new_paid = paid + input.amount_cents;
     let fx = match (&currency_code, invoice_rate) {
-        (Some(_), Some(invoice_rate)) => {
-            let rate = input.exchange_rate_e6.unwrap_or(invoice_rate);
+        (Some(code), Some(_)) => {
+            // No silent default to the booked rate: that would zero the realized gain or loss.
+            let rate = input.exchange_rate_e6.ok_or_else(|| {
+                format!("FX_RATE_REQUIRED: invoice #{number} is in {code}; enter the exchange rate on the payment date")
+            })?;
             if rate <= 0 {
                 return Err("FX_BAD_RATE: the exchange rate must be greater than zero".into());
             }
@@ -951,6 +954,12 @@ mod tests {
         record_payment(
             &pool,
             PaymentInput { invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        )
+        .await
+        .expect_err("a foreign payment needs its own rate");
+        record_payment(
+            &pool,
+            PaymentInput { invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
         )
         .await
         .unwrap();

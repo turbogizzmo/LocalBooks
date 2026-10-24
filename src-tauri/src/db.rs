@@ -317,6 +317,13 @@ impl Db {
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
+                if swapped.is_ok() {
+                    // The replacement's audit trail may be behind this computer's record of the old one.
+                    // The swap has happened either way, so a failure here must not report it as failed.
+                    if let Err(err) = crate::audit_chain::reanchor(&live.pool).await {
+                        eprintln!("LocalBooks: could not record the restored file's audit trail: {err}");
+                    }
+                }
                 swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
             }
             Err(open_err) => {
@@ -463,6 +470,16 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         }
     }
     migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
+    // Seal anything written outside a write transaction (the migration records) into the audit chain.
+    // Best effort: the books must still open (and be verifiable) if sealing fails; the next write
+    // transaction seals them instead.
+    let sealed = match crate::ledger::begin_write(&pool).await {
+        Ok(tx) => crate::ledger::commit_write(tx).await,
+        Err(e) => Err(e),
+    };
+    if let Err(e) = sealed {
+        eprintln!("LocalBooks: could not seal the audit trail of {}: {e}", path.display());
+    }
 
     Ok(pool)
 }
@@ -620,6 +637,9 @@ mod migrate_tests {
             (36, "d307ef0d4f24a13e8ab2065e"),
             (37, "2da2eb42ab82f41f19fd011d"),
             (38, "3e495b0ee917b7be5d03953b"),
+            (39, "b97e9871736181cd0f4b33c5"),
+            (40, "7895f21efb758ee2daf020be"),
+            (41, "cf3d7741aaa74c331ba2b93e"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()
@@ -774,6 +794,42 @@ mod tests {
         )
         .await
         .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_posts_on_a_wal_file_all_succeed() {
+        let tmp = TempDir::new("concurrent");
+        let db = Db::startup(test_config(&tmp.0)).await.unwrap();
+        assert_eq!(db.status().await.unwrap().journal_mode, "wal");
+        let pool = db.pool().await;
+        let id = |n: &'static str| {
+            let pool = pool.clone();
+            async move { sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n).fetch_one(&pool).await.unwrap() }
+        };
+        let (checking, services) = (id("1010").await, id("4100").await);
+
+        // Each post reads (closing date, accounts) before it writes; with deferred transactions some
+        // of these failed with SQLITE_BUSY_SNAPSHOT instead of waiting for the write lock.
+        let posts = (0..24).map(|i| {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                crate::ledger::post_journal_entry(
+                    &pool,
+                    crate::ledger::JournalEntry {
+                        id: None,
+                        date: chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                        description: format!("concurrent {i}"),
+                        lines: vec![crate::ledger::JournalLine::debit(checking, 100 + i), crate::ledger::JournalLine::credit(services, 100 + i)],
+                        currency: None,
+                    },
+                )
+                .await
+            })
+        });
+        for post in posts.collect::<Vec<_>>() {
+            post.await.unwrap().expect("every concurrent post succeeds");
+        }
+        assert_eq!(entries(&db).await, 24);
     }
 
     #[tokio::test]

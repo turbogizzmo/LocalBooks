@@ -14,9 +14,9 @@ use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, post_entry_in_tx, rollback, void_in_tx, EntrySource, JournalEntry};
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     match work(&mut tx).await {
-        Ok(value) => tx.commit().await.map(|()| value).map_err(db_err),
+        Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
 }
@@ -177,7 +177,7 @@ mod tests {
 
         let expense: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-05-02",
             "checkNumber": "101", "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 90_000, "memo": "May" }] })).unwrap();
-        let (expense_id, _) = { let mut tx = pool.begin().await.unwrap(); let r = crate::expenses::write_expense(&mut tx, &expense).await.unwrap(); tx.commit().await.unwrap(); r };
+        let (expense_id, _) = { let mut tx = crate::ledger::begin_write(&pool).await.unwrap(); let r = crate::expenses::write_expense(&mut tx, &expense).await.unwrap(); crate::ledger::commit_write(tx).await.unwrap(); r };
         assert_eq!(document_lines(&pool, "expense", expense_id).await.unwrap()[0].memo.as_deref(), Some("May"));
         let mut fixed = expense.clone();
         fixed.lines[0].amount_cents = 95_000;

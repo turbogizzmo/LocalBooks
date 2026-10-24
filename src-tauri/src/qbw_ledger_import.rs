@@ -45,7 +45,7 @@ fn fingerprint(ledger: &Ledger) -> String {
 /// Stores a ledger read as a new staging batch and returns its id.
 pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, ledger: &Ledger) -> Result<i64, String> {
     let q = &ledger.quality;
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let file_name = source_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO ledger_import_batches
@@ -185,7 +185,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
         .await
         .map_err(db_err)?;
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(batch_id)
 }
 
@@ -618,7 +618,7 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
     order.sort_by_key(|s| (depth(s), s.full_name.to_lowercase()));
 
     let mut result = AutoMapResult::default();
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let mut mapped: HashMap<i64, i64> = sources.iter().filter_map(|s| Some((s.source_id, s.account_id?))).collect();
     for s in order {
         if mapped.contains_key(&s.source_id) {
@@ -719,7 +719,7 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
         }
         mapped.insert(s.source_id, account_id);
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
 }
 
@@ -779,7 +779,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     .await
     .map_err(db_err)?;
     let mut result = ImportListsResult::default();
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for p in parties {
         let table = if p.kind == "CUSTOMER" { "customers" } else { "vendors" };
         let existing: Option<i64> = sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE"))
@@ -959,7 +959,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
 }
 
@@ -1129,7 +1129,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         return Err("QBW_FULL_AFTER_POST: this import is already posted as journal entries; use Start over before a full import".into());
     }
 
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let outcomes = match input.mode {
         ImportMode::Journal => {
             let mut outcomes = Vec::with_capacity(staged.len());
@@ -1199,7 +1199,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
 }
 
@@ -1347,7 +1347,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     if live > 0 {
         return Err("QBW_POSTED: reverse this import's posted entries before deleting it".into());
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for sql in [
         "DELETE FROM ledger_import_lines WHERE batch_id = ?1",
         "DELETE FROM ledger_import_unreadable WHERE batch_id = ?1",
@@ -1359,7 +1359,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     ] {
         sqlx::query(sql).bind(batch_id).execute(&mut *tx).await.map_err(db_err)?;
     }
-    tx.commit().await.map_err(db_err)
+    crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
 #[cfg(test)]

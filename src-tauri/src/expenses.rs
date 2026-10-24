@@ -183,12 +183,12 @@ fn sum_split_lines(amounts: impl Iterator<Item = i64>, code: &str) -> Result<i64
 
 /// Records a vendor bill: Dr each expense category / Cr Accounts Payable, atomically.
 pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<BillSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let bill_id = match write_bill(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_bill(pool, bill_id).await
 }
 
@@ -298,13 +298,13 @@ pub async fn pay_vendor_bills(pool: &SqlitePool, inputs: Vec<BillPaymentInput>) 
     if inputs.is_empty() {
         return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
     }
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
         if let Err(err) = write_bill_payment(&mut tx, input).await {
             return Err(rollback(tx, err).await);
         }
     }
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(inputs.len())
 }
 
@@ -478,12 +478,12 @@ const EXPENSE_SELECT: &str = "
 
 /// Records an expense or check: Dr each split account / Cr the payment account, atomically.
 pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<ExpenseView, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let (id, _) = match write_expense(&mut tx, &input).await {
         Ok(ids) => ids,
         Err(err) => return Err(rollback(tx, err).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     sqlx::query_as::<_, ExpenseView>(&format!("{EXPENSE_SELECT} WHERE x.id = ?1"))
         .bind(id)
         .fetch_one(pool)

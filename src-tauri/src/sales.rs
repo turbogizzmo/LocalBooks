@@ -221,7 +221,7 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
         return Err("PARTY_NO_NAME: enter a name".into());
     }
     let full = if matches!(party, Party::Customer) { job_name(name)? } else { name.to_string() };
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     // A job's customer is created first if needed.
     let parent = match full.rsplit_once(':').filter(|_| matches!(party, Party::Customer)) {
         Some((above, _)) => Some(customer_path(&mut tx, above).await?),
@@ -240,7 +240,7 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
             return Err(party_err(e, name));
         }
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(id)
 }
 
@@ -317,12 +317,12 @@ pub fn validate_sales_receipt(input: &SalesReceiptInput) -> Result<i64, String> 
 
 /// Records a cash sale: Dr deposit account / Cr each line's income account, atomically.
 pub async fn post_sales_receipt(pool: &SqlitePool, input: SalesReceiptInput) -> Result<SalesReceiptSummary, String> {
-    let mut tx = pool.begin().await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let id = match write_sales_receipt(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
     };
-    tx.commit().await.map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     sqlx::query_as::<_, SalesReceiptSummary>(
         "SELECT r.id, r.receipt_number, c.name AS customer_name, r.receipt_date, r.total_cents, r.journal_entry_id
          FROM sales_receipts r LEFT JOIN customers c ON c.id = r.customer_id WHERE r.id = ?1",
