@@ -16,6 +16,7 @@ mod expenses;
 mod forensic;
 mod forms;
 mod export_engine;
+mod file_dentist;
 mod instance;
 mod inventory;
 mod invoices;
@@ -285,6 +286,8 @@ fn main() {
             commands::get_journal_entry_lines,
             commands::list_audit_log,
             commands::verify_ledger_integrity,
+            commands::file_dentist_checkup,
+            commands::file_dentist_rebuild,
             commands::propose_forensic_corrections,
             commands::apply_forensic_correction,
             commands::open_company_file,
