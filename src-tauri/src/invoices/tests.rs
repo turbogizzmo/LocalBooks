@@ -45,6 +45,7 @@ async fn simple_invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -73,6 +74,7 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,
+        details: Default::default(),
     };
     let invoice = create_and_post_invoice(&pool, input).await.expect("invoice posts");
 
@@ -172,6 +174,7 @@ async fn non_income_account_rolls_back_everything() {
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,
+        details: Default::default(),
     };
 
     let err = create_and_post_invoice(&pool, input).await.expect_err("expense account rejected");
@@ -228,6 +231,7 @@ async fn fractional_quantities_post_rounded_amounts() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -265,6 +269,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
             currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: 1_080_000 }),
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -324,6 +329,7 @@ async fn foreign_payment_after_voided_partial_payments_is_accepted() {
             currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -362,6 +368,7 @@ async fn foreign_payment_deposits_its_home_amount() {
             currency: Some(ForeignCurrency { code: "GBP".into(), exchange_rate_e6: 1_270_000 }),
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

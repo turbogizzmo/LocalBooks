@@ -47,6 +47,8 @@ pub struct PartyDetails {
     pub tax_exemption: Option<String>,
     /// Customers only: the form style their forms use (`None` = the default style).
     pub form_style_id: Option<i64>,
+    /// Customers only: the rep filled in on their new sales forms.
+    pub sales_rep_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,6 +82,11 @@ pub struct PartyDetailsInput {
     pub tax_exemption: Option<String>,
     #[serde(default)]
     pub form_style_id: Option<i64>,
+    #[serde(default)]
+    pub sales_rep_id: Option<i64>,
+    /// Custom field values to set (fields left out keep theirs).
+    #[serde(default)]
+    pub custom_fields: Vec<crate::custom_fields::FieldValue>,
 }
 
 fn clean(text: &Option<String>) -> Option<String> {
@@ -90,10 +97,12 @@ fn clean(text: &Option<String>) -> Option<String> {
 pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_>) -> Result<PartyDetails, String> {
     let sql = match table(kind)? {
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
-                               NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id
+                               NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
+                               sales_rep_id
                         FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
-                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id FROM vendors WHERE id = ?1",
+                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id
+              FROM vendors WHERE id = ?1",
     };
     let mut party = sqlx::query_as::<_, PartyDetails>(sql)
         .bind(id)
@@ -133,6 +142,16 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             return Err("PARTY_BAD_FORM_STYLE: that form style no longer exists".into());
         }
     }
+    if let Some(rep) = input.sales_rep_id.filter(|_| t == "customers") {
+        let rep: Option<(String, bool)> = sqlx::query_as("SELECT initials, is_active FROM sales_reps WHERE id = ?1").bind(rep).fetch_optional(pool).await.map_err(db_err)?;
+        let unchanged = sqlx::query_scalar::<_, Option<i64>>("SELECT sales_rep_id FROM customers WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?.flatten()
+            == input.sales_rep_id;
+        match rep {
+            None => return Err("PARTY_BAD_REP: that sales rep no longer exists".into()),
+            Some((initials, false)) if !unchanged => return Err(format!("PARTY_INACTIVE_REP: sales rep {initials} is inactive")),
+            _ => {}
+        }
+    }
     let keep_tax_id = input.keep_tax_id || t == "customers";
     if !keep_tax_id && !access.can_see() {
         return Err("TAX_ID_LOCKED: only users who can see sensitive data can change a tax ID".into());
@@ -141,7 +160,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     let query = if t == "customers" {
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
-                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11 WHERE id = ?12",
+                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -155,6 +174,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(clean(&input.tax_exemption))
         .bind(input.form_style_id)
         .bind(id)
+        .bind(input.sales_rep_id)
     } else {
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,
@@ -180,6 +200,10 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     })?;
     if done.rows_affected() == 0 {
         return Err(format!("PARTY_NOT_FOUND: that {kind} does not exist"));
+    }
+    if !input.custom_fields.is_empty() {
+        let list = if t == "customers" { crate::custom_fields::FieldList::Customer } else { crate::custom_fields::FieldList::Vendor };
+        crate::custom_fields::save_record_values(pool, list, id, &input.custom_fields).await?;
     }
     if t == "customers" && old_name != name {
         let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;

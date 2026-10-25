@@ -8,6 +8,7 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
+import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
@@ -382,7 +383,9 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
-  const COLS = 9;
+  // The Rep column shows once any invoice has a rep.
+  const withRep = (data ?? []).some((inv) => inv.salesRep);
+  const COLS = withRep ? 10 : 9;
   const [printPortal, forms] = useFormPrinter(onNotice);
   const emailed = useEmailStatuses('INVOICE');
   const [unsentOnly, setUnsentOnly] = useState(false);
@@ -409,6 +412,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
           <colgroup>
             <col className="w-[136px]" />
             <col />
+            {withRep && <col className="w-[56px]" />}
             <col className="w-[92px]" />
             <col className="w-[92px]" />
             <col className="w-[112px]" />
@@ -421,6 +425,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
             <tr>
               <th className="qb-grid-head">No.</th>
               <th className="qb-grid-head">Customer</th>
+              {withRep && <th className="qb-grid-head">Rep</th>}
               <th className="qb-grid-head">Date</th>
               <th className="qb-grid-head">Due</th>
               <th className="qb-grid-head text-right">Total</th>
@@ -457,6 +462,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                       <EmailMarks status={emailed.get(inv.id)} />
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
+                    {withRep && <td className="qb-grid-cell">{inv.salesRep ?? ''}</td>}
                     <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                     <td className={`qb-grid-cell ${overdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
                     <td className="qb-grid-cell num" title={inv.currencyCode ? `${formatCents(inv.homeTotalCents)} booked at ${formatRate(inv.exchangeRateE6)}` : undefined}>
@@ -538,6 +544,7 @@ export default function Invoices({ accounts, intent }) {
   const [discountText, setDiscountText] = useState('');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data);
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -554,8 +561,9 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
-        ({ estimate, lines: estimateLines }) => {
+        ({ estimate, lines: estimateLines, details }) => {
           setCustomer(estimate.customerName);
+          sales.set(details);
           setLines([
             ...estimateLines.map((l) => ({
               ...blankLine(l.incomeAccountId),
@@ -591,8 +599,9 @@ export default function Invoices({ accounts, intent }) {
 
   const loadForEdit = (inv) => {
     api.getInvoiceDetail(inv.id).then(
-      ({ invoice, items }) => {
+      ({ invoice, items, details }) => {
         setReceiving(false);
+        sales.set(details);
         setFromEstimate(null);
         setEditing({ id: invoice.id, number: invoice.invoiceNumber });
         setCustomer(invoice.customerName);
@@ -633,6 +642,7 @@ export default function Invoices({ accounts, intent }) {
     setDiscountText('');
     formClass.reset();
     tax.reset();
+    sales.reset();
   };
 
   const [memorizing, setMemorizing] = useState(null);
@@ -671,6 +681,7 @@ export default function Invoices({ accounts, intent }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
+        ...sales.payload(),
       };
       if (mode === 'memorize') return setMemorizing(input);
       if (editing) {
@@ -782,6 +793,7 @@ export default function Invoices({ accounts, intent }) {
               }}
             />
           </label>
+          {sales.picker}
           {formClass.header}
           {tax.picker}
           <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />

@@ -38,6 +38,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

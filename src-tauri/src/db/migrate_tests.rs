@@ -78,6 +78,7 @@ fn released_migrations_are_never_edited() {
         (47, "172ff452c0789c947b76590b"),
         (48, "14dd6e91430541f3ebd7b55d"),
         (49, "8de3ae35947f2b2839a8455c"),
+        (47, "f0b4f590b401fba9428bf1c8"),
     ];
     let actual: Vec<(i64, String)> = MIGRATOR
         .iter()

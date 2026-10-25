@@ -53,6 +53,7 @@ fn ledger() -> Ledger {
         vendors: vec![],
         items: vec![],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     }
 }
 
@@ -86,6 +87,7 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6 },
             DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8 },
         ],
+        sales: Default::default(),
     };
     let payment = |cents| SourceDocument::Payment {
         customer_id: 100,
@@ -131,6 +133,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             active: true,
             balance_cents: Some(2_000),
             notes: None,
+            sales_rep: None,
+            custom_fields: Vec::new(),
         }],
         vendors: vec![],
         items: vec![SourceItem {
@@ -142,8 +146,10 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             kind: "Service",
             taxable: true,
             active: true,
+            custom_fields: Vec::new(),
         }],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -246,9 +252,12 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
             active: true,
             balance_cents: Some(0),
             notes: None,
+            sales_rep: None,
+            custom_fields: Vec::new(),
         }],
         items: vec![],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -299,6 +308,7 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
         expires: "2024-05-01".parse().ok(),
         memo: Some("Spring work".into()),
         lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8 }],
+        sales: Default::default(),
     };
     let lineless = |id, kind, document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-04-01", &[]) };
     let party = |id, name: &str| SourceParty {
@@ -315,6 +325,8 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
         active: true,
         balance_cents: None,
         notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
     };
     let ledger = Ledger {
         accounts: vec![
@@ -357,8 +369,10 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
             kind: "Service",
             taxable: true,
             active: true,
+            custom_fields: Vec::new(),
         }],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -542,6 +556,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         vendors: vec![],
         items: vec![],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     };
     let first = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
     auto_map_accounts(&pool, first).await.unwrap();
@@ -582,6 +597,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         vendors: vec![],
         items: vec![],
         quality: LedgerQuality::default(),
+        sales_lists: Default::default(),
     };
     let third = stage(&pool, Path::new("/books/Other.qbw"), 1, &tools).await.unwrap();
     auto_map_accounts(&pool, third).await.unwrap();
@@ -605,6 +621,8 @@ fn party(id: i64, name: &str, parent: Option<i64>, email: Option<&str>) -> Sourc
         active: true,
         balance_cents: None,
         notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
     }
 }
 
@@ -628,6 +646,7 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
         kind: "Service",
         taxable: false,
         active: true,
+        custom_fields: Vec::new(),
     };
     books.accounts.push(account(6, "Consulting Income", "INCOME", None));
     books.transactions.push(txn(14, "2023-03-05", &[(4, -9_000), (6, 9_000)]));

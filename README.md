@@ -216,7 +216,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | Group | Screens | What you can do |
 |---|---|---|
 | **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
-| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services · Customer Statements · Assess Finance Charges · Send Forms | Invoices with inline line-item grid, full & partial payments, finance charges on overdue invoices (rate, minimum, grace days; interest worked out in integer cents), Change Item Prices (bulk price changes by percentage or amount, from price or cost, with rounding, recorded in the audit trail), sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files, emailed through your mail app or SMTP, with sent history and an Email later queue |
+| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services · Reps, Ship Via & Fields · Customer Statements · Assess Finance Charges · Send Forms | Invoices with inline line-item grid, full & partial payments, optional sales reps, Ship Via and ship dates, up to 15 custom fields per customer, vendor and item list (printable on sales forms), finance charges on overdue invoices (rate, minimum, grace days; interest worked out in integer cents), Change Item Prices (bulk price changes by percentage or amount, from price or cost, with rounding, recorded in the audit trail), sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files, emailed through your mail app or SMTP, with sent history and an Email later queue |
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering, credit card credits (vendor refunds onto a card) |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
@@ -449,6 +449,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── ledger.rs           # validation, posting, voiding, journal register, audit queries
         ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
+        ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
         ├── forms.rs, pdf.rs    # form designer layouts and the PDF writer
         ├── mail_app.rs, smtp.rs, secrets.rs   # emailing forms; credentials on this computer

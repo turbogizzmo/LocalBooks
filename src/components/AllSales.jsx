@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
@@ -30,6 +31,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const [error, setError] = useState(null);
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data);
 
   useEffect(() => {
     if (depositId === null && defaultDeposit !== null) setDepositId(defaultDeposit);
@@ -64,6 +66,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         lines: postedLines,
         taxRateId: tax.rateId,
         discountCents: discount,
+        ...sales.payload(),
       });
       onPosted(`Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.`);
     } catch (err) {
@@ -106,6 +109,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
           <span className="qb-label">Deposit to</span>
           <AccountSelect accounts={accounts} filter={depositFilter} value={depositId} onChange={setDepositId} className="qb-input w-[190px]" />
         </label>
+        {sales.picker}
         {formClass.header}
         {tax.picker}
         <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />

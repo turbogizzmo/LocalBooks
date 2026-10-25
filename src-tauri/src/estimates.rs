@@ -21,6 +21,8 @@ pub struct EstimateInput {
     pub tax_rate_id: Option<i64>,
     #[serde(default)]
     pub discount_cents: i64,
+    #[serde(flatten)]
+    pub details: crate::sales_lists::SalesDetails,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -152,6 +154,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
+    crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
 }
 
@@ -211,6 +214,8 @@ pub async fn convert_to_invoice(
             currency: None,
             tax_rate_id,
             discount_cents,
+            // The estimate's rep, shipping and printed fields carry over to its invoice.
+            details: crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?,
         };
         let invoice_id = write_invoice(&mut tx, &invoice).await?;
         sqlx::query("UPDATE estimates SET status = 'CONVERTED', converted_to_invoice_id = ?1 WHERE id = ?2")
@@ -249,6 +254,7 @@ pub struct EstimateLineView {
 pub struct EstimateDetail {
     pub estimate: EstimateSummary,
     pub lines: Vec<EstimateLineView>,
+    pub details: crate::sales_lists::SalesDetailsView,
 }
 
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
@@ -261,7 +267,8 @@ pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<Esti
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(EstimateDetail { estimate, lines })
+    let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    Ok(EstimateDetail { estimate, lines, details })
 }
 
 /// Refuses converting an estimate that is already invoiced or was rejected.

@@ -698,6 +698,7 @@ async fn post_invoice(
         currency: fx_rate.map(|rate| ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
         tax_rate_id: None,
         discount_cents: 0,
+        details: Default::default(),
     };
     let result = match replacing {
         Some((old, _)) => crate::edits::replace_invoice(pool, live_doc(m, old), input).await,

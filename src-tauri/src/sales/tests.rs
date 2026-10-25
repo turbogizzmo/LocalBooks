@@ -49,6 +49,7 @@ async fn sales_receipt_debits_cash_and_credits_revenue() {
             lines: vec![line(Some(widget.id), 3, 1_999, sales), line(None, 1, 5_000, services)],
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -78,6 +79,7 @@ async fn sales_receipt_rejects_non_income_lines_and_rolls_back() {
             lines: vec![line(None, 1, 5_000, rent)],
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -111,6 +113,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -134,6 +137,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             lines: vec![line(None, 2, 2_500, services)],
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

@@ -16,6 +16,7 @@ async fn invoice(pool: &SqlitePool, customer: &str) -> i64 {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

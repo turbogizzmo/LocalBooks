@@ -3,6 +3,7 @@ import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
+import { CustomFieldInputs } from './SalesLists.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 
@@ -51,12 +52,15 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const salesTax = useSalesTax();
   const { data: formStyles } = useLedgerQuery(api.listFormStyles);
+  const reps = useLedgerQuery(api.listSalesReps).data ?? [];
+  const [fields, setFields] = useState([]);
 
   useEffect(() => {
     api.getParty(kind, id).then(
       (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId }),
       (err) => setError(errorText(err)),
     );
+    api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
   }, [kind, id]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -81,6 +85,8 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         isTaxExempt: Boolean(form.isTaxExempt),
         taxExemption: form.taxExemption,
         formStyleId: form.formStyleId ?? null,
+        salesRepId: form.salesRepId ?? null,
+        customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
       onSaved(`Saved ${noun} ${saved.name}.`);
     } catch (err) {
@@ -156,6 +162,24 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
                 </select>
               </label>
             )}
+            {kind === 'customer' && (reps.length > 0 || form.salesRepId) && (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Sales rep</span>
+                <select className="qb-input" value={form.salesRepId ?? ''} onChange={(e) => setForm((f) => ({ ...f, salesRepId: e.target.value === '' ? null : Number(e.target.value) }))}>
+                  <option value="">None</option>
+                  {reps
+                    .filter((r) => r.isActive || r.id === form.salesRepId)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.initials}
+                        {r.name ? ` (${r.name})` : ''}
+                        {r.isActive ? '' : ' (inactive)'}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            <CustomFieldInputs fields={fields} onChange={setFields} />
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>
               <textarea className="qb-input h-[44px] py-1" value={form.notes ?? ''} onChange={set('notes')} />

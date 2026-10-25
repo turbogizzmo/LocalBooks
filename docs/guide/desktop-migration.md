@@ -29,6 +29,10 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   parent. An account the file uses but never declares gets a type from its name and how it is
   used. Check the account types in step 2.
 - **IIF lists:** customers (with jobs), vendors (with tax ID and 1099 flag) and items come in.
+  So do the Ship Via list (`SHIPMETH`), each customer's rep (`REP`), and custom field values
+  (`CUSTFLD1`…) on customers, vendors and items. Labels come from `CUSTNAMEDICT` and
+  `CUSTITEMDICT`; a value without a label comes in as *Custom field N*. Invoices and sales
+  receipts keep their `REP`, `SHIPVIA` and `SHIPDATE`.
 - **IIF transactions:** a full import makes invoices, credit memos, sales receipts, payments,
   deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, card credits, transfers,
   estimates and purchase orders. Anything else posts as a journal entry. IIF doesn't record which

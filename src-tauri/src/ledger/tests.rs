@@ -182,6 +182,7 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

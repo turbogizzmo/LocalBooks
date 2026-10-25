@@ -665,5 +665,45 @@ pub async fn missing_checks(pool: &SqlitePool, account_id: i64, start_date: Opti
     })
 }
 
+/// Amount sold per sales rep, from the lines of invoices and sales receipts, by document date, in
+/// home currency. Credit memos carry no rep, so this is gross sales; voided documents are left out.
+pub async fn sales_by_rep(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
+    let rows: Vec<(Option<String>, Option<String>, i64, i64)> = sqlx::query_as(
+        "SELECT r.initials, r.name, SUM(x.qty), SUM(x.amount) FROM (
+            SELECT i.sales_rep_id AS rep, it.quantity_e4 AS qty,
+                   it.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents AS amount
+            FROM invoice_items it JOIN invoices i ON i.id = it.invoice_id
+            WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.issue_date BETWEEN ?1 AND ?2
+            UNION ALL
+            SELECT r.sales_rep_id, sl.quantity_e4, sl.amount_cents
+            FROM sales_receipt_lines sl JOIN sales_receipts r ON r.id = sl.sales_receipt_id
+            WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
+         ) x LEFT JOIN sales_reps r ON r.id = x.rep
+         GROUP BY x.rep
+         HAVING SUM(x.amount) <> 0
+         ORDER BY r.initials IS NULL, r.initials COLLATE NOCASE",
+    )
+    .bind(start_date)
+    .bind(end_date)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(summary(
+        start_date,
+        end_date,
+        rows.into_iter()
+            .map(|(initials, name, qty, cents)| SummaryRow {
+                label: match (initials, name) {
+                    (Some(i), Some(n)) => format!("{i} ({n})"),
+                    (Some(i), None) => i,
+                    _ => "No rep".into(),
+                },
+                quantity_e4: Some(qty),
+                amount_cents: cents,
+            })
+            .collect(),
+    ))
+}
+
 #[cfg(test)]
 mod tests;

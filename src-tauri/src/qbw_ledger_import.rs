@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 
+use crate::custom_fields::FieldList;
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 use crate::qbw_company::Ledger;
 use crate::qbw_full_import::{FullImportCounts, Outcome, Staged};
@@ -123,8 +124,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
             sqlx::query(
                 "INSERT INTO ledger_import_parties
                     (batch_id, kind, source_id, name, parent_source_id, company_name, email, phone, address, terms_days,
-                     tax_id, is_1099, is_active, balance_cents, notes)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                     tax_id, is_1099, is_active, balance_cents, notes, sales_rep, custom_fields)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             )
             .bind(batch_id)
             .bind(kind)
@@ -141,6 +142,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
             .bind(p.active as i64)
             .bind(p.balance_cents)
             .bind(&p.notes)
+            .bind(&p.sales_rep)
+            .bind(custom_json(&p.custom_fields))
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
@@ -149,8 +152,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
     for item in &ledger.items {
         sqlx::query(
             "INSERT INTO ledger_import_items
-                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(batch_id)
         .bind(item.id)
@@ -161,9 +164,22 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
         .bind(item.kind)
         .bind(item.taxable as i64)
         .bind(item.active as i64)
+        .bind(custom_json(&item.custom_fields))
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
+    }
+    for (kind, names) in [("REP", &ledger.sales_lists.reps), ("SHIP_METHOD", &ledger.sales_lists.ship_methods)] {
+        for (name, active) in names {
+            sqlx::query("INSERT OR IGNORE INTO ledger_import_sales_lists (batch_id, kind, name, is_active) VALUES (?1, ?2, ?3, ?4)")
+                .bind(batch_id)
+                .bind(kind)
+                .bind(name)
+                .bind(*active as i64)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_err)?;
+        }
     }
     for (n, u) in ledger.unreadable.iter().enumerate() {
         sqlx::query(
@@ -735,6 +751,17 @@ pub struct ImportListsResult {
     /// Items whose account in the file is not an income account in LocalBooks (or is not mapped),
     /// created against the fallback income account.
     pub items_on_fallback_account: i64,
+    /// Custom field values left out because their list already had 15 fields.
+    pub custom_values_without_room: i64,
+}
+
+/// Custom field values as staged: a JSON array of [label, value] pairs, or nothing.
+fn custom_json(values: &[(String, String)]) -> Option<String> {
+    (!values.is_empty()).then(|| serde_json::to_string(values).expect("pairs serialize"))
+}
+
+fn custom_from_json(json: Option<&str>) -> Vec<(String, String)> {
+    json.and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default()
 }
 
 /// An email LocalBooks will store (it checks `%_@_%._%`); anything else goes to the notes.
@@ -767,10 +794,12 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         is_1099: i64,
         is_active: i64,
         notes: Option<String>,
+        sales_rep: Option<String>,
+        custom_fields: Option<String>,
     }
     let parties: Vec<Party> = sqlx::query_as(
         "SELECT kind, source_id, name, parent_source_id, company_name, email, phone, address, terms_days, tax_id, is_1099,
-                is_active, notes
+                is_active, notes, sales_rep, custom_fields
          FROM ledger_import_parties WHERE batch_id = ?1 AND party_id IS NULL
          ORDER BY kind, length(name) - length(replace(name, ':', '')), name",
     )
@@ -780,6 +809,35 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     .map_err(db_err)?;
     let mut result = ImportListsResult::default();
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    // Reps and shipping methods first, so customers can name their rep. Existing ones are matched
+    // by initials or name; ones the file has hidden come in inactive.
+    let sales_lists: Vec<(String, String, i64)> = sqlx::query_as("SELECT kind, name, is_active FROM ledger_import_sales_lists WHERE batch_id = ?1 ORDER BY kind, name")
+        .bind(batch_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    for (kind, name, active) in sales_lists {
+        let (table, found) = if kind == "REP" {
+            ("sales_reps", crate::sales_lists::find_or_create_rep(&mut tx, &name).await)
+        } else {
+            ("ship_methods", crate::sales_lists::find_or_create_ship_method(&mut tx, &name).await)
+        };
+        let id = match found {
+            Ok(id) => id,
+            Err(e) => return Err(ledger::rollback(tx, e).await),
+        };
+        if let (Some(id), 0) = (id, active) {
+            // Only a rep or method nothing uses yet is made inactive: it was just created.
+            let unused = format!(
+                "UPDATE {table} SET is_active = 0 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM invoices WHERE {col} = ?1)
+                   AND NOT EXISTS (SELECT 1 FROM sales_receipts WHERE {col} = ?1) AND NOT EXISTS (SELECT 1 FROM estimates WHERE {col} = ?1)",
+                col = if kind == "REP" { "sales_rep_id" } else { "ship_method_id" }
+            );
+            if let Err(e) = sqlx::query(&unused).bind(id).execute(&mut *tx).await {
+                return Err(ledger::rollback(tx, db_err(e)).await);
+            }
+        }
+    }
     for p in parties {
         let table = if p.kind == "CUSTOMER" { "customers" } else { "vendors" };
         let existing: Option<i64> = sqlx::query_scalar(&format!("SELECT id FROM {table} WHERE name = ?1 COLLATE NOCASE"))
@@ -846,6 +904,21 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 }
             }
         };
+        if created {
+            let list = if p.kind == "CUSTOMER" { FieldList::Customer } else { FieldList::Vendor };
+            let extras = async {
+                if let Some(rep) = p.sales_rep.as_deref().filter(|_| p.kind == "CUSTOMER") {
+                    let rep = crate::sales_lists::find_or_create_rep(&mut tx, rep).await?;
+                    sqlx::query("UPDATE customers SET sales_rep_id = ?1 WHERE id = ?2").bind(rep).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+                }
+                crate::custom_fields::set_values_by_label(&mut tx, list, id, &custom_from_json(p.custom_fields.as_deref())).await
+            }
+            .await;
+            match extras {
+                Ok(dropped) => result.custom_values_without_room += dropped as i64,
+                Err(e) => return Err(ledger::rollback(tx, format!("{e} ({} {})", p.kind.to_lowercase(), p.name)).await),
+            }
+        }
         match (p.kind.as_str(), created) {
             ("CUSTOMER", true) => result.customers_created += 1,
             ("CUSTOMER", false) => result.customers_matched += 1,
@@ -877,6 +950,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         other_account: Option<String>,
         is_taxable: i64,
         is_active: i64,
+        custom_fields: Option<String>,
     }
     // LocalBooks items post to income accounts only; the desktop program also allows expense and
     // cost accounts (for example a "Parts" item). Those items use the fallback income account,
@@ -885,7 +959,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         "SELECT i.source_id, i.name, i.description, i.rate_cents,
                 CASE WHEN t.classification = 'INCOME' THEN a.account_id END AS mapped_account,
                 CASE WHEN a.account_id IS NULL OR t.classification <> 'INCOME' THEN a.full_name END AS other_account,
-                i.is_taxable, i.is_active
+                i.is_taxable, i.is_active, i.custom_fields
          FROM ledger_import_items i
          LEFT JOIN ledger_import_accounts a ON a.batch_id = i.batch_id AND a.source_id = i.income_source_account_id
          LEFT JOIN chart_of_accounts c ON c.id = a.account_id
@@ -939,12 +1013,20 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 .bind(item.is_active)
                 .fetch_one(&mut *tx)
                 .await;
+                let inserted = match inserted {
+                    Ok(id) => crate::custom_fields::set_values_by_label(&mut tx, FieldList::Item, id, &custom_from_json(item.custom_fields.as_deref()))
+                        .await
+                        .map(|dropped| (id, dropped))
+                        .map_err(|e| format!("{e} (item {})", item.name)),
+                    Err(e) => Err(format!("{} (item {})", db_err(e), item.name)),
+                };
                 match inserted {
-                    Ok(id) => {
+                    Ok((id, dropped)) => {
                         result.items_created += 1;
+                        result.custom_values_without_room += dropped as i64;
                         (id, true)
                     }
-                    Err(e) => return Err(ledger::rollback(tx, format!("{} (item {})", db_err(e), item.name)).await),
+                    Err(e) => return Err(ledger::rollback(tx, e).await),
                 }
             }
         };
@@ -1353,6 +1435,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
         "DELETE FROM ledger_import_unreadable WHERE batch_id = ?1",
         "DELETE FROM ledger_import_parties WHERE batch_id = ?1",
         "DELETE FROM ledger_import_items WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_sales_lists WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",
