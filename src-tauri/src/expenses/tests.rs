@@ -224,3 +224,129 @@ async fn bill_lines_can_be_priced_by_quantity_and_rate() {
     input.lines = vec![BillLineInput { quantity_e4: Some(10_000), rate_cents: None, ..priced(0, 0, 3_247) }];
     assert!(post_vendor_bill(&pool, input).await.unwrap_err().starts_with("BILL_LINE_INCOMPLETE"));
 }
+
+#[tokio::test]
+async fn card_credits_debit_the_card_and_credit_the_splits() {
+    let pool = test_pool().await;
+    let (checking, card, office, fuel) =
+        (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6250").await, account_id(&pool, "6100").await);
+    let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+        kind: kind.into(),
+        payee_name: Some("Office Depot".into()),
+        payment_account_id: account,
+        expense_date: d(8),
+        check_number: Some("ignored".into()),
+        payment_method: None,
+        memo: Some("Returned chair".into()),
+        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None }).collect(),
+        currency: None,
+    };
+    post_expense(&pool, input("EXPENSE", card, vec![(office, 20_000), (fuel, 5_000)])).await.unwrap();
+    let credit = post_expense(&pool, input("CARD_CREDIT", card, vec![(office, 12_000), (fuel, 500)])).await.expect("card credit posts");
+    assert_eq!((credit.kind.as_str(), credit.total_cents, credit.check_number.as_deref(), credit.line_count), ("CARD_CREDIT", 12_500, None, 2));
+    assert_eq!(balance(&pool, card).await, 12_500, "the credit brings the card balance down");
+    assert_eq!((balance(&pool, office).await, balance(&pool, fuel).await), (8_000, 4_500));
+
+    // The entry: Dr the card, Cr each split, labelled as a card credit in the register.
+    let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number")
+        .bind(credit.journal_entry_id)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(lines, vec![(office, 0, 12_000), (fuel, 0, 500), (card, 12_500, 0)]);
+    let register = crate::registers::account_register(&pool, card, None, None, false).await.unwrap();
+    let types: Vec<&str> = register.rows.iter().map(|r| r.source_type.as_str()).collect();
+    assert_eq!(types, vec!["EXPENSE", "CARD_CREDIT"]);
+    let description: String = sqlx::query_scalar("SELECT memo FROM journal_entries WHERE id = ?1").bind(credit.journal_entry_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(description, "Credit Card Credit - Office Depot");
+
+    // Only a credit card account takes a card credit.
+    let err = post_expense(&pool, input("CARD_CREDIT", checking, vec![(office, 100)])).await.expect_err("bank refunds are deposits");
+    assert!(err.starts_with("EXP_BAD_PAYMENT_ACCOUNT"), "{err}");
+
+    // Edit: the original is voided and the edited credit posted in its place.
+    let new_id = crate::edits::replace_expense(&pool, credit.id, input("CARD_CREDIT", card, vec![(office, 3_000)])).await.expect("edit");
+    assert_eq!(balance(&pool, card).await, 22_000);
+    assert_eq!((balance(&pool, office).await, balance(&pool, fuel).await), (17_000, 5_000));
+    let edited = list_expenses(&pool).await.unwrap().into_iter().find(|x| x.id == new_id).unwrap();
+    assert_eq!((edited.kind.as_str(), edited.total_cents, edited.is_voided), ("CARD_CREDIT", 3_000, false));
+
+    // Void: the card goes back up by the credit.
+    crate::ledger::void_transaction(&pool, edited.journal_entry_id.unwrap()).await.expect("void");
+    assert_eq!(balance(&pool, card).await, 25_000);
+    let voided = list_expenses(&pool).await.unwrap().into_iter().filter(|x| x.kind == "CARD_CREDIT" && x.is_voided).count();
+    assert_eq!(voided, 2);
+}
+
+#[tokio::test]
+async fn the_database_holds_card_credits_to_their_rules() {
+    let pool = test_pool().await;
+    let (checking, card, office) = (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6250").await);
+    let raw = |kind: &'static str, account: i64| {
+        sqlx::query("INSERT INTO expenses (kind, payment_account_id, expense_date, total_cents, is_credit) VALUES (?1, ?2, '2026-10-08', 100, 1)")
+            .bind(kind)
+            .bind(account)
+    };
+    let err = raw("EXPENSE", checking).execute(&pool).await.unwrap_err();
+    assert!(err.to_string().contains("EXP_BAD_PAYMENT_ACCOUNT"), "{err}");
+    let err = raw("CHECK", checking).execute(&pool).await.unwrap_err();
+    assert!(err.to_string().contains("EXP_BAD_PAYMENT_ACCOUNT"), "{err}");
+
+    // A card credit whose entry runs the charge's way is refused when the entry is attached.
+    let mut tx = pool.begin().await.unwrap();
+    let id: i64 = sqlx::query_scalar("INSERT INTO expenses (kind, payment_account_id, expense_date, total_cents, is_credit) VALUES ('EXPENSE', ?1, '2026-10-08', 100, 1) RETURNING id")
+        .bind(card)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents) VALUES (?1, 1, ?2, 100)").bind(id).bind(office).execute(&mut *tx).await.unwrap();
+    let wrong_way = JournalEntry { id: None, date: d(8), description: "x".into(), lines: vec![JournalLine::debit(office, 100), JournalLine::credit(card, 100)], currency: None };
+    let entry = post_entry_in_tx(&mut tx, &wrong_way, EntrySource::Expense(id)).await.unwrap();
+    let err = sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut *tx).await.unwrap_err();
+    assert!(err.to_string().contains("EXP_WRONG_DIRECTION"), "{err}");
+    tx.rollback().await.unwrap();
+
+    // A posted charge cannot be turned into a credit.
+    let charge = post_expense(
+        &pool,
+        ExpenseInput {
+            kind: "EXPENSE".into(),
+            payee_name: None,
+            payment_account_id: card,
+            expense_date: d(8),
+            check_number: None,
+            payment_method: None,
+            memo: None,
+            lines: vec![SplitLineInput { account_id: office, amount_cents: 100, memo: None, class_id: None }],
+            currency: None,
+        },
+    )
+    .await
+    .unwrap();
+    let err = sqlx::query("UPDATE expenses SET is_credit = 1 WHERE id = ?1").bind(charge.id).execute(&pool).await.unwrap_err();
+    assert!(err.to_string().contains("EXP_IMMUTABLE"), "{err}");
+}
+
+#[tokio::test]
+async fn foreign_card_credit_debits_the_card_in_home_currency() {
+    let pool = test_pool().await;
+    let (card, travel) = (account_id(&pool, "2100").await, account_id(&pool, "6450").await);
+    let posted = post_expense(
+        &pool,
+        ExpenseInput {
+            kind: "CARD_CREDIT".into(),
+            payee_name: Some("Hotel Tokyo".into()),
+            payment_account_id: card,
+            expense_date: d(3),
+            check_number: None,
+            payment_method: None,
+            memo: None,
+            lines: vec![SplitLineInput { account_id: travel, amount_cents: 1_500_000, memo: None, class_id: None }],
+            currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
+        },
+    )
+    .await
+    .expect("foreign card credit posts");
+    assert_eq!((posted.kind.as_str(), posted.home_total_cents), ("CARD_CREDIT", 10_001));
+    assert_eq!((balance(&pool, card).await, balance(&pool, travel).await), (-10_001, -10_001));
+}

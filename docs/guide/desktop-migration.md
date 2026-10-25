@@ -30,13 +30,13 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   used. Check the account types in step 2.
 - **IIF lists:** customers (with jobs), vendors (with tax ID and 1099 flag) and items come in.
 - **IIF transactions:** a full import makes invoices, credit memos, sales receipts, payments,
-  deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, transfers,
+  deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, card credits, transfers,
   estimates and purchase orders. Anything else posts as a journal entry. IIF doesn't record which
   invoice a payment paid, so, like QuickBooks, LocalBooks applies each payment to that customer's
   oldest open invoices, and each bill payment to that vendor's oldest open bills. A deposit is
   matched to undeposited payments of the same amount.
 - **QIF transactions:** a full import makes checks (when they have a check number), expenses, card
-  charges, deposits and transfers. Opening balances post against Opening Balance Equity.
+  charges, card credits, deposits and transfers. Opening balances post against Opening Balance Equity.
   - A transfer appears in both accounts of a Quicken export; LocalBooks brings it in once.
   - A blank category goes to **Uncategorized Income** or **Uncategorized Expense**.
   - Investment accounts are skipped, because LocalBooks doesn't track securities.
@@ -94,7 +94,7 @@ To bring in a different file later, click **Import another file**.
 
 1. Choose how to bring in the transactions:
    - **Full import** (recommended when the file has sales documents) makes LocalBooks invoices,
-     credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges,
+     credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, card credits,
      transfers, estimates and purchase orders, so open invoices and bills, customer and vendor
      balances, and A/R and A/P aging carry over. Anything that can't be a document posts as a
      journal entry and is listed under **not brought in as LocalBooks documents**.

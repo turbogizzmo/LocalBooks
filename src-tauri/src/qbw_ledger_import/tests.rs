@@ -184,7 +184,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
 }
 
 /// The purchase side of a full import: a bill paid by a bill payment dated before it, a check,
-/// a card charge, and a card credit (no LocalBooks form, so a journal entry).
+/// a card charge, a card credit, and a refund into a bank account (no LocalBooks form, so a
+/// journal entry).
 #[tokio::test]
 async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
     use crate::qbw_documents::{Applied, DocumentLine, SourceDocument};
@@ -225,7 +226,8 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
             ),
             doc(32, "Check", "2024-02-12", &[(1, 2_500), (12, -2_500)], expense(Some("1001"))),
             doc(33, "Credit card charge", "2024-02-13", &[(11, 1_200), (10, -1_200)], expense(None)),
-            doc(34, "Credit card charge", "2024-02-14", &[(11, -300), (10, 300)], expense(None)),
+            doc(34, "Credit card credit", "2024-02-14", &[(11, -300), (10, 200), (12, 100)], expense(None)),
+            doc(35, "Check", "2024-02-15", &[(1, -400), (12, 400)], expense(None)),
         ],
         unbalanced: vec![],
         unreadable: vec![],
@@ -252,23 +254,35 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
     auto_map_accounts(&pool, batch).await.unwrap();
     let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
     let full = posted.full.unwrap();
-    assert_eq!((full.bills, full.bill_payments, full.checks, full.expenses, full.fell_back), (1, 1, 1, 1, 1), "{full:?}");
+    assert_eq!((full.bills, full.bill_payments, full.checks, full.expenses, full.card_credits, full.fell_back), (1, 1, 1, 1, 1, 1), "{full:?}");
 
     let (status, bill_number, lines): (String, Option<String>, i64) =
         sqlx::query_as("SELECT status, bill_number, (SELECT COUNT(*) FROM bill_lines WHERE bill_id = b.id) FROM bills b").fetch_one(&pool).await.unwrap();
     assert_eq!((status.as_str(), bill_number.as_deref(), lines), ("PAID", Some("B-7"), 1), "the payment dated before the bill still applies");
-    let checks: Vec<(String, Option<String>, i64)> =
-        sqlx::query_as("SELECT kind, check_number, total_cents FROM expenses ORDER BY id").fetch_all(&pool).await.unwrap();
-    assert_eq!(checks, vec![("CHECK".into(), Some("1001".into()), 2_500), ("EXPENSE".into(), None, 1_200)]);
+    let checks: Vec<(String, Option<String>, i64, bool)> =
+        sqlx::query_as("SELECT kind, check_number, total_cents, is_credit FROM expenses ORDER BY id").fetch_all(&pool).await.unwrap();
+    assert_eq!(
+        checks,
+        vec![("CHECK".into(), Some("1001".into()), 2_500, false), ("EXPENSE".into(), None, 1_200, false), ("EXPENSE".into(), None, 300, true)]
+    );
+    let credit = crate::expenses::list_expenses(&pool).await.unwrap().into_iter().find(|x| x.kind == "CARD_CREDIT").unwrap();
+    assert_eq!((credit.payee_name.as_deref(), credit.line_count, credit.category_account_id), (Some("Paper Supply Co"), 2, None));
+    let credit_lines: Vec<i64> =
+        sqlx::query_scalar("SELECT amount_cents FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number").bind(credit.id).fetch_all(&pool).await.unwrap();
+    assert_eq!(credit_lines, vec![200, 100], "a card credit's split lines are positive, like a charge's");
 
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert_eq!(summary.fallbacks.len(), 1);
-    assert_eq!(summary.fallbacks[0].reason, "it is a refund or card credit, which has no LocalBooks form");
+    assert_eq!(summary.fallbacks[0].reason, "it is a refund into a bank account, which has no LocalBooks form");
     let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
-    assert_eq!(balance(&pool, mapped("Riverside Bank")).await, -7_500);
+    assert_eq!(balance(&pool, mapped("Riverside Bank")).await, -7_100);
     assert_eq!(balance(&pool, mapped("Visa")).await, -900);
-    assert_eq!(balance(&pool, mapped("Office Expense")).await, 5_900);
+    assert_eq!(balance(&pool, mapped("Office Expense")).await, 6_000);
+    assert_eq!(balance(&pool, mapped("Supplies")).await, 2_000);
     assert_eq!(balance(&pool, mapped("Accounts Payable")).await, 0);
+    let (debits, credits): (i64, i64) =
+        sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines").fetch_one(&pool).await.unwrap();
+    assert_eq!(debits, credits, "the books balance");
 }
 
 /// Transfers, estimates and purchase orders in a full import. Estimates and purchase orders
@@ -374,13 +388,16 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     assert_eq!(reasons, ["not brought in: its customer was not imported", "LocalBooks transfers cannot use one of its accounts (accounts receivable)"]);
 }
 
-/// Full pipeline on a real company file into a fresh test database: set LOCALBOOKS_QBW_CHECK
+/// Full pipeline on a real company file (or backup) into a fresh test database: set LOCALBOOKS_QBW_CHECK
 /// and run `cargo test --release -- --ignored posts_a_real --nocapture`.
 #[tokio::test]
 #[ignore]
 async fn posts_a_real_company_file() {
-    let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-    let ledger = tokio::task::spawn_blocking(move || crate::qbw_company::read_ledger(Path::new(&path))).await.unwrap().unwrap();
+    let path = std::path::PathBuf::from(std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK"));
+    // A backup (.qbb) is unpacked to a temporary company file first, as the app does.
+    let unpacked = crate::qbw_backup::is_backup(&path).then(|| crate::qbw_backup::unpack(&path, &std::env::temp_dir()).unwrap());
+    let file = unpacked.as_ref().map_or(path, |u| u.path.clone());
+    let ledger = tokio::task::spawn_blocking(move || crate::qbw_company::read_ledger(&file)).await.unwrap().unwrap();
     let pool = test_pool().await;
     let started = std::time::Instant::now();
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 0, &ledger).await.unwrap();

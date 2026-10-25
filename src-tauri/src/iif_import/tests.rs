@@ -174,6 +174,56 @@ async fn a_full_import_of_an_iif_file_creates_native_documents() {
     assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty(), "the deposit swept the payment");
 }
 
+/// A card charge and a card credit (`CCARD REFUND`) from an IIF file come in as a LocalBooks
+/// expense and card credit, and the card's balance comes out as in the file.
+#[tokio::test]
+async fn a_full_import_brings_card_credits_in_as_card_credits() {
+    use crate::qbw_ledger_import::{auto_map_accounts, batch_summary, post_batch, stage, ImportMode, PostLedgerInput};
+    const CARD: &str = "!ACCNT\tNAME\tACCNTTYPE\r
+ACCNT\tVisa\tCCARD\r
+ACCNT\tSupplies\tEXP\r
+ACCNT\tPostage\tEXP\r
+!VEND\tNAME\r
+VEND\tOffice Depot\r
+!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO\r
+!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tMEMO\r
+!ENDTRNS\r
+TRNS\t\tCREDIT CARD\t3/1/2024\tVisa\tOffice Depot\t-80\tToner\r
+SPL\t\tCREDIT CARD\t3/1/2024\tSupplies\t\t80\t\r
+ENDTRNS\r
+TRNS\t\tCCARD REFUND\t3/5/2024\tVisa\tOffice Depot\t25.50\tReturned toner\r
+SPL\t\tCCARD REFUND\t3/5/2024\tSupplies\t\t-20\t\r
+SPL\t\tCCARD REFUND\t3/5/2024\tPostage\t\t-5.50\t\r
+ENDTRNS\r
+";
+    let pool = crate::db::test_pool().await;
+    let ledger = read(CARD.as_bytes()).unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Card.iif"), CARD.len() as i64, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.expenses, full.card_credits, full.fell_back, full.journal_entries), (1, 1, 0, 0), "{full:?}");
+    assert!(batch_summary(&pool, batch).await.unwrap().fallbacks.is_empty());
+
+    let credit = crate::expenses::list_expenses(&pool).await.unwrap().into_iter().find(|x| x.kind == "CARD_CREDIT").unwrap();
+    assert_eq!((credit.total_cents, credit.line_count, credit.memo.as_deref()), (2_550, 2, Some("Returned toner")));
+    let net = |name: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM journal_lines l JOIN chart_of_accounts a ON a.id = l.account_id WHERE a.name = ?1",
+            )
+            .bind(name)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+    assert_eq!(net("Visa").await, -5_450, "the card owes the charge less the credit");
+    assert_eq!((net("Supplies").await, net("Postage").await), (6_000, -550));
+    let (debits, credits): (i64, i64) = sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines").fetch_one(&pool).await.unwrap();
+    assert_eq!(debits, credits, "the books balance");
+}
+
 /// Reads every IIF sample in Intuit's import kit: set LOCALBOOKS_IIF_DIR to the unpacked kit.
 /// Each must read with every transaction balanced, no line unreadable, and every transaction
 /// of a known kind, or hold nothing LocalBooks imports.

@@ -221,6 +221,13 @@ export const HELP_ARTICLES = [
     go: { label: 'New expense', view: 'expenses/expenses', action: 'expense' },
   },
   {
+    id: 'card-credit', area: 'expenses', views: ['expenses/expenses'],
+    title: 'Record a credit card credit',
+    body: 'Record a refund or credit from a vendor onto a credit card as a card credit: the reverse of a card charge. It lowers the card balance and takes the amount back out of each expense category on its lines.',
+    keywords: 'refund return credit card credit ccard refund chargeback reversal vendor refund',
+    go: { label: 'New card credit', view: 'expenses/expenses', action: 'card-credit' },
+  },
+  {
     id: 'bill', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Enter a vendor bill',
     body: 'Choose New bill, pick the vendor and split the total across expense accounts, by amount or by quantity × rate; it must add up to the bill total. The bill sits in Accounts Payable until you pay it.',
@@ -525,7 +532,7 @@ const ARTICLE_GUIDES = {
   'sales-receipt': 'sales-receipts-and-estimates', estimate: 'sales-receipts-and-estimates',
   customers: 'customers-and-products', products: 'customers-and-products', 'change-prices': 'customers-and-products', vendors: 'customers-and-products', inventory: 'inventory',
   'fx-revaluation': 'currency-revaluation',
-  'expense-check': 'expenses-and-checks', bill: 'bills', 'pay-bills': 'bills', time: 'time-tracking',
+  'expense-check': 'expenses-and-checks', 'card-credit': 'expenses-and-checks', bill: 'bills', 'pay-bills': 'bills', time: 'time-tracking',
   'bank-feed': 'bank-feeds', deposit: 'deposits-and-transfers', transfer: 'deposits-and-transfers', reconcile: 'reconciling',
   'journal-entry': 'journal-entries-and-voids', void: 'journal-entries-and-voids',
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
