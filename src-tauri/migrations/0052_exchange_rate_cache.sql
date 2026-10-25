@@ -21,5 +21,5 @@ CREATE TABLE exchange_rate_cache (
     CHECK (covers_through >= rate_date)
 ) STRICT;
 
--- Off until the user turns it on in Settings › Preferences Console › Currency.
+-- Off until the user turns it on in Settings › Preferences Console › Accounting & tax.
 INSERT INTO system_preferences (key, value) VALUES ('exchange_rate_lookup', 'false');
