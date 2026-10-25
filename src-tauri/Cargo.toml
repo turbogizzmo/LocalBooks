@@ -24,8 +24,8 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-native-tls"] }
 libc = "0.2"
 openqbw = "=0.1.5"
-pdf-extract = "0.12"
 opensqlany = "=0.2.0"
+pdf-extract = "0.12"
 regex = "1"
 rust_xlsxwriter = "0.101"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
