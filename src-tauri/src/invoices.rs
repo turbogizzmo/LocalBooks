@@ -443,10 +443,15 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
             let home_amount = to_home_cents(input.amount_cents, rate)
                 .filter(|h| *h > 0)
                 .ok_or_else(|| "FX_ROUNDS_TO_ZERO: the payment converts to 0.00 in the home currency".to_string())?;
+            // Voided payments can leave the A/R already relieved a cent or two off the proportional
+            // amount, so the relief is kept between what is already relieved and the home total: A/R
+            // never moves backwards on a payment, and never past zero.
             let relieved_after = if new_paid == total {
                 home_total
             } else {
-                mul_div_round(home_total, new_paid, total).ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?
+                mul_div_round(home_total, new_paid, total)
+                    .ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?
+                    .clamp(relieved_before, home_total)
             };
             Some((rate, home_amount, relieved_after - relieved_before))
         }
@@ -929,6 +934,49 @@ mod tests {
 
         let err = record_payment(&pool, PaymentInput { exchange_rate_e6: Some(1_000_000), ..pay(21, 100, 1) }).await;
         assert!(err.is_ok(), "a foreign invoice accepts an explicit rate");
+        let tb = crate::reports::trial_balance(&pool).await.unwrap();
+        assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
+    }
+
+    #[tokio::test]
+    async fn foreign_payment_after_voided_partial_payments_is_accepted() {
+        // Found by the ledger property tests: EUR 0.27 at 0.7579 books $0.20 of A/R. Paying 21, 1,
+        // 3, 1 and 1 cents relieves 16, 0, 3, 0 and 1 cents; voiding two of the one-cent payments
+        // leaves 20 cents relieved against 25 paid, more than the proportional 19 for the next
+        // payment, whose relief used to come out at -1 cent and was refused by the database.
+        let pool = test_pool().await;
+        let (ar, checking, services) = (account_id(&pool, "1200").await, account_id(&pool, "1010").await, account_id(&pool, "4100").await);
+        let rate = 757_900;
+        let invoice = create_and_post_invoice(
+            &pool,
+            InvoiceInput {
+                customer_name: "Lyon SARL".into(),
+                issue_date: d(1),
+                due_date: d(31),
+                lines: vec![InvoiceLineInput{ description: "Sample".into(), quantity_e4: 10_000, rate_cents: 27, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+                currency: Some(ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
+                tax_rate_id: None,
+                discount_cents: 0,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(invoice.home_total_cents, 20);
+        let pay = |cents| PaymentInput { exchange_rate_e6: Some(rate), ..payment(invoice.id, checking, 2, cents) };
+        for cents in [21, 1, 3, 1, 1] {
+            record_payment(&pool, pay(cents)).await.unwrap();
+        }
+        let payments = list_payments(&pool, invoice.id).await.unwrap();
+        assert_eq!(payments.iter().map(|p| p.ar_relief_cents.unwrap()).collect::<Vec<_>>(), [16, 0, 3, 0, 1]);
+        for p in [&payments[1], &payments[3]] {
+            crate::ledger::void_transaction(&pool, p.journal_entry_id.unwrap()).await.unwrap();
+        }
+        assert_eq!(balance(&pool, ar).await, 0, "the voided payments relieved nothing");
+
+        let summary = record_payment(&pool, pay(1)).await.expect("the payment is accepted");
+        assert_eq!((summary.balance_cents, summary.home_balance_cents, balance(&pool, ar).await), (1, 0, 0));
+        let last = record_payment(&pool, pay(1)).await.expect("the final payment is accepted");
+        assert_eq!((last.status.as_str(), last.home_balance_cents, balance(&pool, ar).await), ("PAID", 0, 0));
         let tb = crate::reports::trial_balance(&pool).await.unwrap();
         assert_eq!(tb.total_debit_cents, tb.total_credit_cents);
     }

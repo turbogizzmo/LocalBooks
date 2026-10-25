@@ -101,6 +101,11 @@ fn cents() -> impl Strategy<Value = i64> {
     prop_oneof![3 => 1i64..=100_000, 1 => 1i64..=10_000_000_000, 1 => Just(1i64)]
 }
 
+/// Mostly ordinary rates; sometimes a few cents, where foreign-currency rounding shows.
+fn line_rate() -> impl Strategy<Value = i64> {
+    prop_oneof![4 => 100i64..=200_000, 1 => 4i64..=40]
+}
+
 fn percent() -> impl Strategy<Value = u8> {
     prop_oneof![Just(100u8), 1u8..=99]
 }
@@ -114,7 +119,7 @@ fn op() -> impl Strategy<Value = Op> {
     prop_oneof![
         3 => (day.clone(), pick(), pick(), cents())
             .prop_map(|(day, debit, credit, cents)| Op::Journal { day, debit, credit, cents }),
-        3 => (day.clone(), 0u16..60, prop::collection::vec((1i64..=20, 100i64..=200_000), 1..4), pick(), 0u8..3, prop::option::weighted(0.3, fx_rate()))
+        3 => (day.clone(), 0u16..60, prop::collection::vec((1i64..=20, line_rate()), 1..4), pick(), 0u8..3, prop::option::weighted(0.3, fx_rate()))
             .prop_map(|(day, due_in, lines, income, customer, fx_rate)| Op::Invoice { day, due_in, lines, income, customer, fx_rate }),
         3 => (pick(), percent(), 0u16..90, any::<bool>(), fx_rate())
             .prop_map(|(invoice, percent, after, undeposited, fx_rate)| Op::ReceivePayment { invoice, percent, after, undeposited, fx_rate }),
@@ -430,8 +435,13 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
                 None => (amount, amount),
                 Some(rate) => {
                     let home = to_home_cents(amount, rate).unwrap();
-                    let relieved_after =
-                        if new_paid == inv.total { inv.home_total } else { mul_div_round(inv.home_total, new_paid, inv.total).unwrap() };
+                    // Never backwards, never past the home total (voided payments can leave the A/R
+                    // relieved so far a little off the proportional amount).
+                    let relieved_after = if new_paid == inv.total {
+                        inv.home_total
+                    } else {
+                        mul_div_round(inv.home_total, new_paid, inv.total).unwrap().clamp(inv.relieved, inv.home_total)
+                    };
                     (home, relieved_after - inv.relieved)
                 }
             };
@@ -1057,3 +1067,18 @@ fn voiding_a_payment_reopens_its_invoice() {
     ]);
 }
 
+#[test]
+fn foreign_payment_after_voided_partial_payments() {
+    let pay = |percent| Op::ReceivePayment { invoice: Pick(0), percent, after: 1, undeposited: false, fx_rate: 757_900 };
+    replay(vec![
+        Op::Invoice { day: 10, due_in: 30, lines: vec![(4, 27)], income: Pick(0), customer: 0, fx_rate: Some(757_900) },
+        pay(78),
+        pay(1),
+        pay(60),
+        pay(50),
+        pay(100),
+        Op::Void { entry: Pick(1) },
+        Op::Void { entry: Pick(2) },
+        pay(50),
+    ]);
+}
