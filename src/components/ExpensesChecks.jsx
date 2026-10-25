@@ -180,7 +180,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           </label>
         )}
         {formClass.header}
-        <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
+        <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={date} />
         <div className="ml-auto text-right">
           <div className="qb-label">{isCredit ? 'Credit amount' : 'Total'}</div>
           <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
