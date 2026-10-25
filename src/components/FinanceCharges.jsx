@@ -27,7 +27,8 @@ export default function FinanceCharges({ accounts, navigate }) {
   const data = preview.data;
   const customers = data?.asOf === asOf ? data.customers : [];
   useEffect(() => {
-    setRows(Object.fromEntries(customers.map((c) => [c.customerName, { picked: true, amount: centsToInput(c.chargeCents) }])));
+    // A customer whose charge works out to nothing starts unticked.
+    setRows(Object.fromEntries(customers.map((c) => [c.customerName, { picked: c.chargeCents > 0, amount: centsToInput(c.chargeCents) }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
