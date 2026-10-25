@@ -44,7 +44,7 @@ export const SCREEN_HELP = {
   'accounting/audit': 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
   'accounting/qbw-import': 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
-  reports: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
+  reports: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
   settings: 'Company details and preferences, the closing date, backups and company files, users and passwords, and local AI access.',
 };
 
@@ -165,8 +165,8 @@ export const HELP_ARTICLES = [
   {
     id: 'budgets', area: 'accounting', views: ['accounting/budgets', 'reports'],
     title: 'Set a budget and compare it with actuals',
-    body: 'Accounting › Budgets holds expected income and expenses per account for each month of a fiscal year; Copy across repeats the first month. Reports › Budget vs. Actuals shows actual, budget, the amount over budget and the percent of budget.',
-    keywords: 'budget forecast plan budget vs actual variance',
+    body: 'Accounting › Budgets holds expected income and expenses per account for each month of a fiscal year, and optionally the month-end balance of balance sheet accounts; Copy across repeats the first month. Reports › Profit and Loss Budget vs. Actual and Balance Sheet Budget vs. Actual show actual, budget, the amount over budget and the percent of budget.',
+    keywords: 'budget forecast plan budget vs actual variance balance sheet budget',
     go: { label: 'Go to Budgets', view: 'accounting/budgets' },
   },
   {
@@ -389,6 +389,27 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Reports', view: 'reports' },
   },
   {
+    id: 'prev-year', area: 'reports', views: ['reports'],
+    title: 'Compare this year with last year',
+    body: 'Reports › Profit and Loss Prev Year Comparison puts a period beside the same dates a year earlier; Balance Sheet Prev Year Comparison does the same for an as-of date. Both show the change in dollars and percent.',
+    keywords: 'previous year comparison prior year last year compare change percent year over year',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'inventory-reports', area: 'reports', views: ['reports', 'sales/products'],
+    title: 'Value inventory and check stock levels',
+    body: 'Inventory Valuation Summary shows each tracked item’s quantity, average cost and value as of a date, and Inventory Valuation Detail every movement in a period. Inventory Stock Status by Item adds what is on order and how fast each item sells.',
+    keywords: 'inventory valuation summary detail stock status on hand average cost asset value reorder purchase order',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'missing-checks', area: 'reports', views: ['reports', 'expenses/expenses'],
+    title: 'Find missing or duplicate check numbers',
+    body: 'Reports › Missing Checks lists the checks written from a bank account in number order and marks numbers that were skipped or used twice. Voided checks keep their number.',
+    keywords: 'missing checks check numbers gap skipped duplicate void check register',
+    go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
     id: 'export', area: 'reports', views: ['reports'],
     title: 'Export, print or save a report as PDF',
     body: 'Use Export on a report to save it as a CSV file for a spreadsheet, or to print it. Choose Save as PDF in the print dialog to keep a copy with your company logo.',
@@ -502,6 +523,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
+  'prev-year': 'reports', 'inventory-reports': 'reports', 'missing-checks': 'reports', budgets: 'reports',
   preferences: 'getting-started', users: 'users-and-passwords', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'send-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting', windows: 'getting-started',
 };

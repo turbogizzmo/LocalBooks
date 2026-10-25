@@ -280,3 +280,87 @@ async fn empty_books_still_render_and_balance() {
     assert!(bs.is_balanced);
     assert!(profit_and_loss(&pool, ymd(2026, 2, 1), ymd(2026, 1, 1)).await.is_err());
 }
+
+fn row<'l>(lines: &'l [ClassReportLine], label: &str) -> &'l [Option<i64>] {
+    &lines.iter().find(|l| l.label == label).unwrap_or_else(|| panic!("missing line {label}")).amounts_cents
+}
+
+#[tokio::test]
+async fn balance_sheet_previous_year_comparison_lines_up_and_matches_each_date() {
+    let pool = test_pool().await;
+    let n = |s| account_id(&pool, s);
+    let (checking, savings, card, owner, services, rent) = (n("1010").await, n("1020").await, n("2100").await, n("3100").await, n("4100").await, n("6300").await);
+    post(&pool, ymd(2025, 3, 1), checking, owner, 1_000_000).await;
+    post(&pool, ymd(2025, 6, 1), checking, services, 200_000).await;
+    // Only this year: a savings account and a card balance.
+    post(&pool, ymd(2026, 2, 1), savings, checking, 300_000).await;
+    post(&pool, ymd(2026, 2, 10), rent, card, 50_000).await;
+
+    let (now, then) = (ymd(2026, 6, 30), ymd(2025, 6, 30));
+    let columns = [AsOfColumn { label: "Jun 30, 26".into(), as_of: now }, AsOfColumn { label: "Jun 30, 25".into(), as_of: then }];
+    let report = balance_sheet_columns(&pool, &columns, true).await.unwrap();
+    let labels: Vec<&str> = report.columns.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["Jun 30, 26", "Jun 30, 25", "$ Change", "% Change"]);
+    // Each date's column is that date's Balance Sheet.
+    for (i, as_of) in [now, then].into_iter().enumerate() {
+        let bs = balance_sheet(&pool, as_of).await.unwrap();
+        for line in &bs.lines {
+            assert_eq!(row(&report.lines, &line.label)[i], line.amount_cents, "{} on {as_of}", line.label);
+        }
+    }
+    assert_eq!(row(&report.lines, "1020 Savings"), [Some(300_000), Some(0), Some(300_000), None], "new this year: no percent against zero");
+    assert_eq!(row(&report.lines, "1010 Checking"), [Some(900_000), Some(1_200_000), Some(-300_000), Some(-2_500)]);
+    assert_eq!(row(&report.lines, "3900 Retained Earnings"), [Some(200_000), Some(0), Some(200_000), None]);
+    assert_eq!(row(&report.lines, "Net Income"), [Some(-50_000), Some(200_000), Some(-250_000), Some(-12_500)]);
+    assert_eq!(row(&report.lines, "TOTAL ASSETS"), row(&report.lines, "TOTAL LIABILITIES AND EQUITY"));
+
+    assert!(balance_sheet_columns(&pool, &columns[..1], true).await.unwrap_err().starts_with("RPT_BAD_COMPARE"));
+    assert!(balance_sheet_columns(&pool, &[], false).await.unwrap_err().starts_with("RPT_BAD_COLUMNS"));
+}
+
+#[tokio::test]
+async fn balance_sheet_budget_vs_actual_compares_month_end_balances() {
+    let pool = test_pool().await;
+    let n = |s| account_id(&pool, s);
+    let (checking, card, owner, services, rent) = (n("1010").await, n("2100").await, n("3100").await, n("4100").await, n("6300").await);
+    post(&pool, ymd(2026, 1, 2), checking, owner, 500_000).await;
+    post(&pool, ymd(2026, 1, 20), checking, services, 80_000).await;
+    post(&pool, ymd(2026, 2, 3), rent, card, 30_000).await;
+    post(&pool, ymd(2026, 3, 9), checking, services, 10_000).await; // after the report month
+
+    let budget = create_budget(&pool, "Plan", ymd(2026, 5, 1)).await.unwrap();
+    let a = |account_id, period, amount_cents| BudgetAmount { account_id, period, amount_cents };
+    set_budget_amounts(
+        &pool,
+        budget.id,
+        &[
+            // Balance sheet accounts: the month-end balance.
+            a(checking, 1, 550_000),
+            a(checking, 2, 600_000),
+            a(card, 2, 20_000),
+            a(owner, 2, 500_000),
+            // Income and expense: each month's amount, giving the budgeted net income to date.
+            a(services, 1, 50_000),
+            a(services, 2, 50_000),
+            a(services, 3, 50_000),
+            a(rent, 2, 25_000),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let report = balance_sheet_budget_vs_actual(&pool, budget.id, 2).await.unwrap();
+    assert_eq!((report.start_date, report.end_date), (ymd(2026, 1, 1), ymd(2026, 2, 28)));
+    assert_eq!(row(&report.lines, "1010 Checking"), [Some(580_000), Some(600_000), Some(-20_000), Some(9_667)]);
+    assert_eq!(row(&report.lines, "2100 Credit Card"), [Some(30_000), Some(20_000), Some(10_000), Some(15_000)]);
+    assert_eq!(row(&report.lines, "Net Income"), [Some(50_000), Some(75_000), Some(-25_000), Some(6_667)], "100,000 income less 25,000 rent budgeted through February");
+    let actual = balance_sheet(&pool, ymd(2026, 2, 28)).await.unwrap();
+    assert_eq!(row(&report.lines, "TOTAL ASSETS")[0], Some(actual.total_assets_cents));
+    assert_eq!(row(&report.lines, "TOTAL ASSETS")[1], Some(600_000));
+
+    // The Profit and Loss budget report ignores the balance sheet amounts.
+    let pl = budget_vs_actual(&pool, budget.id, 1, 2).await.unwrap();
+    assert!(pl.lines.iter().all(|l| l.label != "1010 Checking"));
+    assert_eq!(row(&pl.lines, "4100 Services"), [Some(80_000), Some(100_000), Some(-20_000), Some(8_000)]);
+    assert!(balance_sheet_budget_vs_actual(&pool, budget.id, 13).await.unwrap_err().starts_with("RPT_BAD_RANGE"));
+}
