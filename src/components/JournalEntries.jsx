@@ -12,7 +12,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 export const SOURCE_LABEL = {
   JOURNAL: 'Journal Entry', INVOICE: 'Invoice', RECEIVE_PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt',
   CREDIT_MEMO: 'Credit Memo', BILL: 'Bill', BILL_PAYMENT: 'Bill Payment', VENDOR_CREDIT: 'Vendor Credit',
-  CHECK: 'Check', EXPENSE: 'Expense', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Balance',
+  CHECK: 'Check', EXPENSE: 'Expense', CARD_CREDIT: 'Credit Card Credit', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Balance',
 };
 
 let nextKey = 1;

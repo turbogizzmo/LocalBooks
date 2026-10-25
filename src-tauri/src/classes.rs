@@ -10,7 +10,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine};
+use crate::ledger::{db_err, post_entry_in_tx, DISPLAY_SOURCE_TYPE, rollback, EntrySource, JournalEntry, JournalLine};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -236,8 +236,8 @@ pub struct ReclassQuery {
 /// Income and expense lines in the range that can be reclassified: posted, not voided, not a void's
 /// reversal, and not themselves part of a reclassifying entry.
 pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Result<Vec<ReclassLine>, String> {
-    sqlx::query_as::<_, ReclassLine>(
-        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, e.source_type,
+    sqlx::query_as::<_, ReclassLine>(&format!(
+        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 COALESCE(l.memo, e.memo) AS memo, l.account_id, a.full_name AS account_name,
                 l.debit_cents - l.credit_cents AS amount_cents, x.class_id, k.full_name AS class_name
          FROM journal_lines l
@@ -252,8 +252,8 @@ pub async fn reclass_candidates(pool: &SqlitePool, query: &ReclassQuery) -> Resu
            AND (?3 IS NULL OR l.account_id = ?3)
            AND (?4 IS NULL OR x.class_id IN (SELECT class_id FROM v_class_ancestry WHERE ancestor_id = ?4))
            AND (?5 = 0 OR x.class_id IS NULL)
-         ORDER BY e.entry_date, e.entry_number, l.line_number",
-    )
+         ORDER BY e.entry_date, e.entry_number, l.line_number"
+    ))
     .bind(query.start_date)
     .bind(query.end_date)
     .bind(query.account_id)

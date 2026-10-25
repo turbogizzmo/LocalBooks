@@ -638,6 +638,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
               [f.billPayments, DOCUMENT_WORDS.billPayment],
               [f.checks, ['check', 'checks']],
               [f.expenses, ['card charge', 'card charges']],
+              [f.cardCredits, ['card credit', 'card credits']],
               [f.transfers, DOCUMENT_WORDS.transfer],
               [f.estimates, DOCUMENT_WORDS.estimate],
               [f.purchaseOrders, DOCUMENT_WORDS.purchaseOrder],
