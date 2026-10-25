@@ -61,6 +61,9 @@ mod users;
 mod windows;
 mod workflows;
 
+#[cfg(test)]
+mod harness;
+
 use tauri::Manager;
 
 /// Where the company file, backups and settings live. Development builds (`tauri dev`, debug)

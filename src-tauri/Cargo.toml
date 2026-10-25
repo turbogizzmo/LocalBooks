@@ -46,3 +46,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native"] }
 [profile.release]
 codegen-units = 1
 lto = true
+
+[dev-dependencies]
+insta = "1"
+proptest = { version = "1", default-features = false, features = ["std"] }
