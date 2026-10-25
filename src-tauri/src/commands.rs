@@ -2209,6 +2209,10 @@ pub struct UsersTurnedOn {
 pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Option<String>, password: String) -> Result<UsersTurnedOn, String> {
     let (pool, slot) = db.pool_and_session().await?;
     let (session, recovery) = users::turn_on(&pool, &username, display_name.as_deref(), &password).await?;
+    // The tax IDs it just encrypted may still sit in plain in free pages and the journal.
+    if let Err(err) = crate::db::compact(&pool).await {
+        eprintln!("LocalBooks: could not compact the company file after turning on users: {err}");
+    }
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;

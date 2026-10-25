@@ -17,6 +17,9 @@ signs in with their own password, and tax IDs are encrypted so only the people y
 Every tax ID already in the file is encrypted in the same step. The company file now opens on a
 sign-in screen.
 
+> **Note:** Backups made before you turned on users still contain tax IDs in plain text. Delete the
+> ones you no longer need, or keep them somewhere as safe as the books themselves.
+
 > **Tip:** The recovery key is the only way back in if every Admin forgets their password.
 > LocalBooks keeps no copy, and nobody (including LocalBooks' authors) can reset it for you.
 
@@ -71,7 +74,7 @@ Click **I forgot my password** on the sign-in screen.
 - **No Admin password and no recovery key:** click **No Admin password and no recovery key?**. Typing
   **REMOVE ALL USERS** removes every user and erases every encrypted tax ID for good. Transactions,
   lists and reports are kept, and the file opens without signing in again, as before users were
-  turned on.
+  turned on. This is recorded in the audit trail, with the names of the users removed.
 
 An Admin can issue a new recovery key at any time with **New Recovery Key…**; the old one stops
 working.

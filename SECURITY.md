@@ -50,6 +50,10 @@ file can see and change everything, as in earlier versions.
   system's credential store and is used once per opening of the file, never after a sign-out or idle
   sign-out.
 - **Audit trail:** ledger entries record the signed-in user together with the computer's user.
+  Turning users on, adding or changing a user, password resets, using or replacing the recovery key
+  and removing all users are recorded in the same hash-chained trail (never with a password or key).
+- **No plain copies left in the file:** turning users on encrypts existing tax IDs and then compacts
+  the file and empties its write-ahead log; deleted content is overwritten from then on.
 - The local AI access (MCP) server sees no books while a file with users has nobody signed in.
 
 What this does not cover:
@@ -57,6 +61,11 @@ What this does not cover:
 - Only tax IDs are encrypted. The rest of the company file, its backups, attachments and anything
   exported (CSV, PDF) are readable by anyone who has the file. Use full-disk encryption (FileVault,
   BitLocker) on every computer that holds them.
+- Backups made *before* users were turned on still hold tax IDs in plain text. Delete them, or keep
+  them somewhere as safe as the books themselves.
+- Anyone at the sign-in screen can remove all users (the way back when no Admin password or recovery
+  key is left). It erases every encrypted tax ID and is recorded in the audit trail, but it does
+  give that person the rest of the books.
 - Roles are enforced by LocalBooks, not by the file: another program can read or change the
   database directly. The ledger audit trail is hash-chained and anchored outside the file, so such
   changes are detected (Accounting › Audit Log › Verify ledger integrity), not prevented.

@@ -678,6 +678,9 @@ export function UsersSettings() {
     return (
       <section className="qb-panel max-w-[600px] p-2">
         <h2 className="mb-1 text-md font-semibold">Users are on. Save your recovery key</h2>
+        <p className="mb-2 text-sm text-qb-ink-muted">
+          Tax IDs in this file are now encrypted. Backups made before today still contain them in plain text: delete the ones you no longer need.
+        </p>
         {/* Reloading signs every window in as the new Admin. */}
         <RecoveryKeyPanel recoveryKey={turnedOn.recoveryKey} onDone={() => window.location.reload()} />
       </section>

@@ -31,6 +31,7 @@ const RECOVERY_BYTES: usize = 20;
 /// Crockford base32: no I, L, O or U, so a recovery key read aloud or typed from paper is unambiguous.
 const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 pub const MIN_PASSWORD_CHARS: usize = 8;
+pub const MAX_PASSWORD_CHARS: usize = 1024;
 
 /// Argon2id cost of a key slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,8 +193,12 @@ fn slot_aad(key_id: &str, kind: &str, user_id: Option<i64>) -> Vec<u8> {
 }
 
 /// Derives a slot's key from a password or recovery key. Argon2id is slow by design, so it runs off
-/// the async workers.
+/// the async workers. The cost comes from the company file, so it is bounded: a tampered file must
+/// not be able to ask for gigabytes of memory or minutes of work.
 async fn derive(secret: Zeroizing<Vec<u8>>, salt: [u8; SALT_LEN], cost: Cost) -> Result<Zeroizing<[u8; KEY_LEN]>, String> {
+    if !(8..=1024 * 1024).contains(&cost.memory_kib) || !(1..=16).contains(&cost.iterations) || !(1..=8).contains(&cost.parallelism) {
+        return Err("CRYPTO_KDF: unusable key slot cost".into());
+    }
     tokio::task::spawn_blocking(move || {
         let params = Params::new(cost.memory_kib, cost.iterations, cost.parallelism, Some(KEY_LEN))
             .map_err(|e| format!("CRYPTO_KDF: unusable key slot cost ({e})"))?;
@@ -237,8 +242,12 @@ pub async fn create(conn: &mut SqliteConnection) -> Result<(DataKey, RecoveryKey
 
 /// The password rules: at least [`MIN_PASSWORD_CHARS`] characters, nothing else.
 pub fn check_password_rules(password: &str) -> Result<(), String> {
-    if password.chars().count() < MIN_PASSWORD_CHARS {
+    let chars = password.chars().count();
+    if chars < MIN_PASSWORD_CHARS {
         return Err(format!("PASSWORD_TOO_SHORT: use at least {MIN_PASSWORD_CHARS} characters"));
+    }
+    if chars > MAX_PASSWORD_CHARS {
+        return Err(format!("PASSWORD_TOO_LONG: use at most {MAX_PASSWORD_CHARS} characters"));
     }
     Ok(())
 }
@@ -540,6 +549,17 @@ mod tests {
         assert!(!verify_password("corr3ct horsE", &verifier).await.unwrap());
         assert_ne!(verifier, password_verifier("corr3ct horse").await.unwrap(), "salted");
         assert!(verify_password("x", "argon2id$1$2").await.unwrap_err().starts_with("CRYPTO_VERIFIER"));
+    }
+
+    #[tokio::test]
+    async fn a_tampered_slot_cost_is_refused_not_obeyed() {
+        let (pool, key, _) = protected().await;
+        let mut conn = pool.acquire().await.unwrap();
+        set_password(&mut conn, &key, 7, "corr3ct horse").await.unwrap();
+        sqlx::query("UPDATE key_slots SET memory_kib = 1073741824 WHERE user_id = 7").execute(&mut *conn).await.unwrap();
+        assert!(unlock_with_password(&mut conn, 7, "corr3ct horse").await.unwrap_err().starts_with("CRYPTO_KDF"));
+        assert!(verify_password("x", "argon2id$99999999$3$1$AAAAAAAAAAAAAAAAAAAAAA$AAAA").await.unwrap_err().starts_with("CRYPTO_KDF"));
+        assert!(set_password(&mut conn, &key, 7, &"x".repeat(MAX_PASSWORD_CHARS + 1)).await.unwrap_err().starts_with("PASSWORD_TOO_LONG"));
     }
 
     #[tokio::test]

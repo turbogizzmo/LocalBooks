@@ -50,9 +50,11 @@ pub struct TaxIdView {
     pub masked: Option<String>,
 }
 
-/// Stars every digit but the last four, keeping the dashes: `123-45-6789` → `***-**-6789`.
+/// Stars every digit but the last four, keeping the dashes: `123-45-6789` → `***-**-6789`. An ID
+/// shorter than eight letters and digits is starred entirely: its last four would give most of it away.
 pub fn mask(plain: &str) -> String {
     let digits = plain.chars().filter(char::is_ascii_alphanumeric).count();
+    let shown = if digits >= 8 { 4 } else { 0 };
     let mut seen = 0;
     plain
         .chars()
@@ -61,7 +63,7 @@ pub fn mask(plain: &str) -> String {
                 return c;
             }
             seen += 1;
-            if seen + 4 > digits { c } else { '*' }
+            if seen + shown > digits { c } else { '*' }
         })
         .collect()
 }
@@ -135,7 +137,8 @@ mod tests {
     fn masks_keep_the_last_four_and_the_shape() {
         assert_eq!(mask("123-45-6789"), "***-**-6789");
         assert_eq!(mask("12-3456789"), "**-***6789");
-        assert_eq!(mask("123"), "123");
+        assert_eq!(mask("123"), "***");
+        assert_eq!(mask("12-34567"), "**-*****", "too short to show the last four");
         assert!(looks_like_tax_id("12-3456789") && looks_like_tax_id("123 45 6789"));
         assert!(!looks_like_tax_id("AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAexample") && !looks_like_tax_id("n/a"));
     }
@@ -169,6 +172,30 @@ mod tests {
         // A plain value (an import not yet protected) is still masked for users without the key.
         let plain = show(without, 4, Some("98-7654321"), None).unwrap();
         assert_eq!((plain.full, plain.masked.as_deref()), (None, Some("**-***4321")));
+    }
+
+    #[tokio::test]
+    async fn no_plain_tax_id_is_left_in_the_file_after_turning_users_on() {
+        let dir = std::env::temp_dir().join(format!("localbooks-plain-{}-{}", std::process::id(), chrono::Local::now().format("%H%M%S%f")));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("books.localbooks");
+        let pool = crate::db::open(&path).await.unwrap();
+        for i in 0..200 {
+            sqlx::query("INSERT INTO vendors (name, tax_id) VALUES (?1, ?2)").bind(format!("Vendor {i}")).bind(format!("987-65-{i:04}")).execute(&pool).await.unwrap();
+        }
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
+        crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+        crate::db::compact(&pool).await.unwrap();
+        pool.close().await;
+
+        let mut bytes = std::fs::read(&path).unwrap();
+        for sidecar in ["-wal", "-journal"] {
+            bytes.extend(std::fs::read(format!("{}{sidecar}", path.display())).unwrap_or_default());
+        }
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(!text.contains("987-65-0042"), "a plain tax ID survived in the file or its journal");
+        assert!(text.contains("***-**-0042"), "the masked copy is there");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

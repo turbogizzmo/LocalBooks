@@ -64,6 +64,8 @@ pub struct Db {
     /// Who may do what right now, read without waiting by the check in front of every command.
     gate: std::sync::RwLock<crate::permissions::Gate>,
     idle: std::sync::Mutex<Idle>,
+    /// One refresh at a time, so a slower one can never write an older picture over a newer one.
+    refreshing: tokio::sync::Mutex<()>,
 }
 
 /// Returned by operations that need an open company file while none is.
@@ -134,6 +136,7 @@ impl Db {
             startup_warning: std::sync::Mutex::new(None),
             gate: std::sync::RwLock::new(crate::permissions::Gate::Unchecked),
             idle: std::sync::Mutex::new(Idle { last: std::time::SystemTime::now(), limit: None }),
+            refreshing: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -296,6 +299,7 @@ impl Db {
     /// also records the signed-in user as the audit trail's actor.
     pub async fn refresh_gate(&self) {
         use crate::permissions::{Gate, SignedIn};
+        let _one_at_a_time = self.refreshing.lock().await;
         let mut limit = None;
         let (gate, actor) = match self.live.read().await.as_ref() {
             None => (Gate::NoCompany, None),
@@ -554,6 +558,16 @@ async fn open_company_file(path: &Path, backups: &Path) -> Result<Live, String> 
     Ok(live)
 }
 
+/// Rewrites the company file without free space, and empties the write-ahead log, so values that
+/// were just encrypted leave no plain copy behind in the file or its journal (after users are turned
+/// on). Runs outside any transaction.
+pub async fn compact(pool: &SqlitePool) -> Result<(), String> {
+    sqlx::query("VACUUM").execute(pool).await.map_err(|e| format!("DB_COMPACT: {e}"))?;
+    // Rollback-journal files (shared locations) have no log to empty; the pragma is a no-op there.
+    sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(pool).await.map_err(|e| format!("DB_COMPACT: {e}"))?;
+    Ok(())
+}
+
 /// Embedded schema migrations from `src-tauri/migrations`.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -581,6 +595,9 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         .create_if_missing(true)
         .foreign_keys(true)
         .synchronous(SqliteSynchronous::Full)
+        // Overwrite deleted and replaced content, so a value written in plain and then encrypted
+        // (an import's tax IDs) does not linger in free space.
+        .pragma("secure_delete", "ON")
         .busy_timeout(Duration::from_secs(5));
     let (options, connections) = if storage.is_shared() {
         (base.journal_mode(SqliteJournalMode::Delete).locking_mode(SqliteLockingMode::Exclusive), 1)
@@ -776,6 +793,7 @@ mod migrate_tests {
             (42, "02edb65210048bf6d56b7aaf"),
             (43, "a3c2aae0cee51bb815cede4b"),
             (44, "2eb3f96cc028ff0f7a2ef7cd"),
+            (45, "ad79e6b147ac00c8f5a22a9b"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()
