@@ -1,0 +1,16 @@
+{
+  "name": "localbooks-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests that drive the built LocalBooks app through tauri-driver (Windows and Linux).",
+  "scripts": {
+    "test": "wdio run wdio.conf.js",
+    "seed": "node -e \"import('./lib/app.js').then((app) => app.seedCompanies())\""
+  },
+  "devDependencies": {
+    "@wdio/cli": "9.32.0",
+    "@wdio/local-runner": "9.32.0",
+    "@wdio/mocha-framework": "9.32.0",
+    "@wdio/spec-reporter": "9.32.0"
+  }
+}
