@@ -43,7 +43,7 @@ BEGIN
     SELECT RAISE(ABORT, 'FC_IMMUTABLE: an assessed finance charge cannot be changed; void its invoice instead');
 END;
 
--- Off until a rate and an income account are chosen in Settings › Sales.
+-- Off until a rate and an income account are chosen in Settings › Preferences Console › Finance charges.
 INSERT INTO system_preferences (key, value) VALUES
     ('finance_charge_annual_rate',        '0'),
     ('finance_charge_minimum',            '0.00'),

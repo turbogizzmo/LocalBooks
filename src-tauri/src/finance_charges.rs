@@ -1,7 +1,8 @@
 //! Finance charges: interest on overdue invoice balances, assessed as invoices of their own.
 //!
-//! The preferences (Settings › Sales) set an annual rate, a minimum charge, grace days, the income
-//! account credited, and whether earlier finance charges themselves earn finance charges.
+//! The preferences (Settings › Preferences Console › Finance charges) set an annual rate, a minimum
+//! charge, grace days, the income account credited, and whether earlier finance charges themselves
+//! earn finance charges.
 //!
 //! An invoice is overdue on the assessment date ("as of") when its due date is more than the grace
 //! days before it and it still has a balance as of that date (its total less the payments and
@@ -270,7 +271,7 @@ pub async fn assess(pool: &SqlitePool, input: AssessInput) -> Result<Vec<Invoice
 async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, settings: &Settings) -> Result<Vec<i64>, String> {
     let account = settings
         .income_account_id
-        .ok_or("FC_NO_ACCOUNT: choose the income account for finance charges in Settings › Sales")?;
+        .ok_or("FC_NO_ACCOUNT: choose the income account for finance charges in Settings › Preferences Console › Finance charges")?;
     let customers = compute(tx, input.as_of, settings).await?;
     let mut seen: Vec<&str> = Vec::new();
     let mut ids = Vec::with_capacity(input.charges.len());
