@@ -94,15 +94,46 @@ pub fn show(access: Access, vendor_id: i64, stored: Option<&str>, masked: Option
     Ok(TaxIdView { full: plain.filter(|_| access.can_see()), masked })
 }
 
+/// Whether a stored "tax ID" is really QuickBooks' own encrypted value: base64 text that newer
+/// QuickBooks files hold in place of the ID, readable only with QuickBooks' key. Narrow on purpose
+/// (the same rule as migration 0046): at least 24 characters, nothing but base64 characters, a
+/// letter and a digit, and a `/` or `+` or a trailing `=`. Real IDs and notes never match.
+pub fn is_quickbooks_encrypted(text: &str) -> bool {
+    let t = text.trim();
+    t.len() >= 24
+        && t.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '='))
+        && t.chars().any(|c| c.is_ascii_alphabetic())
+        && t.chars().any(|c| c.is_ascii_digit())
+        && (t.contains('/') || t.contains('+') || t.ends_with('='))
+}
+
+async fn clear(conn: &mut SqliteConnection, vendor_id: i64) -> Result<(), String> {
+    sqlx::query("UPDATE vendors SET tax_id = NULL, tax_id_masked = NULL WHERE id = ?1").bind(vendor_id).execute(&mut *conn).await.map_err(db_err)?;
+    Ok(())
+}
+
 /// Encrypts every plain tax ID, and drops the copies imports staged for vendors already created.
-/// Returns how many were encrypted.
+/// QuickBooks' own encrypted values ([`is_quickbooks_encrypted`]) are cleared instead, including
+/// ones encrypted before that check existed. Returns how many were encrypted.
 pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<usize, String> {
+    let encrypted: Vec<(i64, String)> = sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id LIKE 'lb1:%'").fetch_all(&mut *conn).await.map_err(db_err)?;
+    for (id, stored) in &encrypted {
+        if key.decrypt_field(TABLE, COLUMN, *id, stored).is_ok_and(|plain| is_quickbooks_encrypted(&plain)) {
+            clear(conn, *id).await?;
+        }
+    }
     let plain: Vec<(i64, String)> = sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id IS NOT NULL AND tax_id NOT LIKE 'lb1:%'")
         .fetch_all(&mut *conn)
         .await
         .map_err(db_err)?;
     let access = Access { protected: true, key: Some(key) };
+    let mut protected = 0;
     for (id, value) in &plain {
+        if is_quickbooks_encrypted(value) {
+            clear(conn, *id).await?;
+            continue;
+        }
+        protected += 1;
         let (stored, masked) = store(access, *id, Some(value))?;
         sqlx::query("UPDATE vendors SET tax_id = ?1, tax_id_masked = ?2 WHERE id = ?3")
             .bind(stored)
@@ -116,7 +147,7 @@ pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<u
         .execute(&mut *conn)
         .await
         .map_err(db_err)?;
-    Ok(plain.len())
+    Ok(protected)
 }
 
 /// Whether text read from another program's file looks like a tax ID (digits, letters, dashes and

@@ -173,3 +173,44 @@ async fn removing_all_users_keeps_the_books_and_drops_protected_values() {
     let (again, _) = turn_on(&pool, "Owner", None, "owner password").await.unwrap();
     assert_ne!(again.key.unwrap().key_id(), admin.key.unwrap().key_id());
 }
+
+/// Turning users on in a COPY of a real company file: set LOCALBOOKS_USERS_CHECK to the copy and run
+/// `cargo test --release -- --ignored turns_users_on_in_a_copy --nocapture`. Checks that every tax ID
+/// ends up encrypted, no plain one is left anywhere in the file, and the books are unchanged.
+#[tokio::test]
+#[ignore]
+async fn turns_users_on_in_a_copy_of_a_real_company_file() {
+    let path = std::env::var("LOCALBOOKS_USERS_CHECK").expect("set LOCALBOOKS_USERS_CHECK to a copied company file");
+    let path = std::path::Path::new(&path);
+    let pool = crate::db::open(path).await.expect("open the copy");
+    let plain: Vec<(i64, String)> = sqlx::query_as("SELECT id, tax_id FROM vendors WHERE tax_id IS NOT NULL AND tax_id <> ''").fetch_all(&pool).await.unwrap();
+    let tb_before = crate::reports::trial_balance(&pool).await.unwrap();
+    let started = std::time::Instant::now();
+    let (session, _) = turn_on(&pool, "owner", None, "copy check password").await.expect("turn users on");
+    crate::db::compact(&pool).await.expect("compact");
+    println!("turned users on in {:?}", started.elapsed());
+
+    let key = session.key.as_ref().unwrap();
+    for (id, value) in &plain {
+        let (stored, masked): (String, String) = sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+        assert!(crate::crypto::is_encrypted(&stored), "vendor {id} not encrypted");
+        assert_eq!(&key.decrypt_field("vendors", "tax_id", *id, &stored).unwrap(), value, "vendor {id} does not decrypt to its old value");
+        println!("vendor {id}: encrypted, shown to users without access as {masked}");
+    }
+    let tb_after = crate::reports::trial_balance(&pool).await.unwrap();
+    assert_eq!((tb_before.total_debit_cents, tb_before.total_credit_cents), (tb_after.total_debit_cents, tb_after.total_credit_cents));
+    let verification = crate::ledger::verify_ledger_audit(&pool).await.unwrap();
+    assert!(verification.intact, "{:?}", verification.findings);
+    assert!(sign_in(&pool, "owner", "copy check password").await.unwrap().key.is_some());
+    pool.close().await;
+
+    let mut bytes = std::fs::read(path).unwrap();
+    for sidecar in ["-wal", "-journal"] {
+        bytes.extend(std::fs::read(format!("{}{sidecar}", path.display())).unwrap_or_default());
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    for (id, value) in &plain {
+        assert!(!text.contains(value.as_str()), "vendor {id}'s plain tax ID is still in the file");
+    }
+    println!("{} tax ID(s) encrypted, none left in plain; {} entries intact; trial balance {} / {}", plain.len(), verification.entries_checked, tb_after.total_debit_cents, tb_after.total_credit_cents);
+}
