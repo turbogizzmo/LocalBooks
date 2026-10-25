@@ -45,7 +45,7 @@ export const SCREEN_HELP = {
   'accounting/fx-revaluation': 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
   'accounting/qbw-import': 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
   reports: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
-  settings: 'Company details and preferences, the closing date, backups and company files, and local AI access.',
+  settings: 'Company details and preferences, the closing date, backups and company files, users and passwords, and local AI access.',
 };
 
 /**
@@ -440,6 +440,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to the closing date', view: 'settings', action: 'closing' },
   },
   {
+    id: 'users', area: 'company', views: ['settings', 'expenses/vendors'],
+    title: 'Users, passwords and sensitive data',
+    body: 'Turn on users so everyone signs in with their own password and a role (Admin, Standard or View only). Vendor tax IDs are then encrypted and shown in full only to users allowed to see sensitive data. Save the recovery key you are given: it is the only way back in if every Admin forgets their password.',
+    keywords: 'user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember',
+    go: { label: 'Go to Users & Passwords', view: 'settings', action: 'users' },
+  },
+  {
     id: 'backup', area: 'company', views: ['settings'],
     title: 'Back up, restore or open a company file',
     body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept.',
@@ -488,7 +495,7 @@ const ARTICLE_GUIDES = {
   'ledger-discrepancies': 'ledger-integrity', 'audit-log': 'ledger-integrity',
   'qbw-import': 'desktop-migration', 'qbw-undo': 'desktop-migration',
   'profit-loss': 'reports', 'balance-sheet': 'reports', export: 'reports', 'trial-balance': 'reports',
-  preferences: 'getting-started', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'send-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
+  preferences: 'getting-started', users: 'users-and-passwords', 'custom-forms': 'custom-forms', 'email-form': 'custom-forms', smtp: 'custom-forms', 'send-forms': 'custom-forms', 'closing-date': 'closing-the-books', backup: 'backups-and-company-files',
   'file-location': 'backups-and-company-files', mcp: 'ai-assistant', shortcuts: 'troubleshooting', windows: 'getting-started',
 };
 
