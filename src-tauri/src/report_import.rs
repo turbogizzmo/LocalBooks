@@ -476,8 +476,8 @@ impl Group {
             }
         };
         if main > 0 {
-            let line = self.lines.remove(main);
-            self.lines.insert(0, line);
+            // The main line goes first; the others keep their report order.
+            self.lines[..=main].rotate_right(1);
         }
         let date = self.date.as_deref().map(|d| dates.read(d));
         let name = self.name.or_else(|| self.lines.iter().find_map(|l| l.name.clone()));
