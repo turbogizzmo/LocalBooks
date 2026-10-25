@@ -22,12 +22,9 @@ use zeroize::Zeroizing;
 
 use crate::ledger::db_err;
 
-// The field functions are first used when vendor tax IDs are encrypted (the next phase).
-#[allow(dead_code)]
 const FIELD_PREFIX: &str = "lb1:";
 const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
-#[allow(dead_code)]
 const TAG_LEN: usize = 16;
 const SALT_LEN: usize = 16;
 const RECOVERY_BYTES: usize = 20;
@@ -67,8 +64,8 @@ impl std::fmt::Debug for DataKey {
     }
 }
 
-#[allow(dead_code)]
 impl DataKey {
+    #[cfg(test)]
     pub fn key_id(&self) -> &str {
         &self.key_id
     }
@@ -108,7 +105,6 @@ impl DataKey {
 }
 
 /// Whether a stored value is an encrypted field (rather than plain text written before encryption).
-#[allow(dead_code)]
 pub fn is_encrypted(stored: &str) -> bool {
     stored.starts_with(FIELD_PREFIX)
 }
@@ -187,7 +183,6 @@ fn random<const N: usize>() -> Result<[u8; N], String> {
     Ok(bytes)
 }
 
-#[allow(dead_code)]
 fn field_aad(key_id: &str, table: &str, column: &str, row_id: i64) -> Vec<u8> {
     format!("localbooks field v1\0{key_id}\0{table}.{column}\0{row_id}").into_bytes()
 }

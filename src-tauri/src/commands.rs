@@ -28,6 +28,7 @@ use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::{iif_import, qif_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
+use crate::tax_ids;
 use crate::users::{self, NewUserInput, Session, UserUpdate, UserView};
 use crate::storage::{self, RecentCompany, RecentCompanyView, StorageInfo};
 use crate::export_engine;
@@ -1493,7 +1494,9 @@ pub async fn auto_map_ledger_accounts(app: AppHandle, db: State<'_, Db>, batch_i
 /// Brings the import's customers, vendors and items into LocalBooks; emits `ledger-changed`.
 #[tauri::command]
 pub async fn import_ledger_lists(app: AppHandle, db: State<'_, Db>, batch_id: i64) -> Result<ImportListsResult, String> {
-    let result = qbw_ledger_import::import_lists(&db.pool().await, batch_id).await?;
+    let pool = db.pool().await;
+    let result = qbw_ledger_import::import_lists(&pool, batch_id).await?;
+    protect_imported(&pool, &db).await;
     notify(&app);
     Ok(result)
 }
@@ -1504,6 +1507,7 @@ pub async fn post_ledger_batch(app: AppHandle, db: State<'_, Db>, input: PostLed
     let snapshot = backup::pre_import_snapshot(&db, input.batch_id).await?;
     let pool = db.pool().await;
     let posted = qbw_ledger_import::post_batch(&pool, &input).await;
+    protect_imported(&pool, &db).await;
     match &posted {
         Ok(result) if result.entries_posted > 0 || result.lists.is_some() => {
             if let Err(e) = qbw_ledger_import::set_pre_post_backup(&pool, input.batch_id, &snapshot).await {
@@ -1693,21 +1697,47 @@ pub async fn get_account_register(
     registers::account_register(&db.pool().await, account_id, start_date, end_date, include_subaccounts.unwrap_or(false)).await
 }
 
+/// The open file's pool and its sign-in, held for the length of a command that uses the data key.
+async fn signed_in(db: &Db) -> Result<(sqlx::SqlitePool, tokio::sync::OwnedMutexGuard<Option<Session>>), String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    Ok((pool, slot.lock_owned().await))
+}
+
+/// What the signed-in user may do with sensitive data in the open file.
+async fn sensitive_access<'a>(pool: &sqlx::SqlitePool, session: &'a Option<Session>) -> Result<tax_ids::Access<'a>, String> {
+    let mut conn = pool.acquire().await.map_err(ledger::db_err)?;
+    tax_ids::Access::of(&mut conn, session.as_ref().and_then(|s| s.key.as_ref())).await
+}
+
+/// After an import: encrypts the tax IDs it wrote in plain, when the signed-in user holds the key
+/// (otherwise they are encrypted at the next sign-in of someone who does).
+async fn protect_imported(pool: &sqlx::SqlitePool, db: &Db) {
+    let Ok((_, session)) = signed_in(db).await else { return };
+    let Some(key) = session.as_ref().and_then(|s| s.key.as_ref()) else { return };
+    let protected = async { tax_ids::protect_all(&mut *pool.acquire().await.map_err(ledger::db_err)?, key).await };
+    if let Err(err) = protected.await {
+        eprintln!("LocalBooks: could not encrypt imported tax IDs: {err}");
+    }
+}
+
 #[tauri::command]
 pub async fn get_party(db: State<'_, Db>, kind: String, id: i64) -> Result<PartyDetails, String> {
-    parties::get_party(&db.pool().await, &kind, id).await
+    let (pool, session) = signed_in(&db).await?;
+    parties::get_party(&pool, &kind, id, sensitive_access(&pool, &session).await?).await
 }
 
 #[tauri::command]
 pub async fn update_party(app: AppHandle, db: State<'_, Db>, kind: String, id: i64, input: PartyDetailsInput) -> Result<PartyDetails, String> {
-    let party = parties::update_party(&db.pool().await, &kind, id, input).await?;
+    let (pool, session) = signed_in(&db).await?;
+    let party = parties::update_party(&pool, &kind, id, input, sensitive_access(&pool, &session).await?).await?;
     notify(&app);
     Ok(party)
 }
 
 #[tauri::command]
 pub async fn set_party_active(app: AppHandle, db: State<'_, Db>, kind: String, id: i64, active: bool) -> Result<PartyDetails, String> {
-    let party = parties::set_party_active(&db.pool().await, &kind, id, active).await?;
+    let (pool, session) = signed_in(&db).await?;
+    let party = parties::set_party_active(&pool, &kind, id, active, sensitive_access(&pool, &session).await?).await?;
     notify(&app);
     Ok(party)
 }
@@ -1898,7 +1928,8 @@ pub async fn list_statement_customers(db: State<'_, Db>, start_date: NaiveDate, 
 
 #[tauri::command]
 pub async fn get_1099_report(db: State<'_, Db>, year: i32) -> Result<Vec<Vendor1099Row>, String> {
-    workflows::vendors_1099(&db.pool().await, year).await
+    let (pool, session) = signed_in(&db).await?;
+    workflows::vendors_1099(&pool, year, sensitive_access(&pool, &session).await?).await
 }
 
 #[tauri::command]

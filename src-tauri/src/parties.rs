@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
 use crate::sales::{ProductInput, ProductView};
+use crate::tax_ids::{self, Access};
 
 /// `customer` or `vendor`.
 fn table(kind: &str) -> Result<&'static str, String> {
@@ -31,8 +32,13 @@ pub struct PartyDetails {
     pub address: Option<String>,
     pub terms_days: Option<i64>,
     pub notes: Option<String>,
-    /// Vendors only.
+    /// Vendors only: the full tax ID, when this user may see it.
     pub tax_id: Option<String>,
+    /// Vendors only: the tax ID with all but the last four digits starred, whenever there is one.
+    pub tax_id_masked: Option<String>,
+    /// This user can neither see nor change the tax ID (users are on and they lack sensitive access).
+    #[sqlx(default)]
+    pub tax_id_locked: bool,
     pub is_1099: bool,
     pub is_active: bool,
     /// Customers only: default sales tax rate, or exempt from sales tax.
@@ -61,6 +67,9 @@ pub struct PartyDetailsInput {
     pub notes: Option<String>,
     #[serde(default)]
     pub tax_id: Option<String>,
+    /// Leave the tax ID as it is (the form did not change it, or this user cannot see it).
+    #[serde(default)]
+    pub keep_tax_id: bool,
     #[serde(default)]
     pub is_1099: bool,
     #[serde(default)]
@@ -77,23 +86,28 @@ fn clean(text: &Option<String>) -> Option<String> {
     text.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
-pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64) -> Result<PartyDetails, String> {
+/// A customer or vendor; a vendor's tax ID as `access` may see it.
+pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_>) -> Result<PartyDetails, String> {
     let sql = match table(kind)? {
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
-                               NULL AS tax_id, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id
+                               NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id
                         FROM customers WHERE id = ?1",
-        _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, is_1099, is_active,
+        _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
                      NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id FROM vendors WHERE id = ?1",
     };
-    sqlx::query_as::<_, PartyDetails>(sql)
+    let mut party = sqlx::query_as::<_, PartyDetails>(sql)
         .bind(id)
         .fetch_optional(pool)
         .await
         .map_err(db_err)?
-        .ok_or_else(|| format!("PARTY_NOT_FOUND: that {kind} does not exist"))
+        .ok_or_else(|| format!("PARTY_NOT_FOUND: that {kind} does not exist"))?;
+    let view = tax_ids::show(access, id, party.tax_id.as_deref(), party.tax_id_masked.as_deref())?;
+    (party.tax_id, party.tax_id_masked) = (view.full, view.masked);
+    party.tax_id_locked = !access.can_see();
+    Ok(party)
 }
 
-pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDetailsInput) -> Result<PartyDetails, String> {
+pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDetailsInput, access: Access<'_>) -> Result<PartyDetails, String> {
     let t = table(kind)?;
     let typed = input.name.trim();
     if typed.is_empty() {
@@ -119,6 +133,11 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             return Err("PARTY_BAD_FORM_STYLE: that form style no longer exists".into());
         }
     }
+    let keep_tax_id = input.keep_tax_id || t == "customers";
+    if !keep_tax_id && !access.can_see() {
+        return Err("TAX_ID_LOCKED: only users who can see sensitive data can change a tax ID".into());
+    }
+    let (tax_id, tax_id_masked) = if keep_tax_id { (None, None) } else { tax_ids::store(access, id, input.tax_id.as_deref())? };
     let query = if t == "customers" {
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
@@ -139,7 +158,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     } else {
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,
-                    tax_id = ?8, is_1099 = ?9 WHERE id = ?10",
+                    tax_id = CASE WHEN ?11 THEN tax_id ELSE ?8 END, tax_id_masked = CASE WHEN ?11 THEN tax_id_masked ELSE ?12 END,
+                    is_1099 = ?9 WHERE id = ?10",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -148,9 +168,11 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(clean(&input.address))
         .bind(input.terms_days)
         .bind(clean(&input.notes))
-        .bind(clean(&input.tax_id))
+        .bind(tax_id)
         .bind(input.is_1099)
         .bind(id)
+        .bind(keep_tax_id)
+        .bind(tax_id_masked)
     };
     let done = query.execute(pool).await.map_err(|e| {
         let msg = db_err(e);
@@ -186,13 +208,13 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             Err(err) => return Err(crate::ledger::rollback(tx, err).await),
         }
     }
-    get_party(pool, kind, id).await
+    get_party(pool, kind, id, access).await
 }
 
-pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bool) -> Result<PartyDetails, String> {
+pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bool, access: Access<'_>) -> Result<PartyDetails, String> {
     let t = table(kind)?;
     sqlx::query(&format!("UPDATE {t} SET is_active = ?1 WHERE id = ?2")).bind(active).bind(id).execute(pool).await.map_err(db_err)?;
-    get_party(pool, kind, id).await
+    get_party(pool, kind, id, access).await
 }
 
 /// Changes a product's name, description, default rate and income account. Documents already
@@ -249,6 +271,48 @@ mod tests {
     use crate::db::test_pool;
 
     #[tokio::test]
+    async fn protected_tax_ids_need_the_key_to_see_or_change() {
+        let pool = test_pool().await;
+        let (admin, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        let with_key = Access::of(&mut conn, admin.key.as_ref()).await.unwrap();
+        let without = Access::of(&mut conn, None).await.unwrap();
+        drop(conn);
+        let staples = crate::expenses::create_vendor(&pool, "Staples", None).await.unwrap();
+        let input = |tax_id: Option<&str>, keep: bool| PartyDetailsInput {
+            name: "Staples".into(),
+            company_name: None,
+            email: None,
+            phone: None,
+            address: None,
+            terms_days: None,
+            notes: None,
+            tax_id: tax_id.map(str::to_string),
+            keep_tax_id: keep,
+            is_1099: true,
+            tax_rate_id: None,
+            is_tax_exempt: false,
+            tax_exemption: None,
+            form_style_id: None,
+        };
+
+        let saved = update_party(&pool, "vendor", staples.id, input(Some("123-45-6789"), false), with_key).await.unwrap();
+        assert_eq!((saved.tax_id.as_deref(), saved.tax_id_masked.as_deref()), (Some("123-45-6789"), Some("***-**-6789")));
+        let stored: String = sqlx::query_scalar("SELECT tax_id FROM vendors WHERE id = ?1").bind(staples.id).fetch_one(&pool).await.unwrap();
+        assert!(crate::crypto::is_encrypted(&stored) && !stored.contains("6789"));
+
+        let seen = get_party(&pool, "vendor", staples.id, without).await.unwrap();
+        assert_eq!((seen.tax_id, seen.tax_id_masked.as_deref(), seen.tax_id_locked), (None, Some("***-**-6789"), true));
+        assert!(update_party(&pool, "vendor", staples.id, input(None, false), without).await.unwrap_err().starts_with("TAX_ID_LOCKED"), "cannot clear it either");
+        let kept = update_party(&pool, "vendor", staples.id, input(None, true), without).await.unwrap();
+        assert_eq!(kept.tax_id_masked.as_deref(), Some("***-**-6789"), "other changes keep the ID");
+        assert_eq!(get_party(&pool, "vendor", staples.id, with_key).await.unwrap().tax_id.as_deref(), Some("123-45-6789"));
+
+        let cleared = update_party(&pool, "vendor", staples.id, input(Some(" "), false), with_key).await.unwrap();
+        assert_eq!((cleared.tax_id, cleared.tax_id_masked), (None, None));
+    }
+
+    #[tokio::test]
     async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
         let pool = test_pool().await;
         let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap();
@@ -262,31 +326,33 @@ mod tests {
             terms_days: Some(15),
             notes: None,
             tax_id: None,
+            keep_tax_id: false,
             is_1099: false,
             tax_rate_id: None,
             is_tax_exempt: false,
             tax_exemption: None,
             form_style_id: None,
         };
-        let saved = update_party(&pool, "customer", acme.id, input("Acme Inc")).await.unwrap();
+        let saved = update_party(&pool, "customer", acme.id, input("Acme Inc"), Access::OPEN).await.unwrap();
         assert_eq!((saved.name.as_str(), saved.company_name.as_deref(), saved.terms_days), ("Acme Inc", Some("Acme Corp"), Some(15)));
-        assert!(update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(999), ..input("Acme Inc") }).await.unwrap_err().starts_with("PARTY_BAD_FORM_STYLE"));
-        let styled = update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(1), ..input("Acme Inc") }).await.unwrap();
+        assert!(update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(999), ..input("Acme Inc") }, Access::OPEN).await.unwrap_err().starts_with("PARTY_BAD_FORM_STYLE"));
+        let styled = update_party(&pool, "customer", acme.id, PartyDetailsInput { form_style_id: Some(1), ..input("Acme Inc") }, Access::OPEN).await.unwrap();
         assert_eq!(styled.form_style_id, Some(1));
-        assert!(update_party(&pool, "customer", acme.id, input("globex")).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
-        assert!(!set_party_active(&pool, "customer", acme.id, false).await.unwrap().is_active);
+        assert!(update_party(&pool, "customer", acme.id, input("globex"), Access::OPEN).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
+        assert!(!set_party_active(&pool, "customer", acme.id, false, Access::OPEN).await.unwrap().is_active);
 
         // Jobs: typed as Customer:Job, renamed with their customer.
         let job = crate::sales::create_customer(&pool, "Acme Inc : Kitchen", None).await.unwrap();
         assert_eq!(job.name, "Acme Inc:Kitchen");
         let parent: Option<i64> = sqlx::query_scalar("SELECT parent_id FROM customers WHERE id = ?1").bind(job.id).fetch_one(&pool).await.unwrap();
         assert_eq!(parent, Some(acme.id));
-        update_party(&pool, "customer", acme.id, input("Acme Holdings")).await.unwrap();
-        assert_eq!(get_party(&pool, "customer", job.id).await.unwrap().name, "Acme Holdings:Kitchen");
+        update_party(&pool, "customer", acme.id, input("Acme Holdings"), Access::OPEN).await.unwrap();
+        assert_eq!(get_party(&pool, "customer", job.id, Access::OPEN).await.unwrap().name, "Acme Holdings:Kitchen");
 
         let staples = crate::expenses::create_vendor(&pool, "Staples", None).await.unwrap();
-        let vendor = update_party(&pool, "vendor", staples.id, PartyDetailsInput { tax_id: Some("12-3456789".into()), is_1099: true, ..input("Staples") }).await.unwrap();
+        let vendor = update_party(&pool, "vendor", staples.id, PartyDetailsInput { tax_id: Some("12-3456789".into()), is_1099: true, ..input("Staples") }, Access::OPEN).await.unwrap();
         assert!(vendor.is_1099 && vendor.tax_id.as_deref() == Some("12-3456789"));
+        assert_eq!(vendor.tax_id_masked.as_deref(), Some("**-***6789"));
 
         let sales: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4000'").fetch_one(&pool).await.unwrap();
         let rent: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '6300'").fetch_one(&pool).await.unwrap();

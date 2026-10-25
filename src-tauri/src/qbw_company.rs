@@ -405,7 +405,8 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
             phone: field("telephone_num1"),
             address: (!address.is_empty()).then(|| address.join("\n")),
             terms_days: r.get("terms_id").as_int().and_then(|t| terms.get(&t).copied()),
-            tax_id: if vendor { text(r, "tax_identifier") } else { None },
+            // Newer QuickBooks files hold this encrypted with QuickBooks' own key, which cannot be read.
+            tax_id: if vendor { text(r, "tax_identifier").filter(|t| crate::tax_ids::looks_like_tax_id(t)) } else { None },
             is_1099: vendor && r.get("is_1099_vendor_bool").as_int() == Some(1),
             // As in Intuit's own conversion: an inactive name that still has a balance comes in active.
             active: !hidden || balance.is_some_and(|b| b != 0),

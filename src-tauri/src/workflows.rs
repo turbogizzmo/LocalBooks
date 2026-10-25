@@ -150,7 +150,10 @@ pub async fn statement_customers(pool: &SqlitePool, start_date: NaiveDate, end_d
 pub struct Vendor1099Row {
     pub vendor_id: i64,
     pub vendor_name: String,
+    /// The full tax ID, when this user may see it.
     pub tax_id: Option<String>,
+    /// Whenever the vendor has a tax ID.
+    pub tax_id_masked: Option<String>,
     pub address: Option<String>,
     pub paid_cents: i64,
     #[sqlx(skip)]
@@ -163,10 +166,10 @@ pub const NEC_THRESHOLD_CENTS: i64 = 60_000;
 /// Payments to vendors marked for a 1099 in a calendar year, from bank accounts (card payments are
 /// reported by the card company, so they are left out): checks and expenses paid from a bank, and
 /// bill payments from a bank, by payment date.
-pub async fn vendors_1099(pool: &SqlitePool, year: i32) -> Result<Vec<Vendor1099Row>, String> {
+pub async fn vendors_1099(pool: &SqlitePool, year: i32, access: crate::tax_ids::Access<'_>) -> Result<Vec<Vendor1099Row>, String> {
     let (start, end) = (NaiveDate::from_ymd_opt(year, 1, 1).ok_or("RPT_BAD_YEAR: invalid year")?, NaiveDate::from_ymd_opt(year, 12, 31).ok_or("RPT_BAD_YEAR: invalid year")?);
     let mut rows: Vec<Vendor1099Row> = sqlx::query_as(
-        "SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id, v.address,
+        "SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id, v.tax_id_masked, v.address,
                 COALESCE((SELECT SUM(COALESCE(x.home_total_cents, x.total_cents)) FROM expenses x JOIN chart_of_accounts a ON a.id = x.payment_account_id
                           WHERE x.vendor_id = v.id AND x.is_voided = 0 AND a.account_type = 'BANK' AND x.expense_date BETWEEN ?1 AND ?2), 0)
               + COALESCE((SELECT SUM(p.amount_cents) FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN chart_of_accounts a ON a.id = p.payment_account_id
@@ -180,6 +183,8 @@ pub async fn vendors_1099(pool: &SqlitePool, year: i32) -> Result<Vec<Vendor1099
     .map_err(db_err)?;
     for row in &mut rows {
         row.over_threshold = row.paid_cents >= NEC_THRESHOLD_CENTS;
+        let view = crate::tax_ids::show(access, row.vendor_id, row.tax_id.as_deref(), row.tax_id_masked.as_deref())?;
+        (row.tax_id, row.tax_id_masked) = (view.full, view.masked);
     }
     Ok(rows)
 }
@@ -800,10 +805,10 @@ mod tests {
         };
         crate::expenses::post_expense(&pool, pay(checking, 50_000)).await.unwrap();
         crate::expenses::post_expense(&pool, pay(card, 90_000)).await.unwrap();
-        let rows = vendors_1099(&pool, 2026).await.unwrap();
+        let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
         assert_eq!((rows[0].paid_cents, rows[0].over_threshold), (50_000, false));
         crate::expenses::post_expense(&pool, pay(checking, 10_000)).await.unwrap();
-        assert!(vendors_1099(&pool, 2026).await.unwrap()[0].over_threshold);
+        assert!(vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap()[0].over_threshold);
     }
 
     #[tokio::test]

@@ -46,6 +46,7 @@ mod reports;
 mod revaluation;
 mod sales;
 mod sales_tax;
+mod tax_ids;
 mod secrets;
 mod simplefin;
 mod smtp;

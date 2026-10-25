@@ -212,6 +212,8 @@ pub async fn turn_on(pool: &SqlitePool, username: &str, display_name: Option<&st
     .await
     .map_err(db_err)?;
     crypto::set_password(&mut tx, &key, id, password).await?;
+    // Tax IDs already in the file are encrypted now, in the same transaction.
+    crate::tax_ids::protect_all(&mut tx, &key).await?;
     let user = row_by_id(&mut tx, id).await?.view()?;
     tx.commit().await.map_err(db_err)?;
     Ok((Session { user, key: Some(key) }, recovery))
@@ -232,6 +234,10 @@ pub async fn sign_in(pool: &SqlitePool, username: &str, password: &str) -> Resul
         return Err("SIGN_IN_TURNED_OFF: this user is turned off; ask an Admin to turn it back on".into());
     }
     let key = if row.can_see_sensitive == 1 { Some(crypto::unlock_with_password(&mut conn, row.id, password).await?) } else { None };
+    if let Some(key) = &key {
+        // Protects anything written in plain since (an import by someone without the key).
+        crate::tax_ids::protect_all(&mut conn, key).await?;
+    }
     mark_signed_in(&mut conn, row.id).await?;
     let user = row_by_id(&mut conn, row.id).await?.view()?;
     Ok(Session { user, key })
@@ -393,7 +399,7 @@ pub async fn remove_all_users(pool: &SqlitePool, confirmation: &str) -> Result<(
         "DELETE FROM users",
         "DELETE FROM data_key",
         // Encrypted values cannot be read without the data key.
-        "UPDATE vendors SET tax_id = NULL WHERE tax_id LIKE 'lb1:%'",
+        "UPDATE vendors SET tax_id = NULL, tax_id_masked = NULL WHERE tax_id LIKE 'lb1:%'",
         "UPDATE user_reset_in_progress SET value = NULL",
     ] {
         sqlx::query(statement).execute(&mut *tx).await.map_err(db_err)?;
