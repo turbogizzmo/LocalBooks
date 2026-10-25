@@ -366,6 +366,7 @@ const REPORT_GROUPS = [
     reports: [
       ['sales-customer', 'Sales by Customer Summary'],
       ['sales-product', 'Sales by Product/Service Summary'],
+      ['sales-rep', 'Sales by Rep Summary'],
     ],
   },
   {
@@ -450,6 +451,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'ap-detail' && <AgingReport key="apd" payable detail />}
         {report === 'sales-customer' && <SummaryReport key="sc" by="customer" />}
         {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
+        {report === 'sales-rep' && <SummaryReport key="sr" by="rep" />}
         {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}

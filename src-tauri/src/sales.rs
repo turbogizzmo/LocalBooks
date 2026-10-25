@@ -89,6 +89,9 @@ pub struct PartyView {
     pub is_tax_exempt: bool,
     #[sqlx(default)]
     pub terms_days: Option<i64>,
+    /// Customers: the default sales rep.
+    #[sqlx(default)]
+    pub sales_rep_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -152,6 +155,8 @@ pub struct SalesReceiptInput {
     pub tax_rate_id: Option<i64>,
     #[serde(default)]
     pub discount_cents: i64,
+    #[serde(flatten)]
+    pub details: crate::sales_lists::SalesDetails,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -198,7 +203,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
-        "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days,
+        "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days, c.sales_rep_id,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS open_balance_cents
@@ -409,6 +414,8 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
             None => credits.push((key, amount)),
         }
     }
+
+    crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &input.details).await?;
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));

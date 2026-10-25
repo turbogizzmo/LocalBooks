@@ -25,7 +25,8 @@ use sqlx::{Sqlite, Transaction};
 
 use crate::invoices::line_amount;
 use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
-use crate::qbw_documents::{DocumentLine, SourceDocument};
+use crate::qbw_documents::{DocumentLine, SourceDocument, SourceSales};
+use crate::sales_lists::SalesDoc;
 
 /// One staged transaction, with its lines already mapped to LocalBooks accounts.
 pub(crate) struct Staged {
@@ -302,6 +303,23 @@ async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, i
     Ok(())
 }
 
+/// A sales form's rep and shipping details, finding or creating the rep and shipping method by name.
+async fn write_sales(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, sales: &SourceSales) -> Result<(), String> {
+    if sales.is_empty() {
+        return Ok(());
+    }
+    let rep = match sales.rep.as_deref() {
+        Some(r) => crate::sales_lists::find_or_create_rep(tx, r).await?,
+        None => None,
+    };
+    let ship = match sales.ship_via.as_deref() {
+        Some(s) => crate::sales_lists::find_or_create_ship_method(tx, s).await?,
+        None => None,
+    };
+    let details = crate::sales_lists::SalesDetails { sales_rep_id: rep, ship_date: sales.ship_date, ship_method_id: ship, custom_fields: Vec::new() };
+    crate::sales_lists::write_imported(tx, doc, id, &details).await
+}
+
 /// The documents written so far, by source transaction.
 #[derive(Default)]
 struct Written {
@@ -322,7 +340,7 @@ async fn write_invoice(
     map: &HashMap<i64, i64>,
     books: &Books,
 ) -> Result<(i64, i64), String> {
-    let SourceDocument::Invoice { customer_id, number: doc_num, due_date, lines } = doc else { unreachable!() };
+    let SourceDocument::Invoice { customer_id, number: doc_num, due_date, lines, sales } = doc else { unreachable!() };
     let (customer, customer_name) = books.customer(*customer_id)?.clone();
     let total = -receivable(t, books).0;
     if total <= 0 {
@@ -347,6 +365,7 @@ async fn write_invoice(
     .await
     .map_err(db_err)?;
     insert_lines(tx, "invoice_items", "invoice_id", id, &form.lines).await?;
+    write_sales(tx, SalesDoc::Invoice, id, sales).await?;
     let entry = post(tx, t, format!("Invoice #{number} - {customer_name}"), &t.lines, EntrySource::Invoice(id)).await?;
     sqlx::query("UPDATE invoices SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
     Ok((entry, id))
@@ -404,7 +423,7 @@ async fn write_sales_receipt(
     map: &HashMap<i64, i64>,
     books: &Books,
 ) -> Result<(i64, i64, i64, i64), String> {
-    let SourceDocument::SalesReceipt { customer_id, number: doc_num, method, lines } = doc else { unreachable!() };
+    let SourceDocument::SalesReceipt { customer_id, number: doc_num, method, lines, sales } = doc else { unreachable!() };
     let (into, total) = single_debit(t)?;
     if !matches!(books.kind(into), "BANK" | "OTHER_CURRENT_ASSET") {
         return Err("the money did not go into a bank or Undeposited Funds account".into());
@@ -434,6 +453,7 @@ async fn write_sales_receipt(
     .await
     .map_err(db_err)?;
     insert_lines(tx, "sales_receipt_lines", "sales_receipt_id", id, &form.lines).await?;
+    write_sales(tx, SalesDoc::SalesReceipt, id, sales).await?;
     let who = customer.map(|c| format!(" - {}", c.1)).unwrap_or_default();
     let entry = post(tx, t, format!("Sales receipt #{number}{who}"), &t.lines, EntrySource::SalesReceipt(id)).await?;
     sqlx::query("UPDATE sales_receipts SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
@@ -880,7 +900,7 @@ async fn write_transfer(tx: &mut Transaction<'_, Sqlite>, t: &Staged, books: &Bo
 
 /// An open estimate. It posts nothing; its lines keep the item, quantity and rate.
 async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, doc: &SourceDocument, map: &HashMap<i64, i64>, books: &Books) -> Result<(), String> {
-    let SourceDocument::Estimate { customer_id, date, number: doc_num, expires, memo, lines } = doc else { unreachable!() };
+    let SourceDocument::Estimate { customer_id, date, number: doc_num, expires, memo, lines, sales } = doc else { unreachable!() };
     let (customer, _) = books.customer(*customer_id)?.clone();
     // Lines are positive here, so the total is their sum (sales tax included).
     let total: i64 = lines.iter().map(|l| l.cents).sum();
@@ -900,7 +920,8 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, doc: &SourceDocument, 
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    insert_lines(tx, "estimate_lines", "estimate_id", id, &form.lines).await
+    insert_lines(tx, "estimate_lines", "estimate_id", id, &form.lines).await?;
+    write_sales(tx, SalesDoc::Estimate, id, sales).await
 }
 
 /// An open (or, when received, closed) purchase order. It posts nothing.

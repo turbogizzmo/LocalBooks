@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
@@ -31,6 +32,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const customerRef = useRef(null);
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data);
 
   useEffect(() => customerRef.current?.focus(), []);
   useEffect(() => {
@@ -60,6 +62,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
         lines: formClass.apply(payload),
         taxRateId: tax.rateId,
         discountCents: discount,
+        ...sales.payload(),
       });
       const queued = emailLater && (await api.setEmailLater('ESTIMATE', estimate.id, true).then(() => true, () => false));
       onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.${queued ? ' Marked Email later.' : ''}`);
@@ -68,6 +71,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
       setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
       formClass.reset();
       tax.reset();
+      sales.reset();
       setDiscountText('');
       setError(null);
       customerRef.current?.focus();
@@ -99,6 +103,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
           <span className="qb-label">Expiration date</span>
           <input type="date" className="qb-input w-[132px]" value={expires} onChange={(e) => setExpires(e.target.value)} />
         </label>
+        {sales.picker}
         {formClass.header}
         {tax.picker}
         <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />

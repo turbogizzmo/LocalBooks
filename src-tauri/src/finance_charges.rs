@@ -304,6 +304,7 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         };
         let invoice_id = crate::invoices::write_invoice(tx, &invoice).await.map_err(|e| e.replacen("INV_", "FC_", 1))?;
         sqlx::query("INSERT INTO finance_charge_invoices (invoice_id, assessed_as_of, computed_cents) VALUES (?1, ?2, ?3)")

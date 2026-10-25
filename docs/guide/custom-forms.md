@@ -16,9 +16,10 @@ design is saved in your company file.
    - **Logo**: top right, top left or hidden, in three sizes. Upload the logo itself in
      **Preferences › Company**.
    - **Header details**: which company details print, and whether the customer's email prints
-     under the billing address.
-   - **Line items**: the shaded header, line numbers, the quantity and rate columns, and the column
-     labels. On invoices you can also hide the payments and credits listed above the balance due.
+     under the billing address. On sales forms, also whether the rep, the ship date and Ship via,
+     and customer custom fields print. Each prints only when the form has a value.
+   - **Line items**: the shaded header, line numbers, the quantity and rate columns, the column
+     labels, and item custom fields under each line. On invoices you can also hide the payments and credits listed above the balance due.
    - **Messages**: a message to the customer, terms or payment instructions, and a footer for
      every page.
    - **Email**: the subject and message used when you email the form.
@@ -27,7 +28,7 @@ design is saved in your company file.
    standard** restores the built-in one.
 
 Messages can include placeholders that are filled in for each document: `{number}`, `{customer}`,
-`{date}`, `{due_date}`, `{total}`, `{balance}` and `{company}`. `{invoice_number}`, `{amount}` and
+`{date}`, `{due_date}`, `{total}`, `{balance}`, `{company}`, `{rep}`, `{ship_date}` and `{ship_via}`. `{invoice_number}`, `{amount}` and
 `{balance_due}` work too, as other names for `{number}`, `{total}` and `{balance}`. For example,
 *Please pay invoice {number} by {due_date}.*
 

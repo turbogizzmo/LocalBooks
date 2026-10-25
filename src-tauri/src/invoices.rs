@@ -55,6 +55,9 @@ pub struct InvoiceInput {
     /// Taken off the subtotal before tax.
     #[serde(default)]
     pub discount_cents: i64,
+    /// Rep, ship date and method, and printed customer fields.
+    #[serde(flatten)]
+    pub details: crate::sales_lists::SalesDetails,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -89,6 +92,8 @@ pub struct InvoiceSummary {
     pub credits_applied_cents: i64,
     /// Written by Assess Finance Charges.
     pub is_finance_charge: bool,
+    /// The rep's initials, when the invoice has one.
+    pub sales_rep: Option<String>,
 }
 
 const SUMMARY_SELECT: &str = "
@@ -101,7 +106,8 @@ const SUMMARY_SELECT: &str = "
            b.home_total_cents, CASE WHEN i.is_voided = 1 THEN 0 ELSE b.home_open_cents END AS home_balance_cents,
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
-           EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge
+           EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge,
+           (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep
     FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id";
 
@@ -232,6 +238,12 @@ pub async fn create_and_post_invoice(pool: &SqlitePool, input: InvoiceInput) -> 
 }
 
 pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput) -> Result<i64, String> {
+    write_invoice_carrying(tx, input, &crate::sales_lists::SalesDetails::default()).await
+}
+
+/// Writes an invoice that takes over `carried` details from an estimate or the invoice it
+/// replaces (see `sales_lists::write_details_carrying`).
+pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails) -> Result<i64, String> {
     let subtotal = validate_invoice(input)?;
     let mut taxable = 0;
     for line in input.lines.iter().filter(|l| l.is_taxable) {
@@ -337,6 +349,7 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
         .await
         .map_err(db_err)?;
     }
+    crate::sales_lists::write_details_carrying(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details, carried).await?;
 
     lines.extend(cost.lines.iter().cloned());
     let entry = JournalEntry {
@@ -571,6 +584,8 @@ pub struct InvoiceDetail {
     pub invoice: InvoiceSummary,
     pub items: Vec<InvoiceItemView>,
     pub payments: Vec<PaymentView>,
+    /// Rep, shipping and printed customer fields.
+    pub details: crate::sales_lists::SalesDetailsView,
 }
 
 pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceDetail, String> {
@@ -584,7 +599,8 @@ pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<Invoic
     .await
     .map_err(db_err)?;
     let payments = list_payments(pool, invoice_id).await?.into_iter().filter(|p| !p.is_voided).collect();
-    Ok(InvoiceDetail { invoice, items, payments })
+    let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Invoice, invoice_id).await?;
+    Ok(InvoiceDetail { invoice, items, payments, details })
 }
 
 /// Groups open invoice balances (home currency, i.e. the A/R still on the books) by days past due.

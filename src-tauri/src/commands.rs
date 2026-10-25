@@ -11,6 +11,8 @@ use crate::accounts::{self, AccountInput, AccountTypeView};
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
 use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
 use crate::classes::{self, ClassInput, ClassView, ReclassLine, ReclassQuery};
+use crate::custom_fields::{self, CustomFieldInput, CustomFieldView, FieldValue, RecordField};
+use crate::sales_lists::{self, SalesRepInput, SalesRepView, ShipMethodView};
 use crate::closing::{self, ClosingInput, ClosingStatus};
 use crate::credits::{self, ApplyCreditInput, CreditApplicationView, CreditMemoInput, CreditMemoSummary, RefundCreditInput, VendorCreditInput, VendorCreditSummary};
 use crate::parties::{self, PartyDetails, PartyDetailsInput};
@@ -398,7 +400,8 @@ pub async fn get_aging(db: State<'_, Db>, payable: bool, as_of: NaiveDate) -> Re
     report_center::aging(&db.pool().await, payable, as_of).await
 }
 
-/// `customer` (sales by customer), `vendor` (expenses by vendor) or `product` (sales by product/service).
+/// `customer` (sales by customer), `vendor` (expenses by vendor), `product` (sales by product/service)
+/// or `rep` (sales by rep).
 #[tauri::command]
 pub async fn get_summary_report(db: State<'_, Db>, by: String, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
     let pool = db.pool().await;
@@ -406,6 +409,7 @@ pub async fn get_summary_report(db: State<'_, Db>, by: String, start_date: Naive
         "customer" => report_center::by_party(&pool, false, start_date, end_date).await,
         "vendor" => report_center::by_party(&pool, true, start_date, end_date).await,
         "product" => report_center::sales_by_product(&pool, start_date, end_date).await,
+        "rep" => report_center::sales_by_rep(&pool, start_date, end_date).await,
         other => Err(format!("RPT_UNKNOWN: '{other}' is not a summary report")),
     }
 }
@@ -2382,4 +2386,114 @@ pub async fn remove_all_users(app: AppHandle, db: State<'_, Db>, confirmation: S
     signed_in_changed(&app);
     notify(&app);
     Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------
+// Sales reps, shipping methods and custom fields
+// ------------------------------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_sales_reps(db: State<'_, Db>) -> Result<Vec<SalesRepView>, String> {
+    sales_lists::list_sales_reps(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn create_sales_rep(app: AppHandle, db: State<'_, Db>, input: SalesRepInput) -> Result<SalesRepView, String> {
+    let rep = sales_lists::create_sales_rep(&db.pool().await, input).await?;
+    notify(&app);
+    Ok(rep)
+}
+
+#[tauri::command]
+pub async fn update_sales_rep(app: AppHandle, db: State<'_, Db>, id: i64, input: SalesRepInput) -> Result<SalesRepView, String> {
+    let rep = sales_lists::update_sales_rep(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(rep)
+}
+
+#[tauri::command]
+pub async fn set_sales_rep_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<SalesRepView, String> {
+    let rep = sales_lists::set_sales_rep_active(&db.pool().await, id, active).await?;
+    notify(&app);
+    Ok(rep)
+}
+
+#[tauri::command]
+pub async fn delete_sales_rep(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    sales_lists::delete_sales_rep(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_ship_methods(db: State<'_, Db>) -> Result<Vec<ShipMethodView>, String> {
+    sales_lists::list_ship_methods(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn create_ship_method(app: AppHandle, db: State<'_, Db>, name: String) -> Result<ShipMethodView, String> {
+    let method = sales_lists::create_ship_method(&db.pool().await, &name).await?;
+    notify(&app);
+    Ok(method)
+}
+
+#[tauri::command]
+pub async fn rename_ship_method(app: AppHandle, db: State<'_, Db>, id: i64, name: String) -> Result<ShipMethodView, String> {
+    let method = sales_lists::rename_ship_method(&db.pool().await, id, &name).await?;
+    notify(&app);
+    Ok(method)
+}
+
+#[tauri::command]
+pub async fn set_ship_method_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<ShipMethodView, String> {
+    let method = sales_lists::set_ship_method_active(&db.pool().await, id, active).await?;
+    notify(&app);
+    Ok(method)
+}
+
+#[tauri::command]
+pub async fn delete_ship_method(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    sales_lists::delete_ship_method(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_custom_fields(db: State<'_, Db>) -> Result<Vec<CustomFieldView>, String> {
+    custom_fields::list_custom_fields(&db.pool().await).await
+}
+
+/// `list` is `CUSTOMER`, `VENDOR` or `ITEM`.
+#[tauri::command]
+pub async fn create_custom_field(app: AppHandle, db: State<'_, Db>, list: String, input: CustomFieldInput) -> Result<CustomFieldView, String> {
+    let field = custom_fields::create_custom_field(&db.pool().await, custom_fields::parse_list(&list)?, input).await?;
+    notify(&app);
+    Ok(field)
+}
+
+#[tauri::command]
+pub async fn update_custom_field(app: AppHandle, db: State<'_, Db>, id: i64, input: CustomFieldInput) -> Result<CustomFieldView, String> {
+    let field = custom_fields::update_custom_field(&db.pool().await, id, input).await?;
+    notify(&app);
+    Ok(field)
+}
+
+#[tauri::command]
+pub async fn delete_custom_field(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
+    custom_fields::delete_custom_field(&db.pool().await, id).await?;
+    notify(&app);
+    Ok(())
+}
+
+/// Every field of the list with this customer's, vendor's or item's value.
+#[tauri::command]
+pub async fn get_custom_values(db: State<'_, Db>, list: String, record_id: i64) -> Result<Vec<RecordField>, String> {
+    custom_fields::record_fields(&db.pool().await, custom_fields::parse_list(&list)?, record_id).await
+}
+
+#[tauri::command]
+pub async fn save_custom_values(app: AppHandle, db: State<'_, Db>, list: String, record_id: i64, values: Vec<FieldValue>) -> Result<Vec<RecordField>, String> {
+    let fields = custom_fields::save_record_values(&db.pool().await, custom_fields::parse_list(&list)?, record_id, &values).await?;
+    notify(&app);
+    Ok(fields)
 }

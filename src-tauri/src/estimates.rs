@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::invoices::{validate_line, write_invoice, InvoiceInput, InvoiceLineInput};
+use crate::invoices::{validate_line, InvoiceInput, InvoiceLineInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 
@@ -21,6 +21,8 @@ pub struct EstimateInput {
     pub tax_rate_id: Option<i64>,
     #[serde(default)]
     pub discount_cents: i64,
+    #[serde(flatten)]
+    pub details: crate::sales_lists::SalesDetails,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -152,6 +154,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
+    crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
 }
 
@@ -182,6 +185,7 @@ pub async fn convert_to_invoice(
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
+        let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
             sqlx::query_as("SELECT tax_rate_id, discount_cents FROM estimates WHERE id = ?1").bind(estimate_id).fetch_one(&mut *tx).await.map_err(db_err)?;
         let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool)> = sqlx::query_as(
@@ -211,8 +215,10 @@ pub async fn convert_to_invoice(
             currency: None,
             tax_rate_id,
             discount_cents,
+            details: carried.clone(),
         };
-        let invoice_id = write_invoice(&mut tx, &invoice).await?;
+        // The estimate's rep, shipping and printed fields carry over to its invoice as they are.
+        let invoice_id = crate::invoices::write_invoice_carrying(&mut tx, &invoice, &carried).await?;
         sqlx::query("UPDATE estimates SET status = 'CONVERTED', converted_to_invoice_id = ?1 WHERE id = ?2")
             .bind(invoice_id)
             .bind(estimate_id)
@@ -249,6 +255,7 @@ pub struct EstimateLineView {
 pub struct EstimateDetail {
     pub estimate: EstimateSummary,
     pub lines: Vec<EstimateLineView>,
+    pub details: crate::sales_lists::SalesDetailsView,
 }
 
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
@@ -261,7 +268,8 @@ pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<Esti
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    Ok(EstimateDetail { estimate, lines })
+    let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    Ok(EstimateDetail { estimate, lines, details })
 }
 
 /// Refuses converting an estimate that is already invoiced or was rejected.
@@ -288,7 +296,9 @@ pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: I
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;
-        let invoice_id = write_invoice(&mut tx, &input).await?;
+        // Details the form kept from the estimate come over even if they would not be offered now.
+        let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+        let invoice_id = crate::invoices::write_invoice_carrying(&mut tx, &input, &carried).await?;
         sqlx::query("UPDATE estimates SET status = 'CONVERTED', converted_to_invoice_id = ?1 WHERE id = ?2")
             .bind(invoice_id)
             .bind(estimate_id)
