@@ -549,13 +549,13 @@ async fn round_trip_posts_the_reports_trial_balance() {
     auto_map_accounts(&pool, batch).await.unwrap();
     let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
     assert_eq!(
-        (full.invoices, full.payments, full.deposits, full.bills, full.bill_payments, full.expenses),
-        (1, 1, 1, 1, 1, 1),
+        (full.invoices, full.payments, full.deposits, full.bills, full.bill_payments, full.expenses, full.card_credits),
+        (1, 1, 1, 1, 1, 1, 1),
         "{full:?}"
     );
-    // The check has a line credited back, and a card credit has no LocalBooks form: both post as
-    // journal entries, with the general journal entry.
-    assert_eq!((full.checks, full.fell_back, full.journal_entries), (0, 2, 3), "{full:?}");
+    // The check has a line credited back, so it posts as a journal entry, with the general
+    // journal entry.
+    assert_eq!((full.checks, full.fell_back, full.journal_entries), (0, 1, 2), "{full:?}");
     let (status, paid): (String, i64) = sqlx::query_as("SELECT status, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
     assert_eq!((status.as_str(), paid), ("PARTIAL", 100_000));
     assert_eq!(sqlx::query_scalar::<_, String>("SELECT status FROM bills").fetch_one(&pool).await.unwrap(), "PAID");

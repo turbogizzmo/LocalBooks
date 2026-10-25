@@ -162,8 +162,8 @@ General Ledger, not both: each holds every transaction.
 - **Account types** come from the Account Listing. Without it, each account gets a type from its
   name and how it's used, as for IIF. Check the types in step 2.
 - **Full import:** invoices, payments, sales receipts, credit memos, bills, vendor credits, bill
-  payments, checks, expenses, card charges, deposits and transfers become LocalBooks documents, as
-  for IIF. General journal entries, card credits and anything else post as journal entries. The
+  payments, checks, expenses, card charges, card credits, deposits and transfers become LocalBooks
+  documents, as for IIF. General journal entries and anything else post as journal entries. The
   reports don't say which invoice a payment paid, so payments apply to the customer's oldest open
   invoices, bill payments to the vendor's oldest open bills, and deposits to undeposited payments of
   the same amount.
