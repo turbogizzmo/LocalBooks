@@ -5,7 +5,9 @@ src-tauri/target/
 src-tauri/gen/
 
 # Local tooling and OS files
-.claude/
+.claude/*
+# Project skills (how sessions build, run and test the app) are shared.
+!.claude/skills/
 .DS_Store
 *.log
 

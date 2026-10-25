@@ -405,8 +405,10 @@ export function Vendors1099Report() {
   const shown = (data ?? []).filter((r) => all || r.overThreshold);
   const total = shown.reduce((s, r) => s + r.paidCents, 0);
   const columns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Paid', align: 'right' }];
+  // Tax IDs are masked on screen and in print; the CSV export carries them in full for users who may see them.
+  const fullInCsv = shown.some((r) => r.taxId);
   const rows = [
-    ...shown.map((r) => ({ cells: [r.vendorName, r.taxId ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
+    ...shown.map((r) => ({ cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
     ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', formatCents(total)] }] : []),
   ];
   return (
@@ -432,8 +434,10 @@ export function Vendors1099Report() {
           </label>
         </>
       }
-      footer="Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors."
-      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
+      footer={`Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors. Tax IDs are masked here${
+        fullInCsv ? '; the CSV export has them in full, so keep that file safe' : ''
+      }.`}
+      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? r.taxIdMasked ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
     />
   );
 }

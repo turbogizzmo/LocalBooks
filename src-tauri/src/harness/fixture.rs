@@ -403,12 +403,14 @@ pub(crate) async fn harbor_lane() -> SqlitePool {
             terms_days: None,
             notes: None,
             tax_id: Some("123-45-6789".into()),
+            keep_tax_id: false,
             is_1099: true,
             tax_rate_id: None,
             is_tax_exempt: false,
             tax_exemption: None,
             form_style_id: None,
         },
+        crate::tax_ids::Access::OPEN,
     )
     .await
     .expect("mark 1099 vendor");

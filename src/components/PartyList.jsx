@@ -11,6 +11,38 @@ const CONFIG = {
   vendor: { list: api.listVendors, create: api.createVendor, noun: 'vendor', title: 'Vendors', balance: 'Open balance (A/P)' },
 };
 
+/**
+ * A vendor's tax ID. Shown masked until opened; locked (masked, read-only) for users who may not
+ * see sensitive data.
+ */
+function TaxIdField({ form, setForm }) {
+  const [open, setOpen] = useState(!form.taxIdMasked);
+  if (form.taxIdLocked) {
+    return (
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Tax ID (EIN or SSN)</span>
+        <input className="qb-input bg-qb-canvas" value={form.taxIdMasked ?? ''} placeholder="None" readOnly aria-describedby="tax-id-locked" />
+        <span id="tax-id-locked" className="text-2xs text-qb-ink-faint">Only users who can see sensitive data can view or change it.</span>
+      </label>
+    );
+  }
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="font-semibold text-qb-ink-muted">Tax ID (EIN or SSN)</span>
+      {open ? (
+        <input className="qb-input" value={form.taxId ?? ''} onChange={(e) => setForm((f) => ({ ...f, taxId: e.target.value }))} autoComplete="off" spellCheck={false} />
+      ) : (
+        <span className="flex gap-1">
+          <input className="qb-input min-w-0 flex-1 bg-qb-canvas" value={form.taxIdMasked} readOnly />
+          <button type="button" className="qb-btn qb-btn-secondary flex-none px-2" onClick={() => setOpen(true)}>
+            Show
+          </button>
+        </span>
+      )}
+    </label>
+  );
+}
+
 /** The full customer or vendor record: contact details, default terms and (vendors) 1099 status. */
 function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
@@ -22,7 +54,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
 
   useEffect(() => {
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, termsDays: p.termsDays ?? '' }),
+      (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId }),
       (err) => setError(errorText(err)),
     );
   }, [kind, id]);
@@ -42,6 +74,8 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         termsDays: terms === '' ? null : Number(terms),
         notes: form.notes,
         taxId: form.taxId,
+        // Unchanged (or not ours to change): the stored value stays as it is.
+        keepTaxId: Boolean(form.taxIdLocked) || (form.taxId ?? '') === (form.originalTaxId ?? ''),
         is1099: Boolean(form.is1099),
         taxRateId: form.taxRateId ?? null,
         isTaxExempt: Boolean(form.isTaxExempt),
@@ -78,7 +112,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
               <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
             </label>
             {field('Terms (days)', 'termsDays', { inputMode: 'numeric', placeholder: kind === 'customer' ? 'e.g. 30 for Net 30' : 'e.g. 30' })}
-            {kind === 'vendor' && field('Tax ID (EIN or SSN)', 'taxId')}
+            {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && (
               <label className="col-span-2 flex items-center gap-1.5 text-sm">
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />

@@ -141,7 +141,7 @@ async fn cash_flow() {
 #[tokio::test]
 async fn vendors_1099() {
     let pool = company().await;
-    let rows = crate::workflows::vendors_1099(&pool, 2025).await.unwrap();
+    let rows = crate::workflows::vendors_1099(&pool, 2025, crate::tax_ids::Access::OPEN).await.unwrap();
     let mut out = String::from("1099-NEC summary, 2025\n\n");
     for r in &rows {
         writeln!(

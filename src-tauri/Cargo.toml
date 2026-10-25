@@ -10,11 +10,14 @@ repository = "https://github.com/turbogizzmo/LocalBooks"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc"] }
+argon2 = { version = "=0.5.3", default-features = false, features = ["alloc"] }
 base64 = "0.23"
 cfb = "0.14"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
 flate2 = "1"
+getrandom = "=0.2.17"
 hmac = "=0.12.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-native-tls"] }
@@ -32,6 +35,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+zeroize = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WNet", "Win32_System_LibraryLoader", "Win32_System_Mapi"] }
