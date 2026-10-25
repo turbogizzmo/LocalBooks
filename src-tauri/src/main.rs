@@ -9,6 +9,7 @@ mod classes;
 mod closing;
 mod commands;
 mod credits;
+mod crypto;
 mod db;
 mod edits;
 mod email_log;
@@ -26,6 +27,7 @@ mod invoices;
 mod ledger;
 mod mail_app;
 mod parties;
+mod permissions;
 mod pdf;
 mod mcp_server;
 mod preferences;
@@ -45,6 +47,7 @@ mod reports;
 mod revaluation;
 mod sales;
 mod sales_tax;
+mod tax_ids;
 mod secrets;
 mod simplefin;
 mod smtp;
@@ -52,6 +55,7 @@ mod statements;
 mod storage;
 mod text_import;
 mod timesheet;
+mod users;
 mod windows;
 mod workflows;
 
@@ -120,14 +124,15 @@ fn main() {
                     return Ok(());
                 }
             };
+            tauri::async_runtime::block_on(database.refresh_gate());
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
-            // live at the time of each request.
+            // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();
             let pools: mcp_server::PoolSource = std::sync::Arc::new(move || {
                 let handle = pool_handle.clone();
-                Box::pin(async move { handle.state::<db::Db>().pool().await })
+                Box::pin(async move { handle.state::<db::Db>().readable_pool().await })
             });
             app.manage(mcp_server::McpService::new(config_dir.clone(), pools));
             let mcp_handle = app.handle().clone();
@@ -159,7 +164,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(guarded(tauri::generate_handler![
             commands::list_accounts,
             commands::list_account_types,
             commands::create_account,
@@ -359,6 +364,21 @@ fn main() {
             commands::set_email_later,
             commands::list_email_queue,
             commands::get_storage_status,
+            commands::get_sign_in_state,
+            commands::turn_on_users,
+            commands::sign_in,
+            commands::sign_out,
+            commands::sign_in_remembered,
+            commands::forget_remembered_sign_in,
+            commands::touch_session,
+            commands::sign_out_if_idle,
+            commands::list_users,
+            commands::add_user,
+            commands::update_user,
+            commands::change_my_password,
+            commands::recover_with_recovery_key,
+            commands::replace_recovery_key,
+            commands::remove_all_users,
             commands::inspect_database_directory,
             commands::update_database_directory,
             commands::set_company_logo,
@@ -383,7 +403,7 @@ fn main() {
             commands::start_over_ledger_batch,
             commands::reverse_qbw_batch,
             commands::open_window,
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")
         .run(|app, event| match event {
@@ -411,4 +431,26 @@ fn main() {
             }),
             _ => {}
         });
+}
+
+/// Checks the signed-in user's role ([`permissions`]) before handing a command to `handler`; a
+/// refused command fails with the reason and never runs.
+fn guarded(handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let command = invoke.message.command();
+        let need = permissions::need(command);
+        let activity = matches!(need, permissions::Need::Write | permissions::Need::Admin) || command == "touch_session";
+        // Without a company file manager (startup failed), nothing is open to protect.
+        if let Some(db) = invoke.message.webview().try_state::<db::Db>() {
+            if let Err(reason) = db.check(need, activity) {
+                if reason == permissions::IDLE_SIGNED_OUT {
+                    let app = invoke.message.webview().app_handle().clone();
+                    tauri::async_runtime::spawn(async move { commands::sign_out_after_idle(&app).await });
+                }
+                invoke.resolver.reject(reason);
+                return true;
+            }
+        }
+        handler(invoke)
+    }
 }

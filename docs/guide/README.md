@@ -7,6 +7,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 - [Set up your company](getting-started.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
+- [Users, passwords and sensitive data](users-and-passwords.md)
 
 ## Sales and customers
 

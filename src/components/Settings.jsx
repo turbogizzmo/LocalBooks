@@ -8,6 +8,7 @@ import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
 import { NewCompanyDialog } from './CompanyFiles.jsx';
+import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -887,15 +888,29 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
 
-export default function Settings({ companyName, intent }) {
-  const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
+const ALL_TABS = [
+  ['preferences', 'Preferences Console'],
+  ['forms', 'Custom Forms'],
+  ['email', 'Email'],
+  ['data', 'File & Data Controls'],
+  ['ai', 'AI Access (MCP)'],
+  ['users', 'Users & Passwords'],
+  ['updates', 'Updates'],
+];
+// Company-wide settings are an Admin's; everyone manages their own sign-in.
+const NON_ADMIN_TABS = new Set(['users', 'updates']);
+
+export default function Settings({ companyName, intent, isAdmin = true }) {
+  const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
+  const allowed = (id) => tabs.some(([t]) => t === id);
+  const [tab, setTab] = useState(() => (allowed(SETTINGS_TABS[intent?.action]) ? SETTINGS_TABS[intent?.action] : tabs[0][0]));
 
   // Help shortcuts open a specific tab (and, for the closing date, scroll to it).
   useEffect(() => {
     const target = SETTINGS_TABS[intent?.action];
-    if (!target) return;
+    if (!target || !tabs.some(([t]) => t === target)) return;
     setTab(target);
     if (intent.action === 'closing') {
       const timer = setTimeout(() => document.getElementById('closing-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -905,14 +920,7 @@ export default function Settings({ companyName, intent }) {
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       <div className="flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
-        {[
-          ['preferences', 'Preferences Console'],
-          ['forms', 'Custom Forms'],
-          ['email', 'Email'],
-          ['data', 'File & Data Controls'],
-          ['ai', 'AI Access (MCP)'],
-          ['updates', 'Updates'],
-        ].map(([id, label]) => (
+        {tabs.map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -925,11 +933,13 @@ export default function Settings({ companyName, intent }) {
           </button>
         ))}
       </div>
+      {!isAdmin && <Notice kind="info" text="Company-wide settings are managed by an Admin." />}
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}
       {tab === 'data' && <FileAndData companyName={companyName} />}
       {tab === 'ai' && <LocalAiAccess />}
+      {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
     </div>
   );
