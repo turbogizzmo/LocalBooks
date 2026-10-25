@@ -934,8 +934,9 @@ async fn check(pool: &SqlitePool, a: &Accounts, m: &mut Model, lock_before: Opti
 
     // Statements at several dates, across the fiscal year boundary.
     let sum_of = |class: &str| -> i64 { expected.iter().filter(|(id, _)| a.of(**id).0 == class).map(|(_, b)| *b).sum() };
-    for as_of in dates.iter().chain(["2027-12-31"].iter()) {
-        let as_of: NaiveDate = as_of.parse().unwrap();
+    // The far horizon comes from `far_end()`, the same date the model-vs-report checks below key on.
+    let as_of_dates = dates.iter().map(|d| d.parse::<NaiveDate>().unwrap()).chain([far_end()]);
+    for as_of in as_of_dates {
         let bs = crate::statements::balance_sheet(pool, as_of).await?;
         ensure!(bs.is_balanced && bs.difference_cents == 0, "balance sheet {as_of} out of balance by {}", bs.difference_cents);
         ensure_eq!(bs.total_assets_cents, bs.total_liabilities_cents + bs.total_equity_cents, "assets = liabilities + equity at {as_of}");
