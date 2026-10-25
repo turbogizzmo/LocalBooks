@@ -100,6 +100,17 @@ fn a_rule_restricts_the_model_to_its_category_for_the_payee() {
 }
 
 #[test]
+fn common_words_still_count_toward_similarity() {
+    // "ZZZ" is seen first, so its id is lower than "AAA"'s although it sorts later as a key: the
+    // stored ids must still be in id order for the common-word lookup.
+    let mut history = vec![ex("ZZZ STORE", -5_000, 10, None, "2026-01-01")];
+    history.extend((0..20).map(|d| ex("AAA COMMON ZZZ", -5_000, 10, None, &format!("2026-02-{:02}", d + 1))));
+    history.extend((0..20).map(|d| ex(&format!("OTHER{}", ["X", "Y", "Q", "W"][d % 4]), -5_000, 20, None, &format!("2026-03-{:02}", d + 1))));
+    let model = Model::train(history, None);
+    assert!(model.rows.iter().all(|r| r.features.windows(2).all(|w| w[0] < w[1])), "feature ids are sorted");
+}
+
+#[test]
 fn confidence_levels() {
     assert_eq!((confidence_level(95), confidence_level(80), confidence_level(79), confidence_level(50), confidence_level(49)), ("HIGH", "HIGH", "MEDIUM", "MEDIUM", "LOW"));
 }

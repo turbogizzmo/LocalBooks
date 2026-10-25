@@ -203,6 +203,8 @@ impl Model {
             self.postings[id as usize].push(idx);
             features.push(id);
         }
+        // Ids come in first-seen order, not the keys' order; scoring binary-searches them.
+        features.sort_unstable();
         let payee = e.payee.as_deref().map(str::trim).filter(|p| !p.is_empty()).map(|p| match self.payee_ids.get(p) {
             Some(&id) => id,
             None => {
