@@ -388,13 +388,16 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     assert_eq!(reasons, ["not brought in: its customer was not imported", "LocalBooks transfers cannot use one of its accounts (accounts receivable)"]);
 }
 
-/// Full pipeline on a real company file into a fresh test database: set LOCALBOOKS_QBW_CHECK
+/// Full pipeline on a real company file (or backup) into a fresh test database: set LOCALBOOKS_QBW_CHECK
 /// and run `cargo test --release -- --ignored posts_a_real --nocapture`.
 #[tokio::test]
 #[ignore]
 async fn posts_a_real_company_file() {
-    let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-    let ledger = tokio::task::spawn_blocking(move || crate::qbw_company::read_ledger(Path::new(&path))).await.unwrap().unwrap();
+    let path = std::path::PathBuf::from(std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK"));
+    // A backup (.qbb) is unpacked to a temporary company file first, as the app does.
+    let unpacked = crate::qbw_backup::is_backup(&path).then(|| crate::qbw_backup::unpack(&path, &std::env::temp_dir()).unwrap());
+    let file = unpacked.as_ref().map_or(path, |u| u.path.clone());
+    let ledger = tokio::task::spawn_blocking(move || crate::qbw_company::read_ledger(&file)).await.unwrap().unwrap();
     let pool = test_pool().await;
     let started = std::time::Instant::now();
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 0, &ledger).await.unwrap();
