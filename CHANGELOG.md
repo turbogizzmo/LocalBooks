@@ -4,6 +4,35 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.6.0]
+
+- **Import QuickBooks reports.** No working QuickBooks? Every QuickBooks (Desktop for Windows,
+  Desktop for Mac and Online) can still export its **Journal** or **General Ledger** report and its
+  account, customer, vendor and item lists to Excel or CSV, even in view-only mode. Drop those files
+  into the Desktop Migration Wizard and LocalBooks rebuilds your books from them. See the guide for
+  the exact report settings.
+- **Moving from QuickBooks for Mac.** The migration guide now explains how to bring Mac books over:
+  export a copy for QuickBooks for Windows, with no password, and import that.
+- **Credit card credits.** Enter a vendor's refund onto a credit card (Expenses & Checks › Card credit,
+  or + New). Card credits in QuickBooks, IIF and QIF imports now come in as card credits instead of
+  journal entries.
+- **Finance charges.** Set a rate, minimum charge and grace period (Settings › Preferences Console ›
+  Finance charges), then use **Assess Finance Charges** to add late fees to overdue invoices.
+- **Change Item Prices.** Raise or lower the prices of many products and services at once, by an
+  amount or a percentage, with a preview before you apply. Every change is in the audit trail.
+- **Sales reps, Ship Via and custom fields.** Optional lists for sales forms: a sales rep per
+  customer and document (with a Sales by Rep Summary report), shipping method and ship date, and up
+  to 15 custom fields for customers, vendors and items, which can print on your forms. They come in
+  from QuickBooks and IIF imports too. Nothing changes until you add an entry.
+- **New reports:** Profit and Loss and Balance Sheet Previous Year Comparison, Balance Sheet Budget
+  vs. Actual (budgets can now include balance sheet accounts), Inventory Valuation Summary and
+  Detail, Inventory Stock Status by Item, and Missing Checks.
+- **Fixed:** on macOS, "Are you sure?" questions (such as making a new recovery key or deleting a
+  budget) cancelled themselves without asking. They now ask inside LocalBooks.
+- **Fixed:** editing an invoice that had sales tax, after sales tax was turned off, removed its tax.
+- **Fixed:** a View only or Standard user could briefly see Admin settings when LocalBooks reopened
+  on the Settings page. Changes were always refused.
+
 ## [0.5.1]
 
 - **Tax IDs from newer QuickBooks files.** QuickBooks keeps vendor tax IDs encrypted with its own
