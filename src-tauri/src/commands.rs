@@ -1791,6 +1791,29 @@ pub async fn update_product(app: AppHandle, db: State<'_, Db>, id: i64, input: P
     Ok(product)
 }
 
+/// Change Item Prices: products and services with their price and unit cost.
+#[tauri::command]
+pub async fn list_price_items(db: State<'_, Db>) -> Result<Vec<crate::item_prices::PriceItem>, String> {
+    crate::item_prices::list_items(&db.pool().await).await
+}
+
+#[tauri::command]
+pub async fn preview_item_prices(db: State<'_, Db>, input: crate::item_prices::PriceChangeInput) -> Result<Vec<crate::item_prices::PriceChange>, String> {
+    crate::item_prices::preview(&db.pool().await, &input).await
+}
+
+#[tauri::command]
+pub async fn apply_item_prices(app: AppHandle, db: State<'_, Db>, input: crate::item_prices::PriceChangeInput) -> Result<crate::item_prices::AppliedPrices, String> {
+    let applied = crate::item_prices::apply(&db.pool().await, &input).await?;
+    notify(&app);
+    Ok(applied)
+}
+
+#[tauri::command]
+pub async fn list_price_changes(db: State<'_, Db>) -> Result<Vec<crate::item_prices::PriceChangeRecord>, String> {
+    crate::item_prices::history(&db.pool().await, 50).await
+}
+
 #[tauri::command]
 pub async fn set_product_active(app: AppHandle, db: State<'_, Db>, id: i64, active: bool) -> Result<ProductView, String> {
     let product = parties::set_product_active(&db.pool().await, id, active).await?;
