@@ -3,6 +3,8 @@
 The wizard brings in books from:
 
 - a QuickBooks Desktop company file (`.qbw`) or backup (`.qbb`)
+- QuickBooks Desktop for Mac, through a backup saved for QuickBooks for Windows (see **From
+  QuickBooks Desktop for Mac** below)
 - a QuickBooks **IIF export** (`.iif`)
 - a Quicken **QIF export** (`.qif`), which many banks and other programs also produce
 
@@ -45,6 +47,24 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   to your books…**, which matches or creates the accounts, customers, vendors and items and posts
   nothing. **Reverse added lists…** deactivates what it created; **Start over…** puts back the
   books from just before the lists were added.
+
+## From QuickBooks Desktop for Mac
+
+LocalBooks can't open a QuickBooks for Mac company file (`.qb2024`, `.qb2023` and so on) or a Mac
+backup (`.qbmb`) directly, because QuickBooks encrypts them. Save a copy for QuickBooks for Windows
+instead, and import that:
+
+1. In QuickBooks for Mac, open the company file.
+2. Choose **File › Export › To QuickBooks for Windows** (or **File › Save File for Accountant**,
+   which makes the same file).
+3. Click **Verify** when asked. If verification fails, rebuild the company file in QuickBooks first.
+4. Choose a name and location, and click **Save**.
+5. When QuickBooks asks for a password, **leave both fields blank** and click **OK**. LocalBooks
+   can't read a password-protected backup.
+6. In LocalBooks, choose the new `.qbb` file in the wizard, as for a company file below.
+
+Exporting to IIF from QuickBooks for Mac (**File › Export › Lists to IIF File**) brings in lists
+only, not transactions, so use the Windows backup to move your books.
 
 ## 1. Choose a file
 
