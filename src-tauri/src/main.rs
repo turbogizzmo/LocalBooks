@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod accounts;
+mod ach;
 mod audit_chain;
 mod backup;
 mod bank;
@@ -35,6 +36,7 @@ mod parties;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod nacha;
 mod preferences;
 mod qbw_backup;
 mod qbw_company;
@@ -329,6 +331,13 @@ fn main() {
             commands::post_vendor_bill,
             commands::pay_vendor_bill,
             commands::pay_vendor_bills,
+            commands::get_vendor_bank,
+            commands::set_vendor_bank,
+            commands::get_ach_originator,
+            commands::set_ach_originator,
+            commands::pay_bills_by_ach,
+            commands::save_ach_file,
+            commands::list_ach_files,
             commands::list_bill_payments,
             commands::post_expense,
             commands::list_expenses,
