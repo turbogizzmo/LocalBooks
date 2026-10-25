@@ -1,0 +1,19 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Sales tax liability, 2025-01-01 to 2025-12-31
+
+Rate                           ppm         Taxable     Non-taxable             Tax
+State Sales Tax              72500        7,852.50      127,500.00          569.33
+Tax collected                                                             569.33
+Tax paid in period                                                        423.15
+Owed at period end                                                        146.18
+
+Sales tax liability, 2025-10-01 to 2025-12-31
+
+Rate                           ppm         Taxable     Non-taxable             Tax
+State Sales Tax              72500        2,016.25       31,875.00          146.18
+Tax collected                                                             146.18
+Tax paid in period                                                        138.48
+Owed at period end                                                        146.18

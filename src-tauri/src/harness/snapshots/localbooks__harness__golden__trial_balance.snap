@@ -1,0 +1,32 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Trial Balance as of 2025-12-31
+
+Account                                     Type                               Debit          Credit
+1010 Checking                               Bank                            3,363.22                
+1020 Savings                                Bank                           15,000.00                
+1200 Accounts Receivable (A/R)              Accounts Receivable            12,408.81                
+1300 Undeposited Funds                      Other Current Asset            12,047.67                
+1500 Equipment                              Fixed Asset                    18,750.00                
+2000 Accounts Payable (A/P)                 Accounts Payable                                1,983.90
+2100 Credit Card                            Credit Card                                       375.00
+2200 Sales Tax Payable                      Other Current Liability                           146.18
+2300 Payroll Liabilities                    Other Current Liability                         2,001.37
+3100 Owner's Investment                     Equity                                         50,000.00
+3200 Owner's Draw                           Equity                         10,000.00                
+4000 Sales                                  Income                                          7,852.50
+4100 Services                               Income                                        132,708.00
+6000 Advertising & Marketing                Expense                         1,800.00                
+6050 Bank Charges & Fees                    Expense                           180.00                
+6250 Office Supplies                        Expense                           829.90                
+6300 Rent & Lease                           Expense                        28,800.00                
+6350 Software & Cloud Services              Expense                         1,548.00                
+6400 Contractors                            Expense                         5,700.00                
+6500 Utilities                              Expense                         2,367.00                
+6700 Wages                                  Expense                        75,750.00                
+6710 Payroll Taxes                          Expense                         5,794.85                
+8000 Interest Expense                       Other Expense                     780.00                
+8100 Exchange Gain or Loss                  Other Expense                                      52.50
+Total                                                                     195,119.45      195,119.45
