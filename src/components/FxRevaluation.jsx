@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents, formatMoney, formatRate, parseRateE6 } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
@@ -45,9 +46,10 @@ export default function FxRevaluation() {
   const post = async () => {
     const change = preview.netChangeCents;
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Post an unrealized ${change > 0 ? 'gain' : 'loss'} of ${formatCents(Math.abs(change))} on ${formatDate(asOf)}, reversed automatically the next day?`,
-      )
+        { confirmLabel: 'Post' },
+      ))
     )
       return;
     setBusy(true);
@@ -63,7 +65,7 @@ export default function FxRevaluation() {
   };
 
   const undo = async (r) => {
-    if (!window.confirm(`Void the revaluation as of ${formatDate(r.asOf)} and its reversal?`)) return;
+    if (!(await askConfirm(`Void the revaluation as of ${formatDate(r.asOf)} and its reversal?`, { confirmLabel: 'Void', danger: true }))) return;
     try {
       await api.voidFxRevaluation(r.id);
       setNotice({ kind: 'success', text: `Revaluation as of ${formatDate(r.asOf)} voided.` });

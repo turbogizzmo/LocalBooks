@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 
@@ -40,7 +41,7 @@ function Corrections({ onChanged }) {
 
   const apply = async (p) => {
     const label = p.entryNumber ? `#${p.entryNumber}` : `id ${p.entryId}`;
-    if (!window.confirm(`Post a correcting entry dated today for entry ${label}? The altered rows stay in the ledger as evidence.`)) return;
+    if (!(await askConfirm(`Post a correcting entry dated today for entry ${label}? The altered rows stay in the ledger as evidence.`, { confirmLabel: 'Post Correction' }))) return;
     setBusy(p.entryId);
     setError(null);
     try {

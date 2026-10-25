@@ -101,11 +101,15 @@ export function useFormTax(customerName, customers) {
     else if (rateId === null) setRateId(only);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, tax.enabled, tax.activeRates.length]);
+  // A rate loaded from an existing document is kept even if sales tax has since been turned off:
+  // saving the document again must not silently drop the tax it was posted with.
+  const [loaded, setLoaded] = useState(false);
+  const keep = tax.enabled || loaded;
   const rate = tax.rates.find((r) => r.id === rateId) ?? null;
   return {
     enabled: tax.enabled,
-    rateId: tax.enabled ? rateId : null,
-    rate: tax.enabled ? rate : null,
+    rateId: keep ? rateId : null,
+    rate: keep ? rate : null,
     exempt: Boolean(customer?.isTaxExempt),
     picker: tax.enabled ? (
       <TaxRatePicker
@@ -120,10 +124,12 @@ export function useFormTax(customerName, customers) {
     /** Sets the rate from a document being loaded (an estimate becoming an invoice). */
     set: (id) => {
       setTouched(true);
+      setLoaded(id !== null);
       setRateId(id);
     },
     reset: () => {
       setTouched(false);
+      setLoaded(false);
       setRateId(tax.activeRates.length === 1 ? tax.activeRates[0].id : null);
     },
   };

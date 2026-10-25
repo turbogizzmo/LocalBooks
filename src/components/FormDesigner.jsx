@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { FormSheet } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
 
 const KINDS = [
@@ -88,16 +89,19 @@ function StyleBar({ styles, styleId, setStyleId, dirty, onChanged, onNotice }) {
       onNotice({ kind: 'error', text: errorText(err) });
     }
   };
-  const create = (copy) => {
-    const name = window.prompt(copy ? `Name for a copy of “${style.name}”` : 'Name for the new style', copy ? `${style.name} copy` : '');
+  const create = async (copy) => {
+    const name = await askText(copy ? `Name for a copy of “${style.name}”` : 'Name for the new style', copy ? `${style.name} copy` : '');
     if (name) run(() => api.createFormStyle(name, copy ? style.id : null), `Added the style “${name}”.`);
   };
-  const rename = () => {
-    const name = window.prompt('New name for this style', style.name);
+  const rename = async () => {
+    const name = await askText('New name for this style', style.name);
     if (name && name !== style.name) run(() => api.renameFormStyle(style.id, name), `Renamed to “${name}”.`);
   };
-  const remove = () =>
-    window.confirm(`Delete the style “${style.name}”?${style.customerCount ? ` Its ${style.customerCount} customer(s) go back to the default style.` : ''}`) &&
+  const remove = async () =>
+    (await askConfirm(`Delete the style “${style.name}”?${style.customerCount ? ` Its ${style.customerCount} customer(s) go back to the default style.` : ''}`, {
+      confirmLabel: 'Delete',
+      danger: true,
+    })) &&
     run(() => api.deleteFormStyle(style.id), `Deleted “${style.name}”.`);
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -108,9 +112,10 @@ function StyleBar({ styles, styleId, setStyleId, dirty, onChanged, onNotice }) {
         id="form-style"
         className="qb-input w-[220px]"
         value={styleId ?? ''}
-        onChange={(e) => {
-          if (dirty && !window.confirm('Discard unsaved changes to this form?')) return;
-          setStyleId(Number(e.target.value));
+        onChange={async (e) => {
+          const next = Number(e.target.value);
+          if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
+          setStyleId(next);
         }}
       >
         {styles.map((s) => (
@@ -262,8 +267,8 @@ export default function FormDesigner() {
               type="button"
               role="tab"
               aria-selected={kind === k.id}
-              onClick={() => {
-                if (dirty && !window.confirm('Discard unsaved changes to this form?')) return;
+              onClick={async () => {
+                if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
                 setKind(k.id);
               }}
               className={`px-3 py-0.5 font-semibold ${kind === k.id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
@@ -291,7 +296,7 @@ export default function FormDesigner() {
             type="button"
             className="qb-btn qb-btn-secondary h-row"
             disabled={busy || !saved}
-            onClick={() => window.confirm('Replace this form with the standard layout?') && reset()}
+            onClick={async () => (await askConfirm('Replace this form with the standard layout?', { confirmLabel: 'Reset', danger: true })) && reset()}
           >
             Reset to standard
           </button>

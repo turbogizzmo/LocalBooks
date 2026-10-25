@@ -5,6 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
@@ -588,14 +589,14 @@ function LedgerReview({ summary, accounts, busy, run }) {
         : 'locked';
 
   // A file of lists only: add its accounts, customers, vendors and items, and post nothing.
-  const addLists = () => {
+  const addLists = async () => {
     const l = summary.lists;
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Add this file’s lists to your books?\n\n${countOf(used.length, ['account', 'accounts'])}, ${countOf(l.customers, ['customer', 'customers'])}, ` +
           `${countOf(l.vendors, ['vendor', 'vendors'])} and ${countOf(l.items, ['item', 'items'])}: each matches an existing record of the same name or is created. ` +
           'No transactions are posted. You can undo it later with "Reverse added lists" or "Start over".',
-      )
+      ))
     )
       return;
     run(
@@ -616,12 +617,12 @@ function LedgerReview({ summary, accounts, busy, run }) {
     );
   };
 
-  const post = () => {
+  const post = async () => {
     const question =
       mode === 'FULL'
         ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
         : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
-    if (!window.confirm(question)) return;
+    if (!(await askConfirm(question, { confirmLabel: mode === 'FULL' ? 'Import' : 'Post' }))) return;
     run(
       () => api.postLedgerBatch({ batchId: summary.id, mode }),
       (r) => {
@@ -971,13 +972,13 @@ export default function QbwImporter({ accounts }) {
     }
   };
 
-  const reverse = (b) => {
+  const reverse = async (b) => {
     if (
-      !window.confirm(
+      !(await askConfirm(
         b.listsAdded
           ? `Reverse the lists added from ${b.fileName}?\n\nThe accounts, customers, vendors and items the import created are deactivated (accounts used since stay active). Records that were already in your books are left alone.`
           : `Reverse the import of ${b.fileName}?\n\nEach of its ${b.liveEntryCount.toLocaleString()} entries gets a reversing entry, so your balances return to what they were before the import. Accounts the importer created are deactivated. This can take a moment for large imports.`,
-      )
+      ))
     )
       return;
     run(
@@ -997,17 +998,17 @@ export default function QbwImporter({ accounts }) {
   const startOver = async (b) => {
     const when = STAMP.format(new Date(b.startOver.takenAt));
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Start over: put your books back to how they were just before ${b.fileName} was posted (${when})?\n\n` +
           (b.listsAdded
             ? 'This removes the customers, vendors and items it added, and the accounts it created then. Accounts set up in step 2 before that stay, so the lists can be added again.\n\n'
             : `This removes the ${b.liveEntryCount.toLocaleString()} imported entries, with no reversing entries left behind. The accounts set up for the import stay, so it can be posted again.\n\n`) +
           `It also undoes ANYTHING else recorded since ${when}: invoices, payments, edits, other imports.\n\n` +
           `Your books as they are now are saved as a backup first (Settings › Backups), so this can be undone.`,
-      )
+      ))
     )
       return;
-    const typed = window.prompt('This replaces your company file. Type START OVER to confirm.');
+    const typed = await askText('This replaces your company file. Type START OVER to confirm.');
     if (typed?.trim().toUpperCase() !== 'START OVER') {
       if (typed !== null) setNotice({ kind: 'info', text: 'Start over cancelled: the confirmation text did not match. Nothing was changed.' });
       return;
@@ -1035,7 +1036,7 @@ export default function QbwImporter({ accounts }) {
   };
 
   const remove = async (b) => {
-    if (!window.confirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`)) return;
+    if (!(await askConfirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`, { confirmLabel: 'Delete', danger: true }))) return;
     setBusy(true);
     setNotice(null);
     try {
@@ -1060,12 +1061,12 @@ export default function QbwImporter({ accounts }) {
   const step2 = !invoiceSummary ? 'locked' : unmapped === 0 && invoiceSummary.lineCount > 0 ? 'done' : 'active';
   const step3 = !invoiceSummary ? 'locked' : invoiceSummary.liveEntryCount > 0 && postable === 0 ? 'done' : ready ? 'active' : 'locked';
 
-  const post = () => {
+  const post = async () => {
     const total = formatCents(invoiceSummary.totalCents);
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Post ${postable.toLocaleString()} journal entries (${total} in total) to your books?\n\nCheck this total against the original program’s reports first. You can undo it later with "Reverse posted entries".`,
-      )
+      ))
     )
       return;
     run(

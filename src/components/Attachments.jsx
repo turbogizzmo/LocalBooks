@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api, errorText } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 
 const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -42,7 +43,7 @@ export default function Attachments({ entryId }) {
             type="button"
             className="text-qb-ink-muted hover:text-qb-negative"
             aria-label={`Remove ${a.fileName}`}
-            onClick={() => window.confirm(`Remove ${a.fileName} from this transaction?`) && run(() => api.deleteAttachment(a.id))}
+            onClick={async () => (await askConfirm(`Remove ${a.fileName} from this transaction?`, { confirmLabel: 'Remove', danger: true })) && run(() => api.deleteAttachment(a.id))}
           >
             ×
           </button>

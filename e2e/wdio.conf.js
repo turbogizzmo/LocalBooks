@@ -12,6 +12,7 @@ import { APP, SCREENSHOTS, keepOwnConfig, prepareCompany, seedCompanies, waitFor
 const COMPANIES = {
   'users-from-scratch': 'No Users.localbooks',
   'seeded-users': 'Edge Cases.localbooks',
+  'taxed-invoice-edit': 'Edge Cases.localbooks',
 };
 
 const TAURI_DRIVER = process.env.TAURI_DRIVER || path.join(os.homedir(), '.cargo', 'bin', process.platform === 'win32' ? 'tauri-driver.exe' : 'tauri-driver');

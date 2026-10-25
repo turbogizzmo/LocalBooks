@@ -44,6 +44,7 @@ bug. A fixed bug gets an automated test wherever one can reach it.
 | R2 | As `viewer`: run P&L, Balance Sheet, export CSV, print | All work |
 | R3 | As `clerk` (Standard): create and pay an invoice | Works |
 | R4 | As `clerk`: Settings | Only Users & Passwords and Updates tabs |
+| R7 | As `owner`, leave Settings open and sign out; sign in as `clerk` | Opens on Users & Passwords; no Admin settings (Close books, company fields) even for a moment |
 | R5 | As `clerk`: Accounting › import screen | "Only an Admin can import" |
 | R6 | As `owner`: every Settings tab | All present and working |
 
@@ -93,6 +94,8 @@ bug. A fixed bug gets an automated test wherever one can reach it.
 | A11 | Record a payment larger than an invoice's balance | Refused or handled as a credit, never an overpaid invoice |
 | A12 | Sales tax liability report for 2024 | City 8.875% on the taxable amount only |
 | A13 | Bill OB-77 | Part-paid: $500.00 still open in A/P aging |
+| A14 | Sales tax is off in this file: reopen 2024 with the passcode, edit invoice 1003, save without changes | Still $134.52 with its $0.98 tax |
+| A15 | Every "Are you sure?" (New Recovery Key, delete a budget, Reset a form, Start over an import) | An in-app dialog asks; Cancel changes nothing, confirming does it (on macOS a browser dialog silently cancelled) |
 
 ## Names and input
 

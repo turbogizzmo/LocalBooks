@@ -17,6 +17,8 @@ mod estimates;
 mod expenses;
 mod forensic;
 mod forms;
+#[cfg(test)]
+mod frontend_checks;
 mod iif_import;
 mod export_engine;
 mod file_dentist;
