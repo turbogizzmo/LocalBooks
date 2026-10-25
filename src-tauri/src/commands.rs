@@ -188,6 +188,19 @@ pub async fn get_ar_aging(db: State<'_, Db>, as_of: Option<NaiveDate>) -> Result
     invoices::ar_aging(&db.pool().await, as_of.unwrap_or_else(|| Local::now().date_naive())).await
 }
 
+/// Assess Finance Charges: customers with overdue invoices as of a date, and the charge for each.
+#[tauri::command]
+pub async fn preview_finance_charges(db: State<'_, Db>, as_of: NaiveDate) -> Result<crate::finance_charges::Preview, String> {
+    crate::finance_charges::preview(&db.pool().await, as_of).await
+}
+
+#[tauri::command]
+pub async fn assess_finance_charges(app: AppHandle, db: State<'_, Db>, input: crate::finance_charges::AssessInput) -> Result<Vec<InvoiceSummary>, String> {
+    let invoices = crate::finance_charges::assess(&db.pool().await, input).await?;
+    notify(&app);
+    Ok(invoices)
+}
+
 /// Reads a bank file (CSV, OFX, QFX) and reports how it would be imported, importing nothing.
 #[tauri::command]
 pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>) -> Result<BankFileInspection, String> {

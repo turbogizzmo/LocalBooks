@@ -29,6 +29,7 @@ import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
 import Statements from './components/Statements.jsx';
+import FinanceCharges from './components/FinanceCharges.jsx';
 import SendForms from './components/SendForms.jsx';
 import Recurring, { useDueRecurring } from './components/Recurring.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
@@ -75,8 +76,9 @@ export default function App() {
   const signIn = useLedgerQuery(api.getSignInState);
   const signedIn = signIn.data?.user ?? null;
   useIdleLock(signIn.data);
-  // Without users, whoever opens the file can do everything.
-  const isAdmin = !signIn.data?.usersEnabled || signedIn?.role === 'ADMIN';
+  // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
+  // nobody counts as an Admin, so a View-only or Standard user never sees Admin screens first.
+  const isAdmin = signIn.data ? !signIn.data.usersEnabled || signedIn?.role === 'ADMIN' : false;
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
@@ -276,6 +278,7 @@ export default function App() {
           {view === 'sales/products' && <Products accounts={list} />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'sales/statements' && <Statements />}
+          {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={select} />}
           {view === 'sales/send-forms' && <SendForms />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}

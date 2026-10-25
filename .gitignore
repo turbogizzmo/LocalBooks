@@ -22,5 +22,6 @@ src-tauri/gen/
 *.QBW
 *.qbw
 
-# Third-party Windows tools dropped in for reference; never commit them
+# Third-party installers and tools dropped in for reference; never commit them
 *.exe
+*.dmg

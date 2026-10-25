@@ -453,6 +453,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                   >
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
+                      {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
@@ -470,6 +471,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
+                        label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
                           {

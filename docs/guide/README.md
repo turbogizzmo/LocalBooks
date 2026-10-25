@@ -12,7 +12,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 ## Sales and customers
 
 - [Create and send an invoice](invoices.md)
-- [Record customer payments](customer-payments.md)
+- [Record customer payments](customer-payments.md) (and charge interest on overdue invoices)
 - [Sales receipts and estimates](sales-receipts-and-estimates.md)
 - [Design your invoices and estimates](custom-forms.md)
 - [Customers, products and services](customers-and-products.md)
