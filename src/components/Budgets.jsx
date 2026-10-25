@@ -9,7 +9,11 @@ const PL_TYPES = new Set(['INCOME', 'COST_OF_GOODS_SOLD', 'EXPENSE', 'OTHER_INCO
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const key = (accountId, period) => `${accountId}:${period}`;
 
-/** Accounting › Budgets: a Profit and Loss budget per fiscal year, entered month by month per account. */
+/**
+ * Accounting › Budgets: a budget per fiscal year, entered month by month per account. Income and
+ * expense accounts take each month's amount; balance sheet accounts take the balance expected at
+ * each month end.
+ */
 export default function Budgets({ accounts, navigate }) {
   const budgets = useLedgerQuery(api.listBudgets);
   const [budgetId, setBudgetId] = useState(null);
@@ -17,9 +21,10 @@ export default function Budgets({ accounts, navigate }) {
   const [saved, setSaved] = useState({}); // key -> cents as stored
   const [notice, setNotice] = useState(null);
   const [creating, setCreating] = useState(null); // { name, year }
+  const [side, setSide] = useState('pl'); // pl | bs
   const list = budgets.data ?? [];
   const budget = list.find((b) => b.id === budgetId) ?? list[0] ?? null;
-  const rows = useMemo(() => accounts.filter((a) => PL_TYPES.has(a.accountType) && a.isActive), [accounts]);
+  const rows = useMemo(() => accounts.filter((a) => PL_TYPES.has(a.accountType) === (side === 'pl') && a.isActive), [accounts, side]);
 
   useEffect(() => {
     if (!budget) return;
@@ -99,6 +104,15 @@ export default function Budgets({ accounts, navigate }) {
             </select>
           </label>
         )}
+        {budget && !creating && (
+          <label>
+            <span className="qb-label">Accounts</span>
+            <select className="qb-input w-[170px]" value={side} onChange={(e) => setSide(e.target.value)}>
+              <option value="pl">Profit and Loss</option>
+              <option value="bs">Balance Sheet</option>
+            </select>
+          </label>
+        )}
         {creating ? (
           <>
             <label>
@@ -121,7 +135,7 @@ export default function Budgets({ accounts, navigate }) {
         )}
         {budget && !creating && (
           <div className="ml-auto flex gap-2">
-            <button type="button" className="qb-btn" onClick={() => navigate?.('reports', 'open', { report: 'bva' })}>Budget vs. Actuals</button>
+            <button type="button" className="qb-btn" onClick={() => navigate?.('reports', 'open', { report: side === 'pl' ? 'bva' : 'bs-bva' })}>Budget vs. Actual</button>
             <button type="button" className="qb-btn" onClick={remove}>Delete</button>
             <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={changed.length === 0 || invalid.length > 0}>
               Save{changed.length ? ` (${changed.length})` : ''}
@@ -133,7 +147,10 @@ export default function Budgets({ accounts, navigate }) {
       {budgets.error && <Notice kind="error" text={budgets.error} />}
       {invalid.length > 0 && <Notice kind="error" text="Some amounts are not valid numbers; they are outlined in red." />}
       {budgets.data && list.length === 0 && !creating && (
-        <Notice kind="info" text="Budgets set expected income and expenses per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Budget vs. Actuals." />
+        <Notice kind="info" text="Budgets set expected income and expenses (and, if you like, month-end balances) per account for each month of a fiscal year. Choose New budget to start one, then compare it with your books in Reports › Profit and Loss Budget vs. Actual or Balance Sheet Budget vs. Actual." />
+      )}
+      {budget && side === 'bs' && (
+        <Notice kind="info" text="For balance sheet accounts, enter the balance you expect at the end of each month (not the change). The Balance Sheet Budget vs. Actual report compares them with the actual balances." />
       )}
       {budget && (
         <div className="qb-panel min-h-0 flex-1 overflow-auto scrollbar-thin">
@@ -144,7 +161,7 @@ export default function Budgets({ accounts, navigate }) {
                 {MONTHS.map((m) => (
                   <th key={m} className="qb-grid-head num min-w-[92px]">{fiscalMonthLabel(budget.fiscalYearStart, m)}</th>
                 ))}
-                <th className="qb-grid-head num min-w-[100px]">Total</th>
+                <th className="qb-grid-head num min-w-[100px]">{side === 'pl' ? 'Total' : ''}</th>
                 <th className="qb-grid-head" />
               </tr>
             </thead>
@@ -169,7 +186,7 @@ export default function Budgets({ accounts, navigate }) {
                       </td>
                     );
                   })}
-                  <td className="qb-grid-cell num font-semibold">{formatCents(rowTotal(a.id))}</td>
+                  <td className="qb-grid-cell num font-semibold">{side === 'pl' ? formatCents(rowTotal(a.id)) : ''}</td>
                   <td className="qb-grid-cell">
                     <button type="button" className="text-xs text-qb-link hover:underline" onClick={() => fillRow(a.id)} title="Copy the first month across the year">
                       Copy across
