@@ -1,9 +1,11 @@
 # CodeQL configuration (see .github/workflows/codeql.yml).
 #
 # The Rust unit tests live in their own files next to the code they test (src/<module>/tests.rs,
-# plus src/db/migrate_tests.rs). They use fixed sample passwords, salts and keys on throwaway
-# databases, which CodeQL reports as hard-coded secrets. Skipping those files keeps that noise out
-# while every file that ships is still scanned by every query.
+# plus src/db/migrate_tests.rs), and src/test_companies.rs builds test company files. They use fixed
+# sample passwords, salts and keys on throwaway databases, which CodeQL reports as hard-coded
+# secrets. Skipping those test-only files keeps that noise out while every file that ships is still
+# scanned by every query.
 paths-ignore:
   - src-tauri/src/**/tests.rs
   - src-tauri/src/**/migrate_tests.rs
+  - src-tauri/src/test_companies.rs
