@@ -18,6 +18,7 @@ import {
   signIn,
   signOut,
   signedInAs,
+  tableRow,
   type,
   waitForApp,
   waitForSignIn,
@@ -41,7 +42,8 @@ describe('From no users to a View only user', () => {
     await click(button('Save & Post to Ledger'));
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
     // Listed with its total: 2 × 150.00.
-    await expect($('//table//tr[td[2][normalize-space()="E2E Customer"]]/td[5]')).toHaveText(expect.stringContaining('300.00'));
+    const [, customer, , , total] = await tableRow('E2E Customer');
+    expect([customer, total]).toEqual(['E2E Customer', '$300.00']);
   });
 
   it('turns users on and shows the recovery key once', async () => {
@@ -74,9 +76,9 @@ describe('From no users to a View only user', () => {
     await type(field('Type it again', scope), VIEWER.temporary);
     await click(button('Add User', scope));
     await notice('success', `Added ${VIEWER.username}.`).waitForDisplayed();
-    const row = `//table//tr[td[1][starts-with(normalize-space(), "${VIEWER.username}")]]`;
-    await expect($(`${row}/td[3]`)).toHaveText('View only');
-    await expect($(`${row}/td[1]`)).toHaveText(expect.stringContaining('(temporary password)'));
+    const [username, name, role] = await tableRow(VIEWER.username);
+    expect([name, role]).toEqual([VIEWER.name, 'View only']);
+    expect(username).toContain('(temporary password)');
   });
 
   it('signs the new user in, who must choose their own password first', async () => {

@@ -69,8 +69,27 @@ export async function goTo(label) {
 
 /** The Settings tabs on show, in order. */
 export async function settingsTabs() {
-  const tabs = await $$('[role="tablist"] [role="tab"]');
-  return Promise.all(tabs.map((tab) => tab.getText()));
+  return $$('[role="tablist"] [role="tab"]').map((tab) => tab.getText());
+}
+
+/**
+ * The cell texts of the first table row with a cell starting with `text`, once there is one.
+ * Read from the page itself: it waits on re-renders without holding on to stale elements.
+ */
+export async function tableRow(text) {
+  let cells;
+  await browser.waitUntil(
+    async () => {
+      cells = await browser.execute((wanted) => {
+        const clean = (el) => el.textContent.replace(/\s+/g, ' ').trim();
+        const row = [...document.querySelectorAll('table tbody tr')].find((tr) => [...tr.cells].some((td) => clean(td).startsWith(wanted)));
+        return row ? [...row.cells].map(clean) : null;
+      }, text);
+      return cells !== null;
+    },
+    { timeoutMsg: `no table row with a cell starting "${text}"` },
+  );
+  return cells;
 }
 
 export async function openSettingsTab(label) {
