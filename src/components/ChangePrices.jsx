@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 
@@ -98,7 +99,8 @@ export default function ChangePrices({ onClose }) {
   const allPicked = shown.length > 0 && shown.every((i) => picked.has(i.id));
 
   const apply = async () => {
-    if (!window.confirm(`Change the sales price of ${changing.length} item${changing.length === 1 ? '' : 's'}? Invoices and other documents already written keep their prices.`)) return;
+    const question = `Change the sales price of ${changing.length} item${changing.length === 1 ? '' : 's'}? Invoices and other documents already written keep their prices.`;
+    if (!(await askConfirm(question, { confirmLabel: 'Change prices' }))) return;
     setBusy(true);
     try {
       const r = await api.applyItemPrices(input);
