@@ -48,6 +48,8 @@ mod revaluation;
 mod sales;
 mod sales_tax;
 mod tax_ids;
+#[cfg(test)]
+mod test_companies;
 mod secrets;
 mod simplefin;
 mod smtp;
