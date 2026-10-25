@@ -133,6 +133,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           const isActive = active === i;
           const bad = (field) => !state.blank && state.errors[field];
           const cellProps = (col) => ({
+            'data-cell': col,
             onMouseDown: (e) => {
               if (isActive) return;
               // The clicked text cell is swapped for an input during this event; without this the

@@ -166,7 +166,7 @@ pub fn check(gate: &Gate, need: Need) -> Result<(), String> {
         return Err("PASSWORD_CHANGE_REQUIRED: choose your own password first".into());
     }
     match (need, user.role) {
-        (Need::Write, Role::ViewOnly) => Err("ROLE_VIEW_ONLY: your user can look at the books but not change them".into()),
+        (Need::Write, Role::ViewOnly) => Err("ROLE_VIEW_ONLY: view only: your user can look at the books but not change them".into()),
         (Need::Admin, Role::Standard | Role::ViewOnly) => Err("ROLE_ADMIN_ONLY: only an Admin can do this".into()),
         _ => Ok(()),
     }
