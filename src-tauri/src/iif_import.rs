@@ -150,23 +150,26 @@ impl Row<'_> {
     }
 }
 
-/// A `TRNS` or `SPL` row as read.
-struct RawLine {
-    trnstype: String,
-    date: Option<String>,
-    account: Option<String>,
-    name: Option<String>,
-    amount: Option<String>,
-    doc_num: Option<String>,
-    memo: Option<String>,
-    quantity: Option<String>,
-    price: Option<String>,
-    item: Option<String>,
-    due_date: Option<String>,
-    pay_method: Option<String>,
-    rep: Option<String>,
-    ship_via: Option<String>,
-    ship_date: Option<String>,
+/// A `TRNS` or `SPL` row as read. The report reader (`report_import`) builds these too: `trnstype`
+/// is an IIF transaction type, `date` any date [`parse_date`] reads and `amount` signed, debits
+/// positive.
+#[derive(Default)]
+pub(crate) struct RawLine {
+    pub trnstype: String,
+    pub date: Option<String>,
+    pub account: Option<String>,
+    pub name: Option<String>,
+    pub amount: Option<String>,
+    pub doc_num: Option<String>,
+    pub memo: Option<String>,
+    pub quantity: Option<String>,
+    pub price: Option<String>,
+    pub item: Option<String>,
+    pub due_date: Option<String>,
+    pub pay_method: Option<String>,
+    pub rep: Option<String>,
+    pub ship_via: Option<String>,
+    pub ship_date: Option<String>,
 }
 
 impl RawLine {
@@ -191,11 +194,12 @@ impl RawLine {
     }
 }
 
-/// A transaction block as read, before its accounts and names are resolved.
-struct Block {
-    trns: RawLine,
-    splits: Vec<RawLine>,
-    file_line: usize,
+/// A transaction block as read, before its accounts and names are resolved. `trns` is the line on
+/// the transaction's own account (receivables for an invoice, the bank for a check).
+pub(crate) struct Block {
+    pub trns: RawLine,
+    pub splits: Vec<RawLine>,
+    pub file_line: usize,
 }
 
 /// A customer's `REP`, written "Name:ListID:Initials" (ListID 1–3 says which name list the rep is
@@ -400,6 +404,21 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
         });
     }
 
+    Ok(assemble(accounts, nonposting, names, items, sales_lists, &blocks))
+}
+
+/// Resolves transaction blocks against the lists into a ledger: accounts and names a block uses
+/// without the lists declaring them are created, payments are applied, and transactions that do
+/// not balance are set apart. `nonposting` holds the lowercased paths of non-posting accounts;
+/// reps and shipping methods the transactions use are added to `sales_lists`.
+pub(crate) fn assemble(
+    accounts: Accounts,
+    nonposting: Vec<String>,
+    names: Names,
+    mut items: Vec<SourceItem>,
+    mut sales_lists: SourceSalesLists,
+    blocks: &[Block],
+) -> Ledger {
     let item_ids: HashMap<String, (i64, Option<i64>)> = items.iter().map(|i| (i.name.to_lowercase(), (i.id, i.income_account_id))).collect();
     let mut reader = Transactions { accounts, nonposting, names, item_ids, unreadable: Vec::new() };
     let mut transactions: Vec<SourceTransaction> = Vec::new();
@@ -426,7 +445,7 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
             }
         }
     }
-    Ok(Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality, sales_lists })
+    Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality, sales_lists }
 }
 
 /// Resolves transaction blocks against the lists.

@@ -89,6 +89,7 @@ const ADMIN: &[&str] = &[
     "simplefin_disconnect",
     // Importing other programs' books.
     "ingest_raw_qbw",
+    "ingest_report_exports",
     "set_qbw_mapping",
     "auto_create_qbw_accounts",
     "post_qbw_batch",

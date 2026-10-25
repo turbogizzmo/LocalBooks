@@ -183,6 +183,14 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    source invoice ID stops the same invoice being posted twice. Voiding an imported entry
    releases its invoice so it can be posted again.
 
+Without a readable company file, the wizard also takes **QuickBooks report exports** (`.csv` or
+`.xlsx`) from QuickBooks Desktop for Windows or Mac, or QuickBooks Online: the Journal or General
+Ledger, with the Account Listing, contact lists and Item List chosen together. `report_import.rs`
+finds each report by its column headings, skips title, total and footer rows, and hands the
+transactions to the same resolver as the IIF reader. An expired QuickBooks Desktop for Mac can
+still run these reports in view-only mode. See
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#import-quickbooks-reports).
+
 ---
 
 ## Architecture
@@ -507,6 +515,13 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **IIF and QIF imports.** IIF files don't link payments to invoices, so payments apply to the
   oldest open invoices, as QuickBooks does. QIF investment accounts are skipped. A file with lists
   but no transactions adds its accounts, customers, vendors and items and posts nothing.
+- **QuickBooks report imports** (Journal or General Ledger exported to CSV or Excel, with the
+  Account Listing, contact lists and Item List) read Debit and Credit columns only; a report with
+  just an Amount column is refused. Like IIF, they don't link payments to invoices, so payments
+  apply to the oldest open invoices. QuickBooks Online's Journal has no transaction number, so its
+  lines are grouped by date, type and number until they balance. A General Ledger's lines are
+  paired back into transactions through its Split column; lines that can't be paired are listed,
+  not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.

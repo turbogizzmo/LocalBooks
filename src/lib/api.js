@@ -279,6 +279,7 @@ export const api = {
   getInvoiceDetail: (invoiceId) => invoke('get_invoice_detail', { invoiceId }),
 
   ingestRawQbw: (filePath) => invoke('ingest_raw_qbw', { filePath }),
+  ingestReportExports: (filePaths) => invoke('ingest_report_exports', { filePaths }),
   listQbwBatches: () => invoke('list_qbw_batches'),
   getQbwBatch: (batchId) => invoke('get_qbw_batch', { batchId }),
   setQbwMapping: (batchId, rawLabel, accountId) => invoke('set_qbw_mapping', { batchId, rawLabel, accountId }),

@@ -45,6 +45,7 @@ mod qbw_ledger_import;
 mod qbw_pages;
 mod qbw_records;
 mod qif_import;
+mod report_import;
 mod reconcile;
 mod registers;
 mod report_center;
@@ -425,6 +426,7 @@ fn main() {
             commands::get_company_logo,
             commands::get_invoice_detail,
             commands::ingest_raw_qbw,
+            commands::ingest_report_exports,
             commands::list_qbw_batches,
             commands::get_qbw_batch,
             commands::set_qbw_mapping,
