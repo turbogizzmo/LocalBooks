@@ -252,3 +252,79 @@ fn reads_the_import_kit_samples() {
     }
     assert!(files > 0, "no .iif files under LOCALBOOKS_IIF_DIR");
 }
+
+/// Reps, shipping methods and custom fields as a QuickBooks list export and a sales form give
+/// them: the Ship Via list, the custom field labels (`CUSTNAMEDICT`, `CUSTITEMDICT`), a customer's
+/// `REP` ("Name:ListID:Initials") and `CUSTFLD` values, and an invoice's `REP`, `SHIPVIA` and `SHIPDATE`.
+const SALES_LISTS: &str = "!ACCNT\tNAME\tACCNTTYPE\r
+ACCNT\tAccounts Receivable\tAR\r
+ACCNT\tSales\tINC\r
+!SHIPMETH\tNAME\tHIDDEN\r
+SHIPMETH\tUPS\tN\r
+SHIPMETH\tPony Express\tY\r
+!CUSTNAMEDICT\tINDEX\tLABEL\tCUSTOMER\tVENDOR\tEMPLOYEE\r
+CUSTNAMEDICT\t0\tRegion\tY\tY\tN\r
+CUSTNAMEDICT\t1\t\tN\tN\tN\r
+!CUSTITEMDICT\tINDEX\tLABEL\tINUSE\r
+CUSTITEMDICT\t0\tColor\tY\r
+!CUST\tNAME\tREP\tCUSTFLD1\tCUSTFLD2\r
+CUST\tAcme\tJane Smith:2:JS\tWest\tLoyal\r
+!VEND\tNAME\tCUSTFLD1\r
+VEND\tStaples\tEast\r
+!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\tCUSTFLD1\r
+INVITEM\tWidget\tPART\tSales\t10\tRed\r
+!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tREP\tSHIPVIA\tSHIPDATE\r
+!SPL\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tQNTY\tPRICE\tINVITEM\r
+!ENDTRNS\r
+TRNS\tINVOICE\t7/16/2024\tAccounts Receivable\tAcme\t20\t71\tRW\tFedEx\t7/18/2024\r
+SPL\tINVOICE\t7/16/2024\tSales\t\t-20\t-2\t10\tWidget\r
+ENDTRNS\r";
+
+#[test]
+fn reads_reps_shipping_methods_and_custom_fields() {
+    let ledger = read(SALES_LISTS.as_bytes()).unwrap();
+    let acme = ledger.customers.iter().find(|c| c.name == "Acme").unwrap();
+    assert_eq!(acme.sales_rep.as_deref(), Some("JS:Jane Smith"));
+    // CUSTFLD2 has no label in the file, so it keeps a numbered one.
+    assert_eq!(acme.custom_fields, [("Region".to_string(), "West".to_string()), ("Custom field 2".into(), "Loyal".into())]);
+    assert_eq!(ledger.vendors[0].custom_fields, [("Region".to_string(), "East".to_string())]);
+    assert_eq!(ledger.items[0].custom_fields, [("Color".to_string(), "Red".to_string())]);
+    assert_eq!(ledger.sales_lists.reps, [("JS:Jane Smith".to_string(), true), ("RW".into(), true)]);
+    assert_eq!(ledger.sales_lists.ship_methods, [("UPS".to_string(), true), ("Pony Express".into(), false), ("FedEx".into(), true)]);
+    let Some(SourceDocument::Invoice { sales, .. }) = &ledger.transactions[0].document else { panic!("an invoice") };
+    assert_eq!(sales.rep.as_deref(), Some("RW"));
+    assert_eq!(sales.ship_via.as_deref(), Some("FedEx"));
+    assert_eq!(sales.ship_date, NaiveDate::from_ymd_opt(2024, 7, 18));
+}
+
+#[tokio::test]
+async fn a_full_import_brings_in_reps_shipping_and_custom_fields() {
+    use crate::custom_fields::{record_fields, FieldList};
+    use crate::qbw_ledger_import::{auto_map_accounts, post_batch, stage, ImportMode, PostLedgerInput};
+    let pool = crate::db::test_pool().await;
+    let ledger = read(SALES_LISTS.as_bytes()).unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Lists.iif"), SALES_LISTS.len() as i64, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+
+    let reps: Vec<(String, Option<String>, bool)> =
+        crate::sales_lists::list_sales_reps(&pool).await.unwrap().into_iter().map(|r| (r.initials, r.name, r.is_active)).collect();
+    assert_eq!(reps, [("JS".to_string(), Some("Jane Smith".to_string()), true), ("RW".into(), None, true)]);
+    let methods: Vec<(String, bool)> = crate::sales_lists::list_ship_methods(&pool).await.unwrap().into_iter().map(|m| (m.name, m.is_active)).collect();
+    assert_eq!(methods, [("FedEx".to_string(), true), ("Pony Express".into(), false), ("UPS".into(), true)]);
+
+    let (acme, rep): (i64, Option<String>) =
+        sqlx::query_as("SELECT c.id, r.initials FROM customers c LEFT JOIN sales_reps r ON r.id = c.sales_rep_id WHERE c.name = 'Acme'").fetch_one(&pool).await.unwrap();
+    assert_eq!(rep.as_deref(), Some("JS"));
+    let values: Vec<(String, String)> = record_fields(&pool, FieldList::Customer, acme).await.unwrap().into_iter().map(|f| (f.label, f.value)).collect();
+    assert_eq!(values, [("Region".to_string(), "West".to_string()), ("Custom field 2".into(), "Loyal".into())]);
+    let widget: i64 = sqlx::query_scalar("SELECT id FROM products_services WHERE name = 'Widget'").fetch_one(&pool).await.unwrap();
+    assert_eq!(record_fields(&pool, FieldList::Item, widget).await.unwrap()[0].value, "Red");
+
+    let invoice: i64 = sqlx::query_scalar("SELECT id FROM invoices").fetch_one(&pool).await.unwrap();
+    let details = crate::sales_lists::document_details(&pool, crate::sales_lists::SalesDoc::Invoice, invoice).await.unwrap();
+    assert_eq!(
+        (details.sales_rep_initials.as_deref(), details.ship_method_name.as_deref(), details.ship_date.as_deref()),
+        (Some("RW"), Some("FedEx"), Some("2024-07-18"))
+    );
+}

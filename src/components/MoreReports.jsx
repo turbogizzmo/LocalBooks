@@ -321,6 +321,7 @@ export function AgingReport({ payable, detail }) {
 const SUMMARY = {
   customer: { title: 'Sales by Customer Summary', column: 'Customer' },
   product: { title: 'Sales by Product/Service Summary', column: 'Product/Service' },
+  rep: { title: 'Sales by Rep Summary', column: 'Rep' },
   vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor' },
 };
 
@@ -355,7 +356,13 @@ export function SummaryReport({ by }) {
       rows={rows}
       error={error}
       toolbar={p.controls}
-      footer={by === 'product' ? 'Invoices and sales receipts less credit memos, by document date' : 'Accrual basis · posted transactions only'}
+      footer={
+        by === 'product'
+          ? 'Invoices and sales receipts less credit memos, by document date'
+          : by === 'rep'
+            ? 'Invoices and sales receipts by the rep on each form, by document date (credit memos carry no rep)'
+            : 'Accrual basis · posted transactions only'
+      }
       onCsvRows={() => [...data.rows.map((r) => [r.label, ...(withQty ? [((r.quantityE4 ?? 0) / 10_000).toString(), ''] : []), plainAmount(r.amountCents), '']), ['TOTAL', ...(withQty ? ['', ''] : []), plainAmount(data.totalCents), '']]}
     />
   );

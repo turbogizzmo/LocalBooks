@@ -48,16 +48,47 @@ pub struct Applied {
     pub cents: i64,
 }
 
+/// A sales form's rep and shipping details as the file gives them, by name (the full import finds
+/// or creates the rep and shipping method).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SourceSales {
+    /// Initials, or "initials:name".
+    pub rep: Option<String>,
+    pub ship_date: Option<chrono::NaiveDate>,
+    pub ship_via: Option<String>,
+}
+
+impl SourceSales {
+    pub fn is_empty(&self) -> bool {
+        self.rep.is_none() && self.ship_date.is_none() && self.ship_via.is_none()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum SourceDocument {
     #[serde(rename_all = "camelCase")]
-    Invoice { customer_id: i64, number: Option<String>, due_date: Option<chrono::NaiveDate>, lines: Vec<DocumentLine> },
+    Invoice {
+        customer_id: i64,
+        number: Option<String>,
+        due_date: Option<chrono::NaiveDate>,
+        lines: Vec<DocumentLine>,
+        #[serde(default, skip_serializing_if = "SourceSales::is_empty")]
+        sales: SourceSales,
+    },
     #[serde(rename_all = "camelCase")]
     CreditMemo { customer_id: i64, number: Option<String>, lines: Vec<DocumentLine>, applied_to: Vec<Applied> },
     /// Lines include the debit to the account the money went into.
     #[serde(rename_all = "camelCase")]
-    SalesReceipt { customer_id: Option<i64>, number: Option<String>, method: String, lines: Vec<DocumentLine> },
+    SalesReceipt {
+        customer_id: Option<i64>,
+        number: Option<String>,
+        method: String,
+        lines: Vec<DocumentLine>,
+        #[serde(default, skip_serializing_if = "SourceSales::is_empty")]
+        sales: SourceSales,
+    },
     #[serde(rename_all = "camelCase")]
     Payment { customer_id: i64, reference: Option<String>, method: String, applied_to: Vec<Applied> },
     /// The payments a deposit swept out of Undeposited Funds (its other lines are in the ledger lines).
@@ -76,7 +107,16 @@ pub enum SourceDocument {
     /// Estimates and purchase orders post nothing, so they carry their own date and memo; their
     /// line amounts are positive.
     #[serde(rename_all = "camelCase")]
-    Estimate { customer_id: i64, date: chrono::NaiveDate, number: Option<String>, expires: Option<chrono::NaiveDate>, memo: Option<String>, lines: Vec<DocumentLine> },
+    Estimate {
+        customer_id: i64,
+        date: chrono::NaiveDate,
+        number: Option<String>,
+        expires: Option<chrono::NaiveDate>,
+        memo: Option<String>,
+        lines: Vec<DocumentLine>,
+        #[serde(default, skip_serializing_if = "SourceSales::is_empty")]
+        sales: SourceSales,
+    },
     #[serde(rename_all = "camelCase")]
     PurchaseOrder {
         vendor_id: i64,
@@ -182,6 +222,13 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
         }
     }
 
+    // A sales form's rep (`sales_rep_id`), shipping method (`ship_via_id`; estimates have none) and ship date.
+    let (reps, ships) = crate::qbw_company::read_sales_lists(pages, catalog);
+    let sales_of = |h: &Row| SourceSales {
+        rep: h.get("sales_rep_id").as_int().and_then(|r| reps.get(&r)).map(|r| r.0.clone()),
+        ship_date: h.get("ship_date").as_date(),
+        ship_via: h.get("ship_via_id").as_int().and_then(|s| ships.get(&s)).map(|s| s.0.clone()),
+    };
     let mut out = HashMap::new();
     let invoice_headers = headers_of("abmc_invoice_header");
     for (tid, rows) in lines_of("abmc_invoice_lineitem") {
@@ -190,7 +237,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap) },
+            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap), sales: sales_of(h) },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -220,6 +267,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
                 number: text(h, "doc_num"),
                 method: method_of(h),
                 lines: form_lines(&refs, arap),
+                sales: sales_of(h),
             },
         );
     }
@@ -263,7 +311,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
         let (Some(customer_id), Some(date)) = (h.get("customer_id").as_int(), h.get("transaction_date").as_date()) else { continue };
         out.insert(
             tid,
-            SourceDocument::Estimate { customer_id, date, number: text(h, "doc_num"), expires: h.get("due_date").as_date(), memo: text(h, "memo"), lines: positive(&rows) },
+            SourceDocument::Estimate { customer_id, date, number: text(h, "doc_num"), expires: h.get("due_date").as_date(), memo: text(h, "memo"), lines: positive(&rows), sales: sales_of(h) },
         );
     }
     let order_headers = headers_of("abmc_purchase_order_header");

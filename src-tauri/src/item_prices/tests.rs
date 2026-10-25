@@ -148,6 +148,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

@@ -60,7 +60,7 @@ fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxab
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
-    InvoiceInput { customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: 0 }
+    InvoiceInput { customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: 0, details: Default::default() }
 }
 
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
@@ -131,6 +131,8 @@ async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Acce
         is_tax_exempt: false,
         tax_exemption: None,
         form_style_id: None,
+        sales_rep_id: None,
+        custom_fields: Vec::new(),
     };
     parties::update_party(pool, "vendor", id, input, access).await.expect("set the tax ID");
 }

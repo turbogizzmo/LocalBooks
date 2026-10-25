@@ -161,7 +161,16 @@ pub struct FormTemplate {
     pub show_payments: bool,
     /// Statements: the aging summary under the amount due.
     pub show_aging: bool,
-    /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company}.
+    /// Sales forms: the rep, when the document has one.
+    pub show_sales_rep: bool,
+    /// Sales forms: the ship date and shipping method, when the document has them.
+    pub show_shipping: bool,
+    /// Sales forms: customer custom fields marked for sales forms, when filled in.
+    pub show_custom_fields: bool,
+    /// Sales forms: item custom fields marked for sales forms, under each line.
+    pub show_item_fields: bool,
+    /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company},
+    /// {rep}, {ship_date}, {ship_via}.
     pub message: String,
     /// Payment instructions or terms and conditions, below the message.
     pub terms: String,
@@ -197,6 +206,10 @@ impl Default for FormTemplate {
             amount_label: "Amount".into(),
             show_payments: true,
             show_aging: true,
+            show_sales_rep: true,
+            show_shipping: true,
+            show_custom_fields: true,
+            show_item_fields: true,
             message: String::new(),
             terms: String::new(),
             footer: String::new(),
@@ -452,6 +465,54 @@ pub struct FormLine {
     pub quantity: String,
     pub rate: String,
     pub amount: String,
+    /// The item's custom fields marked for sales forms, as "Label: value".
+    pub details: Vec<String>,
+}
+
+/// A sales form's rep, shipping and customer custom fields, already formatted.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FormSales {
+    pub rep: Option<String>,
+    pub ship_date: Option<String>,
+    pub ship_via: Option<String>,
+    /// (label, value) of the customer fields printed on this document.
+    pub fields: Vec<(String, String)>,
+}
+
+impl FormSales {
+    fn of(view: &crate::sales_lists::SalesDetailsView) -> FormSales {
+        FormSales {
+            rep: view.sales_rep_initials.clone(),
+            ship_date: view.ship_date.as_deref().map(format_date),
+            ship_via: view.ship_method_name.clone(),
+            fields: view.custom_fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect(),
+        }
+    }
+
+    /// The rows it adds beside the customer block, as the template allows.
+    fn meta(&self, tpl: &FormTemplate) -> Vec<(String, String, bool)> {
+        let mut rows = Vec::new();
+        if tpl.show_sales_rep {
+            rows.extend(self.rep.iter().map(|r| ("Rep".to_string(), r.clone(), false)));
+        }
+        if tpl.show_shipping {
+            rows.extend(self.ship_date.iter().map(|d| ("Ship date".to_string(), d.clone(), false)));
+            rows.extend(self.ship_via.iter().map(|v| ("Ship via".to_string(), v.clone(), false)));
+        }
+        if tpl.show_custom_fields {
+            rows.extend(self.fields.iter().map(|(l, v)| (l.clone(), v.clone(), false)));
+        }
+        rows
+    }
+}
+
+/// Each line's item custom fields marked for sales forms, as "Label: value".
+async fn item_details(pool: &SqlitePool, products: &[Option<i64>]) -> Result<Vec<Vec<String>>, String> {
+    let fields = crate::custom_fields::item_form_fields(pool).await?;
+    Ok(products
+        .iter()
+        .map(|p| p.and_then(|p| fields.get(&p)).map(|f| f.iter().map(|v| format!("{}: {}", v.label, v.value)).collect()).unwrap_or_default())
+        .collect())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -498,6 +559,8 @@ pub struct FormDoc {
     pub balance: String,
     /// Statements only: printed instead of the line items.
     pub statement: Option<StatementTable>,
+    /// Sales forms: rep, shipping and customer custom fields.
+    pub sales: FormSales,
 }
 
 /// 123456 → "$1,234.56" (or "EUR 1,234.56" for a foreign-currency document), as the app shows it.
@@ -594,10 +657,12 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
     if let Some(code) = code {
         meta.push(("Currency".into(), code.into(), false));
     }
+    let details = item_details(pool, &detail.items.iter().map(|i| i.product_service_id).collect::<Vec<_>>()).await?;
     let lines = detail
         .items
         .iter()
-        .map(|i| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents) })
+        .zip(details)
+        .map(|(i, details)| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
         .collect();
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
@@ -627,6 +692,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         total: money(inv.total_cents),
         balance: money(balance),
         statement: None,
+        sales: FormSales::of(&detail.details),
     })
 }
 
@@ -642,7 +708,8 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64)> = sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
@@ -667,7 +734,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         customer_details: customer_details(&name, &cust),
         customer_email: cust.email,
         meta,
-        lines: rows.into_iter().map(|(description, qty, rate, amount)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount) }).collect(),
+        lines: lines_of(pool, rows, &money).await?,
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -675,6 +742,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         total: money(total),
         balance: money(total),
         statement: None,
+        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?),
     })
 }
 
@@ -695,8 +763,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -727,7 +795,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: rows.into_iter().map(|(description, qty, rate, amount)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount) }).collect(),
+        lines: lines_of(pool, rows, &money).await?,
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -735,7 +803,18 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         total: money(total),
         balance: money(0),
         statement: None,
+        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?),
     })
+}
+
+/// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
+async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<FormLine>, String> {
+    let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
+    Ok(rows
+        .into_iter()
+        .zip(details)
+        .map(|((description, qty, rate, amount, _), details)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details })
+        .collect())
 }
 
 fn statement_label(source_type: &str) -> &'static str {
@@ -793,13 +872,14 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
         total: due.clone(),
         balance: due,
         statement: Some(StatementTable { rows, aging: s.aging_cents.map(money) }),
+        sales: FormSales::default(),
     })
 }
 
 /// A made-up document for the designer's preview when no real one is chosen.
 pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
     let money = |cents: i64| format_money(cents, None, symbol);
-    let line = |d: &str, q: i64, r: i64| FormLine { description: d.into(), quantity: format_quantity(q), rate: money(r), amount: money(q * r / 10_000) };
+    let line = |d: &str, q: i64, r: i64| FormLine { description: d.into(), quantity: format_quantity(q), rate: money(r), amount: money(q * r / 10_000), details: Vec::new() };
     let lines = vec![
         line("Website redesign: discovery, wireframes and two rounds of revisions", 1_0000, 240_000),
         line("Consulting (hours)", 12_5000, 12_500),
@@ -872,6 +952,11 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         due_date: if statement.is_some() { String::new() } else { "10/31/2026".into() },
         total: money(total),
         balance,
+        sales: if statement.is_some() {
+            FormSales::default()
+        } else {
+            FormSales { rep: Some("JS".into()), ship_date: Some("10/02/2026".into()), ship_via: Some("UPS Ground".into()), fields: Vec::new() }
+        },
         statement,
     }
 }
@@ -888,6 +973,9 @@ fn fill_placeholders(text: &str, doc: &FormDoc, company: &Company) -> String {
         ("{total}", doc.total.as_str()),
         ("{balance}", doc.balance.as_str()),
         ("{company}", company.name.as_str()),
+        ("{rep}", doc.sales.rep.as_deref().unwrap_or_default()),
+        ("{ship_date}", doc.sales.ship_date.as_deref().unwrap_or_default()),
+        ("{ship_via}", doc.sales.ship_via.as_deref().unwrap_or_default()),
     ]
     .iter()
     .fold(text.to_string(), |acc, (key, value)| acc.replace(key, value))
@@ -1195,7 +1283,11 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     }
     let mut my = start - 4.0;
     let meta_lead = m.small + 6.0;
-    for (label, value, strong) in &doc.meta {
+    // Rep, shipping and custom fields go above the emphasized amount.
+    let mut meta = doc.meta.clone();
+    let at = meta.iter().position(|r| r.2).unwrap_or(meta.len());
+    meta.splice(at..at, doc.sales.meta(tpl));
+    for (label, value, strong) in &meta {
         my += meta_lead;
         if *strong && modern {
             l.push(Op::Rect { x: meta_x - 4.0, y: my - m.small - 3.0, w: right - meta_x + 4.0, h: meta_lead, fill: Some(tint(accent, 0.88)), stroke: None, line_width: 0.0 });
@@ -1258,7 +1350,13 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
             if tpl.show_line_numbers {
                 cells.push(vec![(i + 1).to_string()]);
             }
-            cells.push(l.wrap(&desc, false, m.body, desc_w));
+            let mut desc_lines = l.wrap(&desc, false, m.body, desc_w);
+            if tpl.show_item_fields {
+                for detail in &item.details {
+                    desc_lines.extend(l.wrap(detail, false, m.body, desc_w));
+                }
+            }
+            cells.push(desc_lines);
             if tpl.show_quantity {
                 cells.push(vec![item.quantity.clone()]);
             }

@@ -200,3 +200,40 @@ fn reads_the_ledger_of_a_real_file() {
         );
     }
 }
+
+#[test]
+fn custom_field_values_take_the_label_defined_for_their_list() {
+    // Position 1 is a name field on customers and vendors, 2 is customers only; items have their own 1.
+    let definitions = vec![
+        (1, "Region".to_string(), [true, true, false]),
+        (2, "Birthday".to_string(), [true, false, false]),
+        (1, "Color".to_string(), [false, false, true]),
+    ];
+    let values = vec![
+        ("C1".to_string(), 2, "May 4".to_string()),
+        ("C1".to_string(), 1, " West ".to_string()),
+        ("V1".to_string(), 2, "ignored: not a vendor field".to_string()),
+        ("V1".to_string(), 1, "East".to_string()),
+        ("I1".to_string(), 1, "Red".to_string()),
+        ("C2".to_string(), 1, "  ".to_string()),
+    ];
+    let customers = custom_values(&definitions, &values, FieldOwner::Customer);
+    assert_eq!(customers["C1"], [("Region".to_string(), "West".to_string()), ("Birthday".into(), "May 4".into())]);
+    assert!(!customers.contains_key("C2"), "blank values are skipped");
+    let vendors = custom_values(&definitions, &values, FieldOwner::Vendor);
+    assert_eq!(vendors["V1"], [("Region".to_string(), "East".to_string())]);
+    // Items read their own definitions: position 1 is Color for them.
+    assert_eq!(custom_values(&definitions, &values, FieldOwner::Item)["I1"], [("Color".to_string(), "Red".to_string())]);
+}
+
+#[test]
+fn sales_lists_keep_one_rep_per_set_of_initials() {
+    let mut lists = SourceSalesLists::default();
+    lists.add_rep("JS", true);
+    lists.add_rep("js:Jane Smith", true);
+    lists.add_rep("JS:Someone Else", false);
+    lists.add_ship_method("UPS", true);
+    lists.add_ship_method(" ups ", false);
+    assert_eq!(lists.reps, [("js:Jane Smith".to_string(), true)]);
+    assert_eq!(lists.ship_methods, [("UPS".to_string(), true)]);
+}

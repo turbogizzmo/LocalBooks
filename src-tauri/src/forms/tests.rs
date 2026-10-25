@@ -92,7 +92,7 @@ fn header_and_totals_text_stays_clear_of_the_logo_and_amounts() {
 fn long_documents_paginate_and_stay_on_the_page() {
     let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
     let mut doc = sample_doc(FormKind::Estimate, "$");
-    doc.lines = (0..80).map(|i| FormLine { description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into() }).collect();
+    doc.lines = (0..80).map(|i| FormLine { description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new() }).collect();
     let tpl = FormTemplate { paper: Paper::A4, ..FormTemplate::default_for(FormKind::Estimate) };
     let pages = layout(&doc, &company, &tpl, None);
     assert!(pages.len() > 2);
@@ -124,6 +124,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await
@@ -185,7 +186,7 @@ fn every_layout_preset_renders_every_form_on_one_page() {
     }
     // Compact fits more lines on a page than Classic.
     let mut doc = sample_doc(FormKind::Invoice, "$");
-    doc.lines = (0..60).map(|i| FormLine { description: format!("Line {i}"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into() }).collect();
+    doc.lines = (0..60).map(|i| FormLine { description: format!("Line {i}"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new() }).collect();
     let pages = |preset| layout(&doc, &company, &FormTemplate { layout: preset, ..FormTemplate::default_for(FormKind::Invoice) }, None).len();
     assert!(pages(FormLayout::Compact) < pages(FormLayout::Classic));
 }
@@ -295,4 +296,55 @@ async fn sales_receipts_and_statements_render_from_the_books() {
     let backwards = Period { start_date: period.end_date, end_date: period.start_date };
     assert!(render(&pool, FormKind::Statement, Some(customer), Some(backwards), None, false).await.is_err());
     assert_eq!(Period::last_month(NaiveDate::from_ymd_opt(2026, 3, 15).unwrap()), Period { start_date: NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(), end_date: NaiveDate::from_ymd_opt(2026, 2, 28).unwrap() });
+}
+
+#[tokio::test]
+async fn sales_forms_print_rep_shipping_and_custom_fields() {
+    use crate::custom_fields::{create_custom_field, save_record_values, CustomFieldInput, FieldList, FieldValue};
+    use crate::sales_lists::{create_sales_rep, create_ship_method, SalesDetails, SalesRepInput};
+    let pool = test_pool().await;
+    let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
+    let widget: i64 =
+        sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id) VALUES ('Widget', 500, ?1) RETURNING id").bind(services).fetch_one(&pool).await.unwrap();
+    let color = create_custom_field(&pool, FieldList::Item, CustomFieldInput { label: "Color".into(), on_sales_forms: true }).await.unwrap();
+    let sku = create_custom_field(&pool, FieldList::Item, CustomFieldInput { label: "Bin".into(), on_sales_forms: false }).await.unwrap();
+    save_record_values(&pool, FieldList::Item, widget, &[FieldValue { field_id: color.id, value: "Red".into() }, FieldValue { field_id: sku.id, value: "B7".into() }]).await.unwrap();
+    let po = create_custom_field(&pool, FieldList::Customer, CustomFieldInput { label: "PO number".into(), on_sales_forms: true }).await.unwrap();
+    let rep = create_sales_rep(&pool, SalesRepInput { initials: "JS".into(), name: None }).await.unwrap();
+    let ups = create_ship_method(&pool, "UPS Ground").await.unwrap();
+    let d = |day| NaiveDate::from_ymd_opt(2026, 10, day).unwrap();
+    let invoice = create_and_post_invoice(
+        &pool,
+        InvoiceInput {
+            customer_name: "Initech".into(),
+            issue_date: d(1),
+            due_date: d(31),
+            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: 500, income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false }],
+            currency: None,
+            tax_rate_id: None,
+            discount_cents: 0,
+            details: SalesDetails {
+                sales_rep_id: Some(rep.id),
+                ship_date: Some(d(2)),
+                ship_method_id: Some(ups.id),
+                custom_fields: vec![FieldValue { field_id: po.id, value: "PO-55".into() }],
+            },
+        },
+    )
+    .await
+    .unwrap();
+    let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
+    let doc = invoice_doc(&pool, invoice.id, "$").await.unwrap();
+    let tpl = FormTemplate { message: "Shipped {ship_via} on {ship_date} by {rep}.".into(), ..FormTemplate::default_for(FormKind::Invoice) };
+    let all = texts(&layout(&doc, &company, &tpl, None));
+    for expected in ["Rep", "JS", "Ship date", "10/02/2026", "Ship via", "UPS Ground", "PO number", "PO-55", "Color: Red", "Shipped UPS Ground on 10/02/2026 by JS."] {
+        assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
+    }
+    assert!(!all.iter().any(|t| t.contains("B7")), "a field not marked for sales forms is not printed");
+
+    let hidden = FormTemplate { show_sales_rep: false, show_shipping: false, show_custom_fields: false, show_item_fields: false, ..FormTemplate::default_for(FormKind::Invoice) };
+    let all = texts(&layout(&doc, &company, &hidden, None));
+    for absent in ["Rep", "Ship via", "UPS Ground", "PO-55", "Color: Red"] {
+        assert!(!all.iter().any(|t| t == absent), "{absent:?} should be hidden");
+    }
 }

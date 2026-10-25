@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
+import { CustomFieldInputs } from './SalesLists.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 
@@ -17,7 +18,11 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [fields, setFields] = useState([]);
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
+  useEffect(() => {
+    api.getCustomValues('ITEM', product.id).then(setFields, () => setFields([]));
+  }, [product.id]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -25,6 +30,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     setBusy(true);
     try {
       const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId, isTaxable: taxable });
+      if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
     } catch (err) {
       setError(errorText(err));
@@ -56,6 +62,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
             <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
             Taxable: charge sales tax when this is sold
           </label>
+          <CustomFieldInputs fields={fields} onChange={setFields} />
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">

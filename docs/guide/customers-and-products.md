@@ -63,3 +63,51 @@ Invoices, estimates, sales receipts and other documents you have already written
 they were written with; only new documents use the new prices. Each change is recorded in the
 ledger audit trail, with every item's old and new price and who made it, and the last few are listed
 under **Earlier price changes** on the same screen.
+
+## Sales reps, Ship Via and custom fields
+
+These three lists are optional. Until you add something to them, nothing about them shows on your
+forms. Manage all three in **Sales › Reps, Ship Via & Fields**.
+
+### Sales reps
+
+A sales rep is a set of initials (up to 5 characters, for example `JS`) and, optionally, a full
+name.
+
+1. In **Sales Reps**, type the **Initials** and the name, then click **Add**.
+2. To give a customer a default rep, open the customer's **Actions** menu, choose **Edit…** and
+   pick the **Sales rep**. New invoices, sales receipts and estimates for that customer fill the
+   rep in. You can change it on each form.
+
+Once a rep is on a customer or a form, you can rename it or make it inactive, but not delete it.
+An inactive rep stays on the forms that already have it and isn't offered for new ones.
+**Reports › Sales by Rep Summary** totals invoices and sales receipts by rep.
+
+### Ship Via
+
+Add the carriers and services you ship with, such as `UPS Ground` or `Local delivery`, under
+**Ship Via**. Once the list has an entry, invoices, sales receipts and estimates get a **Ship
+date** and a **Ship via** box.
+
+### Custom fields
+
+Custom fields let you keep your own details on a record, such as a customer's region, a vendor's
+account number or an item's color. Each list (customers, vendors and items) can have up to 15
+fields. A label can have up to 31 characters and a value up to 100.
+
+1. Under **Custom Fields**, choose **Customers**, **Vendors** or **Items**.
+2. Type a **Label** and click **Add**.
+3. Fill in the value on each record's **Edit…** window, under **Custom fields**.
+
+Tick **On sales forms** for a customer or item field to print it:
+
+- **A customer field** appears as a box on new invoices, sales receipts and estimates. It fills in
+  from the customer, and you can change it on that form only. The form keeps the value it was
+  issued with, even if you change the customer's value later.
+- **An item field** prints under each line that sells the item, as *Label: value*.
+
+Deleting a field also clears it on every record. If a field has been printed on a form, you can't
+delete it. Untick **On sales forms** instead.
+
+To turn any of these off on printed forms, see [Design your forms](custom-forms.md). Imports from
+QuickBooks bring in all three lists (see [Desktop Migration Wizard](desktop-migration.md)).

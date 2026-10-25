@@ -21,8 +21,8 @@ use std::collections::{HashMap, VecDeque};
 use chrono::NaiveDate;
 
 use crate::bank::{parse_amount_cents, parse_date};
-use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceTransaction, UnreadableLine};
-use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument};
+use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceSalesLists, SourceTransaction, UnreadableLine};
+use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument, SourceSales};
 use crate::text_import::{decode, quantity_e4, terms_days, Accounts, Names};
 
 /// LocalBooks account type for an IIF `ACCNTTYPE`; `None` for non-posting accounts.
@@ -164,6 +164,9 @@ struct RawLine {
     item: Option<String>,
     due_date: Option<String>,
     pay_method: Option<String>,
+    rep: Option<String>,
+    ship_via: Option<String>,
+    ship_date: Option<String>,
 }
 
 impl RawLine {
@@ -181,6 +184,9 @@ impl RawLine {
             item: row.text("INVITEM"),
             due_date: row.text("DUEDATE"),
             pay_method: row.text("PAYMETH"),
+            rep: row.text("REP"),
+            ship_via: row.text("SHIPVIA"),
+            ship_date: row.text("SHIPDATE"),
         }
     }
 }
@@ -190,6 +196,44 @@ struct Block {
     trns: RawLine,
     splits: Vec<RawLine>,
     file_line: usize,
+}
+
+/// A customer's `REP`, written "Name:ListID:Initials" (ListID 1–3 says which name list the rep is
+/// on), or a document's `REP`, which is just the initials. Returned as "initials" or "initials:name".
+fn rep_of(value: &str) -> Option<String> {
+    let parts: Vec<&str> = value.split(':').map(str::trim).collect();
+    let rep = match parts.as_slice() {
+        [initials] => initials.to_string(),
+        [name, .., initials] if !initials.is_empty() => {
+            if name.is_empty() {
+                initials.to_string()
+            } else {
+                format!("{initials}:{name}")
+            }
+        }
+        _ => return None,
+    };
+    (!rep.is_empty()).then_some(rep)
+}
+
+/// The `CUSTFLD1`... values of a list row that has any, by field number (1-based).
+fn custom_values(row: &Row, count: usize) -> Vec<(usize, String)> {
+    (1..=count).filter_map(|n| row.text(&format!("CUSTFLD{n}")).map(|v| (n, v))).collect()
+}
+
+/// Custom field labels: `CUSTNAMEDICT` (customers and vendors share 15 labels, each switched on per
+/// list) and `CUSTITEMDICT` (5 for items). Row `INDEX` 0 labels `CUSTFLD1`, and so on. A value
+/// whose label the file does not give is kept under "Custom field N".
+#[derive(Default)]
+struct FieldLabels {
+    names: HashMap<usize, String>,
+    items: HashMap<usize, String>,
+}
+
+impl FieldLabels {
+    fn resolve(map: &HashMap<usize, String>, values: Vec<(usize, String)>) -> Vec<(String, String)> {
+        values.into_iter().map(|(n, v)| (map.get(&n).cloned().unwrap_or_else(|| format!("Custom field {n}")), v)).collect()
+    }
 }
 
 fn item_kind(code: &str) -> Option<&'static str> {
@@ -214,6 +258,11 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let mut blocks: Vec<Block> = Vec::new();
     let mut open: Option<Block> = None;
     let mut problems: Vec<String> = Vec::new();
+    let mut labels = FieldLabels::default();
+    let mut sales_lists = SourceSalesLists::default();
+    // (is a customer, party id, values) and (item index, values), labeled once the dictionaries are read.
+    let mut party_fields: Vec<(bool, i64, Vec<(usize, String)>)> = Vec::new();
+    let mut item_fields: Vec<(usize, Vec<(usize, String)>)> = Vec::new();
 
     for (n, line) in text.lines().enumerate() {
         let line_no = n + 1;
@@ -268,6 +317,11 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.terms_days = row.get("TERMS").and_then(terms_days);
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
+                p.sales_rep = row.get("REP").and_then(rep_of);
+                if let Some(rep) = &p.sales_rep {
+                    sales_lists.add_rep(rep, true);
+                }
+                party_fields.push((true, id, custom_values(&row, 15)));
             }
             "VEND" => {
                 let Some(name) = row.get("NAME") else { continue };
@@ -284,6 +338,17 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.is_1099 = row.yes("1099");
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
+                party_fields.push((false, id, custom_values(&row, 15)));
+            }
+            "SHIPMETH" => {
+                if let Some(name) = row.get("NAME") {
+                    sales_lists.add_ship_method(name, !row.yes("HIDDEN"));
+                }
+            }
+            "CUSTNAMEDICT" | "CUSTITEMDICT" => {
+                let (Some(index), Some(label)) = (row.get("INDEX").and_then(|i| i.parse::<usize>().ok()), row.text("LABEL")) else { continue };
+                let map = if keyword == "CUSTNAMEDICT" { &mut labels.names } else { &mut labels.items };
+                map.insert(index + 1, label);
             }
             "INVITEM" => {
                 let (Some(name), Some(kind)) = (row.get("NAME"), row.get("INVITEMTYPE").and_then(item_kind)) else { continue };
@@ -298,7 +363,9 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                     kind,
                     taxable: row.yes("TAXABLE"),
                     active: !row.yes("HIDDEN"),
+                    custom_fields: Vec::new(),
                 });
+                item_fields.push((items.len() - 1, custom_values(&row, 5)));
             }
             "TRNS" => {
                 if let Some(unclosed) = open.replace(Block { trns: RawLine::from(&row), splits: Vec::new(), file_line: line_no }) {
@@ -316,6 +383,15 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     if let Some(unclosed) = open.take() {
         problems.push(format!("line {}: TRNS without ENDTRNS", unclosed.file_line));
         blocks.push(unclosed);
+    }
+    for (index, values) in item_fields {
+        items[index].custom_fields = FieldLabels::resolve(&labels.items, values);
+    }
+    for (is_customer, id, values) in party_fields {
+        let list = if is_customer { &mut names.customers } else { &mut names.vendors };
+        if let Some(p) = list.iter_mut().find(|p| p.id == id) {
+            p.custom_fields = FieldLabels::resolve(&labels.names, values);
+        }
     }
     if blocks.is_empty() && accounts.list.is_empty() && names.customers.is_empty() && names.vendors.is_empty() && items.is_empty() {
         return Err(match problems.first() {
@@ -340,7 +416,17 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let Transactions { accounts, mut names, unreadable, .. } = reader;
     names.sort();
     items.sort_by_key(|i| i.name.to_lowercase());
-    Ok(Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality })
+    for t in transactions.iter().chain(&unbalanced) {
+        if let Some(SourceDocument::Invoice { sales, .. } | SourceDocument::SalesReceipt { sales, .. } | SourceDocument::Estimate { sales, .. }) = &t.document {
+            if let Some(rep) = &sales.rep {
+                sales_lists.add_rep(rep, true);
+            }
+            if let Some(ship) = &sales.ship_via {
+                sales_lists.add_ship_method(ship, true);
+            }
+        }
+    }
+    Ok(Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality, sales_lists })
 }
 
 /// Resolves transaction blocks against the lists.
@@ -454,10 +540,15 @@ impl Transactions {
         let customer = |names: &mut Names| name.as_deref().map(|n| names.ensure_customer(n));
         let vendor = |names: &mut Names| name.as_deref().map(|n| names.ensure_vendor(n));
         let method = || payment_method(block.trns.pay_method.as_deref().or(block.splits.iter().find_map(|s| s.pay_method.as_deref()))).to_string();
+        let sales = SourceSales {
+            rep: block.trns.rep.as_deref().and_then(rep_of),
+            ship_date: block.trns.ship_date.as_deref().and_then(|d| parse_date(d).ok()),
+            ship_via: block.trns.ship_via.clone(),
+        };
         Some(match trnstype {
-            "INVOICE" => SourceDocument::Invoice { customer_id: customer(&mut self.names)?, number, due_date, lines: form },
+            "INVOICE" => SourceDocument::Invoice { customer_id: customer(&mut self.names)?, number, due_date, lines: form, sales },
             "CREDIT MEMO" => SourceDocument::CreditMemo { customer_id: customer(&mut self.names)?, number, lines: form, applied_to: Vec::new() },
-            "CASH SALE" => SourceDocument::SalesReceipt { customer_id: customer(&mut self.names), number, method: method(), lines: form },
+            "CASH SALE" => SourceDocument::SalesReceipt { customer_id: customer(&mut self.names), number, method: method(), lines: form, sales },
             "PAYMENT" => SourceDocument::Payment { customer_id: customer(&mut self.names)?, reference: number, method: method(), applied_to: Vec::new() },
             "DEPOSIT" => SourceDocument::Deposit { payments: Vec::new() },
             // An item receipt is a bill for goods received before the bill itself arrived.
@@ -481,6 +572,7 @@ impl Transactions {
                 expires: due_date,
                 memo: block.trns.memo.clone(),
                 lines: form.into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect(),
+                sales,
             },
             "PURCHORD" => SourceDocument::PurchaseOrder {
                 vendor_id: vendor(&mut self.names)?,

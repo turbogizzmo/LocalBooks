@@ -135,6 +135,7 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
+            details: Default::default(),
         },
     )
     .await

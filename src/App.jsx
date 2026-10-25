@@ -7,6 +7,7 @@ import Invoices from './components/Invoices.jsx';
 import Estimates from './components/Estimates.jsx';
 import PartyList from './components/PartyList.jsx';
 import Products from './components/Products.jsx';
+import SalesLists from './components/SalesLists.jsx';
 import ExpensesChecks from './components/ExpensesChecks.jsx';
 import Bills from './components/Bills.jsx';
 import TimeTracking from './components/TimeTracking.jsx';
@@ -276,6 +277,7 @@ export default function App() {
           {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
           {view === 'sales/products' && <Products accounts={list} />}
+          {view === 'sales/lists' && <SalesLists />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'sales/statements' && <Statements />}
           {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={select} />}

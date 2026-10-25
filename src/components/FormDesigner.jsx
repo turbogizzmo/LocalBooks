@@ -17,7 +17,7 @@ const LAYOUTS = [
   ['COMPACT', 'Compact', 'Smaller type and tighter rows: more lines per page'],
 ];
 const ACCENTS = ['#2ca01c', '#0b6e4f', '#1f4e79', '#2b6cb0', '#6b46c1', '#b83280', '#c05621', '#333333'];
-const PLACEHOLDERS = '{number} {customer} {date} {due_date} {total} {balance} {company} (also {invoice_number} {amount} {balance_due})';
+const PLACEHOLDERS = '{number} {customer} {date} {due_date} {total} {balance} {company} {rep} {ship_date} {ship_via} (also {invoice_number} {amount} {balance_due})';
 
 function Section({ title, children }) {
   return (
@@ -366,6 +366,13 @@ export default function FormDesigner() {
               <Check label="Company email" checked={draft.showCompanyEmail} onChange={set('showCompanyEmail')} />
               <Check label="EIN" checked={draft.showEin} onChange={set('showEin')} />
               <Check label="Customer email under the billing address" checked={draft.showCustomerEmail} onChange={set('showCustomerEmail')} />
+              {kind !== 'STATEMENT' && (
+                <>
+                  <Check label="Rep, when the form has one" checked={draft.showSalesRep} onChange={set('showSalesRep')} />
+                  <Check label="Ship date and Ship via, when filled in" checked={draft.showShipping} onChange={set('showShipping')} />
+                  <Check label="Customer custom fields marked for sales forms" checked={draft.showCustomFields} onChange={set('showCustomFields')} />
+                </>
+              )}
             </Section>
             {kind === 'STATEMENT' && (
               <Section title="Statement">
@@ -398,6 +405,7 @@ export default function FormDesigner() {
                 <Row label="Amount" htmlFor="form-amountLabel">
                   {text('amountLabel', { maxLength: 24 })}
                 </Row>
+                <Check label="Item custom fields marked for sales forms, under each line" checked={draft.showItemFields} onChange={set('showItemFields')} />
                 {kind === 'INVOICE' && <Check label="List payments and credits above the balance due" checked={draft.showPayments} onChange={set('showPayments')} />}
               </Section>
             )}

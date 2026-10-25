@@ -267,6 +267,7 @@ pub fn read(bytes: &[u8], default_account: &str) -> Result<Ledger, String> {
         unbalanced,
         unreadable,
         quality,
+        sales_lists: Default::default(),
     })
 }
 

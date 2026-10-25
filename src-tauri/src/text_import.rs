@@ -124,6 +124,8 @@ pub fn blank_party(id: i64, name: &str) -> SourceParty {
         active: true,
         balance_cents: None,
         notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
     }
 }
 

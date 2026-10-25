@@ -9,6 +9,7 @@ mod classes;
 mod closing;
 mod commands;
 mod credits;
+mod custom_fields;
 mod crypto;
 mod db;
 mod edits;
@@ -50,6 +51,7 @@ mod report_center;
 mod reports;
 mod revaluation;
 mod sales;
+mod sales_lists;
 mod sales_tax;
 mod tax_ids;
 #[cfg(test)]
@@ -180,6 +182,22 @@ fn main() {
             commands::update_account,
             commands::set_account_active,
             commands::list_classes,
+            commands::list_sales_reps,
+            commands::create_sales_rep,
+            commands::update_sales_rep,
+            commands::set_sales_rep_active,
+            commands::delete_sales_rep,
+            commands::list_ship_methods,
+            commands::create_ship_method,
+            commands::rename_ship_method,
+            commands::set_ship_method_active,
+            commands::delete_ship_method,
+            commands::list_custom_fields,
+            commands::create_custom_field,
+            commands::update_custom_field,
+            commands::delete_custom_field,
+            commands::get_custom_values,
+            commands::save_custom_values,
             commands::create_class,
             commands::update_class,
             commands::set_class_active,

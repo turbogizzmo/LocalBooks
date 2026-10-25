@@ -74,7 +74,7 @@ fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, is_ta
 async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64, lines: Vec<InvoiceLineInput>, tax_rate_id: Option<i64>, currency: Option<ForeignCurrency>) -> i64 {
     crate::invoices::create_and_post_invoice(
         pool,
-        InvoiceInput { customer_name: customer.into(), issue_date: issue, due_date: issue + chrono::Days::new(terms), lines, currency, tax_rate_id, discount_cents: 0 },
+        InvoiceInput { customer_name: customer.into(), issue_date: issue, due_date: issue + chrono::Days::new(terms), lines, currency, tax_rate_id, discount_cents: 0, details: Default::default() },
     )
     .await
     .unwrap_or_else(|e| panic!("invoice for {customer} on {issue}: {e}"))
@@ -245,6 +245,7 @@ pub(crate) async fn harbor_lane() -> SqlitePool {
                     }],
                     tax_rate_id: Some(tax),
                     discount_cents: 0,
+                    details: Default::default(),
                 },
             )
             .await
@@ -409,6 +410,8 @@ pub(crate) async fn harbor_lane() -> SqlitePool {
             is_tax_exempt: false,
             tax_exemption: None,
             form_style_id: None,
+            sales_rep_id: None,
+            custom_fields: Vec::new(),
         },
         crate::tax_ids::Access::OPEN,
     )

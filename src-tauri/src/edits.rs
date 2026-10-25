@@ -54,8 +54,10 @@ async fn entry_of(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64) -> Res
 pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceInput) -> Result<i64, String> {
     run(pool, async |tx| {
         let old = live_entry(tx, "invoices", invoice_id, "invoice").await?;
+        // The edited invoice keeps the original's rep, shipping and printed fields if left as they were.
+        let carried = crate::sales_lists::details_in_tx(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id).await?;
         void_in_tx(tx, old).await?;
-        let new_id = crate::invoices::write_invoice(tx, &input).await?;
+        let new_id = crate::invoices::write_invoice_carrying(tx, &input, &carried).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
         record(tx, old, new_entry).await?;
         Ok(new_id)

@@ -167,6 +167,10 @@ pub struct SourceParty {
     pub balance_cents: Option<i64>,
     /// Details that have no field of their own (extra email addresses, alternate phones).
     pub notes: Option<String>,
+    /// Customers: the default sales rep, as initials or "initials:name".
+    pub sales_rep: Option<String>,
+    /// Custom fields with a value, as (label, value).
+    pub custom_fields: Vec<(String, String)>,
 }
 
 /// An item (service or product) from the file's item list.
@@ -183,6 +187,36 @@ pub struct SourceItem {
     /// Its sales tax code is a taxable one.
     pub taxable: bool,
     pub active: bool,
+    /// Custom fields with a value, as (label, value).
+    pub custom_fields: Vec<(String, String)>,
+}
+
+/// The file's sales rep and shipping method lists, by name, with whether each is active. They are
+/// also found or created from the customers and documents that use them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceSalesLists {
+    /// Initials, or "initials:name".
+    pub reps: Vec<(String, bool)>,
+    pub ship_methods: Vec<(String, bool)>,
+}
+
+impl SourceSalesLists {
+    /// Adds a rep once per set of initials; a later mention with a name fills the name in.
+    pub fn add_rep(&mut self, rep: &str, active: bool) {
+        let initials = |r: &str| r.split(':').next().unwrap_or_default().trim().to_lowercase();
+        match self.reps.iter_mut().find(|(r, _)| initials(r) == initials(rep)) {
+            Some((existing, _)) if !existing.contains(':') && rep.contains(':') => *existing = rep.to_string(),
+            Some(_) => {}
+            None => self.reps.push((rep.to_string(), active)),
+        }
+    }
+
+    pub fn add_ship_method(&mut self, name: &str, active: bool) {
+        let name = name.trim();
+        if !name.is_empty() && !self.ship_methods.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) {
+            self.ship_methods.push((name.to_string(), active));
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -198,6 +232,7 @@ pub struct Ledger {
     /// Line rows that did not decode in full, and what became of each.
     pub unreadable: Vec<UnreadableLine>,
     pub quality: LedgerQuality,
+    pub sales_lists: SourceSalesLists,
 }
 
 /// Decodes the file's pages, re-solving the last sector of pages whose rows do not decode.
@@ -354,6 +389,86 @@ fn paths(names: &BTreeMap<i64, (String, Option<i64>)>) -> HashMap<i64, String> {
         .collect()
 }
 
+/// Which list a custom field definition is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FieldOwner {
+    Customer,
+    Vendor,
+    Item,
+}
+
+/// Labels and values of custom fields, from `abmc_custom_field_type` (one row per defined field:
+/// its position, its name, and which lists it is on) and `abmc_custom_field` (one row per value:
+/// the record's `abm_id`, the position and the text). Returns each record's (label, value) pairs
+/// in position order, for the records of `owner`.
+pub(crate) fn custom_values(
+    definitions: &[(i64, String, [bool; 3])],
+    values: &[(String, i64, String)],
+    owner: FieldOwner,
+) -> HashMap<String, Vec<(String, String)>> {
+    let index = match owner {
+        FieldOwner::Customer => 0,
+        FieldOwner::Vendor => 1,
+        FieldOwner::Item => 2,
+    };
+    let labels: HashMap<i64, &str> = definitions.iter().filter(|d| d.2[index]).map(|d| (d.0, d.1.as_str())).collect();
+    let mut sorted: Vec<&(String, i64, String)> = values.iter().filter(|v| !v.2.trim().is_empty()).collect();
+    sorted.sort_by_key(|v| v.1);
+    let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for (abm, position, value) in sorted {
+        if let Some(label) = labels.get(position) {
+            out.entry(abm.clone()).or_default().push((label.to_string(), value.trim().to_string()));
+        }
+    }
+    out
+}
+
+fn custom_values_of(pages: &[LogicalPage], catalog: &Catalog, owner: FieldOwner) -> HashMap<String, Vec<(String, String)>> {
+    let flag = |r: &Row, c: &str| r.get(c).as_int() == Some(1);
+    let definitions: Vec<(i64, String, [bool; 3])> = rows_of(pages, catalog, "abmc_custom_field_type")
+        .iter()
+        .filter_map(|r| {
+            let flags = [flag(r, "is_for_customer_bool"), flag(r, "is_for_vendor_bool"), flag(r, "is_for_item_bool")];
+            Some((r.get("custom_field_position").as_int()?, text(r, "custom_field_name")?, flags))
+        })
+        .collect();
+    if definitions.is_empty() {
+        return HashMap::new();
+    }
+    let values: Vec<(String, i64, String)> = rows_of(pages, catalog, "abmc_custom_field")
+        .iter()
+        .filter_map(|r| Some((r.get("abm_id").as_text()?, r.get("position").as_int()?, text(r, "field")?)))
+        .collect();
+    custom_values(&definitions, &values, owner)
+}
+
+/// The sales rep list (`abmc_sales_rep`: initials and the name record they belong to) as
+/// "initials" or "initials:name", with whether each is active; and the Ship Via list
+/// (`abmc_shipping`). Keyed by their ids, as headers and customers refer to them.
+pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (HashMap<i64, (String, bool)>, HashMap<i64, (String, bool)>) {
+    let active = |r: &Row| r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1);
+    let reps_rows = rows_of(pages, catalog, "abmc_sales_rep");
+    let contacts = if reps_rows.is_empty() { HashMap::new() } else { current_contacts(pages, catalog) };
+    let reps = reps_rows
+        .iter()
+        .filter_map(|r| {
+            let initials = text(r, "initials")?;
+            let contact = r.get("name_id").as_int().and_then(|n| contacts.get(&n));
+            let name = contact.and_then(|c| {
+                let person = [text(c, "first_name"), text(c, "last_name")].into_iter().flatten().collect::<Vec<_>>().join(" ");
+                (!person.is_empty()).then_some(person).or_else(|| text(c, "company_name"))
+            });
+            let rep = match name {
+                Some(n) => format!("{}:{}", initials.trim(), n.replace(':', "-")),
+                None => initials.trim().to_string(),
+            };
+            Some((r.get("sales_rep_id").as_int()?, (rep, active(r))))
+        })
+        .collect();
+    let ships = rows_of(pages, catalog, "abmc_shipping").iter().filter_map(|r| Some((r.get("shipping_id").as_int()?, (text(r, "name")?, active(r))))).collect();
+    (reps, ships)
+}
+
 fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<SourceParty> {
     let (user, internal, id_col) =
         if vendor { ("abmc_vendor_user", "abmc_vendor_internal", "vendor_id") } else { ("abmc_customer_user", "abmc_customer_internal", "customer_id") };
@@ -373,6 +488,9 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
         .filter_map(|r| Some((r.get(id_col).as_int()?, (text(r, "name")?, if vendor { None } else { r.get("parent_id").as_int() }))))
         .collect();
     let full = paths(&names);
+    let reps = if vendor { HashMap::new() } else { read_sales_lists(pages, catalog).0 };
+    let custom = custom_values_of(pages, catalog, if vendor { FieldOwner::Vendor } else { FieldOwner::Customer });
+    let abm_col = if vendor { "vendor_abm_id" } else { "customer_abm_id" };
     let mut out = Vec::new();
     for r in &users {
         let Some(id) = r.get(id_col).as_int() else { continue };
@@ -412,6 +530,8 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
             active: !hidden || balance.is_some_and(|b| b != 0),
             balance_cents: balance,
             notes: (!notes.is_empty()).then(|| notes.join("\n")),
+            sales_rep: r.get("sales_rep_id").as_int().and_then(|s| reps.get(&s)).map(|(rep, _)| rep.clone()),
+            custom_fields: r.get(abm_col).as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
         });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -428,6 +548,7 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     let names: BTreeMap<i64, (String, Option<i64>)> =
         users.iter().filter_map(|r| Some((r.get("item_id").as_int()?, (text(r, "name")?, r.get("parent_id").as_int())))).collect();
     let full = paths(&names);
+    let custom = custom_values_of(pages, catalog, FieldOwner::Item);
     let mut out: Vec<SourceItem> = users
         .iter()
         .filter_map(|r| {
@@ -447,6 +568,7 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
                 },
                 taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
                 active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
+                custom_fields: r.get("item_abm_id").as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
             })
         })
         .collect();
@@ -628,7 +750,17 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let customers = read_parties(&pages, &catalog, false);
     let vendors = read_parties(&pages, &catalog, true);
     let items = read_items(&pages, &catalog);
-    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality })
+    let (reps, ships) = read_sales_lists(&pages, &catalog);
+    let mut sales_lists = SourceSalesLists::default();
+    for (rep, active) in reps.into_values() {
+        sales_lists.add_rep(&rep, active);
+    }
+    for (name, active) in ships.into_values() {
+        sales_lists.add_ship_method(&name, active);
+    }
+    sales_lists.reps.sort();
+    sales_lists.ship_methods.sort();
+    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists })
 }
 
 #[cfg(test)]
