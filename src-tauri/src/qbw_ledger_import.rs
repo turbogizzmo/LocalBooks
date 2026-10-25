@@ -1082,6 +1082,7 @@ fn source_format(file_name: &str) -> &'static str {
     match std::path::Path::new(file_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
         Some("iif") => "IIF",
         Some("qif") => "QIF",
+        Some("csv" | "xlsx" | "xls") => "REPORT",
         _ => "QBW",
     }
 }

@@ -13,6 +13,7 @@ tauri-build = { version = "2", features = [] }
 aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc"] }
 base64 = "0.23"
+calamine = { version = "0.37", default-features = false }
 cfb = "0.14"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
@@ -50,3 +51,4 @@ lto = true
 [dev-dependencies]
 insta = "1"
 proptest = { version = "1", default-features = false, features = ["std"] }
+zip = { version = "9", default-features = false }
