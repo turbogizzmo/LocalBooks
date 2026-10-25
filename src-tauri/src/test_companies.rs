@@ -9,7 +9,8 @@
 //!   leap-day and year-end dates, a closed period;
 //! - `No Users.localbooks`: a small company without users whose vendor has a plain tax ID, for
 //!   turning users on;
-//! - `Five Years.localbooks`: about 2,800 documents over 2021–2025, for speed and long reports.
+//! - `Five Years.localbooks`: about 2,800 documents over 2021–2025, for speed and long reports
+//!   (skipped when `LOCALBOOKS_SEED_SKIP_LARGE` is set, as the end-to-end tests do).
 //!
 //! Sign-ins and the closing passcode are listed in `docs/testing/edge-cases.md`. Built under
 //! `cfg(test)`, the password hashing uses Argon2's minimum cost: fine for test files, never for real
@@ -289,7 +290,9 @@ async fn seed_test_companies() {
     let started = std::time::Instant::now();
     let recovery = edge_cases(&dir.join("Edge Cases.localbooks")).await;
     no_users(&dir.join("No Users.localbooks")).await;
-    five_years(&dir.join("Five Years.localbooks")).await;
+    if std::env::var_os("LOCALBOOKS_SEED_SKIP_LARGE").is_none() {
+        five_years(&dir.join("Five Years.localbooks")).await;
+    }
     let note = format!(
         "Test companies made by `seed_test_companies` (src-tauri/src/test_companies.rs). Test values only.\n\n\
          Edge Cases.localbooks\n  owner / {ADMIN_PASSWORD} (Admin)\n  clerk / clerk temp pw (Standard; must choose a new password)\n  \

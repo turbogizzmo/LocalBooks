@@ -60,8 +60,14 @@ Run it in the background. It is ready when `dev-builds/config.json` lists the fi
 
 ## 5. Drive it
 
-- **Desktop control (computer use)** is the only way to click through the real window: macOS has
-  no WebDriver for Tauri's webview. It must be on in the Claude desktop app (Settings › This
+- **End-to-end tests (Windows and Linux only):** `e2e/` drives the real debug build through
+  `tauri-driver` and WebdriverIO, each spec on a fresh copy of a seeded company. CI runs them on
+  every pull request; on a Linux or Windows machine, `npm ci --prefix e2e`, build as in step 3, then
+  `xvfb-run --auto-servernum npm test --prefix e2e` (Linux) or `npm test --prefix e2e` (Windows,
+  with `NATIVE_DRIVER` set to a matching `msedgedriver.exe`). Setup and how to write specs:
+  `docs/testing/end-to-end.md`. They cannot run on macOS.
+- **Desktop control (computer use)** is the only way to click through the real window on macOS:
+  there is no WebDriver for Tauri's webview there. It must be on in the Claude desktop app (Settings › This
   computer › Computer use) *before* the session starts; request access to the app named
   `localbooks`. Take a screenshot before every click.
 - **Screens without the backend:** start the `localbooks-vite-1430` preview (`.claude/launch.json`),

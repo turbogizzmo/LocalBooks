@@ -121,7 +121,7 @@ export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue' }
         it in a password manager, somewhere apart from this computer.
       </p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 select-all rounded-xs border border-qb-border-strong bg-qb-canvas px-2 py-1 text-center font-mono text-md tracking-wider">{recoveryKey}</code>
+        <code data-testid="recovery-key" className="flex-1 select-all rounded-xs border border-qb-border-strong bg-qb-canvas px-2 py-1 text-center font-mono text-md tracking-wider">{recoveryKey}</code>
         <button type="button" className="qb-btn qb-btn-secondary flex-none" onClick={copy}>
           {copied ? '✓ Copied' : 'Copy'}
         </button>
