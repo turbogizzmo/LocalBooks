@@ -81,8 +81,38 @@ confirm the day/month order once.
 3. Click **Approve** to post it, or **Exclude** to skip it (for example a duplicate, or a transfer
    you already recorded).
 
-Approved money out becomes an expense; approved money in becomes a deposit. LocalBooks learns from
-what you approve and suggests the same category for that payee next time.
+Approved money out becomes an expense; approved money in becomes a deposit. For money out you can
+also fill in the **Payee**, which becomes the expense's vendor (a new name adds a vendor).
+
+## How categories are suggested
+
+LocalBooks suggests a category for every transaction, in this order:
+
+1. **Rules.** A built-in vendor list (for example fuel stations go to Fuel & Auto), and a rule
+   learned from each transaction you approve, matching the first distinctive words of its
+   description. The note under the category says which kind of rule matched.
+2. **Similar past transactions.** When no rule matches, LocalBooks looks for the past transactions
+   in this company file that are most like this one: words in the description, the exact amount,
+   roughly the same amount, the same bank account and the same time of the month. It suggests the
+   category most of them used, with a **High**, **Medium** or **Low** confidence badge and a
+   *Because similar to …* line naming the closest one. A Target purchase at a store you haven't
+   used before, or this month's rent check, usually gets the right category this way.
+3. **Uncategorized** Expense or Income, when nothing is similar enough.
+
+The **Payee** is suggested from similar past expenses as well, including when a rule chose the
+category.
+
+Good to know:
+
+- **Suggestions never post on their own.** You still approve every transaction, and you can change
+  the category or payee first.
+- **It learns as you go.** Each approval is learned immediately. Excluded transactions teach it
+  nothing. Expenses and deposits you enter directly count as past transactions too, so a file
+  imported from QuickBooks gets useful suggestions from the start.
+- **It stays on your computer.** Suggestions are worked out from your company file in memory. Nothing
+  is sent anywhere and nothing extra is stored.
+- **Voiding** an approved transaction sends it back for review, and LocalBooks forgets it.
+- Inactive accounts are never suggested.
 
 > **Tip:** Approving a bank transaction that you already entered by hand records it twice. Exclude
 > it instead.
