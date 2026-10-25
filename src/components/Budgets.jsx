@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { fiscalMonthLabel } from './MoreReports.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
@@ -75,7 +76,7 @@ export default function Budgets({ accounts, navigate }) {
     }
   };
   const remove = async () => {
-    if (!window.confirm(`Delete the budget “${budget.name}”? Its amounts are removed; transactions are not affected.`)) return;
+    if (!(await askConfirm(`Delete the budget “${budget.name}”? Its amounts are removed; transactions are not affected.`, { confirmLabel: 'Delete', danger: true }))) return;
     try {
       await api.deleteBudget(budget.id);
       setBudgetId(null);

@@ -470,6 +470,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
+                        label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
                           {

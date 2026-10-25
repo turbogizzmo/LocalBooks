@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
@@ -858,8 +859,8 @@ function LocalAiAccess() {
                 type="button"
                 className="qb-btn qb-btn-secondary h-row px-2 text-xs"
                 disabled={busy}
-                onClick={() => {
-                  if (window.confirm('Issue a new access token? Assistants using the current token will stop working until you update them.')) {
+                onClick={async () => {
+                  if (await askConfirm('Issue a new access token? Assistants using the current token will stop working until you update them.', { confirmLabel: 'Issue New Token' })) {
                     run(api.regenerateMcpToken);
                   }
                 }}
@@ -905,12 +906,15 @@ const NON_ADMIN_TABS = new Set(['users', 'updates']);
 export default function Settings({ companyName, intent, isAdmin = true }) {
   const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
   const allowed = (id) => tabs.some(([t]) => t === id);
-  const [tab, setTab] = useState(() => (allowed(SETTINGS_TABS[intent?.action]) ? SETTINGS_TABS[intent?.action] : tabs[0][0]));
+  // The tab asked for (null: the first one). Which tabs are allowed can change after the first
+  // render, when the signed-in user's role arrives, so a tab no longer allowed is never shown.
+  const [chosen, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? null);
+  const tab = chosen && allowed(chosen) ? chosen : tabs[0][0];
 
   // Help shortcuts open a specific tab (and, for the closing date, scroll to it).
   useEffect(() => {
     const target = SETTINGS_TABS[intent?.action];
-    if (!target || !tabs.some(([t]) => t === target)) return;
+    if (!target || !allowed(target)) return;
     setTab(target);
     if (intent.action === 'closing') {
       const timer = setTimeout(() => document.getElementById('closing-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);

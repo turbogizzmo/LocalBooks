@@ -3,6 +3,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { api, errorText } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
@@ -230,8 +231,8 @@ export default function BankConnections({ accounts, onClose, onSynced }) {
       onSynced?.(summary);
     });
 
-  const remove = (c) => {
-    if (!window.confirm(`Remove the connection to ${c.serverHost}? LocalBooks forgets its access on this computer. Transactions already imported stay in Bank Feeds.`)) return;
+  const remove = async (c) => {
+    if (!(await askConfirm(`Remove the connection to ${c.serverHost}? LocalBooks forgets its access on this computer. Transactions already imported stay in Bank Feeds.`, { confirmLabel: 'Remove', danger: true }))) return;
     act(c.id, async () => {
       await api.disconnectBank(c.id);
       setNotice({ kind: 'info', text: 'Connection removed. To stop SimpleFIN sharing the data entirely, also disable the app connection in SimpleFIN Bridge.' });
