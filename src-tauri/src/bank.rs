@@ -288,6 +288,8 @@ pub struct ColumnMapping {
 pub enum BankFileFormat {
     Csv,
     Ofx,
+    /// A statement PDF, read as a table by `bank_pdf`.
+    Pdf,
 }
 
 /// Bank files are usually UTF-8, but OFX 1.x and older CSV exports are often Windows-1252.
@@ -328,7 +330,7 @@ pub fn detect_mapping(headers: &[String]) -> Option<ColumnMapping> {
     let description = find(&["description", "memo", "payee", "name", "details"])?;
     let name = |i: usize| headers[i].trim().to_string();
     let exact_amount = norm.iter().position(|h| h == "amount");
-    let out = find(&["debit", "withdrawal", "money out", "paid out"]);
+    let out = find(&["debit", "withdrawal", "money out", "paid out", "purchase", "charges"]);
     let into = find(&["credit", "deposit", "money in", "paid in"]);
     let (amount, money_in, money_out) = match (exact_amount, into, out) {
         (Some(a), _, _) => (Some(name(a)), None, None),
@@ -339,12 +341,20 @@ pub fn detect_mapping(headers: &[String]) -> Option<ColumnMapping> {
 }
 
 /// A CSV file read into memory: its headers and its non-empty records with their line numbers.
+/// A statement PDF's transaction table is read into the same shape, numbered by transaction.
 pub struct CsvTable {
     pub headers: Vec<String>,
     records: Vec<(u64, csv::StringRecord)>,
+    /// How errors name a record: `BANK_CSV_ROW: line 3` or `BANK_PDF_ROW: transaction 3`.
+    row_error: (&'static str, &'static str),
 }
 
 impl CsvTable {
+    pub fn from_pdf(table: crate::bank_pdf::PdfTable) -> Self {
+        let records = table.records.into_iter().map(|(n, cells)| (n, csv::StringRecord::from(cells))).collect();
+        CsvTable { headers: table.headers, records, row_error: ("BANK_PDF_ROW", "transaction") }
+    }
+
     pub fn read(text: &str) -> Result<Self, String> {
         let mut csv = csv::ReaderBuilder::new().has_headers(true).flexible(true).trim(csv::Trim::All).from_reader(text.as_bytes());
         let headers = csv.headers().map_err(|e| format!("BANK_CSV_READ: {e}"))?.iter().map(|h| h.trim_start_matches('\u{feff}').trim().to_string()).collect();
@@ -355,7 +365,7 @@ impl CsvTable {
                 records.push((record.position().map_or(0, |p| p.line()), record));
             }
         }
-        Ok(CsvTable { headers, records })
+        Ok(CsvTable { headers, records, row_error: ("BANK_CSV_ROW", "line") })
     }
 
     fn column(&self, name: &str) -> Result<usize, String> {
@@ -388,7 +398,8 @@ impl CsvTable {
         let mut rows = Vec::with_capacity(self.records.len());
         for (line, record) in &self.records {
             let field = |i: usize| record.get(i).unwrap_or("");
-            let err = |e: String| format!("BANK_CSV_ROW: line {line}: {e}");
+            let (code, noun) = self.row_error;
+            let err = |e: String| format!("{code}: {noun} {line}: {e}");
             let date = parse_date_ordered(field(date_col), mapping.date_order).map_err(err)?;
             let amount_cents = match amounts {
                 Amounts::Signed(i) => parse_amount_cents(field(i)).map_err(err)?,
@@ -502,6 +513,166 @@ pub struct BankFileInspection {
     pub preview: Vec<BankRow>,
     /// Why the file cannot be read with this mapping (shown in the dialog), if it cannot.
     pub problem: Option<String>,
+    /// For a statement PDF: whether its transactions add up to the balances it prints.
+    pub balance_check: Option<BalanceCheck>,
+}
+
+/// Whether a statement's transactions take its opening balance to its closing balance, and each
+/// running balance to the next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceCheck {
+    /// `MATCHES`, `DIFFERS`, or `NOT_PRINTED` when the statement shows no balances to check.
+    pub status: &'static str,
+    pub opening_cents: Option<i64>,
+    pub closing_cents: Option<i64>,
+    /// What the transactions add to the printed balance.
+    pub change_cents: i64,
+    /// Closing balance minus (opening balance plus change); zero when it matches.
+    pub difference_cents: i64,
+    /// The printed balances are what is owed (a card or loan account), so charges raise them.
+    pub owed: bool,
+    /// The amounts were read with the opposite sign, which the balances showed to be right.
+    pub signs_reversed: bool,
+    /// The first transaction whose running balance does not follow from the one before it.
+    pub first_mismatch_row: Option<u64>,
+}
+
+/// The balances a statement PDF prints, to check its transactions against.
+struct StatementBalances {
+    opening_cents: Option<i64>,
+    closing_cents: Option<i64>,
+    balance_column: Option<String>,
+}
+
+/// A bank file read into memory.
+enum BankFile {
+    Ofx(String),
+    Table { format: BankFileFormat, table: CsvTable, signature: String, balances: Option<StatementBalances> },
+}
+
+fn is_pdf(bytes: &[u8]) -> bool {
+    bytes.get(..1024).unwrap_or(bytes).windows(5).any(|w| w == b"%PDF-")
+}
+
+fn read_bank_file(path: &Path) -> Result<BankFile, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("BANK_FILE_OPEN: {}: {e}", path.display()))?;
+    if is_pdf(&bytes) {
+        let pdf = crate::bank_pdf::read_table(&bytes)?;
+        let balances = StatementBalances { opening_cents: pdf.opening_cents, closing_cents: pdf.closing_cents, balance_column: pdf.balance_column.clone() };
+        // PDF layouts are remembered apart from CSV files that happen to share their titles.
+        let signature = format!("pdf:{}", header_signature(&pdf.headers));
+        return Ok(BankFile::Table { format: BankFileFormat::Pdf, table: CsvTable::from_pdf(pdf), signature, balances: Some(balances) });
+    }
+    let text = decode_text(&bytes);
+    if is_ofx(&text) {
+        return Ok(BankFile::Ofx(text));
+    }
+    let table = CsvTable::read(&text)?;
+    let signature = header_signature(&table.headers);
+    Ok(BankFile::Table { format: BankFileFormat::Csv, table, signature, balances: None })
+}
+
+/// The mapping a table will be read with: given, saved for its headers, or detected. Also returns
+/// where it came from and whether the date order is certain.
+async fn choose_mapping(pool: &SqlitePool, table: &CsvTable, signature: &str, given: Option<ColumnMapping>) -> Result<(Option<ColumnMapping>, Option<&'static str>, bool), String> {
+    if let Some(m) = given {
+        return Ok((Some(m), Some("GIVEN"), true));
+    }
+    if let Some(m) = saved_mapping(pool, signature).await? {
+        return Ok((Some(m), Some("SAVED"), true));
+    }
+    Ok(match detect_mapping(&table.headers) {
+        Some(mut m) => {
+            let (order, certain) = detect_date_order(table.values(&m.date));
+            m.date_order = order;
+            (Some(m), Some("DETECTED"), certain)
+        }
+        None => (None, None, false),
+    })
+}
+
+/// Whether the balances of `bank_account_id` are what is owed (a card, loan or other liability).
+async fn balance_is_owed(pool: &SqlitePool, bank_account_id: Option<i64>) -> Result<bool, String> {
+    let Some(id) = bank_account_id else { return Ok(false) };
+    let owed: Option<bool> = sqlx::query_scalar(
+        "SELECT t.classification = 'LIABILITY' FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(owed.unwrap_or(false))
+}
+
+/// Checks a statement's rows against its balances. If they only add up with every amount's sign
+/// reversed (a card statement printing charges as positive amounts, say), the rows are reversed.
+fn check_balances(rows: &mut [BankRow], table: &CsvTable, printed: &StatementBalances, owed: bool) -> BalanceCheck {
+    let running: Vec<Option<i64>> = match &printed.balance_column {
+        Some(col) => table.values(col).map(|v| parse_amount_cents(v).ok()).collect(),
+        None => Vec::new(),
+    };
+    let running = |i: usize| running.get(i).copied().flatten();
+    // Statements listed newest first are checked oldest first.
+    let mut order: Vec<usize> = (0..rows.len()).collect();
+    if rows.first().zip(rows.last()).is_some_and(|(a, b)| a.date > b.date) {
+        order.reverse();
+    }
+
+    // `sign` is what one unit of a row's amount adds to the printed balance.
+    let evaluate = |sign: i64| {
+        let effect = |i: usize| sign * rows[i].amount_cents;
+        let mut balance = printed.opening_cents;
+        let mut first_mismatch = None;
+        let mut derived_opening = None;
+        let mut sum_before = 0;
+        for &i in &order {
+            balance = balance.map(|b| b + effect(i));
+            sum_before += effect(i);
+            if let Some(shown) = running(i) {
+                match balance {
+                    Some(b) if b != shown => {
+                        first_mismatch.get_or_insert(rows[i].row);
+                    }
+                    Some(_) => {}
+                    None => derived_opening = Some(shown - sum_before),
+                }
+                balance = Some(shown);
+            }
+        }
+        let change: i64 = order.iter().map(|&i| effect(i)).sum();
+        let opening = printed.opening_cents.or(derived_opening);
+        // Without a printed closing balance, the last running balance stands in for it.
+        let any_running = order.iter().any(|&i| running(i).is_some());
+        let closing = printed.closing_cents.or(balance.filter(|_| any_running));
+        let difference = match (opening, closing) {
+            (Some(o), Some(c)) => c - (o + change),
+            _ => 0,
+        };
+        (opening, closing, change, difference, first_mismatch)
+    };
+
+    let expected = if owed { -1 } else { 1 };
+    let mut result = evaluate(expected);
+    let mut signs_reversed = false;
+    let adds_up = |r: &(Option<i64>, Option<i64>, i64, i64, Option<u64>)| r.0.is_some() && r.1.is_some() && r.3 == 0 && r.4.is_none();
+    if result.0.is_some() && result.1.is_some() && !adds_up(&result) && result.2 != 0 {
+        let reversed = evaluate(-expected);
+        if adds_up(&reversed) {
+            for row in rows.iter_mut() {
+                row.amount_cents = -row.amount_cents;
+            }
+            result = reversed;
+            signs_reversed = true;
+        }
+    }
+    let (opening_cents, closing_cents, change_cents, difference_cents, first_mismatch_row) = result;
+    let status = match (opening_cents, closing_cents) {
+        (Some(_), Some(_)) if difference_cents == 0 && first_mismatch_row.is_none() => "MATCHES",
+        (Some(_), Some(_)) => "DIFFERS",
+        _ => "NOT_PRINTED",
+    };
+    BalanceCheck { status, opening_cents, closing_cents, change_cents, difference_cents, owed, signs_reversed, first_mismatch_row }
 }
 
 /// Saved column layouts for CSV files, keyed by their headers.
@@ -548,52 +719,46 @@ async fn save_mapping(pool: &SqlitePool, signature: &str, m: &ColumnMapping) -> 
     .map_err(db_err)
 }
 
-fn read_text(path: &Path) -> Result<String, String> {
-    std::fs::read(path).map(|b| decode_text(&b)).map_err(|e| format!("BANK_FILE_OPEN: {}: {e}", path.display()))
-}
-
-/// Reads a bank file and reports how it would be imported, without importing anything.
-pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMapping>) -> Result<BankFileInspection, String> {
-    let text = read_text(path)?;
-    if is_ofx(&text) {
-        let (rows, problem) = match parse_ofx(&text) {
-            Ok(rows) => (rows, None),
-            Err(e) => (Vec::new(), Some(e)),
-        };
-        return Ok(BankFileInspection {
-            format: BankFileFormat::Ofx,
-            headers: Vec::new(),
-            mapping: None,
-            mapping_source: None,
-            date_order_certain: true,
-            row_count: rows.len(),
-            preview: rows.into_iter().take(8).collect(),
-            problem,
-        });
-    }
-
-    let table = CsvTable::read(&text)?;
-    let signature = header_signature(&table.headers);
-    let (mapping, source, certain) = if let Some(m) = given {
-        (Some(m), Some("GIVEN"), true)
-    } else if let Some(m) = saved_mapping(pool, &signature).await? {
-        (Some(m), Some("SAVED"), true)
-    } else if let Some(mut m) = detect_mapping(&table.headers) {
-        let (order, certain) = detect_date_order(table.values(&m.date));
-        m.date_order = order;
-        (Some(m), Some("DETECTED"), certain)
-    } else {
-        (None, None, false)
+/// Reads a bank file and reports how it would be imported into `bank_account_id` (which decides
+/// how a statement's balances read: owed on a card, held in a bank account), importing nothing.
+pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMapping>, bank_account_id: Option<i64>) -> Result<BankFileInspection, String> {
+    let (format, table, signature, balances) = match read_bank_file(path)? {
+        BankFile::Ofx(text) => {
+            let (rows, problem) = match parse_ofx(&text) {
+                Ok(rows) => (rows, None),
+                Err(e) => (Vec::new(), Some(e)),
+            };
+            return Ok(BankFileInspection {
+                format: BankFileFormat::Ofx,
+                headers: Vec::new(),
+                mapping: None,
+                mapping_source: None,
+                date_order_certain: true,
+                row_count: rows.len(),
+                preview: rows.into_iter().take(8).collect(),
+                problem,
+                balance_check: None,
+            });
+        }
+        BankFile::Table { format, table, signature, balances } => (format, table, signature, balances),
     };
-    let (rows, problem) = match &mapping {
-        None => (Vec::new(), Some("Choose which columns hold the date, description and amount.".to_string())),
+
+    let (mapping, source, certain) = choose_mapping(pool, &table, &signature, given).await?;
+    let (rows, problem, balance_check) = match &mapping {
+        None => (Vec::new(), Some("Choose which columns hold the date, description and amount.".to_string()), None),
         Some(m) => match table.rows(m) {
-            Ok(rows) => (rows, None),
-            Err(e) => (Vec::new(), Some(e)),
+            Ok(mut rows) => {
+                let check = match &balances {
+                    Some(b) => Some(check_balances(&mut rows, &table, b, balance_is_owed(pool, bank_account_id).await?)),
+                    None => None,
+                };
+                (rows, None, check)
+            }
+            Err(e) => (Vec::new(), Some(e), None),
         },
     };
     Ok(BankFileInspection {
-        format: BankFileFormat::Csv,
+        format,
         headers: table.headers,
         mapping,
         mapping_source: source,
@@ -601,6 +766,7 @@ pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMa
         row_count: rows.len(),
         preview: rows.into_iter().take(8).collect(),
         problem,
+        balance_check,
     })
 }
 
@@ -735,30 +901,22 @@ fn normalize_description(description: &str) -> String {
 /// amount, description and their occurrence count within the file, so two identical same-day
 /// purchases both import while an overlapping or repeated statement adds nothing twice.
 pub async fn import_file(pool: &SqlitePool, path: &Path, bank_account_id: i64, given: Option<ColumnMapping>) -> Result<ImportSummary, String> {
-    let text = read_text(path)?;
-    let rows = if is_ofx(&text) {
-        parse_ofx(&text)?
-    } else {
-        let table = CsvTable::read(&text)?;
-        let signature = header_signature(&table.headers);
-        let mapping = match &given {
-            Some(m) => m.clone(),
-            None => match saved_mapping(pool, &signature).await? {
-                Some(m) => m,
-                None => {
-                    let mut m = detect_mapping(&table.headers).ok_or_else(|| {
-                        format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", "))
-                    })?;
-                    m.date_order = detect_date_order(table.values(&m.date)).0;
-                    m
-                }
-            },
-        };
-        let rows = table.rows(&mapping)?;
-        if given.is_some() {
-            save_mapping(pool, &signature, &mapping).await?;
+    let rows = match read_bank_file(path)? {
+        BankFile::Ofx(text) => parse_ofx(&text)?,
+        BankFile::Table { table, signature, balances, .. } => {
+            let chosen = given.is_some();
+            let mapping = choose_mapping(pool, &table, &signature, given).await?.0.ok_or_else(|| {
+                format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", "))
+            })?;
+            let mut rows = table.rows(&mapping)?;
+            if let Some(b) = &balances {
+                check_balances(&mut rows, &table, b, balance_is_owed(pool, Some(bank_account_id)).await?);
+            }
+            if chosen {
+                save_mapping(pool, &signature, &mapping).await?;
+            }
+            rows
         }
-        rows
     };
 
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
