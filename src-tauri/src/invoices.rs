@@ -238,6 +238,12 @@ pub async fn create_and_post_invoice(pool: &SqlitePool, input: InvoiceInput) -> 
 }
 
 pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput) -> Result<i64, String> {
+    write_invoice_carrying(tx, input, &crate::sales_lists::SalesDetails::default()).await
+}
+
+/// Writes an invoice that takes over `carried` details from an estimate or the invoice it
+/// replaces (see `sales_lists::write_details_carrying`).
+pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails) -> Result<i64, String> {
     let subtotal = validate_invoice(input)?;
     let mut taxable = 0;
     for line in input.lines.iter().filter(|l| l.is_taxable) {
@@ -343,7 +349,7 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
         .await
         .map_err(db_err)?;
     }
-    crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details).await?;
+    crate::sales_lists::write_details_carrying(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details, carried).await?;
 
     lines.extend(cost.lines.iter().cloned());
     let entry = JournalEntry {

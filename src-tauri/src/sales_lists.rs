@@ -304,18 +304,27 @@ async fn check_active(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, wh
     }
 }
 
-/// Writes a new document's details, after its row is inserted and before it posts. The rep and
-/// shipping method must be active; `issue_date` is the document's date (a ship date may be later
-/// or earlier, as QuickBooks allows).
+/// Writes a new document's details, after its row is inserted and before it posts. A rep and
+/// shipping method chosen for it must be active (a ship date may be later or earlier than the
+/// document's date, as QuickBooks allows).
 pub(crate) async fn write_details(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
+    write_details_carrying(tx, doc, id, details, &SalesDetails::default()).await
+}
+
+/// Like [`write_details`], for a document that takes over another one's details: an estimate
+/// becoming an invoice, or an invoice replaced by its edited version. Whatever is the same as on
+/// `carried` comes over as it was, even when its rep or shipping method has since been made
+/// inactive or its custom field taken off sales forms, so a later list change cannot block it.
+/// Anything newly chosen is checked as for a new form.
+pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails, carried: &SalesDetails) -> Result<(), String> {
     if details.is_empty() {
         return Ok(());
     }
     let code = doc.code();
-    if let Some(rep) = details.sales_rep_id {
+    if let Some(rep) = details.sales_rep_id.filter(|r| carried.sales_rep_id != Some(*r)) {
         check_active(tx, "sales_reps", rep, "sales rep", code).await?;
     }
-    if let Some(method) = details.ship_method_id {
+    if let Some(method) = details.ship_method_id.filter(|m| carried.ship_method_id != Some(*m)) {
         check_active(tx, "ship_methods", method, "shipping method", code).await?;
     }
     sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3 WHERE id = ?4", doc.table()))
@@ -326,7 +335,8 @@ pub(crate) async fn write_details(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    custom_fields::write_document_fields(tx, doc, id, &details.custom_fields).await
+    let carried_fields: Vec<i64> = carried.custom_fields.iter().map(|f| f.field_id).collect();
+    custom_fields::write_document_fields(tx, doc, id, &details.custom_fields, &carried_fields).await
 }
 
 /// An imported document's rep and shipping details, without the checks a new form gets: history

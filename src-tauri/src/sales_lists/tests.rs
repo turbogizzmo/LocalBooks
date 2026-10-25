@@ -200,3 +200,67 @@ async fn imports_find_reps_and_methods_by_name() {
     // A rep already on file keeps its own name.
     assert_eq!(reps.iter().find(|r| r.id == existing.id).unwrap().name, None);
 }
+
+/// A rep, shipping method or printed field that was fine when the estimate (or invoice) was made
+/// carries over even after the list changes; only newly chosen ones are checked.
+#[tokio::test]
+async fn carried_details_survive_later_list_changes() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let js = create_sales_rep(&pool, rep("JS", None)).await.unwrap();
+    let rw = create_sales_rep(&pool, rep("RW", None)).await.unwrap();
+    let ups = create_ship_method(&pool, "UPS").await.unwrap();
+    let po = create_custom_field(&pool, FieldList::Customer, CustomFieldInput { label: "PO number".into(), on_sales_forms: true }).await.unwrap();
+    let details = SalesDetails {
+        sales_rep_id: Some(js.id),
+        ship_date: Some(d(3)),
+        ship_method_id: Some(ups.id),
+        custom_fields: vec![FieldValue { field_id: po.id, value: "77".into() }],
+    };
+    let estimate_input = || crate::estimates::EstimateInput {
+        customer_name: "Initech".into(),
+        estimate_date: d(1),
+        expiration_date: None,
+        memo: None,
+        lines: vec![crate::sales::SalesLineInput {
+            product_service_id: None,
+            description: "Audit".into(),
+            quantity_e4: 10_000,
+            rate_cents: 5_000,
+            income_account_id: services,
+            class_id: None,
+            is_taxable: false,
+        }],
+        tax_rate_id: None,
+        discount_cents: 0,
+        details: details.clone(),
+    };
+    let first = crate::estimates::create_estimate(&pool, estimate_input()).await.unwrap();
+    let second = crate::estimates::create_estimate(&pool, estimate_input()).await.unwrap();
+    let posted = create_and_post_invoice(&pool, invoice("Initech", services, 9_000, details.clone())).await.unwrap();
+
+    // Everything on them goes stale.
+    set_sales_rep_active(&pool, js.id, false).await.unwrap();
+    set_ship_method_active(&pool, ups.id, false).await.unwrap();
+    crate::custom_fields::update_custom_field(&pool, po.id, CustomFieldInput { label: "PO number".into(), on_sales_forms: false }).await.unwrap();
+
+    // Converting straight from the estimate carries it all over.
+    let converted = crate::estimates::convert_to_invoice(&pool, first.id, d(5), d(30)).await.unwrap();
+    let carried = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap().details;
+    assert_eq!(carried.to_input(), details);
+
+    // So does the invoice form loaded from an estimate, as long as the details are left as they were...
+    let form = invoice("Initech", services, 5_000, details.clone());
+    let from_form = crate::estimates::invoice_from_estimate(&pool, second.id, form).await.unwrap();
+    assert_eq!(invoice_detail(&pool, from_form.id).await.unwrap().details.to_input(), details);
+
+    // ...and an edited invoice keeps the original's.
+    let replaced = crate::edits::replace_invoice(&pool, posted.id, invoice("Initech", services, 9_500, details.clone())).await.unwrap();
+    assert_eq!(invoice_detail(&pool, replaced).await.unwrap().details.to_input(), details);
+
+    // A newly chosen inactive rep is still refused.
+    set_sales_rep_active(&pool, rw.id, false).await.unwrap();
+    let other = SalesDetails { sales_rep_id: Some(rw.id), ..details.clone() };
+    let err = crate::edits::replace_invoice(&pool, replaced, invoice("Initech", services, 9_600, other)).await.unwrap_err();
+    assert!(err.starts_with("INV_INACTIVE_SALES_REP"), "{err}");
+}

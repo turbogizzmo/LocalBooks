@@ -338,11 +338,14 @@ pub(crate) async fn set_values_by_label(tx: &mut Transaction<'_, Sqlite>, list: 
 // ------------------------------------------------------------------------------------------------
 
 /// Stores the customer fields entered on a new sales document. Only customer fields marked for
-/// sales forms may be given; blanks are skipped.
-pub(crate) async fn write_document_fields(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, values: &[FieldValue]) -> Result<(), String> {
+/// sales forms may be given, apart from `carried` ones the document takes over from another (they
+/// may have been taken off sales forms since); blanks are skipped.
+pub(crate) async fn write_document_fields(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, values: &[FieldValue], carried: &[i64]) -> Result<(), String> {
     for v in values {
-        let label: Option<String> = sqlx::query_scalar("SELECT label FROM custom_fields WHERE id = ?1 AND list = 'CUSTOMER' AND on_sales_forms = 1")
+        let label: Option<String> =
+            sqlx::query_scalar("SELECT label FROM custom_fields WHERE id = ?1 AND list = 'CUSTOMER' AND (on_sales_forms = 1 OR ?2)")
             .bind(v.field_id)
+            .bind(carried.contains(&v.field_id))
             .fetch_optional(&mut **tx)
             .await
             .map_err(db_err)?;

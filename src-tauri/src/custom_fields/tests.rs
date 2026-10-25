@@ -63,7 +63,7 @@ async fn a_field_printed_on_a_form_stays() {
     let pool = test_pool().await;
     let po = create_custom_field(&pool, FieldList::Customer, field("PO number", true)).await.unwrap();
     let mut tx = crate::ledger::begin_write(&pool).await.unwrap();
-    write_document_fields(&mut tx, SalesDoc::Invoice, 1, &[FieldValue { field_id: po.id, value: "77".into() }, FieldValue { field_id: po.id, value: " ".into() }])
+    write_document_fields(&mut tx, SalesDoc::Invoice, 1, &[FieldValue { field_id: po.id, value: "77".into() }, FieldValue { field_id: po.id, value: " ".into() }], &[])
         .await
         .unwrap();
     crate::ledger::commit_write(tx).await.unwrap();
