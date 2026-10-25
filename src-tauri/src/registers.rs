@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-use crate::ledger::db_err;
+use crate::ledger::{db_err, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -84,7 +84,7 @@ pub async fn account_register(
         None => 0,
     };
     let mut rows: Vec<RegisterRow> = sqlx::query_as(&format!(
-        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, e.source_type, e.source_id,
+        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
                 (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
                  FROM journal_lines o JOIN v_chart_of_accounts o_a ON o_a.id = o.account_id

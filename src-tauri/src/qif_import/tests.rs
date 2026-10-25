@@ -83,6 +83,12 @@ T-42.10
 PCoffee Shop
 LMeals
 ^
+D1/18'24
+T12.00
+PCoffee Shop
+MRefund for a spilled order
+LMeals
+^
 !Account
 NBrokerage
 TInvst
@@ -151,7 +157,7 @@ fn a_transfer_written_in_both_accounts_imports_once() {
     let transfers = by_kind(&ledger, "Transfer");
     assert_eq!(transfers.len(), 1);
     assert!(matches!(transfers[0].document, Some(SourceDocument::Transfer)));
-    assert_eq!(ledger.transactions.len(), 6);
+    assert_eq!(ledger.transactions.len(), 7);
 }
 
 #[test]
@@ -180,14 +186,14 @@ fn rejects_files_that_are_not_qif() {
 }
 
 #[tokio::test]
-async fn a_full_import_of_a_qif_file_creates_checks_deposits_and_transfers() {
+async fn a_full_import_of_a_qif_file_creates_checks_card_credits_deposits_and_transfers() {
     use crate::qbw_ledger_import::{auto_map_accounts, post_batch, stage, ImportMode, PostLedgerInput};
     let pool = crate::db::test_pool().await;
     let ledger = read(EXPORT.as_bytes(), "Ignored").unwrap();
     let batch = stage(&pool, std::path::Path::new("/exports/Quicken.qif"), EXPORT.len() as i64, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
     let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
-    assert_eq!((full.checks, full.expenses, full.deposits, full.transfers, full.fell_back), (1, 2, 1, 1, 0), "{full:?}");
+    assert_eq!((full.checks, full.expenses, full.card_credits, full.deposits, full.transfers, full.fell_back), (1, 2, 1, 1, 1, 0), "{full:?}");
     assert_eq!(full.journal_entries, 1, "the opening balance");
 
     let checking: i64 = sqlx::query_scalar(
@@ -197,4 +203,13 @@ async fn a_full_import_of_a_qif_file_creates_checks_deposits_and_transfers() {
     .await
     .unwrap();
     assert_eq!(checking, 100_000 - 12_050 + 250_000 - 50_000 - 30_000);
+    let visa: i64 = sqlx::query_scalar(
+        "SELECT SUM(l.debit_cents) - SUM(l.credit_cents) FROM v_posted_lines l JOIN chart_of_accounts a ON a.id = l.account_id WHERE a.name = 'Visa'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(visa, -4_210 + 1_200, "the refund brings the card balance down");
+    let (debits, credits): (i64, i64) = sqlx::query_as("SELECT SUM(debit_cents), SUM(credit_cents) FROM journal_lines").fetch_one(&pool).await.unwrap();
+    assert_eq!(debits, credits, "the books balance");
 }

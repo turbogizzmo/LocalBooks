@@ -378,7 +378,7 @@ impl Builder {
         };
         let document = match kind {
             "Transfer" if lines.len() == 2 => Some(SourceDocument::Transfer),
-            "Check" | "Withdrawal" | "Credit card charge" => {
+            "Check" | "Withdrawal" | "Credit card charge" | "Credit card credit" => {
                 Some(SourceDocument::Expense { vendor_id: None, number: t.number.clone().filter(|_| kind == "Check"), applied_to: Vec::new() })
             }
             "Deposit" => Some(SourceDocument::Deposit { payments: Vec::new() }),

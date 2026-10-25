@@ -143,6 +143,11 @@ pub struct JournalEntry {
     pub currency: Option<ForeignCurrency>,
 }
 
+/// An entry's source type for display, given the entry as `e`: a card credit posts as an
+/// `EXPENSE` entry but is listed as `CARD_CREDIT`.
+pub(crate) const DISPLAY_SOURCE_TYPE: &str =
+    "CASE WHEN e.source_type = 'EXPENSE' AND (SELECT is_credit FROM expenses WHERE id = e.source_id) = 1 THEN 'CARD_CREDIT' ELSE e.source_type END";
+
 /// The business document that produced an entry. Manual journal entries have no source document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntrySource {
@@ -797,8 +802,8 @@ pub struct AuditEntry {
 }
 
 pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<JournalEntryView>, String> {
-    sqlx::query_as::<_, JournalEntryView>(
-        "SELECT e.id, e.entry_number, e.entry_date, e.memo, e.source_type, e.source_id,
+    sqlx::query_as::<_, JournalEntryView>(&format!(
+        "SELECT e.id, e.entry_number, e.entry_date, e.memo, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 COALESCE((SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id), 0) AS total_cents,
                 e.is_voided, e.reverses_entry_id, o.entry_number AS reverses_entry_number,
                 r.entry_number AS reversed_by_entry_number, e.posted_at
@@ -807,8 +812,8 @@ pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<J
          LEFT JOIN journal_entries r ON r.reverses_entry_id = e.id
          WHERE e.status = 'POSTED'
          ORDER BY e.entry_date DESC, e.entry_number DESC
-         LIMIT ?1",
-    )
+         LIMIT ?1"
+    ))
     .bind(limit)
     .fetch_all(pool)
     .await

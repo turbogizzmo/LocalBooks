@@ -20,7 +20,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 ## Expenses and vendors
 
-- [Record expenses and write checks](expenses-and-checks.md)
+- [Record expenses, write checks and record card credits](expenses-and-checks.md)
 - [Enter and pay bills](bills.md)
 
 ## Employees

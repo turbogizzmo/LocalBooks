@@ -8,7 +8,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
-use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, MAX_LINE_CENTS};
+use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, DISPLAY_SOURCE_TYPE, MAX_LINE_CENTS};
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
@@ -633,10 +633,10 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
     let amount = q.trim_start_matches('$').replace(',', "");
     let amount_cents = parse_amount(&amount);
     let number: Option<i64> = q.trim_start_matches('#').parse().ok();
-    sqlx::query_as::<_, SearchHit>(
+    sqlx::query_as::<_, SearchHit>(&format!(
         "SELECT * FROM (
             SELECT 'TRANSACTION' AS kind, e.id, COALESCE(p.party_name, e.memo, 'Journal entry') AS label, e.memo AS detail, e.entry_date AS date,
-                   (SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id) AS amount_cents, e.source_type
+                   (SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id) AS amount_cents, {DISPLAY_SOURCE_TYPE} AS source_type
             FROM journal_entries e LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id
             WHERE e.status = 'POSTED' AND e.reverses_entry_id IS NULL AND (
                    e.memo LIKE ?1 ESCAPE '\\' OR p.party_name LIKE ?1 ESCAPE '\\' OR e.entry_number = ?3
@@ -650,8 +650,8 @@ pub async fn search(pool: &SqlitePool, query: &str) -> Result<Vec<SearchHit>, St
          UNION ALL SELECT * FROM (SELECT 'VENDOR', id, name, email, NULL, NULL, NULL FROM vendors WHERE name LIKE ?1 ESCAPE '\\' OR company_name LIKE ?1 ESCAPE '\\' LIMIT 8)
          UNION ALL SELECT * FROM (SELECT 'PRODUCT', id, name, description, NULL, rate_cents, NULL FROM products_services WHERE name LIKE ?1 ESCAPE '\\' LIMIT 6)
          UNION ALL SELECT * FROM (SELECT 'ACCOUNT', id, full_name, account_type_name, NULL, NULL, NULL FROM v_chart_of_accounts
-                                  WHERE full_name LIKE ?1 ESCAPE '\\' OR account_number = ?4 LIMIT 6)",
-    )
+                                  WHERE full_name LIKE ?1 ESCAPE '\\' OR account_number = ?4 LIMIT 6)"
+    ))
     .bind(&like)
     .bind(amount_cents)
     .bind(number)

@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, format_cents, rollback};
+use crate::ledger::{db_err, format_cents, rollback, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -138,7 +138,7 @@ pub async fn list_reconciliations(pool: &SqlitePool, account_id: i64) -> Result<
 /// `reconciliation_id` is set on lines ticked in the reconciliation currently in progress.
 pub async fn unreconciled_lines(pool: &SqlitePool, account_id: i64) -> Result<Vec<UnreconciledLine>, String> {
     sqlx::query_as::<_, UnreconciledLine>(&format!(
-        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, e.source_type,
+        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type,
                 COALESCE(l.memo, e.memo) AS memo, l.debit_cents, l.credit_cents,
                 {NORMAL_SIGNED} AS amount_cents, l.reconciliation_id
          FROM journal_lines l

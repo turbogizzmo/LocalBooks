@@ -1,6 +1,7 @@
 //! Expenses: vendors, bills (accrual: Dr each split account / Cr Accounts Payable), bill payments
 //! (Dr Accounts Payable / Cr bank or credit card), and expenses & checks (cash basis: Dr each split
-//! account / Cr the bank or credit card). Bills support partial payments like invoices.
+//! account / Cr the bank or credit card), and credit card credits (the reverse of a card charge: Dr the
+//! card / Cr each split account). Bills support partial payments like invoices.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -430,7 +431,8 @@ pub struct SplitLineInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseInput {
-    /// `EXPENSE` (paid by bank or card) or `CHECK` (written from a bank account).
+    /// `EXPENSE` (paid by bank or card), `CHECK` (written from a bank account) or `CARD_CREDIT`
+    /// (a refund or credit from a vendor onto a credit card).
     pub kind: String,
     pub payee_name: Option<String>,
     pub payment_account_id: i64,
@@ -448,6 +450,7 @@ pub struct ExpenseInput {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseView {
     pub id: i64,
+    /// `EXPENSE`, `CHECK` or `CARD_CREDIT`. A card credit's total is positive, like a charge's.
     pub kind: String,
     pub payee_name: Option<String>,
     pub payment_account_id: i64,
@@ -467,7 +470,7 @@ pub struct ExpenseView {
 }
 
 const EXPENSE_SELECT: &str = "
-    SELECT x.id, x.kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
+    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
            x.payment_method, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
            COALESCE(x.home_total_cents, x.total_cents) AS home_total_cents,
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
@@ -476,7 +479,8 @@ const EXPENSE_SELECT: &str = "
            x.journal_entry_id, x.is_voided
     FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
 
-/// Records an expense or check: Dr each split account / Cr the payment account, atomically.
+/// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
+/// (Dr the card / Cr each split account), atomically.
 pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<ExpenseView, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let (id, _) = match write_expense(&mut tx, &input).await {
@@ -494,9 +498,11 @@ pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<Expe
 /// Writes and posts an expense inside the caller's transaction; returns (expense id, entry id).
 /// Bank feed approvals use this so an approved outflow is a real Expense document.
 pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &ExpenseInput) -> Result<(i64, i64), String> {
-    let (kind, source): (&str, fn(i64) -> EntrySource) = match input.kind.as_str() {
-        "EXPENSE" => ("EXPENSE", EntrySource::Expense),
-        "CHECK" => ("CHECK", EntrySource::Check),
+    // A card credit is stored as an EXPENSE flagged as a credit and posts the other way round.
+    let (kind, is_credit, source): (&str, bool, fn(i64) -> EntrySource) = match input.kind.as_str() {
+        "EXPENSE" => ("EXPENSE", false, EntrySource::Expense),
+        "CARD_CREDIT" => ("EXPENSE", true, EntrySource::Expense),
+        "CHECK" => ("CHECK", false, EntrySource::Check),
         other => return Err(format!("EXP_BAD_KIND: unknown expense kind '{other}'")),
     };
     if input.lines.is_empty() {
@@ -513,9 +519,10 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-    match (kind, account_type.as_deref()) {
-        ("CHECK", Some("BANK")) | ("EXPENSE", Some("BANK")) | ("EXPENSE", Some("CREDIT_CARD")) => {}
-        ("CHECK", _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: checks are written from a Bank account".into()),
+    match (kind, is_credit, account_type.as_deref()) {
+        ("CHECK", _, Some("BANK")) | ("EXPENSE", false, Some("BANK" | "CREDIT_CARD")) | ("EXPENSE", true, Some("CREDIT_CARD")) => {}
+        ("CHECK", _, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: checks are written from a Bank account".into()),
+        (_, true, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: a card credit goes to a Credit Card account".into()),
         _ => return Err("EXP_BAD_PAYMENT_ACCOUNT: pay expenses from a Bank or Credit Card account".into()),
     }
     let vendor_id = match clean(input.payee_name.as_deref()) {
@@ -525,16 +532,15 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
 
     // Journal lines in the document's currency; the ledger converts foreign ones to home currency.
-    let mut lines: Vec<JournalLine> = input
-        .lines
-        .iter()
-        .map(|line| JournalLine::debit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id))
-        .collect();
-    lines.push(JournalLine::credit(input.payment_account_id, total));
+    // A charge debits each split and credits the payment account; a card credit is the reverse.
+    let split = |account, cents| if is_credit { JournalLine::credit(account, cents) } else { JournalLine::debit(account, cents) };
+    let mut lines: Vec<JournalLine> =
+        input.lines.iter().map(|line| split(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id)).collect();
+    lines.push(if is_credit { JournalLine::debit(input.payment_account_id, total) } else { JournalLine::credit(input.payment_account_id, total) });
     let home_total = match &input.currency {
         Some(currency) => {
             currency.validate()?;
-            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.1)
+            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.0 + l.1)
         }
         None => None,
     };
@@ -542,8 +548,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let expense_id: i64 = sqlx::query_scalar(
         "INSERT INTO expenses
             (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents,
-             currency_code, exchange_rate_e6, home_total_cents)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
+             currency_code, exchange_rate_e6, home_total_cents, is_credit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id",
     )
     .bind(kind)
     .bind(vendor_id)
@@ -556,6 +562,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
     .bind(home_total)
+    .bind(is_credit)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -579,6 +586,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let label = match (kind, check_number) {
         ("CHECK", Some(n)) => format!("Check #{n}{payee}"),
         ("CHECK", None) => format!("Check{payee}"),
+        _ if is_credit => format!("Credit Card Credit{payee}"),
         _ => format!("Expense{payee}"),
     };
     let description = match clean(input.memo.as_deref()) {

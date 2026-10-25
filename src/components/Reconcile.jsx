@@ -10,7 +10,7 @@ const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType
 const SOURCE_LABEL = {
   JOURNAL: 'Journal', INVOICE: 'Invoice', RECEIVE_PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt',
   CREDIT_MEMO: 'Credit Memo', BILL: 'Bill', BILL_PAYMENT: 'Bill Payment', VENDOR_CREDIT: 'Vendor Credit',
-  CHECK: 'Check', EXPENSE: 'Expense', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Bal.',
+  CHECK: 'Check', EXPENSE: 'Expense', CARD_CREDIT: 'Credit Card Credit', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Bal.',
 };
 
 function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel }) {

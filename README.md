@@ -217,7 +217,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 |---|---|---|
 | **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
 | **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services · Customer Statements · Assess Finance Charges · Send Forms | Invoices with inline line-item grid, full & partial payments, finance charges on overdue invoices (rate, minimum, grace days; interest worked out in integer cents), Change Item Prices (bulk price changes by percentage or amount, from price or cost, with rounding, recorded in the audit trail), sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files, emailed through your mail app or SMTP, with sent history and an Email later queue |
-| **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
+| **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering, credit card credits (vendor refunds onto a card) |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
@@ -235,6 +235,7 @@ its entry form with focus in the first field.
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
 | Estimate | Bill | | Transfer |
 | Sales Receipt | Pay Bills | | |
+| | Credit Card Credit | | |
 
 ---
 
@@ -250,6 +251,7 @@ its entry form with focus in the first field.
 | Payment on a foreign invoice | Bank (at payment rate) + Exchange **loss** | A/R (at booked rate) + Exchange **gain** |
 | Pay bill | Accounts Payable | Bank or Credit Card |
 | Expense / Check | Expense / asset (per split) | Bank (or Credit Card for expenses) |
+| Credit card credit | Credit Card | Expense / asset (per split) |
 | Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
 | Transfer | To-account | From-account |
 | Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |

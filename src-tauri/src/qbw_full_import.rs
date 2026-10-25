@@ -5,8 +5,8 @@
 //! payments become one LocalBooks payment per invoice they paid (the file's `AppliedToTxn`
 //! links); credit memos are applied to the invoices they were applied to; deposits sweep those
 //! payments out of Undeposited Funds. On the purchase side, bills and vendor credits become
-//! documents, bill payments (and checks that paid bills) one payment per bill, and checks and
-//! card charges LocalBooks checks and expenses. Transfers become transfers; estimates and purchase
+//! documents, bill payments (and checks that paid bills) one payment per bill, checks and card
+//! charges LocalBooks checks and expenses, and card credits LocalBooks card credits. Transfers become transfers; estimates and purchase
 //! orders, which post nothing, become open estimates and purchase orders (as in Intuit's own
 //! conversion, an estimate's link to the invoice it became is not kept). Every document posts exactly the source file's own ledger
 //! lines, so account balances come out the same as a journal import.
@@ -68,6 +68,8 @@ pub struct FullImportCounts {
     pub checks: i64,
     /// Card charges and other expenses.
     pub expenses: i64,
+    /// Refunds and credits from vendors onto a credit card.
+    pub card_credits: i64,
     pub transfers: i64,
     pub estimates: i64,
     pub purchase_orders: i64,
@@ -789,27 +791,31 @@ async fn write_bill_payment(
 }
 
 /// A check (from a bank account) or card charge becomes a LocalBooks check or expense with its
-/// split lines.
+/// split lines, and a card credit (money back onto a card) a LocalBooks card credit.
 async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &SourceDocument, books: &Books) -> Result<(i64, i64, &'static str), String> {
     let SourceDocument::Expense { vendor_id, number, .. } = doc else { unreachable!() };
-    if t.lines.iter().any(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")) && !t.lines.iter().any(|l| l.1 > 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")) {
-        return Err("it is a refund or card credit, which has no LocalBooks form".into());
-    }
-    let (from, total) = single_credit(t)?;
     let is_check = t.kind == "Check";
-    match (is_check, books.kind(from)) {
-        (true, "BANK") | (false, "BANK" | "CREDIT_CARD") => {}
-        (true, _) => return Err("it was not written from a bank account".into()),
-        (false, _) => return Err("it was not paid from a bank or card account".into()),
+    let is_credit = t.lines.iter().any(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD"))
+        && !t.lines.iter().any(|l| l.1 > 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD"));
+    // A charge's one credit is the account paid from; a card credit's one debit is the card.
+    let (from, total) = if is_credit { single_debit(t)? } else { single_credit(t)? };
+    match (is_check, is_credit, books.kind(from)) {
+        (true, false, "BANK") | (false, false, "BANK" | "CREDIT_CARD") | (false, true, "CREDIT_CARD") => {}
+        (_, true, _) => return Err("it is a refund into a bank account, which has no LocalBooks form".into()),
+        (true, _, _) => return Err("it was not written from a bank account".into()),
+        (false, _, _) => return Err("it was not paid from a bank or card account".into()),
     }
-    if t.lines.iter().any(|l| l.0 != from && (l.1 > 0 || matches!(books.kind(l.0), "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE"))) {
+    // Every other line runs the other way from the payment account: debits for a charge, credits
+    // for a card credit.
+    let other_way = |cents: i64| if is_credit { cents < 0 } else { cents > 0 };
+    if t.lines.iter().any(|l| l.0 != from && (other_way(l.1) || matches!(books.kind(l.0), "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE"))) {
         return Err("it posts to receivables or payables, or has a line the other way".into());
     }
     let vendor = vendor_id.and_then(|v| books.vendors.get(&v)).map(|v| v.0);
     let kind = if is_check { "CHECK" } else { "EXPENSE" };
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO expenses (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
+        "INSERT INTO expenses (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents, is_credit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id",
     )
     .bind(kind)
     .bind(vendor)
@@ -819,6 +825,7 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     .bind(if is_check { "CHECK" } else if books.kind(from) == "CREDIT_CARD" { "CREDIT_CARD" } else { "OTHER" })
     .bind(&t.memo)
     .bind(total)
+    .bind(is_credit)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -827,7 +834,7 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
             .bind(id)
             .bind(n as i64 + 1)
             .bind(account)
-            .bind(-cents)
+            .bind(cents.abs())
             .bind(memo)
             .execute(&mut **tx)
             .await
@@ -836,7 +843,7 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     let source = if is_check { EntrySource::Check(id) } else { EntrySource::Expense(id) };
     let entry = post(tx, t, describe(t), &t.lines, source).await?;
     sqlx::query("UPDATE expenses SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
-    Ok((entry, id, kind))
+    Ok((entry, id, if is_credit { "CARD_CREDIT" } else { kind }))
 }
 
 /// A transfer between two balance-sheet accounts.
@@ -1099,10 +1106,10 @@ pub(crate) async fn post_all(
                 }
                 Some(doc @ SourceDocument::Expense { .. }) => match attempt!(write_expense(tx, t, doc, &books).await) {
                     Ok((entry, _, posted_as)) => {
-                        if posted_as == "CHECK" {
-                            counts.checks += 1;
-                        } else {
-                            counts.expenses += 1;
+                        match posted_as {
+                            "CHECK" => counts.checks += 1,
+                            "CARD_CREDIT" => counts.card_credits += 1,
+                            _ => counts.expenses += 1,
                         }
                         Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as, fallback_reason: None, entries: 1 }
                     }
