@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import Notice from './Notice.jsx';
 import { useCompanyFileActions } from './CompanyFiles.jsx';
 import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
 
 const MIN_PASSWORD = 8;
@@ -534,7 +535,7 @@ function UserList({ me }) {
   }, [load]);
 
   const replaceKey = async () => {
-    if (!window.confirm('Issue a new recovery key? The one you saved stops working.')) return;
+    if (!(await askConfirm('Issue a new recovery key? The one you saved stops working.', { confirmLabel: 'Issue New Key' }))) return;
     try {
       setRecoveryKey(await api.replaceRecoveryKey());
     } catch (err) {

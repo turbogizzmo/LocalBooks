@@ -75,8 +75,9 @@ export default function App() {
   const signIn = useLedgerQuery(api.getSignInState);
   const signedIn = signIn.data?.user ?? null;
   useIdleLock(signIn.data);
-  // Without users, whoever opens the file can do everything.
-  const isAdmin = !signIn.data?.usersEnabled || signedIn?.role === 'ADMIN';
+  // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
+  // nobody counts as an Admin, so a View-only or Standard user never sees Admin screens first.
+  const isAdmin = signIn.data ? !signIn.data.usersEnabled || signedIn?.role === 'ADMIN' : false;
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
