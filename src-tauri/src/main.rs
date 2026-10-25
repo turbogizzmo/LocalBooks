@@ -23,6 +23,7 @@ mod iif_import;
 mod export_engine;
 mod file_dentist;
 mod file_menu;
+mod finance_charges;
 mod instance;
 mod inventory;
 mod invoices;
@@ -209,6 +210,8 @@ fn main() {
             commands::record_invoice_payment,
             commands::list_invoice_payments,
             commands::get_ar_aging,
+            commands::preview_finance_charges,
+            commands::assess_finance_charges,
             commands::inspect_bank_file,
             commands::list_inventory_items,
             commands::track_inventory,

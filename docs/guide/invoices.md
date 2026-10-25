@@ -50,4 +50,9 @@ Posted invoices can't be edited. Open the row's **Actions** menu and choose **Vo
 then create a corrected invoice. An invoice that already has payments can't be voided until the
 payments are voided. See [Journal entries and voiding](journal-entries-and-voids.md).
 
+## Charge interest on late invoices
+
+To bill customers interest on invoices past their due date, use **Sales › Assess Finance Charges**.
+See **Charge interest on overdue invoices** in [Record customer payments](customer-payments.md).
+
 Next: [Record customer payments](customer-payments.md)
