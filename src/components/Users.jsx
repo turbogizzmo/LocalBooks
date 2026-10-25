@@ -14,6 +14,35 @@ const ROLES = [
 ];
 const roleLabel = (role) => ROLES.find(([id]) => id === role)?.[1] ?? role;
 
+const ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'wheel', 'touchstart'];
+
+/**
+ * Signs out after the company's idle limit. Every 30 seconds a window reports whether anyone typed
+ * or clicked in it; a quiet window asks the backend, which counts every window, whether the limit
+ * has passed. The backend refuses commands past the limit on its own too (a Mac that slept).
+ */
+export function useIdleLock(state) {
+  const minutes = state?.usersEnabled && state.user ? state.autoLockMinutes : 0;
+  useEffect(() => {
+    if (!minutes) return undefined;
+    let active = false;
+    const mark = () => {
+      active = true;
+    };
+    ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, mark, { passive: true, capture: true }));
+    const timer = setInterval(() => {
+      // Signing out reloads every window (company-file-changed).
+      if (active) api.touchSession().catch(() => {});
+      else api.signOutIfIdle().catch(() => {});
+      active = false;
+    }, 30_000);
+    return () => {
+      clearInterval(timer);
+      ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, mark, { capture: true }));
+    };
+  }, [minutes]);
+}
+
 /** Reloads the window when another window signs in or out, or another company is opened. */
 function useReloadOnCompanyChange() {
   useEffect(() => {
@@ -112,12 +141,13 @@ export function RecoveryKeyPanel({ recoveryKey, onDone, doneLabel = 'Continue' }
 function SignInForm({ busy, run, onForgot }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   return (
     <form
       className="flex flex-col gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => api.signIn(username, password));
+        run(() => api.signIn(username, password, remember));
       }}
     >
       <Field label="User name">
@@ -126,6 +156,15 @@ function SignInForm({ busy, run, onForgot }) {
       <Field label="Password">
         <input type="password" className="qb-input w-full" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
       </Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-0.5" checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={busy} />
+        <span>
+          Remember me on this Mac
+          <span className="block text-2xs text-qb-ink-faint">
+            Opens this company as you without asking. Anyone who can use this Mac account could open your books, so leave it off on a shared computer.
+          </span>
+        </span>
+      </label>
       <div className="flex items-center justify-between">
         <button type="button" className="text-sm text-qb-link hover:underline" onClick={onForgot}>
           I forgot my password
@@ -572,6 +611,42 @@ function UserList({ me }) {
   );
 }
 
+/** Admin: how long a signed-in user may be idle before LocalBooks signs them out. */
+function AutoLockSetting({ minutes }) {
+  const [value, setValue] = useState(String(minutes));
+  const [status, setStatus] = useState(null);
+  const save = async (next) => {
+    setValue(next);
+    try {
+      await api.setPreference('auto_lock_minutes', next);
+      setStatus({ kind: 'success', text: next === '0' ? 'LocalBooks will not sign anyone out for being idle.' : `Signs out after ${next} minutes without activity.` });
+    } catch (err) {
+      setStatus({ kind: 'error', text: errorText(err) });
+    }
+  };
+  return (
+    <section className="qb-panel">
+      <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Sign out when idle</h2>
+      <div className="flex max-w-[560px] flex-col gap-1 p-2 text-sm">
+        <label className="flex items-center gap-2">
+          <span>Sign everyone out after</span>
+          <select className="qb-input w-[140px]" value={value} onChange={(e) => save(e.target.value)}>
+            {['5', '10', '15', '30', '60', '120', '0'].map((m) => (
+              <option key={m} value={m}>
+                {m === '0' ? 'Never' : `${m} minutes`}
+              </option>
+            ))}
+            {!['5', '10', '15', '30', '60', '120', '0'].includes(value) && <option value={value}>{value} minutes</option>}
+          </select>
+          <span>without activity</span>
+        </label>
+        <span className="text-xs text-qb-ink-muted">Counts typing and clicking in every LocalBooks window, and time the Mac was asleep. Anything not yet saved is lost when it signs out.</span>
+        {status && <Notice kind={status.kind} text={status.text} onDismiss={() => setStatus(null)} />}
+      </div>
+    </section>
+  );
+}
+
 /** Settings › Users & Passwords. */
 export function UsersSettings() {
   const [state, setState] = useState(null);
@@ -635,9 +710,23 @@ export function UsersSettings() {
           </p>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
           {changed && <Notice kind="success" text="Your password was changed." onDismiss={() => setChanged(false)} />}
+          {state.rememberedHere && (
+            <div className="flex items-center gap-2 text-sm">
+              <span>This Mac remembers a sign-in for this company and opens it without asking.</span>
+              <button
+                type="button"
+                className="qb-btn qb-btn-secondary h-row flex-none px-2 text-xs"
+                disabled={busy}
+                onClick={() => run(async () => (await api.forgetRememberedSignIn(), setState((s) => ({ ...s, rememberedHere: false }))))}
+              >
+                Forget on This Mac
+              </button>
+            </div>
+          )}
           <ChangeOwnPasswordForm busy={busy} run={run} onDone={() => setChanged(true)} />
         </div>
       </section>
+      {me.role === 'ADMIN' && <AutoLockSetting minutes={state.autoLockMinutes} />}
       {me.role === 'ADMIN' && <UserList me={me} />}
     </div>
   );

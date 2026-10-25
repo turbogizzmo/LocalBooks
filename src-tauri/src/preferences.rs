@@ -33,6 +33,10 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             text(100, "company name")
         }
         "company_legal_name" => text(150, "legal name"),
+        "auto_lock_minutes" => match v.parse::<u32>() {
+            Ok(minutes) if minutes <= 240 => Ok(minutes.to_string()),
+            _ => Err("PREF_BAD_AUTO_LOCK: enter 0 (never) to 240 minutes".into()),
+        },
         "company_address" => text(300, "address"),
         "company_phone" => text(40, "phone"),
         "company_email" => {

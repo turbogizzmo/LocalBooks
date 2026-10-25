@@ -15,6 +15,9 @@
 
 use crate::users::Role;
 
+/// Refused because the signed-in user was idle past the company's limit; the caller signs them out.
+pub const IDLE_SIGNED_OUT: &str = "SIGN_IN_IDLE: you were signed out after a while without activity; sign in again";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Need {
     Open,
@@ -30,6 +33,9 @@ const OPEN: &[&str] = &[
     "turn_on_users",
     "sign_in",
     "sign_out",
+    "sign_in_remembered",
+    "forget_remembered_sign_in",
+    "sign_out_if_idle",
     "change_my_password",
     "recover_with_recovery_key",
     "remove_all_users",
@@ -99,6 +105,8 @@ const ADMIN: &[&str] = &[
 
 /// Commands that only read, besides those named `get_…`, `list_…`, `inspect_…` and `preview_…`.
 const READ: &[&str] = &[
+    // Counts as activity (see `main.rs`); refused like any other command once the limit has passed.
+    "touch_session",
     "search_books",
     "verify_ledger_integrity",
     "file_dentist_checkup",
@@ -211,14 +219,14 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("localbooks-gate-{}-{}", std::process::id(), chrono::Local::now().format("%H%M%S%f")));
         let db = crate::db::Db::open_at(dir.join("books.localbooks"), crate::db::test_config(&dir)).await.unwrap();
         db.refresh_gate().await;
-        assert!(db.check(Need::Admin).is_ok(), "no users: everything runs");
+        assert!(db.check(Need::Admin, true).is_ok(), "no users: everything runs");
 
         let (pool, slot) = db.pool_and_session().await.unwrap();
         let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
         let admin = session.user.clone();
         *slot.lock().await = Some(session);
         db.refresh_gate().await;
-        assert!(db.check(Need::Admin).is_ok());
+        assert!(db.check(Need::Admin, true).is_ok());
 
         let viewer = crate::users::add(&pool, slot.lock().await.as_ref().unwrap(), crate::users::NewUserInput {
             username: "viewer".into(),
@@ -231,7 +239,7 @@ mod tests {
         .unwrap();
         *slot.lock().await = None;
         db.refresh_gate().await;
-        assert!(db.check(Need::Read).unwrap_err().starts_with("SIGN_IN_REQUIRED"));
+        assert!(db.check(Need::Read, true).unwrap_err().starts_with("SIGN_IN_REQUIRED"));
         assert!(db.readable_pool().await.acquire().await.is_ok());
         let hidden = sqlx::query("SELECT 1 FROM vendors").execute(&db.readable_pool().await).await;
         assert!(hidden.is_err(), "the MCP server sees no books while signed out");
@@ -241,8 +249,29 @@ mod tests {
         crate::users::change_own_password(&pool, &mut session, "temporary pw", "viewer's own pw").await.unwrap();
         *slot.lock().await = Some(session);
         db.refresh_gate().await;
-        assert!(db.check(Need::Read).is_ok());
-        assert!(db.check(Need::Write).unwrap_err().starts_with("ROLE_VIEW_ONLY"));
+        assert!(db.check(Need::Read, true).is_ok());
+        assert!(db.check(Need::Write, true).unwrap_err().starts_with("ROLE_VIEW_ONLY"));
+
+        // Idle past the company's limit (15 minutes unless an Admin changes it), counting time asleep.
+        db.backdate_activity(std::time::Duration::from_secs(14 * 60));
+        assert!(db.check(Need::Read, false).is_ok());
+        assert!(!db.idle_expired());
+        db.backdate_activity(std::time::Duration::from_secs(14 * 60));
+        assert!(db.check(Need::Read, true).is_ok(), "activity resets the clock");
+        db.backdate_activity(std::time::Duration::from_secs(16 * 60));
+        assert!(db.idle_expired());
+        assert_eq!(db.check(Need::Read, false).unwrap_err(), IDLE_SIGNED_OUT);
+        assert_eq!(db.check(Need::Read, true).unwrap_err(), IDLE_SIGNED_OUT, "too late to count as activity");
+        assert!(db.check(Need::Open, false).is_ok(), "signing out and in still work");
+        crate::preferences::set(&pool, "auto_lock_minutes", "0").await.unwrap();
+        db.refresh_gate().await;
+        db.backdate_activity(std::time::Duration::from_secs(24 * 3600));
+        assert!(db.check(Need::Read, false).is_ok() && !db.idle_expired(), "0 never locks");
+        assert!(crate::preferences::set(&pool, "auto_lock_minutes", "300").await.unwrap_err().starts_with("PREF_BAD_AUTO_LOCK"));
+
+        // A remembered sign-in is tried once per opening, and never after a sign-out.
+        assert!(db.take_remembered_attempt().await);
+        assert!(!db.take_remembered_attempt().await);
 
         // The audit trail names whoever is signed in.
         *slot.lock().await = Some(crate::users::sign_in(&pool, "Owner", "owner password").await.unwrap());
@@ -262,7 +291,7 @@ mod tests {
         assert!(actor.starts_with(&format!("{} as ", admin.username)), "{actor}");
 
         db.close().await;
-        assert!(db.check(Need::Admin).is_ok(), "no company open: commands answer for themselves");
+        assert!(db.check(Need::Admin, true).is_ok(), "no company open: commands answer for themselves");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

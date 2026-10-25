@@ -368,6 +368,10 @@ fn main() {
             commands::turn_on_users,
             commands::sign_in,
             commands::sign_out,
+            commands::sign_in_remembered,
+            commands::forget_remembered_sign_in,
+            commands::touch_session,
+            commands::sign_out_if_idle,
             commands::list_users,
             commands::add_user,
             commands::update_user,
@@ -429,18 +433,24 @@ fn main() {
         });
 }
 
-/// Checks the signed-in user's role ([`permissions`]) before handing a command to `commands`; a
+/// Checks the signed-in user's role ([`permissions`]) before handing a command to `handler`; a
 /// refused command fails with the reason and never runs.
-fn guarded<R: tauri::Runtime>(commands: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+fn guarded(handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     move |invoke| {
-        let need = permissions::need(invoke.message.command());
+        let command = invoke.message.command();
+        let need = permissions::need(command);
+        let activity = matches!(need, permissions::Need::Write | permissions::Need::Admin) || command == "touch_session";
         // Without a company file manager (startup failed), nothing is open to protect.
         if let Some(db) = invoke.message.webview().try_state::<db::Db>() {
-            if let Err(reason) = db.check(need) {
+            if let Err(reason) = db.check(need, activity) {
+                if reason == permissions::IDLE_SIGNED_OUT {
+                    let app = invoke.message.webview().app_handle().clone();
+                    tauri::async_runtime::spawn(async move { commands::sign_out_after_idle(&app).await });
+                }
                 invoke.resolver.reject(reason);
                 return true;
             }
         }
-        commands(invoke)
+        handler(invoke)
     }
 }

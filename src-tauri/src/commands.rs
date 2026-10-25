@@ -1244,6 +1244,9 @@ pub async fn set_preference(app: AppHandle, db: State<'_, Db>, key: String, valu
     if key == "company_name" {
         company_changed(&app).await;
     }
+    if key == "auto_lock_minutes" {
+        db.refresh_gate().await;
+    }
     notify(&app);
     Ok(stored)
 }
@@ -2086,6 +2089,27 @@ pub struct SignInState {
     /// The file asks who is signing in.
     pub users_enabled: bool,
     pub user: Option<UserView>,
+    /// Minutes without activity before signing out (0 = never), when users are on.
+    pub auto_lock_minutes: u32,
+    /// This Mac remembers a sign-in for this company file.
+    pub remembered_here: bool,
+}
+
+/// Sign-ins remembered on this computer ("Remember me on this Mac"), one per company file, keyed by
+/// the file's data-key id: `{"username": …, "password": …}` in the operating system's credential store.
+fn remembered_sign_ins(app: &AppHandle) -> Result<SecretStore, String> {
+    let dir = app.path().app_config_dir().map_err(|e| format!("SIGN_IN_CONFIG: {e}"))?;
+    Ok(SecretStore::for_this_computer(&dir, "LocalBooks sign-in", "remembered-sign-ins.json", "the remembered sign-in"))
+}
+
+async fn file_key_id(pool: &sqlx::SqlitePool) -> Result<Option<String>, String> {
+    sqlx::query_scalar("SELECT key_id FROM data_key WHERE id = 1").fetch_optional(pool).await.map_err(ledger::db_err)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RememberedSignIn {
+    username: String,
+    password: String,
 }
 
 /// Signing in or out changes what every window may show, so each reloads (as for another file).
@@ -2095,11 +2119,82 @@ fn signed_in_changed(app: &AppHandle) {
 
 /// Whether the open company file has users and who is signed in; `None` with no company open.
 #[tauri::command]
-pub async fn get_sign_in_state(db: State<'_, Db>) -> Result<Option<SignInState>, String> {
+pub async fn get_sign_in_state(app: AppHandle, db: State<'_, Db>) -> Result<Option<SignInState>, String> {
     let Ok((pool, session)) = db.pool_and_session().await else { return Ok(None) };
     let users_enabled = users::users_enabled(&pool).await?;
     let user = session.lock().await.as_ref().map(|s| s.user.clone());
-    Ok(Some(SignInState { users_enabled, user }))
+    let auto_lock_minutes = if users_enabled { users::auto_lock_minutes(&pool).await } else { 0 };
+    let remembered_here = match file_key_id(&pool).await? {
+        Some(id) if users_enabled => remembered_sign_ins(&app)?.get(&id).await.ok().flatten().is_some(),
+        _ => false,
+    };
+    Ok(Some(SignInState { users_enabled, user, auto_lock_minutes, remembered_here }))
+}
+
+/// Startup with users on: signs in with the sign-in this Mac remembers for the file, once per
+/// opening (never after a sign-out or idle lock). A remembered password that no longer works is
+/// forgotten. Whether someone was signed in.
+#[tauri::command]
+pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Option<UserView>, String> {
+    if !db.take_remembered_attempt().await {
+        return Ok(None);
+    }
+    let (pool, slot) = db.pool_and_session().await?;
+    let Some(id) = file_key_id(&pool).await? else { return Ok(None) };
+    let store = remembered_sign_ins(&app)?;
+    let Some(saved) = store.get(&id).await?.and_then(|json| serde_json::from_str::<RememberedSignIn>(&json).ok()) else { return Ok(None) };
+    match users::sign_in(&pool, &saved.username, &saved.password).await {
+        Ok(session) if !session.user.must_change_password => {
+            let user = session.user.clone();
+            *slot.lock().await = Some(session);
+            db.refresh_gate().await;
+            Ok(Some(user))
+        }
+        _ => {
+            store.delete(&id).await?;
+            Ok(None)
+        }
+    }
+}
+
+/// Settings › Users & Passwords: stop remembering the sign-in on this Mac.
+#[tauri::command]
+pub async fn forget_remembered_sign_in(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
+    let (pool, _) = db.pool_and_session().await?;
+    if let Some(id) = file_key_id(&pool).await? {
+        remembered_sign_ins(&app)?.delete(&id).await?;
+    }
+    Ok(())
+}
+
+/// Activity from a window (typing in a form sends no other command): keeps the sign-in alive. The
+/// check in front of every command does the work.
+#[tauri::command]
+pub async fn touch_session() -> Result<(), String> {
+    Ok(())
+}
+
+/// A window that has seen no activity asks whether the company's idle limit has passed (counting
+/// every window); if so, signs out. Whether it did.
+#[tauri::command]
+pub async fn sign_out_if_idle(app: AppHandle, db: State<'_, Db>) -> Result<bool, String> {
+    if !db.idle_expired() {
+        return Ok(false);
+    }
+    sign_out_after_idle(&app).await;
+    Ok(true)
+}
+
+/// The check in front of the commands found the user idle past the limit: sign them out everywhere.
+pub async fn sign_out_after_idle(app: &AppHandle) {
+    let Some(db) = app.try_state::<Db>() else { return };
+    let Ok((_, slot)) = db.pool_and_session().await else { return };
+    if slot.lock().await.take().is_none() {
+        return; // another command got here first
+    }
+    db.forbid_remembered_sign_in().await;
+    db.refresh_gate().await;
+    signed_in_changed(app);
 }
 
 #[derive(serde::Serialize)]
@@ -2122,9 +2217,18 @@ pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Op
 }
 
 #[tauri::command]
-pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String) -> Result<UserView, String> {
+pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String, remember: bool) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
     let session = users::sign_in(&pool, &username, &password).await?;
+    if let Some(id) = file_key_id(&pool).await? {
+        let store = remembered_sign_ins(&app)?;
+        if remember {
+            let saved = RememberedSignIn { username: session.user.username.clone(), password };
+            store.put(&id, &serde_json::to_string(&saved).map_err(|e| e.to_string())?).await?;
+        } else {
+            store.delete(&id).await?;
+        }
+    }
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;
@@ -2136,6 +2240,8 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
 pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     let (_, slot) = db.pool_and_session().await?;
     *slot.lock().await = None;
+    // Signing out means someone else may sign in next: no automatic sign-in until the file reopens.
+    db.forbid_remembered_sign_in().await;
     db.refresh_gate().await;
     signed_in_changed(&app);
     Ok(())

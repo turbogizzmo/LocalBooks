@@ -19,6 +19,14 @@ use sqlx::SqlitePool;
 use crate::crypto::{self, DataKey, RecoveryKey};
 use crate::ledger::db_err;
 
+/// Minutes without activity before a signed-in user is signed out, unless an Admin changed it.
+pub const DEFAULT_AUTO_LOCK_MINUTES: u32 = 15;
+
+/// The company's idle limit in minutes (`auto_lock_minutes`; 0 = never).
+pub async fn auto_lock_minutes(pool: &SqlitePool) -> u32 {
+    crate::preferences::get(pool, "auto_lock_minutes").await.ok().and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_AUTO_LOCK_MINUTES)
+}
+
 /// What the owner types to confirm [`remove_all_users`].
 pub const REMOVE_ALL_CONFIRMATION: &str = "REMOVE ALL USERS";
 

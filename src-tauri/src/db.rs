@@ -28,6 +28,23 @@ struct Live {
     opened_from_file: bool,
     /// Who is signed in to this file (when it has users). A new or restored file starts signed out.
     session: SessionSlot,
+    /// A remembered sign-in is tried once per opening, and never after someone signs out or the
+    /// idle limit signs them out.
+    remembered_tried: std::sync::atomic::AtomicBool,
+}
+
+/// When the signed-in user last did something, and how long they may be idle. Wall-clock time, so
+/// time asleep counts.
+#[derive(Debug)]
+struct Idle {
+    last: std::time::SystemTime,
+    limit: Option<Duration>,
+}
+
+impl Idle {
+    fn is_over(&self) -> bool {
+        self.limit.is_some_and(|limit| self.last.elapsed().unwrap_or_default() >= limit)
+    }
 }
 
 /// The signed-in user of the open company file, shared by the commands of one process.
@@ -46,6 +63,7 @@ pub struct Db {
     startup_warning: std::sync::Mutex<Option<String>>,
     /// Who may do what right now, read without waiting by the check in front of every command.
     gate: std::sync::RwLock<crate::permissions::Gate>,
+    idle: std::sync::Mutex<Idle>,
 }
 
 /// Returned by operations that need an open company file while none is.
@@ -101,7 +119,7 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
     let pool = open_for(path, &storage, backups).await?;
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default() })
+    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default(), remembered_tried: Default::default() })
 }
 
 impl Db {
@@ -115,6 +133,7 @@ impl Db {
             config,
             startup_warning: std::sync::Mutex::new(None),
             gate: std::sync::RwLock::new(crate::permissions::Gate::Unchecked),
+            idle: std::sync::Mutex::new(Idle { last: std::time::SystemTime::now(), limit: None }),
         }
     }
 
@@ -277,11 +296,14 @@ impl Db {
     /// also records the signed-in user as the audit trail's actor.
     pub async fn refresh_gate(&self) {
         use crate::permissions::{Gate, SignedIn};
+        let mut limit = None;
         let (gate, actor) = match self.live.read().await.as_ref() {
             None => (Gate::NoCompany, None),
             Some(live) => {
                 // An unreadable users table asks for a sign-in rather than opening the books.
                 if crate::users::users_enabled(&live.pool).await.unwrap_or(true) {
+                    let minutes = crate::users::auto_lock_minutes(&live.pool).await;
+                    limit = (minutes > 0).then(|| Duration::from_secs(60 * u64::from(minutes)));
                     let session = live.session.lock().await;
                     let user = session.as_ref().map(|s| &s.user);
                     (
@@ -294,21 +316,64 @@ impl Db {
             }
         };
         crate::audit_chain::set_signed_in(actor);
+        *self.idle.lock().expect("idle lock") = Idle { last: std::time::SystemTime::now(), limit };
         *self.gate.write().expect("gate lock") = gate;
     }
 
     /// The open file's pool for a reader outside the commands (the MCP server): none (the empty,
     /// closed database) while the file has users and nobody is signed in.
     pub async fn readable_pool(&self) -> SqlitePool {
-        match self.check(crate::permissions::Need::Read) {
+        match self.check(crate::permissions::Need::Read, false) {
             Ok(()) => self.pool().await,
             Err(_) => self.closed.clone(),
         }
     }
 
     /// Whether the signed-in user (if any) may run a command needing `need`.
-    pub fn check(&self, need: crate::permissions::Need) -> Result<(), String> {
-        crate::permissions::check(&self.gate.read().expect("gate lock"), need)
+    /// Past the idle limit, every command but the [`Need::Open`](crate::permissions::Need::Open)
+    /// ones is refused with [`IDLE_SIGNED_OUT`](crate::permissions::IDLE_SIGNED_OUT). `activity`:
+    /// the command shows someone at work (a change, or a window reporting typing and clicks). Reads
+    /// do not count, since windows reload what another window changed without anyone touching them.
+    pub fn check(&self, need: crate::permissions::Need, activity: bool) -> Result<(), String> {
+        use crate::permissions::{Gate, Need, IDLE_SIGNED_OUT};
+        let gate = self.gate.read().expect("gate lock");
+        if need != Need::Open && matches!(*gate, Gate::Users(Some(_))) {
+            let mut idle = self.idle.lock().expect("idle lock");
+            if idle.is_over() {
+                return Err(IDLE_SIGNED_OUT.into());
+            }
+            if activity {
+                idle.last = std::time::SystemTime::now();
+            }
+        }
+        crate::permissions::check(&gate, need)
+    }
+
+    /// Whether someone is signed in and has been idle past the limit.
+    pub fn idle_expired(&self) -> bool {
+        matches!(*self.gate.read().expect("gate lock"), crate::permissions::Gate::Users(Some(_))) && self.idle.lock().expect("idle lock").is_over()
+    }
+
+    /// Tests: pretend the signed-in user has been idle for `by`.
+    #[cfg(test)]
+    pub fn backdate_activity(&self, by: Duration) {
+        let mut idle = self.idle.lock().expect("idle lock");
+        idle.last = std::time::SystemTime::now() - by;
+    }
+
+    /// Whether a remembered sign-in may be tried now (the first time since the file was opened);
+    /// later calls, and calls after [`Db::forbid_remembered_sign_in`], answer false.
+    pub async fn take_remembered_attempt(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        self.live.read().await.as_ref().is_some_and(|live| !live.remembered_tried.swap(true, Ordering::SeqCst))
+    }
+
+    /// After a sign-out or idle lock: only a typed password signs in again while the file stays open.
+    pub async fn forbid_remembered_sign_in(&self) {
+        use std::sync::atomic::Ordering;
+        if let Some(live) = self.live.read().await.as_ref() {
+            live.remembered_tried.store(true, Ordering::SeqCst);
+        }
     }
 
     /// The open company file's pool and sign-in, read together so both belong to the same file.

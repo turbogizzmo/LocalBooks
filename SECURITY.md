@@ -26,3 +26,41 @@ Only the latest release receives fixes. Installed copies offer updates automatic
 - Emailed forms open in the user's own mail app by default. Sending over SMTP is optional, uses
   STARTTLS or TLS whenever a password is involved, and keeps the password in the operating system's
   credential store, never in the company file.
+
+## Users and sensitive data
+
+A company file can have users (Settings › Users & Passwords). Without them, anyone who can open the
+file can see and change everything, as in earlier versions.
+
+- **Sign-in:** each user's password is kept only as an Argon2id verifier (64 MiB, 3 passes). Wrong
+  passwords and unknown user names get the same answer in the same time.
+- **Roles:** Admin, Standard and View only, checked by LocalBooks before every command runs. A
+  command not yet classified is treated as a change, so View-only users cannot run it.
+- **Sensitive data:** vendor tax IDs are encrypted with AES-256-GCM using a random key for each
+  company file, and each value is bound to its vendor and to that file. The key is never stored as
+  is: each user allowed to see sensitive data, and the file's recovery key, has a copy locked with a
+  key derived from their password (Argon2id). Users without that permission have no copy and cannot
+  decrypt tax IDs; they see a masked form (`***-**-6789`).
+- **Recovery:** the recovery key is shown once when users are turned on, and LocalBooks keeps no
+  copy. There is no reset service. With neither an Admin password nor the recovery key, the only way
+  back is removing all users, which erases every encrypted value and keeps the books.
+- **Idle sign-out:** after 15 minutes without activity in any window (configurable by an Admin),
+  including time asleep.
+- **Remember me on this Mac** (optional, off by default) keeps the user's password in the operating
+  system's credential store and is used once per opening of the file, never after a sign-out or idle
+  sign-out.
+- **Audit trail:** ledger entries record the signed-in user together with the computer's user.
+- The local AI access (MCP) server sees no books while a file with users has nobody signed in.
+
+What this does not cover:
+
+- Only tax IDs are encrypted. The rest of the company file, its backups, attachments and anything
+  exported (CSV, PDF) are readable by anyone who has the file. Use full-disk encryption (FileVault,
+  BitLocker) on every computer that holds them.
+- Roles are enforced by LocalBooks, not by the file: another program can read or change the
+  database directly. The ledger audit trail is hash-chained and anchored outside the file, so such
+  changes are detected (Accounting › Audit Log › Verify ledger integrity), not prevented.
+- A tax ID read from a file that is staged for import but not yet imported stays unencrypted until
+  the import is carried out or discarded.
+- Newer QuickBooks files encrypt tax IDs with QuickBooks' own key; LocalBooks cannot read those and
+  imports the vendor without one.

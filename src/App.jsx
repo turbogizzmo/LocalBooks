@@ -35,6 +35,7 @@ import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
 import { useCompanyFileActions } from './components/CompanyFiles.jsx';
+import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
@@ -73,6 +74,7 @@ export default function App() {
   const storage = useLedgerQuery(api.getStorageStatus);
   const signIn = useLedgerQuery(api.getSignInState);
   const signedIn = signIn.data?.user ?? null;
+  useIdleLock(signIn.data);
   // Without users, whoever opens the file can do everything.
   const isAdmin = !signIn.data?.usersEnabled || signedIn?.role === 'ADMIN';
   const list = accounts.data ?? [];
