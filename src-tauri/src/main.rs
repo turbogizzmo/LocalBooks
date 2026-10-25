@@ -27,6 +27,7 @@ mod finance_charges;
 mod instance;
 mod inventory;
 mod invoices;
+mod item_prices;
 mod ledger;
 mod mail_app;
 mod parties;
@@ -189,6 +190,10 @@ fn main() {
             commands::update_party,
             commands::set_party_active,
             commands::update_product,
+            commands::list_price_items,
+            commands::preview_item_prices,
+            commands::apply_item_prices,
+            commands::list_price_changes,
             commands::set_product_active,
             commands::list_credit_memos,
             commands::create_credit_memo,

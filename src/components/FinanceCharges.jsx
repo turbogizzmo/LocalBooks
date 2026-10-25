@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
@@ -49,7 +50,8 @@ export default function FinanceCharges({ accounts, navigate }) {
     });
 
   const assess = async () => {
-    if (!window.confirm(`Create ${picked.length} finance charge invoice${picked.length === 1 ? '' : 's'} dated ${formatDate(asOf)}, totalling ${formatCents(total)}?`)) return;
+    const question = `Create ${picked.length} finance charge invoice${picked.length === 1 ? '' : 's'} dated ${formatDate(asOf)}, totalling ${formatCents(total)}?`;
+    if (!(await askConfirm(question, { confirmLabel: 'Assess charges' }))) return;
     setBusy(true);
     try {
       const made = await api.assessFinanceCharges({ asOf, charges: picked.map((c) => ({ customerName: c.customerName, chargeCents: amount(c) })) });

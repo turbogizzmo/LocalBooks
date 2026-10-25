@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import ChangePrices from './ChangePrices.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
@@ -81,6 +82,7 @@ export default function Products({ accounts }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [changingPrices, setChangingPrices] = useState(false);
   const setActive = async (p, active) => {
     try {
       await api.setProductActive(p.id, active);
@@ -152,11 +154,15 @@ export default function Products({ accounts }) {
           }}
         />
       )}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col">
+      {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
+      <section className={`qb-panel min-h-0 flex-1 flex-col ${changingPrices ? 'hidden' : 'flex'}`}>
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
-          <label className="ml-auto flex flex-none items-center gap-1 text-sm">
+          <button type="button" className="qb-btn qb-btn-secondary ml-auto mr-2 h-row flex-none" onClick={() => setChangingPrices(true)}>
+            Change prices…
+          </button>
+          <label className="flex flex-none items-center gap-1 text-sm">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive
           </label>

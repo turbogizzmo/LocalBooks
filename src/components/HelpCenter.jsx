@@ -114,6 +114,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Assess finance charges', view: 'sales/finance-charges' },
   },
   {
+    id: 'change-prices', area: 'sales', views: ['sales/products'],
+    title: 'Change many prices at once',
+    body: 'On Sales › Products & Services, click Change prices… and tick the items. Raise or lower them by a percentage or a fixed amount, based on the current price or the unit cost, and round the result; check the new prices, then apply. Documents already written keep their prices, and each change is recorded in the audit trail.',
+    keywords: 'price increase bulk change prices markup percent raise lower round item prices',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+  },
+  {
     id: 'inventory', area: 'sales', views: ['sales/products', 'expenses/bills', 'sales/invoices'],
     title: 'Track inventory and cost of goods sold',
     body: 'Choose Track stock on a product, record opening stock with Adjust stock, and buy more on bills by picking it as the Stock item. Selling it on an invoice or sales receipt records its moving average cost in Cost of Goods Sold; you can sell before the bill arrives, and the cost is trued up when it does.',
@@ -516,7 +523,7 @@ export const HELP_ARTICLES = [
 const ARTICLE_GUIDES = {
   invoice: 'invoices', 'foreign-currency': 'invoices', 'finance-charges': 'customer-payments', 'receive-payment': 'customer-payments',
   'sales-receipt': 'sales-receipts-and-estimates', estimate: 'sales-receipts-and-estimates',
-  customers: 'customers-and-products', products: 'customers-and-products', vendors: 'customers-and-products', inventory: 'inventory',
+  customers: 'customers-and-products', products: 'customers-and-products', 'change-prices': 'customers-and-products', vendors: 'customers-and-products', inventory: 'inventory',
   'fx-revaluation': 'currency-revaluation',
   'expense-check': 'expenses-and-checks', bill: 'bills', 'pay-bills': 'bills', time: 'time-tracking',
   'bank-feed': 'bank-feeds', deposit: 'deposits-and-transfers', transfer: 'deposits-and-transfers', reconcile: 'reconciling',
