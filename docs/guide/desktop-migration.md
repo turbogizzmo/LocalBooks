@@ -7,8 +7,11 @@ The wizard brings in books from:
   QuickBooks Desktop for Mac** below)
 - a QuickBooks **IIF export** (`.iif`)
 - a Quicken **QIF export** (`.qif`), which many banks and other programs also produce
+- QuickBooks **report exports** (`.csv` or `.xlsx`) from QuickBooks Desktop for Windows or Mac, or
+  QuickBooks Online: the Journal (or General Ledger), with the Account Listing, contact lists and
+  Item List
 
-> **Read this first:** newer company files and IIF and QIF exports come in as the full ledger:
+> **Read this first:** newer company files, IIF and QIF exports and report exports come in as the full ledger:
 > accounts, customers, vendors, items and every transaction. Some older `.qbw` files can only be
 > read for invoice line amounts, which post as income against an offset account you choose.
 > Always compare the result with a trial balance from the original program before posting.
@@ -68,12 +71,110 @@ instead, and import that:
 6. In LocalBooks, choose the new `.qbb` file in the wizard, as for a company file below.
 
 Exporting to IIF from QuickBooks for Mac (**File › Export › Lists to IIF File**) brings in lists
-only, not transactions, so use the Windows backup to move your books.
+only, not transactions, so use the Windows backup to move your books. If you can't make the
+Windows backup (for example, your QuickBooks for Mac only opens files in view-only mode), export
+its reports instead: see [Import QuickBooks reports](#import-quickbooks-reports).
+
+## Import QuickBooks reports
+
+Every QuickBooks product can export its reports to Excel or CSV, so this works even when LocalBooks
+can't read the company file, and needs no file decryption. Export these reports, then choose them
+**all together** in step 1 (hold **⌘** or **Ctrl** to pick several, or drag them onto the box):
+
+- the **Journal**: every transaction with all its lines. This is the one that matters.
+- the **Account Listing** (QuickBooks Online: **Account List**): gives each account its type, and
+  its balance, which step 2 shows next to the imported total so you can compare.
+- the **Customer Contact List** and **Vendor Contact List**: addresses, phones, emails, terms, and
+  vendors' tax IDs and 1099 status.
+- the **Item List** (QuickBooks Online: **Product/Service List**).
+
+Only the Journal is needed; the lists add detail. Lists can also be imported on their own.
+
+### No QuickBooks license any more?
+
+- **QuickBooks Desktop for Mac:** an expired copy still opens company files in **view-only mode**
+  for about a year, and view-only mode can run and export reports. If yours no longer opens at all,
+  install the **30-day trial of QuickBooks Desktop for Mac 2024** from Intuit, open the company file
+  in it (it may ask to update a copy of the file to the 2024 format), and export the reports below.
+- **QuickBooks Desktop for Windows:** an expired copy opens in a similar read-only mode; run the
+  reports from there.
+- **QuickBooks Online:** a cancelled subscription keeps read-only access for a year. Sign in and
+  export the reports.
+
+### QuickBooks Desktop for Windows
+
+1. Go to **Reports › Accountant & Taxes › Journal**.
+2. Click **Customize Report**. On **Display**, set **Dates** to **All**.
+3. Under **Columns**, tick **Trans #**, **Type**, **Date**, **Num**, **Name**, **Memo**,
+   **Account**, **Class**, **Debit** and **Credit**. Click **OK**.
+4. Click **Excel › Create New Worksheet**. Choose **Create a comma separated values (.csv) file**
+   (or **in a new workbook** for `.xlsx`), then click **Export** and save the file.
+5. For the lists, use **Reports › List**: **Account Listing**, **Customer Contact List**, **Vendor
+   Contact List** and **Item Listing**. Export each the same way. In the Vendor Contact List you can
+   add the **Tax ID**, **Eligible for 1099** and **Terms** columns with **Customize Report**.
+
+### QuickBooks Desktop for Mac
+
+1. Go to **Reports › Accountant & Taxes › Journal**.
+2. Click **Customize** (in older versions, **Options**). Set the dates to **All**.
+3. Under **Columns**, tick **Trans #**, **Type**, **Date**, **Num**, **Name**, **Memo**,
+   **Account**, **Class**, **Debit** and **Credit**.
+4. Click **Export** on the report's toolbar (or **File › Export › Report to Excel**). Save as an
+   Excel workbook (`.xlsx`) or as comma-separated values (`.csv`).
+5. Export the lists from **Reports › Lists**: **Account Listing**, **Customer Contact List**,
+   **Vendor Contact List** and **Item List**.
+
+### QuickBooks Online
+
+1. Go to **Reports**, search for **Journal** and open it.
+2. Set **Report period** to **All Dates**.
+3. Click **Customize** (or the **Columns** / **⚙ Change columns** control) and show **Date**,
+   **Transaction Type**, **Num**, **Name**, **Memo/Description**, **Account**, **Class**, **Debit**
+   and **Credit**. Click **Run report**.
+4. Click the **Export** icon and choose **Export to Excel** (or **Export to CSV**).
+5. Export the lists the same way: **Account List**, **Customer Contact List**, **Vendor Contact
+   List** (add **Tax ID** and **Track 1099** under **Change columns**) and **Product/Service List**.
+
+### If the Journal won't export: the General Ledger
+
+The **General Ledger** (or **Transaction Detail by Account**) works too. Set the dates to **All**
+and show the **Type**, **Date**, **Num**, **Name**, **Memo**, **Split**, **Debit** and **Credit**
+columns (and **Trans #** where QuickBooks offers it). It lists each line under its account, so
+LocalBooks rebuilds each transaction by pairing its lines through the **Split** column. A line it
+can't pair is listed as not read completely and isn't posted. Use either the Journal or the
+General Ledger, not both: each holds every transaction.
+
+### What LocalBooks does with them
+
+- **Finding the data:** the title rows, blank and spacer columns, account headings, total rows and
+  the footer are skipped. Columns are found by their heading, whatever the product calls them, in
+  any order. Step 1 says which product and report each file was read as. A file that isn't one of
+  these reports is refused, with the reason.
+- **Amounts** come only from the **Debit** and **Credit** columns, as written: `1,234.56`,
+  `(45.00)` and `-$0.29` all read. A report with only an **Amount** column is refused, because
+  that column's sign depends on the account. An amount that doesn't read is never guessed: its
+  transaction is listed as not read completely, and isn't posted.
+- **Dates:** Excel dates, Excel serial numbers and text dates all read. Text dates are month first
+  unless a date in the file can only be day first (such as `25/04/2024`).
+- **Transactions:** QuickBooks Desktop's **Trans #** groups the lines. QuickBooks Online has no
+  transaction number, so lines with the same date, type and number make one transaction until its
+  debits equal its credits. A transaction that doesn't balance is listed and not posted.
+- **Account types** come from the Account Listing. Without it, each account gets a type from its
+  name and how it's used, as for IIF. Check the types in step 2.
+- **Full import:** invoices, payments, sales receipts, credit memos, bills, vendor credits, bill
+  payments, checks, expenses, card charges, deposits and transfers become LocalBooks documents, as
+  for IIF. General journal entries, card credits and anything else post as journal entries. The
+  reports don't say which invoice a payment paid, so payments apply to the customer's oldest open
+  invoices, bill payments to the vendor's oldest open bills, and deposits to undeposited payments of
+  the same amount.
+- **Several journals** (one per year, say) can be chosen together. With **Trans #**, a transaction
+  in two of them is read once; without it, make sure their dates don't overlap.
 
 ## 1. Choose a file
 
 1. Go to **Accounting › Desktop Migration Wizard**.
-2. Click **Choose a file…**, or drag the file onto the box.
+2. Click **Choose a file…**, or drag the file onto the box. For report exports, choose the report
+   and its lists together.
 3. Wait while the progress bar works through the file; large files take a few minutes. Keep
    LocalBooks open. The file is only read, never changed, and nothing is added to your books yet.
 

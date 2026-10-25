@@ -10,8 +10,10 @@ import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
-const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif'];
-const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export' };
+/** QuickBooks report exports: several can be read together (a report and its lists). */
+const REPORT_EXTENSIONS = ['csv', 'xlsx', 'xls'];
+const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif', ...REPORT_EXTENSIONS];
+const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export', REPORT: 'QuickBooks report export' };
 const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
@@ -106,7 +108,7 @@ function ChooseFile({ busy, onFile }) {
           else if (type === 'leave') setHover(false);
           else if (type === 'drop') {
             setHover(false);
-            if (!busy && paths?.length) onFile(paths[0]);
+            if (!busy && paths?.length) onFile(paths);
           }
         })
         .then((fn) => (cancelled ? fn() : (unlisten = fn)))
@@ -121,8 +123,13 @@ function ChooseFile({ busy, onFile }) {
   }, [busy, onFile]);
 
   const browse = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Company file, backup or export (.qbw, .qbb, .iif, .qif)', extensions: EXTENSIONS }] });
-    if (typeof path === 'string') onFile(path);
+    const picked = await open({
+      multiple: true,
+      directory: false,
+      filters: [{ name: 'Company file, backup or export (.qbw, .qbb, .iif, .qif, .csv, .xlsx)', extensions: EXTENSIONS }],
+    });
+    const paths = typeof picked === 'string' ? [picked] : picked;
+    if (paths?.length) onFile(paths);
   };
 
   return (
@@ -136,12 +143,21 @@ function ChooseFile({ busy, onFile }) {
           Choose a file…
         </button>
         <div className="text-xs text-qb-ink-muted">
-          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, or a Quicken .qif export. You can also drag it here. It is only
-          read, never changed, and nothing is added to your books yet.
+          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, a Quicken .qif export, or QuickBooks reports exported to .csv or
+          .xlsx: a Journal or General Ledger, with the Account Listing, contact lists and Item List if you have them (choose them together). You can
+          also drag files here. They are only read, never changed, and nothing is added to your books yet.
         </div>
       </div>
     </div>
   );
+}
+
+/** What an import was read from, by its file's extension. */
+function sourceLabel(fileName) {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (REPORT_EXTENSIONS.includes(ext)) return 'Report export';
+  if (ext === 'iif' || ext === 'qif') return `${ext.toUpperCase()} export`;
+  return 'Company file';
 }
 
 function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, onDelete }) {
@@ -188,11 +204,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                     ? 'Invoice lines'
                     : b.listsOnly
                       ? 'Lists only'
-                      : b.liveEntryCount === 0
-                        ? 'Company file'
-                        : b.mode === 'FULL'
-                          ? 'Company file · full import'
-                          : 'Company file · journal import'}
+                      : `${sourceLabel(b.fileName)}${b.liveEntryCount === 0 ? '' : b.mode === 'FULL' ? ' · full import' : ' · journal import'}`}
                 </div>
               </td>
               <td className="qb-grid-cell text-qb-ink-muted">{STAMP.format(new Date(b.importedAt))}</td>
@@ -813,7 +825,7 @@ let reading = null;
 let lastOpened = null;
 
 /** Starts reading a file, collecting its progress whether or not the screen is showing. */
-function startReading(path, ext) {
+function startReading(paths, ext) {
   const first = ext === 'qbb' ? 'Unpacking backup' : 'Reading file';
   const subscribers = new Set();
   const r = {
@@ -833,7 +845,8 @@ function startReading(path, ext) {
   })
     .then((fn) => (unlisten = fn))
     .catch(() => {});
-  r.promise = listening.then(() => api.ingestRawQbw(path)).finally(() => unlisten?.());
+  const ingest = REPORT_EXTENSIONS.includes(ext) ? () => api.ingestReportExports(paths) : () => api.ingestRawQbw(paths[0]);
+  r.promise = listening.then(ingest).finally(() => unlisten?.());
   return r;
 }
 
@@ -910,12 +923,13 @@ export default function QbwImporter({ accounts }) {
         if (result.kind === 'ledger') {
           const complete = batch.transactionCount - batch.unbalanced.length;
           const l = batch.lists;
+          const sources = result.sources?.length ? ` (${result.sources.join('; ')})` : '';
           setNotice({
             kind: 'success',
             text: batch.listsOnly
-              ? `Read the ${FORMAT_NAMES[batch.sourceFormat]}: lists only, with ${batch.accounts.length} accounts, ${l.customers} customers, ${l.vendors} vendors and ${l.items} items, and no transactions. Nothing is in your books yet: review step 2 below, then add the lists in step 3.`
+              ? `Read the ${FORMAT_NAMES[batch.sourceFormat]}${sources}: lists only, with ${batch.accounts.length} accounts, ${l.customers} customers, ${l.vendors} vendors and ${l.items} items, and no transactions. Nothing is in your books yet: review step 2 below, then add the lists in step 3.`
               :
-              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
+              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}${sources}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
               (batch.unbalanced.length ? ` ${batch.unbalanced.length} could not be read completely and are listed below.` : '') +
               ' Nothing is in your books yet: review step 2 below.',
           });
@@ -944,13 +958,21 @@ export default function QbwImporter({ accounts }) {
   }, [follow]);
 
   const ingest = useCallback(
-    async (path) => {
-      const ext = path.split('.').pop()?.toLowerCase();
-      if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
+    async (paths) => {
+      const exts = paths.map((p) => p.split('.').pop()?.toLowerCase());
+      const ext = exts[0];
+      if (!exts.every((e) => EXTENSIONS.includes(e))) {
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, an .iif or .qif export, or QuickBooks reports exported to .csv or .xlsx.' });
         return;
       }
-      reading = startReading(path, ext);
+      if (paths.length > 1 && !exts.every((e) => REPORT_EXTENSIONS.includes(e))) {
+        setNotice({
+          kind: 'error',
+          text: 'Choose one company file or export at a time. Only QuickBooks report exports (.csv, .xlsx) can be read together, such as a Journal with the Account Listing.',
+        });
+        return;
+      }
+      reading = startReading(paths, ext);
       follow(reading);
     },
     [follow],
@@ -1088,7 +1110,8 @@ export default function QbwImporter({ accounts }) {
           <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · built on the open-source OpenQBW work</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports and Quicken .qif exports. Newer company files and both exports
+          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports, Quicken .qif exports and QuickBooks report exports (a Journal or
+          General Ledger as .csv or .xlsx, from QuickBooks Desktop for Windows or Mac, or QuickBooks Online). Newer company files and the exports
           come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
           as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
           <strong>invoice line amounts only</strong>, posted against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed

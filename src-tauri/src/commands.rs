@@ -28,7 +28,7 @@ use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
-use crate::{iif_import, qif_import};
+use crate::{iif_import, qif_import, report_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
 use crate::tax_ids;
 use crate::users::{self, NewUserInput, Session, UserUpdate, UserView};
@@ -1370,7 +1370,8 @@ pub const QBW_PROGRESS: &str = "qbw-import-progress";
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum IngestResult {
     Invoices { batch: BatchSummary },
-    Ledger { batch: LedgerBatchSummary },
+    /// `sources` says what each report export was read as; it is empty for other files.
+    Ledger { batch: LedgerBatchSummary, sources: Vec<String> },
 }
 
 /// Reads a .qbw company file, the company file inside a .qbb backup, or an .iif (QuickBooks) or
@@ -1384,7 +1385,7 @@ pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif") {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, or an .iif or .qif export".into());
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, or QuickBooks report exports (.csv, .xlsx)".into());
     }
     let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
     let progress = |stage: &'static str, done: u64, total: u64| {
@@ -1415,7 +1416,7 @@ pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String
         progress("Staging rows", 0, 1);
         let batch_id = qbw_ledger_import::stage(&pool, &path, file_size, &ledger).await?;
         progress("Staging rows", 1, 1);
-        return Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await? });
+        return Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await?, sources: Vec::new() });
     }
 
     // A backup holds the company file compressed; unpack it next to LocalBooks' own cache.
@@ -1465,10 +1466,56 @@ pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String
             progress("Staging rows", 0, 1);
             let batch_id = qbw_ledger_import::stage(&pool, &path, file_size, &ledger).await?;
             progress("Staging rows", 1, 1);
-            Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await? })
+            Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await?, sources: Vec::new() })
         }
         Err(err) => Err(err),
     }
+}
+
+/// Reads QuickBooks report exports (a Journal or General Ledger, and any of the Account Listing,
+/// contact lists and Item List, as .csv or .xlsx) into one new staging batch, named after the
+/// report. Nothing is posted to the ledger.
+#[tauri::command]
+pub async fn ingest_report_exports(app: AppHandle, db: State<'_, Db>, file_paths: Vec<String>) -> Result<IngestResult, String> {
+    if file_paths.is_empty() {
+        return Err("REPORT_NO_FILES: choose at least one report export".into());
+    }
+    let progress = |done: u64, total: u64| {
+        let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Reading file", done, total });
+    };
+    let mut files = Vec::with_capacity(file_paths.len());
+    let mut file_size = 0;
+    for (n, p) in file_paths.iter().enumerate() {
+        let path = PathBuf::from(p);
+        let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if !report_import::EXTENSIONS.contains(&ext.as_str()) {
+            return Err(format!("REPORT_BAD_EXTENSION: {} is not a report export: choose .csv or .xlsx files", path.display()));
+        }
+        progress(n as u64, file_paths.len() as u64 + 1);
+        let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
+        file_size += bytes.len() as i64;
+        let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.clone());
+        files.push((name, bytes));
+    }
+    let read = tauri::async_runtime::spawn_blocking(move || report_import::read_files(&files))
+        .await
+        .map_err(|e| format!("QBW_PARSE_FAILED: the files could not be read ({e})"))??;
+    progress(1, 1);
+    let ledger = &read.ledger;
+    if ledger.transactions.is_empty()
+        && ledger.unbalanced.is_empty()
+        && ledger.accounts.is_empty()
+        && ledger.customers.is_empty()
+        && ledger.vendors.is_empty()
+        && ledger.items.is_empty()
+    {
+        return Err("REPORT_EMPTY: these reports have no accounts, lists or transactions to import".into());
+    }
+    let pool = db.pool().await;
+    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: 0, total: 1 });
+    let batch_id = qbw_ledger_import::stage(&pool, Path::new(&file_paths[read.main]), file_size, ledger).await?;
+    let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage: "Staging rows", done: 1, total: 1 });
+    Ok(IngestResult::Ledger { batch: qbw_ledger_import::batch_summary(&pool, batch_id).await?, sources: read.sources })
 }
 
 #[tauri::command]
