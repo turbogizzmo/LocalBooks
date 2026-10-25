@@ -1,0 +1,24 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Inventory Valuation Summary as of 2025-12-31
+
+Framed Print             8       47.00        376.00      120.00        960.00
+Sketchbook              25        8.75        218.75       24.00        600.00
+Total                                                     594.75                  1,560.00
+
+Inventory Valuation Detail, 2025-11-15 to 2025-12-31
+
+Framed Print  (opening 12 worth 540.00)
+  2025-11-17  PURCHASE  Gallery Supply             6      306.00      18       47.00      846.00
+  2025-11-20  SALE      Brightwater Cafe          -7     -329.00      11       47.00      517.00
+  2025-12-12  SALE      Brightwater Cafe          -3     -141.00       8       47.00      376.00
+Sketchbook  (opening 40 worth 350.00)
+  2025-12-04  SALE      Brightwater Cafe         -15     -131.25      25        8.75      218.75
+Total value 594.75
+
+Inventory Stock Status by Item, 2025-11-01 to 2025-12-31
+
+Framed Print             8         0        10      1.1475
+Sketchbook              25         0        15      1.7213

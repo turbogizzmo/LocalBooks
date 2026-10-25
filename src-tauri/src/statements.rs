@@ -602,7 +602,7 @@ pub async fn trial_balance_as_of(pool: &SqlitePool, as_of: NaiveDate) -> Result<
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let retained = chart.accounts.iter().find(|a| a.is_system && a.account_type == "EQUITY" && a.name == "Retained Earnings").map(|a| a.id);
+    let retained = retained_earnings(&chart);
     let is_pl: HashMap<i64, bool> = chart.accounts.iter().map(|a| (a.id, PL_TYPES.contains(&a.account_type.as_str()))).collect();
 
     let mut tb = DatedTrialBalance { as_of, fiscal_year_start: fiscal_start, rows: Vec::new(), total_debit_cents: 0, total_credit_cents: 0 };
@@ -723,8 +723,9 @@ pub struct BudgetView {
     pub fiscal_year_start: NaiveDate,
 }
 
-/// One budget amount: income or expense expected for an account in a month of the fiscal year
-/// (period 1 = the first month), on the account's normal side (income and expenses positive).
+/// One budget amount for an account in a month of the fiscal year (period 1 = the first month), on
+/// the account's normal side: the month's income or expense, or a balance sheet account's balance
+/// at the month end.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetAmount {
@@ -764,15 +765,16 @@ pub async fn budget_amounts(pool: &SqlitePool, id: i64) -> Result<Vec<BudgetAmou
     sqlx::query_as("SELECT account_id, period, amount_cents FROM budget_amounts WHERE budget_id = ?1").bind(id).fetch_all(pool).await.map_err(db_err)
 }
 
-/// Saves budget amounts (zero removes one). Only income and expense accounts are budgeted.
+/// Saves budget amounts (zero removes one). Income and expense accounts are budgeted as each
+/// month's activity; balance sheet accounts as the balance at each month end.
 pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmount]) -> Result<(), String> {
     let chart = Chart::load(pool).await?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for a in amounts {
-        let pl = chart.accounts.iter().any(|acct| acct.id == a.account_id && PL_TYPES.contains(&acct.account_type.as_str()));
-        if !pl || !(1..=12).contains(&a.period) {
+        let known = chart.accounts.iter().any(|acct| acct.id == a.account_id);
+        if !known || !(1..=12).contains(&a.period) {
             let _ = tx.rollback().await;
-            return Err("BUDGET_BAD_AMOUNT: budget income and expense accounts by month (1 to 12)".into());
+            return Err("BUDGET_BAD_AMOUNT: budget an account by month (1 to 12)".into());
         }
         let sql = if a.amount_cents == 0 {
             "DELETE FROM budget_amounts WHERE budget_id = ?1 AND account_id = ?2 AND period = ?3"
@@ -788,6 +790,15 @@ pub async fn set_budget_amounts(pool: &SqlitePool, id: i64, amounts: &[BudgetAmo
     crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
+async fn budget_year_start(pool: &SqlitePool, budget_id: i64) -> Result<NaiveDate, String> {
+    sqlx::query_scalar("SELECT fiscal_year_start FROM budgets WHERE id = ?1")
+        .bind(budget_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| "BUDGET_NOT_FOUND: that budget does not exist".into())
+}
+
 /// Budget vs. Actual: actual income and expenses for fiscal months `from_period`..=`to_period` of
 /// the budget's year beside the budget, with the amount over budget and the percent of budget
 /// (basis points: 112.5% = 11250).
@@ -795,12 +806,7 @@ pub async fn budget_vs_actual(pool: &SqlitePool, budget_id: i64, from_period: i6
     if !(1..=12).contains(&from_period) || !(from_period..=12).contains(&to_period) {
         return Err("RPT_BAD_RANGE: choose months 1 to 12 of the fiscal year".into());
     }
-    let start: NaiveDate = sqlx::query_scalar("SELECT fiscal_year_start FROM budgets WHERE id = ?1")
-        .bind(budget_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or("BUDGET_NOT_FOUND: that budget does not exist")?;
+    let start = budget_year_start(pool, budget_id).await?;
     let from = start.checked_add_months(chrono::Months::new(from_period as u32 - 1)).ok_or("RPT_BAD_RANGE: date out of range")?;
     let end = start.checked_add_months(chrono::Months::new(to_period as u32)).and_then(|d| d.pred_opt()).ok_or("RPT_BAD_RANGE: date out of range")?;
     let chart = Chart::load(pool).await?;
@@ -978,24 +984,44 @@ fn class_columns(
     subtree
 }
 
-pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<BalanceSheet, String> {
-    let chart = Chart::load(pool).await?;
-    let (fiscal_start, _) = fiscal_year_bounds(as_of, fiscal_start_month(pool).await?);
+/// A balance sheet's amounts as of a date: every balance on its normal side, with earlier fiscal
+/// years' profit closed into Retained Earnings, and this fiscal year's net income.
+struct BsAmounts {
+    natural: HashMap<i64, i64>,
+    net_income: i64,
+    fiscal_start: NaiveDate,
+}
+
+async fn bs_amounts(pool: &SqlitePool, chart: &Chart, as_of: NaiveDate, fiscal_month: u32) -> Result<BsAmounts, String> {
+    let (fiscal_start, _) = fiscal_year_bounds(as_of, fiscal_month);
     let cumulative = debit_net(pool, None, as_of).await?;
     let prior = match fiscal_start.pred_opt() {
         Some(day_before) => debit_net(pool, None, day_before).await?,
         None => HashMap::new(),
     };
-    let prior_net_income = net_income(&chart, &prior);
-    let year_net_income = net_income(&chart, &cumulative) - prior_net_income;
-
-    // Prior years' profit closes into Retained Earnings; this year's shows as Net Income.
+    let prior_net_income = net_income(chart, &prior);
     let mut natural = chart.natural(&cumulative);
-    if let Some(re) = chart.accounts.iter().find(|a| a.is_system && a.account_type == "EQUITY" && a.name == "Retained Earnings") {
-        *natural.entry(re.id).or_insert(0) += prior_net_income;
+    if let Some(re) = retained_earnings(chart) {
+        *natural.entry(re).or_insert(0) += prior_net_income;
     }
-    let mut b = Builder::new(&chart, natural);
+    Ok(BsAmounts { natural, net_income: net_income(chart, &cumulative) - prior_net_income, fiscal_start })
+}
 
+fn retained_earnings(chart: &Chart) -> Option<i64> {
+    chart.accounts.iter().find(|a| a.is_system && a.account_type == "EQUITY" && a.name == "Retained Earnings").map(|a| a.id)
+}
+
+struct BsBody {
+    lines: Vec<ReportLine>,
+    assets: i64,
+    liabilities: i64,
+    equity: i64,
+    liabilities_and_equity: i64,
+}
+
+/// Lays out a Balance Sheet. `show_net_income` forces the equity section's "Net Income" line (so
+/// every column of a multi-column balance sheet has the same rows).
+fn build_bs(mut b: Builder<'_>, year_net_income: i64, show_net_income: bool) -> BsBody {
     let assets = b.group("ASSETS", "TOTAL ASSETS", LineKind::Net, 0, true, |b| {
         let current = b.group("Current Assets", "Total Current Assets", LineKind::Total, 1, true, |b| {
             let bank = b.section("Bank Accounts", &["BANK"], 2, false);
@@ -1024,25 +1050,161 @@ pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<Balanc
             });
             equity = b.group("Equity", "Total Equity", LineKind::Total, 1, true, |b| {
                 let (accounts, _) = b.accounts(&["EQUITY"], 2);
-                if year_net_income != 0 {
+                if show_net_income {
                     b.push(LineKind::Account, "Net Income", 2, Some(year_net_income), None);
                 }
                 (accounts + year_net_income, true)
             });
             (liabilities + equity, true)
         });
+    BsBody { lines: b.lines, assets, liabilities, equity, liabilities_and_equity }
+}
 
-    let difference_cents = assets - liabilities_and_equity;
+pub async fn balance_sheet(pool: &SqlitePool, as_of: NaiveDate) -> Result<BalanceSheet, String> {
+    let chart = Chart::load(pool).await?;
+    let amounts = bs_amounts(pool, &chart, as_of, fiscal_start_month(pool).await?).await?;
+    let bs = build_bs(Builder::new(&chart, amounts.natural), amounts.net_income, amounts.net_income != 0);
+    let difference_cents = bs.assets - bs.liabilities_and_equity;
     Ok(BalanceSheet {
         as_of,
-        lines: b.lines,
-        total_assets_cents: assets,
-        total_liabilities_cents: liabilities,
-        total_equity_cents: equity,
-        net_income_cents: year_net_income,
+        lines: bs.lines,
+        total_assets_cents: bs.assets,
+        total_liabilities_cents: bs.liabilities,
+        total_equity_cents: bs.equity,
+        net_income_cents: amounts.net_income,
         is_balanced: difference_cents == 0,
         difference_cents,
-        fiscal_year_start: fiscal_start,
+        fiscal_year_start: amounts.fiscal_start,
+        currency_symbol: currency_symbol(pool).await?,
+    })
+}
+
+/// Balance sheet amounts that line up across columns: each column built with the same rows (every
+/// account with a balance in any column), plus the Net Income line when any column has one.
+fn bs_columns(chart: &Chart, columns: &[(HashMap<i64, i64>, i64)]) -> (Vec<ReportLine>, Vec<BsBody>) {
+    let mut shape: HashMap<i64, i64> = HashMap::new();
+    for (natural, _) in columns {
+        for (account, amount) in natural {
+            *shape.entry(*account).or_insert(0) += amount.abs();
+        }
+    }
+    let show_net_income = columns.iter().any(|(_, net)| *net != 0);
+    let shaped = build_bs(Builder::new(chart, shape.clone()), 0, show_net_income);
+    let bodies = columns
+        .iter()
+        .map(|(natural, net)| build_bs(Builder { chart, shape: shape.clone(), natural: natural.clone(), lines: Vec::new() }, *net, show_net_income))
+        .collect();
+    (shaped.lines, bodies)
+}
+
+/// `% Change` / `% of Budget` in basis points (12.5% = 1250), or `None` against zero.
+fn percent_of(part: i64, whole: i64) -> Option<i64> {
+    if whole == 0 { None } else { mul_div_round(part, 10_000, whole.abs()) }
+}
+
+/// One column of a multi-date Balance Sheet.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AsOfColumn {
+    pub label: String,
+    pub as_of: NaiveDate,
+}
+
+/// Balance Sheet with a column per date (every column with the same rows), optionally followed by
+/// "$ Change" and "% Change" columns comparing the first date with the second, as in a Balance
+/// Sheet Previous Year Comparison. `% Change` amounts are basis points (12.5% = 1250).
+pub async fn balance_sheet_columns(pool: &SqlitePool, dates: &[AsOfColumn], compare: bool) -> Result<ProfitAndLossByClass, String> {
+    if dates.is_empty() || dates.len() > 36 {
+        return Err("RPT_BAD_COLUMNS: choose between 1 and 36 dates".into());
+    }
+    if compare && dates.len() != 2 {
+        return Err("RPT_BAD_COMPARE: a comparison needs exactly two dates".into());
+    }
+    let chart = Chart::load(pool).await?;
+    let fiscal_month = fiscal_start_month(pool).await?;
+    let mut amounts = Vec::with_capacity(dates.len());
+    for c in dates {
+        let a = bs_amounts(pool, &chart, c.as_of, fiscal_month).await?;
+        amounts.push((a.natural, a.net_income));
+    }
+    let (shaped, bodies) = bs_columns(&chart, &amounts);
+    let mut columns: Vec<ClassColumn> =
+        dates.iter().map(|c| ClassColumn { class_id: None, label: c.label.clone(), kind: "period", depth: 0, is_total: false }).collect();
+    if compare {
+        columns.push(ClassColumn { class_id: None, label: "$ Change".into(), kind: "change", depth: 0, is_total: false });
+        columns.push(ClassColumn { class_id: None, label: "% Change".into(), kind: "percent", depth: 0, is_total: false });
+    }
+    let lines = shaped
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let mut amounts: Vec<Option<i64>> = bodies.iter().map(|b| b.lines[i].amount_cents).collect();
+            if compare {
+                let (current, previous) = (amounts[0], amounts[1]);
+                amounts.push(current.zip(previous).map(|(c, p)| c - p));
+                amounts.push(current.zip(previous).and_then(|(c, p)| percent_of(c - p, p)));
+            }
+            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: amounts }
+        })
+        .collect();
+    Ok(ProfitAndLossByClass {
+        start_date: dates.iter().map(|c| c.as_of).min().unwrap(),
+        end_date: dates.iter().map(|c| c.as_of).max().unwrap(),
+        columns,
+        lines,
+        currency_symbol: currency_symbol(pool).await?,
+    })
+}
+
+/// Balance Sheet Budget vs. Actual as of the last day of fiscal month `period` of the budget's year:
+/// actual balances beside the balances budgeted for that month end, with the amount over budget and
+/// the percent of budget (basis points). Balance sheet accounts are budgeted as month-end balances
+/// on their normal side; the budgeted Net Income is the budget's income less expenses for the year
+/// to that month.
+pub async fn balance_sheet_budget_vs_actual(pool: &SqlitePool, budget_id: i64, period: i64) -> Result<ProfitAndLossByClass, String> {
+    if !(1..=12).contains(&period) {
+        return Err("RPT_BAD_RANGE: choose a month 1 to 12 of the fiscal year".into());
+    }
+    let start = budget_year_start(pool, budget_id).await?;
+    let as_of = start.checked_add_months(chrono::Months::new(period as u32)).and_then(|d| d.pred_opt()).ok_or("RPT_BAD_RANGE: date out of range")?;
+    let chart = Chart::load(pool).await?;
+    let actual = bs_amounts(pool, &chart, as_of, fiscal_start_month(pool).await?).await?;
+
+    let rows: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, period, amount_cents FROM budget_amounts WHERE budget_id = ?1 AND period <= ?2")
+        .bind(budget_id)
+        .bind(period)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let mut balances: HashMap<i64, i64> = HashMap::new();
+    let mut pl_debit_net: HashMap<i64, i64> = HashMap::new();
+    for (id, p, natural) in rows {
+        let Some(account) = chart.accounts.iter().find(|a| a.id == id) else { continue };
+        if PL_TYPES.contains(&account.account_type.as_str()) {
+            *pl_debit_net.entry(id).or_insert(0) += if account.is_debit_normal { natural } else { -natural };
+        } else if p == period {
+            balances.insert(id, natural);
+        }
+    }
+    let budget_net_income = net_income(&chart, &pl_debit_net);
+
+    let (shaped, bodies) = bs_columns(&chart, &[(actual.natural, actual.net_income), (balances, budget_net_income)]);
+    let lines = shaped
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let (act, bud) = (bodies[0].lines[i].amount_cents, bodies[1].lines[i].amount_cents);
+            let over = act.zip(bud).map(|(x, y)| x - y);
+            let pct = act.zip(bud).and_then(|(x, y)| if y == 0 { None } else { mul_div_round(x, 10_000, y) });
+            ClassReportLine { kind: line.kind, label: line.label.clone(), depth: line.depth, account_id: line.account_id, amounts_cents: vec![act, bud, over, pct] }
+        })
+        .collect();
+    let column = |label: &str, kind| ClassColumn { class_id: None, label: label.into(), kind, depth: 0, is_total: false };
+    Ok(ProfitAndLossByClass {
+        start_date: actual.fiscal_start,
+        end_date: as_of,
+        columns: vec![column("Actual", "period"), column("Budget", "period"), column("$ Over Budget", "change"), column("% of Budget", "percent")],
+        lines,
         currency_symbol: currency_symbol(pool).await?,
     })
 }

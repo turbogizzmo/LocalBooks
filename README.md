@@ -221,7 +221,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
-| **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
+| **Reports** | Profit and Loss · Balance Sheet · Prev Year Comparisons · Budget vs. Actual · Cash Flows · Aging · Sales & Expense summaries · Inventory Valuation & Stock Status · Missing Checks · Trial Balance · General Ledger | Fiscal-year-aware statements (accrual or cash, by month, quarter or class), previous year and budget comparisons for the P&L and Balance Sheet, moving-average inventory valuation, check-number gaps and duplicates, CSV export, Print / Save as PDF with company logo |
 | **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) · Users & Passwords | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access, optional users with roles, sign-in, a recovery key and encrypted vendor tax IDs |
 
 ### `+ New` quick-create matrix

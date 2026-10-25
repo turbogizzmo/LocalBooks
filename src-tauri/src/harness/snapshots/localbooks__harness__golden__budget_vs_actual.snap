@@ -1,0 +1,66 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Profit & Loss Budget vs. Actual, Q1 2025
+
+                                                              Actual          Budget   $ Over Budget     % of Budget
+Income                                                                                                              
+  4000 Sales                                                2,122.50            0.00        2,122.50                
+  4100 Services                                            31,875.00       45,000.00      -13,125.00          70.83%
+Total Income                                               33,997.50       45,000.00      -11,002.50          75.55%
+Gross Profit                                               33,997.50       45,000.00      -11,002.50          75.55%
+Expenses                                                                                                            
+  6050 Bank Charges & Fees                                     45.00            0.00           45.00                
+  6250 Office Supplies                                          0.00          900.00         -900.00           0.00%
+  6300 Rent & Lease                                         7,200.00        7,200.00            0.00         100.00%
+  6350 Software & Cloud Services                              387.00            0.00          387.00                
+  6400 Contractors                                            950.00            0.00          950.00                
+  6500 Utilities                                              609.00            0.00          609.00                
+  6700 Wages                                               18,000.00            0.00       18,000.00                
+  6710 Payroll Taxes                                        1,377.00            0.00        1,377.00                
+Total Expenses                                             28,568.00        8,100.00       20,468.00         352.69%
+Net Operating Income                                        5,429.50       36,900.00      -31,470.50          14.71%
+Other Expenses                                                                                                      
+  8000 Interest Expense                                       330.00            0.00          330.00                
+Total Other Expenses                                          330.00            0.00          330.00                
+Net Other Income                                             -330.00            0.00         -330.00                
+Net Income                                                  5,099.50       36,900.00      -31,800.50          13.82%
+
+Balance Sheet Budget vs. Actual as of 2025-06-30
+
+                                                              Actual          Budget   $ Over Budget     % of Budget
+ASSETS                                                                                                              
+  Current Assets                                                                                                    
+    Bank Accounts                                                                                                   
+      1010 Checking                                        27,797.57       46,000.00      -18,202.43          60.43%
+      1020 Savings                                         15,000.00            0.00       15,000.00                
+    Total Bank Accounts                                    42,797.57       46,000.00       -3,202.43          93.04%
+    Accounts Receivable                                                                                             
+      1200 Accounts Receivable (A/R)                       10,683.72            0.00       10,683.72                
+    Total Accounts Receivable                              10,683.72            0.00       10,683.72                
+  Total Current Assets                                     53,481.29       46,000.00        7,481.29         116.26%
+  Fixed Assets                                                                                                      
+    1500 Equipment                                         18,750.00            0.00       18,750.00                
+  Total Fixed Assets                                       18,750.00            0.00       18,750.00                
+TOTAL ASSETS                                               72,231.29       46,000.00       26,231.29         157.02%
+LIABILITIES AND EQUITY                                                                                              
+  Liabilities                                                                                                       
+    Current Liabilities                                                                                             
+      Credit Cards                                                                                                  
+        2100 Credit Card                                        0.00          500.00         -500.00           0.00%
+      Total Credit Cards                                        0.00          500.00         -500.00           0.00%
+      Other Current Liabilities                                                                                     
+        2200 Sales Tax Payable                                130.78            0.00          130.78                
+        2300 Payroll Liabilities                            1,853.12            0.00        1,853.12                
+      Total Other Current Liabilities                       1,983.90            0.00        1,983.90                
+    Total Current Liabilities                               1,983.90          500.00        1,483.90         396.78%
+    Long-Term Liabilities                                                                                           
+      2500 Loan Payable                                    12,000.00            0.00       12,000.00                
+    Total Long-Term Liabilities                            12,000.00            0.00       12,000.00                
+  Total Liabilities                                        13,983.90          500.00       13,483.90        2796.78%
+  Equity                                                                                                            
+    3100 Owner's Investment                                50,000.00            0.00       50,000.00                
+    Net Income                                              8,247.39       73,800.00      -65,552.61          11.18%
+  Total Equity                                             58,247.39       73,800.00      -15,552.61          78.93%
+TOTAL LIABILITIES AND EQUITY                               72,231.29       74,300.00       -2,068.71          97.22%
