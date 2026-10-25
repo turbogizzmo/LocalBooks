@@ -33,7 +33,7 @@ function Panel({ title, hint, notice, onDismiss, error, children, toolbar }) {
   return (
     <section className="qb-panel flex min-h-0 flex-col">
       <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
-        <h2 className="text-md font-semibold">{title}</h2>
+        <h2 className="flex-none whitespace-nowrap text-md font-semibold">{title}</h2>
         <span className="min-w-0 truncate text-xs text-qb-ink-muted" title={hint}>{hint}</span>
         {toolbar && <span className="ml-auto flex flex-none items-center gap-2">{toolbar}</span>}
       </div>
