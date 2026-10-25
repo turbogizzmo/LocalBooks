@@ -37,6 +37,7 @@ export const SCREEN_HELP = {
   'accounting/classes': 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
   'accounting/reclassify': 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   'accounting/journal': 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
+  'sales/finance-charges': 'Charge interest on overdue invoices. Pick the assessment date, check or change each customer’s charge, and assess: each becomes an invoice that shows in A/R aging and on statements. Set the rate, minimum, grace days and account in Settings.',
   'sales/statements': 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or open one to save it as PDF or email it.',
   'expenses/purchase-orders': 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
   'accounting/recurring': 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
@@ -105,6 +106,13 @@ export const HELP_ARTICLES = [
     go: { label: 'Go to Products & Services', view: 'sales/products' },
   },
 
+  {
+    id: 'finance-charges', area: 'sales', views: ['sales/finance-charges', 'sales/invoices', 'sales/statements', 'settings'],
+    title: 'Charge interest on overdue invoices',
+    body: 'Set an annual rate, minimum charge, grace days and income account under Settings › Finance charges, then open Sales › Assess Finance Charges. Each ticked customer gets a finance charge invoice for interest on their overdue balance, which appears in A/R aging and on statements.',
+    keywords: 'finance charge late fee interest overdue past due assess penalty',
+    go: { label: 'Assess finance charges', view: 'sales/finance-charges' },
+  },
   {
     id: 'inventory', area: 'sales', views: ['sales/products', 'expenses/bills', 'sales/invoices'],
     title: 'Track inventory and cost of goods sold',
@@ -506,7 +514,7 @@ export const HELP_ARTICLES = [
 
 /** The step-by-step guide (docs/guide/<id>.md) behind each topic. */
 const ARTICLE_GUIDES = {
-  invoice: 'invoices', 'foreign-currency': 'invoices', 'receive-payment': 'customer-payments',
+  invoice: 'invoices', 'foreign-currency': 'invoices', 'finance-charges': 'customer-payments', 'receive-payment': 'customer-payments',
   'sales-receipt': 'sales-receipts-and-estimates', estimate: 'sales-receipts-and-estimates',
   customers: 'customers-and-products', products: 'customers-and-products', vendors: 'customers-and-products', inventory: 'inventory',
   'fx-revaluation': 'currency-revaluation',
@@ -531,6 +539,7 @@ const SCREEN_GUIDES = {
   'accounting/audit': 'ledger-integrity', 'accounting/qbw-import': 'desktop-migration', reports: 'reports',
   'accounting/fx-revaluation': 'currency-revaluation',
   'sales/send-forms': 'custom-forms',
+  'sales/finance-charges': 'customer-payments',
   settings: 'getting-started',
 };
 

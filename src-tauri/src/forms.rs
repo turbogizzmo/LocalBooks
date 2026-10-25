@@ -741,6 +741,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
 fn statement_label(source_type: &str) -> &'static str {
     match source_type {
         "INVOICE" => "Invoice",
+        "FINANCE_CHARGE" => "Finance Charge",
         "RECEIVE_PAYMENT" => "Payment",
         "CREDIT_MEMO" => "Credit Memo",
         "SALES_RECEIPT" => "Sales Receipt",

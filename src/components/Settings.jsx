@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
@@ -271,6 +272,7 @@ function CompanyLogoField() {
 function PreferencesConsole() {
   const { data: prefs, error } = useLedgerQuery(api.getPreferences);
   const { data: forms } = useLedgerQuery(api.listTaxForms);
+  const { data: accounts } = useLedgerQuery(api.listAccounts);
   if (error) return <Notice kind="error" text={error} />;
   if (!prefs) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
   const field = (props) => <PrefField prefs={prefs} {...props} />;
@@ -380,6 +382,48 @@ function PreferencesConsole() {
                 </label>
               ),
             })}
+        </Group>
+        <Group title="Finance charges" id="finance-charges">
+          {field({
+            label: 'Annual interest rate',
+            prefKey: 'finance_charge_annual_rate',
+            hint: 'Percent a year, charged per day on overdue balances (a year counts as 365 days)',
+            children: ({ id, value, setValue, commit, invalid }) => (
+              <span className="flex items-center gap-1">
+                <input id={id} className="qb-input num w-[80px]" value={value} inputMode="decimal" onChange={(e) => setValue(e.target.value)} onBlur={() => commit()} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} aria-invalid={invalid} />
+                <span className="text-sm">%</span>
+              </span>
+            ),
+          })}
+          {field({ label: 'Minimum charge', prefKey: 'finance_charge_minimum', hint: 'A smaller charge is raised to this amount', children: textInput({ inputMode: 'decimal', className: 'qb-input num w-[100px]' }) })}
+          {field({ label: 'Grace period', prefKey: 'finance_charge_grace_days', hint: 'Days past the due date before an invoice is charged; interest still runs from the due date', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
+          {field({
+            label: 'Finance charge account',
+            prefKey: 'finance_charge_account_id',
+            hint: 'The income account finance charge invoices credit',
+            children: ({ id, value, commit, invalid }) => (
+              <AccountSelect
+                id={id}
+                accounts={accounts ?? []}
+                filter={(a) => a.classification === 'INCOME'}
+                value={value === '' ? null : Number(value)}
+                onChange={(next) => commit(next === null ? '' : String(next))}
+                placeholder="Choose an income account"
+                aria-invalid={invalid}
+              />
+            ),
+          })}
+          {field({
+            label: 'Charge on finance charges',
+            prefKey: 'finance_charge_on_finance_charges',
+            hint: 'Whether overdue finance charge invoices themselves earn finance charges',
+            children: ({ id, value, commit }) => (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                Assess finance charges on overdue finance charges
+              </label>
+            ),
+          })}
         </Group>
         <Group title="Automatic backups">
           {field({
@@ -889,7 +933,7 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', 'finance-charges': 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
 
 const ALL_TABS = [
   ['preferences', 'Preferences Console'],
@@ -916,8 +960,9 @@ export default function Settings({ companyName, intent, isAdmin = true }) {
     const target = SETTINGS_TABS[intent?.action];
     if (!target || !allowed(target)) return;
     setTab(target);
-    if (intent.action === 'closing') {
-      const timer = setTimeout(() => document.getElementById('closing-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    const anchor = { closing: 'closing-date', 'finance-charges': 'finance-charges' }[intent.action];
+    if (anchor) {
+      const timer = setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
       return () => clearTimeout(timer);
     }
   }, [intent]);

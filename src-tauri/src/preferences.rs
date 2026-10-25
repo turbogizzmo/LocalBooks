@@ -79,7 +79,18 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
                 Err(format!("PREF_BAD_TAX_FORM: unknown tax form '{v}'"))
             }
         }
-        "class_tracking" | "class_prompt" | "sales_tax_enabled" => match v {
+        "finance_charge_annual_rate" => crate::finance_charges::parse_rate(v).map(crate::finance_charges::format_rate),
+        "finance_charge_minimum" => crate::finance_charges::parse_minimum(v).map(crate::ledger::format_cents).map(|m| m.replace(['$', ','], "")),
+        "finance_charge_grace_days" => match v.parse::<i64>() {
+            Ok(days) if (0..=crate::finance_charges::MAX_GRACE_DAYS).contains(&days) => Ok(days.to_string()),
+            _ => Err("PREF_BAD_FC_GRACE: enter 0 to 365 grace days".into()),
+        },
+        // An Income account, checked against the chart of accounts in `set`; blank turns finance charges off.
+        "finance_charge_account_id" => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_FC_ACCOUNT: choose an Income account".into()),
+        },
+        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
         },
@@ -144,6 +155,18 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
             .map_err(db_err)?;
         if has_foreign {
             return Err("PREF_HOME_CURRENCY_LOCKED: the home currency cannot change once foreign-currency transactions exist".into());
+        }
+    }
+    if key == "finance_charge_account_id" && !normalized.is_empty() {
+        let account: Option<(String, bool)> = sqlx::query_as(
+            "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+        )
+        .bind(normalized.parse::<i64>().unwrap_or_default())
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+        if !matches!(account, Some((classification, true)) if classification == "INCOME") {
+            return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
         }
     }
     sqlx::query(
