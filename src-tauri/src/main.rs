@@ -9,8 +9,6 @@ mod classes;
 mod closing;
 mod commands;
 mod credits;
-// Used by company-file users and sign-in, which come next.
-#[allow(dead_code)]
 mod crypto;
 mod db;
 mod edits;
@@ -55,6 +53,7 @@ mod statements;
 mod storage;
 mod text_import;
 mod timesheet;
+mod users;
 mod windows;
 mod workflows;
 
@@ -362,6 +361,17 @@ fn main() {
             commands::set_email_later,
             commands::list_email_queue,
             commands::get_storage_status,
+            commands::get_sign_in_state,
+            commands::turn_on_users,
+            commands::sign_in,
+            commands::sign_out,
+            commands::list_users,
+            commands::add_user,
+            commands::update_user,
+            commands::change_my_password,
+            commands::recover_with_recovery_key,
+            commands::replace_recovery_key,
+            commands::remove_all_users,
             commands::inspect_database_directory,
             commands::update_database_directory,
             commands::set_company_logo,

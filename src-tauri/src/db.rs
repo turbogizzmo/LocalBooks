@@ -26,7 +26,12 @@ struct Live {
     /// Opened directly (a double-clicked `.localbooks` file or File › Open) rather than from the
     /// configured location. Lasts for this session; `config.json` is not changed.
     opened_from_file: bool,
+    /// Who is signed in to this file (when it has users). A new or restored file starts signed out.
+    session: SessionSlot,
 }
+
+/// The signed-in user of the open company file, shared by the commands of one process.
+pub type SessionSlot = std::sync::Arc<tokio::sync::Mutex<Option<crate::users::Session>>>;
 
 /// The live company file. Commands borrow a pool clone per call; a restore or relocation swaps the
 /// pool under the write lock, so no command ever sees a half-replaced database.
@@ -94,7 +99,7 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
     let pool = open_for(path, &storage, backups).await?;
-    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false })
+    Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default() })
 }
 
 impl Db {
@@ -258,6 +263,13 @@ impl Db {
         }
     }
 
+    /// The open company file's pool and sign-in, read together so both belong to the same file.
+    pub async fn pool_and_session(&self) -> Result<(SqlitePool, SessionSlot), String> {
+        let live = self.live.read().await;
+        let live = live.as_ref().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+        Ok((live.pool.clone(), live.session.clone()))
+    }
+
     /// The open company file, or [`NO_COMPANY_OPEN`].
     pub async fn path(&self) -> Result<PathBuf, String> {
         self.live.read().await.as_ref().map(|live| live.path.clone()).ok_or_else(|| NO_COMPANY_OPEN.to_string())
@@ -317,6 +329,8 @@ impl Db {
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
+                // The restored file has its own users; whoever was signed in signs in again.
+                live.session = SessionSlot::default();
                 if swapped.is_ok() {
                     // The replacement's audit trail may be behind this computer's record of the old one.
                     // The swap has happened either way, so a failure here must not report it as failed.
@@ -641,6 +655,7 @@ mod migrate_tests {
             (40, "7895f21efb758ee2daf020be"),
             (41, "cf3d7741aaa74c331ba2b93e"),
             (42, "02edb65210048bf6d56b7aaf"),
+            (43, "a3c2aae0cee51bb815cede4b"),
         ];
         let actual: Vec<(i64, String)> = MIGRATOR
             .iter()

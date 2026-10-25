@@ -22,9 +22,12 @@ use zeroize::Zeroizing;
 
 use crate::ledger::db_err;
 
+// The field functions are first used when vendor tax IDs are encrypted (the next phase).
+#[allow(dead_code)]
 const FIELD_PREFIX: &str = "lb1:";
 const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
+#[allow(dead_code)]
 const TAG_LEN: usize = 16;
 const SALT_LEN: usize = 16;
 const RECOVERY_BYTES: usize = 20;
@@ -64,6 +67,7 @@ impl std::fmt::Debug for DataKey {
     }
 }
 
+#[allow(dead_code)]
 impl DataKey {
     pub fn key_id(&self) -> &str {
         &self.key_id
@@ -104,6 +108,7 @@ impl DataKey {
 }
 
 /// Whether a stored value is an encrypted field (rather than plain text written before encryption).
+#[allow(dead_code)]
 pub fn is_encrypted(stored: &str) -> bool {
     stored.starts_with(FIELD_PREFIX)
 }
@@ -182,6 +187,7 @@ fn random<const N: usize>() -> Result<[u8; N], String> {
     Ok(bytes)
 }
 
+#[allow(dead_code)]
 fn field_aad(key_id: &str, table: &str, column: &str, row_id: i64) -> Vec<u8> {
     format!("localbooks field v1\0{key_id}\0{table}.{column}\0{row_id}").into_bytes()
 }
@@ -234,19 +240,42 @@ pub async fn create(conn: &mut SqliteConnection) -> Result<(DataKey, RecoveryKey
     Ok((key, recovery))
 }
 
-/// Gives `user_id` a slot opened by `password`, replacing any slot they had.
-pub async fn set_password(conn: &mut SqliteConnection, key: &DataKey, user_id: i64, password: &str) -> Result<(), String> {
+/// The password rules: at least [`MIN_PASSWORD_CHARS`] characters, nothing else.
+pub fn check_password_rules(password: &str) -> Result<(), String> {
     if password.chars().count() < MIN_PASSWORD_CHARS {
         return Err(format!("PASSWORD_TOO_SHORT: use at least {MIN_PASSWORD_CHARS} characters"));
     }
-    sqlx::query("DELETE FROM key_slots WHERE user_id = ?1").bind(user_id).execute(&mut *conn).await.map_err(db_err)?;
-    add_slot(conn, key, "PASSWORD", Some(user_id), Zeroizing::new(password.as_bytes().to_vec()), COST).await
+    Ok(())
 }
 
-/// Removes `user_id`'s slot: they can no longer unlock sensitive data.
-pub async fn remove_password(conn: &mut SqliteConnection, user_id: i64) -> Result<(), String> {
+/// A verifier for signing in with `password`: `argon2id$<memory KiB>$<iterations>$<parallelism>$<salt>$<hash>`.
+pub async fn password_verifier(password: &str) -> Result<String, String> {
+    let salt: [u8; SALT_LEN] = random()?;
+    let hash = derive(Zeroizing::new(password.as_bytes().to_vec()), salt, COST).await?;
+    let b64 = base64::engine::general_purpose::STANDARD_NO_PAD;
+    Ok(format!("argon2id${}${}${}${}${}", COST.memory_kib, COST.iterations, COST.parallelism, b64.encode(salt), b64.encode(&hash[..])))
+}
+
+/// Whether `password` matches a [`password_verifier`].
+pub async fn verify_password(password: &str, verifier: &str) -> Result<bool, String> {
+    let damaged = || "CRYPTO_VERIFIER: damaged password verifier".to_string();
+    let parts: Vec<&str> = verifier.split('$').collect();
+    let ["argon2id", m, t, p, salt, hash] = parts[..] else { return Err(damaged()) };
+    let number = |s: &str| s.parse::<u32>().map_err(|_| damaged());
+    let cost = Cost { memory_kib: number(m)?, iterations: number(t)?, parallelism: number(p)? };
+    let b64 = base64::engine::general_purpose::STANDARD_NO_PAD;
+    let salt: [u8; SALT_LEN] = b64.decode(salt).map_err(|_| damaged())?.try_into().map_err(|_| damaged())?;
+    let expected = b64.decode(hash).map_err(|_| damaged())?;
+    let actual = derive(Zeroizing::new(password.as_bytes().to_vec()), salt, cost).await?;
+    // Compared in constant time.
+    Ok(expected.len() == KEY_LEN && expected.iter().zip(actual.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0)
+}
+
+/// Gives `user_id` a slot opened by `password`, replacing any slot they had.
+pub async fn set_password(conn: &mut SqliteConnection, key: &DataKey, user_id: i64, password: &str) -> Result<(), String> {
+    check_password_rules(password)?;
     sqlx::query("DELETE FROM key_slots WHERE user_id = ?1").bind(user_id).execute(&mut *conn).await.map_err(db_err)?;
-    Ok(())
+    add_slot(conn, key, "PASSWORD", Some(user_id), Zeroizing::new(password.as_bytes().to_vec()), COST).await
 }
 
 /// Issues a new recovery key; the previous one stops working.
@@ -345,10 +374,25 @@ mod tests {
     use super::*;
     use crate::db::test_pool;
 
+    /// A protected file with users 1, 3, 7, 8 and 9 (key slots need an existing user).
     async fn protected() -> (sqlx::SqlitePool, DataKey, RecoveryKey) {
         let pool = test_pool().await;
-        let (key, recovery) = create(&mut pool.acquire().await.unwrap()).await.unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        add_users(&mut conn).await;
+        let (key, recovery) = create(&mut conn).await.unwrap();
+        drop(conn);
         (pool, key, recovery)
+    }
+
+    async fn add_users(conn: &mut SqliteConnection) {
+        for id in [1, 3, 7, 8, 9] {
+            sqlx::query("INSERT INTO users (id, username, display_name, role, password_verifier) VALUES (?1, ?2, ?2, 'STANDARD', 'argon2id$test')")
+                .bind(id)
+                .bind(format!("user{id}"))
+                .execute(&mut *conn)
+                .await
+                .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -372,8 +416,8 @@ mod tests {
         assert!(unlock_with_password(&mut conn, 8, "corr3ct horse").await.unwrap_err().starts_with("KEY_NO_SLOT"));
         assert!(set_password(&mut conn, &key, 8, "short").await.unwrap_err().starts_with("PASSWORD_TOO_SHORT"));
 
-        remove_password(&mut conn, 7).await.unwrap();
-        assert!(unlock_with_password(&mut conn, 7, "corr3ct horse").await.unwrap_err().starts_with("KEY_NO_SLOT"));
+        sqlx::query("UPDATE users SET can_see_sensitive = 0 WHERE id = 7").execute(&mut *conn).await.unwrap();
+        assert!(unlock_with_password(&mut conn, 7, "corr3ct horse").await.unwrap_err().starts_with("KEY_NO_SLOT"), "losing access removes the slot");
     }
 
     #[tokio::test]
@@ -441,6 +485,7 @@ mod tests {
     async fn protection_is_created_once_and_slots_need_a_key() {
         let pool = test_pool().await;
         let mut conn = pool.acquire().await.unwrap();
+        add_users(&mut conn).await;
         assert!(!is_protected(&mut conn).await.unwrap());
         assert!(unlock_with_password(&mut conn, 1, "whatever123").await.unwrap_err().starts_with("DATA_KEY_MISSING"));
         let err = sqlx::query("INSERT INTO key_slots (kind, user_id, memory_kib, iterations, parallelism, salt, nonce, wrapped_key) VALUES ('PASSWORD', 1, 8, 1, 1, zeroblob(16), zeroblob(12), zeroblob(48))")
@@ -473,6 +518,7 @@ mod tests {
         let (original, copy) = (dir.join("original.localbooks"), dir.join("copy.localbooks"));
         let pool = crate::db::open(&original).await.unwrap();
         let mut conn = pool.acquire().await.unwrap();
+        add_users(&mut conn).await;
         let (key, recovery) = create(&mut conn).await.unwrap();
         set_password(&mut conn, &key, 1, "owner password").await.unwrap();
         let stored = key.encrypt_field("vendors", "tax_id", 5, "98-7654321").unwrap();
@@ -489,6 +535,24 @@ mod tests {
         drop(conn);
         pool.close().await;
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn password_verifiers_check_the_password() {
+        let verifier = password_verifier("corr3ct horse").await.unwrap();
+        assert!(verifier.starts_with("argon2id$") && !verifier.contains("corr3ct"));
+        assert!(verify_password("corr3ct horse", &verifier).await.unwrap());
+        assert!(!verify_password("corr3ct horsE", &verifier).await.unwrap());
+        assert_ne!(verifier, password_verifier("corr3ct horse").await.unwrap(), "salted");
+        assert!(verify_password("x", "argon2id$1$2").await.unwrap_err().starts_with("CRYPTO_VERIFIER"));
+    }
+
+    #[tokio::test]
+    async fn slots_need_an_existing_user() {
+        let pool = test_pool().await;
+        let mut conn = pool.acquire().await.unwrap();
+        let (key, _) = create(&mut conn).await.unwrap();
+        assert!(set_password(&mut conn, &key, 42, "corr3ct horse").await.unwrap_err().starts_with("KEY_SLOT_NO_USER"));
     }
 
     #[test]

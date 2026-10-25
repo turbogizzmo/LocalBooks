@@ -28,6 +28,7 @@ use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 use crate::{iif_import, qif_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
+use crate::users::{self, NewUserInput, Session, UserUpdate, UserView};
 use crate::storage::{self, RecentCompany, RecentCompanyView, StorageInfo};
 use crate::export_engine;
 use crate::preferences::{self, FiscalPeriods, TaxDeadline};
@@ -2042,4 +2043,125 @@ pub async fn set_budget_amounts(app: AppHandle, db: State<'_, Db>, id: i64, amou
 #[tauri::command]
 pub async fn get_budget_vs_actual(db: State<'_, Db>, id: i64, from_period: i64, to_period: i64) -> Result<ProfitAndLossByClass, String> {
     statements::budget_vs_actual(&db.pool().await, id, from_period, to_period).await
+}
+
+// ------------------------------------------------------------------------------------------------
+// Users and signing in
+// ------------------------------------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignInState {
+    /// The file asks who is signing in.
+    pub users_enabled: bool,
+    pub user: Option<UserView>,
+}
+
+/// Signing in or out changes what every window may show, so each reloads (as for another file).
+fn signed_in_changed(app: &AppHandle) {
+    let _ = app.emit(COMPANY_FILE_CHANGED, ());
+}
+
+/// Whether the open company file has users and who is signed in; `None` with no company open.
+#[tauri::command]
+pub async fn get_sign_in_state(db: State<'_, Db>) -> Result<Option<SignInState>, String> {
+    let Ok((pool, session)) = db.pool_and_session().await else { return Ok(None) };
+    let users_enabled = users::users_enabled(&pool).await?;
+    let user = session.lock().await.as_ref().map(|s| s.user.clone());
+    Ok(Some(SignInState { users_enabled, user }))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsersTurnedOn {
+    pub user: UserView,
+    /// Shown once; LocalBooks does not keep it.
+    pub recovery_key: String,
+}
+
+#[tauri::command]
+pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Option<String>, password: String) -> Result<UsersTurnedOn, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let (session, recovery) = users::turn_on(&pool, &username, display_name.as_deref(), &password).await?;
+    let user = session.user.clone();
+    *slot.lock().await = Some(session);
+    // No reload here: the window shows the recovery key first.
+    Ok(UsersTurnedOn { user, recovery_key: recovery.as_str().to_string() })
+}
+
+#[tauri::command]
+pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String) -> Result<UserView, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let session = users::sign_in(&pool, &username, &password).await?;
+    let user = session.user.clone();
+    *slot.lock().await = Some(session);
+    signed_in_changed(&app);
+    Ok(user)
+}
+
+#[tauri::command]
+pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
+    let (_, slot) = db.pool_and_session().await?;
+    *slot.lock().await = None;
+    signed_in_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_users(db: State<'_, Db>) -> Result<Vec<UserView>, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    Session::require_admin(slot.lock().await.as_ref())?;
+    users::list(&pool).await
+}
+
+#[tauri::command]
+pub async fn add_user(db: State<'_, Db>, input: NewUserInput) -> Result<UserView, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let guard = slot.lock().await;
+    users::add(&pool, Session::require_admin(guard.as_ref())?, input).await
+}
+
+#[tauri::command]
+pub async fn update_user(db: State<'_, Db>, id: i64, input: UserUpdate) -> Result<UserView, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let guard = slot.lock().await;
+    users::update(&pool, Session::require_admin(guard.as_ref())?, id, input).await
+}
+
+#[tauri::command]
+pub async fn change_my_password(db: State<'_, Db>, current: String, next: String) -> Result<UserView, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let mut guard = slot.lock().await;
+    let session = guard.as_mut().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
+    users::change_own_password(&pool, session, &current, &next).await
+}
+
+/// A forgotten Admin password: the recovery key sets a new one and signs that Admin in.
+#[tauri::command]
+pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recovery_key: String, username: String, new_password: String) -> Result<UserView, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let session = users::recover(&pool, &recovery_key, &username, &new_password).await?;
+    let user = session.user.clone();
+    *slot.lock().await = Some(session);
+    signed_in_changed(&app);
+    Ok(user)
+}
+
+#[tauri::command]
+pub async fn replace_recovery_key(db: State<'_, Db>) -> Result<String, String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    let guard = slot.lock().await;
+    let recovery = users::replace_recovery_key(&pool, Session::require_admin(guard.as_ref())?).await?;
+    Ok(recovery.as_str().to_string())
+}
+
+/// The last resort on the sign-in screen when no Admin password or recovery key is left.
+#[tauri::command]
+pub async fn remove_all_users(app: AppHandle, db: State<'_, Db>, confirmation: String) -> Result<(), String> {
+    let (pool, slot) = db.pool_and_session().await?;
+    users::remove_all_users(&pool, &confirmation).await?;
+    *slot.lock().await = None;
+    signed_in_changed(&app);
+    notify(&app);
+    Ok(())
 }

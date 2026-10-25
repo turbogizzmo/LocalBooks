@@ -71,6 +71,8 @@ export default function App() {
   const prefs = useLedgerQuery(api.getPreferences);
   const logo = useLedgerQuery(api.getCompanyLogo);
   const storage = useLedgerQuery(api.getStorageStatus);
+  const signIn = useLedgerQuery(api.getSignInState);
+  const signedIn = signIn.data?.user ?? null;
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
@@ -182,6 +184,16 @@ export default function App() {
             </button>
           )}
           <GlobalSearch navigate={select} />
+          {signedIn && (
+            <button
+              type="button"
+              className="flex-none rounded-xs px-2 py-0.5 text-xs font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+              onClick={() => select('settings', 'users')}
+              title="Your sign-in, in Settings › Users & Passwords"
+            >
+              {signedIn.displayName}
+            </button>
+          )}
           {storage.data && (
             <span
               className="flex min-w-0 max-w-[480px] items-center gap-1.5 text-xs text-qb-ink-muted"

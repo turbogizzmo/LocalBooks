@@ -8,6 +8,7 @@ import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
 import { NewCompanyDialog } from './CompanyFiles.jsx';
+import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -887,7 +888,7 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
 
 export default function Settings({ companyName, intent }) {
   const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
@@ -911,6 +912,7 @@ export default function Settings({ companyName, intent }) {
           ['email', 'Email'],
           ['data', 'File & Data Controls'],
           ['ai', 'AI Access (MCP)'],
+          ['users', 'Users & Passwords'],
           ['updates', 'Updates'],
         ].map(([id, label]) => (
           <button
@@ -930,6 +932,7 @@ export default function Settings({ companyName, intent }) {
       {tab === 'email' && <EmailSettings />}
       {tab === 'data' && <FileAndData companyName={companyName} />}
       {tab === 'ai' && <LocalAiAccess />}
+      {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
     </div>
   );
