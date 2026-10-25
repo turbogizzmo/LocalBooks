@@ -83,8 +83,26 @@ other references, such as `EFT`, are not listed; the count at the top tells you 
 ## Export or print
 
 1. Click **Export ▾** on the report.
-2. Choose **Export to CSV** to save a file for Excel or Numbers, or **Print / Save to PDF**.
+2. Choose **Export to Excel**, **Export to CSV** or **Print / Save to PDF**.
 3. In the print dialog, choose **Save as PDF** to keep a copy. Your company name and logo are on it.
+
+**Export to Excel** saves an `.xlsx` workbook that opens in Excel, Numbers, Google Sheets or
+LibreOffice, laid out like QuickBooks' *Export to Excel*:
+
+- The company name, report title and date range (and the basis, where there is one) are in the top
+  rows. The column headings are bold and stay in view while you scroll.
+- Amounts are numbers in your company's currency format, so you can add them up or chart them.
+  Negative amounts are red. Dates are real dates, so you can sort and filter by them.
+- Subaccounts keep their indent under their parent, and section, subtotal and total rows are bold
+  with the same lines above them as on screen.
+
+**Export to CSV** saves plain text that any program can read: amounts are plain numbers such as
+`1234.56`, and subaccounts are indented with spaces.
+
+Registers, the Chart of Accounts, the Customers, Vendors and Products & Services lists, and the
+audit log have an **Export ▾** button too, with the same Excel and CSV choices. Each exports what
+the screen shows: the register's date range, the list's search and **Show inactive** choice, the audit
+log's event filter. Audit log times are in this computer's time zone.
 
 > **Tip:** The **Dashboard** shows a live trial balance. **✓ In balance** means total debits equal
 > total credits, which is always true because every entry must balance to post.

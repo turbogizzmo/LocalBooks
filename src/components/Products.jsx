@@ -5,8 +5,11 @@ import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
+import { todayIso } from '../lib/dates.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
@@ -99,6 +102,43 @@ export default function Products({ accounts }) {
     }
   };
 
+  const company = useCompany();
+  const exports = tableExports({
+    company: company.name,
+    title: 'Products & Services List',
+    subtitle: `As of ${longDate(todayIso())}`,
+    columns: [
+      { label: 'Name', kind: 'text' },
+      { label: 'Description', kind: 'text' },
+      { label: 'Rate', kind: 'money' },
+      { label: 'Income account', kind: 'text' },
+      { label: 'Taxable', kind: 'text' },
+      { label: 'On hand', kind: 'number' },
+      { label: 'Avg cost', kind: 'money' },
+      { label: 'Stock value', kind: 'money' },
+    ],
+    rows: () =>
+      (data ?? [])
+        .filter((p) => showInactive || p.isActive)
+        .map((p) => {
+          const item = items.get(p.id);
+          return {
+            cells: [
+              `${p.name}${p.isActive ? '' : ' (inactive)'}`,
+              p.description ?? '',
+              p.rateCents || null,
+              accountLabel(accounts, p.incomeAccountId),
+              p.isTaxable ? 'Yes' : 'No',
+              item ? item.qtyOnHandE4 / 10_000 : null,
+              item?.averageCostCents ?? null,
+              item ? item.valueCents : null,
+            ],
+          };
+        }),
+    filename: 'Products-and-Services',
+    onNotice: setNotice,
+  });
+
   const chosenAccount = accountId ?? defaultIncome;
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
 
@@ -173,6 +213,9 @@ export default function Products({ accounts }) {
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive
           </label>
+          <div className="ml-2 flex-none">
+            <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          </div>
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
