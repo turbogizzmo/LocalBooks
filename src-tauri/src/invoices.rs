@@ -443,10 +443,15 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
             let home_amount = to_home_cents(input.amount_cents, rate)
                 .filter(|h| *h > 0)
                 .ok_or_else(|| "FX_ROUNDS_TO_ZERO: the payment converts to 0.00 in the home currency".to_string())?;
+            // Voided payments can leave the A/R already relieved a cent or two off the proportional
+            // amount, so the relief is kept between what is already relieved and the home total: A/R
+            // never moves backwards on a payment, and never past zero.
             let relieved_after = if new_paid == total {
                 home_total
             } else {
-                mul_div_round(home_total, new_paid, total).ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?
+                mul_div_round(home_total, new_paid, total)
+                    .ok_or_else(|| "FX_OVERFLOW: amount out of range".to_string())?
+                    .clamp(relieved_before, home_total)
             };
             Some((rate, home_amount, relieved_after - relieved_before))
         }

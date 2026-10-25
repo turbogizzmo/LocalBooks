@@ -1,0 +1,14 @@
+---
+source: src/harness/golden.rs
+expression: aging(false).await
+---
+RECEIVABLE aging as of 2025-12-31
+
+Name                               Current        1 - 30       31 - 60       61 - 90   91 and over         Total
+Bonn Studio GmbH                      0.00          0.00          0.00      1,953.00          0.00      1,953.00
+Cobalt Outfitters                10,455.81          0.00          0.00          0.00          0.00     10,455.81
+TOTAL                            10,455.81          0.00          0.00      1,953.00          0.00     12,408.81
+
+Open items
+Bonn Studio GmbH            Invoice       1013      2025-09-15  due 2025-10-15    77 days past due      1,953.00
+Cobalt Outfitters           Invoice       1012      2025-12-10  due 2026-01-09    -9 days past due     10,455.81

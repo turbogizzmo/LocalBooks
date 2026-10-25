@@ -1,0 +1,34 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Profit & Loss, 2025-01-01 to 2025-12-31
+
+Income
+  4000 Sales                                                            7,852.50
+  4100 Services                                                       132,708.00
+Total Income                                                          140,560.50
+Gross Profit                                                          140,560.50
+Expenses
+  6000 Advertising & Marketing                                          1,800.00
+  6050 Bank Charges & Fees                                                180.00
+  6250 Office Supplies                                                    829.90
+  6300 Rent & Lease                                                    28,800.00
+  6350 Software & Cloud Services                                        1,548.00
+  6400 Contractors                                                      5,700.00
+  6500 Utilities                                                        2,367.00
+  6700 Wages                                                           75,750.00
+  6710 Payroll Taxes                                                    5,794.85
+Total Expenses                                                        122,769.75
+Net Operating Income                                                   17,790.75
+Other Expenses
+  8000 Interest Expense                                                   780.00
+  8100 Exchange Gain or Loss                                              -52.50
+Total Other Expenses                                                      727.50
+Net Other Income                                                         -727.50
+Net Income                                                             17,063.25
+
+Total revenue                                                         140,560.50
+Total expenses                                                        123,497.25
+Gross profit                                                          140,560.50
+Net income                                                             17,063.25

@@ -2,3 +2,4 @@
 # platform: a Windows checkout converting to CRLF would give Windows builds different checksums, and
 # a company file shared between operating systems would then refuse to open.
 *.sql text eol=lf
+*.snap text eol=lf
