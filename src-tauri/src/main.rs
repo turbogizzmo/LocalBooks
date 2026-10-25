@@ -20,6 +20,7 @@ mod expenses;
 mod forensic;
 mod forms;
 mod fx_rates;
+mod gnucash_import;
 #[cfg(test)]
 mod frontend_checks;
 mod iif_import;

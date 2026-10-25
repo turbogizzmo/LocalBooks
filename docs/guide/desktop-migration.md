@@ -1,4 +1,4 @@
-# Desktop Migration Wizard: import from QuickBooks or Quicken
+# Desktop Migration Wizard: import from QuickBooks, Quicken or GnuCash
 
 The wizard brings in books from:
 
@@ -10,8 +10,9 @@ The wizard brings in books from:
 - QuickBooks **report exports** (`.csv` or `.xlsx`) from QuickBooks Desktop for Windows or Mac, or
   QuickBooks Online: the Journal (or General Ledger), with the Account Listing, contact lists and
   Item List
+- a **GnuCash book** (`.gnucash`), saved as XML or SQLite (see **From GnuCash** below)
 
-> **Read this first:** newer company files, IIF and QIF exports and report exports come in as the full ledger:
+> **Read this first:** newer company files, IIF and QIF exports, report exports and GnuCash books come in as the full ledger:
 > accounts, customers, vendors, items and every transaction. Some older `.qbw` files can only be
 > read for invoice line amounts, which post as income against an offset account you choose.
 > Always compare the result with a trial balance from the original program before posting.
@@ -169,6 +170,58 @@ General Ledger, not both: each holds every transaction.
   the same amount.
 - **Several journals** (one per year, say) can be chosen together. With **Trans #**, a transaction
   in two of them is read once; without it, make sure their dates don't overlap.
+
+## From GnuCash
+
+Choose the book itself, the `.gnucash` file you open in GnuCash. LocalBooks reads both kinds of
+book: the default compressed XML file, and a book saved as SQLite (**File › Save As…** with
+**Data Format** set to `sqlite3`). The file is only read, so it can stay open in GnuCash, though
+it's best to close GnuCash first so that your last changes are saved. GnuCash's dated backups
+(`Books.gnucash.20240101120000.gnucash`) are books too, if you need an earlier state. The `.log`
+files aren't needed.
+
+LocalBooks reads the book like this:
+
+- **Accounts** keep their GnuCash paths (`Expenses:Auto:Fuel`). Bank and cash accounts become bank
+  accounts; Asset, Credit Card, Liability, Equity, Income, Expense, A/Receivable and A/Payable
+  accounts become the matching LocalBooks types; trading accounts become equity accounts, as GnuCash
+  shows them. Hidden accounts come in inactive.
+  - **Placeholders** (such as the top-level `Assets` or `Expenses`) become ordinary parent accounts.
+  - In LocalBooks a subaccount has its parent's type, so an account whose type differs from its
+    parent's moves to the top level. For example, `Assets:Current Assets:Checking Account` (a bank
+    account under an asset account) becomes the top-level bank account `Checking Account`. Step 2
+    still shows its full GnuCash path.
+- **Amounts** come over exactly. GnuCash stores each amount as a fraction. One that isn't a whole
+  number of cents (such as `1.005`) isn't rounded: its transaction is listed under **lines not read
+  in full**, with the amount, for you to enter by hand.
+- **Currencies.** The home currency is the one most of the book's transactions use. LocalBooks
+  books every amount in that currency:
+  - A transaction in the home currency uses its home-currency amounts, even for an account kept in
+    another currency. Those accounts hold home-currency amounts in LocalBooks.
+  - A transaction in another currency uses the amounts its home-currency accounts received or paid
+    (GnuCash's *amount* rather than its *value*). A line in an account kept in another currency
+    then has no home-currency amount, so the transaction is listed rather than converted at a
+    guessed rate.
+  - Exchange rates and stock prices from the price database aren't imported.
+- **Investments.** Stock and mutual fund accounts are skipped, because LocalBooks doesn't track
+  securities. A transaction that touches one is listed with its other lines (usually the bank
+  side), so you can enter the cash movement yourself.
+- **Customers, vendors and jobs** come in with their billing address, phone, email, notes and
+  payment terms. A customer's jobs become sub-customers (`Customer:Job`). Employees aren't imported.
+- **Business documents.** A full import makes:
+  - invoices and bills, with their line items (quantity and price) when the entries add up to what
+    GnuCash posted, and one line per account otherwise;
+  - credit memos from customer credit notes, applied to the invoices GnuCash linked them to;
+  - vendor credits from vendor credit notes;
+  - payments and bill payments, applied to the invoices and bills GnuCash applied them to;
+  - checks (transactions with a check number), withdrawals, deposits, card charges and transfers.
+
+  Anything else posts as a journal entry, as do expense vouchers and opening balances. An unposted
+  (draft) invoice or bill posts nothing in GnuCash, so it isn't imported.
+- **Not imported:** scheduled transactions, budgets, the price database, reconciliation status,
+  tax tables and employees.
+- **Dates:** GnuCash stores each date as a time of day in UTC. LocalBooks takes the calendar date
+  you saw in GnuCash, including for older books that stored midnight in your time zone.
 
 ## 1. Choose a file
 

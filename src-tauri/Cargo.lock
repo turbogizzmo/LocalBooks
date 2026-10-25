@@ -2447,6 +2447,7 @@ dependencies = [
  "opensqlany",
  "pdf-extract",
  "proptest",
+ "quick-xml",
  "regex",
  "reqwest",
  "rust_xlsxwriter",
