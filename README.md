@@ -12,8 +12,9 @@ for a high-density, keyboard-friendly interface.
 > [**tester page**](https://turbogizzmo.github.io/LocalBooks/). Installed copies update themselves.
 >
 > **Using LocalBooks?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
-> for invoices, payments, bills, banking, reconciling, reports, closing the books, backups and more.
-> The same guides are built into the app's Help (press F1).
+> for invoices, payments, bills, banking, reconciling, reports, closing the books, backups, users and
+> passwords, and more. The same guides are built into the app's Help (press F1). What changed in each
+> release is in the [changelog](CHANGELOG.md).
 
 ## Contents
 
@@ -221,7 +222,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
 | **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
 | **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
-| **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access |
+| **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) · Users & Passwords | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access, optional users with roles, sign-in, a recovery key and encrypted vendor tax IDs |
 
 ### `+ New` quick-create matrix
 
@@ -339,7 +340,9 @@ version upgrades a company file's schema, it saves a verified copy to the local 
 
 To ship a release:
 
-1. Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`; commit.
+1. Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (and the
+   lockfiles), and add a `## [<version>]` section to `CHANGELOG.md`: it becomes the release notes on
+   GitHub and in the app's update window. Commit.
 2. `git tag v0.2.0 && git push origin v0.2.0`. CI tests on all three platforms, builds signed
    installers and `latest.json`, and attaches them to a **draft** release.
 3. Edit the draft's notes (they appear in the app's update prompt) and click **Publish**. Installed
@@ -480,11 +483,14 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
-- **No sales tax** on invoices or receipts.
+- **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
+  returns.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
   receipts, and estimates are home-currency only, and bank accounts are always home currency. Open
   foreign-currency invoices can be revalued at period end (Accounting › Currency Revaluation).
-- **Single user.** One person at a time per company file, including on shared folders.
+- **One person at a time.** A company file can have several users, each with a password and a role
+  (Settings › Users & Passwords), but only one person can have it open at a time, including on
+  shared folders.
 - Whether the `.localbooks` file type is registered on Linux depends on the desktop environment.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
