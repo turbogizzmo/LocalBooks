@@ -152,7 +152,7 @@ pub struct Vendor1099Row {
     pub vendor_name: String,
     /// The full tax ID, when this user may see it.
     pub tax_id: Option<String>,
-    /// Whenever the vendor has a tax ID.
+    /// The tax ID with all but the last four digits starred; set whenever the vendor has a tax ID.
     pub tax_id_masked: Option<String>,
     pub address: Option<String>,
     pub paid_cents: i64,
