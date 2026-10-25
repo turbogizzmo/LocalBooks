@@ -9,6 +9,9 @@ mod classes;
 mod closing;
 mod commands;
 mod credits;
+// Used by company-file users and sign-in, which come next.
+#[allow(dead_code)]
+mod crypto;
 mod db;
 mod edits;
 mod email_log;
