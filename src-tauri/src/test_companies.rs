@@ -290,7 +290,8 @@ async fn seed_test_companies() {
     let started = std::time::Instant::now();
     let recovery = edge_cases(&dir.join("Edge Cases.localbooks")).await;
     no_users(&dir.join("No Users.localbooks")).await;
-    if std::env::var_os("LOCALBOOKS_SEED_SKIP_LARGE").is_none() {
+    let large = std::env::var_os("LOCALBOOKS_SEED_SKIP_LARGE").is_none();
+    if large {
         five_years(&dir.join("Five Years.localbooks")).await;
     }
     let note = format!(
@@ -298,7 +299,8 @@ async fn seed_test_companies() {
          Edge Cases.localbooks\n  owner / {ADMIN_PASSWORD} (Admin)\n  clerk / clerk temp pw (Standard; must choose a new password)\n  \
          bookkeeper / bookkeeper temp pw (Standard, can see sensitive data; must choose a new password)\n  \
          viewer / viewer temp pw (View only; must choose a new password)\n  recovery key: {recovery}\n  closing passcode: {CLOSING_PASSCODE}\n\n\
-         No Users.localbooks: no sign-in.\nFive Years.localbooks: no sign-in.\n"
+         No Users.localbooks: no sign-in.\n{}",
+        if large { "Five Years.localbooks: no sign-in.\n" } else { "" }
     );
     std::fs::write(dir.join("README.txt"), note).expect("write the README");
     println!("seeded {} in {:?}", dir.display(), started.elapsed());
