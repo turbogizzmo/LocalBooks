@@ -2116,6 +2116,7 @@ pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Op
     let (session, recovery) = users::turn_on(&pool, &username, display_name.as_deref(), &password).await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
+    db.refresh_gate().await;
     // No reload here: the window shows the recovery key first.
     Ok(UsersTurnedOn { user, recovery_key: recovery.as_str().to_string() })
 }
@@ -2126,6 +2127,7 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
     let session = users::sign_in(&pool, &username, &password).await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
+    db.refresh_gate().await;
     signed_in_changed(&app);
     Ok(user)
 }
@@ -2134,6 +2136,7 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
 pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     let (_, slot) = db.pool_and_session().await?;
     *slot.lock().await = None;
+    db.refresh_gate().await;
     signed_in_changed(&app);
     Ok(())
 }
@@ -2162,9 +2165,14 @@ pub async fn update_user(db: State<'_, Db>, id: i64, input: UserUpdate) -> Resul
 #[tauri::command]
 pub async fn change_my_password(db: State<'_, Db>, current: String, next: String) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
-    let mut guard = slot.lock().await;
-    let session = guard.as_mut().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
-    users::change_own_password(&pool, session, &current, &next).await
+    let user = {
+        let mut guard = slot.lock().await;
+        let session = guard.as_mut().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
+        users::change_own_password(&pool, session, &current, &next).await?
+    };
+    // A temporary password no longer holds the user at the sign-in screen.
+    db.refresh_gate().await;
+    Ok(user)
 }
 
 /// A forgotten Admin password: the recovery key sets a new one and signs that Admin in.
@@ -2174,6 +2182,7 @@ pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recove
     let session = users::recover(&pool, &recovery_key, &username, &new_password).await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
+    db.refresh_gate().await;
     signed_in_changed(&app);
     Ok(user)
 }
@@ -2192,6 +2201,7 @@ pub async fn remove_all_users(app: AppHandle, db: State<'_, Db>, confirmation: S
     let (pool, slot) = db.pool_and_session().await?;
     users::remove_all_users(&pool, &confirmation).await?;
     *slot.lock().await = None;
+    db.refresh_gate().await;
     signed_in_changed(&app);
     notify(&app);
     Ok(())

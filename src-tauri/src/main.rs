@@ -27,6 +27,7 @@ mod invoices;
 mod ledger;
 mod mail_app;
 mod parties;
+mod permissions;
 mod pdf;
 mod mcp_server;
 mod preferences;
@@ -123,14 +124,15 @@ fn main() {
                     return Ok(());
                 }
             };
+            tauri::async_runtime::block_on(database.refresh_gate());
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
-            // live at the time of each request.
+            // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();
             let pools: mcp_server::PoolSource = std::sync::Arc::new(move || {
                 let handle = pool_handle.clone();
-                Box::pin(async move { handle.state::<db::Db>().pool().await })
+                Box::pin(async move { handle.state::<db::Db>().readable_pool().await })
             });
             app.manage(mcp_server::McpService::new(config_dir.clone(), pools));
             let mcp_handle = app.handle().clone();
@@ -162,7 +164,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(guarded(tauri::generate_handler![
             commands::list_accounts,
             commands::list_account_types,
             commands::create_account,
@@ -397,7 +399,7 @@ fn main() {
             commands::start_over_ledger_batch,
             commands::reverse_qbw_batch,
             commands::open_window,
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")
         .run(|app, event| match event {
@@ -425,4 +427,20 @@ fn main() {
             }),
             _ => {}
         });
+}
+
+/// Checks the signed-in user's role ([`permissions`]) before handing a command to `commands`; a
+/// refused command fails with the reason and never runs.
+fn guarded<R: tauri::Runtime>(commands: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let need = permissions::need(invoke.message.command());
+        // Without a company file manager (startup failed), nothing is open to protect.
+        if let Some(db) = invoke.message.webview().try_state::<db::Db>() {
+            if let Err(reason) = db.check(need) {
+                invoke.resolver.reject(reason);
+                return true;
+            }
+        }
+        commands(invoke)
+    }
 }

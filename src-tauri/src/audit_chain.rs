@@ -80,13 +80,45 @@ fn anchor_store() -> Option<SecretStore> {
     ANCHORS.get().cloned()
 }
 
-/// Who is writing: the operating-system user and the app version.
-fn actor() -> &'static str {
-    static ACTOR: OnceLock<String> = OnceLock::new();
-    ACTOR.get_or_init(|| {
+/// The LocalBooks user signed in to the open company file, set by [`crate::db::Db::refresh_gate`].
+/// One company file is open per process, so one value serves every write.
+#[cfg(not(test))]
+static SIGNED_IN: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+#[cfg(test)]
+thread_local! {
+    /// Tests open and close company files in parallel, each on its own thread.
+    static SIGNED_IN: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+pub fn set_signed_in(username: Option<String>) {
+    #[cfg(not(test))]
+    {
+        *SIGNED_IN.write().expect("signed-in lock") = username;
+    }
+    #[cfg(test)]
+    SIGNED_IN.with(|s| *s.borrow_mut() = username);
+}
+
+fn signed_in() -> Option<String> {
+    #[cfg(not(test))]
+    return SIGNED_IN.read().expect("signed-in lock").clone();
+    #[cfg(test)]
+    SIGNED_IN.with(|s| s.borrow().clone())
+}
+
+/// Who is writing: the signed-in LocalBooks user when the file has users, then the operating-system
+/// user and the app version.
+fn actor() -> String {
+    static COMPUTER: OnceLock<String> = OnceLock::new();
+    let computer = COMPUTER.get_or_init(|| {
         let user = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_else(|_| "unknown user".into());
         format!("{user} (LocalBooks {})", env!("CARGO_PKG_VERSION"))
-    })
+    });
+    match signed_in().as_deref() {
+        Some(username) => format!("{username} as {computer}"),
+        None => computer.clone(),
+    }
 }
 
 fn row_hash(prev: &str, id: i64, timestamp: &str, action: &str, target: i64, actor: &str, payload: &str) -> String {
@@ -132,7 +164,7 @@ pub async fn seal(conn: &mut SqliteConnection) -> Result<Option<ChainHead>, Stri
             }
             None => return Err(format!("AUDIT_CHAIN_GAP: audit record {id} follows an unsealed record")),
         };
-        let row_actor = row_actor.unwrap_or_else(|| actor().to_string());
+        let row_actor = row_actor.unwrap_or_else(actor);
         let hash = row_hash(&prev, id, &timestamp, &action, target, &row_actor, &payload);
         sqlx::query("UPDATE ledger_audit_log SET actor = ?1, prev_hash = ?2, row_hash = ?3 WHERE id = ?4 AND row_hash IS NULL")
             .bind(&row_actor)

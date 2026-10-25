@@ -73,6 +73,8 @@ export default function App() {
   const storage = useLedgerQuery(api.getStorageStatus);
   const signIn = useLedgerQuery(api.getSignInState);
   const signedIn = signIn.data?.user ?? null;
+  // Without users, whoever opens the file can do everything.
+  const isAdmin = !signIn.data?.usersEnabled || signedIn?.role === 'ADMIN';
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
@@ -256,6 +258,11 @@ export default function App() {
             <Notice kind="info" text={`${storage.data.startupWarning} Change it in Settings › File & Data Controls.`} />
           </div>
         )}
+        {signedIn?.role === 'VIEW_ONLY' && (
+          <div className="no-print">
+            <Notice kind="info" text={`Signed in as ${signedIn.displayName}, view only: you can look at the books and run reports, but not change anything.`} />
+          </div>
+        )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           {view === 'dashboard' && <Dashboard />}
@@ -285,10 +292,11 @@ export default function App() {
           {view === 'accounting/recurring' && <Recurring />}
           {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}
-          {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
+          {view === 'accounting/qbw-import' &&
+            (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
+          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} />}
         </div>
       </main>
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}

@@ -44,6 +44,8 @@ pub struct Db {
     closed: SqlitePool,
     config: DbConfig,
     startup_warning: std::sync::Mutex<Option<String>>,
+    /// Who may do what right now, read without waiting by the check in front of every command.
+    gate: std::sync::RwLock<crate::permissions::Gate>,
 }
 
 /// Returned by operations that need an open company file while none is.
@@ -107,7 +109,13 @@ impl Db {
         let closed = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_lazy_with(SqliteConnectOptions::new().filename(":memory:").pragma("query_only", "ON"));
-        Db { live: tokio::sync::RwLock::new(live), closed, config, startup_warning: std::sync::Mutex::new(None) }
+        Db {
+            live: tokio::sync::RwLock::new(live),
+            closed,
+            config,
+            startup_warning: std::sync::Mutex::new(None),
+            gate: std::sync::RwLock::new(crate::permissions::Gate::Unchecked),
+        }
     }
 
     /// Opens the company file at `path` (creating and migrating it if new).
@@ -197,6 +205,7 @@ impl Db {
             }
             *live = Some(next);
         }
+        self.refresh_gate().await;
         *self.startup_warning.lock().expect("warning mutex") = None;
         self.require_status().await
     }
@@ -228,6 +237,7 @@ impl Db {
     /// it can be opened elsewhere. Whether a company was open.
     pub async fn close(&self) -> bool {
         let closed = self.live.write().await.take();
+        self.refresh_gate().await;
         *self.startup_warning.lock().expect("warning mutex") = None;
         match closed {
             Some(live) => {
@@ -261,6 +271,44 @@ impl Db {
             Some(live) => live.pool.clone(),
             None => self.closed.clone(),
         }
+    }
+
+    /// Recomputes who may do what from the open file and its sign-in. Runs whenever either changes;
+    /// also records the signed-in user as the audit trail's actor.
+    pub async fn refresh_gate(&self) {
+        use crate::permissions::{Gate, SignedIn};
+        let (gate, actor) = match self.live.read().await.as_ref() {
+            None => (Gate::NoCompany, None),
+            Some(live) => {
+                // An unreadable users table asks for a sign-in rather than opening the books.
+                if crate::users::users_enabled(&live.pool).await.unwrap_or(true) {
+                    let session = live.session.lock().await;
+                    let user = session.as_ref().map(|s| &s.user);
+                    (
+                        Gate::Users(user.map(|u| SignedIn { role: u.role, must_change_password: u.must_change_password })),
+                        user.map(|u| u.username.clone()),
+                    )
+                } else {
+                    (Gate::NoUsers, None)
+                }
+            }
+        };
+        crate::audit_chain::set_signed_in(actor);
+        *self.gate.write().expect("gate lock") = gate;
+    }
+
+    /// The open file's pool for a reader outside the commands (the MCP server): none (the empty,
+    /// closed database) while the file has users and nobody is signed in.
+    pub async fn readable_pool(&self) -> SqlitePool {
+        match self.check(crate::permissions::Need::Read) {
+            Ok(()) => self.pool().await,
+            Err(_) => self.closed.clone(),
+        }
+    }
+
+    /// Whether the signed-in user (if any) may run a command needing `need`.
+    pub fn check(&self, need: crate::permissions::Need) -> Result<(), String> {
+        crate::permissions::check(&self.gate.read().expect("gate lock"), need)
     }
 
     /// The open company file's pool and sign-in, read together so both belong to the same file.
@@ -310,6 +358,12 @@ impl Db {
     /// Replaces the live database file with `staged` (a migrated, closed SQLite file) and reopens it.
     /// If the replacement cannot be opened, `fallback` (a snapshot of the previous file) is put back.
     pub async fn swap_in(&self, staged: &Path, fallback: &Path) -> Result<(), String> {
+        let swapped = self.swap_in_file(staged, fallback).await;
+        self.refresh_gate().await;
+        swapped
+    }
+
+    async fn swap_in_file(&self, staged: &Path, fallback: &Path) -> Result<(), String> {
         let mut guard = self.live.write().await;
         let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
         live.pool.close().await;
