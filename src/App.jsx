@@ -29,6 +29,7 @@ import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
 import Statements from './components/Statements.jsx';
+import FinanceCharges from './components/FinanceCharges.jsx';
 import SendForms from './components/SendForms.jsx';
 import Recurring, { useDueRecurring } from './components/Recurring.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
@@ -276,6 +277,7 @@ export default function App() {
           {view === 'sales/products' && <Products accounts={list} />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'sales/statements' && <Statements />}
+          {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={select} />}
           {view === 'sales/send-forms' && <SendForms />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}

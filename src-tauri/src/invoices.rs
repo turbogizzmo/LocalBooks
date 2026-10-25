@@ -87,6 +87,8 @@ pub struct InvoiceSummary {
     pub discount_cents: i64,
     /// Credit memos applied to this invoice (included in amount paid).
     pub credits_applied_cents: i64,
+    /// Written by Assess Finance Charges.
+    pub is_finance_charge: bool,
 }
 
 const SUMMARY_SELECT: &str = "
@@ -98,7 +100,8 @@ const SUMMARY_SELECT: &str = "
            i.is_voided, i.currency_code, i.exchange_rate_e6,
            b.home_total_cents, CASE WHEN i.is_voided = 1 THEN 0 ELSE b.home_open_cents END AS home_balance_cents,
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
-           COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents
+           COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
+           EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge
     FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id";
 
