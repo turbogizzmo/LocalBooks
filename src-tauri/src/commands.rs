@@ -49,8 +49,8 @@ use crate::reconcile::{self, ReconcileAccountState, ReconcileProgress, Reconcili
 use crate::reports::{self, AccountView, Dashboard};
 use crate::simplefin::{self, ConnectionView, SimpleFin, SyncSummary};
 use crate::sales::{self, PartyView, ProductInput, ProductView, SalesReceiptInput, SalesReceiptSummary, SalesTransaction};
-use crate::statements::{self, BalanceSheet, Basis, BudgetAmount, BudgetView, CashFlowStatement, ClassFilter, DatedTrialBalance, PeriodReportInput, ProfitAndLoss, ProfitAndLossByClass};
-use crate::report_center::{self, AgingReport, GeneralLedger, SummaryReport};
+use crate::statements::{self, AsOfColumn, BalanceSheet, Basis, BudgetAmount, BudgetView, CashFlowStatement, ClassFilter, DatedTrialBalance, PeriodReportInput, ProfitAndLoss, ProfitAndLossByClass};
+use crate::report_center::{self, AgingReport, GeneralLedger, InventoryValuation, InventoryValuationDetail, MissingChecks, StockStatus, SummaryReport};
 
 pub const LEDGER_CHANGED: &str = "ledger-changed";
 
@@ -409,6 +409,32 @@ pub async fn get_profit_and_loss_by_class(
 #[tauri::command]
 pub async fn get_balance_sheet(db: State<'_, Db>, as_of: NaiveDate) -> Result<BalanceSheet, String> {
     statements::balance_sheet(&db.pool().await, as_of).await
+}
+
+/// Balance Sheet with a column per date; `compare` adds $ and % change from the second date.
+#[tauri::command]
+pub async fn get_balance_sheet_columns(db: State<'_, Db>, columns: Vec<AsOfColumn>, compare: bool) -> Result<ProfitAndLossByClass, String> {
+    statements::balance_sheet_columns(&db.pool().await, &columns, compare).await
+}
+
+#[tauri::command]
+pub async fn get_inventory_valuation(db: State<'_, Db>, as_of: NaiveDate) -> Result<InventoryValuation, String> {
+    report_center::inventory_valuation(&db.pool().await, as_of).await
+}
+
+#[tauri::command]
+pub async fn get_inventory_valuation_detail(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<InventoryValuationDetail, String> {
+    report_center::inventory_valuation_detail(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_stock_status(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<StockStatus, String> {
+    report_center::stock_status(&db.pool().await, start_date, end_date).await
+}
+
+#[tauri::command]
+pub async fn get_missing_checks(db: State<'_, Db>, account_id: i64, start_date: Option<NaiveDate>, end_date: Option<NaiveDate>) -> Result<MissingChecks, String> {
+    report_center::missing_checks(&db.pool().await, account_id, start_date, end_date).await
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2077,6 +2103,11 @@ pub async fn set_budget_amounts(app: AppHandle, db: State<'_, Db>, id: i64, amou
 #[tauri::command]
 pub async fn get_budget_vs_actual(db: State<'_, Db>, id: i64, from_period: i64, to_period: i64) -> Result<ProfitAndLossByClass, String> {
     statements::budget_vs_actual(&db.pool().await, id, from_period, to_period).await
+}
+
+#[tauri::command]
+pub async fn get_balance_sheet_budget_vs_actual(db: State<'_, Db>, id: i64, period: i64) -> Result<ProfitAndLossByClass, String> {
+    statements::balance_sheet_budget_vs_actual(&db.pool().await, id, period).await
 }
 
 // ------------------------------------------------------------------------------------------------

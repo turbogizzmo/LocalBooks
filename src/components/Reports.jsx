@@ -3,7 +3,21 @@ import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { AgingReport, BudgetVsActualReport, CashFlowReport, Vendors1099Report, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
+import {
+  AgingReport,
+  BalanceSheetBudgetVsActualReport,
+  BudgetVsActualReport,
+  CashFlowReport,
+  GeneralLedgerReport,
+  InventoryValuationDetailReport,
+  InventoryValuationReport,
+  MissingChecksReport,
+  SalesTaxLiabilityReport,
+  StockStatusReport,
+  SummaryReport,
+  TrialBalanceReport,
+  Vendors1099Report,
+} from './MoreReports.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -33,7 +47,7 @@ export function splitPeriods(start, end, mode) {
   return columns;
 }
 
-const shiftYear = (date) => {
+export const shiftYear = (date) => {
   const [y, m, d] = date.split('-').map(Number);
   return iso(y - 1, m, Math.min(d, lastDay(y - 1, m)));
 };
@@ -49,7 +63,7 @@ export function priorRange(start, end, mode) {
 const RANGE_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const shortRange = (from, to) => `${RANGE_LABEL.format(new Date(`${from}T00:00:00Z`))} – ${RANGE_LABEL.format(new Date(`${to}T00:00:00Z`))}`;
 
-function ProfitAndLoss({ byClass = false, navigate }) {
+function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null, navigate }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
@@ -60,7 +74,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
   const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
   const [basis, setBasis] = useState('ACCRUAL');
   const [split, setSplit] = useState('total'); // total | months | quarters
-  const [compare, setCompare] = useState('none'); // none | period | year
+  const [compare, setCompare] = useState(initialCompare); // none | period | year
   const periodColumns = () => {
     if (split !== 'total') return splitPeriods(start, end, split);
     if (compare === 'none') return null;
@@ -178,7 +192,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
               const columns = data.columns ?? [{ label: 'Total' }];
               const rows = [
                 [company.name],
-                ['Profit and Loss'],
+                [title ?? 'Profit and Loss'],
                 [subtitle],
                 [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
                 [],
@@ -201,7 +215,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
       )}
       {data && (
         <Statement
-          title={byClass ? 'Profit and Loss by Class' : 'Profit and Loss'}
+          title={title ?? (byClass ? 'Profit and Loss by Class' : 'Profit and Loss')}
           subtitle={subtitle}
           lines={data.lines}
           columns={byClass || multi ? data.columns : null}
@@ -263,6 +277,63 @@ function BalanceSheet({ navigate }) {
   );
 }
 
+/** Balance Sheet as of a date beside the same date a year earlier, with $ and % change. */
+function BalanceSheetComparison({ navigate }) {
+  const [asOf, setAsOf] = useState(todayIso());
+  const [notice, setNotice] = useState(null);
+  const company = useCompany();
+  const prior = asOf ? shiftYear(asOf) : null;
+  const { data, error, reload } = useLedgerQuery(() =>
+    asOf ? api.getBalanceSheetColumns([{ label: RANGE_LABEL.format(new Date(`${asOf}T00:00:00Z`)), asOf }, { label: RANGE_LABEL.format(new Date(`${prior}T00:00:00Z`)), asOf: prior }], true) : Promise.resolve(null),
+  );
+  useEffect(() => {
+    reload();
+  }, [asOf, reload]);
+  const title = 'Balance Sheet Prev Year Comparison';
+  const subtitle = asOf ? `As of ${longDate(asOf)} and ${longDate(prior)}` : '';
+  return (
+    <>
+      <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
+        <label>
+          <span className="qb-label">As of</span>
+          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+        </label>
+        <div className="ml-auto">
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() =>
+              saveText(
+                toCsv([
+                  [company.name],
+                  [title],
+                  [subtitle],
+                  [],
+                  ['Account', ...data.columns.map((c) => c.label)],
+                  ...data.lines.map((l) => [`${'  '.repeat(l.depth)}${l.label}`, ...l.amountsCents.map((a, i) => (data.columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a)))]),
+                ]),
+                `Balance-Sheet-Prev-Year-Comparison_${asOf}.csv`,
+                setNotice,
+              )
+            }
+          />
+        </div>
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {error && <Notice kind="error" text={error} />}
+      {data && (
+        <Statement
+          title={title}
+          subtitle={subtitle}
+          lines={data.lines}
+          columns={data.columns}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: null, endDate: asOf, includeSubaccounts: line.kind === 'subtotal' })}
+          footer="Accrual basis · each column closes earlier fiscal years' profit into Retained Earnings · % Change is against the earlier date"
+        />
+      )}
+    </>
+  );
+}
+
 /** The report list, grouped as in classic desktop accounting software. */
 const REPORT_GROUPS = [
   {
@@ -270,9 +341,17 @@ const REPORT_GROUPS = [
     reports: [
       ['pl', 'Profit and Loss'],
       ['plc', 'Profit and Loss by Class'],
+      ['pl-py', 'Profit and Loss Prev Year Comparison'],
       ['bs', 'Balance Sheet'],
+      ['bs-py', 'Balance Sheet Prev Year Comparison'],
       ['cf', 'Statement of Cash Flows'],
-      ['bva', 'Budget vs. Actuals'],
+    ],
+  },
+  {
+    title: 'Budgets',
+    reports: [
+      ['bva', 'Profit and Loss Budget vs. Actual'],
+      ['bs-bva', 'Balance Sheet Budget vs. Actual'],
     ],
   },
   {
@@ -303,6 +382,18 @@ const REPORT_GROUPS = [
       ['expenses-vendor', 'Expenses by Vendor Summary'],
       ['1099', '1099 Summary'],
     ],
+  },
+  {
+    title: 'Inventory',
+    reports: [
+      ['inv-val', 'Inventory Valuation Summary'],
+      ['inv-detail', 'Inventory Valuation Detail'],
+      ['stock-status', 'Inventory Stock Status by Item'],
+    ],
+  },
+  {
+    title: 'Banking',
+    reports: [['missing-checks', 'Missing Checks']],
   },
   {
     title: 'For my accountant',
@@ -363,7 +454,14 @@ export default function Reports({ navigate, intent }) {
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
+        {report === 'pl-py' && <ProfitAndLoss key="pl-py" initialCompare="year" title="Profit and Loss Prev Year Comparison" navigate={navigate} />}
+        {report === 'bs-py' && <BalanceSheetComparison navigate={navigate} />}
         {report === 'bva' && <BudgetVsActualReport navigate={navigate} />}
+        {report === 'bs-bva' && <BalanceSheetBudgetVsActualReport navigate={navigate} />}
+        {report === 'inv-val' && <InventoryValuationReport />}
+        {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
+        {report === 'stock-status' && <StockStatusReport />}
+        {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
       </div>
     </div>
