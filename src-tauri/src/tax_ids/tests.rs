@@ -80,3 +80,64 @@ async fn protect_all_encrypts_plain_ids_once() {
     assert_eq!(key.decrypt_field(TABLE, COLUMN, a, &stored).unwrap(), "12-3456789");
     assert_eq!(protect_all(&mut pool.acquire().await.unwrap(), key).await.unwrap(), 0, "nothing left to protect");
 }
+
+/// Shaped like the value a newer QuickBooks file holds in place of a vendor's tax ID (base64).
+const QB_VALUE: &str = "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAexampleOnlyNotAKey12==";
+
+#[test]
+fn only_quickbooks_encrypted_values_match() {
+    assert!(is_quickbooks_encrypted(QB_VALUE));
+    assert!(is_quickbooks_encrypted(&format!("  {QB_VALUE} ")));
+    for kept in ["12-3456789", "123-45-6789", "n/a", "W-9 requested 2026/01/05", "123456789012345678901234567890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ12", "Pending: see email from pat@x.com"] {
+        assert!(!is_quickbooks_encrypted(kept), "{kept}");
+    }
+}
+
+/// Migration 0046 and `is_quickbooks_encrypted` must agree on every value.
+#[tokio::test]
+async fn the_migration_clears_exactly_what_the_rule_matches() {
+    let pool = test_pool().await;
+    let samples = [QB_VALUE, "12-3456789", "n/a", "W-9 requested 2026/01/05", "123456789012345678901234567890", "ABCDEFGHIJKLMNOPQRSTUVWXYZ12", "abc/def+ghi=jkl/mno+pqr1=", "lb1:not-checked-by-sql"];
+    for (n, value) in samples.iter().enumerate() {
+        sqlx::query("INSERT INTO vendors (name, tax_id, tax_id_masked) VALUES (?1, ?2, 'masked')").bind(format!("Vendor {n}")).bind(value).execute(&pool).await.unwrap();
+    }
+    sqlx::raw_sql(include_str!("../../migrations/0046_clear_quickbooks_encrypted_tax_ids.sql")).execute(&pool).await.unwrap();
+    for (n, value) in samples.iter().enumerate() {
+        let (tax_id, masked): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE name = ?1").bind(format!("Vendor {n}")).fetch_one(&pool).await.unwrap();
+        let cleared = !value.starts_with("lb1:") && is_quickbooks_encrypted(value);
+        assert_eq!(tax_id.is_none(), cleared, "{value}");
+        assert_eq!(masked.is_none(), cleared, "{value}");
+    }
+}
+
+#[tokio::test]
+async fn turning_users_on_clears_quickbooks_values_and_encrypts_real_ids() {
+    let pool = test_pool().await;
+    let qb: i64 = sqlx::query_scalar("INSERT INTO vendors (name, tax_id) VALUES ('Imported', ?1) RETURNING id").bind(QB_VALUE).fetch_one(&pool).await.unwrap();
+    let real: i64 = sqlx::query_scalar("INSERT INTO vendors (name, tax_id) VALUES ('Real', '12-3456789') RETURNING id").fetch_one(&pool).await.unwrap();
+    let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+    let get = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, Option<String>>("SELECT tax_id FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!(get(qb).await, None, "QuickBooks' value is cleared, not encrypted");
+    let stored = get(real).await.unwrap();
+    assert_eq!(session.key.as_ref().unwrap().decrypt_field(TABLE, COLUMN, real, &stored).unwrap(), "12-3456789");
+}
+
+#[tokio::test]
+async fn quickbooks_values_encrypted_before_the_check_are_cleared_at_the_next_unlock() {
+    let pool = test_pool().await;
+    let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+    let key = session.key.as_ref().unwrap();
+    let id: i64 = sqlx::query_scalar("INSERT INTO vendors (name) VALUES ('Imported') RETURNING id").fetch_one(&pool).await.unwrap();
+    // As v0.5.0 stored it: QuickBooks' value, encrypted and masked like a real ID.
+    let (stored, masked) = store(Access { protected: true, key: Some(key) }, id, Some(QB_VALUE)).unwrap();
+    sqlx::query("UPDATE vendors SET tax_id = ?1, tax_id_masked = ?2 WHERE id = ?3").bind(stored).bind(masked).bind(id).execute(&pool).await.unwrap();
+
+    assert_eq!(protect_all(&mut pool.acquire().await.unwrap(), key).await.unwrap(), 0);
+    let (tax_id, masked): (Option<String>, Option<String>) = sqlx::query_as("SELECT tax_id, tax_id_masked FROM vendors WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!((tax_id, masked), (None, None));
+}
+
