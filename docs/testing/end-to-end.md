@@ -78,6 +78,11 @@ $env:NATIVE_DRIVER = "$env:TEMP\msedgedriver\msedgedriver.exe"
 
 Redo this when WebView2 updates itself (the run fails with a "session not created" version error).
 
+Run the tests from a normal, **not elevated**, terminal (not "Run as administrator"). In an
+elevated process WebView2 ignores the debugging port msedgedriver asks for, and every session fails
+with "DevToolsActivePort file doesn't exist" ([wry#1782](https://github.com/tauri-apps/wry/issues/1782)).
+GitHub's Windows runners are elevated, so CI runs the tests through `gsudo --integrity Medium`.
+
 Then, from the repository root, the same three commands without `xvfb-run`:
 `npm ci; npm ci --prefix e2e`, `npx tauri build --debug --no-bundle`, `npm test --prefix e2e`.
 
@@ -87,7 +92,8 @@ Then, from the repository root, the same three commands without `xvfb-run`:
 - `NATIVE_DRIVER`: path to `msedgedriver.exe` (Windows) or `WebKitWebDriver` (Linux) if it is not on
   `PATH`.
 - `LOCALBOOKS_E2E_KEEP_SEEDS=1`: reuse the companies already in `e2e/.work/seeds` instead of
-  reseeding (faster when rerunning one spec).
+  reseeding (faster when rerunning one spec). `npm run seed --prefix e2e` reseeds on its own, as CI
+  does before the tests.
 - One spec: `npm test --prefix e2e -- --spec specs/seeded-users.e2e.js`.
 
 A failing step saves a screenshot to `e2e/.work/screenshots/` (in CI, the

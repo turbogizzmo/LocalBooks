@@ -95,7 +95,9 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP 'msedgedriver'
           Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $zip
           Expand-Archive $zip -DestinationPath $dir -Force
+          Write-Host "msedgedriver: $(& "$dir\msedgedriver.exe" --version)"
           "NATIVE_DRIVER=$(Join-Path $dir 'msedgedriver.exe')" >> $env:GITHUB_ENV
+          $dir >> $env:GITHUB_PATH
 
       - name: Install frontend and test dependencies
         shell: bash
@@ -106,36 +108,29 @@ jobs:
       - name: Build the debug app
         run: npx tauri build --debug --no-bundle
 
-      - name: DIAGNOSTIC (temporary) launch on Windows
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $app = (Resolve-Path src-tauri\target\debug\localbooks.exe).Path
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-          $p = Start-Process -FilePath $app -PassThru -RedirectStandardError "$env:RUNNER_TEMP\app-err.txt" -RedirectStandardOutput "$env:RUNNER_TEMP\app-out.txt"
-          Start-Sleep 15
-          "alive: $(-not $p.HasExited)"; if ($p.HasExited) { "exit code: $($p.ExitCode)" }
-          try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:9222/json/version).Content } catch { "no devtools: $_" }
-          Get-Content "$env:RUNNER_TEMP\app-err.txt", "$env:RUNNER_TEMP\app-out.txt"
-          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
-          Get-ChildItem "$env:LOCALAPPDATA\com.localbooks.desktop" -ErrorAction SilentlyContinue | Select-Object Name
-          $d = Start-Process $env:NATIVE_DRIVER -ArgumentList '--port=9515','--verbose',"--log-path=$env:RUNNER_TEMP\edge.log" -PassThru
-          Start-Sleep 2
-          $caps = @{ capabilities = @{ alwaysMatch = @{ browserName = 'webview2'; 'ms:edgeChromium' = $true; 'ms:edgeOptions' = @{ binary = $app; args = @() } } } } | ConvertTo-Json -Depth 6
-          try { Invoke-RestMethod -Method Post -Uri http://127.0.0.1:9515/session -Body $caps -ContentType 'application/json' -TimeoutSec 90 | ConvertTo-Json -Depth 6 } catch { "session failed: $_" }
-          Stop-Process -Id $d.Id -Force -ErrorAction SilentlyContinue
-          Get-Process localbooks -ErrorAction SilentlyContinue | Stop-Process -Force
-          Get-Content "$env:RUNNER_TEMP\edge.log" | Select-String -Pattern 'Launching|args|user-data|DevTools|ERROR|WEBVIEW2|exit|Failed' | Select-Object -First 60
+      # Seeded here, so the Windows run below needs no writes outside the workspace.
+      - name: Seed the test companies
+        run: npm run seed --prefix e2e
 
       - name: Run end-to-end tests (Linux)
         if: runner.os == 'Linux'
+        env:
+          LOCALBOOKS_E2E_KEEP_SEEDS: '1'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1440x900x24" npm test --prefix e2e
 
+      # msedgedriver gives the app its --remote-debugging-port through WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+      # which WebView2 ignores in an elevated process, and the runner is elevated. gsudo runs the
+      # tests at medium integrity instead (as Tauri's own CI does); the workspace is opened up so
+      # that process can write to it. https://github.com/tauri-apps/wry/issues/1782
       - name: Run end-to-end tests (Windows)
         if: runner.os == 'Windows'
-        run: npm test --prefix e2e
+        shell: pwsh
+        env:
+          LOCALBOOKS_E2E_KEEP_SEEDS: '1'
+        run: |
+          winget install gerardog.gsudo --accept-source-agreements --accept-package-agreements
+          icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+          sudo --integrity Medium npm test --prefix e2e
 
       - name: Keep failure screenshots (7 days)
         if: failure()

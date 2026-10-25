@@ -4,7 +4,8 @@
   "type": "module",
   "description": "End-to-end tests that drive the built LocalBooks app through tauri-driver (Windows and Linux).",
   "scripts": {
-    "test": "wdio run wdio.conf.js"
+    "test": "wdio run wdio.conf.js",
+    "seed": "node -e \"import('./lib/app.js').then((app) => app.seedCompanies())\""
   },
   "devDependencies": {
     "@wdio/cli": "9.32.0",
