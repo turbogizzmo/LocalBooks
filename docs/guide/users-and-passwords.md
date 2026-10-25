@@ -87,6 +87,9 @@ working.
   full for people who can see sensitive data, so keep that file safe.
 - Tax IDs brought in by an import are encrypted as soon as the import finishes (or at the next
   sign-in of someone who can see sensitive data).
+- Newer QuickBooks files keep tax IDs encrypted with QuickBooks' own key, which LocalBooks can't
+  read. Those vendors come in without a tax ID, and an unreadable value left by an earlier import is
+  removed automatically. Enter the ID again from the vendor's W-9.
 
 ## What this protects, and what it doesn't
 

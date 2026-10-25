@@ -72,4 +72,5 @@ What this does not cover:
 - A tax ID read from a file that is staged for import but not yet imported stays unencrypted until
   the import is carried out or discarded.
 - Newer QuickBooks files encrypt tax IDs with QuickBooks' own key; LocalBooks cannot read those and
-  imports the vendor without one.
+  imports the vendor without one. Files imported before LocalBooks 0.5.1 may hold that unreadable
+  value; it is cleared when the file is opened (or, if already encrypted, at the next unlock).
