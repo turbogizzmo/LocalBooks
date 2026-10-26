@@ -191,6 +191,11 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    source invoice ID stops the same invoice being posted twice. Voiding an imported entry
    releases its invoice so it can be posted again.
 
+The wizard also reads the full ledger (accounts, customers, vendors and every transaction) from
+newer company files, QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
+(`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
+and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
+
 Without a readable company file, the wizard also takes **QuickBooks report exports** (`.csv` or
 `.xlsx`) from QuickBooks Desktop for Windows or Mac, or QuickBooks Online: the Journal or General
 Ledger, with the Account Listing, contact lists and Item List chosen together. `report_import.rs`
@@ -236,7 +241,7 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 | **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering, credit card credits (vendor refunds onto a card) |
 | **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
 | **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
-| **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
+| **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw`, IIF, QIF, QuickBooks report and GnuCash import via staging |
 | **Reports** | Profit and Loss · Balance Sheet · Prev Year Comparisons · Budget vs. Actual · Cash Flows · Aging · Sales & Expense summaries · Inventory Valuation & Stock Status · Missing Checks · Trial Balance · General Ledger | Fiscal-year-aware statements (accrual or cash, by month, quarter or class), previous year and budget comparisons for the P&L and Balance Sheet, moving-average inventory valuation, check-number gaps and duplicates, Excel (.xlsx) and CSV export of reports, registers, lists and the audit log, Print / Save as PDF with company logo |
 | **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) · Users & Passwords | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access, optional users with roles, sign-in, a recovery key and encrypted vendor tax IDs |
 
@@ -533,6 +538,9 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   lines are grouped by date, type and number until they balance. A General Ledger's lines are
   paired back into transactions through its Split column; lines that can't be paired are listed,
   not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
+- **GnuCash imports.** Stock and mutual fund accounts are skipped. Amounts that aren't whole cents,
+  and foreign-currency transactions with no home-currency amount, are listed for manual entry
+  rather than rounded or converted. Scheduled transactions, budgets and prices aren't imported.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.

@@ -270,7 +270,7 @@ pub struct StartOverPoint {
 pub struct LedgerBatchSummary {
     pub id: i64,
     pub file_name: String,
-    /// `QBW` (a company file or backup), `IIF` or `QIF`, from the file's extension.
+    /// `QBW` (a company file or backup), `IIF`, `QIF` or `GNUCASH`, from the file's extension.
     pub source_format: String,
     pub source_path: String,
     pub file_size_bytes: i64,
@@ -1083,6 +1083,7 @@ fn source_format(file_name: &str) -> &'static str {
         Some("iif") => "IIF",
         Some("qif") => "QIF",
         Some("csv" | "xlsx" | "xls") => "REPORT",
+        Some("gnucash" | "gnc") => "GNUCASH",
         _ => "QBW",
     }
 }
