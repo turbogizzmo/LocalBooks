@@ -38,3 +38,23 @@ A void is refused when:
 - it's dated on or before the closing date ([Close a period](closing-the-books.md));
 - an invoice or bill still has payments (void the payments first), or a payment is already part of a
   bank deposit (void the deposit first).
+
+## Find a transaction
+
+For a quick lookup, type in the search box at the top of the window (**⌘K** or **Ctrl+K**). It
+matches numbers, names, memos, references and exact amounts.
+
+For more, choose **Advanced search…** at the bottom of its results, or go to **Accounting › Find
+Transactions**. Combine any of:
+
+- **Name, memo or number contains**: text anywhere in the name, the number or a line's memo.
+- **Dates**: a period such as *This month* or *Last fiscal year*, or your own From and To.
+- **Number**: the exact invoice, check, bill or reference number (a leading `#` is ignored).
+- **Amount**: equal to, at least, at most or between, compared with each transaction's total.
+- **Transaction types**, **Customers and vendors**, and **Accounts** (an account includes its
+  subaccounts).
+- **Include voided**: voided transactions and their reversals are left out unless this is ticked.
+
+The list shows one row per transaction with how many match and their total. Click a column heading
+to sort and a row to open the transaction. The first 500 matches are listed, newest first; narrow
+the filters to see older ones.

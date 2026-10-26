@@ -44,6 +44,8 @@ const OPEN: &[&str] = &[
     "open_company_file",
     "close_company_file",
     "create_company_file",
+    "get_company_setup_options",
+    "get_starter_chart",
     "forget_recent_company",
     "find_company_files",
     "restore_backup_as",
@@ -112,6 +114,7 @@ const READ: &[&str] = &[
     // Counts as activity (see `main.rs`); refused like any other command once the limit has passed.
     "touch_session",
     "search_books",
+    "find_transactions",
     "verify_ledger_integrity",
     "file_dentist_checkup",
     "propose_forensic_corrections",

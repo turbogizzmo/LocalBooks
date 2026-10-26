@@ -4,7 +4,7 @@
 //!
 //! Every item opens a page of the app, often with an entry form or report: the focused window is sent
 //! `menu-navigate` with `{ view, action, data }`, as the app's own navigation passes them. A few items
-//! act on the page itself (focus the search box, show Help, hide the side bar) and are sent as
+//! act on the page itself (show Help, hide the side bar) and are sent as
 //! `menu-command`. Shortcuts follow the classic ones where they don't clash with text editing or the
 //! platform (Ctrl+A stays Select All; Cmd+W stays Close Window on macOS).
 
@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Wry};
 
 /// Sent to the focused window with the page to open.
 const MENU_NAVIGATE: &str = "menu-navigate";
-/// Sent to the focused window with a command for the page ("find", "help", "sidebar").
+/// Sent to the focused window with a command for the page ("help", "sidebar").
 const MENU_COMMAND: &str = "menu-command";
 /// A navigation item's id: this prefix, then `view|action|report|n` (n keeps repeated items unique).
 const GO_PREFIX: &str = "go:";
@@ -62,7 +62,7 @@ const FILE: &[Entry] = &[
 const EDIT: &[Entry] = &[
     Entry::Sep,
     page("Use Register", "accounting/register"),
-    Entry::Cmd { label: "Find…", command: "find", accel: Some("CmdOrCtrl+F") },
+    keyed("Find…", "accounting/find", None, "CmdOrCtrl+F"),
     Entry::Sep,
     form("Preferences…", "settings", "preferences"),
 ];

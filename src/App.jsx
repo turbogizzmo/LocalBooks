@@ -35,7 +35,8 @@ import SendForms from './components/SendForms.jsx';
 import Recurring, { useDueRecurring } from './components/Recurring.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
-import GlobalSearch, { focusSearch } from './components/GlobalSearch.jsx';
+import GlobalSearch from './components/GlobalSearch.jsx';
+import FindTransactions from './components/FindTransactions.jsx';
 import { hasPendingMigration, useCompanyFileActions } from './components/CompanyFiles.jsx';
 import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
@@ -148,7 +149,6 @@ export default function App() {
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
       if (payload === 'sidebar') setSidebarHidden((h) => !h);
-      if (payload === 'find') focusSearch();
     }));
     return () => {
       cancelled = true;
@@ -321,6 +321,7 @@ export default function App() {
           {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
           {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
+          {view === 'accounting/find' && <FindTransactions {...props} />}
           {view === 'accounting/recurring' && <Recurring />}
           {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}

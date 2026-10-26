@@ -12,6 +12,7 @@ mod banking;
 mod classes;
 mod closing;
 mod commands;
+mod company_setup;
 mod credits;
 mod custom_fields;
 mod custom_reports;
