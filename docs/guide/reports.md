@@ -147,6 +147,7 @@ an account heading to open its register.
 | **1099 Detail** | The checks, expenses and bill payments from bank accounts behind the 1099 Summary, by vendor |
 | **Transaction List by Date** | One row per transaction, with its total |
 | **Journal** | Every transaction with all of its debit and credit lines |
+| **Adjusting Journal Entries** | Only the journal entries marked **Adjusting entry**, with all of their lines |
 
 The numbers agree with the other reports: account lines and balances with the General Ledger, the
 aging details with the A/R and A/P Aging Summary, the Sales by Customer and Product/Service Detail
@@ -165,6 +166,96 @@ Things to know:
 - On ledger lines, **Item**, **Qty** and **Rate** are filled in when the line was posted from a single
   item line of its invoice, sales receipt, credit memo or bill. The reports by product or service
   read the documents' item lines instead, in your home currency.
+
+## Accountant & Taxes reports
+
+The **Accountant & Taxes** group in the report list holds what an accountant asks for at year end:
+the **Trial Balance**, **General Ledger**, **Transaction List by Date**, **Journal** and
+**Adjusting Journal Entries**, and the reports below. Each one exports and prints like any other,
+and a click on a line opens its transaction.
+
+### Adjusting Journal Entries
+
+Tick **Adjusting entry** when you post a journal entry (see
+[Journal entries and voiding](journal-entries-and-voids.md)) to mark it as a period-end adjustment,
+such as depreciation, an accrual or a correction your accountant gives you. **Adjusting Journal
+Entries** lists only those entries, opening on the fiscal year to date. When an adjusting entry is
+voided, the entry that voids it is listed too, so together they come to zero. It is a detail report,
+so **Customize…** and **Save as…** work on it.
+
+### Previous Reconciliation
+
+Reprints a completed reconciliation. Choose the **Account** and the **Statement ending** date, then
+**Detail** or **Summary**:
+
+- **Detail** lists the beginning balance, then each cleared transaction (checks and payments, then
+  deposits and credits) with a running balance, the cleared balance, and the transactions dated on or
+  before the statement that were not cleared. Their **Status** says whether a later statement
+  cleared them (**Cleared** and its date) or they are still **Outstanding**. The last line is the
+  register balance on the statement date.
+- **Summary** shows the same thing as counts and totals, with the statement's ending balance.
+
+For a credit card the two halves are **Charges and Cash Advances** and **Payments and Credits**.
+See [Reconcile an account](reconciling.md).
+
+### Reconciliation Discrepancy
+
+Lists cleared transactions that were changed, voided or deleted after their reconciliation was
+completed, by account and statement, with the amount when it was reconciled, the amount now and the
+effect on the reconciled balance. Pick one **Account** or all of them.
+
+LocalBooks itself never lets a reconciled transaction change, so in normal use this report is empty.
+Anything it finds means the company file was changed outside LocalBooks (another program, or a file
+restored from elsewhere). See [Reconcile an account](reconciling.md#check-for-changes-after-reconciling)
+for what is checked, and why reconciliations finished with an earlier version are checked by their
+totals only.
+
+### Income Tax Summary and Income Tax Detail
+
+These total your books by the lines of your income tax return. They use the **Tax form** set in
+**Settings › Preferences** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
+on the report.
+
+First give each account its tax line:
+
+1. Open **Income Tax Summary** and click **Tax lines…**.
+2. For each income and expense account, choose the line its amounts go on, such as **8 ·
+   Advertising** or **26 · Wages**. Your choice is saved straight away.
+3. For a partnership or corporation, tick **Show balance sheet accounts** to give asset, liability
+   and equity accounts a **Sch. L** (balance sheet) line too.
+
+Then choose the **Tax year** (Last fiscal year to start) or a custom range:
+
+- **Income Tax Summary** shows one amount per tax line: income lines as credits less debits,
+  deductions as debits less credits, and Schedule L lines as each account's balance at the end of the
+  year. Click a line to see its transactions.
+- **Income Tax Detail** lists the transactions behind each line, or one line you choose under
+  **Tax line**.
+- **Unassigned** lists the income and expense accounts with activity but no tax line, so nothing is
+  missed. **Other tax lines** lists accounts with a line from another form, or a line brought in
+  from QuickBooks that LocalBooks hasn't matched.
+
+Moving from QuickBooks Desktop: an IIF file's account tax lines come across when they are named
+(such as `Sch C: Advertising`). A company file (`.qbw`, `.qbb`) and most IIF files store only
+QuickBooks' own number for the line; LocalBooks keeps it as **QuickBooks tax line** and its number,
+so accounts that shared a line stay together under **Other tax lines** until you choose the
+LocalBooks line under **Tax lines…**.
+
+The amounts come from your books on the accrual basis. They are a starting point for your return,
+not the return itself: your tax preparer may adjust them, for example for meals or depreciation.
+
+### Collections Report
+
+Every invoice past its due date and still open on the **As of** date, grouped by customer. Each
+customer's heading shows how to reach them: the **Company name** (as the contact), **Phone** and
+**Email** from the customer's record. **Aging** is the number of days past due. Credit memos and
+invoices not yet due are left out; the A/R Aging reports show those.
+
+### Open Purchase Orders
+
+Purchase orders dated on or before the **As of** date that haven't been billed or closed, grouped by
+vendor, with the expected date and amount. Purchase orders don't post to the books, so this report
+doesn't change any balance.
 
 ## Customize a report
 

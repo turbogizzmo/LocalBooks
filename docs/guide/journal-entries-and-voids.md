@@ -10,7 +10,14 @@ balances.
 2. Set the **Journal date** and an optional **Memo**.
 3. Add at least two lines. On each, choose the account and enter a debit or a credit.
 4. Total debits must equal total credits. LocalBooks won't post an entry that doesn't balance.
-5. Click **Save & Post**.
+5. Tick **Adjusting entry** if this is a period-end adjustment (depreciation, an accrual, a correction
+   from your accountant).
+6. Click **Save & Post**.
+
+Adjusting entries are tagged **Adjusting** in the list; choose **Adjusting entries** in the filter
+to see only them. **Reports › Accountant & Taxes › Adjusting Journal Entries** lists them with their
+lines (see [Accountant & Taxes reports](reports.md#adjusting-journal-entries)). Editing an entry
+keeps its mark unless you untick it.
 
 ## Undo a transaction (void)
 

@@ -319,8 +319,8 @@ export function reportExports({ company, title, subtitle, report, filename, onNo
   };
 }
 
-/** The report on screen and in print; also used by the job costing reports (`JobReports.jsx`). */
-export function ReportTable({ company, title, subtitle, report, onRow, footer = 'click a line to open its transaction · Customize… changes the filters, columns and grouping' }) {
+/** The report on screen and in print; also used by the job costing and Accountant & Taxes reports. */
+export function ReportTable({ company, title, subtitle, report, onRow, footer = 'click a line to open its transaction · Customize… changes the filters, columns and grouping', empty = 'No transactions match this report’s dates and filters.' }) {
   const { columns, rows } = report;
   const rowClass = (kind) =>
     kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'subtotal' ? 'font-semibold border-t border-qb-ink' : kind === 'total' ? 'font-semibold border-t-2 border-double border-qb-ink' : '';
@@ -376,7 +376,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, footer = 
           <tbody>
             {report.lineCount === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-1.5 py-1 text-qb-ink-muted">No transactions match this report’s dates and filters.</td>
+                <td colSpan={columns.length} className="px-1.5 py-1 text-qb-ink-muted">{empty}</td>
               </tr>
             )}
             {rows.map((r, i) => (

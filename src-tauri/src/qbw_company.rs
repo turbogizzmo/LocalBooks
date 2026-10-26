@@ -65,6 +65,9 @@ pub struct SourceAccount {
     pub active: bool,
     /// Balance the file stores for the account (negative = debit), when readable.
     pub stored_balance_cents: Option<i64>,
+    /// The income tax line the file assigns, as LocalBooks keeps an imported one it cannot match
+    /// (see `accountant_reports::imported_tax_line`).
+    pub tax_line: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,6 +300,8 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
                 parent_id: r.get("parent_id").as_int().filter(|p| *p > 0),
                 active: !hidden,
                 stored_balance_cents: stored.get(&id).copied(),
+                // QuickBooks numbers its tax lines; 0 is unassigned. The file has no names for them.
+                tax_line: r.get("tax_line_id_num").as_int().filter(|n| *n > 0).map(|n| crate::accountant_reports::quickbooks_tax_line(n)),
             },
         );
     }

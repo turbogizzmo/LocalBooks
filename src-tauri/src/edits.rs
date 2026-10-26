@@ -11,7 +11,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::expenses::{BillInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
-use crate::ledger::{db_err, post_entry_in_tx, rollback, void_in_tx, EntrySource, JournalEntry};
+use crate::ledger::{db_err, post_entry_in_tx_flagged, rollback, void_in_tx, EntrySource, JournalEntry};
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
@@ -89,29 +89,36 @@ pub async fn replace_expense(pool: &SqlitePool, expense_id: i64, input: ExpenseI
 }
 
 /// Replaces a manual journal entry. Entries made by another screen (documents, reclassifications,
-/// refunds, tax payments) are edited from that screen.
+/// refunds, tax payments) are edited from that screen. The replacement keeps the original's
+/// adjusting-entry mark.
 pub async fn replace_journal_entry(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry) -> Result<i64, String> {
+    replace_journal_entry_flagged(pool, journal_entry_id, entry, None).await
+}
+
+/// [`replace_journal_entry`], marking the replacement as an adjusting entry or not; `None` keeps
+/// the original's mark.
+pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry, adjusting: Option<bool>) -> Result<i64, String> {
     run(pool, async |tx| {
-        let manual: Option<bool> = sqlx::query_scalar(
+        let manual: Option<(bool, bool)> = sqlx::query_as(
             "SELECT e.source_type = 'JOURNAL' AND e.reverses_entry_id IS NULL AND e.is_voided = 0
                 AND NOT EXISTS (SELECT 1 FROM class_reclassifications WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id)
-             FROM journal_entries e WHERE e.id = ?1",
+             , e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
         )
         .bind(journal_entry_id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-        match manual {
+        let was_adjusting = match manual {
             None => return Err("EDIT_NOT_FOUND: that journal entry does not exist".into()),
-            Some(false) => return Err("EDIT_NOT_MANUAL: only manual journal entries are edited here; edit the others from the screen that made them".into()),
-            Some(true) => {}
-        }
+            Some((false, _)) => return Err("EDIT_NOT_MANUAL: only manual journal entries are edited here; edit the others from the screen that made them".into()),
+            Some((true, adjusting)) => adjusting,
+        };
         void_in_tx(tx, journal_entry_id).await?;
-        let new_entry = post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
+        let new_entry = post_entry_in_tx_flagged(tx, &entry, EntrySource::Journal, adjusting.unwrap_or(was_adjusting)).await?;
         record(tx, journal_entry_id, new_entry).await?;
         Ok(new_entry)
     })

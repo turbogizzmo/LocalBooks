@@ -11,6 +11,7 @@ fn account(id: i64, name: &str, kind: &'static str, parent: Option<i64>) -> Sour
         parent_id: parent,
         active: true,
         stored_balance_cents: None,
+        tax_line: None,
     }
 }
 

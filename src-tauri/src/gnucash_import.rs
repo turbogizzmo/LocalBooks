@@ -488,6 +488,7 @@ pub fn ledger(book: &Book) -> Ledger {
             parent_id,
             active: !a.hidden,
             stored_balance_cents: None,
+            tax_line: None,
         });
     }
 

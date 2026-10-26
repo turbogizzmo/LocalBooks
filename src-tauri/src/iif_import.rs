@@ -303,7 +303,14 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                             Some("UNDEPOSIT") => "OTHER_CURRENT_ASSET",
                             _ => t,
                         };
-                        accounts.declare(name, t, !row.yes("HIDDEN"));
+                        let id = accounts.declare(name, t, !row.yes("HIDDEN"));
+                        // Some exports name the tax line (TAXLINE); QuickBooks writes its number (SCD).
+                        let tax_line = row.text("TAXLINE").and_then(|t| crate::accountant_reports::imported_tax_line(&t)).or_else(|| {
+                            row.get("SCD").and_then(|n| n.trim().parse::<i64>().ok()).filter(|n| *n > 0).map(crate::accountant_reports::quickbooks_tax_line)
+                        });
+                        if let Some(a) = accounts.list.iter_mut().find(|a| a.id == id) {
+                            a.tax_line = tax_line;
+                        }
                     }
                     None => nonposting.push(name.to_lowercase()),
                 }
