@@ -399,7 +399,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, footer = 
 // ------------------------------------------------------------------------------------------------
 
 /** A checkbox list with a search box; `value` holds the chosen options' values. */
-function MultiPick({ label, options, value, onChange, keyOf = String }) {
+export function MultiPick({ label, options, value, onChange, keyOf = String }) {
   const [q, setQ] = useState('');
   const chosen = new Set(value.map(keyOf));
   const shown = options.filter((o) => chosen.has(keyOf(o.value)) || o.label.toLowerCase().includes(q.toLowerCase()));
@@ -433,7 +433,7 @@ function MultiPick({ label, options, value, onChange, keyOf = String }) {
   );
 }
 
-function MoneyBound({ label, cents, onChange }) {
+export function MoneyBound({ label, cents, onChange }) {
   const shown = cents === null || cents === undefined ? '' : centsToInput(cents);
   const [text, setText] = useState(shown);
   const [editing, setEditing] = useState(false);
