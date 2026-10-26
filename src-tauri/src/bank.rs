@@ -11,6 +11,10 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
+pub mod suggest;
+
+use suggest::{Example, Query, SimilarTo, Suggester};
+
 use crate::banking::{write_deposit, DepositInput, DepositOtherLine};
 use crate::expenses::{write_expense, ExpenseInput, SplitLineInput};
 use crate::ledger::{db_err, rollback, MAX_LINE_CENTS};
@@ -20,8 +24,19 @@ use crate::ledger::{db_err, rollback, MAX_LINE_CENTS};
 pub struct CategorySuggestion {
     pub account_id: i64,
     pub rule_id: Option<i64>,
-    /// `LEARNED` (from past approvals), `BUILT_IN` (vendor list) or `DEFAULT` (uncategorized fallback).
+    /// `LEARNED` (a rule from past approvals), `BUILT_IN` (vendor list), `MODEL` (similar past
+    /// transactions, see [`suggest`]) or `DEFAULT` (uncategorized fallback).
     pub origin: String,
+    /// For `MODEL` suggestions: 0-100, and the past transaction this line is most like.
+    pub confidence: Option<u8>,
+    pub confidence_level: Option<&'static str>,
+    pub similar_to: Option<SimilarTo>,
+}
+
+impl CategorySuggestion {
+    fn plain(account_id: i64, rule_id: Option<i64>, origin: &str) -> Self {
+        CategorySuggestion { account_id, rule_id, origin: origin.into(), confidence: None, confidence_level: None, similar_to: None }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,6 +48,8 @@ pub struct BankTransactionView {
     pub description: String,
     pub amount_cents: i64,
     pub suggestion: Option<CategorySuggestion>,
+    /// A payee learned from similar past expenses (money out only).
+    pub payee: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -661,17 +678,45 @@ impl RuleSet {
         })
     }
 
-    pub fn suggest(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
+    /// The first rule matching the line, if any.
+    pub fn matching(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
         let direction = if amount_cents < 0 { "OUTFLOW" } else { "INFLOW" };
         self.rules
             .iter()
             .find(|r| (r.direction == "ANY" || r.direction == direction) && r.regex.is_match(description))
-            .map(|r| CategorySuggestion { account_id: r.account_id, rule_id: Some(r.id), origin: r.origin.clone() })
-            .or_else(|| {
-                let fallback = if amount_cents < 0 { self.uncategorized_expense } else { self.uncategorized_income };
-                fallback.map(|account_id| CategorySuggestion { account_id, rule_id: None, origin: "DEFAULT".into() })
-            })
+            .map(|r| CategorySuggestion::plain(r.account_id, Some(r.id), &r.origin))
     }
+
+    /// Uncategorized Expense or Income, for a line nothing else suggests a category for.
+    pub fn fallback(&self, amount_cents: i64) -> Option<CategorySuggestion> {
+        let fallback = if amount_cents < 0 { self.uncategorized_expense } else { self.uncategorized_income };
+        fallback.map(|account_id| CategorySuggestion::plain(account_id, None, "DEFAULT"))
+    }
+
+    /// Rules only: the first matching rule, else the uncategorized fallback.
+    #[cfg(test)]
+    pub fn suggest(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
+        self.matching(description, amount_cents).or_else(|| self.fallback(amount_cents))
+    }
+}
+
+/// What a bank line is categorized as: an explicit rule first; otherwise the model's suggestion from
+/// similar past transactions; otherwise uncategorized. The model's payee is offered either way.
+pub fn combine(rules: &RuleSet, amount_cents: i64, ruled: Option<CategorySuggestion>, predicted: Option<suggest::Prediction>) -> (Option<CategorySuggestion>, Option<String>) {
+    let payee = predicted.as_ref().and_then(|p| p.payee.clone()).filter(|_| amount_cents < 0);
+    let suggestion = ruled
+        .or_else(|| {
+            predicted.map(|p| CategorySuggestion {
+                account_id: p.account_id,
+                rule_id: None,
+                origin: "MODEL".into(),
+                confidence: Some(p.confidence),
+                confidence_level: Some(suggest::confidence_level(p.confidence)),
+                similar_to: Some(p.similar_to),
+            })
+        })
+        .or_else(|| rules.fallback(amount_cents));
+    (suggestion, payee)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -784,8 +829,10 @@ pub(crate) async fn insert_line(
     Ok(result.rows_affected() == 1)
 }
 
-pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>, String> {
-    let rows: Vec<(i64, i64, String, String, i64)> = sqlx::query_as(
+/// Pending lines with their suggestions. `file` names the open company file, so the cached model is
+/// never used for another one.
+pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) -> Result<Vec<BankTransactionView>, String> {
+    let rows: Vec<(i64, i64, NaiveDate, String, i64)> = sqlx::query_as(
         "SELECT id, bank_account_id, txn_date, description, amount_cents
          FROM bank_transactions WHERE status = 'PENDING'
          ORDER BY txn_date DESC, id DESC",
@@ -795,38 +842,49 @@ pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>,
     .map_err(db_err)?;
 
     let rules = RuleSet::load(pool).await?;
+    let ruled: Vec<Option<CategorySuggestion>> = rows.iter().map(|r| rules.matching(&r.3, r.4)).collect();
+    let queries: Vec<Query> =
+        rows.iter().map(|r| Query { bank_account_id: r.1, date: r.2, description: &r.3, amount_cents: r.4 }).collect();
+    let only: Vec<Option<i64>> = ruled.iter().map(|s| s.as_ref().map(|s| s.account_id)).collect();
+    let predicted = suggester.with_model(pool, file, |m| m.predict_batch(&queries, &only)).await?;
+    drop(queries);
     Ok(rows
         .into_iter()
-        .map(|(id, bank_account_id, date, description, amount_cents)| BankTransactionView {
-            suggestion: rules.suggest(&description, amount_cents),
-            id,
-            bank_account_id,
-            date,
-            description,
-            amount_cents,
+        .zip(ruled.into_iter().zip(predicted))
+        .map(|((id, bank_account_id, date, description, amount_cents), (ruled, predicted))| {
+            let (suggestion, payee) = combine(&rules, amount_cents, ruled, predicted);
+            BankTransactionView { suggestion, payee, id, bank_account_id, date: date.to_string(), description, amount_cents }
         })
         .collect())
 }
 
-/// Posts a pending bank line to the ledger against `category_account_id` (and optional class) and
-/// learns a matching rule.
-pub async fn approve(pool: &SqlitePool, transaction_id: i64, category_account_id: i64, class_id: Option<i64>) -> Result<i64, String> {
+/// What the user chose for a pending line.
+#[derive(Debug, Clone, Default)]
+pub struct Approval {
+    pub category_account_id: i64,
+    pub class_id: Option<i64>,
+    /// The vendor on the expense (money out only); a new name adds a vendor.
+    pub payee_name: Option<String>,
+}
+
+/// Posts a pending bank line to the ledger against the chosen category (and optional class and
+/// payee), learns a matching rule, and adds the line to the suggestion model.
+pub async fn approve(pool: &SqlitePool, suggester: &Suggester, file: &str, transaction_id: i64, approval: Approval) -> Result<i64, String> {
+    let before = Suggester::signature(pool).await?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
-    match write_approval(&mut tx, transaction_id, category_account_id, class_id).await {
-        Ok(entry_id) => {
+    match write_approval(&mut tx, transaction_id, &approval).await {
+        Ok((entry_id, example)) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            suggester.learn(pool, file, &before, example).await?;
             Ok(entry_id)
         }
         Err(err) => Err(rollback(tx, err).await),
     }
 }
 
-async fn write_approval(
-    tx: &mut Transaction<'_, Sqlite>,
-    transaction_id: i64,
-    category_account_id: i64,
-    class_id: Option<i64>,
-) -> Result<i64, String> {
+async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, approval: &Approval) -> Result<(i64, Example), String> {
+    let Approval { category_account_id, class_id, .. } = *approval;
+    let payee_name = approval.payee_name.as_deref().map(str::trim).filter(|p| !p.is_empty());
     let row: Option<(i64, NaiveDate, String, i64, String)> = sqlx::query_as(
         "SELECT bank_account_id, txn_date, description, amount_cents, status FROM bank_transactions WHERE id = ?1",
     )
@@ -849,7 +907,7 @@ async fn write_approval(
     let (entry_id, direction) = if amount_cents < 0 {
         let expense = ExpenseInput {
             kind: "EXPENSE".into(),
-            payee_name: None,
+            payee_name: payee_name.map(str::to_string),
             payment_account_id: bank_account_id,
             expense_date: date,
             check_number: None,
@@ -903,7 +961,8 @@ async fn write_approval(
         .map_err(db_err)?;
     }
 
-    Ok(entry_id)
+    let payee = if amount_cents < 0 { payee_name.map(str::to_string) } else { None };
+    Ok((entry_id, Example { bank_account_id, date, description, amount_cents, account_id: category_account_id, payee }))
 }
 
 /// Removes a pending line from the review queue without posting it (e.g. a transfer already recorded).

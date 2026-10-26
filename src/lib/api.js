@@ -47,8 +47,8 @@ export const api = {
   importBankFile: (path, bankAccountId, mapping = null) => invoke('import_bank_csv', { path, bankAccountId, mapping }),
   inspectBankFile: (path, mapping = null) => invoke('inspect_bank_file', { path, mapping }),
   listBankTransactions: () => invoke('list_bank_transactions'),
-  approveBankTransaction: (transactionId, categoryAccountId, classId = null) =>
-    invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId }),
+  approveBankTransaction: (transactionId, categoryAccountId, classId = null, payeeName = null) =>
+    invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId, payeeName }),
   excludeBankTransaction: (transactionId) => invoke('exclude_bank_transaction', { transactionId }),
   listBankConnections: () => invoke('simplefin_list'),
   connectBank: (token) => invoke('simplefin_connect', { token }),
