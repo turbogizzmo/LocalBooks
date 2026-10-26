@@ -19,6 +19,8 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
+use crate::company_setup;
+
 use crate::ledger::{self, db_err, mul_div_round, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
 
 /// A tracked product as stored.
@@ -361,7 +363,7 @@ pub struct TrackInput {
     pub product_id: i64,
     #[serde(default)]
     pub sku: Option<String>,
-    /// Defaults to "Inventory Asset" and "Cost of Goods Sold".
+    /// Defaults to "Inventory Asset" and "Cost of Goods Sold", created when the company has none.
     #[serde(default)]
     pub asset_account_id: Option<i64>,
     #[serde(default)]
@@ -370,21 +372,16 @@ pub struct TrackInput {
 
 /// Starts tracking quantity and cost for an existing product (starting at zero on hand).
 pub async fn track_product(pool: &SqlitePool, input: &TrackInput) -> Result<InventoryItemView, String> {
-    let default = |sql: &'static str| async move {
-        sqlx::query_scalar::<_, i64>(sql).fetch_optional(pool).await.map_err(db_err)
-    };
+    let mut conn = pool.acquire().await.map_err(db_err)?;
     let asset = match input.asset_account_id {
         Some(a) => a,
-        None => default("SELECT id FROM chart_of_accounts WHERE name = 'Inventory Asset' AND account_type = 'OTHER_CURRENT_ASSET' AND is_active = 1 ORDER BY id LIMIT 1")
-            .await?
-            .ok_or("STOCK_NO_ASSET_ACCOUNT: create an Other Current Asset account for inventory first")?,
+        None => company_setup::ensure_standard_account(&mut conn, company_setup::INVENTORY_ASSET).await?,
     };
     let cogs = match input.cogs_account_id {
         Some(a) => a,
-        None => default("SELECT id FROM chart_of_accounts WHERE account_type = 'COST_OF_GOODS_SOLD' AND is_active = 1 ORDER BY COALESCE(account_number, ''), id LIMIT 1")
-            .await?
-            .ok_or("STOCK_NO_COGS_ACCOUNT: create a Cost of Goods Sold account first")?,
+        None => company_setup::ensure_standard_account(&mut conn, company_setup::COST_OF_GOODS_SOLD).await?,
     };
+    drop(conn);
     let sku = input.sku.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let id: i64 = sqlx::query_scalar(
         "INSERT INTO inventory_items (product_id, sku, asset_account_id, cogs_account_id) VALUES (?1, ?2, ?3, ?4) RETURNING id",

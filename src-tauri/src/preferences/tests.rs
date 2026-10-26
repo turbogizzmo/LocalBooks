@@ -28,7 +28,7 @@ async fn preferences_validate_normalize_and_persist() {
     assert_eq!(set(&pool, "company_ein", "123456789").await.unwrap(), "12-3456789");
     assert_eq!(set(&pool, "fiscal_year_start", "07-01").await.unwrap(), "07-01");
     assert_eq!(fiscal_start_month(&pool).await.unwrap(), 7);
-    for (key, value) in [("fiscal_year_start", "07-15"), ("fiscal_year_start", "13-01"), ("company_name", "  "), ("tax_form", "990"), ("bogus", "x"), ("company_ein", "12-34")] {
+    for (key, value) in [("fiscal_year_start", "07-15"), ("fiscal_year_start", "13-01"), ("company_name", "  "), ("tax_form", "990-EZ"), ("bogus", "x"), ("company_ein", "12-34")] {
         assert!(set(&pool, key, value).await.is_err(), "{key}={value} should be rejected");
     }
     // The database guards the fiscal start even if the module is bypassed.
@@ -85,4 +85,10 @@ fn tax_calendar_rolls_weekends_and_follows_entity_rules() {
     let corp = tax_calendar("1120", 10, ymd(2026, 11, 1));
     assert!(corp.iter().any(|d| d.form == "Form 1120" && d.statutory_date == ymd(2028, 1, 15)));
     assert_eq!(corp.iter().filter(|d| d.form == "Form 1120-W").count(), 4);
+
+    // Nonprofit: Form 990 is due the 15th day of the 5th month (May 15), with no estimated payments.
+    let np = tax_calendar("990", 1, ymd(2026, 6, 1));
+    let returns: Vec<NaiveDate> = np.iter().filter(|d| d.form == "Form 990").map(|d| d.statutory_date).collect();
+    assert_eq!(returns, vec![ymd(2026, 5, 15), ymd(2027, 5, 15)]);
+    assert!(np.iter().all(|d| !d.form.contains("ES") && !d.form.contains("1120-W")));
 }

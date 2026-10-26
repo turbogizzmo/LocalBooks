@@ -37,6 +37,7 @@ fn imported_tax_lines_match_by_form_and_label() {
     assert_eq!(imported_tax_line("Form 1120S: Rents").as_deref(), Some("1120S:11"));
     assert_eq!(imported_tax_line("Form 1120: Rents").as_deref(), Some("1120:16"));
     assert_eq!(imported_tax_line("Form 1065: Guaranteed payments to partners").as_deref(), Some("1065:10"));
+    assert_eq!(imported_tax_line("Form 990: Advertising and promotion").as_deref(), Some("990:IX 12"));
     // Unknown labels are kept as the file names them; unassigned ones are dropped.
     assert_eq!(imported_tax_line("Sch C: Something new").as_deref(), Some("Sch C: Something new"));
     assert_eq!(imported_tax_line("Advertising").as_deref(), Some("Advertising"));

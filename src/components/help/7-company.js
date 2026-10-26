@@ -20,6 +20,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'new-company', area: 'company', views: ['settings'],
+    title: 'Create a new company with a suggested chart of accounts',
+    body: 'File › New Company… asks for your company details and tax form, then suggests a chart of accounts for your industry from the same 33 industries QuickBooks offers, numbered QuickBooks-style; check or uncheck accounts before saving. Skip uses LocalBooks’ standard chart instead, and either way the accounts can be changed later in the Chart of Accounts.',
+    keywords: 'new company setup interview easystep industry chart of accounts starter accounts tax form entity sole proprietor llc partnership corporation s corp nonprofit 990',
+    go: { label: 'Go to File & Data Controls', view: 'settings', action: 'data' },
+    guide: 'getting-started',
+  },
+  {
     id: 'preferences', area: 'company', views: ['settings'],
     title: 'Set company details and preferences',
     body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices, estimates and reports; Settings › Custom Forms sets how invoices and estimates look.',

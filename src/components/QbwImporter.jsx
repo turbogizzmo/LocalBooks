@@ -9,6 +9,7 @@ import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { takePendingMigration } from './CompanyFiles.jsx';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
 /** QuickBooks report exports: several can be read together (a report and its lists). */
@@ -18,23 +19,6 @@ const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export'
 const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
-const ACCOUNT_TYPE_NAMES = {
-  BANK: 'Bank',
-  ACCOUNTS_RECEIVABLE: 'Accounts Receivable',
-  OTHER_CURRENT_ASSET: 'Other Current Asset',
-  FIXED_ASSET: 'Fixed Asset',
-  OTHER_ASSET: 'Other Asset',
-  ACCOUNTS_PAYABLE: 'Accounts Payable',
-  CREDIT_CARD: 'Credit Card',
-  OTHER_CURRENT_LIABILITY: 'Other Current Liability',
-  LONG_TERM_LIABILITY: 'Long Term Liability',
-  EQUITY: 'Equity',
-  INCOME: 'Income',
-  COST_OF_GOODS_SOLD: 'Cost of Goods Sold',
-  EXPENSE: 'Expense',
-  OTHER_INCOME: 'Other Income',
-  OTHER_EXPENSE: 'Other Expense',
-};
 const STAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
 function formatBytes(n) {

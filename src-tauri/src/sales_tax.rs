@@ -54,7 +54,8 @@ async fn get_rate(pool: &SqlitePool, id: i64) -> Result<TaxRateView, String> {
         .ok_or_else(|| format!("TAX_NOT_FOUND: tax rate {id} does not exist"))
 }
 
-/// The liability account for a rate: the one given (a current liability), or Sales Tax Payable.
+/// The liability account for a rate: the one given (a current liability), or Sales Tax Payable
+/// (created when the company has none).
 async fn liability_account(tx: &mut Transaction<'_, Sqlite>, chosen: Option<i64>) -> Result<i64, String> {
     if let Some(id) = chosen {
         let kind: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
@@ -63,14 +64,18 @@ async fn liability_account(tx: &mut Transaction<'_, Sqlite>, chosen: Option<i64>
             _ => Err("TAX_BAD_ACCOUNT: sales tax accrues in an Other Current Liability account".into()),
         };
     }
-    sqlx::query_scalar(
+    let found: Option<i64> = sqlx::query_scalar(
         "SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_LIABILITY' AND is_active = 1
-         ORDER BY (name = 'Sales Tax Payable') DESC, (account_number = '2200') DESC, id LIMIT 1",
+           AND (name = 'Sales Tax Payable' COLLATE NOCASE OR account_number IN ('2200', '25500'))
+         ORDER BY (name = 'Sales Tax Payable' COLLATE NOCASE) DESC, id LIMIT 1",
     )
     .fetch_optional(&mut **tx)
     .await
-    .map_err(db_err)?
-    .ok_or_else(|| "TAX_NO_ACCOUNT: add a Sales Tax Payable account (Other Current Liability) first".into())
+    .map_err(db_err)?;
+    match found {
+        Some(id) => Ok(id),
+        None => crate::company_setup::ensure_standard_account(tx, crate::company_setup::SALES_TAX_PAYABLE).await,
+    }
 }
 
 fn validate_rate(input: &TaxRateInput) -> Result<&str, String> {

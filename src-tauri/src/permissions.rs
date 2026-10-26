@@ -44,6 +44,8 @@ const OPEN: &[&str] = &[
     "open_company_file",
     "close_company_file",
     "create_company_file",
+    "get_company_setup_options",
+    "get_starter_chart",
     "forget_recent_company",
     "find_company_files",
     "restore_backup_as",

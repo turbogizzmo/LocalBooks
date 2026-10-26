@@ -233,9 +233,10 @@ impl Db {
     }
 
     /// File › New Company: creates an empty company file at `path` (schema applied, default chart
-    /// of accounts), names it `company_name`, and makes it the live company file for this session.
-    /// An existing file at `path` is never replaced.
-    pub async fn create(&self, path: &Path, company_name: &str) -> Result<StorageStatus, String> {
+    /// of accounts, or the chart and settings from the setup assistant), names it `company_name`,
+    /// and makes it the live company file for this session. An existing file at `path` is never
+    /// replaced.
+    pub async fn create(&self, path: &Path, company_name: &str, setup: Option<&crate::company_setup::CompanySetup>) -> Result<StorageStatus, String> {
         let name = company_name.trim();
         if name.is_empty() {
             return Err("NEW_COMPANY_NAME: enter a name for the new company".into());
@@ -245,7 +246,15 @@ impl Db {
             return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (LocalBooks never replaces a company file)", path.display()));
         }
         let mut next = open_live(&path, None).await?;
-        if let Err(err) = crate::preferences::set(&next.pool, "company_name", name).await {
+        let prepared = async {
+            crate::preferences::set(&next.pool, "company_name", name).await?;
+            match setup {
+                Some(setup) => crate::company_setup::apply(&next.pool, setup).await,
+                None => Ok(()),
+            }
+        }
+        .await;
+        if let Err(err) = prepared {
             next.pool.close().await;
             drop(next);
             remove_with_sidecars(&path);
