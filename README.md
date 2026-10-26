@@ -211,9 +211,9 @@ still run these reports in view-only mode. See
 ```mermaid
 flowchart LR
     subgraph UI["React + Tailwind (Tauri webview)"]
-        V[Views & forms] --> A[lib/api.js]
+        V[Views & forms] --> A[lib/api/<br/>one file per feature]
     end
-    A -- "invoke()" --> C[commands.rs<br/>74 Tauri commands]
+    A -- "invoke()" --> C[commands/<br/>one file per feature]
     subgraph Engine["Rust engine"]
         C --> D[Document modules<br/>invoices · sales · expenses · banking<br/>estimates · bank · reconcile · timesheet]
         D --> L[ledger.rs<br/>validate · post · void]
@@ -232,18 +232,44 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 
 ## Feature blueprint
 
-### Navigation
+### Features
 
-| Group | Screens | What you can do |
-|---|---|---|
-| **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
-| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services · Reps, Ship Via & Fields · Customer Statements · Assess Finance Charges · Send Forms | Invoices with inline line-item grid, full & partial payments, optional sales reps, Ship Via and ship dates, up to 15 custom fields per customer, vendor and item list (printable on sales forms), finance charges on overdue invoices (rate, minimum, grace days; interest worked out in integer cents), Change Item Prices (bulk price changes by percentage or amount, from price or cost, with rounding, recorded in the audit trail), sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files, emailed through your mail app or SMTP, with sent history and an Email later queue |
-| **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering, credit card credits (vendor refunds onto a card) |
-| **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
-| **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
-| **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw`, IIF, QIF, QuickBooks report and GnuCash import via staging |
-| **Reports** | Profit and Loss · Balance Sheet · Prev Year Comparisons · Budget vs. Actual · Cash Flows · Aging · Sales & Expense summaries · Inventory Valuation & Stock Status · Missing Checks · Trial Balance · General Ledger | Fiscal-year-aware statements (accrual or cash, by month, quarter or class), previous year and budget comparisons for the P&L and Balance Sheet, moving-average inventory valuation, check-number gaps and duplicates, Excel (.xlsx) and CSV export of reports, registers, lists and the audit log, Print / Save as PDF with company logo |
-| **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) · Users & Passwords | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access, optional users with roles, sign-in, a recovery key and encrypted vendor tax IDs |
+One row per feature, in alphabetical order, each on its own line, so features added in parallel
+land on different lines. Keep a row to one short line and put the details in the feature's guide
+under [`docs/guide/`](docs/guide/README.md).
+
+| Feature | Where | What you can do | Guide |
+|---|---|---|---|
+| ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
+| AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
+| Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
+| Backups & company files | Settings › File & Data Controls | Backups and restore, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
+| Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
+| Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once | [guide](docs/guide/bills.md) |
+| Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
+| Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
+| Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
+| Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
+| Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Custom forms & email | Settings › Custom Forms · Email; Sales › Send Forms | Invoice and estimate designer, PDFs, mail app or SMTP, sent history, Email later queue | [guide](docs/guide/custom-forms.md) |
+| Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/custom-forms.md) |
+| Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
+| Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
+| Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
+| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
+| Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
+| Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
+| Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
+| Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
+| Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
+| Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
+| Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
+| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
+| Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
+| Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
 
 ### `+ New` quick-create matrix
 
@@ -465,7 +491,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
 ├── src/                        # React frontend
 │   ├── App.jsx                 # routing, + New intents, company context
 │   ├── components/             # one file per screen plus shared grids, menus and print documents
-│   ├── lib/                    # api.js (Tauri bindings), money.js (cents math), dates.js
+│   ├── lib/                    # api.js + api/ (Tauri bindings, one file per feature), money.js, dates.js
 │   └── styles/print.css        # US Letter print designer
 ├── tailwind.config.js          # color tokens and dense components
 └── src-tauri/
@@ -473,8 +499,8 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
     ├── capabilities/           # Tauri permission set
     ├── tauri.conf.json
     └── src/
-        ├── main.rs             # app setup, command registration, clean shutdown
-        ├── commands.rs         # Tauri command layer
+        ├── main.rs             # app setup, clean shutdown
+        ├── commands/           # Tauri command layer, one file per feature (see docs/dev/parallel-work.md)
         ├── db.rs               # connection handling, migrations, hot-swap & relocation
         ├── ledger.rs           # validation, posting, voiding, journal register, audit queries
         ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,

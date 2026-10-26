@@ -1,0 +1,132 @@
+// Help, part 5: topics on Accounting & audit (the number in the file name sets the order) and the help for its screens.
+// Each topic’s own `area` decides its heading under All topics.
+
+/** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
+export const screens = {
+  'accounting/register': {
+    help: 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction.',
+  },
+  'accounting/chart-of-accounts': {
+    help: 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here.',
+  },
+  'accounting/classes': {
+    help: 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',
+  },
+  'accounting/reclassify': {
+    help: 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
+  },
+  'accounting/journal': {
+    help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
+    guide: 'journal-entries-and-voids',
+  },
+  'accounting/recurring': {
+    help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
+  },
+  'accounting/budgets': {
+    help: 'Expected income and expenses for each account, month by month for a fiscal year. Compare a budget with your books in Reports › Budget vs. Actuals.',
+  },
+  'accounting/audit': {
+    help: 'A history of every posting, void and reconciliation that cannot be edited, and a check that every posted entry still matches what was recorded.',
+    guide: 'ledger-integrity',
+  },
+  'accounting/fx-revaluation': {
+    help: 'Restate open foreign-currency invoices at a period-end rate. The unrealized gain or loss is posted on that date and reversed the next day.',
+    guide: 'currency-revaluation',
+  },
+  'accounting/qbw-import': {
+    help: 'Bring invoice amounts across from a desktop .qbw company file, review them, and post them as balanced entries.',
+    guide: 'desktop-migration',
+  },
+};
+
+/**
+ * Topics: two sentences each, describing what LocalBooks actually does. `views` lists the
+ * screens a topic is about (shown under "On this screen"); `go` opens the place to do it, with an
+ * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
+ */
+export const topics = [
+  {
+    id: 'register', area: 'accounting', views: ['accounting/register', 'accounting/chart-of-accounts', 'reports'],
+    title: 'Open an account register',
+    body: 'Accounting › Account Registers shows every transaction in one account with a running balance; double-clicking an account in the Chart of Accounts or clicking an account on a report opens it too. Click a row to see the whole transaction, or void it from the ▾ menu.',
+    keywords: 'register account register ledger running balance transactions drill down quickreport',
+    go: { label: 'Go to Account Registers', view: 'accounting/register' },
+  },
+  {
+    id: 'chart-of-accounts', area: 'accounting', views: ['accounting/chart-of-accounts', 'accounting/journal', 'dashboard'],
+    title: 'Find and edit the chart of accounts',
+    body: 'Accounting › Chart of Accounts lists every account by type, with subaccounts indented under their parent and balances for asset, liability and equity accounts. Use New account to add one, double-click an account to rename or renumber it, and make unused accounts inactive so they leave the pickers while their history stays.',
+    keywords: 'chart of accounts coa account list new account subaccount rename number inactive category ledger accounts',
+    go: { label: 'Go to Chart of Accounts', view: 'accounting/chart-of-accounts' },
+  },
+  {
+    id: 'classes', area: 'accounting', views: ['accounting/classes', 'sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal', 'reports'],
+    title: 'Track departments or locations with classes',
+    body: 'Turn on Use class tracking under Accounting › Classes (or Settings › Class tracking) and add classes and subclasses; a Class column then appears on invoices, sales receipts, estimates, bills, expenses, checks, deposits, bank feed approvals, time and journal entries. Settings can assign one class to a whole transaction instead, or warn before saving lines without a class, and Reports › Profit and Loss by Class shows each class side by side with parent totals.',
+    keywords: 'class classes class tracking department location division region segment profit center',
+    go: { label: 'Go to Classes', view: 'accounting/classes' },
+  },
+  {
+    id: 'reclassify', area: 'accounting', views: ['accounting/reclassify', 'accounting/classes', 'reports'],
+    title: 'Fix the class on posted transactions',
+    body: 'Accounting › Reclassify Transactions lists posted income and expense lines by date, account and current class; tick lines, choose the new class and choose Reclassify. Each move posts a reclassifying journal entry on the line’s own date, so reports are corrected for that period, and voiding that entry undoes it.',
+    keywords: 'reclassify wrong class change class fix class move class',
+    go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
+  },
+  {
+    id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
+    title: 'Post a manual journal entry',
+    body: 'Choose New journal entry and enter at least two lines whose debits equal credits; LocalBooks will not post an entry that does not balance. Use it for adjustments such as depreciation or opening balances.',
+    keywords: 'journal entry adjust adjustment debit credit manual opening balance',
+    go: { label: 'New journal entry', view: 'accounting/journal', action: 'journal-entry' },
+    guide: 'journal-entries-and-voids',
+  },
+  {
+    id: 'void', area: 'accounting', views: ['accounting/journal', 'sales/invoices', 'sales/all', 'expenses/expenses', 'expenses/bills', 'banking/transfers'],
+    title: 'Undo a transaction (void)',
+    body: 'Posted transactions are never deleted: Void Transaction (in the row’s menu) posts an exact reversing entry, and both stay visible in Journal Entries. Reconciled transactions and anything dated on or before the closing date cannot be voided.',
+    keywords: 'delete undo reverse mistake cancel void correction',
+    go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
+    guide: 'journal-entries-and-voids',
+  },
+  {
+    id: 'ledger-discrepancies', area: 'accounting', views: ['accounting/audit'],
+    title: 'Check and correct the ledger',
+    body: 'Verify ledger integrity compares every posted entry with the snapshot taken when it was posted and lists anything changed, deleted or out of balance. Review corrections proposes a balanced correcting entry where one can fix the problem and posts only after you approve; a change that left debits and credits unequal needs a restore from a backup.',
+    keywords: 'audit tamper heal auto-heal mismatch integrity forensic snapshot corrupt verify',
+    go: { label: 'Go to the Audit Log', view: 'accounting/audit' },
+    guide: 'ledger-integrity',
+  },
+  {
+    id: 'audit-log', area: 'accounting', views: ['accounting/audit'],
+    title: 'Read the audit log',
+    body: 'Every posting, void and reconciliation lock is recorded automatically by the database, with its time, and cannot be edited or deleted. Filter by event type to see just posts, voids or reconciliations.',
+    keywords: 'audit history trail log events',
+    go: { label: 'Go to the Audit Log', view: 'accounting/audit' },
+    guide: 'ledger-integrity',
+  },
+  {
+    id: 'fx-revaluation', area: 'accounting', views: ['accounting/fx-revaluation', 'sales/invoices', 'reports'],
+    title: 'Revalue foreign-currency invoices at period end',
+    body: 'Enter period-end rates under Accounting › Currency Revaluation to restate what customers owe in other currencies. The unrealized gain or loss posts on that date and reverses the next day, so payments still realize the right gain or loss.',
+    keywords: 'currency revaluation unrealized exchange gain loss foreign period end rate',
+    go: { label: 'Go to Currency Revaluation', view: 'accounting/fx-revaluation' },
+    guide: 'currency-revaluation',
+  },
+  {
+    id: 'qbw-import', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Import a desktop company file (.qbw)',
+    body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from .qbw files yet. Map each line type to an income account, compare the total with the original program, then post.',
+    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
+    id: 'qbw-undo', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Undo or delete a desktop migration import',
+    body: 'Reverse posted entries voids everything an import posted and deactivates the accounts it created, returning your balances to where they were. Delete import removes only the staged lines and never touches your books.',
+    keywords: 'undo reverse delete import qbw remove staged',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+];
