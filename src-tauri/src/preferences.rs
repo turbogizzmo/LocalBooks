@@ -90,7 +90,7 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             "" => Ok(String::new()),
             _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_FC_ACCOUNT: choose an Income account".into()),
         },
-        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" => match v {
+        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
         },

@@ -74,6 +74,14 @@ foreign unit, stored as an integer scaled by 1,000,000).
   cumulatively, so the final payment clears it to the cent. The difference posts to the system
   account **Exchange Gain or Loss**.
 - The home currency is a preference and locks once foreign transactions exist.
+- **Optional daily exchange rates (uses the network).** With *Look up daily exchange rates* on
+  (Settings › Preferences Console, off by default), rate fields are pre-filled with the European
+  Central Bank's reference rate for the transaction date, through the open-source
+  [Frankfurter](https://github.com/lineofflight/frankfurter) API at `api.frankfurter.dev`. Each
+  lookup sends only the two currency codes and a date. Answers are cached in the company file
+  (`exchange_rate_cache`), so a date is fetched once and works offline. Weekends and holidays use
+  the previous business day's rate. The suggestion can always be overridden, and saved
+  transactions keep the rate they were saved with.
 
 ### Double-entry enforced at two layers
 
@@ -459,6 +467,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── reconcile.rs, timesheet.rs       # business documents
         ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
+        ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache
         ├── forms.rs, pdf.rs    # form designer layouts and the PDF writer
         ├── mail_app.rs, smtp.rs, secrets.rs   # emailing forms; credentials on this computer
         ├── email_log.rs        # sent history (append-only) and the Email later queue

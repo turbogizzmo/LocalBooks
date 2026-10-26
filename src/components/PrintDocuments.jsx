@@ -4,7 +4,7 @@ import { formatMoney } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 /** Company identity for printed documents: name, contact lines and logo (data URL or null). */
-export const CompanyContext = createContext({ name: 'LocalBooks', legalName: '', address: '', email: '', phone: '', ein: '', logo: null, homeCurrency: 'USD' });
+export const CompanyContext = createContext({ name: 'LocalBooks', legalName: '', address: '', email: '', phone: '', ein: '', logo: null, homeCurrency: 'USD', fxLookup: false });
 
 export function useCompany() {
   return useContext(CompanyContext);

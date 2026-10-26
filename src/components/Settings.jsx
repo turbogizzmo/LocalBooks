@@ -345,6 +345,24 @@ function PreferencesConsole() {
               </span>
             ),
           })}
+          {field({
+            label: 'Exchange rates',
+            prefKey: 'exchange_rate_lookup',
+            hint: (
+              <>
+                Suggests the European Central Bank’s rate for a foreign-currency transaction’s date, through the Frankfurter service
+                (api.frankfurter.dev). Only the two currency codes and the date are sent; nothing about your company or its transactions.
+                Rates are saved in the company file, so a date is looked up once and works offline. You can always type a different rate,
+                and saved transactions keep theirs.
+              </>
+            ),
+            children: ({ id, value, commit }) => (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                Look up daily exchange rates
+              </label>
+            ),
+          })}
         </Group>
         <Group title="Class tracking" id="class-tracking">
           {field({

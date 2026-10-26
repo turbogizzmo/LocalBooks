@@ -13,6 +13,7 @@ import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
+import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const TERMS = [
@@ -42,6 +43,8 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const money = (c) => formatMoney(c, foreign);
   const [rate, setRate] = useState(foreign ? formatRate(invoice.exchangeRateE6) : '');
   const rateE6 = foreign ? parseRateE6(rate) : null;
+  // The invoice's rate is only a starting point: with lookup on, the payment date's rate replaces it.
+  const suggested = useSuggestedRate({ currency: foreign, date, rate, setRate, initialIsDefault: true });
   const [method, setMethod] = useState('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -98,7 +101,10 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
           {foreign && (
             <label>
               <span className="qb-label">1 {foreign} = ? {invoice.homeCurrency}</span>
-              <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(rateError)} />
+              <span className="flex items-center gap-1.5">
+                <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(rateError)} />
+                {suggested.note}
+              </span>
             </label>
           )}
           <label>
@@ -179,12 +185,13 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.invoiceNumber - b.invoiceNumber);
   const money = (c) => formatMoney(c, currency || null);
   const rateE6 = currency ? parseRateE6(rate) : null;
+  const suggested = useSuggestedRate({ currency, date, rate, setRate });
   const pickCustomer = (name) => {
     setCustomer(name);
     const first = open.find((i) => i.customerName === name);
     const code = first?.currencyCode ?? '';
     setCurrency(code);
-    setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+    suggested.adopt(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
     setApplied({});
     setReceived('');
   };
@@ -260,7 +267,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
               onChange={(e) => {
                 setCurrency(e.target.value);
                 const first = customerInvoices.find((i) => (i.currencyCode ?? '') === e.target.value);
-                setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+                suggested.adopt(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
                 setApplied({});
                 setReceived('');
               }}
@@ -274,7 +281,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
         {currency && (
           <label>
             <span className="qb-label">1 {currency} = ? {homeCurrency}</span>
-            <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rate !== '' && rateE6 === null} />
+            <span className="flex items-center gap-1.5">
+              <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rate !== '' && rateE6 === null} />
+              {suggested.note}
+            </span>
           </label>
         )}
         <label>
@@ -802,7 +812,7 @@ export default function Invoices({ accounts, intent }) {
               Receive payment
             </button>
           )}
-          <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
+          <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={issueDate} />
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
             <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
