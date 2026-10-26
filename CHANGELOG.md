@@ -4,6 +4,33 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.7.0]
+
+- **Export to Excel.** Every report, register, list and the audit log can now be saved as an Excel
+  workbook, laid out like QuickBooks' own export: real numbers and dates, bold totals, frozen
+  headers, and indented accounts.
+- **Import PDF bank statements.** Bank Feeds can read the transaction table from a PDF bank or card
+  statement. You confirm the columns, and a balance check shows whether the statement adds up. PDFs
+  that are only scanned images can't be read.
+- **Import from GnuCash.** The Desktop Migration Wizard reads GnuCash books (XML or SQLite) into
+  LocalBooks, including customers, vendors, invoices and bills.
+- **Smarter Bank Feed suggestions.** When no rule matches, LocalBooks suggests a category and payee
+  from similar past transactions, with a confidence level and the transaction it looked like.
+  Nothing is approved automatically, and nothing leaves your computer.
+- **Daily exchange rates (optional).** Turn on **Look up daily exchange rates** (Settings ›
+  Preferences Console › Accounting & tax) to have foreign-currency rates filled in from the European
+  Central Bank. Only the currency codes and the date are sent. A rate you type, or one already
+  saved, is never replaced.
+- **Pay bills by ACH file.** In Pay Bills, choose **Pay by ACH file** to record the payments and
+  save a NACHA file to upload to your bank. Vendor bank details are encrypted like tax IDs. Check
+  your first file with your bank before relying on it.
+- **License notices.** Help now lists the open-source components LocalBooks uses. QuickBooks® is a
+  registered trademark of Intuit Inc.; LocalBooks is independent and not affiliated with, endorsed
+  by, or sponsored by Intuit.
+- Behind the scenes: every release is now checked automatically on macOS, Windows and Linux before
+  it's offered as an update. The checks cover the update signatures, upgrading company files from
+  the previous version, and launching the app.
+
 ## [0.6.0]
 
 - **Import QuickBooks reports.** No working QuickBooks? Every QuickBooks (Desktop for Windows,
