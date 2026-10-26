@@ -25,3 +25,4 @@ src-tauri/gen/
 # Third-party installers and tools dropped in for reference; never commit them
 *.exe
 *.dmg
+__pycache__/
