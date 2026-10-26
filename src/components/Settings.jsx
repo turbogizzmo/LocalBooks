@@ -9,7 +9,7 @@ import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
-import { NewCompanyDialog } from './CompanyFiles.jsx';
+import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -635,7 +635,7 @@ function RestoreConfirm({ info, onConfirm, onCancel, busy }) {
   );
 }
 
-function FileAndData({ companyName }) {
+function FileAndData({ companyName, isAdmin, navigate }) {
   const backups = useLedgerQuery(api.listBackups);
   const [notice, setNotice] = useState(null);
   const [pending, setPending] = useState(null);
@@ -685,20 +685,30 @@ function FileAndData({ companyName }) {
   };
 
   const chooseRestore = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (path) prepareRestore(path);
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS] }],
+    });
+    if (!path) return;
+    // A QuickBooks backup can't replace these books: it becomes a new company through the migration wizard.
+    if (!isQuickBooksFile(path)) return prepareRestore(path);
+    try {
+      await migrateQuickBooksFile(path);
+    } catch (err) {
+      setNotice({ kind: 'error', text: `This file can't be restored: ${errorText(err)}` });
+    }
   };
 
   // Opens another company file in place for this session (the same as double-clicking it).
   const openCompanyFile = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (!path) return;
     setBusy(true);
     setNotice(null);
     try {
-      await api.openCompanyFile(path);
+      await openOrRestoreCompany();
     } catch (err) {
       setNotice({ kind: 'error', text: `This file can't be opened: ${errorText(err)}` });
+    } finally {
       setBusy(false);
     }
   };
@@ -759,6 +769,11 @@ function FileAndData({ companyName }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => setCreatingCompany(true)} disabled={busy}>
             New Company…
           </button>
+          {isAdmin && navigate && (
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => navigate('accounting/qbw-import')} disabled={busy}>
+              Desktop Migration Wizard…
+            </button>
+          )}
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={closeCompany} disabled={busy}>
             Close Company
           </button>
@@ -965,7 +980,7 @@ const ALL_TABS = [
 // Company-wide settings are an Admin's; everyone manages their own sign-in.
 const NON_ADMIN_TABS = new Set(['users', 'updates']);
 
-export default function Settings({ companyName, intent, isAdmin = true }) {
+export default function Settings({ companyName, intent, isAdmin = true, navigate }) {
   const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
   const allowed = (id) => tabs.some(([t]) => t === id);
   // The tab asked for (null: the first one). Which tabs are allowed can change after the first
@@ -1004,7 +1019,7 @@ export default function Settings({ companyName, intent, isAdmin = true }) {
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}
-      {tab === 'data' && <FileAndData companyName={companyName} />}
+      {tab === 'data' && <FileAndData companyName={companyName} isAdmin={isAdmin} navigate={navigate} />}
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
