@@ -462,7 +462,8 @@ fn build_pl(mut b: Builder<'_>, net_other: Option<bool>) -> PlBody {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassColumn {
-    /// The class the column is for; `None` for Unclassified and Total.
+    /// The class the column is for (the customer or job, in Profit and Loss by Job); `None` for
+    /// Unclassified and Total.
     pub class_id: Option<i64>,
     pub label: String,
     /// `class` (a class with no subclass columns), `other` (a parent's own lines, shown beside
@@ -501,11 +502,7 @@ pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, 
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
-    let chart = Chart::load(pool).await?;
-    let pl_accounts: std::collections::HashSet<i64> =
-        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
-
-    // Debit-net movement per (class, account) over P&L accounts only.
+    // Debit-net movement per (class, account).
     let rows: Vec<(Option<i64>, i64, i64)> = sqlx::query_as(
         "SELECT class_id, account_id, SUM(debit_cents) - SUM(credit_cents)
          FROM v_posted_lines
@@ -517,29 +514,52 @@ pub async fn profit_and_loss_by_class(pool: &SqlitePool, start_date: NaiveDate, 
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let mut by_class: HashMap<Option<i64>, HashMap<i64, i64>> = HashMap::new();
-    let mut total: HashMap<i64, i64> = HashMap::new();
-    for (class, account, net) in rows {
-        if net != 0 && pl_accounts.contains(&account) {
-            by_class.entry(class).or_default().insert(account, net);
-            *total.entry(account).or_insert(0) += net;
-        }
-    }
-
     let classes: Vec<(i64, Option<i64>, String, String)> =
         sqlx::query_as("SELECT id, parent_id, name, full_name FROM v_classes ORDER BY replace(lower(full_name), ':', char(1))")
             .fetch_all(pool)
             .await
             .map_err(db_err)?;
-    // Each column adds up the movement of these classes (None = unclassified lines).
+    profit_and_loss_by_columns(pool, start_date, end_date, rows, &classes, "Unclassified").await
+}
+
+/// Profit & Loss with a column per member of a tree (classes, or customers and their jobs) that has
+/// income or expense, from `rows` of (member, account, debit-net movement). Members with movement
+/// below them get an "(other)" column for their own lines and a "Total" column; lines with no
+/// member go in a `none_label` column. The Total column is the ordinary Profit & Loss.
+/// `tree` holds (id, parent, name, full name) in display order.
+pub(crate) async fn profit_and_loss_by_columns(
+    pool: &SqlitePool,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    rows: Vec<(Option<i64>, i64, i64)>,
+    tree: &[(i64, Option<i64>, String, String)],
+    none_label: &str,
+) -> Result<ProfitAndLossByClass, String> {
+    let chart = Chart::load(pool).await?;
+    let pl_accounts: std::collections::HashSet<i64> =
+        chart.accounts.iter().filter(|a| PL_TYPES.contains(&a.account_type.as_str())).map(|a| a.id).collect();
+    let mut by_class: HashMap<Option<i64>, HashMap<i64, i64>> = HashMap::new();
+    let mut total: HashMap<i64, i64> = HashMap::new();
+    for (class, account, net) in rows {
+        if net != 0 && pl_accounts.contains(&account) {
+            *by_class.entry(class).or_default().entry(account).or_insert(0) += net;
+            *total.entry(account).or_insert(0) += net;
+        }
+    }
+    by_class.retain(|_, accounts| {
+        accounts.retain(|_, net| *net != 0);
+        !accounts.is_empty()
+    });
+
+    // Each column adds up the movement of these members (None = lines with no member).
     let mut columns: Vec<(ClassColumn, Vec<Option<i64>>)> = Vec::new();
-    for (id, parent, _, _) in &classes {
+    for (id, parent, _, _) in tree {
         if parent.is_none() {
-            class_columns(&classes, &by_class, *id, 0, &mut columns);
+            class_columns(tree, &by_class, *id, 0, &mut columns);
         }
     }
     if by_class.contains_key(&None) {
-        columns.push((ClassColumn { class_id: None, label: "Unclassified".into(), kind: "unclassified", depth: 0, is_total: false }, vec![None]));
+        columns.push((ClassColumn { class_id: None, label: none_label.into(), kind: "unclassified", depth: 0, is_total: false }, vec![None]));
     }
 
     let total_natural = chart.natural(&total);

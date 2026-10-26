@@ -595,6 +595,7 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
                     rate_cents: l.rate_cents,
                     product_service_id: l.product_service_id,
                     class_id: l.class_id,
+                    customer_id: None,
                 })
                 .collect(),
         };

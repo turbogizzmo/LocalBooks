@@ -1,0 +1,33 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(\"job_transactions\",\n&run(&pool, JobReportKind::JobTransactions, &params).await)"
+---
+job_transactions, 2025-01-01 to 2025-12-31
+
+Type                               Date          Num                    Name                   Memo                   Account                Product/Service            Act. Cost  Act. Revenue
+Kestrel Homes
+  Invoice                          2025-11-20    1016                   Kestrel Homes          Invoice #1016 - Kestre Services               Site Survey                                 600.00 ↗
+Total Kestrel Homes                                                                                                                                                          0.00        600.00
+Kestrel Homes:Lakeview Remodel
+  Invoice                          2025-10-20    1014                   Kestrel Homes:Lakeview Invoice #1014 - Kestre Services               Framing Labor                             3,400.00 ↗
+  Invoice                          2025-10-20    1014                   Kestrel Homes:Lakeview Invoice #1014 - Kestre Services               Site Survey                                 600.00 ↗
+  Invoice                          2025-10-20    1014                   Kestrel Homes:Lakeview Invoice #1014 - Kestre Sales                  Oak Panels                                3,000.00 ↗
+  Invoice                          2025-10-20    1014                   Kestrel Homes:Lakeview Invoice #1014 - Kestre Cost of Goods Sold     Oak Panels                  1,500.00 ↗
+  Bill                             2025-11-05    TS-433                 Timberline Supply      Bill #TS-433 - Timberl Job Materials          No product/service          1,200.00 ↗
+  Bill                             2025-11-05    TS-433                 Timberline Supply      Bill #TS-433 - Timberl Contractors            No product/service          1,000.00 ↗
+  Expense                          2025-11-18                           Hardware Depot         Expense - Hardware Dep Job Materials          No product/service            120.00 ↗
+  Vendor Credit                    2025-11-25    TS-C9                  Timberline Supply      Vendor credit #TS-C9 - Job Materials          No product/service           -200.00 ↗
+  Credit Memo                      2025-11-28    1                      Kestrel Homes:Lakeview Credit memo #1 - Kestr Services               Framing Labor                              -170.00 ↗
+Total Kestrel Homes:Lakeview Remod                                                                                                                                       3,620.00      6,830.00
+Kestrel Homes:Maple St Addition
+  Bill                             2025-11-05    TS-433                 Timberline Supply      Bill #TS-433 - Timberl Job Materials          No product/service            800.00 ↗
+  Check                            2025-11-12    1050                   Metro Equipment Rental Check #1050 - Metro Eq Equipment Rental       No product/service            450.00 ↗
+  Invoice                          2025-11-15    1015                   Kestrel Homes:Maple St Invoice #1015 - Kestre Services               Framing Labor                             2,550.00 ↗
+  Expense                          2025-11-19                           Hardware Depot         Expense - Hardware Dep Job Materials          No product/service             75.00 ↗
+  Void                             2025-11-19                           Hardware Depot         VOID of entry #175: Ex Job Materials          No product/service            -75.00 ↗
+  Sales Receipt                    2025-12-02    5                      Kestrel Homes:Maple St Sales Receipt #5 - Kes Sales                  Oak Panels                                  600.00 ↗
+  Sales Receipt                    2025-12-02    5                      Kestrel Homes:Maple St Sales Receipt #5 - Kes Cost of Goods Sold     Oak Panels                    300.00 ↗
+Total Kestrel Homes:Maple St Addit                                                                                                                                       1,550.00      3,150.00
+TOTAL                                                                                                                                                                    5,170.00     10,580.00
+
+17 lines

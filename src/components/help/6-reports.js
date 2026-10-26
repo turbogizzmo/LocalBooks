@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, detail reports you can customize and memorize, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -42,6 +42,14 @@ export const topics = [
     title: 'Customize a report and memorize it',
     body: 'On any detail report (P&L Detail, Sales by Customer Detail, Check Detail, Journal and the others), Customize… chooses the columns, the subtotals and the filters: accounts, names, transaction types, class, product or service, paid or cleared status, an amount range and memo text; Summary turns it into one row per group, optionally by month, quarter or year. Save as… keeps it under Memorized reports to run again, and a click on a line opens its transaction.',
     keywords: 'custom report transaction detail customize filter columns memorize memorized saved report p&l detail balance sheet detail sales by customer detail purchases by vendor check detail deposit detail journal transaction list 1099 detail',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'job-reports', area: 'reports', views: ['reports', 'expenses/bills', 'expenses/expenses', 'sales/estimates'],
+    title: 'See what each job earns and costs',
+    body: 'Reports › Jobs shows actual cost, revenue and profit for each customer and job, by product/service or account, estimates against actual revenue, Profit and Loss by Job, Estimates by Job and how much of each estimate has been invoiced; click a row to open what is behind it. Costs count for a job when you choose it in the Customer:Job column of a bill, expense, check or vendor credit line; time is not costed.',
+    keywords: 'job costing job profitability summary detail estimates vs actuals item profitability profit and loss by job customer job progress invoices estimates by job billable cost',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },

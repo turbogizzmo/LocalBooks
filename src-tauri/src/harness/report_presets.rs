@@ -91,8 +91,8 @@ async fn company() -> SqlitePool {
             memo: Some("Poster stock".into()),
             total_cents: 45_000,
             lines: vec![
-                BillLineInput { account_id: office, amount_cents: 40_000, memo: Some("Poster stock".into()), quantity_e4: Some(5_000_000), rate_cents: Some(80), product_service_id: Some(prints), class_id: Some(studio) },
-                BillLineInput { account_id: office, amount_cents: 5_000, memo: Some("Delivery".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None },
+                BillLineInput { account_id: office, amount_cents: 40_000, memo: Some("Poster stock".into()), quantity_e4: Some(5_000_000), rate_cents: Some(80), product_service_id: Some(prints), class_id: Some(studio), customer_id: None },
+                BillLineInput { account_id: office, amount_cents: 5_000, memo: Some("Delivery".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None },
             ],
         },
     )
@@ -106,7 +106,7 @@ async fn company() -> SqlitePool {
             reference: Some("RP-C1".into()),
             credit_date: d(2025, 11, 25),
             memo: Some("Damaged stock".into()),
-            lines: vec![VendorCreditLineInput { account_id: office, amount_cents: 6_000, memo: Some("Damaged stock".into()), class_id: Some(studio) }],
+            lines: vec![VendorCreditLineInput { account_id: office, amount_cents: 6_000, memo: Some("Damaged stock".into()), class_id: Some(studio), customer_id: None }],
         },
     )
     .await

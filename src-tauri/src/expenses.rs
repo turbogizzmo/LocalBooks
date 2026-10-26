@@ -28,6 +28,9 @@ pub struct BillLineInput {
     pub product_service_id: Option<i64>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -242,10 +245,13 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("BILL: line {n}")).await?;
         }
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("BILL: line {n}")).await?;
+        }
 
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id, customer_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(bill_id)
         .bind(n as i64)
@@ -256,6 +262,7 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
         .bind(line.rate_cents)
         .bind(line.product_service_id)
         .bind(line.class_id)
+        .bind(line.customer_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -430,6 +437,9 @@ pub struct SplitLineInput {
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -572,8 +582,11 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .map_err(db_err)?;
 
     for (idx, line) in input.lines.iter().enumerate() {
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("EXP: split line {}", idx + 1)).await?;
+        }
         sqlx::query(
-            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id, customer_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(expense_id)
         .bind(idx as i64 + 1)
@@ -581,6 +594,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .bind(line.amount_cents)
         .bind(clean(line.memo.as_deref()))
         .bind(line.class_id)
+        .bind(line.customer_id)
         .execute(&mut **tx)
         .await
         .map_err(|e| format!("{} (split line {})", db_err(e), idx + 1))?;

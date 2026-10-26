@@ -30,7 +30,7 @@ fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
         due_date: d(31),
         memo: None,
         total_cents: lines.iter().map(|(_, cents)| cents).sum(),
-        lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None }).collect(),
+        lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }).collect(),
     }
 }
 
@@ -128,7 +128,7 @@ async fn expenses_and_checks_credit_the_payment_account() {
         check_number: Some("1042".into()),
         payment_method: None,
         memo: None,
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None }).collect(),
+        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None, customer_id: None }).collect(),
         currency: None,
     };
 
@@ -190,8 +190,8 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
             payment_method: Some("CREDIT_CARD".into()),
             memo: None,
             lines: vec![
-                SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()), class_id: None },
-                SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None, class_id: None },
+                SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()), class_id: None, customer_id: None },
+                SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None, class_id: None, customer_id: None },
             ],
             currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
         },
@@ -211,7 +211,7 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
 async fn bill_lines_can_be_priced_by_quantity_and_rate() {
     let pool = test_pool().await;
     let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-    let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None, class_id: None };
+    let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None, class_id: None, customer_id: None };
     let mut input = bill("Staples", vec![]);
     input.lines = vec![priced(25_000, 1_299, 3_248)];
     input.total_cents = 3_248;
@@ -238,7 +238,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
         check_number: Some("ignored".into()),
         payment_method: None,
         memo: Some("Returned chair".into()),
-        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None }).collect(),
+        lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None, customer_id: None }).collect(),
         currency: None,
     };
     post_expense(&pool, input("EXPENSE", card, vec![(office, 20_000), (fuel, 5_000)])).await.unwrap();
@@ -317,7 +317,7 @@ async fn the_database_holds_card_credits_to_their_rules() {
             check_number: None,
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: office, amount_cents: 100, memo: None, class_id: None }],
+            lines: vec![SplitLineInput { account_id: office, amount_cents: 100, memo: None, class_id: None, customer_id: None }],
             currency: None,
         },
     )
@@ -341,7 +341,7 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
             check_number: None,
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: travel, amount_cents: 1_500_000, memo: None, class_id: None }],
+            lines: vec![SplitLineInput { account_id: travel, amount_cents: 1_500_000, memo: None, class_id: None, customer_id: None }],
             currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
         },
     )

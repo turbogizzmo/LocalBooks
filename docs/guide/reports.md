@@ -80,6 +80,52 @@ when their check number (or reference) is a whole number. A voided check keeps i
 not missing. One check that pays several bills from the same vendor counts once. Payments with
 other references, such as `EFT`, are not listed; the count at the top tells you how many there are.
 
+## Job costing reports
+
+**Reports › Jobs** shows how much each customer and job has earned and cost, the way the Jobs, Time
+& Mileage reports do in QuickBooks Desktop. A job is a customer under another customer
+(`Customer:Job`, for example `Kestrel Homes:Lakeview Remodel`).
+
+To charge a cost to a job, choose it in the **Customer:Job** column of a bill, expense, check, card
+charge, card credit or vendor credit line. Sales count for the customer or job on the invoice, sales
+receipt or credit memo.
+
+| Report | Shows |
+|---|---|
+| **Job Profitability Summary** | For each customer and job: actual cost, actual revenue and the difference. A customer with jobs shows its own amounts as *(other)* and a total |
+| **Job Profitability Detail** | The same for each job, broken down by product/service or by account (**Break down by**) |
+| **Job Estimates vs. Actuals Summary** and **Detail** | Each job's estimated revenue against its actual revenue, with the difference in dollars and percent, and its actual cost; the detail is by product/service |
+| **Item Profitability** | Actual cost, revenue and difference for each product or service |
+| **Item Estimates vs. Actuals** | Estimated against actual revenue for each product or service |
+| **Profit and Loss by Job** | The Profit and Loss with a column for each customer and job, like Profit and Loss by Class |
+| **Estimates by Job** | Every estimate, grouped by customer and job, with its status and amount |
+| **Progress Invoices vs. Estimates** | Each estimate's total, how much of it has been invoiced, and the share |
+
+1. Choose the **Report period**. The job reports start at **All dates**; Profit and Loss by Job starts
+   at **Fiscal year to date**.
+2. Optionally choose one **Customer:Job** (with its jobs), or **No customer/job**.
+3. Click a row to open the report beneath it: a job opens its detail, and a detail row opens the
+   transactions behind it. **‹ Back** goes back up. Click a transaction to open it.
+
+What counts:
+
+- **Actual revenue** is income: invoices and sales receipts, less credit memos and discounts.
+- **Actual cost** is expense and cost of goods sold: bill, expense, check and card lines charged to the
+  job, less card credits and vendor credits, plus the cost of stock sold to the job. A bill line with
+  a job and another without, on the same account, are shared out exactly.
+- A customer payment's exchange gain or loss counts for that customer.
+- Everything else (journal entries, deposits, lines with no customer or job) is in
+  **No customer/job**, so every report adds up to the Profit and Loss for the same dates: the
+  **TOTAL** difference is net income.
+- **Time isn't costed.** A time activity has a billing rate but no cost rate, so hours don't add to a
+  job's cost. Record what you pay for labor as a bill, check or expense line charged to the job.
+- **Estimates have no cost**, so the estimate reports compare revenue only. Rejected estimates are
+  left out; an estimate discount counts against the estimate's revenue.
+- An estimate turns into one invoice for its whole amount, so **Progress Invoices vs. Estimates**
+  shows each estimate as either invoiced in full (with the invoice number; click to open it) or not
+  yet invoiced. An edited invoice is followed to its replacement; a voided one counts as not invoiced.
+- Lines entered before job costing was added have no customer or job.
+
 ## Detail reports
 
 These reports list transactions one line at a time, with subtotals. They are all built on the same

@@ -263,6 +263,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
 | Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
 | Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
+| Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
@@ -557,6 +558,9 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
+- **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
+  have no cost column, so estimates vs. actuals compare revenue, and an estimate becomes a single
+  invoice (no partial progress invoices).
 - **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
   returns.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales

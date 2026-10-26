@@ -133,7 +133,7 @@ async fn vendor_credits_reduce_payables_and_apply_to_bills() {
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap().id;
     let credit = create_vendor_credit(
         &pool,
-        VendorCreditInput { vendor_name: "staples".into(), reference: Some("RMA-7".into()), credit_date: d(3), memo: None, lines: vec![VendorCreditLineInput { account_id: supplies, amount_cents: 12_000, memo: Some("Returned toner".into()), class_id: None }] },
+        VendorCreditInput { vendor_name: "staples".into(), reference: Some("RMA-7".into()), credit_date: d(3), memo: None, lines: vec![VendorCreditLineInput { account_id: supplies, amount_cents: 12_000, memo: Some("Returned toner".into()), class_id: None, customer_id: None }] },
     )
     .await
     .unwrap();

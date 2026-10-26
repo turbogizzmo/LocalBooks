@@ -1,9 +1,10 @@
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
+import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, memo: '', amount: '', qty: '', rate: '' });
+export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, memo: '', amount: '', qty: '', rate: '' });
 
 /** Split rows for a posted bill's or expense's lines, to edit it. */
 export const splitRowsFrom = (lines) =>
@@ -11,6 +12,7 @@ export const splitRowsFrom = (lines) =>
     ...blankSplit(l.accountId),
     productId: l.productServiceId ?? null,
     classId: l.classId ?? null,
+    customerId: l.customerId ?? null,
     memo: l.memo ?? '',
     amount: l.quantityE4 ? '' : centsToInput(l.amountCents),
     qty: l.quantityE4 ? formatQuantity(l.quantityE4).replace(/,/g, '') : '',
@@ -54,6 +56,7 @@ export function summarizeSplits(rows) {
       memo: row.memo.trim() || null,
       productServiceId: row.productId ?? null,
       classId: row.classId ?? null,
+      customerId: row.customerId ?? null,
       ...(priced ? { quantityE4, rateCents } : {}),
     });
   }
@@ -63,12 +66,15 @@ export function summarizeSplits(rows) {
 /**
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
  * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
- * column (once the company has classes) for documents whose lines carry one.
+ * column (once the company has classes) for documents whose lines carry one. `withJobs` adds a
+ * Customer:Job column (once the company has customers): the job a cost is for, for job costing.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, currency = null, stockItems = [] }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, currency = null, stockItems = [] }) {
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = classesAllowed && showsClassColumn(tracking, rows);
+  const customers = useLedgerQuery(api.listCustomers).data ?? [];
+  const withJobs = jobsAllowed && (customers.length > 0 || rows.some((r) => r.customerId));
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
   const withStock = withPricing && stockItems.length > 0;
   const pickItem = (key, productId) => {
@@ -87,6 +93,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         {withStock && <col className="w-[150px]" />}
         <col className="w-[260px]" />
         <col />
+        {withJobs && <col className="w-[170px]" />}
         {withClasses && <col className="w-[150px]" />}
         {withPricing && <col className="w-[70px]" />}
         {withPricing && <col className="w-[96px]" />}
@@ -99,6 +106,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           {withStock && <th className="qb-grid-head">Stock item</th>}
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
+          {withJobs && <th className="qb-grid-head" title="The customer or job this cost is for (job costing)">Customer:Job</th>}
           {withClasses && <th className="qb-grid-head">Class</th>}
           {withPricing && <th className="qb-grid-head text-right">Qty</th>}
           {withPricing && <th className="qb-grid-head text-right">Rate</th>}
@@ -132,6 +140,18 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
               <td className="qb-grid-cell-edit">
                 <input value={row.memo} onChange={(e) => update(row.key, { memo: e.target.value })} placeholder="What was this for?" aria-label={`Description ${i + 1}`} />
               </td>
+              {withJobs && (
+                <td className="qb-grid-cell-edit">
+                  <select value={row.customerId ?? ''} onChange={(e) => update(row.key, { customerId: e.target.value ? Number(e.target.value) : null })} aria-label={`Customer or job ${i + 1}`}>
+                    <option value="">—</option>
+                    {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              )}
               {withClasses && (
                 <td className="qb-grid-cell-edit">
                   <ClassSelect className="" classes={classes} value={row.classId ?? null} onChange={(classId) => update(row.key, { classId })} aria-label={`Class ${i + 1}`} />
@@ -166,7 +186,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0)}>
+          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 1 : 0)}>
             <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
               ＋ Add split row
             </button>

@@ -36,6 +36,7 @@ mod instance;
 mod inventory;
 mod invoices;
 mod item_prices;
+mod job_reports;
 mod ledger;
 mod mail_app;
 mod parties;

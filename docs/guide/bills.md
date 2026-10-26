@@ -11,7 +11,10 @@ pay it.
 3. Split the bill across expense accounts, one line per category. A line can be an amount, or a
    quantity × rate (for example 2.5 hours at 40.00).
 4. The lines must add up to the bill total. When they do, the split shows as fully allocated.
-5. Click **Post Bill**.
+5. To charge a cost to a job, choose the customer or job in the line's **Customer:Job** column. It
+   doesn't change how the bill posts; the [job costing reports](reports.md#job-costing-reports)
+   count it as that job's cost.
+6. Click **Post Bill**.
 
 The **Bills tracker** lists every bill with its due date, open balance and status.
 
