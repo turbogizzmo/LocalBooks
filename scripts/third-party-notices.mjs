@@ -157,6 +157,10 @@ if (process.argv.includes('--check')) {
     const [had, want] = [current.split('\n'), text.split('\n')];
     const at = want.findIndex((line, i) => line !== had[i]);
     console.error(`First difference at line ${at + 1}:\n  file:     ${had[at] ?? '(end of file)'}\n  expected: ${want[at] ?? '(end of file)'}`);
+    const listed = (lines) => new Set(lines.filter((line) => /^\S+ \S+  \[/.test(line)));
+    const [before, after] = [listed(had), listed(want)];
+    for (const line of after) if (!before.has(line)) console.error(`  added:    ${line}`);
+    for (const line of before) if (!after.has(line)) console.error(`  removed:  ${line}`);
     console.error('THIRD-PARTY-NOTICES.txt is out of date: run `node scripts/third-party-notices.mjs` and commit the result.');
     process.exit(1);
   }
