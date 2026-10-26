@@ -2,6 +2,8 @@ import { Fragment, useEffect, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
@@ -63,6 +65,48 @@ export default function Register({ accounts, intent }) {
   const [firstHead, secondHead] = paymentsFirst ? [decreaseHead, increaseHead] : [increaseHead, decreaseHead];
   const [firstAmount, secondAmount] = paymentsFirst ? [decrease, increase] : [increase, decrease];
 
+  const company = useCompany();
+  const exportRange = start && end ? `${longDate(start)} – ${longDate(end)}` : start ? `From ${longDate(start)}` : end ? `Through ${longDate(end)}` : 'All dates';
+  const exports = tableExports({
+    company: company.name,
+    title: data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''} Register` : 'Register',
+    subtitle: exportRange,
+    columns: [
+      { label: 'Date', kind: 'date' },
+      { label: 'Type', kind: 'text' },
+      { label: 'No.', kind: 'text' },
+      { label: 'Payee / name', kind: 'text' },
+      { label: 'Memo', kind: 'text' },
+      { label: 'Account', kind: 'text' },
+      { label: 'Class', kind: 'text' },
+      { label: 'Cleared', kind: 'text' },
+      { label: firstHead, kind: 'money' },
+      { label: secondHead, kind: 'money' },
+      { label: 'Balance', kind: 'money' },
+    ],
+    rows: () => [
+      ...(data.startDate ? [{ kind: 'section', cells: [data.startDate, '', '', '', 'Balance forward', '', '', '', null, null, data.openingBalanceCents] }] : []),
+      ...data.rows.map((r) => ({
+        cells: [
+          r.entryDate,
+          r.isReversal ? 'Void' : (SOURCE_LABEL[r.sourceType] ?? r.sourceType),
+          r.entryNumber == null ? '' : String(r.entryNumber),
+          r.partyName ?? '',
+          `${r.isVoided ? 'VOIDED ' : ''}${r.memo ?? ''}`,
+          data.includeSubaccounts && r.accountName !== data.accountName ? `${r.accountName} · ${r.split ?? ''}` : (r.split ?? ''),
+          r.className ?? '',
+          r.reconciled ? 'R' : r.cleared ? 'C' : '',
+          firstAmount(r) || null,
+          secondAmount(r) || null,
+          r.balanceCents,
+        ],
+      })),
+      { kind: 'total', cells: ['', '', '', '', 'Ending balance', '', '', '', null, null, data.endingBalanceCents] },
+    ],
+    filename: `${(data?.accountName ?? 'Register').replace(/[^A-Za-z0-9]+/g, '-')}-Register${start ? `_${start}` : ''}${end ? `_to_${end}` : ''}`,
+    onNotice: setNotice,
+  });
+
   const voidEntry = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
@@ -102,6 +146,11 @@ export default function Register({ accounts, intent }) {
           >
             Open in new window
           </button>
+        )}
+        {data && (
+          <div className="self-end">
+            <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          </div>
         )}
         {data && (
           <div className="ml-auto text-right">

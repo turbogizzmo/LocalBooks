@@ -24,8 +24,12 @@ export function resolvePeriod(id, fiscal) {
   return periodRange(id);
 }
 
-/** "Export" dropdown: CSV through the native save dialog, or the system print dialog (Save as PDF). */
-export function ExportMenu({ onCsv, onNotice }) {
+/**
+ * "Export" dropdown: Excel or CSV through the native save dialog, or the system print dialog (Save
+ * as PDF). The Excel choice shows when the report passes `onXlsx`; screens with nothing to print
+ * (registers, lists) pass `printable={false}`.
+ */
+export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -60,9 +64,16 @@ export function ExportMenu({ onCsv, onNotice }) {
           <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onCsv)}>
             Export to CSV
           </button>
-          <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(print)}>
-            Print / Save to PDF
-          </button>
+          {onXlsx && (
+            <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onXlsx)}>
+              Export to Excel
+            </button>
+          )}
+          {printable && (
+            <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(print)}>
+              Print / Save to PDF
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -73,6 +84,132 @@ export async function saveCsv(report, params, filename, onNotice) {
   const csv = await api.reportCsv(report, params);
   const path = await api.saveReportToDisk(csv, filename);
   if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+}
+
+/** Saves a financial statement the Rust side renders (as `saveCsv` does) as an Excel workbook. */
+export async function saveReportXlsx(report, params, filename, onNotice) {
+  const path = await api.saveReportXlsx(report, params, filename);
+  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+}
+
+/** Saves a sheet (see `statementSheet` and `tableSheet`) as an Excel workbook. */
+export async function saveXlsx(sheet, filename, onNotice) {
+  const path = await api.saveXlsx(sheet, filename);
+  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+}
+
+/** `Report-Name.csv` → `Report-Name.xlsx`. */
+export const xlsxName = (csvName) => csvName.replace(/\.csv$/i, '') + '.xlsx';
+
+/**
+ * A statement as an Excel sheet: lines keep their kind (bold totals, rules) and depth (indent);
+ * `columns` (multi-column layouts) give one amount column each, money or percent.
+ */
+export function statementSheet({ company, title, subtitle = '', notes = [], lines, columns = null, footer = null }) {
+  const cols = columns ?? [{ label: 'Total' }];
+  return {
+    company,
+    title,
+    subtitle,
+    notes,
+    footer,
+    columns: [{ label: '', kind: 'text' }, ...cols.map((c) => ({ label: c.label, kind: c.kind === 'percent' ? 'percent' : 'money' }))],
+    rows: lines.map((l) => ({
+      kind: l.kind === 'account' ? 'detail' : l.kind,
+      depth: Math.min(l.depth ?? 0, 15),
+      cells: [l.label, ...(columns ? l.amountsCents : [l.amountCents]).map((a) => a ?? null)],
+    })),
+  };
+}
+
+const PLAIN_AMOUNT = /^-?\d+\.\d\d$/;
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** "1234.56" → 123456, with string arithmetic so no cent is lost to floating point. */
+const amountToCents = (text) => {
+  const negative = text.startsWith('-');
+  const [whole, frac] = text.replace('-', '').split('.');
+  const cents = Number(whole) * 100 + Number(frac);
+  return negative ? -cents : cents;
+};
+
+/**
+ * A table report as an Excel sheet, from the same rows of cells the CSV export writes (amounts as
+ * `plainAmount` text, dates as YYYY-MM-DD). A column's kind is `columns[i].kind` when given;
+ * otherwise right-aligned columns whose cells are all plain amounts are money (other numeric ones
+ * are numbers) and columns of ISO dates are dates. Leading spaces on the first cell become indent;
+ * rows starting "TOTAL"/"Total …" are totals, and rows with only a first cell are section headings.
+ */
+export function tableSheet({ company, title, subtitle = '', notes = [], columns, rows, footer = null }) {
+  const blank = (v) => v === null || v === undefined || String(v).trim() === '';
+  const shaped = rows.map((r) => {
+    const first = String(r[0] ?? '');
+    const label = first.trimStart();
+    const depth = Math.min(Math.floor((first.length - label.length) / 2), 15);
+    const onlyFirst = label !== '' && r.slice(1).every(blank);
+    const kind = /^(TOTAL|Total\b)/.test(label) ? 'total' : onlyFirst && columns.length > 1 ? 'section' : 'detail';
+    return { kind, depth, label, cells: r };
+  });
+  // Kinds come from detail rows: a heading or "Total …" label in a date column doesn't make it text.
+  const details = shaped.filter((r) => r.kind === 'detail');
+  const kinds = columns.map((col, c) => {
+    if (col.kind) return col.kind;
+    const values = details.map((r) => r.cells[c]).filter((v) => !blank(v)).map(String);
+    if (values.length === 0) return 'text';
+    if (col.align === 'right' && values.every((v) => PLAIN_AMOUNT.test(v))) return 'money';
+    if (col.align === 'right' && values.every((v) => PLAIN_NUMBER.test(v))) return 'number';
+    if (values.every((v) => ISO_DATE.test(v))) return 'date';
+    return 'text';
+  });
+  const cell = (v, c) => {
+    if (blank(v)) return null;
+    if (kinds[c] === 'money') return typeof v === 'number' ? v : PLAIN_AMOUNT.test(String(v)) ? amountToCents(String(v)) : String(v);
+    if (kinds[c] === 'number') return PLAIN_NUMBER.test(String(v)) ? Number(v) : String(v);
+    return String(v);
+  };
+  return {
+    company,
+    title,
+    subtitle,
+    notes,
+    footer,
+    columns: columns.map((col, c) => ({ label: col.label, kind: kinds[c] })),
+    rows: shaped.map((r) => ({
+      kind: r.kind,
+      depth: r.depth,
+      // Headings and totals keep their label as text, whatever the first column holds.
+      cells: [r.label === '' ? null : r.kind === 'detail' ? cell(r.label, 0) : r.label, ...r.cells.slice(1).map((v, i) => cell(v, i + 1))],
+    })),
+  };
+}
+
+/**
+ * CSV and Excel exports of a screen's table (a register, a list, the audit log), for `ExportMenu`.
+ * `columns` are { label, kind } with kind `text`, `money` (cents), `number`, `date` (YYYY-MM-DD) or
+ * `datetime`; `rows()` returns { kind, depth, cells } with typed cells. `depth` indents the
+ * `indentColumn` cell (leading spaces in the CSV, an indent level in Excel).
+ */
+export function tableExports({ company, title, subtitle = '', columns, rows, indentColumn = 0, footer = null, filename, onNotice }) {
+  const csvCell = (v, c, depth) => {
+    if (v === null || v === undefined) return '';
+    if (columns[c].kind === 'money') return plainAmount(v);
+    return c === indentColumn && depth ? `${'  '.repeat(depth)}${v}` : String(v);
+  };
+  return {
+    onCsv: () =>
+      saveText(
+        toCsv([[company], [title], ...(subtitle ? [[subtitle]] : []), [], columns.map((c) => c.label), ...rows().map((r) => r.cells.map((v, c) => csvCell(v, c, r.depth)))]),
+        `${filename}.csv`,
+        onNotice,
+      ),
+    onXlsx: () =>
+      saveXlsx(
+        { company, title, subtitle, notes: [], footer, indentColumn, columns, rows: rows().map((r) => ({ kind: r.kind ?? 'detail', depth: Math.min(r.depth ?? 0, 15), cells: r.cells.map((v) => v ?? null) })) },
+        `${filename}.xlsx`,
+        onNotice,
+      ),
+  };
 }
 
 const LONG_DATE = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
