@@ -36,7 +36,7 @@ use std::path::Path;
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 
 use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceAccount, SourceLine, SourceParty, SourceTransaction, UnreadableLine};
-use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument};
+use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument, SourceSales};
 use crate::qif_import::SKIPPED_INVESTMENT;
 use crate::text_import::blank_party;
 
@@ -89,8 +89,10 @@ pub async fn read(path: &Path) -> Result<Ledger, String> {
         None => return Err("GNUCASH_NOT_GNUCASH: this file is neither a GnuCash XML book nor a GnuCash SQLite book".into()),
     };
     let ledger = ledger(&book);
-    if ledger.accounts.is_empty() && ledger.transactions.is_empty() && ledger.unbalanced.is_empty() {
-        return Err("GNUCASH_EMPTY: this book has no accounts or transactions".into());
+    // A book of lists alone (customers or vendors, no accounts yet) imports as a lists-only batch.
+    let nothing = ledger.accounts.is_empty() && ledger.customers.is_empty() && ledger.vendors.is_empty();
+    if nothing && ledger.transactions.is_empty() && ledger.unbalanced.is_empty() && ledger.unreadable.is_empty() {
+        return Err("GNUCASH_EMPTY: this book has no accounts, customers, vendors or transactions".into());
     }
     Ok(ledger)
 }
@@ -627,7 +629,7 @@ pub fn ledger(book: &Book) -> Ledger {
 
     let (transactions, unbalanced): (Vec<_>, Vec<_>) = transactions.into_iter().partition(|t| t.imbalance_cents() == 0);
     let (customers, vendors) = cx.parties.into_lists();
-    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality }
+    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default() }
 }
 
 /// The book's customers (with their jobs as sub-customers) and vendors, as ledger parties.
@@ -781,7 +783,7 @@ fn invoice_document(cx: &Context, st: &mut SourceTransaction, t: &Transaction, i
         }
         Some(Payee::Customer(customer_id)) => {
             st.kind = "Invoice";
-            st.document = Some(SourceDocument::Invoice { customer_id, number, due_date, lines });
+            st.document = Some(SourceDocument::Invoice { customer_id, number, due_date, lines, sales: SourceSales::default() });
         }
         // A vendor credit note is a bill that debits payables; the full import tells them apart.
         Some(Payee::Vendor(vendor_id)) => {

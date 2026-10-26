@@ -923,6 +923,7 @@ fn check(ledger: &Ledger) {
                 cents: 10_000,
                 account_id: consulting
             }],
+            sales: Default::default(),
         })
     );
     let payment = by_name(ledger, "Acme Corp");
@@ -1020,6 +1021,30 @@ async fn reads_book_files_of_each_kind() {
     let other = dir.join("notes.gnucash");
     std::fs::write(&other, "just some text").unwrap();
     assert!(read(&other).await.unwrap_err().starts_with("GNUCASH_NOT_GNUCASH"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A book with a customer and nothing else reads, for a lists-only import; an empty one does not.
+#[tokio::test]
+async fn a_book_of_lists_alone_reads() {
+    let dir = std::env::temp_dir().join(format!("localbooks-gnucash-lists-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let head = r#"<?xml version="1.0" encoding="utf-8" ?>
+<gnc-v2 xmlns:gnc="http://www.gnucash.org/XML/gnc" xmlns:act="http://www.gnucash.org/XML/act" xmlns:cust="http://www.gnucash.org/XML/cust">
+<gnc:book version="2.0.0">
+<gnc:account version="2.0.0"><act:name>Root Account</act:name><act:id type="guid">root</act:id><act:type>ROOT</act:type></gnc:account>
+"#;
+    let customer = r#"<gnc:GncCustomer version="2.0.0"><cust:guid type="guid">c1</cust:guid><cust:name>Solo Client</cust:name><cust:active>1</cust:active></gnc:GncCustomer>
+"#;
+    let tail = "</gnc:book>\n</gnc-v2>\n";
+    let lists = dir.join("lists.gnucash");
+    std::fs::write(&lists, format!("{head}{customer}{tail}")).unwrap();
+    let ledger = read(&lists).await.unwrap();
+    assert_eq!((ledger.accounts.len(), ledger.transactions.len(), ledger.customers.len()), (0, 0, 1));
+    assert_eq!(ledger.customers[0].name, "Solo Client");
+    let empty = dir.join("empty.gnucash");
+    std::fs::write(&empty, format!("{head}{tail}")).unwrap();
+    assert!(read(&empty).await.unwrap_err().starts_with("GNUCASH_EMPTY"));
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
