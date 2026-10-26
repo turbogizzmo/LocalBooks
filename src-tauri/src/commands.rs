@@ -206,10 +206,10 @@ pub async fn assess_finance_charges(app: AppHandle, db: State<'_, Db>, input: cr
     Ok(invoices)
 }
 
-/// Reads a bank file (CSV, OFX, QFX) and reports how it would be imported, importing nothing.
+/// Reads a bank file (CSV, OFX, QFX, PDF statement) and reports how it would be imported, importing nothing.
 #[tauri::command]
-pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>) -> Result<BankFileInspection, String> {
-    bank::inspect_file(&db.pool().await, &path, mapping).await
+pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>, bank_account_id: Option<i64>) -> Result<BankFileInspection, String> {
+    bank::inspect_file(&db.pool().await, &path, mapping, bank_account_id).await
 }
 
 #[tauri::command]

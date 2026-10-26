@@ -29,12 +29,44 @@ function ColumnSelect({ label, headers, value, onChange, allowNone = false }) {
   );
 }
 
+const CHECK_STYLES = {
+  error: 'border-qb-negative/40 bg-[#fdf0ef] text-qb-negative',
+  success: 'border-qb-green/40 bg-qb-green-tint text-qb-green-active',
+  info: 'border-qb-info/40 bg-[#eaf4fb] text-qb-info',
+};
+
+/** Whether a PDF statement's transactions add up to the balances it prints. Wraps, unlike Notice. */
+function BalanceCheck({ check }) {
+  let kind;
+  let text;
+  if (check.status === 'NOT_PRINTED') {
+    kind = 'info';
+    text = 'This statement prints no opening and closing balance, so LocalBooks cannot check that every transaction was read.';
+  } else if (check.status === 'MATCHES') {
+    const owed = check.owed ? ' owed' : '';
+    const change = `${check.changeCents < 0 ? '−' : '+'} ${formatCents(Math.abs(check.changeCents))}`;
+    kind = 'success';
+    text = `Balances check out: opening ${formatCents(check.openingCents)}${owed} ${change} = closing ${formatCents(check.closingCents)}${owed}.`;
+    if (check.signsReversed) text += ' Amounts were read with their signs reversed, as the balances require.';
+  } else {
+    const where = check.firstMismatchRow ? ` The running balance first stops matching at transaction ${check.firstMismatchRow}.` : '';
+    kind = 'error';
+    text = `Balances don't add up: the statement shows ${formatCents(check.closingCents)} closing, but the transactions give ${formatCents(check.openingCents + check.changeCents)} (off by ${formatCents(Math.abs(check.differenceCents))}).${where} Check the columns, or compare the preview with the statement.`;
+  }
+  return (
+    <div role={kind === 'error' ? 'alert' : 'status'} className={`border px-2 py-1 text-sm ${CHECK_STYLES[kind]}`}>
+      {text}
+    </div>
+  );
+}
+
 /**
- * Lets the user say which CSV columns hold the date, description and amount when LocalBooks cannot
- * tell (or cannot tell the day/month order). The preview re-reads the file with each choice, and
- * the layout is remembered for the next file with the same headers.
+ * Lets the user say which columns hold the date, description and amount when LocalBooks cannot
+ * tell (or cannot tell the day/month order), and confirm the table read from a PDF statement. The
+ * preview re-reads the file with each choice, and the layout is remembered for the next file with
+ * the same headers.
  */
-export default function BankColumnMapping({ path, inspection, accountName, onCancel, onImport }) {
+export default function BankColumnMapping({ path, inspection, bankAccountId = null, accountName, onCancel, onImport }) {
   const [mapping, setMapping] = useState(() => inspection.mapping ?? blankMapping(inspection.headers));
   const [layout, setLayout] = useState(() => (inspection.mapping?.moneyIn ? 'split' : 'signed'));
   // Until the first re-read arrives, show nothing rather than the "unrecognized" message.
@@ -57,7 +89,7 @@ export default function BankColumnMapping({ path, inspection, accountName, onCan
     let stale = false;
     const t = setTimeout(async () => {
       try {
-        const next = await api.inspectBankFile(path, JSON.parse(key));
+        const next = await api.inspectBankFile(path, JSON.parse(key), bankAccountId);
         if (!stale) setPreview(next);
       } catch (err) {
         if (!stale) setError(errorText(err));
@@ -67,7 +99,7 @@ export default function BankColumnMapping({ path, inspection, accountName, onCan
       stale = true;
       clearTimeout(t);
     };
-  }, [path, key]);
+  }, [path, key, bankAccountId]);
 
   const set = (field) => (value) => setMapping((m) => ({ ...m, [field]: value }));
   const ok = preview && !preview.problem && preview.rowCount > 0;
@@ -93,9 +125,11 @@ export default function BankColumnMapping({ path, inspection, accountName, onCan
           </span>
         </div>
         <p className="border-b border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          {inspection.mapping
-            ? 'Check the day/month order: every date in this file could be read either way.'
-            : 'LocalBooks did not recognize these column names. Choose them once; files with the same columns will then import directly.'}
+          {inspection.format === 'PDF'
+            ? 'LocalBooks read this table from the PDF. Check that each column holds what its title says; statements with the same columns will use your choice.'
+            : inspection.mapping
+              ? 'Check the day/month order: every date in this file could be read either way.'
+              : 'LocalBooks did not recognize these column names. Choose them once; files with the same columns will then import directly.'}
         </p>
 
         <div className="grid grid-cols-2 gap-3 px-3 py-2 sm:grid-cols-4">
@@ -159,6 +193,12 @@ export default function BankColumnMapping({ path, inspection, accountName, onCan
           ) : preview.problem ? (
             <Notice kind="error" text={errorText(preview.problem)} />
           ) : (
+            <>
+            {preview.balanceCheck && (
+              <div className="mb-1.5">
+                <BalanceCheck check={preview.balanceCheck} />
+              </div>
+            )}
             <table className="qb-grid">
               <thead>
                 <tr>
@@ -177,6 +217,7 @@ export default function BankColumnMapping({ path, inspection, accountName, onCan
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
 
