@@ -8,7 +8,40 @@ import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
 
 /** Sent by File › New Company… ("new") and File › Open or Restore Company… ("open"); see file_menu.rs. */
 const FILE_MENU_REQUESTED = 'file-menu-requested';
-const COMPANY_FILTER = { name: 'LocalBooks company file or backup', extensions: ['localbooks', 'db'] };
+/** QuickBooks Desktop company files and backups: opening one starts a new company and migrates it. */
+export const QUICKBOOKS_EXTENSIONS = ['qbw', 'qbb', 'qbm'];
+/** QuickBooks names its files in capitals (`Company.QBW`), and some file pickers match extensions case by case. */
+export const QUICKBOOKS_FILTER_EXTENSIONS = QUICKBOOKS_EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]);
+const COMPANY_FILTER = {
+  name: 'LocalBooks or QuickBooks company file or backup',
+  extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS],
+};
+/** The QuickBooks file to read once the new company it is migrating into has opened (the window reloads in between). */
+const PENDING_MIGRATION_KEY = 'localbooks.pendingMigration';
+
+export function isQuickBooksFile(path) {
+  return QUICKBOOKS_EXTENSIONS.includes(path.split('.').pop()?.toLowerCase());
+}
+
+/** Whether a QuickBooks file is waiting for the Desktop Migration Wizard in this window. */
+export function hasPendingMigration() {
+  try {
+    return !!sessionStorage.getItem(PENDING_MIGRATION_KEY);
+  } catch {
+    return false;
+  }
+}
+
+/** The QuickBooks file waiting for the Desktop Migration Wizard, if any; it is handed over only once. */
+export function takePendingMigration() {
+  try {
+    const path = sessionStorage.getItem(PENDING_MIGRATION_KEY);
+    sessionStorage.removeItem(PENDING_MIGRATION_KEY);
+    return path;
+  } catch {
+    return null;
+  }
+}
 
 function formatBytes(n) {
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
@@ -29,8 +62,9 @@ function safeFileName(name) {
 /**
  * Open or Restore Company: a `.localbooks` file (or a `localbooks.db` kept in a folder) opens in
  * place; any other `.db` is a LocalBooks backup, which is restored to a new company file so the
- * backup itself stays as it was. Resolves once the company is open (the window then reloads), or
- * when the user cancels.
+ * backup itself stays as it was. A QuickBooks `.qbw`/`.qbb`/`.qbm` file starts a new company file
+ * and opens the Desktop Migration Wizard on it; the QuickBooks file is only read. Resolves once the
+ * company is open (the window then reloads), or when the user cancels.
  */
 export async function openOrRestoreCompany() {
   const path = await open({ multiple: false, directory: false, title: 'Open or restore a company', filters: [COMPANY_FILTER] });
@@ -40,12 +74,41 @@ export async function openOrRestoreCompany() {
     await api.openCompanyFile(path);
     return;
   }
+  if (isQuickBooksFile(path)) {
+    await migrateQuickBooksFile(path);
+    return;
+  }
   const destination = await save({
     title: 'Restore the backup as a new company file',
     defaultPath: `${fileStem(path)}.localbooks`,
     filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
   });
   if (destination) await api.restoreBackupAs(path, destination);
+}
+
+/**
+ * Starts a new company file named after a QuickBooks file and opens the Desktop Migration Wizard on
+ * it once the new company has opened. Resolves when the user cancels, or as the window reloads.
+ */
+export async function migrateQuickBooksFile(path) {
+  const companyName = fileStem(path);
+  const destination = await save({
+    title: 'Save the new company file to migrate the QuickBooks books into',
+    defaultPath: `${safeFileName(companyName)}.localbooks`,
+    filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
+  });
+  if (!destination) return;
+  try {
+    sessionStorage.setItem(PENDING_MIGRATION_KEY, path);
+  } catch {
+    // Without storage the new company still opens; the file is then chosen in the wizard.
+  }
+  try {
+    await api.createCompanyFile(destination, companyName);
+  } catch (err) {
+    takePendingMigration();
+    throw err;
+  }
 }
 
 /** New Company: asks for the company's name, then where to save its file, and opens it. */
