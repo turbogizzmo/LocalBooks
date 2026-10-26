@@ -14,6 +14,8 @@
 #                running after 30 s with no crash report, quit, and leave that file upgraded (with a
 #                pre-upgrade copy), intact and with unchanged balances.
 #
+# A pull request that changes the release check runs it against the newest release.
+#
 # Releases older than `--check-file` (v0.6.0 and earlier) skip the Upgrade step; the launch still
 # checks their upgrade, without File Dentist. How to read the results: docs/testing/release-check.md.
 
@@ -30,6 +32,12 @@ on:
       previous:
         description: "Release tag to upgrade from (default: the newest published release before it)"
         required: false
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/release-check.yml
+      - .github/release-check/**
+      - src-tauri/src/release_check.rs
 
 # Reading draft releases and their assets needs write access to contents; nothing here writes.
 # The token is given only to the steps that download, never to the steps that run the release.
@@ -37,11 +45,10 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-check-${{ inputs.tag || github.event.release.tag_name }}
+  group: release-check-${{ inputs.tag || github.event.release.tag_name || github.ref }}
   cancel-in-progress: true
 
 env:
-  TAG: ${{ inputs.tag || github.event.release.tag_name }}
   REPO: ${{ github.repository }}
 
 defaults:
@@ -52,9 +59,10 @@ jobs:
   plan:
     name: Plan
     # Published latest releases are past the gate; check test builds (pre-releases) and drafts.
-    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease || github.event.release.draft
+    if: github.event_name != 'release' || github.event.release.prerelease || github.event.release.draft
     runs-on: ubuntu-latest
     outputs:
+      tag: ${{ steps.plan.outputs.tag }}
       version: ${{ steps.plan.outputs.version }}
       previous: ${{ steps.plan.outputs.previous }}
       app_schema: ${{ steps.plan.outputs.app_schema }}
@@ -64,8 +72,11 @@ jobs:
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
           PREVIOUS: ${{ inputs.previous }}
         run: |
+          # A pull request checks the newest release that is not a draft.
+          [ -n "$TAG" ] || TAG=$(gh release list --repo "$REPO" --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName')
           gh release view "$TAG" --repo "$REPO" --json tagName,isDraft,isPrerelease
           if [ -z "$PREVIOUS" ]; then
             # The newest published (non-draft) release that sorts before this tag.
@@ -77,6 +88,7 @@ jobs:
           app_schema=$(echo "$migrations" | grep -o '^[0-9]*' | sort -n | tail -1 | sed 's/^0*//')
           if gh api "repos/$REPO/contents/src-tauri/src/release_check.rs?ref=$TAG" --silent 2>/dev/null; then check_mode=true; else check_mode=false; fi
           {
+            echo "tag=$TAG"
             echo "version=${TAG#v}"
             echo "previous=$PREVIOUS"
             echo "app_schema=$app_schema"
@@ -105,6 +117,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     env:
+      TAG: ${{ needs.plan.outputs.tag }}
       PREVIOUS: ${{ needs.plan.outputs.previous }}
       APP_SCHEMA: ${{ needs.plan.outputs.app_schema }}
       WORK: ${{ github.workspace }}/release-check-work

@@ -3,7 +3,8 @@
 `.github/workflows/release-check.yml` is the gate between a test build and **latest**. It checks
 the files a release actually ships, on macOS, Windows and Linux, and replaces the manual Mac check.
 It runs when a pre-release or draft is published or edited, and by hand (Actions › Release check ›
-Run workflow, with the tag and optionally the tag to upgrade from). Promote a release to latest only
+Run workflow, with the tag and optionally the tag to upgrade from). A pull request that changes the
+release check itself runs it against the newest release. Promote a release to latest only
 when all three jobs are green.
 
 ## What each job checks
