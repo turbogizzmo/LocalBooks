@@ -1,0 +1,57 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(name, &report)"
+---
+job_profit_detail_by_account, 2025-01-01 to 2025-12-31
+
+Account                                Act. Cost  Act. Revenue     ($) Diff.
+Alder & Finch LLP
+  Sales                                     0.00      2,337.50      2,337.50 ▸
+  Services                                  0.00     42,500.00     42,500.00 ▸
+Total Alder & Finch LLP                     0.00     44,837.50     44,837.50 ▸
+Bonn Studio GmbH
+  Services                                  0.00      5,208.00      5,208.00 ▸
+  Exchange Gain or Loss                   -52.50          0.00         52.50 ▸
+Total Bonn Studio GmbH                    -52.50      5,208.00      5,260.50 ▸
+Brightwater Cafe
+  Sales                                     0.00      2,337.50      2,337.50 ▸
+  Services                                  0.00     45,000.00     45,000.00 ▸
+Total Brightwater Cafe                      0.00     47,337.50     47,337.50 ▸
+Cobalt Outfitters
+  Sales                                     0.00      2,337.50      2,337.50 ▸
+  Services                                  0.00     40,000.00     40,000.00 ▸
+Total Cobalt Outfitters                     0.00     42,337.50     42,337.50 ▸
+Kestrel Homes
+  Services                                  0.00        600.00        600.00 ▸
+Total Kestrel Homes                         0.00        600.00        600.00 ▸
+Kestrel Homes:Lakeview Remodel
+  Sales                                     0.00      3,000.00      3,000.00 ▸
+  Services                                  0.00      3,830.00      3,830.00 ▸
+  Cost of Goods Sold                    1,500.00          0.00     -1,500.00 ▸
+  Job Materials                         1,120.00          0.00     -1,120.00 ▸
+  Contractors                           1,000.00          0.00     -1,000.00 ▸
+Total Kestrel Homes:Lakeview Remod      3,620.00      6,830.00      3,210.00 ▸
+Kestrel Homes:Maple St Addition
+  Sales                                     0.00        600.00        600.00 ▸
+  Services                                  0.00      2,550.00      2,550.00 ▸
+  Cost of Goods Sold                      300.00          0.00       -300.00 ▸
+  Job Materials                           800.00          0.00       -800.00 ▸
+  Equipment Rental                        450.00          0.00       -450.00 ▸
+Total Kestrel Homes:Maple St Addit      1,550.00      3,150.00      1,600.00 ▸
+No customer/job
+  Sales                                     0.00        840.00        840.00 ▸
+  Job Materials                           300.00          0.00       -300.00 ▸
+  Advertising & Marketing               1,800.00          0.00     -1,800.00 ▸
+  Bank Charges & Fees                     180.00          0.00       -180.00 ▸
+  Office Supplies                         829.90          0.00       -829.90 ▸
+  Rent & Lease                         28,800.00          0.00    -28,800.00 ▸
+  Software & Cloud Services             1,548.00          0.00     -1,548.00 ▸
+  Contractors                           5,700.00          0.00     -5,700.00 ▸
+  Utilities                             2,367.00          0.00     -2,367.00 ▸
+  Wages                                75,750.00          0.00    -75,750.00 ▸
+  Payroll Taxes                         5,794.85          0.00     -5,794.85 ▸
+  Interest Expense                        780.00          0.00       -780.00 ▸
+Total No customer/job                 123,849.75        840.00   -123,009.75 ▸
+TOTAL                                 128,967.25    151,140.50     22,173.25
+
+144 lines

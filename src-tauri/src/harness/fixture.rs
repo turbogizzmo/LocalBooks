@@ -111,6 +111,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
                     rate_cents: None,
                     product_service_id: None,
                     class_id: None,
+                    customer_id: None,
                 })
                 .collect(),
         },
@@ -139,7 +140,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
             memo: None,
             lines: lines
                 .into_iter()
-                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None })
+                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None, customer_id: None })
                 .collect(),
             currency: None,
         },
@@ -152,7 +153,11 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
 
 /// Builds Harbor Lane Design Co. on a fresh in-memory company file.
 pub(crate) async fn harbor_lane() -> SqlitePool {
-    let pool = crate::db::test_pool().await;
+    harbor_lane_in(crate::db::test_pool().await).await
+}
+
+/// Builds Harbor Lane Design Co. in `pool`, a new company file.
+pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
     let p = &pool;
     crate::preferences::set(p, "company_name", "Harbor Lane Design Co.").await.expect("company name");
 

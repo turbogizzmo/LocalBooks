@@ -68,6 +68,7 @@ features![
     inventory,
     invoices,
     item_prices,
+    job_reports,
     journal,
     lists,
     mcp,

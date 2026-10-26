@@ -397,6 +397,9 @@ pub struct VendorCreditLineInput {
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -497,13 +500,17 @@ async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCre
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("VC: line {n}")).await?;
         }
-        sqlx::query("INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("VC: line {n}")).await?;
+        }
+        sqlx::query("INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo, class_id, customer_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
             .bind(credit_id)
             .bind(n as i64)
             .bind(line.account_id)
             .bind(line.amount_cents)
             .bind(clean(line.memo.as_deref()))
             .bind(line.class_id)
+            .bind(line.customer_id)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;

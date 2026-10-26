@@ -65,6 +65,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         rateCents: l.rateCents ?? null,
         productServiceId: l.productServiceId ?? null,
         classId: l.classId ?? null,
+        customerId: l.customerId ?? null,
       })),
     );
     const warning = formClass.missing(postedLines);
@@ -157,7 +158,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           </button>
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses stockItems={stockItems.data ?? []} />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs stockItems={stockItems.data ?? []} />
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
       {memorizing && (
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />

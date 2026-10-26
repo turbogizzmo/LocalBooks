@@ -35,7 +35,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (invalid > 0) return setError(`${invalid} line(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one line.');
-    const postedLines = formClass.apply(lines.map((l) => ({ accountId: l.accountId, amountCents: l.amountCents, memo: l.memo, classId: l.classId ?? null })));
+    const postedLines = formClass.apply(lines.map((l) => ({ accountId: l.accountId, amountCents: l.amountCents, memo: l.memo, classId: l.classId ?? null, customerId: l.customerId ?? null })));
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
     setBusy(true);
@@ -86,7 +86,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withClasses />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withClasses withJobs />
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">

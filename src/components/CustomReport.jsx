@@ -319,12 +319,13 @@ export function reportExports({ company, title, subtitle, report, filename, onNo
   };
 }
 
-function ReportTable({ company, title, subtitle, report, onRow }) {
+/** The report on screen and in print; also used by the job costing reports (`JobReports.jsx`). */
+export function ReportTable({ company, title, subtitle, report, onRow, footer = 'click a line to open its transaction · Customize… changes the filters, columns and grouping' }) {
   const { columns, rows } = report;
   const rowClass = (kind) =>
     kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'subtotal' ? 'font-semibold border-t border-qb-ink' : kind === 'total' ? 'font-semibold border-t-2 border-double border-qb-ink' : '';
-  const clickable = (r) => Boolean(r.journalEntryId || r.drill || (r.kind === 'section' && r.accountId));
-  const hint = (r) => (r.journalEntryId ? 'Open this transaction' : r.drill ? 'Show these transactions' : r.accountId ? 'Open the register for this account' : undefined);
+  const clickable = (r) => Boolean(r.journalEntryId || r.drill || r.estimateId || (r.kind === 'section' && r.accountId));
+  const hint = (r) => (r.journalEntryId ? 'Open this transaction' : r.drill ? 'Show these transactions' : r.estimateId ? 'Open Estimates' : r.accountId ? 'Open the register for this account' : undefined);
   const cells = (r, cellClass) =>
     r.kind === 'section' ? (
       <td colSpan={columns.length} className={cellClass(0)}>{r.cells[0]}</td>
@@ -386,7 +387,7 @@ function ReportTable({ company, title, subtitle, report, onRow }) {
           </tbody>
         </table>
         <footer className="mt-3 border-t border-qb-border pt-1 text-xs text-qb-ink-muted">
-          {report.lineCount} {report.lineCount === 1 ? 'line' : 'lines'} · click a line to open its transaction · Customize… changes the filters, columns and grouping
+          {report.lineCount} {report.lineCount === 1 ? 'line' : 'lines'} · {footer}
         </footer>
       </article>
     </>

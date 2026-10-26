@@ -1,0 +1,20 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(name, &report)"
+---
+job_profit_summary, 2025-01-01 to 2025-12-31
+
+Customer:Job                           Act. Cost  Act. Revenue     ($) Diff.
+Alder & Finch LLP                           0.00     44,837.50     44,837.50 ▸
+Bonn Studio GmbH                          -52.50      5,208.00      5,260.50 ▸
+Brightwater Cafe                            0.00     47,337.50     47,337.50 ▸
+Cobalt Outfitters                           0.00     42,337.50     42,337.50 ▸
+Kestrel Homes
+  Kestrel Homes (other)                     0.00        600.00        600.00 ▸
+  Lakeview Remodel                      3,620.00      6,830.00      3,210.00 ▸
+  Maple St Addition                     1,550.00      3,150.00      1,600.00 ▸
+Total Kestrel Homes                     5,170.00     10,580.00      5,410.00 ▸
+No customer/job                       123,849.75        840.00   -123,009.75 ▸
+TOTAL                                 128,967.25    151,140.50     22,173.25
+
+144 lines

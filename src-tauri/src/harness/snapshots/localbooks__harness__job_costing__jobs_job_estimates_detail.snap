@@ -1,0 +1,40 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(name, &report)"
+---
+job_estimates_detail, 2025-01-01 to 2025-12-31
+
+Product/Service                        Act. Cost  Est. Revenue  Act. Revenue     ($) Diff.     (%) Diff.
+Alder & Finch LLP
+  No product/service                        0.00          0.00     44,837.50     44,837.50 ▸
+Total Alder & Finch LLP                     0.00          0.00     44,837.50     44,837.50
+Bonn Studio GmbH
+  No product/service                      -52.50          0.00      5,208.00      5,208.00 ▸
+Total Bonn Studio GmbH                    -52.50          0.00      5,208.00      5,208.00
+Brightwater Cafe
+  No product/service                        0.00          0.00     47,337.50     47,337.50 ▸
+Total Brightwater Cafe                      0.00          0.00     47,337.50     47,337.50
+Cobalt Outfitters
+  No product/service                        0.00          0.00     42,337.50     42,337.50 ▸
+Total Cobalt Outfitters                     0.00          0.00     42,337.50     42,337.50
+Kestrel Homes
+  Site Survey                               0.00          0.00        600.00        600.00 ▸
+Total Kestrel Homes                         0.00          0.00        600.00        600.00
+Kestrel Homes:Lakeview Remodel
+  Framing Labor                             0.00      3,400.00      3,230.00       -170.00          -5.0 ▸
+  Oak Panels                            1,500.00      3,000.00      3,000.00          0.00           0.0 ▸
+  Site Survey                               0.00        600.00        600.00          0.00           0.0 ▸
+  No product/service                    2,120.00          0.00          0.00          0.00 ▸
+Total Kestrel Homes:Lakeview Remod      3,620.00      7,000.00      6,830.00       -170.00          -2.4
+Kestrel Homes:Maple St Addition
+  Framing Labor                             0.00      5,100.00      2,550.00     -2,550.00         -50.0 ▸
+  Oak Panels                              300.00          0.00        600.00        600.00 ▸
+  Site Survey                               0.00        600.00          0.00       -600.00        -100.0 ▸
+  No product/service                    1,250.00       -200.00          0.00        200.00        -100.0 ▸
+Total Kestrel Homes:Maple St Addit      1,550.00      5,500.00      3,150.00     -2,350.00         -42.7
+No customer/job
+  No product/service                  123,849.75          0.00        840.00        840.00 ▸
+Total No customer/job                 123,849.75          0.00        840.00        840.00
+TOTAL                                 128,967.25     12,500.00    151,140.50    138,640.50        1109.1
+
+150 lines
