@@ -127,7 +127,7 @@ function ChooseFile({ busy, onFile }) {
     const picked = await open({
       multiple: true,
       directory: false,
-      filters: [{ name: 'Company file, backup, export or book (.qbw, .qbb, .iif, .qif, .gnucash, .csv, .xlsx)', extensions: EXTENSIONS }],
+      filters: [{ name: 'Company file, backup, export or book (.qbw, .qbb, .iif, .qif, .gnucash, .csv, .xlsx)', extensions: EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]) }],
     });
     const paths = typeof picked === 'string' ? [picked] : picked;
     if (paths?.length) onFile(paths);

@@ -9,7 +9,7 @@ import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
-import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_EXTENSIONS } from './CompanyFiles.jsx';
+import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -688,7 +688,7 @@ function FileAndData({ companyName }) {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_EXTENSIONS] }],
+      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS] }],
     });
     if (!path) return;
     // A QuickBooks backup can't replace these books: it becomes a new company through the migration wizard.

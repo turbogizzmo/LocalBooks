@@ -10,9 +10,11 @@ import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
 const FILE_MENU_REQUESTED = 'file-menu-requested';
 /** QuickBooks Desktop company files and backups: opening one starts a new company and migrates it. */
 export const QUICKBOOKS_EXTENSIONS = ['qbw', 'qbb', 'qbm'];
+/** QuickBooks names its files in capitals (`Company.QBW`), and some file pickers match extensions case by case. */
+export const QUICKBOOKS_FILTER_EXTENSIONS = QUICKBOOKS_EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]);
 const COMPANY_FILTER = {
   name: 'LocalBooks or QuickBooks company file or backup',
-  extensions: ['localbooks', 'db', ...QUICKBOOKS_EXTENSIONS],
+  extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS],
 };
 /** The QuickBooks file to read once the new company it is migrating into has opened (the window reloads in between). */
 const PENDING_MIGRATION_KEY = 'localbooks.pendingMigration';

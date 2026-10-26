@@ -55,6 +55,19 @@ off: restore the most recent backup that passes the check-up.
 - It opens in place for this session. The window title and the top bar show which file is open, and
   your usual company file is unchanged.
 
+## Open a QuickBooks company file or backup
+
+**Open Company File…**, **Restore from Backup…** and **File › Open or Restore Company…** also accept
+QuickBooks `.qbw` company files, `.qbb` backups and `.qbm` portable files.
+
+1. Choose the QuickBooks file.
+2. Pick where to save the new LocalBooks company file. It's named after the QuickBooks file.
+3. The new company opens on the **Desktop Migration Wizard**, which starts reading the QuickBooks
+   file. Review and post what it finds as described in
+   [Desktop Migration Wizard](desktop-migration.md).
+
+The QuickBooks file is only read, never changed, and the books you had open are left as they were.
+
 ## Keep the books on a network or synced drive
 
 1. Click **Change Company File Location…** and choose the **Folder**, for example on a network drive
