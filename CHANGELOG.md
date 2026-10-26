@@ -4,6 +4,18 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.8.1]
+
+- **Open QuickBooks files directly.** **File › Open or Restore Company…**, **Open Company File…**
+  and **Restore from Backup…** now let you pick a QuickBooks `.qbw` company file, `.qbb` backup or
+  `.qbm` portable file, where before only LocalBooks files could be chosen. LocalBooks creates a new
+  company named after the file and opens the Desktop Migration Wizard on it. The QuickBooks file is
+  only read.
+- **Settings › File & Data Controls** has a **Desktop Migration Wizard…** button, so the QuickBooks,
+  Quicken and GnuCash import is next to Open and Restore as well as under **Accounting**.
+- QuickBooks files named in capitals (such as `Company.QBB`) can be chosen in every file picker,
+  including the Desktop Migration Wizard's.
+
 ## [0.8.0]
 
 - **Customize reports.** The new detail reports have a **Customize…** button: choose the dates,
