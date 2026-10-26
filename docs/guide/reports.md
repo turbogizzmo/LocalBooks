@@ -112,6 +112,8 @@ Things to know:
   credits dated on or before it. Credit not yet used is negative.
 - Voided transactions show with the entry that voids them, so together they come to zero. Choose
   **Leave out voided transactions** under **Customize…** to hide both (the 1099 Detail does).
+- The name filters list customers and vendors. LocalBooks has no payroll, so no transaction names an
+  employee.
 - **Balance Sheet Detail** shows the equity accounts' own lines; this year's net income is not a
   line of its own, as it is on the Balance Sheet.
 - On ledger lines, **Item**, **Qty** and **Rate** are filled in when the line was posted from a single
