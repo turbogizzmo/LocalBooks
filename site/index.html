@@ -131,6 +131,18 @@
 
     footer { max-width: 980px; margin: 0 auto; padding: 8px 16px 32px; color: var(--ink-faint); font-size: 12px; }
 
+    /* Move your books: pick a program, then what you have, and see only those steps. */
+    .mig-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); margin: 14px 0 6px; }
+    .mig-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+    .mig-choice { font: inherit; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; cursor: pointer; }
+    .mig-choice:hover { border-color: var(--border-strong); background: var(--row-hover); }
+    .mig-choice:focus-visible { outline: none; box-shadow: 0 0 0 2px #2ca01c40; border-color: var(--green); }
+    .mig-choice[aria-pressed="true"] { border-color: var(--green); background: var(--green-tint); box-shadow: inset 3px 0 0 var(--green); }
+    .mig-choice .name { display: block; font-weight: 600; }
+    .mig-choice .sub { display: block; font-size: 12px; color: var(--ink-muted); }
+    .mig-result { margin-top: 14px; border: 1px solid var(--border); border-radius: 2px; background: var(--canvas); padding: 12px 14px; }
+    .mig-result h3 { font-size: 15px; margin: 0 0 2px; }
+    .mig-result .for { color: var(--ink-muted); font-size: 12px; margin: 0 0 10px; }
     @media (max-width: 760px) {
       .hero, .two-col { grid-template-columns: 1fr; }
       .guide-list { columns: 1; }
@@ -235,18 +247,31 @@
       <h2>Move your books to LocalBooks</h2>
       <div class="panel-body">
         <p>Everything comes in through <strong>Accounting › Desktop Migration Wizard</strong>. The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
+        <div id="mig" hidden>
+          <p class="mig-label">1. Which program are you leaving?</p>
+          <div class="mig-choices" id="mig-sources" role="group" aria-label="Program you're leaving"></div>
+          <div id="mig-types-wrap" hidden>
+            <p class="mig-label">2. What do you have?</p>
+            <div class="mig-choices" id="mig-types" role="group" aria-label="What you have"></div>
+          </div>
+          <div id="mig-result" aria-live="polite"></div>
+        </div>
+        <details id="mig-all" open>
+        <summary>Every option at once</summary>
         <table class="grid" aria-label="What to bring in from each program">
           <thead><tr><th style="width:30%">Your books are in</th><th>What to do</th></tr></thead>
           <tbody>
             <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
             <tr><td><strong>QuickBooks Desktop for Mac</strong></td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
-            <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › Export › QIF File</strong> with <strong>All accounts</strong>, and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
+            <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › File Export › QIF File</strong> with <strong>All accounts</strong> (or one account at a time), and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
             <tr><td><strong>GnuCash</strong></td><td>Choose your <code>.gnucash</code> book (either the XML or SQLite kind). <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-gnucash">Steps</a></td></tr>
             <tr><td>A payment processor, point of sale or payroll tool</td><td>Choose its <strong>IIF</strong> export (<code>.iif</code>).</td></tr>
             <tr><td>Only your bank</td><td>Start a new company and bring in your bank history from <strong>Banking › Bank Feeds</strong>: OFX, QFX, QBO, CSV or PDF statements, or a SimpleFIN connection. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bank-feeds.md">Steps</a></td></tr>
           </tbody>
         </table>
+        </details>
+        <p class="mig-label">Then, whichever program you came from</p>
         <ol class="steps">
           <li><strong>Run a trial balance</strong> in your old program first, so you have something to compare with.</li>
           <li>In LocalBooks, open <strong>Accounting › Desktop Migration Wizard</strong> and choose your file or files.</li>
@@ -367,6 +392,123 @@
   </footer>
 
   <script>
+    // Move your books: a two-step chooser over the same paths as the table, which stays as the
+    // no-JavaScript fallback. Steps are this page's own HTML strings, not user input.
+    (function () {
+      const G = 'https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/';
+      const wizard = 'In LocalBooks, open <strong>Accounting › Desktop Migration Wizard</strong> and choose ';
+      const reportSteps = (journal) => [
+        journal,
+        'Also export the <strong>Account Listing</strong>, <strong>Customer Contact List</strong>, <strong>Vendor Contact List</strong> and <strong>Item List</strong>. Only the Journal is required; the lists add types, addresses and balances to check against.',
+        wizard + '<strong>all the files together</strong> (hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd>, or drag them in).'
+      ];
+      const DATA = [
+        { name: 'QuickBooks Desktop for Windows', sub: 'Pro, Premier or Enterprise', types: [
+          { name: 'A company file or backup', sub: '.qbw or .qbb', heading: 'Import it directly', direct: true, steps: [
+              'Copy your <code>.qbw</code> company file, or a <code>.qbb</code> backup, to this computer.',
+              wizard + 'the file.'],
+            note: 'LocalBooks reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
+            guide: 'desktop-migration.md' }
+        ]},
+        { name: 'QuickBooks Desktop for Mac', sub: 'Any year, 2016 to 2024', types: [
+          { name: 'QuickBooks still opens', sub: '.qb2024, .qb2021 or a .qbmb backup', heading: 'Export a Windows copy, then import it', steps: [
+              'Open the company in QuickBooks for Mac as the admin. For a <code>.qbmb</code> backup, restore it first. Intuit suggests running <strong>File › Utilities › Verify Data</strong> first.',
+              'Choose <strong>File › Export › To QuickBooks for Windows</strong> (older versions: <strong>Back Up to QuickBooks for Windows</strong>). Leave the password <strong>blank</strong>, and save the <code>.qbb</code> somewhere easy to find.',
+              wizard + 'that <code>.qbb</code>.'],
+            note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. LocalBooks can’t open a password-protected backup.',
+            guide: 'desktop-migration.md#from-quickbooks-desktop-for-mac' },
+          { name: 'QuickBooks won’t open any more', sub: 'Expired subscription or no license', heading: 'Export your reports instead', steps: reportSteps(
+              'Open the company in QuickBooks for Mac. An expired copy still opens it in <strong>view-only mode</strong> for about a year; if it won’t open at all, install Intuit’s 30-day trial. Go to <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and export it to Excel or CSV.'),
+            note: 'View-only mode can still run and export reports. The guide lists the exact columns to include.',
+            guide: 'desktop-migration.md#import-quickbooks-reports' }
+        ]},
+        { name: 'QuickBooks Online', sub: 'Including a cancelled subscription', types: [
+          { name: 'Report exports', sub: '.xlsx or .csv', heading: 'Export your reports, then import them', steps: reportSteps(
+              'In QuickBooks Online, run the <strong>Journal</strong> report with the dates set to <strong>All Dates</strong>, and export it to Excel. A cancelled subscription keeps read-only access for a year.'),
+            guide: 'desktop-migration.md#import-quickbooks-reports' }
+        ]},
+        { name: 'Quicken', sub: 'Or anything that exports QIF', types: [
+          { name: 'A QIF export', sub: '.qif', heading: 'Export to QIF, then import it', direct: true, steps: [
+              'In Quicken, choose <strong>File › File Export › QIF File</strong>. Pick <strong>All accounts</strong> if your edition offers it (otherwise one account at a time), and include <strong>Transactions</strong>, <strong>Account list</strong> and <strong>Category list</strong>.',
+              'Set the end date to today, so future scheduled transactions aren’t exported.',
+              wizard + 'the <code>.qif</code> file.'],
+            note: 'Investment accounts are skipped, because LocalBooks doesn’t track securities.',
+            guide: 'desktop-migration.md#import-an-iif-or-qif-export' }
+        ]},
+        { name: 'GnuCash', sub: 'XML or SQLite books', types: [
+          { name: 'A GnuCash book', sub: '.gnucash', heading: 'Import it directly', direct: true, steps: [
+              'Close the book in GnuCash (or copy the file).',
+              wizard + 'the <code>.gnucash</code> file.'],
+            note: 'Customers, vendors, invoices and bills come in as LocalBooks documents. Investment accounts are skipped.',
+            guide: 'desktop-migration.md#from-gnucash' }
+        ]},
+        { name: 'Something else', sub: 'Another program, or just your bank', types: [
+          { name: 'An IIF or QIF export', sub: 'From a payment processor, point of sale or payroll tool', heading: 'Import the export file', direct: true, steps: [
+              'Export an <strong>IIF</strong> (QuickBooks interchange) or <strong>QIF</strong> file from the program. Most accounting and bookkeeping tools offer one.',
+              wizard + 'the file.'],
+            guide: 'desktop-migration.md#import-an-iif-or-qif-export' },
+          { name: 'Only my bank’s records', sub: 'Starting fresh', heading: 'Start a new company and import your bank history', steps: [
+              'Start a new company in LocalBooks and set up your bank and card accounts.',
+              'In <strong>Banking › Bank Feeds</strong>, import statements as <strong>OFX, QFX, QBO, CSV or PDF</strong>, or connect your bank with SimpleFIN.',
+              'Enter opening balances and any open invoices and bills from your last statements or reports.'],
+            guide: 'bank-feeds.md' }
+        ]}
+      ];
+
+      const root = document.getElementById('mig');
+      const sourcesEl = document.getElementById('mig-sources');
+      const typesWrap = document.getElementById('mig-types-wrap');
+      const typesEl = document.getElementById('mig-types');
+      const resultEl = document.getElementById('mig-result');
+      let current = -1;
+
+      function choice(name, sub, pressed, onClick) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'mig-choice';
+        b.setAttribute('aria-pressed', String(pressed));
+        const n = document.createElement('span'); n.className = 'name'; n.textContent = name; b.appendChild(n);
+        if (sub) { const s = document.createElement('span'); s.className = 'sub'; s.textContent = sub; b.appendChild(s); }
+        b.addEventListener('click', onClick);
+        return b;
+      }
+      function renderSources() {
+        sourcesEl.textContent = '';
+        DATA.forEach((src, i) => sourcesEl.appendChild(choice(src.name, src.sub, i === current, () => pickSource(i))));
+      }
+      // Update the pressed state in place, so a keyboard user's focus stays on the button they used.
+      function markPressed(container, index) {
+        container.querySelectorAll('.mig-choice').forEach((c, j) => c.setAttribute('aria-pressed', String(j === index)));
+      }
+      function pickSource(i) {
+        current = i;
+        markPressed(sourcesEl, i);
+        const src = DATA[i];
+        typesEl.textContent = '';
+        resultEl.textContent = '';
+        if (src.types.length === 1) { typesWrap.hidden = true; show(src.types[0]); return; }
+        typesWrap.hidden = false;
+        src.types.forEach((t, j) => typesEl.appendChild(choice(t.name, t.sub, false, () => {
+          markPressed(typesEl, j);
+          show(t);
+        })));
+      }
+      function show(t) {
+        resultEl.innerHTML =
+          '<div class="mig-result"><h3></h3><p class="for"></p>' +
+          (t.direct ? '<div class="notice notice-success">LocalBooks reads this directly. No conversion needed.</div>' : '') +
+          '<ol class="steps">' + t.steps.map((s) => '<li>' + s + '</li>').join('') + '</ol>' +
+          (t.note ? '<div class="notice notice-info">' + t.note + '</div>' : '') +
+          '<p class="small"><a href="' + G + t.guide + '">Full steps in the guide</a></p></div>';
+        resultEl.querySelector('h3').textContent = t.heading;
+        resultEl.querySelector('.for').textContent = DATA[current].name + ' › ' + t.name;
+      }
+
+      root.hidden = false;
+      document.getElementById('mig-all').open = false;
+      renderSources();
+    })();
+
     (function () {
       var RELEASES = 'https://github.com/turbogizzmo/LocalBooks/releases';
 
