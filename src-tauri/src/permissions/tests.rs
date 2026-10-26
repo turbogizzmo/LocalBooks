@@ -122,8 +122,8 @@ async fn the_gate_follows_the_open_file_and_its_sign_in() {
 /// Every command the app registers is classified on purpose: the lists name only real commands.
 #[test]
 fn the_lists_name_registered_commands() {
-    let main = include_str!("../main.rs");
+    let registered: Vec<_> = crate::commands::all_commands().collect();
     for name in OPEN.iter().chain(ADMIN).chain(READ) {
-        assert!(main.contains(&format!("commands::{name},")), "{name} is not a registered command");
+        assert!(registered.contains(name), "{name} is not a registered command");
     }
 }
