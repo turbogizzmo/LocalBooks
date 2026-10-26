@@ -13,7 +13,7 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 
 use super::account;
-use super::fixture::{d, harbor_lane};
+use super::fixture::{d, harbor_lane, harbor_lane_in};
 use crate::credits::{CreditMemoInput, VendorCreditInput, VendorCreditLineInput};
 use crate::custom_reports::{ColumnKind, RowKind};
 use crate::estimates::EstimateInput;
@@ -35,7 +35,10 @@ async fn new_account(pool: &SqlitePool, number: &str, name: &str, account_type: 
 }
 
 pub(crate) async fn company() -> SqlitePool {
-    let pool = harbor_lane().await;
+    with_jobs(harbor_lane().await).await
+}
+
+async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let p = &pool;
     let sales = account(p, "4000").await;
     let services = account(p, "4100").await;
@@ -404,7 +407,10 @@ async fn filters_and_drill_downs() {
 async fn seed_job_costing_company() {
     let dir = std::path::PathBuf::from(std::env::var("LOCALBOOKS_SEED_DIR").expect("set LOCALBOOKS_SEED_DIR"));
     let path = dir.join("Job Costing.localbooks");
-    let _ = std::fs::remove_file(&path);
-    let pool = company().await;
-    sqlx::query("VACUUM INTO ?1").bind(path.display().to_string()).execute(&pool).await.expect("write the company file");
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+    let pool = crate::db::open(&path).await.expect("create the company file");
+    let pool = with_jobs(harbor_lane_in(pool).await).await;
+    pool.close().await;
 }
