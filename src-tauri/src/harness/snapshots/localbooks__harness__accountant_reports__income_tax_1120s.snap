@@ -1,0 +1,33 @@
+---
+source: src/harness/accountant_reports.rs
+expression: "text(\"Income Tax Summary, Form 1120-S\", &report)"
+---
+Income Tax Summary, Form 1120-S, 2025-01-01 to 2025-12-31
+
+Tax line                              Amount
+Income
+  1a · Gross receipts or s        140,560.50
+Total Income                      140,560.50
+Deductions
+  8 · Salaries and wages           75,750.00
+  11 · Rents                       28,800.00
+  12 · Taxes and licenses           5,794.85
+  13 · Interest                       780.00
+  16 · Advertising                  1,800.00
+Total Deductions                  112,924.85
+Balance sheet (Schedule
+  Sch. L · Cash                    18,363.22
+  Sch. L · Buildings and o         18,750.00
+  Sch. L · Other current l            375.00
+Unassigned (income and e
+  Bank Charges & Fees                 180.00
+  Office Supplies                     829.90
+  Software & Cloud Service          1,548.00
+  Contractors                       5,700.00
+  Utilities                         2,367.00
+  Exchange Gain or Loss               -52.50
+
+15 lines
+Note: Form 1120-S · 2025-01-01 through 2025-12-31
+Note: 6 income or expense accounts with activity have no tax line; assign one under Tax lines.
+Note: Amounts are from the books on the accrual basis; adjust for your return as your tax preparer advises.

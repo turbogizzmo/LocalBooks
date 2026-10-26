@@ -335,9 +335,15 @@ pub async fn post_transaction(pool: &SqlitePool, entry: JournalEntry) -> Result<
 
 /// Same as [`post_transaction`], returning the id of the posted entry.
 pub async fn post_journal_entry(pool: &SqlitePool, entry: JournalEntry) -> Result<i64, String> {
+    post_journal_entry_flagged(pool, entry, false).await
+}
+
+/// Posts a manual journal entry, marked as an adjusting entry when `adjusting` is set (the flag is
+/// part of the posted header, so it is fixed once posted).
+pub async fn post_journal_entry_flagged(pool: &SqlitePool, entry: JournalEntry, adjusting: bool) -> Result<i64, String> {
     let mut tx = begin_write(&pool).await.map_err(db_err)?;
 
-    match post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await {
+    match post_entry_in_tx_flagged(&mut tx, &entry, EntrySource::Journal, adjusting).await {
         Ok(id) => commit_write(tx).await.map(|()| id).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
     }
@@ -358,6 +364,16 @@ pub async fn post_entry_in_tx(
     entry: &JournalEntry,
     source: EntrySource,
 ) -> Result<i64, String> {
+    post_entry_in_tx_flagged(tx, entry, source, false).await
+}
+
+/// [`post_entry_in_tx`], with the entry marked as an adjusting entry when `adjusting` is set.
+pub async fn post_entry_in_tx_flagged(
+    tx: &mut Transaction<'_, Sqlite>,
+    entry: &JournalEntry,
+    source: EntrySource,
+    adjusting: bool,
+) -> Result<i64, String> {
     validate_entry(entry)?;
     crate::closing::check_open(tx, entry.date).await?;
     if let Some(currency) = &entry.currency {
@@ -371,13 +387,14 @@ pub async fn post_entry_in_tx(
             return Err(format!("FX_IS_HOME: {} is the home currency; record it without an exchange rate", currency.code));
         }
     }
-    write_entry(tx, entry, source).await
+    write_entry(tx, entry, source, adjusting).await
 }
 
 async fn write_entry(
     tx: &mut Transaction<'_, Sqlite>,
     entry: &JournalEntry,
     source: EntrySource,
+    adjusting: bool,
 ) -> Result<i64, String> {
     let memo = Some(entry.description.trim()).filter(|s| !s.is_empty());
 
@@ -390,8 +407,8 @@ async fn write_entry(
 
     let entry_id: i64 = sqlx::query_scalar(
         "INSERT INTO journal_entries
-            (id, entry_number, entry_date, memo, source_type, source_id, reverses_entry_id, foreign_currency_code, exchange_rate_e6, status)
-         VALUES (?1, (SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries), ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'DRAFT')
+            (id, entry_number, entry_date, memo, source_type, source_id, reverses_entry_id, foreign_currency_code, exchange_rate_e6, is_adjusting, status)
+         VALUES (?1, (SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'DRAFT')
          RETURNING id",
     )
     .bind(entry.id)
@@ -402,6 +419,7 @@ async fn write_entry(
     .bind(source.reverses())
     .bind(entry.currency.as_ref().map(|c| c.code.as_str()))
     .bind(entry.currency.as_ref().map(|c| c.exchange_rate_e6))
+    .bind(adjusting)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -772,6 +790,7 @@ pub struct JournalEntryView {
     pub reverses_entry_number: Option<i64>,
     pub reversed_by_entry_number: Option<i64>,
     pub posted_at: Option<String>,
+    pub is_adjusting: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -806,7 +825,7 @@ pub async fn list_journal_entries(pool: &SqlitePool, limit: i64) -> Result<Vec<J
         "SELECT e.id, e.entry_number, e.entry_date, e.memo, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 COALESCE((SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = e.id), 0) AS total_cents,
                 e.is_voided, e.reverses_entry_id, o.entry_number AS reverses_entry_number,
-                r.entry_number AS reversed_by_entry_number, e.posted_at
+                r.entry_number AS reversed_by_entry_number, e.posted_at, e.is_adjusting
          FROM journal_entries e
          LEFT JOIN journal_entries o ON o.id = e.reverses_entry_id
          LEFT JOIN journal_entries r ON r.reverses_entry_id = e.id

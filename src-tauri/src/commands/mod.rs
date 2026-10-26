@@ -46,6 +46,7 @@ mod prelude;
 // One line per feature file, alphabetical.
 features![
     about,
+    accountant_reports,
     accounts,
     ach,
     attachments,

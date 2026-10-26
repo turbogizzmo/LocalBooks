@@ -85,6 +85,7 @@ impl Accounts {
             parent_id,
             active: true,
             stored_balance_cents: None,
+            tax_line: None,
         });
         self.by_name.insert(full_name.to_lowercase(), id);
         id

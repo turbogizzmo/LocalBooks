@@ -16,8 +16,9 @@ pub async fn post_journal_entry(
     app: AppHandle,
     db: State<'_, Db>,
     entry: JournalEntry,
+    adjusting: Option<bool>,
 ) -> Result<i64, String> {
-    let id = ledger::post_journal_entry(&db.pool().await, entry).await?;
+    let id = ledger::post_journal_entry_flagged(&db.pool().await, entry, adjusting.unwrap_or(false)).await?;
     notify(&app);
     Ok(id)
 }
