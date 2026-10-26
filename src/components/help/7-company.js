@@ -108,9 +108,17 @@ export const topics = [
     guide: 'troubleshooting',
   },
   {
+    id: 'menu-bar', area: 'company', views: [],
+    title: 'Use the QuickBooks-style menu bar',
+    body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
+    keywords: 'menu menus menu bar lists company customers vendors employees banking reports shortcut ctrl+i ctrl+w ctrl+r ctrl+j ctrl+t ctrl+f quickbooks desktop',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'windows', area: 'company', views: [],
     title: 'Work in more than one window',
-    body: 'Choose New window at the top of any screen (Window › New Window on a Mac, or Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away.',
+    body: 'Choose New window at the top of any screen (or Window › New Window, Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away.',
     keywords: 'window windows multiple new window side by side second monitor register report open',
     go: null,
     guide: 'getting-started',

@@ -2,6 +2,7 @@
 
 mod accountant_reports;
 mod accounts;
+mod app_menu;
 mod ach;
 mod audit_chain;
 mod backup;
@@ -111,9 +112,9 @@ fn main() {
             if let Some(help) = menu.get(tauri::menu::HELP_SUBMENU_ID) {
                 menu.remove(&help)?;
             }
-            #[cfg(target_os = "macos")]
             windows::add_new_window_item(handle, &menu)?;
             file_menu::add_company_items(handle, &menu)?;
+            app_menu::install(handle, &menu)?;
             Ok(menu)
         })
         .plugin(tauri_plugin_dialog::init())
@@ -121,9 +122,9 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .on_menu_event(|app, event| {
-            #[cfg(target_os = "macos")]
             windows::on_menu_event(app, event.id().as_ref());
             file_menu::on_menu_event(app, event.id().as_ref());
+            app_menu::on_menu_event(app, event.id().as_ref());
         })
         .setup(|app| {
             let (data_dir, config_dir) = data_dirs(app)?;

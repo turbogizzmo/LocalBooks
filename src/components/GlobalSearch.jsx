@@ -22,6 +22,15 @@ function destination(hit) {
   }
 }
 
+const SEARCH_INPUT_ID = 'global-search-input';
+
+/** Puts the cursor in the header search box (Edit › Find…). */
+export function focusSearch() {
+  const input = document.getElementById(SEARCH_INPUT_ID);
+  input?.focus();
+  input?.select();
+}
+
 /** Header search: transactions by number, name, memo or amount, and list entries by name (Ctrl/Cmd+K). */
 export default function GlobalSearch({ navigate }) {
   const [query, setQuery] = useState('');
@@ -100,6 +109,7 @@ export default function GlobalSearch({ navigate }) {
     <div ref={boxRef} className="relative flex-none">
       <input
         ref={inputRef}
+        id={SEARCH_INPUT_ID}
         type="search"
         className="qb-input h-row w-[260px] text-sm"
         placeholder="Search transactions, names, amounts (⌘K)"
