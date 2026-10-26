@@ -446,7 +446,11 @@ pub async fn remove_all_users(pool: &SqlitePool, confirmation: &str) -> Result<(
     let erased: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendors WHERE tax_id LIKE 'lb1:%'").fetch_one(&mut *tx).await.map_err(db_err)?;
     // Anyone at the sign-in screen can do this, so it is recorded where it can't be undone quietly:
     // the hash-chained audit trail, anchored outside the file.
-    record(&mut tx, 0, "ALL_USERS_REMOVED", serde_json::json!({ "users": removed, "taxIdsErased": erased })).await?;
+    let bank_erased: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor_bank_accounts WHERE routing_number LIKE 'lb1:%' OR account_number LIKE 'lb1:%'")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    record(&mut tx, 0, "ALL_USERS_REMOVED", serde_json::json!({ "users": removed, "taxIdsErased": erased, "bankDetailsErased": bank_erased })).await?;
     for statement in [
         "UPDATE user_reset_in_progress SET value = 1",
         "DELETE FROM key_slots",
@@ -458,6 +462,7 @@ pub async fn remove_all_users(pool: &SqlitePool, confirmation: &str) -> Result<(
     ] {
         sqlx::query(statement).execute(&mut *tx).await.map_err(db_err)?;
     }
+    crate::ach::erase_encrypted(&mut tx).await?;
     crate::ledger::commit_write(tx).await.map_err(db_err)
 }
 
