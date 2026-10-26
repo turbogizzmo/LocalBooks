@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { FolderOpen, Plus, Search } from 'lucide-react';
 import Notice from './Notice.jsx';
 import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
+import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 
 /** Sent by File › New Company… ("new") and File › Open or Restore Company… ("open"); see file_menu.rs. */
 const FILE_MENU_REQUESTED = 'file-menu-requested';
@@ -111,9 +112,33 @@ export async function migrateQuickBooksFile(path) {
   }
 }
 
-/** New Company: asks for the company's name, then where to save its file, and opens it. */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const SETUP_TABS = [
+  ['company', 'Company information'],
+  ['accounts', 'Industry and accounts'],
+  ['expert', 'Expert settings'],
+];
+const TYPE_ORDER = Object.keys(ACCOUNT_TYPE_NAMES);
+
+/** The industry accounts QuickBooks checks by default: its core accounts. */
+const defaultSelection = (chart) => new Set(chart.filter((a) => a.group === 'core').map((a) => a.number));
+
+/**
+ * New Company, modeled on QuickBooks' New Company setup: company and tax information, then an
+ * industry and its suggested chart of accounts (core accounts checked, recommended ones offered),
+ * then expert settings. "Skip" creates the company with the standard chart instead. Asks where to
+ * save the file last, and opens it.
+ */
 export function NewCompanyDialog({ onClose }) {
-  const [name, setName] = useState('');
+  const [tab, setTab] = useState('company');
+  const [options, setOptions] = useState(null);
+  const [info, setInfo] = useState({ name: '', legalName: '', address: '', ein: '', entityType: 'sole_proprietorship', fiscalYearStart: '01-01' });
+  const [industry, setIndustry] = useState('');
+  const [chart, setChart] = useState([]);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bankName, setBankName] = useState('Checking');
+  const [salesTax, setSalesTax] = useState(false);
+  const [inventory, setInventory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -123,19 +148,87 @@ export function NewCompanyDialog({ onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [busy, onClose]);
 
-  const create = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  useEffect(() => {
+    api.getCompanySetupOptions().then(setOptions, (err) => setError(errorText(err)));
+  }, []);
+
+  // The chart follows the industry and tax form; a new industry starts from its suggested accounts.
+  useEffect(() => {
+    if (!industry) {
+      setChart([]);
+      return;
+    }
+    let live = true;
+    api.getStarterChart(industry, info.entityType).then(
+      (rows) => live && setChart(rows),
+      (err) => live && setError(errorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [industry, info.entityType]);
+
+  const chooseIndustry = async (name) => {
+    setIndustry(name);
+    setSalesTax(!!options?.industries.find((i) => i.name === name)?.salesTax);
+    setSelected(name ? defaultSelection(await api.getStarterChart(name, info.entityType)) : new Set());
+  };
+
+  const set = (key) => (e) => setInfo((v) => ({ ...v, [key]: e.target.value }));
+
+  /** Checking a subaccount checks its parent; unchecking a parent unchecks its subaccounts. */
+  const toggle = (account) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(account.number)) {
+        next.delete(account.number);
+        chart.filter((a) => a.parentNumber === account.number).forEach((a) => next.delete(a.number));
+      } else {
+        next.add(account.number);
+        if (account.parentNumber) next.add(account.parentNumber);
+      }
+      return next;
+    });
+
+  const groups = useMemo(() => {
+    const byType = new Map();
+    for (const a of chart) {
+      if (!byType.has(a.accountType)) byType.set(a.accountType, []);
+      byType.get(a.accountType).push(a);
+    }
+    return TYPE_ORDER.filter((t) => byType.has(t)).map((t) => [t, byType.get(t)]);
+  }, [chart]);
+  const required = chart.filter((a) => a.group === 'required').length;
+
+  const create = async (withSetup) => {
+    if (!info.name.trim()) {
+      setTab('company');
+      return;
+    }
     setError(null);
     const path = await save({
       title: 'Save the new company file',
-      defaultPath: `${safeFileName(name)}.localbooks`,
+      defaultPath: `${safeFileName(info.name)}.localbooks`,
       filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
     });
     if (!path) return;
+    const setup = withSetup
+      ? {
+          industry,
+          entityType: info.entityType,
+          accounts: [...selected],
+          bankAccountName: bankName,
+          legalName: info.legalName,
+          address: info.address,
+          ein: info.ein,
+          fiscalYearStart: info.fiscalYearStart,
+          salesTax,
+          inventory,
+        }
+      : null;
     setBusy(true);
     try {
-      await api.createCompanyFile(path, name.trim());
+      await api.createCompanyFile(path, info.name.trim(), setup);
       // The window reloads on the new company.
     } catch (err) {
       setError(errorText(err));
@@ -143,25 +236,182 @@ export function NewCompanyDialog({ onClose }) {
     }
   };
 
+  const tabIndex = SETUP_TABS.findIndex(([id]) => id === tab);
+  const canFinish = !!info.name.trim() && !!industry;
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30" role="dialog" aria-modal="true" aria-label="New company">
-      <form className="qb-panel w-[440px] p-3 shadow-panel" onSubmit={create}>
-        <h2 className="mb-1 text-md font-semibold">Create a new company</h2>
-        <p className="mb-2 text-sm text-qb-ink-muted">
-          A new, empty company file with the standard chart of accounts. You choose where to save it next; the company you have open now is not changed.
+      <form
+        className="qb-panel flex h-[min(640px,90vh)] w-[720px] flex-col p-3 shadow-panel"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (tabIndex < SETUP_TABS.length - 1) setTab(SETUP_TABS[tabIndex + 1][0]);
+          else if (canFinish) create(true);
+        }}
+      >
+        <h2 className="mb-1 shrink-0 text-md font-semibold">Create a new company</h2>
+        <p className="mb-2 shrink-0 text-sm text-qb-ink-muted">
+          Answer a few questions and LocalBooks suggests a chart of accounts for your type of business, like QuickBooks does. The company you have open now is not changed.
         </p>
-        <label className="block">
-          <span className="qb-label">Company name</span>
-          <input className="qb-input w-full" value={name} onChange={(e) => setName(e.target.value)} autoFocus disabled={busy} />
-        </label>
-        {error && <div className="mt-2 text-sm text-qb-negative">{error}</div>}
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="mb-2 flex shrink-0 self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Setup steps">
+          {SETUP_TABS.map(([id, label], i) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              disabled={busy}
+              className={`px-2.5 py-0.5 font-semibold ${tab === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
+            >
+              {i + 1}. {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {tab === 'company' && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="col-span-2 block">
+                <span className="qb-label">Company name</span>
+                <input className="qb-input w-full" value={info.name} onChange={set('name')} autoFocus disabled={busy} />
+              </label>
+              <label className="block">
+                <span className="qb-label">Legal name</span>
+                <input className="qb-input w-full" value={info.legalName} onChange={set('legalName')} disabled={busy} placeholder="If different" />
+              </label>
+              <label className="block">
+                <span className="qb-label">Federal ID (EIN)</span>
+                <input className="qb-input w-full" value={info.ein} onChange={set('ein')} disabled={busy} placeholder="XX-XXXXXXX" />
+              </label>
+              <label className="col-span-2 block">
+                <span className="qb-label">Address</span>
+                <textarea className="qb-input w-full" rows={2} value={info.address} onChange={set('address')} disabled={busy} />
+              </label>
+              <label className="block">
+                <span className="qb-label">Income tax form used</span>
+                <select className="qb-input w-full" value={info.entityType} onChange={set('entityType')} disabled={busy}>
+                  {(options?.entityTypes ?? []).map((t) => (
+                    <option key={t.key} value={t.key}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="qb-label">First month in fiscal year</span>
+                <select className="qb-input w-full" value={info.fiscalYearStart} onChange={set('fiscalYearStart')} disabled={busy}>
+                  {MONTHS.map((m, i) => (
+                    <option key={m} value={`${String(i + 1).padStart(2, '0')}-01`}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {tab === 'accounts' && (
+            <div>
+              <div className="mb-2 flex items-end gap-2">
+                <label className="block flex-1">
+                  <span className="qb-label">Industry</span>
+                  <select className="qb-input w-full" value={industry} onChange={(e) => chooseIndustry(e.target.value)} disabled={busy} aria-label="Industry">
+                    <option value="">Choose the type of business closest to yours…</option>
+                    {(options?.industries ?? []).map((i) => (
+                      <option key={i.name} value={i.name}>{i.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block w-[200px]">
+                  <span className="qb-label">Bank account name</span>
+                  <input className="qb-input w-full" value={bankName} onChange={(e) => setBankName(e.target.value)} disabled={busy} />
+                </label>
+              </div>
+              {industry ? (
+                <>
+                  <div className="mb-1 flex items-center justify-between text-sm text-qb-ink-muted">
+                    <span>
+                      We've preselected the accounts most businesses like yours need. Uncheck any you don't want or check more. {selected.size + required} accounts will be created.
+                    </span>
+                    <button type="button" className="qb-btn qb-btn-secondary shrink-0" onClick={() => setSelected(defaultSelection(chart))} disabled={busy}>
+                      Default
+                    </button>
+                  </div>
+                  <div className="rounded-xs border border-qb-border">
+                    {groups.map(([type, accounts]) => (
+                      <fieldset key={type} className="border-b border-qb-border last:border-b-0">
+                        <legend className="sr-only">{ACCOUNT_TYPE_NAMES[type]}</legend>
+                        <div className="bg-qb-row-hover px-2 py-0.5 text-xs font-semibold uppercase text-qb-ink-muted">{ACCOUNT_TYPE_NAMES[type]}</div>
+                        {accounts.map((a) => {
+                          const fixed = a.group === 'required';
+                          return (
+                            <label key={a.number} className={`flex items-baseline gap-2 px-2 py-0.5 text-sm hover:bg-qb-row-hover ${a.parentNumber ? 'pl-7' : ''}`} title={a.description}>
+                              <input type="checkbox" checked={fixed || selected.has(a.number)} disabled={fixed || busy} onChange={() => toggle(a)} />
+                              <span className="w-[44px] shrink-0 tabular-nums text-qb-ink-muted">{a.number}</span>
+                              <span className="font-medium">{a.number === '10100' ? bankName.trim() || 'Checking' : a.name}</span>
+                              <span className="truncate text-xs text-qb-ink-muted">{fixed ? 'Always created' : a.description}</span>
+                            </label>
+                          );
+                        })}
+                      </fieldset>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-qb-ink-muted">
+                  Choose an industry to see its suggested accounts. If none fits, choose General Product-based Business or General Service-based Business at the end of the list.
+                </p>
+              )}
+            </div>
+          )}
+
+          {tab === 'expert' && (
+            <div className="space-y-2 text-sm">
+              <p className="text-qb-ink-muted">These start from what's usual for your industry. You can change them later in Settings.</p>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" checked={salesTax} onChange={(e) => setSalesTax(e.target.checked)} disabled={busy} />
+                <span>
+                  <span className="font-medium">Customers are charged sales tax</span>
+                  <span className="block text-qb-ink-muted">Turns on sales tax and adds a Sales Tax Payable account. Add your tax rates afterwards in Sales Tax.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" checked={inventory} onChange={(e) => setInventory(e.target.checked)} disabled={busy} />
+                <span>
+                  <span className="font-medium">Inventory and purchase orders are used</span>
+                  <span className="block text-qb-ink-muted">Adds the Inventory Asset and Cost of Goods Sold accounts for tracking products on hand.</span>
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
+
+        {error && <div className="mt-2 shrink-0 text-sm text-qb-negative">{error}</div>}
+        <div className="mt-3 flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary"
+            onClick={() => create(false)}
+            disabled={busy || !info.name.trim()}
+            title="Create the company with LocalBooks' standard chart of accounts and set it up yourself"
+          >
+            Skip — use the standard chart
+          </button>
+          <span className="flex-1" />
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || !name.trim()}>
-            {busy ? 'Creating…' : 'Save As…'}
-          </button>
+          {tabIndex > 0 && (
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setTab(SETUP_TABS[tabIndex - 1][0])} disabled={busy}>
+              Back
+            </button>
+          )}
+          {tabIndex < SETUP_TABS.length - 1 ? (
+            <button type="submit" className="qb-btn qb-btn-primary" disabled={busy}>
+              Next
+            </button>
+          ) : (
+            <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || !canFinish} title={canFinish ? undefined : 'Enter a company name and choose an industry first'}>
+              {busy ? 'Creating…' : 'Save As…'}
+            </button>
+          )}
         </div>
       </form>
     </div>

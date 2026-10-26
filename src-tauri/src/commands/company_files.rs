@@ -1,6 +1,7 @@
 //! Company files: location, opening and closing, the No Company Open screen, window titles and startup failure.
 
 use super::prelude::*;
+use crate::company_setup::{self, CompanySetup, SetupOptions, StarterAccount};
 
 handlers![
     get_storage_status,
@@ -12,6 +13,8 @@ handlers![
     forget_recent_company,
     find_company_files,
     create_company_file,
+    get_company_setup_options,
+    get_starter_chart,
     restore_backup_as,
     close_company_file,
     get_startup_failure,
@@ -215,15 +218,28 @@ fn with_company_extension(path: PathBuf) -> PathBuf {
     }
 }
 
-/// File › New Company: creates an empty company file named `company_name` at `path` and opens it.
+/// File › New Company: creates an empty company file named `company_name` at `path` and opens it,
+/// with the chart of accounts and settings chosen in the setup assistant (or the standard chart).
 #[tauri::command]
-pub async fn create_company_file(app: AppHandle, path: String, company_name: String) -> Result<StorageStatus, String> {
+pub async fn create_company_file(app: AppHandle, path: String, company_name: String, setup: Option<CompanySetup>) -> Result<StorageStatus, String> {
     let path = with_company_extension(PathBuf::from(path));
-    let status = app.state::<Db>().create(&path, &company_name).await?;
+    let status = app.state::<Db>().create(&path, &company_name, setup.as_ref()).await?;
     company_changed(&app).await;
     let _ = app.emit(COMPANY_FILE_CHANGED, ());
     notify(&app);
     Ok(status)
+}
+
+/// The New Company assistant's industries and tax forms.
+#[tauri::command]
+pub async fn get_company_setup_options() -> Result<SetupOptions, String> {
+    Ok(company_setup::options())
+}
+
+/// The suggested chart of accounts for an industry and tax form.
+#[tauri::command]
+pub async fn get_starter_chart(industry: String, entity_type: String) -> Result<Vec<StarterAccount>, String> {
+    company_setup::starter_chart(&industry, &entity_type)
 }
 
 /// Open or Restore Company with a LocalBooks backup: copies the backup to `destination_path` (a new

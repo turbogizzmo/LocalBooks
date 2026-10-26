@@ -716,6 +716,65 @@ const FORM_1120: &[(&str, &str, TaxLineKind)] = &[
     ("26", "Other deductions", D),
 ];
 
+/// Form 990: revenue (Part VIII), functional expenses (Part IX) and the balance sheet (Part X).
+const FORM_990: &[(&str, &str, TaxLineKind)] = &[
+    ("VIII 1a", "Federated campaigns", I),
+    ("VIII 1b", "Membership dues", I),
+    ("VIII 1c", "Fundraising events (contributions)", I),
+    ("VIII 1d", "Related organizations", I),
+    ("VIII 1e", "Government grants (contributions)", I),
+    ("VIII 1f", "All other contributions, gifts and grants", I),
+    ("VIII 2", "Program service revenue", I),
+    ("VIII 3", "Investment income", I),
+    ("VIII 5", "Royalties", I),
+    ("VIII 6", "Net rental income", I),
+    ("VIII 7", "Net gain (loss) from sales of assets other than inventory", I),
+    ("VIII 8", "Net income from fundraising events", I),
+    ("VIII 9", "Net income from gaming activities", I),
+    ("VIII 10", "Net income from sales of inventory", I),
+    ("VIII 11", "Miscellaneous revenue", I),
+    ("IX 1", "Grants to domestic organizations and governments", D),
+    ("IX 2", "Grants to domestic individuals", D),
+    ("IX 4", "Benefits paid to or for members", D),
+    ("IX 5", "Compensation of officers, directors and key employees", D),
+    ("IX 7", "Other salaries and wages", D),
+    ("IX 8", "Pension plan contributions", D),
+    ("IX 9", "Other employee benefits", D),
+    ("IX 10", "Payroll taxes", D),
+    ("IX 11a", "Management fees", D),
+    ("IX 11b", "Legal fees", D),
+    ("IX 11c", "Accounting fees", D),
+    ("IX 11e", "Professional fundraising services", D),
+    ("IX 11g", "Other fees for services", D),
+    ("IX 12", "Advertising and promotion", D),
+    ("IX 13", "Office expenses", D),
+    ("IX 14", "Information technology", D),
+    ("IX 16", "Occupancy", D),
+    ("IX 17", "Travel", D),
+    ("IX 19", "Conferences, conventions and meetings", D),
+    ("IX 20", "Interest", D),
+    ("IX 21", "Payments to affiliates", D),
+    ("IX 22", "Depreciation, depletion and amortization", D),
+    ("IX 23", "Insurance", D),
+    ("IX 24", "Other expenses", D),
+    ("X 1", "Cash (non-interest-bearing)", B),
+    ("X 2", "Savings and temporary cash investments", B),
+    ("X 3", "Pledges and grants receivable", B),
+    ("X 4", "Accounts receivable", B),
+    ("X 8", "Inventories for sale or use", B),
+    ("X 9", "Prepaid expenses and deferred charges", B),
+    ("X 10", "Land, buildings and equipment, net", B),
+    ("X 11", "Investments", B),
+    ("X 15", "Other assets", B),
+    ("X 17", "Accounts payable and accrued expenses", B),
+    ("X 18", "Grants payable", B),
+    ("X 19", "Deferred revenue", B),
+    ("X 23", "Secured mortgages and notes payable", B),
+    ("X 25", "Other liabilities", B),
+    ("X 27", "Net assets without donor restrictions", B),
+    ("X 28", "Net assets with donor restrictions", B),
+];
+
 /// Schedule L (balance sheet) lines, shared by the 1065, 1120-S and 1120. `{owners}` lines differ.
 const SCHEDULE_L: &[(&str, &str, TaxLineKind)] = &[
     ("L-cash", "Cash", B),
@@ -746,6 +805,7 @@ pub fn tax_lines() -> Vec<TaxLine> {
     add("1065", FORM_1065);
     add("1120S", FORM_1120S);
     add("1120", FORM_1120);
+    add("990", FORM_990);
     for (form, owners, equity) in [
         ("1065", "partners", &[("L-capital", "Partners' capital accounts")][..]),
         ("1120S", "shareholders", &[("L-capital-stock", "Capital stock"), ("L-retained-earnings", "Retained earnings"), ("L-distributions", "Shareholder distributions")][..]),
@@ -791,6 +851,8 @@ pub fn imported_tax_line(text: &str) -> Option<String> {
         Some("1120S")
     } else if prefix.contains("1120") {
         Some("1120")
+    } else if prefix.contains("990") {
+        Some("990")
     } else {
         None
     };
@@ -1020,7 +1082,8 @@ pub async fn income_tax(pool: &SqlitePool, form: &str, start: NaiveDate, end: Na
         }
         rows.push(labeled(RowKind::Subtotal, 1, w, &format!("Total {title}"), &[json!(total)]));
     };
-    for (heading, kind) in [("Income", TaxLineKind::Income), ("Deductions", TaxLineKind::Deduction), ("Balance sheet (Schedule L)", TaxLineKind::BalanceSheet)] {
+    let balance_sheet = if form == "990" { "Balance sheet (Part X)" } else { "Balance sheet (Schedule L)" };
+    for (heading, kind) in [("Income", TaxLineKind::Income), ("Deductions", TaxLineKind::Deduction), (balance_sheet, TaxLineKind::BalanceSheet)] {
         let blocks: Vec<(&usize, &Vec<&TaxAccount>)> = by_line.iter().filter(|(i, _)| lines[**i].kind == kind && keep(Some(lines[**i].code.as_str()))).collect();
         if blocks.is_empty() {
             continue;
@@ -1070,6 +1133,7 @@ fn form_name(form: &str) -> &'static str {
         "1065" => "Form 1065",
         "1120S" => "Form 1120-S",
         "1120" => "Form 1120",
+        "990" => "Form 990",
         _ => "Other form",
     }
 }
