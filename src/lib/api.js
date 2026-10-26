@@ -45,10 +45,10 @@ export const api = {
   previewFinanceCharges: (asOf) => invoke('preview_finance_charges', { asOf }),
   assessFinanceCharges: (input) => invoke('assess_finance_charges', { input }),
   importBankFile: (path, bankAccountId, mapping = null) => invoke('import_bank_csv', { path, bankAccountId, mapping }),
-  inspectBankFile: (path, mapping = null) => invoke('inspect_bank_file', { path, mapping }),
+  inspectBankFile: (path, mapping = null, bankAccountId = null) => invoke('inspect_bank_file', { path, mapping, bankAccountId }),
   listBankTransactions: () => invoke('list_bank_transactions'),
-  approveBankTransaction: (transactionId, categoryAccountId, classId = null) =>
-    invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId }),
+  approveBankTransaction: (transactionId, categoryAccountId, classId = null, payeeName = null) =>
+    invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId, payeeName }),
   excludeBankTransaction: (transactionId) => invoke('exclude_bank_transaction', { transactionId }),
   listBankConnections: () => invoke('simplefin_list'),
   connectBank: (token) => invoke('simplefin_connect', { token }),
@@ -248,6 +248,9 @@ export const api = {
   reportCsv: (report, { startDate = null, endDate = null, asOf = null, classFilter = null } = {}) =>
     invoke('report_csv', { report, startDate, endDate, asOf, classFilter }),
   saveReportToDisk: (reportHtmlOrMatrix, filename) => invoke('save_report_to_disk', { reportHtmlOrMatrix, filename }),
+  saveReportXlsx: (report, { startDate = null, endDate = null, asOf = null, classFilter = null } = {}, filename) =>
+    invoke('save_report_xlsx', { report, startDate, endDate, asOf, classFilter, filename }),
+  saveXlsx: (sheet, filename) => invoke('save_xlsx', { sheet, filename }),
   printReport: () => invoke('print_report'),
 
   getStorageStatus: () => invoke('get_storage_status'),

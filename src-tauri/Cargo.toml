@@ -25,7 +25,10 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "h
 libc = "0.2"
 openqbw = "=0.1.5"
 opensqlany = "=0.2.0"
+pdf-extract = "0.12"
+quick-xml = "0.42"
 regex = "1"
+rust_xlsxwriter = "0.101"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
@@ -49,6 +52,7 @@ codegen-units = 1
 lto = true
 
 [dev-dependencies]
+calamine = { version = "0.37", features = ["dates"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 insta = "1"
 proptest = { version = "1", default-features = false, features = ["std"] }
-zip = { version = "9", default-features = false }

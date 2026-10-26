@@ -5,6 +5,7 @@ mod ach;
 mod audit_chain;
 mod backup;
 mod bank;
+mod bank_pdf;
 mod banking;
 mod classes;
 mod closing;
@@ -20,6 +21,7 @@ mod expenses;
 mod forensic;
 mod forms;
 mod fx_rates;
+mod gnucash_import;
 #[cfg(test)]
 mod frontend_checks;
 mod iif_import;
@@ -70,6 +72,7 @@ mod timesheet;
 mod users;
 mod windows;
 mod workflows;
+mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
@@ -143,6 +146,7 @@ fn main() {
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             app.manage(fx_rates::ReqwestHttp::new()?);
+            app.manage(bank::suggest::Suggester::default());
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();
@@ -392,6 +396,8 @@ fn main() {
             commands::get_tax_calendar,
             commands::report_csv,
             commands::save_report_to_disk,
+            commands::save_xlsx,
+            commands::save_report_xlsx,
             commands::print_report,
             commands::list_form_styles,
             commands::create_form_style,

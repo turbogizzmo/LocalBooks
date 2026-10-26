@@ -10,6 +10,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::accounts::{self, AccountInput, AccountTypeView};
 use crate::ach::{self, AchFileView, AchPaymentInput, OriginatorDetails, VendorBankInput, VendorBankView};
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
+use crate::bank::suggest::Suggester;
 use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
 use crate::classes::{self, ClassInput, ClassView, ReclassLine, ReclassQuery};
 use crate::custom_fields::{self, CustomFieldInput, CustomFieldView, FieldValue, RecordField};
@@ -29,12 +30,13 @@ use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
-use crate::{iif_import, qif_import, report_import};
+use crate::{gnucash_import, iif_import, qif_import, report_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
 use crate::tax_ids;
 use crate::users::{self, NewUserInput, Session, UserUpdate, UserView};
 use crate::storage::{self, RecentCompany, RecentCompanyView, StorageInfo};
 use crate::export_engine;
+use crate::xlsx_export;
 use crate::preferences::{self, FiscalPeriods, TaxDeadline};
 use crate::banking::{self, BankingActivity, DepositInput, TransferInput, UndepositedItem};
 use crate::estimates::{self, EstimateDetail, EstimateInput, EstimateSummary};
@@ -205,10 +207,10 @@ pub async fn assess_finance_charges(app: AppHandle, db: State<'_, Db>, input: cr
     Ok(invoices)
 }
 
-/// Reads a bank file (CSV, OFX, QFX) and reports how it would be imported, importing nothing.
+/// Reads a bank file (CSV, OFX, QFX, PDF statement) and reports how it would be imported, importing nothing.
 #[tauri::command]
-pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>) -> Result<BankFileInspection, String> {
-    bank::inspect_file(&db.pool().await, &path, mapping).await
+pub async fn inspect_bank_file(db: State<'_, Db>, path: PathBuf, mapping: Option<ColumnMapping>, bank_account_id: Option<i64>) -> Result<BankFileInspection, String> {
+    bank::inspect_file(&db.pool().await, &path, mapping, bank_account_id).await
 }
 
 #[tauri::command]
@@ -279,19 +281,24 @@ pub async fn simplefin_disconnect(db: State<'_, Db>, sf: State<'_, SimpleFin>, c
 }
 
 #[tauri::command]
-pub async fn list_bank_transactions(db: State<'_, Db>) -> Result<Vec<BankTransactionView>, String> {
-    bank::list_pending(&db.pool().await).await
+pub async fn list_bank_transactions(db: State<'_, Db>, suggester: State<'_, Suggester>) -> Result<Vec<BankTransactionView>, String> {
+    let file = db.path().await?.display().to_string();
+    bank::list_pending(&db.pool().await, &suggester, &file).await
 }
 
 #[tauri::command]
 pub async fn approve_bank_transaction(
     app: AppHandle,
     db: State<'_, Db>,
+    suggester: State<'_, Suggester>,
     transaction_id: i64,
     category_account_id: i64,
     class_id: Option<i64>,
+    payee_name: Option<String>,
 ) -> Result<i64, String> {
-    let entry_id = bank::approve(&db.pool().await, transaction_id, category_account_id, class_id).await?;
+    let file = db.path().await?.display().to_string();
+    let approval = bank::Approval { category_account_id, class_id, payee_name };
+    let entry_id = bank::approve(&db.pool().await, &suggester, &file, transaction_id, approval).await?;
     notify(&app);
     Ok(entry_id)
 }
@@ -1332,15 +1339,11 @@ pub async fn report_csv(
     export_engine::render(&db.pool().await, &report, start_date, end_date, as_of, class_filter.as_ref()).await
 }
 
-/// Prompts with the native Save dialog and writes `report_html_or_matrix` to the chosen file.
-/// Returns the saved path, or `None` if the user cancelled.
-#[tauri::command]
-pub async fn save_report_to_disk(app: AppHandle, report_html_or_matrix: String, filename: String) -> Result<Option<String>, String> {
+/// Prompts with the native Save dialog for `filename`, filtered to its extension. `None` if cancelled.
+async fn choose_export_path(app: AppHandle, filename: String) -> Result<Option<PathBuf>, String> {
     let extension = std::path::Path::new(&filename).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "csv".into());
-    let dialog_app = app.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || {
-        dialog_app
-            .dialog()
+        app.dialog()
             .file()
             .set_file_name(&filename)
             .add_filter(extension.to_uppercase(), &[extension.as_str()])
@@ -1349,8 +1352,44 @@ pub async fn save_report_to_disk(app: AppHandle, report_html_or_matrix: String, 
     .await
     .map_err(|e| format!("EXPORT_DIALOG: {e}"))?;
     let Some(target) = chosen else { return Ok(None) };
-    let path = target.into_path().map_err(|e| format!("EXPORT_BAD_PATH: {e}"))?;
+    target.into_path().map(Some).map_err(|e| format!("EXPORT_BAD_PATH: {e}"))
+}
+
+/// Prompts with the native Save dialog and writes `report_html_or_matrix` to the chosen file.
+/// Returns the saved path, or `None` if the user cancelled.
+#[tauri::command]
+pub async fn save_report_to_disk(app: AppHandle, report_html_or_matrix: String, filename: String) -> Result<Option<String>, String> {
+    let Some(path) = choose_export_path(app, filename).await? else { return Ok(None) };
     export_engine::write_atomically(&path, report_html_or_matrix.as_bytes())?;
+    Ok(Some(path.display().to_string()))
+}
+
+/// Renders a screen's report as an Excel workbook and saves it through the native Save dialog.
+/// Returns the saved path, or `None` if the user cancelled.
+#[tauri::command]
+pub async fn save_xlsx(app: AppHandle, db: State<'_, Db>, sheet: xlsx_export::Sheet, filename: String) -> Result<Option<String>, String> {
+    let bytes = xlsx_export::to_xlsx(&sheet, &preferences::currency_symbol(&db.pool().await).await?)?;
+    let Some(path) = choose_export_path(app, filename).await? else { return Ok(None) };
+    export_engine::write_atomically(&path, &bytes)?;
+    Ok(Some(path.display().to_string()))
+}
+
+/// Renders a financial statement (as [`report_csv`] does) as an Excel workbook and saves it.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn save_report_xlsx(
+    app: AppHandle,
+    db: State<'_, Db>,
+    report: String,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    as_of: Option<NaiveDate>,
+    class_filter: Option<ClassFilter>,
+    filename: String,
+) -> Result<Option<String>, String> {
+    let bytes = xlsx_export::render_report(&db.pool().await, &report, start_date, end_date, as_of, class_filter.as_ref()).await?;
+    let Some(path) = choose_export_path(app, filename).await? else { return Ok(None) };
+    export_engine::write_atomically(&path, &bytes)?;
     Ok(Some(path.display().to_string()))
 }
 
@@ -1376,9 +1415,9 @@ pub enum IngestResult {
     Ledger { batch: LedgerBatchSummary, sources: Vec<String> },
 }
 
-/// Reads a .qbw company file, the company file inside a .qbb backup, or an .iif (QuickBooks) or
-/// .qif (Quicken) export into a new staging batch, reporting progress as `qbw-import-progress`
-/// events. Nothing is posted to the ledger.
+/// Reads a .qbw company file, the company file inside a .qbb backup, an .iif (QuickBooks) or
+/// .qif (Quicken) export, or a GnuCash book (.gnucash, XML or SQLite) into a new staging batch,
+/// reporting progress as `qbw-import-progress` events. Nothing is posted to the ledger.
 ///
 /// The invoice-line reader runs first, so files it supports import as before; when it finds
 /// nothing (newer file versions), the record-layer decoder reads the whole ledger instead.
@@ -1386,23 +1425,27 @@ pub enum IngestResult {
 pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<IngestResult, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif") {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, or QuickBooks report exports (.csv, .xlsx)".into());
+    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, a .gnucash book, or QuickBooks report exports (.csv, .xlsx)".into());
     }
     let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
     let progress = |stage: &'static str, done: u64, total: u64| {
         let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage, done, total });
     };
 
-    // IIF and QIF exports are text: read straight into a ledger and stage it like a company file.
-    if matches!(ext.as_str(), "iif" | "qif") {
+    // IIF and QIF exports and GnuCash books read straight into a ledger, staged like a company file.
+    if matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
         progress("Reading file", 0, 1);
-        let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
-        let account = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported account".into());
-        let is_iif = ext == "iif";
-        let ledger = tauri::async_runtime::spawn_blocking(move || if is_iif { iif_import::read(&bytes) } else { qif_import::read(&bytes, &account) })
-            .await
-            .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??;
+        let ledger = if matches!(ext.as_str(), "gnucash" | "gnc") {
+            gnucash_import::read(&path).await?
+        } else {
+            let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
+            let account = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported account".into());
+            let is_iif = ext == "iif";
+            tauri::async_runtime::spawn_blocking(move || if is_iif { iif_import::read(&bytes) } else { qif_import::read(&bytes, &account) })
+                .await
+                .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??
+        };
         progress("Reading file", 1, 1);
         // A file of lists alone imports (it adds its lists); one with nothing at all does not.
         if ledger.transactions.is_empty()

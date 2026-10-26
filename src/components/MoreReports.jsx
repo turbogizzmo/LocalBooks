@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, toCsv } from './ReportParts.jsx';
+import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, saveXlsx, statementSheet, tableSheet, toCsv, xlsxName } from './ReportParts.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
@@ -66,13 +66,14 @@ function TableReport({ title, subtitle, columns, rows, footer, toolbar, onCsvRow
   const [notice, setNotice] = useState(null);
   const filename = `${title.replace(/[^A-Za-z0-9]+/g, '-')}.csv`;
   const csv = () => saveText(toCsv([[company.name], [title], [subtitle], [], columns.map((c) => c.label), ...onCsvRows()]), filename, setNotice);
+  const xlsx = () => saveXlsx(tableSheet({ company: company.name, title, subtitle, columns, rows: onCsvRows(), footer }), xlsxName(filename), setNotice);
   const rowClass = (kind) => (kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'total' ? 'font-semibold border-t border-qb-ink' : kind === 'grand' ? 'font-semibold border-t-2 border-double border-qb-ink' : '');
   return (
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {toolbar}
         <div className="ml-auto">
-          <ExportMenu onNotice={setNotice} onCsv={csv} />
+          <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -160,12 +161,18 @@ export function CashFlowReport({ navigate }) {
       `Statement-of-Cash-Flows_${p.start}_to_${p.end}.csv`,
       setNotice,
     );
+  const xlsx = () =>
+    saveXlsx(
+      statementSheet({ company: company.name, title: 'Statement of Cash Flows', subtitle: rangeText(p.start, p.end), lines: data.lines, footer: 'Indirect method · cash is the total of the Bank accounts' }),
+      `Statement-of-Cash-Flows_${p.start}_to_${p.end}.xlsx`,
+      setNotice,
+    );
   return (
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {p.controls}
         <div className="ml-auto">
-          <ExportMenu onNotice={setNotice} onCsv={csv} />
+          <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -412,7 +419,7 @@ export function Vendors1099Report() {
   const shown = (data ?? []).filter((r) => all || r.overThreshold);
   const total = shown.reduce((s, r) => s + r.paidCents, 0);
   const columns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Paid', align: 'right' }];
-  // Tax IDs are masked on screen and in print; the CSV export carries them in full for users who may see them.
+  // Tax IDs are masked on screen and in print; the Excel and CSV exports carry them in full for users who may see them.
   const fullInCsv = shown.some((r) => r.taxId);
   const rows = [
     ...shown.map((r) => ({ cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
@@ -442,7 +449,7 @@ export function Vendors1099Report() {
         </>
       }
       footer={`Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors. Tax IDs are masked here${
-        fullInCsv ? '; the CSV export has them in full, so keep that file safe' : ''
+        fullInCsv ? '; the Excel and CSV exports have them in full, so keep those files safe' : ''
       }.`}
       onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? r.taxIdMasked ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
     />
@@ -522,6 +529,13 @@ export function BudgetVsActualReport({ navigate }) {
                 setNotice,
               )
             }
+            onXlsx={() =>
+              saveXlsx(
+                statementSheet({ company: company.name, title: 'Profit and Loss Budget vs. Actual', subtitle: `${budget.name} · ${rangeText(data.startDate, data.endDate)}`, lines: data.lines, columns: data.columns }),
+                'Profit-and-Loss-Budget-vs-Actual.xlsx',
+                setNotice,
+              )
+            }
           />
         </div>
       </div>
@@ -589,6 +603,7 @@ export function BalanceSheetBudgetVsActualReport({ navigate }) {
           <ExportMenu
             onNotice={setNotice}
             onCsv={() => saveText(toCsv([[company.name], [title], [subtitle], [], ...columnCsvRows(data)]), `Balance-Sheet-Budget-vs-Actual_${data.endDate}.csv`, setNotice)}
+            onXlsx={() => saveXlsx(statementSheet({ company: company.name, title, subtitle, lines: data.lines, columns: data.columns }), `Balance-Sheet-Budget-vs-Actual_${data.endDate}.xlsx`, setNotice)}
           />
         </div>
       </div>

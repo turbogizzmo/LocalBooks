@@ -117,6 +117,8 @@ const READ: &[&str] = &[
     "simplefin_suggested_start",
     "report_csv",
     "save_report_to_disk",
+    "save_xlsx",
+    "save_report_xlsx",
     "print_report",
     "render_form",
     "save_form_pdf",
