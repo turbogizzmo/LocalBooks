@@ -68,6 +68,7 @@ mod timesheet;
 mod users;
 mod windows;
 mod workflows;
+mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
@@ -383,6 +384,8 @@ fn main() {
             commands::get_tax_calendar,
             commands::report_csv,
             commands::save_report_to_disk,
+            commands::save_xlsx,
+            commands::save_report_xlsx,
             commands::print_report,
             commands::list_form_styles,
             commands::create_form_style,

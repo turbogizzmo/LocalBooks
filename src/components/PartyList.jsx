@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
+import { todayIso } from '../lib/dates.js';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -253,6 +256,23 @@ export default function PartyList({ kind }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
+  const company = useCompany();
+  const exports = tableExports({
+    company: company.name,
+    title: `${cfg.title} List`,
+    subtitle: `As of ${longDate(todayIso())}${query.trim() ? ` · matching "${query.trim()}"` : ''}`,
+    columns: [
+      { label: 'Name', kind: 'text' },
+      { label: 'Email', kind: 'text' },
+      { label: cfg.balance, kind: 'money' },
+    ],
+    rows: () => [
+      ...rows.map((p) => ({ depth: p.name.split(':').length - 1, cells: [`${p.name}${p.isActive ? '' : ' (inactive)'}`, p.email ?? '', p.openBalanceCents || null] })),
+      { kind: 'total', cells: ['TOTAL', '', total] },
+    ],
+    filename: `${cfg.title}-List`,
+    onNotice: setNotice,
+  });
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -278,6 +298,7 @@ export default function PartyList({ kind }) {
           <span className="ml-auto text-sm text-qb-ink-muted">
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
+          <ExportMenu printable={false} onNotice={setNotice} {...exports} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}

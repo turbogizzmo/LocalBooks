@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
-import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
+import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveReportXlsx, saveText, saveXlsx, statementSheet, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import {
   AgingReport,
@@ -204,6 +204,19 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
               ];
               return saveText(toCsv(rows), `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
             }}
+            onXlsx={() => {
+              if (byClass) return saveReportXlsx('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.xlsx`, setNotice);
+              if (!multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+              const sheet = statementSheet({
+                company: company.name,
+                title: title ?? 'Profit and Loss',
+                subtitle,
+                notes: [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
+                lines: data.lines,
+                columns: data.columns ?? null,
+              });
+              return saveXlsx(sheet, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+            }}
           />
         </div>
       </div>
@@ -259,7 +272,11 @@ function BalanceSheet({ navigate }) {
           </div>
         )}
         <div className={data ? '' : 'ml-auto'}>
-          <ExportMenu onNotice={setNotice} onCsv={() => saveCsv('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.csv`, setNotice)} />
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() => saveCsv('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.csv`, setNotice)}
+            onXlsx={() => saveReportXlsx('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.xlsx`, setNotice)}
+          />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -315,6 +332,7 @@ function BalanceSheetComparison({ navigate }) {
                 setNotice,
               )
             }
+            onXlsx={() => saveXlsx(statementSheet({ company: company.name, title, subtitle, notes: ['Accrual basis'], lines: data.lines, columns: data.columns }), `Balance-Sheet-Prev-Year-Comparison_${asOf}.xlsx`, setNotice)}
           />
         </div>
       </div>

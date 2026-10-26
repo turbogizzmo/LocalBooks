@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
+import { todayIso } from '../lib/dates.js';
 
 const SECTIONS = [
   { id: 'ASSET', label: 'Assets' },
@@ -147,6 +150,35 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
     (showInactive || a.isActive) &&
     (!query || a.fullName.toLowerCase().includes(query) || (a.accountNumber ?? '').includes(query) || a.accountTypeName.toLowerCase().includes(query));
   const inactiveCount = accounts.filter((a) => !a.isActive).length;
+  const company = useCompany();
+  const exports = tableExports({
+    company: company.name,
+    title: 'Chart of Accounts',
+    subtitle: `As of ${longDate(todayIso())}${query ? ` · matching "${search.trim()}"` : ''}`,
+    indentColumn: 1,
+    columns: [
+      { label: 'Number', kind: 'text' },
+      { label: 'Account', kind: 'text' },
+      { label: 'Type', kind: 'text' },
+      { label: 'Description', kind: 'text' },
+      { label: 'Balance', kind: 'money' },
+    ],
+    rows: () =>
+      SECTIONS.flatMap((section) => {
+        const rows = ordered.filter((a) => a.classification === section.id && matches(a));
+        if (rows.length === 0) return [];
+        const withBalance = HAS_BALANCE.has(section.id);
+        return [
+          { kind: 'section', cells: ['', section.label, '', '', withBalance && !query ? rows.reduce((sum, a) => sum + a.balanceCents, 0) : null] },
+          ...rows.map((a) => ({
+            depth: query ? 0 : a.depth,
+            cells: [a.accountNumber ?? '', `${query ? a.fullName : a.name}${a.isActive ? '' : ' (inactive)'}`, a.accountTypeName, a.description ?? '', withBalance ? (rolled.get(a.id) ?? a.balanceCents) : null],
+          })),
+        ];
+      }),
+    filename: 'Chart-of-Accounts',
+    onNotice: setNotice,
+  });
 
   const setActive = async (a, active) => {
     try {
@@ -179,7 +211,10 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
           </label>
-          <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setDialog({ account: null })}>
+          <div className="ml-auto">
+            <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          </div>
+          <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => setDialog({ account: null })}>
             New account
           </button>
         </div>

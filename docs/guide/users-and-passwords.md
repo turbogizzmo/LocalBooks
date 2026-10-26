@@ -83,8 +83,8 @@ working.
 
 - On a vendor's record the tax ID shows as `***-**-6789`. People who can see sensitive data click
   **Show** to see or change it; everyone else sees only the last four digits and can't change it.
-- The **1099 Summary** report shows tax IDs masked on screen and in print. Its CSV export has them in
-  full for people who can see sensitive data, so keep that file safe.
+- The **1099 Summary** report shows tax IDs masked on screen and in print. Its Excel and CSV exports
+  have them in full for people who can see sensitive data, so keep those files safe.
 - Tax IDs brought in by an import are encrypted as soon as the import finishes (or at the next
   sign-in of someone who can see sensitive data).
 - Newer QuickBooks files keep tax IDs encrypted with QuickBooks' own key, which LocalBooks can't

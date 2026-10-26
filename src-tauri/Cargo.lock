@@ -342,6 +342,7 @@ checksum = "c9ca341b94bc4b29e08970b1a03914fad2dfe177e2ecb67fcd6de9046004aafb"
 dependencies = [
  "atoi_simd",
  "byteorder",
+ "chrono",
  "codepage",
  "encoding_rs",
  "fast-float2",
@@ -2395,6 +2396,7 @@ dependencies = [
  "proptest",
  "regex",
  "reqwest",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "sha2",
@@ -3592,6 +3594,15 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rust_xlsxwriter"
+version = "0.101.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49aa1d1558e9465f5053bf9fb5361fe75db827c6a4423d5e5fe72096622f8908"
+dependencies = [
+ "zip",
 ]
 
 [[package]]
