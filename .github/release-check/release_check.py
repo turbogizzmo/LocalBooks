@@ -260,10 +260,11 @@ def cmd_install(args):
     else:
         deb = only(args.release_dir, ".deb")
         subprocess.run(["sudo", "apt-get", "install", "-y", "--no-install-recommends", str(deb.resolve())], check=True, stdout=subprocess.DEVNULL)
-        listing = subprocess.run(["dpkg-deb", "-c", str(deb)], check=True, capture_output=True, text=True).stdout
-        binaries = [line.split()[-1].lstrip(".") for line in listing.splitlines() if " ./usr/bin/" in line and not line.startswith("d")]
+        package = subprocess.run(["dpkg-deb", "-f", str(deb), "Package"], check=True, capture_output=True, text=True).stdout.strip()
+        files = subprocess.run(["dpkg", "-L", package], check=True, capture_output=True, text=True).stdout.splitlines()
+        binaries = [f for f in files if f.startswith("/usr/bin/") and Path(f).is_file()]
         if not binaries:
-            raise SystemExit("the .deb installs nothing in /usr/bin")
+            raise SystemExit(f"the {package} package installs nothing in /usr/bin: {files}")
         exe = Path(binaries[0])
     print(exe)
 
