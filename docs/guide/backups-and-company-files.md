@@ -54,6 +54,10 @@ off: restore the most recent backup that passes the check-up.
 - Double-click a `.localbooks` file, or click **Open Company File…** and choose one.
 - It opens in place for this session. The window title and the top bar show which file is open, and
   your usual company file is unchanged.
+- To open a company **without restoring windows**, hold **Option** (Mac) or **Alt** (Windows and
+  Linux) while you click **Open**, or choose **File › Open Company Without Restoring Windows…**
+  (Ctrl+Alt+O, ⌘⌥O on a Mac). Other windows close and the company opens on a plain Home page instead
+  of the page you last had open, which helps when a page won't load.
 
 ## Open a QuickBooks company file or backup
 

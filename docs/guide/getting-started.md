@@ -67,6 +67,12 @@ Asset, are added the first time you use that feature.
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
+## Sort a list
+
+Click a column heading in a list (invoices, bills, estimates, checks, customers, products, the
+journal and others) to sort by it; click it again to reverse the order. An arrow shows which column
+is sorted.
+
 ## Work in more than one window
 
 Like classic desktop accounting software, LocalBooks can show the same company in several windows,
