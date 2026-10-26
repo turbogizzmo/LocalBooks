@@ -12,6 +12,7 @@ mod closing;
 mod commands;
 mod credits;
 mod custom_fields;
+mod custom_reports;
 mod crypto;
 mod db;
 mod edits;

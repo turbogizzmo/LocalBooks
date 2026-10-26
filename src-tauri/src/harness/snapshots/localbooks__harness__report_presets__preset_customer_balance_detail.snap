@@ -1,0 +1,46 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Customer Balance Detail, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                          Amount       Balance
+Alder & Finch LLP
+                               Invoice                   2025-01-10    1001                      Invoice #1001 - Alder &   Accounts Receivable (A/R      11,194.77     11,194.77
+                               Payment                   2025-02-06                              Payment - Invoice #1001   Accounts Receivable (A/R     -11,194.77          0.00
+                               Invoice                   2025-04-10    1004                      Invoice #1004 - Alder &   Accounts Receivable (A/R      11,080.81     11,080.81
+                               Payment                   2025-05-07                              Payment - Invoice #1004   Accounts Receivable (A/R     -11,080.81          0.00
+                               Invoice                   2025-07-10    1007                      Invoice #1007 - Alder &   Accounts Receivable (A/R      11,422.67     11,422.67
+                               Payment                   2025-08-06                              Payment - Invoice #1007   Accounts Receivable (A/R     -11,422.67          0.00
+                               Invoice                   2025-10-10    1010                      Invoice #1010 - Alder &   Accounts Receivable (A/R      11,308.72     11,308.72
+                               Payment                   2025-11-06                              Payment - Invoice #1010   Accounts Receivable (A/R     -11,308.72          0.00
+Total Alder & Finch LLP                                                                                                                                       0.00          0.00
+Bonn Studio GmbH
+                               Invoice                   2025-09-15    1013                      Invoice #1013 - Bonn Stu  Accounts Receivable (A/R       5,208.00      5,208.00
+                               Payment                   2025-10-20                              Payment - Invoice #1013   Accounts Receivable (A/R      -3,255.00      1,953.00
+Total Bonn Studio GmbH                                                                                                                                    1,953.00      1,953.00
+Brightwater Cafe
+                               Invoice                   2025-02-10    1002                      Invoice #1002 - Brightwa  Accounts Receivable (A/R      11,933.72     11,933.72
+                               Payment                   2025-03-09                              Payment - Invoice #1002   Accounts Receivable (A/R     -11,933.72          0.00
+                               Invoice                   2025-05-10    1005                      Invoice #1005 - Brightwa  Accounts Receivable (A/R      11,819.77     11,819.77
+                               Payment                   2025-06-06                              Payment - Invoice #1005   Accounts Receivable (A/R     -11,819.77          0.00
+                               Invoice                   2025-08-10    1008                      Invoice #1008 - Brightwa  Accounts Receivable (A/R      11,705.81     11,705.81
+                               Payment                   2025-09-06                              Payment - Invoice #1008   Accounts Receivable (A/R     -11,705.81          0.00
+                               Invoice                   2025-11-10    1011                      Invoice #1011 - Brightwa  Accounts Receivable (A/R      12,047.67     12,047.67
+                               Invoice                   2025-11-14    1014                      Invoice #1014 - Brightwa  Accounts Receivable (A/R       2,200.00     14,247.67
+                               Credit Memo               2025-11-20    1                         Credit memo #1 - Brightw  Accounts Receivable (A/R        -150.00     14,097.67
+                               Payment                   2025-12-07                              Payment - Invoice #1011   Accounts Receivable (A/R     -12,047.67      2,050.00
+Total Brightwater Cafe                                                                                                                                    2,050.00      2,050.00
+Cobalt Outfitters
+                               Invoice                   2025-03-10    1003                      Invoice #1003 - Cobalt O  Accounts Receivable (A/R      10,797.67     10,797.67
+                               Payment                   2025-04-06                              Payment - Invoice #1003   Accounts Receivable (A/R     -10,797.67          0.00
+                               Invoice                   2025-06-10    1006                      Invoice #1006 - Cobalt O  Accounts Receivable (A/R      10,683.72     10,683.72
+                               Payment                   2025-07-07                              Payment - Invoice #1006   Accounts Receivable (A/R      -5,341.86      5,341.86
+                               Invoice                   2025-09-10    1009                      Invoice #1009 - Cobalt O  Accounts Receivable (A/R      10,569.77     15,911.63
+                               Payment                   2025-09-25                              Payment - Invoice #1006   Accounts Receivable (A/R      -5,341.86     10,569.77
+                               Payment                   2025-10-07                              Payment - Invoice #1009   Accounts Receivable (A/R     -10,569.77          0.00
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O  Accounts Receivable (A/R      10,455.81     10,455.81
+Total Cobalt Outfitters                                                                                                                                  10,455.81     10,455.81
+TOTAL                                                                                                                                                    14,458.81
+
+28 lines

@@ -1,0 +1,13 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Customer Balance Summary, all dates to 2025-12-31
+
+Name                                  Amount
+Bonn Studio GmbH                    1,953.00
+Brightwater Cafe                    2,050.00
+Cobalt Outfitters                  10,455.81
+TOTAL                              14,458.81
+
+28 lines

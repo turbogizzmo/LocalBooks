@@ -1,0 +1,167 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Income by Customer Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                          Amount       Balance
+Alder & Finch LLP
+                               Invoice                   2025-01-10    1001                      Invoice #1001 - Alder &   Services                      10,625.00     10,625.00
+                               Invoice                   2025-01-10    1001                      Invoice #1001 - Alder &   Sales                            531.25     11,156.25
+                               Invoice                   2025-04-10    1004                      Invoice #1004 - Alder &   Services                      10,625.00     21,781.25
+                               Invoice                   2025-04-10    1004                      Invoice #1004 - Alder &   Sales                            425.00     22,206.25
+                               Invoice                   2025-07-10    1007                      Invoice #1007 - Alder &   Services                      10,625.00     32,831.25
+                               Invoice                   2025-07-10    1007                      Invoice #1007 - Alder &   Sales                            743.75     33,575.00
+                               Invoice                   2025-10-10    1010                      Invoice #1010 - Alder &   Services                      10,625.00     44,200.00
+                               Invoice                   2025-10-10    1010                      Invoice #1010 - Alder &   Sales                            637.50     44,837.50
+Total Alder & Finch LLP                                                                                                                                  44,837.50     44,837.50
+Bonn Studio GmbH
+                               Invoice                   2025-09-15    1013                      Invoice #1013 - Bonn Stu  Services                       5,208.00      5,208.00
+                               Payment                   2025-10-20                              Realized exchange gain    Exchange Gain or Loss             52.50      5,260.50
+Total Bonn Studio GmbH                                                                                                                                    5,260.50      5,260.50
+Brightwater Cafe
+                               Invoice                   2025-02-10    1002                      Invoice #1002 - Brightwa  Services                      11,250.00     11,250.00
+                               Invoice                   2025-02-10    1002                      Invoice #1002 - Brightwa  Sales                            637.50     11,887.50
+                               Invoice                   2025-05-10    1005                      Invoice #1005 - Brightwa  Services                      11,250.00     23,137.50
+                               Invoice                   2025-05-10    1005                      Invoice #1005 - Brightwa  Sales                            531.25     23,668.75
+                               Invoice                   2025-08-10    1008                      Invoice #1008 - Brightwa  Services                      11,250.00     34,918.75
+                               Invoice                   2025-08-10    1008                      Invoice #1008 - Brightwa  Sales                            425.00     35,343.75
+                               Invoice                   2025-11-10    1011                      Invoice #1011 - Brightwa  Services                      11,250.00     46,593.75
+                               Invoice                   2025-11-10    1011                      Invoice #1011 - Brightwa  Sales                            743.75     47,337.50
+                               Invoice                   2025-11-14    1014                      Invoice #1014 - Brightwa  Sales                          2,200.00     49,537.50
+                               Credit Memo               2025-11-20    1                         Credit memo #1 - Brightw  Sales                           -150.00     49,387.50
+Total Brightwater Cafe                                                                                                                                   49,387.50     49,387.50
+Cobalt Outfitters
+                               Invoice                   2025-03-10    1003                      Invoice #1003 - Cobalt O  Services                      10,000.00     10,000.00
+                               Invoice                   2025-03-10    1003                      Invoice #1003 - Cobalt O  Sales                            743.75     10,743.75
+                               Invoice                   2025-06-10    1006                      Invoice #1006 - Cobalt O  Services                      10,000.00     20,743.75
+                               Invoice                   2025-06-10    1006                      Invoice #1006 - Cobalt O  Sales                            637.50     21,381.25
+                               Invoice                   2025-09-10    1009                      Invoice #1009 - Cobalt O  Services                      10,000.00     31,381.25
+                               Invoice                   2025-09-10    1009                      Invoice #1009 - Cobalt O  Sales                            531.25     31,912.50
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O  Services                      10,000.00     41,912.50
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O  Sales                            425.00     42,337.50
+Total Cobalt Outfitters                                                                                                                                  42,337.50     42,337.50
+First Harbor Bank
+                               Expense                   2025-01-31                              Monthly service fee       Bank Charges & Fees              -15.00        -15.00
+                               Expense                   2025-02-28                              Monthly service fee       Bank Charges & Fees              -15.00        -30.00
+                               Expense                   2025-03-31                              Monthly service fee       Bank Charges & Fees              -15.00        -45.00
+                               Expense                   2025-04-30                              Monthly service fee       Bank Charges & Fees              -15.00        -60.00
+                               Expense                   2025-05-31                              Monthly service fee       Bank Charges & Fees              -15.00        -75.00
+                               Expense                   2025-06-30                              Monthly service fee       Bank Charges & Fees              -15.00        -90.00
+                               Expense                   2025-07-31                              Monthly service fee       Bank Charges & Fees              -15.00       -105.00
+                               Expense                   2025-08-31                              Monthly service fee       Bank Charges & Fees              -15.00       -120.00
+                               Expense                   2025-09-30                              Monthly service fee       Bank Charges & Fees              -15.00       -135.00
+                               Expense                   2025-10-31                              Monthly service fee       Bank Charges & Fees              -15.00       -150.00
+                               Expense                   2025-11-30                              Monthly service fee       Bank Charges & Fees              -15.00       -165.00
+                               Expense                   2025-12-31                              Monthly service fee       Bank Charges & Fees              -15.00       -180.00
+Total First Harbor Bank                                                                                                                                    -180.00       -180.00
+Harbor Power & Light
+                               Expense                   2025-01-12                              Electricity               Utilities                       -191.50       -191.50
+                               Expense                   2025-02-12                              Electricity               Utilities                       -203.00       -394.50
+                               Expense                   2025-03-12                              Electricity               Utilities                       -214.50       -609.00
+                               Expense                   2025-04-12                              Electricity               Utilities                       -180.00       -789.00
+                               Expense                   2025-05-12                              Electricity               Utilities                       -191.50       -980.50
+                               Expense                   2025-06-12                              Electricity               Utilities                       -203.00     -1,183.50
+                               Expense                   2025-06-13                              Duplicate entry           Utilities                       -191.50     -1,375.00
+                               Expense                   2025-07-12                              Electricity               Utilities                       -214.50     -1,589.50
+                               Expense                   2025-08-12                              Electricity               Utilities                       -180.00     -1,769.50
+                               Expense                   2025-09-12                              Electricity               Utilities                       -191.50     -1,961.00
+                               Expense                   2025-10-12                              Electricity               Utilities                       -203.00     -2,164.00
+                               Expense                   2025-11-12                              Electricity               Utilities                       -214.50     -2,378.50
+                               Expense                   2025-12-12                              Electricity               Utilities                       -180.00     -2,558.50
+Total Harbor Power & Lig                                                                                                                                 -2,558.50     -2,558.50
+Jordan Reyes
+                               Check                     2025-02-18    1004                      Illustration              Contractors                     -950.00       -950.00
+                               Check                     2025-04-18    1007                      Illustration              Contractors                     -950.00     -1,900.00
+                               Check                     2025-06-18    1010                      Illustration              Contractors                     -950.00     -2,850.00
+                               Check                     2025-08-18    1013                      Illustration              Contractors                     -950.00     -3,800.00
+                               Check                     2025-10-18    1016                      Illustration              Contractors                     -950.00     -4,750.00
+                               Check                     2025-12-18    1019                      Illustration              Contractors                     -950.00     -5,700.00
+Total Jordan Reyes                                                                                                                                       -5,700.00     -5,700.00
+Lumen Media
+                               Bill                      2025-12-01    LM-88                     Bill #LM-88 - Lumen Medi  Advertising & Marketing       -1,500.00     -1,500.00
+Total Lumen Media                                                                                                                                        -1,500.00     -1,500.00
+Northwind Software
+                               Bill                      2025-01-03    NW-01                     Bill #NW-01 - Northwind   Software & Cloud Service        -129.00       -129.00
+                               Bill                      2025-02-03    NW-02                     Bill #NW-02 - Northwind   Software & Cloud Service        -129.00       -258.00
+                               Bill                      2025-03-03    NW-03                     Bill #NW-03 - Northwind   Software & Cloud Service        -129.00       -387.00
+                               Bill                      2025-04-03    NW-04                     Bill #NW-04 - Northwind   Software & Cloud Service        -129.00       -516.00
+                               Bill                      2025-05-03    NW-05                     Bill #NW-05 - Northwind   Software & Cloud Service        -129.00       -645.00
+                               Bill                      2025-06-03    NW-06                     Bill #NW-06 - Northwind   Software & Cloud Service        -129.00       -774.00
+                               Bill                      2025-07-03    NW-07                     Bill #NW-07 - Northwind   Software & Cloud Service        -129.00       -903.00
+                               Bill                      2025-08-03    NW-08                     Bill #NW-08 - Northwind   Software & Cloud Service        -129.00     -1,032.00
+                               Bill                      2025-09-03    NW-09                     Bill #NW-09 - Northwind   Software & Cloud Service        -129.00     -1,161.00
+                               Bill                      2025-10-03    NW-10                     Bill #NW-10 - Northwind   Software & Cloud Service        -129.00     -1,290.00
+                               Bill                      2025-11-03    NW-11                     Bill #NW-11 - Northwind   Software & Cloud Service        -129.00     -1,419.00
+                               Bill                      2025-12-03    NW-12                     Bill #NW-12 - Northwind   Software & Cloud Service        -129.00     -1,548.00
+Total Northwind Software                                                                                                                                 -1,548.00     -1,548.00
+Pinecrest Office Supply
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Office Supplies                 -642.50       -642.50
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Advertising & Marketing         -300.00       -942.50
+                               Bill                      2025-11-20    PC-4521                   Bill #PC-4521 - Pinecres  Office Supplies                 -187.40     -1,129.90
+Total Pinecrest Office S                                                                                                                                 -1,129.90     -1,129.90
+Riverbend Properties
+                               Check                     2025-01-01    1002                      Studio rent               Rent & Lease                  -2,400.00     -2,400.00
+                               Check                     2025-02-01    1003                      Studio rent               Rent & Lease                  -2,400.00     -4,800.00
+                               Check                     2025-03-01    1005                      Studio rent               Rent & Lease                  -2,400.00     -7,200.00
+                               Check                     2025-04-01    1006                      Studio rent               Rent & Lease                  -2,400.00     -9,600.00
+                               Check                     2025-05-01    1008                      Studio rent               Rent & Lease                  -2,400.00    -12,000.00
+                               Check                     2025-06-01    1009                      Studio rent               Rent & Lease                  -2,400.00    -14,400.00
+                               Check                     2025-07-01    1011                      Studio rent               Rent & Lease                  -2,400.00    -16,800.00
+                               Check                     2025-08-01    1012                      Studio rent               Rent & Lease                  -2,400.00    -19,200.00
+                               Check                     2025-09-01    1014                      Studio rent               Rent & Lease                  -2,400.00    -21,600.00
+                               Check                     2025-10-01    1015                      Studio rent               Rent & Lease                  -2,400.00    -24,000.00
+                               Check                     2025-11-01    1017                      Studio rent               Rent & Lease                  -2,400.00    -26,400.00
+                               Check                     2025-12-01    1018                      Studio rent               Rent & Lease                  -2,400.00    -28,800.00
+Total Riverbend Properti                                                                                                                                -28,800.00    -28,800.00
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Office Supplies                 -400.00       -400.00
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Office Supplies                  -50.00       -450.00
+                               Vendor Credit             2025-11-25    RP-C1                     Damaged stock             Office Supplies                   60.00       -390.00
+Total Riverside Print Sh                                                                                                                                   -390.00       -390.00
+No name
+                               Journal Entry             2025-01-25    12                        Loan payment              Interest Expense                -120.00       -120.00
+                               Journal Entry             2025-01-31    10                        Payroll 01/2025           Wages                         -6,000.00     -6,120.00
+                               Journal Entry             2025-01-31    10                        Payroll 01/2025           Payroll Taxes                   -459.00     -6,579.00
+                               Sales Receipt             2025-02-20    1                         Sales Receipt #1          Sales                            210.00     -6,369.00
+                               Journal Entry             2025-02-25    25                        Loan payment              Interest Expense                -110.00     -6,479.00
+                               Journal Entry             2025-02-28    23                        Payroll 02/2025           Wages                         -6,000.00    -12,479.00
+                               Journal Entry             2025-02-28    23                        Payroll 02/2025           Payroll Taxes                   -459.00    -12,938.00
+                               Journal Entry             2025-03-25    38                        Loan payment              Interest Expense                -100.00    -13,038.00
+                               Journal Entry             2025-03-31    36                        Payroll 03/2025           Wages                         -6,000.00    -19,038.00
+                               Journal Entry             2025-03-31    36                        Payroll 03/2025           Payroll Taxes                   -459.00    -19,497.00
+                               Journal Entry             2025-04-25    50                        Loan payment              Interest Expense                 -90.00    -19,587.00
+                               Journal Entry             2025-04-30    48                        Payroll 04/2025           Wages                         -6,250.00    -25,837.00
+                               Journal Entry             2025-04-30    48                        Payroll 04/2025           Payroll Taxes                   -478.12    -26,315.12
+                               Sales Receipt             2025-05-20    2                         Sales Receipt #2          Sales                            210.00    -26,105.12
+                               Journal Entry             2025-05-25    65                        Loan payment              Interest Expense                 -80.00    -26,185.12
+                               Journal Entry             2025-05-31    63                        Payroll 05/2025           Wages                         -6,250.00    -32,435.12
+                               Journal Entry             2025-05-31    63                        Payroll 05/2025           Payroll Taxes                   -478.12    -32,913.24
+                               Void                      2025-06-13    166                       Duplicate entry           Utilities                        191.50    -32,721.74
+                               Journal Entry             2025-06-25    77                        Loan payment              Interest Expense                 -70.00    -32,791.74
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Wages                         -6,250.00    -39,041.74
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Payroll Taxes                   -478.12    -39,519.86
+                               Journal Entry             2025-07-25    90                        Loan payment              Interest Expense                 -60.00    -39,579.86
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Wages                         -6,250.00    -45,829.86
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Payroll Taxes                   -478.12    -46,307.98
+                               Sales Receipt             2025-08-20    3                         Sales Receipt #3          Sales                            210.00    -46,097.98
+                               Journal Entry             2025-08-25    104                       Loan payment              Interest Expense                 -50.00    -46,147.98
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Wages                         -6,500.00    -52,647.98
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Payroll Taxes                   -497.25    -53,145.23
+                               Journal Entry             2025-09-25    118                       Loan payment              Interest Expense                 -40.00    -53,185.23
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Wages                         -6,500.00    -59,685.23
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Payroll Taxes                   -497.25    -60,182.48
+                               Journal Entry             2025-10-25    130                       Loan payment              Interest Expense                 -30.00    -60,212.48
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Wages                         -6,500.00    -66,712.48
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Payroll Taxes                   -497.25    -67,209.73
+                               Sales Receipt             2025-11-20    4                         Sales Receipt #4          Sales                            210.00    -66,999.73
+                               Journal Entry             2025-11-25    145                       Loan payment              Interest Expense                 -20.00    -67,019.73
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Wages                         -6,500.00    -73,519.73
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Payroll Taxes                   -497.25    -74,016.98
+                               Journal Entry             2025-12-25    154                       Loan payment              Interest Expense                 -10.00    -74,026.98
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Wages                         -6,750.00    -80,776.98
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Payroll Taxes                   -516.37    -81,293.35
+Total No name                                                                                                                                           -81,293.35    -81,293.35
+TOTAL                                                                                                                                                    18,723.25
+
+131 lines

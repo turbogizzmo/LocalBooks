@@ -1,0 +1,28 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Transaction List by Date, 2025-11-01 to 2025-11-30
+
+                               Type                      Date          Num                       Name                      Memo                      Account                   Split                            Amount
+                               Check                     2025-11-01    1017                      Riverbend Properties      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Bill                      2025-11-03    NW-11                     Northwind Software        Bill #NW-11 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Payment                   2025-11-06                              Alder & Finch LLP         Payment - Invoice #1010   Undeposited Funds         Accounts Receivable (A/R      11,308.72
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Invoice #1011 - Brightwa  Accounts Receivable (A/R  -Split-                       12,047.67
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      Bill #RP-77 - Riverside   Office Supplies           Accounts Payable (A/P)           450.00
+                               Expense                   2025-11-12                              Harbor Power & Light      Electricity               Utilities                 Credit Card                      214.50
+                               Invoice                   2025-11-14    1014                      Brightwater Cafe          Invoice #1014 - Brightwa  Accounts Receivable (A/R  Sales                          2,200.00
+                               Journal Entry             2025-11-15    129                                                 Payroll tax deposit       Payroll Liabilities       Checking                       1,927.25
+                               Sales Receipt             2025-11-20    4                                                   Sales Receipt #4          Undeposited Funds         -Split-                          225.23
+                               Bill                      2025-11-20    PC-4521                   Pinecrest Office Supply   Bill #PC-4521 - Pinecres  Office Supplies           Accounts Payable (A/P)           187.40
+                               Credit Memo               2025-11-20    1                         Brightwater Cafe          Credit memo #1 - Brightw  Sales                     Accounts Receivable (A/R         150.00
+                               Journal Entry             2025-11-25    145                                                 Loan payment              Loan Payable              -Split-                        2,020.00
+                               Vendor Credit             2025-11-25    RP-C1                     Riverside Print Shop      Vendor credit #RP-C1 - R  Accounts Payable (A/P)    Office Supplies                   60.00
+                               Transfer                  2025-11-26                                                        Transfer: Card payment    Credit Card               Checking                         214.50
+                               Bill Payment              2025-11-28                              Northwind Software        Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Deposit                   2025-11-30                                                        Deposit                   Checking                  -Split-                       11,533.95
+                               Journal Entry             2025-11-30    143                                                 Payroll 11/2025           Wages                     -Split-                        6,997.25
+                               Expense                   2025-11-30                              First Harbor Bank         Monthly service fee       Bank Charges & Fees       Checking                          15.00
+TOTAL                                                                                                                                                                                                        52,209.47
+
+18 lines

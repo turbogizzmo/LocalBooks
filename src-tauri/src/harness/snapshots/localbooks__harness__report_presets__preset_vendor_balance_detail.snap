@@ -1,0 +1,48 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Vendor Balance Detail, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                          Amount       Balance
+Lumen Media
+                               Bill                      2025-12-01    LM-88                     Bill #LM-88 - Lumen Medi  Accounts Payable (A/P)         1,500.00      1,500.00
+                               Bill Payment              2025-12-31                              Bill Payment - Lumen Med  Accounts Payable (A/P)          -375.00      1,125.00
+Total Lumen Media                                                                                                                                         1,125.00      1,125.00
+Northwind Software
+                               Bill                      2025-01-03    NW-01                     Bill #NW-01 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-01-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-02-03    NW-02                     Bill #NW-02 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-02-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-03-03    NW-03                     Bill #NW-03 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-03-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-04-03    NW-04                     Bill #NW-04 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-04-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-05-03    NW-05                     Bill #NW-05 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-05-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-06-03    NW-06                     Bill #NW-06 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-06-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-07-03    NW-07                     Bill #NW-07 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-07-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-08-03    NW-08                     Bill #NW-08 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-08-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-09-03    NW-09                     Bill #NW-09 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-09-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-10-03    NW-10                     Bill #NW-10 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-10-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-11-03    NW-11                     Bill #NW-11 - Northwind   Accounts Payable (A/P)           129.00        129.00
+                               Bill Payment              2025-11-28                              Bill Payment - Northwind  Accounts Payable (A/P)          -129.00          0.00
+                               Bill                      2025-12-03    NW-12                     Bill #NW-12 - Northwind   Accounts Payable (A/P)           129.00        129.00
+Total Northwind Software                                                                                                                                    129.00        129.00
+Pinecrest Office Supply
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Accounts Payable (A/P)           942.50        942.50
+                               Bill Payment              2025-10-01                              Bill Payment - Pinecrest  Accounts Payable (A/P)          -400.00        542.50
+                               Bill                      2025-11-20    PC-4521                   Bill #PC-4521 - Pinecres  Accounts Payable (A/P)           187.40        729.90
+Total Pinecrest Office S                                                                                                                                    729.90        729.90
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Accounts Payable (A/P)           450.00        450.00
+                               Vendor Credit             2025-11-25    RP-C1                     Vendor credit #RP-C1 - R  Accounts Payable (A/P)           -60.00        390.00
+Total Riverside Print Sh                                                                                                                                    390.00        390.00
+TOTAL                                                                                                                                                     2,373.90
+
+30 lines
