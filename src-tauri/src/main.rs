@@ -142,6 +142,7 @@ fn main() {
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
             app.manage(fx_rates::ReqwestHttp::new()?);
+            app.manage(bank::suggest::Suggester::default());
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();

@@ -9,6 +9,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::accounts::{self, AccountInput, AccountTypeView};
 use crate::backup::{self, BackupFile, CompanyFileInfo, RestoreResult};
+use crate::bank::suggest::Suggester;
 use crate::bank::{self, BankFileInspection, BankTransactionView, ColumnMapping, ImportSummary};
 use crate::classes::{self, ClassInput, ClassView, ReclassLine, ReclassQuery};
 use crate::custom_fields::{self, CustomFieldInput, CustomFieldView, FieldValue, RecordField};
@@ -279,19 +280,24 @@ pub async fn simplefin_disconnect(db: State<'_, Db>, sf: State<'_, SimpleFin>, c
 }
 
 #[tauri::command]
-pub async fn list_bank_transactions(db: State<'_, Db>) -> Result<Vec<BankTransactionView>, String> {
-    bank::list_pending(&db.pool().await).await
+pub async fn list_bank_transactions(db: State<'_, Db>, suggester: State<'_, Suggester>) -> Result<Vec<BankTransactionView>, String> {
+    let file = db.path().await?.display().to_string();
+    bank::list_pending(&db.pool().await, &suggester, &file).await
 }
 
 #[tauri::command]
 pub async fn approve_bank_transaction(
     app: AppHandle,
     db: State<'_, Db>,
+    suggester: State<'_, Suggester>,
     transaction_id: i64,
     category_account_id: i64,
     class_id: Option<i64>,
+    payee_name: Option<String>,
 ) -> Result<i64, String> {
-    let entry_id = bank::approve(&db.pool().await, transaction_id, category_account_id, class_id).await?;
+    let file = db.path().await?.display().to_string();
+    let approval = bank::Approval { category_account_id, class_id, payee_name };
+    let entry_id = bank::approve(&db.pool().await, &suggester, &file, transaction_id, approval).await?;
     notify(&app);
     Ok(entry_id)
 }
