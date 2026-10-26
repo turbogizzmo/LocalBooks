@@ -635,7 +635,7 @@ function RestoreConfirm({ info, onConfirm, onCancel, busy }) {
   );
 }
 
-function FileAndData({ companyName }) {
+function FileAndData({ companyName, isAdmin, navigate }) {
   const backups = useLedgerQuery(api.listBackups);
   const [notice, setNotice] = useState(null);
   const [pending, setPending] = useState(null);
@@ -769,6 +769,11 @@ function FileAndData({ companyName }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => setCreatingCompany(true)} disabled={busy}>
             New Company…
           </button>
+          {isAdmin && navigate && (
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => navigate('accounting/qbw-import')} disabled={busy}>
+              Desktop Migration Wizard…
+            </button>
+          )}
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={closeCompany} disabled={busy}>
             Close Company
           </button>
@@ -975,7 +980,7 @@ const ALL_TABS = [
 // Company-wide settings are an Admin's; everyone manages their own sign-in.
 const NON_ADMIN_TABS = new Set(['users', 'updates']);
 
-export default function Settings({ companyName, intent, isAdmin = true }) {
+export default function Settings({ companyName, intent, isAdmin = true, navigate }) {
   const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
   const allowed = (id) => tabs.some(([t]) => t === id);
   // The tab asked for (null: the first one). Which tabs are allowed can change after the first
@@ -1014,7 +1019,7 @@ export default function Settings({ companyName, intent, isAdmin = true }) {
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}
-      {tab === 'data' && <FileAndData companyName={companyName} />}
+      {tab === 'data' && <FileAndData companyName={companyName} isAdmin={isAdmin} navigate={navigate} />}
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}

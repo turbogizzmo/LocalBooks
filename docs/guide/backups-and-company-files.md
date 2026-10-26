@@ -68,6 +68,9 @@ QuickBooks `.qbw` company files, `.qbb` backups and `.qbm` portable files.
 
 The QuickBooks file is only read, never changed, and the books you had open are left as they were.
 
+To bring a QuickBooks, Quicken or GnuCash file into the books you have open instead, click
+**Desktop Migration Wizard…** (also under **Accounting › Desktop Migration Wizard**).
+
 ## Keep the books on a network or synced drive
 
 1. Click **Change Company File Location…** and choose the **Folder**, for example on a network drive

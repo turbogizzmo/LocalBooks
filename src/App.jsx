@@ -306,7 +306,7 @@ export default function App() {
             (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} />}
+          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} />}
         </div>
       </main>
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}
