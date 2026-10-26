@@ -3,6 +3,7 @@ import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveReportXlsx, saveText, saveXlsx, statementSheet, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
 import {
   AgingReport,
   BalanceSheetBudgetVsActualReport,
@@ -376,7 +377,6 @@ const REPORT_GROUPS = [
     title: 'Who owes you',
     reports: [
       ['ar', 'A/R Aging Summary'],
-      ['ar-detail', 'Open Invoices (A/R Aging Detail)'],
     ],
   },
   {
@@ -391,7 +391,6 @@ const REPORT_GROUPS = [
     title: 'What you owe',
     reports: [
       ['ap', 'A/P Aging Summary'],
-      ['ap-detail', 'Unpaid Bills (A/P Aging Detail)'],
       ['sales-tax', 'Sales Tax Liability'],
     ],
   },
@@ -425,13 +424,14 @@ const REPORT_GROUPS = [
 
 export default function Reports({ navigate, intent }) {
   const [report, setReport] = useState(() => intent?.data?.report ?? 'pl');
+  const custom = useCustomReports();
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]);
   return (
     <div className="flex h-full gap-2 p-2">
       <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
-        {REPORT_GROUPS.map((group) => (
+        {withCustomReports(REPORT_GROUPS, custom).map((group) => (
           <div key={group.title} className="mb-1">
             <div className="px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">{group.title}</div>
             {group.reports.map(([id, label]) => (
@@ -463,10 +463,8 @@ export default function Reports({ navigate, intent }) {
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
         {report === 'bs' && <BalanceSheet navigate={navigate} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
-        {report === 'ar' && <AgingReport key="ar" payable={false} detail={false} />}
-        {report === 'ar-detail' && <AgingReport key="ard" payable={false} detail />}
-        {report === 'ap' && <AgingReport key="ap" payable detail={false} />}
-        {report === 'ap-detail' && <AgingReport key="apd" payable detail />}
+        {report === 'ar' && <AgingReport key="ar" payable={false} />}
+        {report === 'ap' && <AgingReport key="ap" payable />}
         {report === 'sales-customer' && <SummaryReport key="sc" by="customer" />}
         {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
         {report === 'sales-rep' && <SummaryReport key="sr" by="rep" />}
@@ -483,6 +481,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'stock-status' && <StockStatusReport />}
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
+        {isCustomReport(report) && <CustomReport key={report} report={report} custom={custom} navigate={navigate} onOpen={setReport} />}
       </div>
     </div>
   );

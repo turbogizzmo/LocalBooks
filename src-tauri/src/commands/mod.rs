@@ -56,6 +56,7 @@ features![
     company_files,
     credits,
     custom_fields,
+    custom_reports,
     customer_statements,
     deposits,
     editing,

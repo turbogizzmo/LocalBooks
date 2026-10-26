@@ -267,60 +267,28 @@ export function GeneralLedgerReport({ navigate }) {
   );
 }
 
-/** A/R or A/P aging, as a summary by name or a detail list of open items. */
-export function AgingReport({ payable, detail }) {
+/** A/R or A/P aging by name. The detail lists (Open Invoices, Unpaid Bills, the aging details) are custom report presets. */
+export function AgingReport({ payable }) {
   const [asOf, setAsOf] = useState(todayIso());
   const { data, error, reload } = useLedgerQuery(() => (asOf ? api.getAging(payable, asOf) : Promise.resolve(null)));
   useEffect(() => {
     reload();
   }, [asOf, reload]);
-  const side = payable ? 'A/P' : 'A/R';
-  const title = detail ? (payable ? 'Unpaid Bills (A/P Aging Detail)' : 'Open Invoices (A/R Aging Detail)') : `${side} Aging Summary`;
+  const title = `${payable ? 'A/P' : 'A/R'} Aging Summary`;
   const labels = data?.bucketLabels ?? ['Current', '1 - 30', '31 - 60', '61 - 90', '91 and over'];
-
-  if (!detail) {
-    const rows = data
-      ? [...data.rows.map((r) => ({ cells: [r.partyName, ...r.bucketsCents.map(money), formatCents(r.totalCents)] })), { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] }]
-      : [];
-    return (
-      <TableReport
-        title={title}
-        subtitle={data ? `As of ${longDate(data.asOf)}` : ''}
-        columns={[{ label: payable ? 'Vendor' : 'Customer' }, ...labels.map((l) => ({ label: l, align: 'right' })), { label: 'Total', align: 'right' }]}
-        rows={rows}
-        error={error}
-        toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-        footer={`Days past due · balances as of the report date · credit not yet used is negative`}
-        onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
-      />
-    );
-  }
-
-  const rows = [];
-  let current = null;
-  let subtotal = 0;
-  for (const item of data?.items ?? []) {
-    if (item.partyName !== current) {
-      if (current !== null) rows.push({ kind: 'total', cells: [`Total ${current}`, '', '', '', '', '', formatCents(subtotal)] });
-      rows.push({ kind: 'section', span: 7, cells: [item.partyName] });
-      current = item.partyName;
-      subtotal = 0;
-    }
-    subtotal += item.openCents;
-    rows.push({ cells: [item.kind, item.number ?? '', formatDate(item.date), formatDate(item.dueDate), item.daysPastDue > 0 ? item.daysPastDue : '', '', formatCents(item.openCents)] });
-  }
-  if (current !== null) rows.push({ kind: 'total', cells: [`Total ${current}`, '', '', '', '', '', formatCents(subtotal)] });
-  if (data) rows.push({ kind: 'grand', cells: ['TOTAL', '', '', '', '', '', formatCents(data.totalCents)] });
+  const rows = data
+    ? [...data.rows.map((r) => ({ cells: [r.partyName, ...r.bucketsCents.map(money), formatCents(r.totalCents)] })), { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] }]
+    : [];
   return (
     <TableReport
       title={title}
       subtitle={data ? `As of ${longDate(data.asOf)}` : ''}
-      columns={[{ label: 'Type' }, { label: 'No.' }, { label: 'Date' }, { label: 'Due date' }, { label: 'Past due', align: 'right' }, { label: '' }, { label: 'Open balance', align: 'right' }]}
+      columns={[{ label: payable ? 'Vendor' : 'Customer' }, ...labels.map((l) => ({ label: l, align: 'right' })), { label: 'Total', align: 'right' }]}
       rows={rows}
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-      footer="Balances as of the report date, after payments and credits dated on or before it"
-      onCsvRows={() => (data?.items ?? []).map((i) => [i.partyName, i.kind, i.number ?? '', i.date, i.dueDate, i.daysPastDue > 0 ? i.daysPastDue : '', plainAmount(i.openCents)])}
+      footer={`Days past due · balances as of the report date · credit not yet used is negative`}
+      onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
     />
   );
 }

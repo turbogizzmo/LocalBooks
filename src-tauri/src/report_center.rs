@@ -139,7 +139,8 @@ pub struct AgingReport {
     pub items: Vec<AgingItem>,
 }
 
-fn bucket(days_past_due: i64) -> usize {
+/// The aging column (index into [`AGING_LABELS`]) for an item this many days past due.
+pub(crate) fn aging_bucket(days_past_due: i64) -> usize {
     match days_past_due {
         d if d <= 0 => 0,
         1..=30 => 1,
@@ -196,7 +197,7 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
     let mut totals = [0i64; 5];
     for item in &mut items {
         item.days_past_due = (as_of - item.due_date).num_days();
-        let b = bucket(item.days_past_due);
+        let b = aging_bucket(item.days_past_due);
         if rows.last().map(|r| r.party_name.as_str()) != Some(item.party_name.as_str()) {
             rows.push(AgingRow { party_name: item.party_name.clone(), buckets_cents: [0; 5], total_cents: 0 });
         }

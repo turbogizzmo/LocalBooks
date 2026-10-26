@@ -1,0 +1,20 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Open Invoices, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Due Date              Aging  Open Balance
+Bonn Studio GmbH
+                               Invoice                   2025-09-15    1013                      Invoice #1013 - Bonn Stu  2025-10-15               77      1,953.00
+Total Bonn Studio GmbH                                                                                                                                      1,953.00
+Brightwater Cafe
+                               Invoice                   2025-11-14    1014                      Invoice #1014 - Brightwa  2025-12-14               17      2,100.00
+                               Credit Memo               2025-11-20    1                         Credit memo #1 - Brightw  2025-11-20               41        -50.00
+Total Brightwater Cafe                                                                                                                                      2,050.00
+Cobalt Outfitters
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O  2026-01-09                      10,455.81
+Total Cobalt Outfitters                                                                                                                                    10,455.81
+TOTAL                                                                                                                                                      14,458.81
+
+4 lines

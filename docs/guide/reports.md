@@ -80,6 +80,77 @@ when their check number (or reference) is a whole number. A voided check keeps i
 not missing. One check that pays several bills from the same vendor counts once. Payments with
 other references, such as `EFT`, are not listed; the count at the top tells you how many there are.
 
+## Detail reports
+
+These reports list transactions one line at a time, with subtotals. They are all built on the same
+report engine, so each one can be customized (see below). Click a line to open its transaction, or
+an account heading to open its register.
+
+| Report | Shows |
+|---|---|
+| **Profit & Loss Detail** | Every income and expense line in the period, by account, with a running balance |
+| **Balance Sheet Detail** | Every asset, liability and equity line in the period, by account, from each account's beginning balance |
+| **A/R Aging Detail** · **A/P Aging Detail** | Open invoices and credit memos (bills and vendor credits), grouped by how far past due they are |
+| **Open Invoices** · **Unpaid Bills** | The same open items, grouped by customer or vendor |
+| **Customer Balance Summary** and **Detail** · **Vendor Balance Summary** and **Detail** | What makes up each customer's receivable or each vendor's payable balance, as of a date |
+| **Sales by Customer Detail** · **Sales by Product/Service Detail** | Each sale, by customer or by product or service, with quantity and rate |
+| **Income by Customer Summary** and **Detail** | Income less expenses for each customer (credits minus debits) |
+| **Expenses by Vendor Detail** | Each expense line, by vendor |
+| **Purchases by Vendor Summary** and **Detail** · **Purchases by Product/Service Summary** and **Detail** | Product and service lines on bills, checks, expenses and vendor credits |
+| **Check Detail** · **Deposit Detail** | Each check and bill payment (or deposit) with the lines it paid for, debits minus credits |
+| **1099 Detail** | The checks, expenses and bill payments from bank accounts behind the 1099 Summary, by vendor |
+| **Transaction List by Date** | One row per transaction, with its total |
+| **Journal** | Every transaction with all of its debit and credit lines |
+
+The numbers agree with the other reports: account lines and balances with the General Ledger, the
+aging details with the A/R and A/P Aging Summary, the Sales by Customer and Product/Service Detail
+with their summaries, and the 1099 Detail with the 1099 Summary.
+
+Things to know:
+
+- **Open Balance** and **Aging** are figured as of the report's end date, after the payments and
+  credits dated on or before it. Credit not yet used is negative.
+- Voided transactions show with the entry that voids them, so together they come to zero. Choose
+  **Leave out voided transactions** under **Customize…** to hide both (the 1099 Detail does).
+- The name filters list customers and vendors. LocalBooks has no payroll, so no transaction names an
+  employee.
+- **Balance Sheet Detail** shows the equity accounts' own lines; this year's net income is not a
+  line of its own, as it is on the Balance Sheet.
+- On ledger lines, **Item**, **Qty** and **Rate** are filled in when the line was posted from a single
+  item line of its invoice, sales receipt, credit memo or bill. The reports by product or service
+  read the documents' item lines instead, in your home currency.
+
+## Customize a report
+
+1. Open any detail report and click **Customize…**.
+2. Under **Display**, choose **Detail** (one row per line) or **Summary** (one row per group):
+   - **Subtotal by** (or **Rows**, in a summary): account, name, product or service, class,
+     transaction type, rep, transaction, month, quarter, year or aging period.
+   - **Columns over time** (summary only): a column for each month, quarter or year, and a total.
+   - **Columns, in order**: tick the columns to show (Type, Date, Num, Name, Memo, Account, Split,
+     Class, Item, Qty, Rate, Debit, Credit, Amount, Balance, Open Balance, Due Date, Aging, Rep) and
+     move them with the arrows.
+   - **Amount**: on each account's normal balance side, debits minus credits, or credits minus
+     debits.
+3. Under **Filters**, narrow the lines by accounts (with their subaccounts) or account types,
+   customers and vendors, transaction types, classes, products and services, reps, paid status,
+   cleared status, an amount range (either side) and text in the memo. The report updates as you go.
+4. Change the **Title** if you like, and click **Done**.
+
+**Reset to preset** puts a report back the way it came.
+
+In a summary, click a row to see the lines behind it; **‹ Back to summary** returns.
+
+## Memorize a report
+
+1. Customize a report and click **Save as…**.
+2. Name it and click **Save**. A name already in use asks before it is replaced.
+
+Saved reports are listed under **Memorized reports** at the bottom of the report list. They keep the
+filters, columns, grouping and report period (such as **This month**), not the numbers, so they show
+current figures each time. To change one, open it, customize it and **Save as…** the same name; to
+remove it, click **Delete…**. Memorized reports are saved in the company file.
+
 ## Export or print
 
 1. Click **Export ▾** on the report.

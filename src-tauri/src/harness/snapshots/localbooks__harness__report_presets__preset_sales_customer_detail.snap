@@ -1,0 +1,51 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Sales by Customer Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Item                                Qty          Rate Account                          Amount       Balance
+Alder & Finch LLP
+                               Invoice                   2025-01-10    1001                      Invoice #1001 - Alder &                                        85        125.00 Services                      10,625.00     10,625.00
+                               Invoice                   2025-01-10    1001                      Invoice #1001 - Alder &                                      12.5         42.50 Sales                            531.25     11,156.25
+                               Invoice                   2025-04-10    1004                      Invoice #1004 - Alder &                                        85        125.00 Services                      10,625.00     21,781.25
+                               Invoice                   2025-04-10    1004                      Invoice #1004 - Alder &                                        10         42.50 Sales                            425.00     22,206.25
+                               Invoice                   2025-07-10    1007                      Invoice #1007 - Alder &                                        85        125.00 Services                      10,625.00     32,831.25
+                               Invoice                   2025-07-10    1007                      Invoice #1007 - Alder &                                      17.5         42.50 Sales                            743.75     33,575.00
+                               Invoice                   2025-10-10    1010                      Invoice #1010 - Alder &                                        85        125.00 Services                      10,625.00     44,200.00
+                               Invoice                   2025-10-10    1010                      Invoice #1010 - Alder &                                        15         42.50 Sales                            637.50     44,837.50
+Total Alder & Finch LLP                                                                                                                                        395                                             44,837.50     44,837.50
+Bonn Studio GmbH
+                               Invoice                   2025-09-15    1013                      Invoice #1013 - Bonn Stu                                        1      4,800.00 Services                       5,208.00      5,208.00
+Total Bonn Studio GmbH                                                                                                                                           1                                              5,208.00      5,208.00
+Brightwater Cafe
+                               Invoice                   2025-02-10    1002                      Invoice #1002 - Brightwa                                       90        125.00 Services                      11,250.00     11,250.00
+                               Invoice                   2025-02-10    1002                      Invoice #1002 - Brightwa                                       15         42.50 Sales                            637.50     11,887.50
+                               Invoice                   2025-05-10    1005                      Invoice #1005 - Brightwa                                       90        125.00 Services                      11,250.00     23,137.50
+                               Invoice                   2025-05-10    1005                      Invoice #1005 - Brightwa                                     12.5         42.50 Sales                            531.25     23,668.75
+                               Invoice                   2025-08-10    1008                      Invoice #1008 - Brightwa                                       90        125.00 Services                      11,250.00     34,918.75
+                               Invoice                   2025-08-10    1008                      Invoice #1008 - Brightwa                                       10         42.50 Sales                            425.00     35,343.75
+                               Invoice                   2025-11-10    1011                      Invoice #1011 - Brightwa                                       90        125.00 Services                      11,250.00     46,593.75
+                               Invoice                   2025-11-10    1011                      Invoice #1011 - Brightwa                                     17.5         42.50 Sales                            743.75     47,337.50
+                               Invoice                   2025-11-14    1014                      Invoice #1014 - Brightwa                                                        Sales                          2,200.00     49,537.50
+                               Credit Memo               2025-11-20    1                         Credit memo #1 - Brightw  Poster Prints                        -6         25.00 Sales                           -150.00     49,387.50
+Total Brightwater Cafe                                                                                                                                         409                                             49,387.50     49,387.50
+Cobalt Outfitters
+                               Invoice                   2025-03-10    1003                      Invoice #1003 - Cobalt O                                       80        125.00 Services                      10,000.00     10,000.00
+                               Invoice                   2025-03-10    1003                      Invoice #1003 - Cobalt O                                     17.5         42.50 Sales                            743.75     10,743.75
+                               Invoice                   2025-06-10    1006                      Invoice #1006 - Cobalt O                                       80        125.00 Services                      10,000.00     20,743.75
+                               Invoice                   2025-06-10    1006                      Invoice #1006 - Cobalt O                                       15         42.50 Sales                            637.50     21,381.25
+                               Invoice                   2025-09-10    1009                      Invoice #1009 - Cobalt O                                       80        125.00 Services                      10,000.00     31,381.25
+                               Invoice                   2025-09-10    1009                      Invoice #1009 - Cobalt O                                     12.5         42.50 Sales                            531.25     31,912.50
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O                                       80        125.00 Services                      10,000.00     41,912.50
+                               Invoice                   2025-12-10    1012                      Invoice #1012 - Cobalt O                                       10         42.50 Sales                            425.00     42,337.50
+Total Cobalt Outfitters                                                                                                                                        375                                             42,337.50     42,337.50
+No name
+                               Sales Receipt             2025-02-20    1                         Sales Receipt #1                                                6         35.00 Sales                            210.00        210.00
+                               Sales Receipt             2025-05-20    2                         Sales Receipt #2                                                6         35.00 Sales                            210.00        420.00
+                               Sales Receipt             2025-08-20    3                         Sales Receipt #3                                                6         35.00 Sales                            210.00        630.00
+                               Sales Receipt             2025-11-20    4                         Sales Receipt #4                                                6         35.00 Sales                            210.00        840.00
+Total No name                                                                                                                                                   24                                                840.00        840.00
+TOTAL                                                                                                                                                         1204                                            142,610.50
+
+31 lines

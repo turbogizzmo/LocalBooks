@@ -1,0 +1,48 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Sales by Product/Service Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Name                      Memo                                Qty          Rate        Amount       Balance
+Logo Package
+                               Invoice                   2025-11-14    1014                      Brightwater Cafe          Logo refresh                          1      1,200.00      1,200.00      1,200.00
+Total Logo Package                                                                                                                                               1                    1,200.00      1,200.00
+Poster Prints
+                               Invoice                   2025-11-14    1014                      Brightwater Cafe          Menu posters                         40         25.00      1,000.00      1,000.00
+                               Credit Memo               2025-11-20    1                         Brightwater Cafe          Misprinted posters                   -6         25.00       -150.00        850.00
+Total Poster Prints                                                                                                                                             34                      850.00        850.00
+No product/service
+                               Invoice                   2025-01-10    1001                      Alder & Finch LLP         Brand design                         85        125.00     10,625.00     10,625.00
+                               Invoice                   2025-01-10    1001                      Alder & Finch LLP         Printed collateral                 12.5         42.50        531.25     11,156.25
+                               Invoice                   2025-02-10    1002                      Brightwater Cafe          Brand design                         90        125.00     11,250.00     22,406.25
+                               Invoice                   2025-02-10    1002                      Brightwater Cafe          Printed collateral                   15         42.50        637.50     23,043.75
+                               Sales Receipt             2025-02-20    1                                                   Poster prints                         6         35.00        210.00     23,253.75
+                               Invoice                   2025-03-10    1003                      Cobalt Outfitters         Brand design                         80        125.00     10,000.00     33,253.75
+                               Invoice                   2025-03-10    1003                      Cobalt Outfitters         Printed collateral                 17.5         42.50        743.75     33,997.50
+                               Invoice                   2025-04-10    1004                      Alder & Finch LLP         Brand design                         85        125.00     10,625.00     44,622.50
+                               Invoice                   2025-04-10    1004                      Alder & Finch LLP         Printed collateral                   10         42.50        425.00     45,047.50
+                               Invoice                   2025-05-10    1005                      Brightwater Cafe          Brand design                         90        125.00     11,250.00     56,297.50
+                               Invoice                   2025-05-10    1005                      Brightwater Cafe          Printed collateral                 12.5         42.50        531.25     56,828.75
+                               Sales Receipt             2025-05-20    2                                                   Poster prints                         6         35.00        210.00     57,038.75
+                               Invoice                   2025-06-10    1006                      Cobalt Outfitters         Brand design                         80        125.00     10,000.00     67,038.75
+                               Invoice                   2025-06-10    1006                      Cobalt Outfitters         Printed collateral                   15         42.50        637.50     67,676.25
+                               Invoice                   2025-07-10    1007                      Alder & Finch LLP         Brand design                         85        125.00     10,625.00     78,301.25
+                               Invoice                   2025-07-10    1007                      Alder & Finch LLP         Printed collateral                 17.5         42.50        743.75     79,045.00
+                               Invoice                   2025-08-10    1008                      Brightwater Cafe          Brand design                         90        125.00     11,250.00     90,295.00
+                               Invoice                   2025-08-10    1008                      Brightwater Cafe          Printed collateral                   10         42.50        425.00     90,720.00
+                               Sales Receipt             2025-08-20    3                                                   Poster prints                         6         35.00        210.00     90,930.00
+                               Invoice                   2025-09-10    1009                      Cobalt Outfitters         Brand design                         80        125.00     10,000.00    100,930.00
+                               Invoice                   2025-09-10    1009                      Cobalt Outfitters         Printed collateral                 12.5         42.50        531.25    101,461.25
+                               Invoice                   2025-09-15    1013                      Bonn Studio GmbH          Packaging design                      1      4,800.00      5,208.00    106,669.25
+                               Invoice                   2025-10-10    1010                      Alder & Finch LLP         Brand design                         85        125.00     10,625.00    117,294.25
+                               Invoice                   2025-10-10    1010                      Alder & Finch LLP         Printed collateral                   15         42.50        637.50    117,931.75
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Brand design                         90        125.00     11,250.00    129,181.75
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Printed collateral                 17.5         42.50        743.75    129,925.50
+                               Sales Receipt             2025-11-20    4                                                   Poster prints                         6         35.00        210.00    130,135.50
+                               Invoice                   2025-12-10    1012                      Cobalt Outfitters         Brand design                         80        125.00     10,000.00    140,135.50
+                               Invoice                   2025-12-10    1012                      Cobalt Outfitters         Printed collateral                   10         42.50        425.00    140,560.50
+Total No product/service                                                                                                                                      1210                  140,560.50    140,560.50
+TOTAL                                                                                                                                                         1245                  142,610.50
+
+32 lines

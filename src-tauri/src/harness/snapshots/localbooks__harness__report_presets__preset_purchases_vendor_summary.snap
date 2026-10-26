@@ -1,0 +1,11 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Purchases by Vendor Summary, 2025-01-01 to 2025-12-31
+
+Name                                     Qty        Amount
+Riverside Print Shop                     500        400.00
+TOTAL                                    500        400.00
+
+1 lines

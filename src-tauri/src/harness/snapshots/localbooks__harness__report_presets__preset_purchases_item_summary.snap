@@ -1,0 +1,11 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Purchases by Product/Service Summary, 2025-01-01 to 2025-12-31
+
+Product/Service                          Qty        Amount
+Poster Prints                            500        400.00
+TOTAL                                    500        400.00
+
+1 lines

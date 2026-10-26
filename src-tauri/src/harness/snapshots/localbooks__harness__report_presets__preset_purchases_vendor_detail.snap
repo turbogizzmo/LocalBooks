@@ -1,0 +1,13 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Purchases by Vendor Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Item                                Qty          Rate        Amount       Balance
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Poster stock              Poster Prints                       500          0.80        400.00        400.00
+Total Riverside Print Sh                                                                                                                                       500                      400.00        400.00
+TOTAL                                                                                                                                                          500                      400.00
+
+1 lines

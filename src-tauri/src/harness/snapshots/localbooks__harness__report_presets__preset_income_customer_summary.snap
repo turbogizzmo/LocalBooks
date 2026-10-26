@@ -1,0 +1,23 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Income by Customer Summary, 2025-01-01 to 2025-12-31
+
+Name                                  Amount
+Alder & Finch LLP                  44,837.50
+Bonn Studio GmbH                    5,260.50
+Brightwater Cafe                   49,387.50
+Cobalt Outfitters                  42,337.50
+First Harbor Bank                    -180.00
+Harbor Power & Light               -2,558.50
+Jordan Reyes                       -5,700.00
+Lumen Media                        -1,500.00
+Northwind Software                 -1,548.00
+Pinecrest Office Supply            -1,129.90
+Riverbend Properties              -28,800.00
+Riverside Print Shop                 -390.00
+No name                           -81,293.35
+TOTAL                              18,723.25
+
+131 lines

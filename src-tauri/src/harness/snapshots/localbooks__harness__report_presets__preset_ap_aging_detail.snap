@@ -1,0 +1,24 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+A/P Aging Detail, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Name                      Due Date              Aging  Open Balance
+Current
+                               Bill                      2025-12-03    NW-12                     Northwind Software        2026-01-02                         129.00
+Total Current                                                                                                                                                 129.00
+1 - 30
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      2025-12-10               21        425.00
+                               Bill                      2025-11-20    PC-4521                   Pinecrest Office Supply   2025-12-20               11        187.40
+                               Bill                      2025-12-01    LM-88                     Lumen Media               2025-12-16               15      1,125.00
+Total 1 - 30                                                                                                                                                1,737.40
+31 - 60
+                               Vendor Credit             2025-11-25    RP-C1                     Riverside Print Shop      2025-11-25               36        -35.00
+Total 31 - 60                                                                                                                                                 -35.00
+61 - 90
+                               Bill                      2025-09-05    PC-4410                   Pinecrest Office Supply   2025-10-05               87        542.50
+Total 61 - 90                                                                                                                                                 542.50
+TOTAL                                                                                                                                                       2,373.90
+
+6 lines

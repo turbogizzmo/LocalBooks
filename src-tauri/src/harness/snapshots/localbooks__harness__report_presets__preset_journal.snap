@@ -1,0 +1,90 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Journal, 2025-11-01 to 2025-11-30
+
+                               Type                      Date          Num                       Name                      Memo                      Account                           Debit        Credit
+Check 1017 · 2025-11-01
+                               Check                     2025-11-01    1017                      Riverbend Properties      Studio rent               Rent & Lease                   2,400.00
+                               Check                     2025-11-01    1017                      Riverbend Properties      Check #1017 - Riverbend   Checking                                     2,400.00
+Total Check 1017 · 2025-                                                                                                                                                            2,400.00      2,400.00
+Bill NW-11 · 2025-11-03
+                               Bill                      2025-11-03    NW-11                     Northwind Software        Bill #NW-11 - Northwind   Software & Cloud Service         129.00
+                               Bill                      2025-11-03    NW-11                     Northwind Software        Bill #NW-11 - Northwind   Accounts Payable (A/P)                         129.00
+Total Bill NW-11 · 2025-                                                                                                                                                              129.00        129.00
+Payment · 2025-11-06
+                               Payment                   2025-11-06                              Alder & Finch LLP         Payment - Invoice #1010   Undeposited Funds             11,308.72
+                               Payment                   2025-11-06                              Alder & Finch LLP         Payment - Invoice #1010   Accounts Receivable (A/R                    11,308.72
+Total Payment · 2025-11-                                                                                                                                                           11,308.72     11,308.72
+Invoice 1011 · 2025-11-1
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Invoice #1011 - Brightwa  Accounts Receivable (A/R      12,047.67
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Invoice #1011 - Brightwa  Services                                    11,250.00
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Invoice #1011 - Brightwa  Sales                                          743.75
+                               Invoice                   2025-11-10    1011                      Brightwater Cafe          Sales tax                 Sales Tax Payable                               53.92
+Total Invoice 1011 · 202                                                                                                                                                           12,047.67     12,047.67
+Bill RP-77 · 2025-11-10
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      Bill #RP-77 - Riverside   Office Supplies                  400.00
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      Bill #RP-77 - Riverside   Office Supplies                   50.00
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      Bill #RP-77 - Riverside   Accounts Payable (A/P)                         450.00
+Total Bill RP-77 · 2025-                                                                                                                                                              450.00        450.00
+Expense · 2025-11-12
+                               Expense                   2025-11-12                              Harbor Power & Light      Electricity               Utilities                        214.50
+                               Expense                   2025-11-12                              Harbor Power & Light      Expense - Harbor Power &  Credit Card                                    214.50
+Total Expense · 2025-11-                                                                                                                                                              214.50        214.50
+Invoice 1014 · 2025-11-1
+                               Invoice                   2025-11-14    1014                      Brightwater Cafe          Invoice #1014 - Brightwa  Accounts Receivable (A/R       2,200.00
+                               Invoice                   2025-11-14    1014                      Brightwater Cafe          Invoice #1014 - Brightwa  Sales                                        2,200.00
+Total Invoice 1014 · 202                                                                                                                                                            2,200.00      2,200.00
+Journal Entry 129 · 2025
+                               Journal Entry             2025-11-15    129                                                 Payroll tax deposit       Payroll Liabilities            1,927.25
+                               Journal Entry             2025-11-15    129                                                 Payroll tax deposit       Checking                                     1,927.25
+Total Journal Entry 129                                                                                                                                                             1,927.25      1,927.25
+Sales Receipt 4 · 2025-1
+                               Sales Receipt             2025-11-20    4                                                   Sales Receipt #4          Undeposited Funds                225.23
+                               Sales Receipt             2025-11-20    4                                                   Sales Receipt #4          Sales                                          210.00
+                               Sales Receipt             2025-11-20    4                                                   Sales tax                 Sales Tax Payable                               15.23
+Total Sales Receipt 4 ·                                                                                                                                                               225.23        225.23
+Bill PC-4521 · 2025-11-2
+                               Bill                      2025-11-20    PC-4521                   Pinecrest Office Supply   Bill #PC-4521 - Pinecres  Office Supplies                  187.40
+                               Bill                      2025-11-20    PC-4521                   Pinecrest Office Supply   Bill #PC-4521 - Pinecres  Accounts Payable (A/P)                         187.40
+Total Bill PC-4521 · 202                                                                                                                                                              187.40        187.40
+Credit Memo 1 · 2025-11-
+                               Credit Memo               2025-11-20    1                         Brightwater Cafe          Credit memo #1 - Brightw  Sales                            150.00
+                               Credit Memo               2025-11-20    1                         Brightwater Cafe          Credit memo #1 - Brightw  Accounts Receivable (A/R                       150.00
+Total Credit Memo 1 · 20                                                                                                                                                              150.00        150.00
+Journal Entry 145 · 2025
+                               Journal Entry             2025-11-25    145                                                 Loan payment              Loan Payable                   2,000.00
+                               Journal Entry             2025-11-25    145                                                 Loan payment              Interest Expense                  20.00
+                               Journal Entry             2025-11-25    145                                                 Loan payment              Checking                                     2,020.00
+Total Journal Entry 145                                                                                                                                                             2,020.00      2,020.00
+Vendor Credit RP-C1 · 20
+                               Vendor Credit             2025-11-25    RP-C1                     Riverside Print Shop      Vendor credit #RP-C1 - R  Accounts Payable (A/P)            60.00
+                               Vendor Credit             2025-11-25    RP-C1                     Riverside Print Shop      Damaged stock             Office Supplies                                 60.00
+Total Vendor Credit RP-C                                                                                                                                                               60.00         60.00
+Transfer · 2025-11-26
+                               Transfer                  2025-11-26                                                        Transfer: Card payment    Credit Card                      214.50
+                               Transfer                  2025-11-26                                                        Transfer: Card payment    Checking                                       214.50
+Total Transfer · 2025-11                                                                                                                                                              214.50        214.50
+Bill Payment · 2025-11-2
+                               Bill Payment              2025-11-28                              Northwind Software        Bill Payment - Northwind  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-11-28                              Northwind Software        Bill Payment - Northwind  Checking                                       129.00
+Total Bill Payment · 202                                                                                                                                                              129.00        129.00
+Deposit · 2025-11-30
+                               Deposit                   2025-11-30                                                        Deposit                   Checking                      11,533.95
+                               Deposit                   2025-11-30                                                        Alder & Finch LLP         Undeposited Funds                           11,308.72
+                               Deposit                   2025-11-30                                                        Customer payment          Undeposited Funds                              225.23
+Total Deposit · 2025-11-                                                                                                                                                           11,533.95     11,533.95
+Journal Entry 143 · 2025
+                               Journal Entry             2025-11-30    143                                                 Payroll 11/2025           Wages                          6,500.00
+                               Journal Entry             2025-11-30    143                                                 Payroll 11/2025           Payroll Taxes                    497.25
+                               Journal Entry             2025-11-30    143                                                 Payroll 11/2025           Checking                                     5,070.00
+                               Journal Entry             2025-11-30    143                                                 Payroll 11/2025           Payroll Liabilities                          1,927.25
+Total Journal Entry 143                                                                                                                                                             6,997.25      6,997.25
+Expense · 2025-11-30
+                               Expense                   2025-11-30                              First Harbor Bank         Monthly service fee       Bank Charges & Fees               15.00
+                               Expense                   2025-11-30                              First Harbor Bank         Expense - First Harbor B  Checking                                        15.00
+Total Expense · 2025-11-                                                                                                                                                               15.00         15.00
+TOTAL                                                                                                                                                                              52,209.47     52,209.47
+
+44 lines
