@@ -369,8 +369,15 @@ To ship a release:
    GitHub and in the app's update window. Commit.
 2. `git tag v0.2.0 && git push origin v0.2.0`. CI tests on all three platforms, builds signed
    installers and `latest.json`, and attaches them to a **draft** release.
-3. Edit the draft's notes (they appear in the app's update prompt) and click **Publish**. Installed
-   copies see the update only after publishing.
+3. Edit the draft's notes (they appear in the app's update prompt) and publish it as a
+   **pre-release** (a test build on the tester page). Installed copies don't see it yet: the
+   updater follows the latest release.
+4. Publishing starts the **Release check** (`release-check.yml`, also runnable by hand with the tag).
+   On macOS, Windows and Linux it verifies the signed installers and `latest.json`, upgrades test
+   companies seeded by the previous release, and launches the installed app. See
+   [docs/testing/release-check.md](docs/testing/release-check.md).
+5. Once the release check is green on all three platforms, promote the release to **latest**.
+   Installed copies then offer the update.
 
 Windows updates use the per-user `-setup.exe` installer, the one the tester page recommends.
 
@@ -379,6 +386,7 @@ Windows updates use the per-user `-setup.exe` installer, the one the tester page
 | Workflow | When | What |
 |---|---|---|
 | `release.yml` | push, pull request, tag, manual | Tests on macOS, Windows, Linux; installers on tags and manual runs |
+| `release-check.yml` | pre-release or draft published/edited, manual | The gate before latest: signatures and `latest.json`, upgrade from the previous release, launch smoke, on all three platforms |
 | `codeql.yml` | push, pull request, weekly | Static security analysis of Rust, JavaScript and the workflows |
 | `audit.yml` | lockfile changes, weekly | RustSec and npm advisories for shipped dependencies |
 | `pages.yml` | changes to `site/` | Publishes the [tester page](https://turbogizzmo.github.io/LocalBooks/) |
