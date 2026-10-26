@@ -72,12 +72,44 @@ Asset, are added the first time you use that feature.
 Like classic desktop accounting software, LocalBooks can show the same company in several windows,
 for example a report on one screen while you enter transactions on another.
 
-- Choose **New window** at the top of any screen to open that screen in another window. On a Mac,
-  **Window › New Window** (⇧⌘N) does the same; on Windows and Linux, press **Ctrl+Shift+N**.
+- Choose **New window** at the top of any screen to open that screen in another window.
+  **Window › New Window** does the same, or press **Ctrl+Shift+N** (⇧⌘N on a Mac).
 - In an account register or in Reports, choose **Open in new window** to keep that register (with
   its dates) or report open on its own.
 
 Every window shows the same books: when you save a change in one, the others update straight away.
 Closing a window leaves the others open; LocalBooks quits when you close the last one.
+
+## Find things in the menu bar
+
+The menu bar is laid out like QuickBooks Desktop's, so the commands you know are where you expect
+them. Each one opens the screen, and often the form, in the window you're working in:
+
+| Menu | What's in it |
+|---|---|
+| **File** | New, open, close and back up company files; import QuickBooks files; print and send forms |
+| **Edit** | Undo, cut, copy and paste; Use Register; **Find…** (Find Transactions); Preferences |
+| **View** | Show or hide the left icon bar |
+| **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |
+| **Company** | Home Page, users and passwords, closing date, bank feeds, budgets, general journal entries, reclassify, currency adjustment |
+| **Customers** | Customer Center, estimates, invoices, sales receipts, statements, finance charges, receive payments, credit memos and refunds, Change Item Prices |
+| **Vendors** | Vendor Center, enter and pay bills, vendor credits, sales tax, purchase orders, 1099s |
+| **Employees** | Weekly timesheet and single time activity |
+| **Banking** | Write checks, credit card charges, registers, deposits, transfers, reconcile, bank feeds |
+| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets |
+
+The classic shortcuts work from anywhere:
+
+| Shortcut | Opens |
+|---|---|
+| **Ctrl+I** (⌘I) | Create Invoices |
+| **Ctrl+W** | Write Checks (Windows and Linux; on a Mac ⌘W closes the window) |
+| **Ctrl+R** (⌘R) | Use Register |
+| **Ctrl+J** (⌘J) | Customer Center |
+| **Ctrl+T** (⌘T) | Memorized Transaction List (Recurring Transactions) |
+| **Ctrl+F** (⌘F) | Find Transactions |
+
+**Ctrl+A** stays Select All, so open the Chart of Accounts from **Lists**. On Windows, press **Alt**
+to reach the menus from the keyboard (for example **Alt+U** for Customers).
 
 Next: [Create and send an invoice](invoices.md) · [Back up, restore and open company files](backups-and-company-files.md)

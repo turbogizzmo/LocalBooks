@@ -46,7 +46,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
 import { setCurrencySymbol } from './lib/money.js';
-import { isMainWindow, NEW_WINDOW_REQUESTED, openWindow, startPage } from './lib/windows.js';
+import { isMainWindow, MENU_COMMAND, MENU_NAVIGATE, NEW_WINDOW_REQUESTED, openWindow, startPage } from './lib/windows.js';
 
 const STORAGE_KEY = 'localbooks.view';
 // A window opened on a page (Window › New Window, or a register or report in its own window).
@@ -135,7 +135,28 @@ export default function App() {
     openWindow(id).catch((err) => setWindowError(String(err)));
   }, []);
 
-  // Window › New Window (macOS menu) asks the focused window to open the page it shows.
+  // The menu bar's Lists, Company, Customers, … items open a page (often with its entry form), and a
+  // few act on the page itself (see app_menu.rs).
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  useEffect(() => {
+    const unlistens = [];
+    let cancelled = false;
+    const win = getCurrentWebviewWindow();
+    const keep = (p) => p.then((fn) => (cancelled ? fn() : unlistens.push(fn))).catch(() => {});
+    keep(win.listen(MENU_NAVIGATE, ({ payload }) => {
+      if (findNav(payload.view)) select(payload.view, payload.action, payload.data);
+    }));
+    keep(win.listen(MENU_COMMAND, ({ payload }) => {
+      if (payload === 'help') setHelpOpen(true);
+      if (payload === 'sidebar') setSidebarHidden((h) => !h);
+    }));
+    return () => {
+      cancelled = true;
+      unlistens.forEach((fn) => fn());
+    };
+  }, [select]);
+
+  // Window › New Window asks the focused window to open the page it shows.
   useEffect(() => {
     let unlisten;
     let cancelled = false;
@@ -179,7 +200,7 @@ export default function App() {
   return (
     <CompanyContext.Provider value={company}>
     <div className="flex h-full">
-      <Sidebar current={view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />
+      {!sidebarHidden && <Sidebar current={view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
@@ -280,7 +301,7 @@ export default function App() {
           {view === 'sales/estimates' && <Estimates {...props} />}
           {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
-          {view === 'sales/products' && <Products accounts={list} />}
+          {view === 'sales/products' && <Products accounts={list} intent={intent} />}
           {view === 'sales/lists' && <SalesLists />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'sales/statements' && <Statements />}
