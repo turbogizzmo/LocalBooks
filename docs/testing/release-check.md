@@ -55,4 +55,4 @@ cp "Edge Cases.localbooks" /tmp/check.localbooks
 
 The steps are subcommands of `.github/release-check/release_check.py` (Python 3.10+, with the
 `cryptography` package for the Artifacts step). Run `python3 .github/release-check/release_check.py
---help` to list them. Without `GITHUB_STEP_SUMMARY` set, the summary prints to the terminal.
+--help` to list them. The summary always prints to the terminal (and the run log), and also goes to `GITHUB_STEP_SUMMARY` when that is set.

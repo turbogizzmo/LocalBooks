@@ -51,12 +51,12 @@ failures = []
 
 
 def summary(text=""):
+    """Adds to the job summary, and to the log so the results are also in the run's logs."""
+    print(text, flush=True)
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if path:
         with open(path, "a", encoding="utf-8") as f:
             f.write(text + "\n")
-    else:
-        print(text)
 
 
 def fail(message):
