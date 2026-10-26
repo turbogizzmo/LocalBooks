@@ -100,6 +100,7 @@ export const api = {
   postFxRevaluation: (asOf, rates) => invoke('post_fx_revaluation', { asOf, rates }),
   listFxRevaluations: () => invoke('list_fx_revaluations'),
   voidFxRevaluation: (id) => invoke('void_fx_revaluation', { id }),
+  lookupExchangeRate: (currency, date) => invoke('lookup_exchange_rate', { currency, date }),
   listFormStyles: () => invoke('list_form_styles'),
   createFormStyle: (name, copyFrom = null) => invoke('create_form_style', { name, copyFrom }),
   renameFormStyle: (id, name) => invoke('rename_form_style', { id, name }),
@@ -286,6 +287,7 @@ export const api = {
   getInvoiceDetail: (invoiceId) => invoke('get_invoice_detail', { invoiceId }),
 
   ingestRawQbw: (filePath) => invoke('ingest_raw_qbw', { filePath }),
+  ingestReportExports: (filePaths) => invoke('ingest_report_exports', { filePaths }),
   listQbwBatches: () => invoke('list_qbw_batches'),
   getQbwBatch: (batchId) => invoke('get_qbw_batch', { batchId }),
   setQbwMapping: (batchId, rawLabel, accountId) => invoke('set_qbw_mapping', { batchId, rawLabel, accountId }),

@@ -74,6 +74,14 @@ foreign unit, stored as an integer scaled by 1,000,000).
   cumulatively, so the final payment clears it to the cent. The difference posts to the system
   account **Exchange Gain or Loss**.
 - The home currency is a preference and locks once foreign transactions exist.
+- **Optional daily exchange rates (uses the network).** With *Look up daily exchange rates* on
+  (Settings › Preferences Console, off by default), rate fields are pre-filled with the European
+  Central Bank's reference rate for the transaction date, through the open-source
+  [Frankfurter](https://github.com/lineofflight/frankfurter) API at `api.frankfurter.dev`. Each
+  lookup sends only the two currency codes and a date. Answers are cached in the company file
+  (`exchange_rate_cache`), so a date is fetched once and works offline. Weekends and holidays use
+  the previous business day's rate. The suggestion can always be overridden, and saved
+  transactions keep the rate they were saved with.
 
 ### Double-entry enforced at two layers
 
@@ -182,6 +190,14 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    whole batch posts in one transaction, so it lands completely or not at all. A register keyed by
    source invoice ID stops the same invoice being posted twice. Voiding an imported entry
    releases its invoice so it can be posted again.
+
+Without a readable company file, the wizard also takes **QuickBooks report exports** (`.csv` or
+`.xlsx`) from QuickBooks Desktop for Windows or Mac, or QuickBooks Online: the Journal or General
+Ledger, with the Account Listing, contact lists and Item List chosen together. `report_import.rs`
+finds each report by its column headings, skips title, total and footer rows, and hands the
+transactions to the same resolver as the IIF reader. An expired QuickBooks Desktop for Mac can
+still run these reports in view-only mode. See
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#import-quickbooks-reports).
 
 ---
 
@@ -451,6 +467,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── reconcile.rs, timesheet.rs       # business documents
         ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
+        ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache
         ├── forms.rs, pdf.rs    # form designer layouts and the PDF writer
         ├── mail_app.rs, smtp.rs, secrets.rs   # emailing forms; credentials on this computer
         ├── email_log.rs        # sent history (append-only) and the Email later queue
@@ -507,6 +524,13 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **IIF and QIF imports.** IIF files don't link payments to invoices, so payments apply to the
   oldest open invoices, as QuickBooks does. QIF investment accounts are skipped. A file with lists
   but no transactions adds its accounts, customers, vendors and items and posts nothing.
+- **QuickBooks report imports** (Journal or General Ledger exported to CSV or Excel, with the
+  Account Listing, contact lists and Item List) read Debit and Credit columns only; a report with
+  just an Amount column is refused. Like IIF, they don't link payments to invoices, so payments
+  apply to the oldest open invoices. QuickBooks Online's Journal has no transaction number, so its
+  lines are grouped by date, type and number until they balance. A General Ledger's lines are
+  paired back into transactions through its Split column; lines that can't be paired are listed,
+  not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.

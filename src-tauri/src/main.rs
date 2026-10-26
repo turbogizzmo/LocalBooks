@@ -19,6 +19,7 @@ mod estimates;
 mod expenses;
 mod forensic;
 mod forms;
+mod fx_rates;
 #[cfg(test)]
 mod frontend_checks;
 mod iif_import;
@@ -47,6 +48,7 @@ mod qbw_ledger_import;
 mod qbw_pages;
 mod qbw_records;
 mod qif_import;
+mod report_import;
 mod reconcile;
 mod registers;
 mod report_center;
@@ -140,6 +142,7 @@ fn main() {
             tauri::async_runtime::block_on(database.refresh_gate());
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
+            app.manage(fx_rates::ReqwestHttp::new()?);
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
             // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();
@@ -246,6 +249,7 @@ fn main() {
             commands::post_fx_revaluation,
             commands::list_fx_revaluations,
             commands::void_fx_revaluation,
+            commands::lookup_exchange_rate,
             commands::get_estimate_detail,
             commands::invoice_from_estimate,
             commands::import_bank_csv,
@@ -434,6 +438,7 @@ fn main() {
             commands::get_company_logo,
             commands::get_invoice_detail,
             commands::ingest_raw_qbw,
+            commands::ingest_report_exports,
             commands::list_qbw_batches,
             commands::get_qbw_batch,
             commands::set_qbw_mapping,
