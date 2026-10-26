@@ -10,6 +10,7 @@ import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
 const isSplitAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
@@ -244,6 +245,15 @@ export default function ExpensesChecks({ accounts, intent }) {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
   };
+  const sorter = useSort(data, {
+    date: (x) => x.expenseDate,
+    type: (x) => (x.kind === 'CHECK' ? 'Check' : 'Expense'),
+    number: (x) => x.checkNumber,
+    payee: (x) => x.payeeName,
+    category: (x) => (x.categoryAccountId !== null ? accountLabel(accounts, x.categoryAccountId) : null),
+    from: (x) => accountLabel(accounts, x.paymentAccountId),
+    total: (x) => x.homeTotalCents ?? x.totalCents,
+  });
   const rows = data ?? [];
 
   return (
@@ -301,13 +311,13 @@ export default function ExpensesChecks({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Type</th>
-                <th className="qb-grid-head">No.</th>
-                <th className="qb-grid-head">Payee</th>
-                <th className="qb-grid-head">Category</th>
-                <th className="qb-grid-head">Paid from / memo</th>
-                <th className="qb-grid-head text-right">Total</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="type">Type</SortTh>
+                <SortTh sorter={sorter} col="number">No.</SortTh>
+                <SortTh sorter={sorter} col="payee">Payee</SortTh>
+                <SortTh sorter={sorter} col="category">Category</SortTh>
+                <SortTh sorter={sorter} col="from">Paid from / memo</SortTh>
+                <SortTh sorter={sorter} col="total" className="text-right">Total</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -317,7 +327,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                   <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No expenses, checks or card credits yet.</td>
                 </tr>
               )}
-              {rows.map((x) => (
+              {sorter.sorted.map((x) => (
                 <tr key={x.id} className={`qb-grid-row ${x.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>
                   <td className="qb-grid-cell">{EXPENSE_KINDS[x.kind] ?? x.kind}</td>

@@ -4,6 +4,7 @@ import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMinutes, parseHoursToMinutes, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -386,6 +387,16 @@ export default function TimeTracking({ intent }) {
   const [notice, setNotice] = useState(null);
   const [range, setRange] = useState(() => [addDays(todayIso(), -30), addDays(todayIso(), 7)]);
   const { data: activities, error, reload } = useLedgerQuery(() => api.listTimeActivities(range[0], range[1]));
+  const sorter = useSort(activities, {
+    date: (a) => a.activityDate,
+    employee: (a) => a.employeeName,
+    customer: (a) => a.customerName,
+    service: (a) => a.serviceName,
+    description: (a) => a.description,
+    billable: (a) => (a.billable ? 'Yes' : 'No'),
+    rate: (a) => a.hourlyRateCents,
+    time: (a) => a.minutes,
+  });
 
   useEffect(() => {
     if (intent?.action === 'weekly-timesheet') setMode('weekly');
@@ -447,14 +458,14 @@ export default function TimeTracking({ intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Employee</th>
-                <th className="qb-grid-head">Customer</th>
-                <th className="qb-grid-head">Service</th>
-                <th className="qb-grid-head">Description</th>
-                <th className="qb-grid-head">Billable</th>
-                <th className="qb-grid-head text-right">Rate</th>
-                <th className="qb-grid-head text-right">Time</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="employee">Employee</SortTh>
+                <SortTh sorter={sorter} col="customer">Customer</SortTh>
+                <SortTh sorter={sorter} col="service">Service</SortTh>
+                <SortTh sorter={sorter} col="description">Description</SortTh>
+                <SortTh sorter={sorter} col="billable">Billable</SortTh>
+                <SortTh sorter={sorter} col="rate" className="text-right">Rate</SortTh>
+                <SortTh sorter={sorter} col="time" className="text-right">Time</SortTh>
               </tr>
             </thead>
             <tbody>
@@ -463,7 +474,7 @@ export default function TimeTracking({ intent }) {
                   <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No time recorded in this range.</td>
                 </tr>
               )}
-              {(activities ?? []).map((a) => (
+              {sorter.sorted.map((a) => (
                 <tr key={a.id} className="qb-grid-row">
                   <td className="qb-grid-cell">{formatDate(a.activityDate)}</td>
                   <td className="qb-grid-cell font-semibold">{a.employeeName}</td>

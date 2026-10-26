@@ -4,6 +4,7 @@ import RowMenu from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const KIND_LABEL = { JOURNAL: 'Journal entry', EXPENSE: 'Expense / check', BILL: 'Bill', INVOICE: 'Invoice' };
 const FREQUENCIES = [
@@ -119,6 +120,16 @@ export default function Recurring() {
   const [notice, setNotice] = useState(null);
   const [asOf, setAsOf] = useState(todayIso);
   const list = data ?? [];
+  const sorter = useSort(list, {
+    name: (t) => t.name,
+    type: (t) => KIND_LABEL[t.kind] ?? t.kind,
+    payee: (t) => t.payee,
+    schedule: (t) => scheduleText(t.frequency, t.every),
+    next: (t) => t.nextDate,
+    end: (t) => t.endDate,
+    last: (t) => t.lastRunDate,
+    amount: (t) => t.amountCents,
+  });
   const due = list.filter((t) => t.isActive && t.nextDate <= asOf && (!t.endDate || t.nextDate <= t.endDate));
 
   const act = async (work, success) => {
@@ -152,14 +163,14 @@ export default function Recurring() {
         <table className="qb-grid">
           <thead>
             <tr>
-              <th className="qb-grid-head">Name</th>
-              <th className="qb-grid-head">Type</th>
-              <th className="qb-grid-head">Payee / customer</th>
-              <th className="qb-grid-head">Schedule</th>
-              <th className="qb-grid-head">Next date</th>
-              <th className="qb-grid-head">End</th>
-              <th className="qb-grid-head">Last entered</th>
-              <th className="qb-grid-head num">Amount</th>
+              <SortTh sorter={sorter} col="name">Name</SortTh>
+              <SortTh sorter={sorter} col="type">Type</SortTh>
+              <SortTh sorter={sorter} col="payee">Payee / customer</SortTh>
+              <SortTh sorter={sorter} col="schedule">Schedule</SortTh>
+              <SortTh sorter={sorter} col="next">Next date</SortTh>
+              <SortTh sorter={sorter} col="end">End</SortTh>
+              <SortTh sorter={sorter} col="last">Last entered</SortTh>
+              <SortTh sorter={sorter} col="amount" className="num">Amount</SortTh>
               <th className="qb-grid-head w-[36px]" />
             </tr>
           </thead>
@@ -169,7 +180,7 @@ export default function Recurring() {
                 <td colSpan={9} className="qb-grid-cell text-qb-ink-muted">No memorized transactions yet.</td>
               </tr>
             )}
-            {list.map((t) => {
+            {sorter.sorted.map((t) => {
               const isDue = due.includes(t);
               return (
                 <tr key={t.id} className={`qb-grid-row ${t.isActive ? '' : 'text-qb-ink-muted'}`}>

@@ -9,6 +9,7 @@ import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './F
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -168,7 +169,18 @@ export default function Estimates({ accounts, intent, navigate }) {
   const [printPortal, forms] = useFormPrinter(setNotice);
   const emailed = useEmailStatuses('ESTIMATE');
   const [unsentOnly, setUnsentOnly] = useState(false);
-  const shown = rows.filter((e) => !unsentOnly || emailed.get(e.id)?.queued);
+  const sorter = useSort(
+    rows.filter((e) => !unsentOnly || emailed.get(e.id)?.queued),
+    {
+      number: (e) => e.estimateNumber,
+      customer: (e) => e.customerName,
+      date: (e) => e.estimateDate,
+      expires: (e) => e.expirationDate,
+      amount: (e) => e.totalCents,
+      status: (e) => STATUS[e.status].label,
+    },
+  );
+  const shown = sorter.sorted;
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -203,12 +215,12 @@ export default function Estimates({ accounts, intent, navigate }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">No.</th>
-                <th className="qb-grid-head">Customer</th>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Expires</th>
-                <th className="qb-grid-head text-right">Amount</th>
-                <th className="qb-grid-head">Status</th>
+                <SortTh sorter={sorter} col="number">No.</SortTh>
+                <SortTh sorter={sorter} col="customer">Customer</SortTh>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="expires">Expires</SortTh>
+                <SortTh sorter={sorter} col="amount" className="text-right">Amount</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>

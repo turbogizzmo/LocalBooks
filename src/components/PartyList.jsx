@@ -9,6 +9,7 @@ import { CustomFieldInputs } from './SalesLists.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -372,6 +373,11 @@ export default function PartyList({ kind }) {
     nameRef.current?.focus();
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
+  const sorter = useSort(rows, {
+    name: (p) => p.name,
+    email: (p) => p.email,
+    balance: (p) => p.openBalanceCents || null,
+  });
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
   const company = useCompany();
   const exports = tableExports({
@@ -430,9 +436,9 @@ export default function PartyList({ kind }) {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="qb-grid-head">Name</th>
-                  <th className="qb-grid-head">Email</th>
-                  <th className="qb-grid-head text-right">{cfg.balance}</th>
+                  <SortTh sorter={sorter} col="name">Name</SortTh>
+                  <SortTh sorter={sorter} col="email">Email</SortTh>
+                  <SortTh sorter={sorter} col="balance" className="text-right">{cfg.balance}</SortTh>
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
@@ -458,7 +464,7 @@ export default function PartyList({ kind }) {
                     </td>
                   </tr>
                 )}
-                {rows.map((p) => (
+                {sorter.sorted.map((p) => (
                   <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setEditing(p.id)}>
                     <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
                       {p.name.split(':').at(-1)}

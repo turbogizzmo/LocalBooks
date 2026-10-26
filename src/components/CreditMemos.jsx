@@ -9,6 +9,7 @@ import { taxOn, useFormTax } from './SalesTax.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 
@@ -307,6 +308,15 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
 
 export default function CreditMemos({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listCreditMemos);
+  const sorter = useSort(data, {
+    number: (m) => m.creditNumber,
+    date: (m) => m.creditDate,
+    customer: (m) => m.customerName,
+    type: (m) => (m.refundAccountId !== null ? 'Refund receipt' : 'Credit memo'),
+    total: (m) => m.totalCents,
+    left: (m) => (m.refundAccountId !== null || m.isVoided ? null : m.remainingCents),
+    status: (m) => (m.isVoided ? 'Voided' : m.refundAccountId !== null ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open'),
+  });
   const [composing, setComposing] = useState(intent?.action === 'credit-memo' ? 'credit' : intent?.action === 'refund-receipt' ? 'refund' : null);
   const [dialog, setDialog] = useState(null); // { mode: 'apply' | 'refund', memo }
   const [notice, setNotice] = useState(null);
@@ -369,13 +379,13 @@ export default function CreditMemos({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">No.</th>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Customer</th>
-                <th className="qb-grid-head">Type</th>
-                <th className="qb-grid-head text-right">Total</th>
-                <th className="qb-grid-head text-right">Credit left</th>
-                <th className="qb-grid-head">Status</th>
+                <SortTh sorter={sorter} col="number">No.</SortTh>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="customer">Customer</SortTh>
+                <SortTh sorter={sorter} col="type">Type</SortTh>
+                <SortTh sorter={sorter} col="total" className="text-right">Total</SortTh>
+                <SortTh sorter={sorter} col="left" className="text-right">Credit left</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -385,7 +395,7 @@ export default function CreditMemos({ accounts, intent }) {
                   <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No credit memos or refund receipts yet.</td>
                 </tr>
               )}
-              {(data ?? []).map((m) => {
+              {sorter.sorted.map((m) => {
                 const refund = m.refundAccountId !== null;
                 const status = m.isVoided ? 'Voided' : refund ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open';
                 return (
