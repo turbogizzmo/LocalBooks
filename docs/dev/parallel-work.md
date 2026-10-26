@@ -35,6 +35,20 @@ of them is a write, so only a command that opens files, reads without a `get_`, 
   There is one file per migration, so two new migrations never touch the same file.
 - Never edit a pinned migration or its pin. Fix mistakes with a new migration.
 
+## Documentation travels with the feature
+
+A feature PR isn't done until people can find out how to use it. In the same PR:
+
+- **User guide:** a section in the right `docs/guide/*.md`, or a new guide. A new guide also needs a
+  link in `docs/guide/README.md`, a Help topic with `guide: '<name>'` under
+  `src/components/help/`, and a row in the tester page's guide list (`site/index.html`).
+  `docs_checks::every_guide_is_linked_from_the_site_help_and_index` fails until all three exist.
+- **In-app Help:** add or update the topic for the screen in `src/components/help/<area>.js`.
+- **README:** add the feature's row to the feature table, and update *Known limitations* if it
+  removes or adds one.
+- **Website:** if the feature changes how people install, update, or move their books in, update
+  that section of `site/index.html` too. The page is published from `main` by `pages.yml`.
+
 ## Merging
 
 - **Merge only when the branch is 0 commits behind `main` and CI is green on that exact head

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LocalBooks Tester Guide</title>
-  <meta name="description" content="Download, install and update the LocalBooks test build, and report what you find.">
+  <meta name="description" content="Download and install LocalBooks, move your books over from QuickBooks, Quicken or GnuCash, and report what you find.">
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
     /* The LocalBooks app palette and type (tailwind.config.js), so the page feels like the app. */
@@ -147,6 +147,7 @@
       <span class="tag">Tester preview</span>
       <nav class="topnav" aria-label="Sections">
         <a href="#install">Install</a>
+        <a href="#move">Move your books</a>
         <a href="#whats-new">What’s new</a>
         <a href="#updates">Updates</a>
         <a href="#data">Your data</a>
@@ -166,10 +167,11 @@
             LocalBooks keeps your books in a single file on your own machine: invoices, bills, bank feeds, inventory,
             reconciliation and financial statements, with every transaction posted as a balanced double-entry journal entry.
             Design your own invoice and estimate forms, save them as PDF, and email them to customers, one at a time or in a batch.
-            Thank you for trying the test build.
+            Thank you for trying it.
           </p>
           <ul class="facts">
             <li>No account, no subscription, no cloud: your company file never leaves your computer.</li>
+            <li>Bring your books with you from QuickBooks Desktop (Windows or Mac), QuickBooks Online, Quicken or GnuCash. <a href="#move">See how</a>.</li>
             <li>Familiar layout for anyone coming from classic desktop accounting software.</li>
             <li>Invoices and estimates you design yourself: print them, save them as PDF, or email them with the PDF attached.</li>
             <li>Updates install themselves after you approve them, with a copy of your books saved first.</li>
@@ -197,7 +199,7 @@
         <div role="tabpanel" id="panel-windows" aria-labelledby="tab-windows">
           <ol class="steps">
             <li>Download the <strong>Windows installer</strong> (the file ending in <code>-setup.exe</code>).</li>
-            <li>Open it. Because this test build is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
+            <li>Open it. Because LocalBooks is not code-signed yet, Windows may show <em>“Windows protected your PC”</em>.
               Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
             <li>Follow the installer. It installs for your user account only and does not need an administrator.</li>
             <li>Start <strong>LocalBooks</strong> from the Start menu.</li>
@@ -209,7 +211,7 @@
           <ol class="steps">
             <li>Download the <strong>macOS disk image</strong> (<code>.dmg</code>). One download works on Apple silicon and Intel Macs.</li>
             <li>Open it and drag <strong>LocalBooks</strong> into <strong>Applications</strong>.</li>
-            <li>Open LocalBooks from Applications. Because this test build is not notarized by Apple yet, macOS stops it the first time.</li>
+            <li>Open LocalBooks from Applications. Because LocalBooks is not notarized by Apple yet, macOS stops it the first time.</li>
             <li>Open <strong>System Settings › Privacy &amp; Security</strong>, scroll down to the message about LocalBooks, and click <strong>Open Anyway</strong>. You only need to do this once.</li>
           </ol>
           <details>
@@ -226,6 +228,33 @@
             <li><strong>Any distribution:</strong> download the <code>.AppImage</code>, make it executable (<code>chmod +x</code>), and run it. Only the AppImage updates itself; the <code>.deb</code> and <code>.rpm</code> are updated by installing the new package.</li>
           </ol>
         </div>
+      </div>
+    </section>
+
+    <section class="panel" id="move">
+      <h2>Move your books to LocalBooks</h2>
+      <div class="panel-body">
+        <p>Everything comes in through <strong>Accounting › Desktop Migration Wizard</strong>. The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
+        <table class="grid" aria-label="What to bring in from each program">
+          <thead><tr><th style="width:30%">Your books are in</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
+            <tr><td><strong>QuickBooks Desktop for Mac</strong></td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
+            <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › Export › QIF File</strong> with <strong>All accounts</strong>, and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
+            <tr><td><strong>GnuCash</strong></td><td>Choose your <code>.gnucash</code> book (either the XML or SQLite kind). <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-gnucash">Steps</a></td></tr>
+            <tr><td>A payment processor, point of sale or payroll tool</td><td>Choose its <strong>IIF</strong> export (<code>.iif</code>).</td></tr>
+            <tr><td>Only your bank</td><td>Start a new company and bring in your bank history from <strong>Banking › Bank Feeds</strong>: OFX, QFX, QBO, CSV or PDF statements, or a SimpleFIN connection. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bank-feeds.md">Steps</a></td></tr>
+          </tbody>
+        </table>
+        <ol class="steps">
+          <li><strong>Run a trial balance</strong> in your old program first, so you have something to compare with.</li>
+          <li>In LocalBooks, open <strong>Accounting › Desktop Migration Wizard</strong> and choose your file or files.</li>
+          <li>Check <strong>Balances matching the file</strong>, then match each account to a LocalBooks account (or click <strong>Match existing accounts and create the rest</strong>).</li>
+          <li>Choose <strong>Full import</strong> to bring in invoices, bills, payments and deposits as real documents, so open balances and aging carry over. Then post.</li>
+          <li>Compare LocalBooks’ trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
+        </ol>
+        <p class="small muted">Full details, including what each format can and can’t carry over: <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving your books guide</a>.</p>
       </div>
     </section>
 
@@ -249,21 +278,21 @@
         <h2>Updates</h2>
         <div class="panel-body">
           <p>LocalBooks checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
-          <div class="notice notice-info"><strong>LocalBooks 0.2.0</strong> is available (you have 0.1.0). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span></div>
+          <div class="notice notice-info"><strong>LocalBooks 0.7.0</strong> is available (you have 0.6.0). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span></div>
           <ol class="steps">
             <li>Read <strong>What’s new</strong> if you like, then click <strong>Install and restart</strong>.</li>
             <li>LocalBooks downloads the update, checks its digital signature, installs it and reopens.</li>
             <li>The first time the new version opens your company file, it saves a copy first (Settings › File &amp; Data Controls, listed as <em>Before upgrade</em>).</li>
           </ol>
           <p class="small muted">To check yourself, or to turn off automatic checks, go to <strong>Settings › Updates</strong>. Checking sends nothing about your books.</p>
-          <p class="small muted">Test builds (marked <em>test build</em> above) are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
+          <p class="small muted">Previews (marked <em>preview</em> above) are early versions that are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
         </div>
       </section>
 
       <section class="panel" id="data">
-        <h2>Your data during testing</h2>
+        <h2>Your data</h2>
         <div class="panel-body">
-          <div class="notice notice-warn">This is a test build. Please keep your current bookkeeping system running alongside it, and don’t rely on LocalBooks as your only record yet.</div>
+          <div class="notice notice-info">LocalBooks is new. Keep your old program’s books until you’ve compared a month or two in LocalBooks and you’re happy the numbers match.</div>
           <ul class="facts">
             <li>Your company file stays on your computer. Nothing is uploaded.</li>
             <li>LocalBooks makes an automatic backup each day. Make your own any time from <strong>Settings › File &amp; Data Controls › Back up now</strong>.</li>
@@ -305,17 +334,23 @@
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/customer-payments.md">Customer payments</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/sales-receipts-and-estimates.md">Sales receipts and estimates</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/custom-forms.md">Design, print and email invoices and estimates</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/customers-and-products.md">Customers, products and services</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bills.md">Bills</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/expenses-and-checks.md">Expenses and checks</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/bank-feeds.md">Bank feeds and SimpleFIN</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/deposits-and-transfers.md">Deposits and transfers</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/reconciling.md">Reconciling</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/inventory.md">Inventory</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/time-tracking.md">Time tracking</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/reports.md">Reports</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/journal-entries-and-voids.md">Journal entries and voids</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/currency-revaluation.md">Foreign currency and exchange rates</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/closing-the-books.md">Closing the books</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/backups-and-company-files.md">Backups and company files</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/users-and-passwords.md">Users, passwords and sensitive data</a></li>
-          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving from a .qbw company file</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md">Moving from QuickBooks, Quicken or GnuCash</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ledger-integrity.md">How LocalBooks keeps the books accurate</a></li>
+          <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/ai-assistant.md">Read-only AI access</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/troubleshooting.md">Troubleshooting</a></li>
           <li><a href="https://github.com/turbogizzmo/LocalBooks/tree/main/docs/guide">All guides</a></li>
         </ul>
@@ -364,14 +399,14 @@
       var note = document.getElementById('primary-note');
       var others = document.getElementById('other-downloads');
 
-      // The newest published release, test builds (pre-releases) included: installed copies only
+      // The newest published release, previews (pre-releases) included: installed copies only
       // update themselves to full releases, so testers get pre-releases from here.
       fetch('https://api.github.com/repos/turbogizzmo/LocalBooks/releases?per_page=10', { headers: { Accept: 'application/vnd.github+json' } })
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (releases) {
           var release = (releases || []).filter(function (r) { return !r.draft; })[0];
           if (!release) throw new Error('no release');
-          versionEl.textContent = (release.tag_name || release.name || 'Latest') + (release.prerelease ? ' (test build)' : '');
+          versionEl.textContent = (release.tag_name || release.name || 'Latest') + (release.prerelease ? ' (preview)' : '');
           var found = KINDS.map(function (k) {
             var asset = (release.assets || []).filter(function (a) { return k.test.test(a.name); })[0];
             return asset ? { kind: k, asset: asset } : null;

@@ -390,13 +390,22 @@ version upgrades a company file's schema, it saves a verified copy to the local 
 
 To ship a release:
 
-1. Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (and the
-   lockfiles), and add a `## [<version>]` section to `CHANGELOG.md`: it becomes the release notes on
-   GitHub and in the app's update window. Commit.
+1. In one release PR:
+   - bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (and
+     the lockfiles);
+   - add a `## [<version>]` section to `CHANGELOG.md`, written for the people using LocalBooks. It
+     becomes the release notes on GitHub and in the app's update window;
+   - update the tester page (`site/index.html`): **What's new to test in <major.minor>**, the sample
+     update bar, and any install, update or **Move your books** steps the release changes;
+   - check that every feature in the release has its guide section, Help topic and README row (see
+     [docs/dev/parallel-work.md](docs/dev/parallel-work.md)).
+
+   `docs_checks` fails the PR if the changelog section or the tester page's What's new is missing
+   for the new version, or if a guide isn't linked from the page, Help and the guide index.
 2. `git tag v0.2.0 && git push origin v0.2.0`. CI tests on all three platforms, builds signed
    installers and `latest.json`, and attaches them to a **draft** release.
 3. Edit the draft's notes (they appear in the app's update prompt) and publish it as a
-   **pre-release** (a test build on the tester page). Installed copies don't see it yet: the
+   **pre-release** (a preview on the tester page). Installed copies don't see it yet: the
    updater follows the latest release.
 4. Publishing starts the **Release check** (`release-check.yml`, also runnable by hand with the tag).
    On macOS, Windows and Linux it verifies the signed installers and `latest.json`, upgrades test
