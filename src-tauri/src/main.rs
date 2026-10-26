@@ -4,6 +4,7 @@ mod accounts;
 mod audit_chain;
 mod backup;
 mod bank;
+mod bank_pdf;
 mod banking;
 mod classes;
 mod closing;

@@ -125,19 +125,21 @@ export default function BankFeed({ accounts }) {
   };
 
   // OFX/QFX and recognized CSV layouts import straight away; otherwise the user maps the columns.
+  // A PDF statement always shows its columns and balance check first: its table was read from the
+  // page layout, so the user confirms it.
   const importStatement = async () => {
     if (bankAccountId === null) return;
     try {
       const path = await open({
         multiple: false,
         directory: false,
-        filters: [{ name: 'Bank statement (CSV, OFX, QFX)', extensions: ['csv', 'CSV', 'ofx', 'OFX', 'qfx', 'QFX', 'qbo', 'QBO'] }],
+        filters: [{ name: 'Bank statement (CSV, OFX, QFX, PDF)', extensions: ['csv', 'CSV', 'ofx', 'OFX', 'qfx', 'QFX', 'qbo', 'QBO', 'pdf', 'PDF'] }],
       });
       if (!path) return;
       setBusy(true);
       setNotice(null);
-      const inspection = await api.inspectBankFile(path);
-      const confident = inspection.format === 'OFX' || (inspection.mapping && inspection.dateOrderCertain);
+      const inspection = await api.inspectBankFile(path, null, bankAccountId);
+      const confident = inspection.format === 'OFX' || (inspection.format === 'CSV' && inspection.mapping && inspection.dateOrderCertain);
       if (inspection.format === 'OFX' && inspection.problem) throw new Error(inspection.problem);
       if (!confident) {
         setMappingFile({ path, inspection });
@@ -223,6 +225,7 @@ export default function BankFeed({ accounts }) {
         <BankColumnMapping
           path={mappingFile.path}
           inspection={mappingFile.inspection}
+          bankAccountId={bankAccountId}
           accountName={accountLabel(accounts, bankAccountId)}
           onCancel={() => setMappingFile(null)}
           onImport={async (mapping) => {

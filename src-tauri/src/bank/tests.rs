@@ -227,7 +227,7 @@ async fn unrecognized_csv_is_mapped_once_and_remembered() {
     let csv = "Fecha,Concepto,Importe\n03/07/2026,Supermercado,-45.10\n05/07/2026,Nomina,1800.00\n";
     let path = temp_file("santander.csv", csv.as_bytes());
 
-    let seen = inspect_file(&pool, &path, None).await.unwrap();
+    let seen = inspect_file(&pool, &path, None, None).await.unwrap();
     assert_eq!((seen.format, seen.mapping.is_none(), seen.headers.len()), (BankFileFormat::Csv, true, 3));
     assert!(seen.problem.is_some());
     assert!(import_file(&pool, &path, checking, None).await.unwrap_err().starts_with("BANK_CSV_COLUMNS"));
@@ -240,7 +240,7 @@ async fn unrecognized_csv_is_mapped_once_and_remembered() {
         money_out: None,
         date_order: DateOrder::Dmy,
     };
-    let preview = inspect_file(&pool, &path, Some(mapping.clone())).await.unwrap();
+    let preview = inspect_file(&pool, &path, Some(mapping.clone()), None).await.unwrap();
     assert_eq!((preview.mapping_source, preview.row_count, preview.problem.clone()), (Some("GIVEN"), 2, None));
     assert_eq!(preview.preview[0].date, NaiveDate::from_ymd_opt(2026, 7, 3).unwrap());
 
@@ -249,14 +249,14 @@ async fn unrecognized_csv_is_mapped_once_and_remembered() {
 
     // The same bank's next file imports with the saved layout.
     let later = temp_file("santander-aug.csv", "Fecha,Concepto,Importe\n02/08/2026,Gasolina,-60.00\n".as_bytes());
-    let seen = inspect_file(&pool, &later, None).await.unwrap();
+    let seen = inspect_file(&pool, &later, None, None).await.unwrap();
     assert_eq!((seen.mapping_source, seen.mapping.as_ref()), (Some("SAVED"), Some(&mapping)));
     assert_eq!(import_file(&pool, &later, checking, None).await.unwrap().imported, 1);
     let dates: Vec<String> = list_pending(&pool, &Suggester::default(), "test").await.unwrap().into_iter().map(|t| t.date).collect();
     assert_eq!(dates, ["2026-08-02", "2026-07-05", "2026-07-03"]);
 
     let bad = ColumnMapping { money_in: Some("Importe".into()), ..mapping };
-    assert!(inspect_file(&pool, &path, Some(bad)).await.unwrap().problem.unwrap().starts_with("BANK_CSV_MAPPING"));
+    assert!(inspect_file(&pool, &path, Some(bad), None).await.unwrap().problem.unwrap().starts_with("BANK_CSV_MAPPING"));
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     std::fs::remove_dir_all(later.parent().unwrap()).unwrap();
 }
@@ -374,4 +374,79 @@ async fn import_dedupes_and_approval_posts_and_learns() {
         .await
         .unwrap();
     assert_eq!(checking_after, 0);
+}
+
+#[tokio::test]
+async fn pdf_statement_is_checked_against_its_balances_and_imported_once() {
+    use crate::bank_pdf::tests::checking_statement_pdf;
+    let pool = test_pool().await;
+    let checking = account_id(&pool, "1010").await;
+    let path = temp_file("maple-jan.pdf", &checking_statement_pdf());
+
+    let seen = inspect_file(&pool, &path, None, Some(checking)).await.unwrap();
+    assert_eq!((seen.format, seen.mapping_source, seen.row_count, seen.problem.clone()), (BankFileFormat::Pdf, Some("DETECTED"), 7, None));
+    let mapping = seen.mapping.clone().unwrap();
+    assert_eq!((mapping.money_out.as_deref(), mapping.money_in.as_deref()), (Some("Withdrawals"), Some("Deposits")));
+    assert_eq!(seen.preview[0].amount_cents, -5_420);
+    assert_eq!(seen.preview[0].date, NaiveDate::from_ymd_opt(2026, 1, 3).unwrap());
+    let check = seen.balance_check.unwrap();
+    assert_eq!(
+        (check.status, check.opening_cents, check.change_cents, check.closing_cents, check.signs_reversed, check.owed),
+        ("MATCHES", Some(100_000), 101_940, Some(201_940), false, false)
+    );
+
+    // Choosing the columns remembers them for this bank's next statement.
+    let summary = import_file(&pool, &path, checking, Some(mapping.clone())).await.unwrap();
+    assert_eq!(summary, ImportSummary { imported: 7, duplicates: 0, skipped_zero: 0 });
+    let again = inspect_file(&pool, &path, None, Some(checking)).await.unwrap();
+    assert_eq!(again.mapping_source, Some("SAVED"));
+    assert_eq!(import_file(&pool, &path, checking, None).await.unwrap(), ImportSummary { imported: 0, duplicates: 7, skipped_zero: 0 });
+
+    let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
+    assert_eq!(pending.iter().map(|t| t.amount_cents).sum::<i64>(), 101_940);
+    assert!(pending.iter().any(|t| t.description == "POS PURCHASE GREENLEAF GROCERY SPRINGFIELD CARD 4321"));
+
+    // Read with the columns swapped, the statement no longer adds up as a bank account... until the
+    // signs are reversed, which the balances show to be right.
+    let swapped = ColumnMapping { money_in: mapping.money_out.clone(), money_out: mapping.money_in.clone(), ..mapping.clone() };
+    let check = inspect_file(&pool, &path, Some(swapped), Some(checking)).await.unwrap().balance_check.unwrap();
+    assert_eq!((check.status, check.signs_reversed), ("MATCHES", true));
+
+    // Reading the running balance as an amount breaks both totals; the check says so.
+    let wrong = ColumnMapping { money_in: Some("Balance".into()), ..mapping };
+    let check = inspect_file(&pool, &path, Some(wrong), Some(checking)).await.unwrap().balance_check.unwrap();
+    assert_eq!((check.status, check.signs_reversed), ("DIFFERS", false));
+    assert_ne!(check.difference_cents, 0);
+    assert_eq!(check.first_mismatch_row, Some(1));
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[tokio::test]
+async fn card_statement_charges_import_as_money_out() {
+    use crate::bank_pdf::tests::card_statement_pdf;
+    let pool = test_pool().await;
+    let card = account_id(&pool, "2100").await;
+    let path = temp_file("visa-jan.pdf", &card_statement_pdf());
+
+    let seen = inspect_file(&pool, &path, None, Some(card)).await.unwrap();
+    let check = seen.balance_check.clone().unwrap();
+    assert_eq!((check.status, check.owed, check.signs_reversed), ("MATCHES", true, true));
+    assert_eq!((check.opening_cents, check.change_cents, check.closing_cents), (Some(50_000), 13_215, Some(63_215)));
+    assert_eq!(seen.preview.iter().map(|r| r.amount_cents).collect::<Vec<_>>(), [-1_250, 50_000, -21_965, -40_000]);
+
+    import_file(&pool, &path, card, seen.mapping.clone()).await.unwrap();
+    let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
+    let cafe = pending.iter().find(|t| t.description == "CORNER CAFE").unwrap();
+    assert_eq!((cafe.amount_cents, cafe.date.as_str()), (-1_250, "2025-12-18"));
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[tokio::test]
+async fn scanned_pdf_cannot_be_inspected() {
+    use crate::bank_pdf::tests::scanned_statement_pdf;
+    let pool = test_pool().await;
+    let path = temp_file("scan.pdf", &scanned_statement_pdf());
+    let err = inspect_file(&pool, &path, None, None).await.unwrap_err();
+    assert!(err.starts_with("BANK_PDF_NO_TEXT"), "{err}");
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

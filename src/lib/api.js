@@ -45,7 +45,7 @@ export const api = {
   previewFinanceCharges: (asOf) => invoke('preview_finance_charges', { asOf }),
   assessFinanceCharges: (input) => invoke('assess_finance_charges', { input }),
   importBankFile: (path, bankAccountId, mapping = null) => invoke('import_bank_csv', { path, bankAccountId, mapping }),
-  inspectBankFile: (path, mapping = null) => invoke('inspect_bank_file', { path, mapping }),
+  inspectBankFile: (path, mapping = null, bankAccountId = null) => invoke('inspect_bank_file', { path, mapping, bankAccountId }),
   listBankTransactions: () => invoke('list_bank_transactions'),
   approveBankTransaction: (transactionId, categoryAccountId, classId = null, payeeName = null) =>
     invoke('approve_bank_transaction', { transactionId, categoryAccountId, classId, payeeName }),
