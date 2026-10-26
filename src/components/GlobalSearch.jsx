@@ -76,23 +76,25 @@ export default function GlobalSearch({ navigate }) {
   }, []);
 
   const choose = (hit) => {
-    const [view, action = null, data = null] = destination(hit);
+    const [view, action = null, data = null] = hit ? destination(hit) : ['accounting/find', 'find', { text: query.trim() }];
     navigate(view, action, data);
     setOpen(false);
     inputRef.current?.blur();
   };
+  // The row after the hits: Advanced search…, which opens Find with the typed text.
+  const advanced = hits?.length ?? 0;
   const onKeyDown = (e) => {
     if (e.key === 'Escape') {
       setOpen(false);
       inputRef.current?.blur();
-    } else if (e.key === 'ArrowDown' && hits?.length) {
+    } else if (e.key === 'ArrowDown' && hits) {
       e.preventDefault();
-      setActive((a) => Math.min(a + 1, hits.length - 1));
-    } else if (e.key === 'ArrowUp' && hits?.length) {
+      setActive((a) => Math.min(a + 1, advanced));
+    } else if (e.key === 'ArrowUp' && hits) {
       e.preventDefault();
       setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === 'Enter' && hits?.[active]) {
-      choose(hits[active]);
+    } else if (e.key === 'Enter' && hits) {
+      choose(hits[active] ?? null);
     }
   };
 
@@ -140,6 +142,20 @@ export default function GlobalSearch({ navigate }) {
               {h.amountCents !== null && h.amountCents !== undefined && <span className="num w-[90px] flex-none text-right">{formatCents(h.amountCents)}</span>}
             </li>
           ))}
+          {hits && (
+            <li
+              role="option"
+              aria-selected={active === advanced}
+              className={`cursor-pointer border-t border-qb-border px-2 py-0.5 text-sm text-qb-info ${active === advanced ? 'bg-qb-row-selected' : 'hover:bg-qb-row-hover'}`}
+              onMouseEnter={() => setActive(advanced)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(null);
+              }}
+            >
+              Advanced search for “{query.trim()}”…
+            </li>
+          )}
         </ul>
       )}
     </div>

@@ -19,6 +19,10 @@ export const screens = {
     help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
     guide: 'journal-entries-and-voids',
   },
+  'accounting/find': {
+    help: 'Find posted transactions by text, dates, type, customer or vendor, account, amount and number together, like Edit › Find in desktop accounting software. Amounts are each transaction’s total. Click a row to open it.',
+    guide: 'journal-entries-and-voids',
+  },
   'accounting/recurring': {
     help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
   },
