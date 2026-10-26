@@ -29,7 +29,7 @@ use crate::windows;
 use crate::smtp::{self, SmtpSettings, SmtpStatus};
 use crate::file_dentist::{self, CheckupReport, RebuildResult};
 use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
-use crate::{iif_import, qif_import, report_import};
+use crate::{gnucash_import, iif_import, qif_import, report_import};
 use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};
 use crate::tax_ids;
 use crate::users::{self, NewUserInput, Session, UserUpdate, UserView};
@@ -1414,9 +1414,9 @@ pub enum IngestResult {
     Ledger { batch: LedgerBatchSummary, sources: Vec<String> },
 }
 
-/// Reads a .qbw company file, the company file inside a .qbb backup, or an .iif (QuickBooks) or
-/// .qif (Quicken) export into a new staging batch, reporting progress as `qbw-import-progress`
-/// events. Nothing is posted to the ledger.
+/// Reads a .qbw company file, the company file inside a .qbb backup, an .iif (QuickBooks) or
+/// .qif (Quicken) export, or a GnuCash book (.gnucash, XML or SQLite) into a new staging batch,
+/// reporting progress as `qbw-import-progress` events. Nothing is posted to the ledger.
 ///
 /// The invoice-line reader runs first, so files it supports import as before; when it finds
 /// nothing (newer file versions), the record-layer decoder reads the whole ledger instead.
@@ -1424,23 +1424,27 @@ pub enum IngestResult {
 pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<IngestResult, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif") {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, or QuickBooks report exports (.csv, .xlsx)".into());
+    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, a .gnucash book, or QuickBooks report exports (.csv, .xlsx)".into());
     }
     let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
     let progress = |stage: &'static str, done: u64, total: u64| {
         let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage, done, total });
     };
 
-    // IIF and QIF exports are text: read straight into a ledger and stage it like a company file.
-    if matches!(ext.as_str(), "iif" | "qif") {
+    // IIF and QIF exports and GnuCash books read straight into a ledger, staged like a company file.
+    if matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
         progress("Reading file", 0, 1);
-        let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
-        let account = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported account".into());
-        let is_iif = ext == "iif";
-        let ledger = tauri::async_runtime::spawn_blocking(move || if is_iif { iif_import::read(&bytes) } else { qif_import::read(&bytes, &account) })
-            .await
-            .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??;
+        let ledger = if matches!(ext.as_str(), "gnucash" | "gnc") {
+            gnucash_import::read(&path).await?
+        } else {
+            let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;
+            let account = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported account".into());
+            let is_iif = ext == "iif";
+            tauri::async_runtime::spawn_blocking(move || if is_iif { iif_import::read(&bytes) } else { qif_import::read(&bytes, &account) })
+                .await
+                .map_err(|e| format!("QBW_PARSE_FAILED: the file could not be read ({e})"))??
+        };
         progress("Reading file", 1, 1);
         // A file of lists alone imports (it adds its lists); one with nothing at all does not.
         if ledger.transactions.is_empty()
