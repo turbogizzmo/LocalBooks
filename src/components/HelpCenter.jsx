@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNav } from './Sidebar.jsx';
 import GuideView, { GUIDES, GUIDE_ORDER } from './GuideView.jsx';
+import About from './About.jsx';
 import { Icon } from '../lib/icons.js';
 
 /** Help areas, in the order they are listed under "All topics". */
@@ -800,6 +801,7 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
                 ))}
               </ul>
             </section>
+            <About />
           </>
         )}
       </div>

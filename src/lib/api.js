@@ -255,6 +255,7 @@ export const api = {
 
   getStorageStatus: () => invoke('get_storage_status'),
   getStartupFailure: () => invoke('get_startup_failure'),
+  getThirdPartyNotices: () => invoke('get_third_party_notices'),
   openCompanyFile: (path) => invoke('open_company_file', { path }),
   getStartScreen: () => invoke('get_start_screen'),
   forgetRecentCompany: (path) => invoke('forget_recent_company', { path }),

@@ -374,6 +374,7 @@ fn main() {
             commands::get_closing_status,
             commands::set_closing_date,
             commands::get_startup_failure,
+            commands::get_third_party_notices,
             commands::get_mcp_status,
             commands::set_mcp_enabled,
             commands::regenerate_mcp_token,

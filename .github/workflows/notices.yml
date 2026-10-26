@@ -1,0 +1,36 @@
+# Keeps THIRD-PARTY-NOTICES.txt (bundled with the app, shown under Help › About LocalBooks) in step
+# with the dependencies that ship. Fix a failure with `npm ci && node scripts/third-party-notices.mjs`
+# and commit the regenerated file.
+name: Third-party notices
+
+on:
+  push:
+    branches: [main]
+    paths: ['src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'package-lock.json', 'package.json', 'THIRD-PARTY-NOTICES.txt', 'scripts/third-party-notices.mjs', 'scripts/notices/**', '.github/workflows/notices.yml']
+  pull_request:
+    branches: [main]
+    paths: ['src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'package-lock.json', 'package.json', 'THIRD-PARTY-NOTICES.txt', 'scripts/third-party-notices.mjs', 'scripts/notices/**', '.github/workflows/notices.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: THIRD-PARTY-NOTICES.txt is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      # Only packages that ship are listed, so the build-time tools need not be installed.
+      - name: Install shipped npm packages
+        run: npm ci --omit=dev --ignore-scripts
+      - name: Fetch crates
+        working-directory: src-tauri
+        run: cargo fetch --locked
+      - name: Compare with a fresh copy
+        run: node scripts/third-party-notices.mjs --check
