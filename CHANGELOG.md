@@ -4,6 +4,31 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.8.0]
+
+- **Customize reports.** The new detail reports have a **Customize…** button: choose the dates,
+  accounts, names, transaction types, class, item and more; pick and order the columns; and group or
+  subtotal by account, name, item, class, type or period. Click any line to open its transaction.
+  **Save as…** keeps a customized report under its own name (a memorized report) to run again.
+- **About 24 new detail reports**, matching QuickBooks: Profit and Loss Detail, Balance Sheet Detail,
+  A/R and A/P Aging Detail, Open Invoices, Unpaid Bills, Customer and Vendor Balance Summary and
+  Detail, Sales by Customer and by Product/Service Detail, Income by Customer, Expenses by Vendor
+  Detail, Purchases by Vendor and by Item, Check Detail, Deposit Detail, 1099 Detail, Transaction
+  List by Date and Journal. All of them export to Excel, CSV and PDF.
+- **Job costing.** Bill, expense, check, card and vendor credit lines have a new **Customer:Job**
+  column, so costs can be charged to a job. **Reports › Jobs** has Job Profitability, Job Estimates
+  vs. Actuals, Item Profitability, Item Estimates vs. Actuals, Profit and Loss by Job, Estimates by
+  Job, and Progress Invoices vs. Estimates. Time isn't costed yet, because time entries have no cost
+  rate.
+- **Accountant & Taxes reports.** Mark a journal entry as an **Adjusting entry** and see them in the
+  Adjusting Journal Entries report. Reprint any past reconciliation (Previous Reconciliation Detail
+  and Summary), and see what changed after it with Reconciliation Discrepancy (for reconciliations
+  you finish from now on). Assign **tax lines** to accounts (Schedule C, 1065, 1120-S, 1120) for the
+  Income Tax Summary and Detail; QuickBooks IIF imports bring them in where the file names them.
+  Also new: the **Collections** report and **Open Purchase Orders**.
+- The tester page has a step-by-step **Move your books** guide: pick the program you're leaving and
+  see just your steps.
+
 ## [0.7.0]
 
 - **Export to Excel.** Every report, register, list and the audit log can now be saved as an Excel
