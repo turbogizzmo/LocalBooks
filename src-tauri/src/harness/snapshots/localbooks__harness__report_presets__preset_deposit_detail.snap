@@ -1,0 +1,15 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Deposit Detail, 2025-11-01 to 2025-11-30
+
+                               Type                      Date          Num                       Name                      Memo                      Account                   Class                            Amount
+Deposit · 2025-11-30
+                               Deposit                   2025-11-30                                                        Deposit                   Checking                                                11,533.95
+                               Deposit                   2025-11-30                                                        Alder & Finch LLP         Undeposited Funds                                      -11,308.72
+                               Deposit                   2025-11-30                                                        Customer payment          Undeposited Funds                                         -225.23
+Total Deposit · 2025-11-                                                                                                                                                                                          0.00
+TOTAL                                                                                                                                                                                                             0.00
+
+3 lines

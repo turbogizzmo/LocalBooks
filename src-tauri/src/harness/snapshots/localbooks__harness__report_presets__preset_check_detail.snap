@@ -1,0 +1,18 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Check Detail, 2025-11-01 to 2025-11-30
+
+                               Type                      Date          Num                       Name                      Memo                      Account                   Class                            Amount
+Check 1017 · 2025-11-01
+                               Check                     2025-11-01    1017                      Riverbend Properties      Studio rent               Rent & Lease                                             2,400.00
+                               Check                     2025-11-01    1017                      Riverbend Properties      Check #1017 - Riverbend   Checking                                                -2,400.00
+Total Check 1017 · 2025-                                                                                                                                                                                          0.00
+Bill Payment · 2025-11-2
+                               Bill Payment              2025-11-28                              Northwind Software        Bill Payment - Northwind  Accounts Payable (A/P)                                     129.00
+                               Bill Payment              2025-11-28                              Northwind Software        Bill Payment - Northwind  Checking                                                  -129.00
+Total Bill Payment · 202                                                                                                                                                                                          0.00
+TOTAL                                                                                                                                                                                                             0.00
+
+4 lines

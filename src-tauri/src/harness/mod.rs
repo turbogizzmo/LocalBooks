@@ -9,6 +9,7 @@
 mod fixture;
 mod golden;
 mod ledger_props;
+mod report_presets;
 
 use sqlx::SqlitePool;
 

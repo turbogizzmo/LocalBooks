@@ -1,0 +1,130 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Expenses by Vendor Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                   Class                            Amount       Balance
+Bonn Studio GmbH
+                               Payment                   2025-10-20                              Realized exchange gain    Exchange Gain or Loss                                      -52.50        -52.50
+Total Bonn Studio GmbH                                                                                                                                                                -52.50        -52.50
+First Harbor Bank
+                               Expense                   2025-01-31                              Monthly service fee       Bank Charges & Fees                                         15.00         15.00
+                               Expense                   2025-02-28                              Monthly service fee       Bank Charges & Fees                                         15.00         30.00
+                               Expense                   2025-03-31                              Monthly service fee       Bank Charges & Fees                                         15.00         45.00
+                               Expense                   2025-04-30                              Monthly service fee       Bank Charges & Fees                                         15.00         60.00
+                               Expense                   2025-05-31                              Monthly service fee       Bank Charges & Fees                                         15.00         75.00
+                               Expense                   2025-06-30                              Monthly service fee       Bank Charges & Fees                                         15.00         90.00
+                               Expense                   2025-07-31                              Monthly service fee       Bank Charges & Fees                                         15.00        105.00
+                               Expense                   2025-08-31                              Monthly service fee       Bank Charges & Fees                                         15.00        120.00
+                               Expense                   2025-09-30                              Monthly service fee       Bank Charges & Fees                                         15.00        135.00
+                               Expense                   2025-10-31                              Monthly service fee       Bank Charges & Fees                                         15.00        150.00
+                               Expense                   2025-11-30                              Monthly service fee       Bank Charges & Fees                                         15.00        165.00
+                               Expense                   2025-12-31                              Monthly service fee       Bank Charges & Fees                                         15.00        180.00
+Total First Harbor Bank                                                                                                                                                               180.00        180.00
+Harbor Power & Light
+                               Expense                   2025-01-12                              Electricity               Utilities                                                  191.50        191.50
+                               Expense                   2025-02-12                              Electricity               Utilities                                                  203.00        394.50
+                               Expense                   2025-03-12                              Electricity               Utilities                                                  214.50        609.00
+                               Expense                   2025-04-12                              Electricity               Utilities                                                  180.00        789.00
+                               Expense                   2025-05-12                              Electricity               Utilities                                                  191.50        980.50
+                               Expense                   2025-06-12                              Electricity               Utilities                                                  203.00      1,183.50
+                               Expense                   2025-06-13                              Duplicate entry           Utilities                                                  191.50      1,375.00
+                               Expense                   2025-07-12                              Electricity               Utilities                                                  214.50      1,589.50
+                               Expense                   2025-08-12                              Electricity               Utilities                                                  180.00      1,769.50
+                               Expense                   2025-09-12                              Electricity               Utilities                                                  191.50      1,961.00
+                               Expense                   2025-10-12                              Electricity               Utilities                                                  203.00      2,164.00
+                               Expense                   2025-11-12                              Electricity               Utilities                                                  214.50      2,378.50
+                               Expense                   2025-12-12                              Electricity               Utilities                                                  180.00      2,558.50
+Total Harbor Power & Lig                                                                                                                                                            2,558.50      2,558.50
+Jordan Reyes
+                               Check                     2025-02-18    1004                      Illustration              Contractors                                                950.00        950.00
+                               Check                     2025-04-18    1007                      Illustration              Contractors                                                950.00      1,900.00
+                               Check                     2025-06-18    1010                      Illustration              Contractors                                                950.00      2,850.00
+                               Check                     2025-08-18    1013                      Illustration              Contractors                                                950.00      3,800.00
+                               Check                     2025-10-18    1016                      Illustration              Contractors                                                950.00      4,750.00
+                               Check                     2025-12-18    1019                      Illustration              Contractors                                                950.00      5,700.00
+Total Jordan Reyes                                                                                                                                                                  5,700.00      5,700.00
+Lumen Media
+                               Bill                      2025-12-01    LM-88                     Bill #LM-88 - Lumen Medi  Advertising & Marketing                                  1,500.00      1,500.00
+Total Lumen Media                                                                                                                                                                   1,500.00      1,500.00
+Northwind Software
+                               Bill                      2025-01-03    NW-01                     Bill #NW-01 - Northwind   Software & Cloud Service                                   129.00        129.00
+                               Bill                      2025-02-03    NW-02                     Bill #NW-02 - Northwind   Software & Cloud Service                                   129.00        258.00
+                               Bill                      2025-03-03    NW-03                     Bill #NW-03 - Northwind   Software & Cloud Service                                   129.00        387.00
+                               Bill                      2025-04-03    NW-04                     Bill #NW-04 - Northwind   Software & Cloud Service                                   129.00        516.00
+                               Bill                      2025-05-03    NW-05                     Bill #NW-05 - Northwind   Software & Cloud Service                                   129.00        645.00
+                               Bill                      2025-06-03    NW-06                     Bill #NW-06 - Northwind   Software & Cloud Service                                   129.00        774.00
+                               Bill                      2025-07-03    NW-07                     Bill #NW-07 - Northwind   Software & Cloud Service                                   129.00        903.00
+                               Bill                      2025-08-03    NW-08                     Bill #NW-08 - Northwind   Software & Cloud Service                                   129.00      1,032.00
+                               Bill                      2025-09-03    NW-09                     Bill #NW-09 - Northwind   Software & Cloud Service                                   129.00      1,161.00
+                               Bill                      2025-10-03    NW-10                     Bill #NW-10 - Northwind   Software & Cloud Service                                   129.00      1,290.00
+                               Bill                      2025-11-03    NW-11                     Bill #NW-11 - Northwind   Software & Cloud Service                                   129.00      1,419.00
+                               Bill                      2025-12-03    NW-12                     Bill #NW-12 - Northwind   Software & Cloud Service                                   129.00      1,548.00
+Total Northwind Software                                                                                                                                                            1,548.00      1,548.00
+Pinecrest Office Supply
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Office Supplies                                            642.50        642.50
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Advertising & Marketing                                    300.00        942.50
+                               Bill                      2025-11-20    PC-4521                   Bill #PC-4521 - Pinecres  Office Supplies                                            187.40      1,129.90
+Total Pinecrest Office S                                                                                                                                                            1,129.90      1,129.90
+Riverbend Properties
+                               Check                     2025-01-01    1002                      Studio rent               Rent & Lease                                             2,400.00      2,400.00
+                               Check                     2025-02-01    1003                      Studio rent               Rent & Lease                                             2,400.00      4,800.00
+                               Check                     2025-03-01    1005                      Studio rent               Rent & Lease                                             2,400.00      7,200.00
+                               Check                     2025-04-01    1006                      Studio rent               Rent & Lease                                             2,400.00      9,600.00
+                               Check                     2025-05-01    1008                      Studio rent               Rent & Lease                                             2,400.00     12,000.00
+                               Check                     2025-06-01    1009                      Studio rent               Rent & Lease                                             2,400.00     14,400.00
+                               Check                     2025-07-01    1011                      Studio rent               Rent & Lease                                             2,400.00     16,800.00
+                               Check                     2025-08-01    1012                      Studio rent               Rent & Lease                                             2,400.00     19,200.00
+                               Check                     2025-09-01    1014                      Studio rent               Rent & Lease                                             2,400.00     21,600.00
+                               Check                     2025-10-01    1015                      Studio rent               Rent & Lease                                             2,400.00     24,000.00
+                               Check                     2025-11-01    1017                      Studio rent               Rent & Lease                                             2,400.00     26,400.00
+                               Check                     2025-12-01    1018                      Studio rent               Rent & Lease                                             2,400.00     28,800.00
+Total Riverbend Properti                                                                                                                                                           28,800.00     28,800.00
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Office Supplies           Studio                           400.00        400.00
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Office Supplies                                             50.00        450.00
+                               Vendor Credit             2025-11-25    RP-C1                     Damaged stock             Office Supplies           Studio                           -60.00        390.00
+Total Riverside Print Sh                                                                                                                                                              390.00        390.00
+No name
+                               Journal Entry             2025-01-25    12                        Loan payment              Interest Expense                                           120.00        120.00
+                               Journal Entry             2025-01-31    10                        Payroll 01/2025           Wages                                                    6,000.00      6,120.00
+                               Journal Entry             2025-01-31    10                        Payroll 01/2025           Payroll Taxes                                              459.00      6,579.00
+                               Journal Entry             2025-02-25    25                        Loan payment              Interest Expense                                           110.00      6,689.00
+                               Journal Entry             2025-02-28    23                        Payroll 02/2025           Wages                                                    6,000.00     12,689.00
+                               Journal Entry             2025-02-28    23                        Payroll 02/2025           Payroll Taxes                                              459.00     13,148.00
+                               Journal Entry             2025-03-25    38                        Loan payment              Interest Expense                                           100.00     13,248.00
+                               Journal Entry             2025-03-31    36                        Payroll 03/2025           Wages                                                    6,000.00     19,248.00
+                               Journal Entry             2025-03-31    36                        Payroll 03/2025           Payroll Taxes                                              459.00     19,707.00
+                               Journal Entry             2025-04-25    50                        Loan payment              Interest Expense                                            90.00     19,797.00
+                               Journal Entry             2025-04-30    48                        Payroll 04/2025           Wages                                                    6,250.00     26,047.00
+                               Journal Entry             2025-04-30    48                        Payroll 04/2025           Payroll Taxes                                              478.12     26,525.12
+                               Journal Entry             2025-05-25    65                        Loan payment              Interest Expense                                            80.00     26,605.12
+                               Journal Entry             2025-05-31    63                        Payroll 05/2025           Wages                                                    6,250.00     32,855.12
+                               Journal Entry             2025-05-31    63                        Payroll 05/2025           Payroll Taxes                                              478.12     33,333.24
+                               Void                      2025-06-13    166                       Duplicate entry           Utilities                                                 -191.50     33,141.74
+                               Journal Entry             2025-06-25    77                        Loan payment              Interest Expense                                            70.00     33,211.74
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Wages                                                    6,250.00     39,461.74
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Payroll Taxes                                              478.12     39,939.86
+                               Journal Entry             2025-07-25    90                        Loan payment              Interest Expense                                            60.00     39,999.86
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Wages                                                    6,250.00     46,249.86
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Payroll Taxes                                              478.12     46,727.98
+                               Journal Entry             2025-08-25    104                       Loan payment              Interest Expense                                            50.00     46,777.98
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Wages                                                    6,500.00     53,277.98
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Payroll Taxes                                              497.25     53,775.23
+                               Journal Entry             2025-09-25    118                       Loan payment              Interest Expense                                            40.00     53,815.23
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Wages                                                    6,500.00     60,315.23
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Payroll Taxes                                              497.25     60,812.48
+                               Journal Entry             2025-10-25    130                       Loan payment              Interest Expense                                            30.00     60,842.48
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Wages                                                    6,500.00     67,342.48
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Payroll Taxes                                              497.25     67,839.73
+                               Journal Entry             2025-11-25    145                       Loan payment              Interest Expense                                            20.00     67,859.73
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Wages                                                    6,500.00     74,359.73
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Payroll Taxes                                              497.25     74,856.98
+                               Journal Entry             2025-12-25    154                       Loan payment              Interest Expense                                            10.00     74,866.98
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Wages                                                    6,750.00     81,616.98
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Payroll Taxes                                              516.37     82,133.35
+Total No name                                                                                                                                                                      82,133.35     82,133.35
+TOTAL                                                                                                                                                                             123,887.25
+
+100 lines
