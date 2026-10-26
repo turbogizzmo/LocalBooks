@@ -1,0 +1,14 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Vendor Balance Summary, all dates to 2025-12-31
+
+Name                                  Amount
+Lumen Media                         1,125.00
+Northwind Software                    129.00
+Pinecrest Office Supply               729.90
+Riverside Print Shop                  390.00
+TOTAL                               2,373.90
+
+30 lines

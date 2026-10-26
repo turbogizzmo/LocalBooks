@@ -14,10 +14,23 @@ import { formatDate, todayIso } from '../lib/dates.js';
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
 const isSplitAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
 
-/** A new expense or check, or (with `editing` = { expense, lines }) a posted one being edited. */
+// The form's kinds: a card credit is a refund or credit from a vendor onto a credit card.
+export const EXPENSE_KINDS = { EXPENSE: 'Expense', CHECK: 'Check', CARD_CREDIT: 'Card credit' };
+
+const PAY_FROM = {
+  EXPENSE: (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD',
+  CHECK: (a) => a.accountType === 'BANK',
+  CARD_CREDIT: (a) => a.accountType === 'CREDIT_CARD',
+};
+
+/** A new expense, check or card credit, or (with `editing` = { expense, lines }) a posted one being edited. */
 function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, editing = null }) {
-  const payFrom = kind === 'CHECK' ? (a) => a.accountType === 'BANK' : (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
-  const defaultPayFrom = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
+  const payFrom = PAY_FROM[kind];
+  const isCredit = kind === 'CARD_CREDIT';
+  const defaultPayFrom = useMemo(
+    () => accounts.find((a) => a.isActive && a.accountType === (kind === 'CARD_CREDIT' ? 'CREDIT_CARD' : 'BANK'))?.id ?? null,
+    [accounts, kind],
+  );
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
   const nextCheck = useMemo(() => {
     const numbers = expenses.filter((e) => e.kind === 'CHECK' && /^\d+$/.test(e.checkNumber ?? '')).map((e) => Number(e.checkNumber));
@@ -52,20 +65,22 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     if (defaultCategory === null) return;
     setRows((rs) => rs.map((r) => (r.accountId === null ? { ...r, accountId: defaultCategory } : r)));
   }, [defaultCategory]);
-  // A check must come from a bank account; drop a credit card selection when switching.
+  // A check comes from a bank account and a card credit goes to a card; drop a selection that
+  // no longer fits when switching.
   useEffect(() => {
     const current = accounts.find((a) => a.id === accountId);
-    if (kind === 'CHECK' && current && current.accountType !== 'BANK') setAccountId(defaultPayFrom);
-  }, [kind, accountId, accounts, defaultPayFrom]);
+    if (current && !payFrom(current)) setAccountId(defaultPayFrom);
+  }, [kind, accountId, accounts, defaultPayFrom, payFrom]);
 
   const { lines, invalid, total } = summarizeSplits(rows);
 
   const [memorizing, setMemorizing] = useState(null);
   const save = async (mode) => {
-    if (accountId === null) return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : 'Choose the payment account.');
+    if (accountId === null)
+      return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : isCredit ? 'Choose the credit card the credit goes to.' : 'Choose the payment account.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
-    if (lines.some((l) => l.accountId === accountId)) return setError('A split row cannot use the payment account itself.');
+    if (lines.some((l) => l.accountId === accountId)) return setError(`A split row cannot use the ${isCredit ? 'card' : 'payment account'} itself.`);
     if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
     const postedLines = formClass.apply(lines);
     const warning = formClass.missing(postedLines);
@@ -86,13 +101,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       if (mode === 'memorize') return setMemorizing({ ...input, checkNumber: null });
       if (editing) {
         await api.replaceExpense(was.id, input);
-        onPosted(`${kind === 'CHECK' ? 'Check' : 'Expense'} replaced: the original is voided and the edited one is posted.`);
+        onPosted(`${EXPENSE_KINDS[kind]} replaced: the original is voided and the edited one is posted.`);
         return onCancel();
       }
       const posted = await api.postExpense(input);
+      const splits = `${lines.length} split${lines.length === 1 ? '' : 's'}`;
       onPosted(
-        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : 'Expense'} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
-          `Cr ${accountLabel(accounts, accountId)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`,
+        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : EXPENSE_KINDS[kind]} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
+          (isCredit ? `Dr ${accountLabel(accounts, accountId)} / Cr ${splits}.` : `Cr ${accountLabel(accounts, accountId)} / Dr ${splits}.`),
       );
       setPayee('');
       setMemo('');
@@ -111,10 +127,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     <section className="qb-panel flex-none">
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <div className="mr-1 flex self-center overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Type">
-          {[
-            ['EXPENSE', 'Expense'],
-            ['CHECK', 'Check'],
-          ].map(([id, label]) => (
+          {Object.entries(EXPENSE_KINDS).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -129,7 +142,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
         <label>
           <span className="qb-label">Payee</span>
-          <input ref={payeeRef} className="qb-input w-[200px]" value={payee} onChange={(e) => setPayee(e.target.value)} list="expense-payees" placeholder="Who did you pay?" />
+          <input
+            ref={payeeRef}
+            className="qb-input w-[200px]"
+            value={payee}
+            onChange={(e) => setPayee(e.target.value)}
+            list="expense-payees"
+            placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'}
+          />
           <datalist id="expense-payees">
             {vendors.map((v) => (
               <option key={v.id} value={v.name} />
@@ -137,11 +157,11 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           </datalist>
         </label>
         <label>
-          <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : 'Payment account'}</span>
+          <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>
           <AccountSelect accounts={accounts} filter={payFrom} value={accountId} onChange={setAccountId} className="qb-input w-[200px]" />
         </label>
         <label>
-          <span className="qb-label">{kind === 'CHECK' ? 'Check date' : 'Payment date'}</span>
+          <span className="qb-label">{kind === 'CHECK' ? 'Check date' : isCredit ? 'Credit date' : 'Payment date'}</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {kind === 'CHECK' ? (
@@ -149,7 +169,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             <span className="qb-label">Check no.</span>
             <input className="qb-input num w-[80px]" value={checkNumber} onChange={(e) => setCheckNumber(e.target.value)} />
           </label>
-        ) : (
+        ) : isCredit ? null : (
           <label>
             <span className="qb-label">Payment method</span>
             <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -160,14 +180,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           </label>
         )}
         {formClass.header}
-        <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
+        <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={date} />
         <div className="ml-auto text-right">
-          <div className="qb-label">Total</div>
+          <div className="qb-label">{isCredit ? 'Credit amount' : 'Total'}</div>
           <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>
           {currency && rateE6 !== null && total > 0 && <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(total, rateE6))} in {homeCurrency}</div>}
         </div>
       </div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} withClasses currency={currency || null} />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} withClasses withJobs currency={currency || null} />
       <div className="flex items-center gap-2 px-2 py-1">
         <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}
@@ -179,7 +199,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             Memorize…
           </button>
           <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Posting…' : editing ? 'Save changes' : `Save & Post ${kind === 'CHECK' ? 'Check' : 'Expense'}`}
+            {busy ? 'Posting…' : editing ? 'Save changes' : `Save & Post ${kind === 'CARD_CREDIT' ? 'Credit' : EXPENSE_KINDS[kind]}`}
           </button>
         </div>
       </div>
@@ -190,10 +210,13 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   );
 }
 
+// "+ New" items that open this screen's form.
+const INTENT_KINDS = { expense: 'EXPENSE', check: 'CHECK', 'card-credit': 'CARD_CREDIT' };
+
 export default function ExpensesChecks({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listExpenses);
   const vendors = useLedgerQuery(api.listVendors);
-  const initialKind = intent?.action === 'check' ? 'CHECK' : intent?.action === 'expense' ? 'EXPENSE' : null;
+  const initialKind = INTENT_KINDS[intent?.action] ?? null;
   const [kind, setKind] = useState(initialKind);
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { expense, lines }
@@ -214,8 +237,7 @@ export default function ExpensesChecks({ accounts, intent }) {
   };
 
   useEffect(() => {
-    if (intent?.action === 'check') setKind('CHECK');
-    if (intent?.action === 'expense') setKind('EXPENSE');
+    if (INTENT_KINDS[intent?.action]) setKind(INTENT_KINDS[intent.action]);
   }, [intent]);
 
   const voidEntry = async (journalEntryId) => {
@@ -251,9 +273,12 @@ export default function ExpensesChecks({ accounts, intent }) {
       {error && <Notice kind="error" text={`Could not load expenses: ${error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
-          <h2 className="text-md font-semibold">Expenses & checks</h2>
+          <h2 className="text-md font-semibold">Expenses, checks & card credits</h2>
           <span className="text-xs text-qb-ink-muted">Bank feed approvals appear here as expenses and deposits</span>
           <div className="ml-auto flex gap-2">
+            <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setKind('CARD_CREDIT')}>
+              Card credit
+            </button>
             <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setKind('CHECK')}>
               Write check
             </button>
@@ -289,13 +314,13 @@ export default function ExpensesChecks({ accounts, intent }) {
             <tbody>
               {data && rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No expenses or checks yet.</td>
+                  <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">No expenses, checks or card credits yet.</td>
                 </tr>
               )}
               {rows.map((x) => (
                 <tr key={x.id} className={`qb-grid-row ${x.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>
-                  <td className="qb-grid-cell">{x.kind === 'CHECK' ? 'Check' : 'Expense'}</td>
+                  <td className="qb-grid-cell">{EXPENSE_KINDS[x.kind] ?? x.kind}</td>
                   <td className="qb-grid-cell">{x.checkNumber ?? ''}</td>
                   <td className="qb-grid-cell font-semibold" title={x.payeeName ?? ''}>{x.payeeName ?? <span className="font-normal text-qb-ink-faint">—</span>}</td>
                   <td className="qb-grid-cell">
@@ -309,7 +334,8 @@ export default function ExpensesChecks({ accounts, intent }) {
                     className={`qb-grid-cell num ${x.isVoided ? 'line-through' : ''}`}
                     title={x.currencyCode ? `${formatCents(x.homeTotalCents)} at ${formatRate(x.exchangeRateE6)}` : undefined}
                   >
-                    {formatMoney(x.totalCents, x.currencyCode)}
+                    {/* A card credit gives money back, so it shows as a negative amount. */}
+                    {formatMoney(x.kind === 'CARD_CREDIT' ? -x.totalCents : x.totalCents, x.currencyCode)}
                   </td>
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
@@ -319,7 +345,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                         voidItem({
                           journalEntryId: x.journalEntryId,
                           voided: x.isVoided,
-                          description: `${x.kind === 'CHECK' ? `Check${x.checkNumber ? ` #${x.checkNumber}` : ''}` : 'Expense'} of ${formatMoney(x.totalCents, x.currencyCode)}${x.payeeName ? ` to ${x.payeeName}` : ''}. If it came from the bank feed, the bank line returns to "For review".`,
+                          description: `${x.kind === 'CHECK' ? `Check${x.checkNumber ? ` #${x.checkNumber}` : ''}` : EXPENSE_KINDS[x.kind]} of ${formatMoney(x.totalCents, x.currencyCode)}${x.payeeName ? ` ${x.kind === 'CARD_CREDIT' ? 'from' : 'to'} ${x.payeeName}` : ''}. If it came from the bank feed, the bank line returns to "For review".`,
                           onVoid: voidEntry,
                         }),
                       ]}

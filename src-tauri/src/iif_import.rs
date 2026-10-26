@@ -21,8 +21,8 @@ use std::collections::{HashMap, VecDeque};
 use chrono::NaiveDate;
 
 use crate::bank::{parse_amount_cents, parse_date};
-use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceTransaction, UnreadableLine};
-use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument};
+use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceSalesLists, SourceTransaction, UnreadableLine};
+use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument, SourceSales};
 use crate::text_import::{decode, quantity_e4, terms_days, Accounts, Names};
 
 /// LocalBooks account type for an IIF `ACCNTTYPE`; `None` for non-posting accounts.
@@ -150,20 +150,26 @@ impl Row<'_> {
     }
 }
 
-/// A `TRNS` or `SPL` row as read.
-struct RawLine {
-    trnstype: String,
-    date: Option<String>,
-    account: Option<String>,
-    name: Option<String>,
-    amount: Option<String>,
-    doc_num: Option<String>,
-    memo: Option<String>,
-    quantity: Option<String>,
-    price: Option<String>,
-    item: Option<String>,
-    due_date: Option<String>,
-    pay_method: Option<String>,
+/// A `TRNS` or `SPL` row as read. The report reader (`report_import`) builds these too: `trnstype`
+/// is an IIF transaction type, `date` any date [`parse_date`] reads and `amount` signed, debits
+/// positive.
+#[derive(Default)]
+pub(crate) struct RawLine {
+    pub trnstype: String,
+    pub date: Option<String>,
+    pub account: Option<String>,
+    pub name: Option<String>,
+    pub amount: Option<String>,
+    pub doc_num: Option<String>,
+    pub memo: Option<String>,
+    pub quantity: Option<String>,
+    pub price: Option<String>,
+    pub item: Option<String>,
+    pub due_date: Option<String>,
+    pub pay_method: Option<String>,
+    pub rep: Option<String>,
+    pub ship_via: Option<String>,
+    pub ship_date: Option<String>,
 }
 
 impl RawLine {
@@ -181,15 +187,57 @@ impl RawLine {
             item: row.text("INVITEM"),
             due_date: row.text("DUEDATE"),
             pay_method: row.text("PAYMETH"),
+            rep: row.text("REP"),
+            ship_via: row.text("SHIPVIA"),
+            ship_date: row.text("SHIPDATE"),
         }
     }
 }
 
-/// A transaction block as read, before its accounts and names are resolved.
-struct Block {
-    trns: RawLine,
-    splits: Vec<RawLine>,
-    file_line: usize,
+/// A transaction block as read, before its accounts and names are resolved. `trns` is the line on
+/// the transaction's own account (receivables for an invoice, the bank for a check).
+pub(crate) struct Block {
+    pub trns: RawLine,
+    pub splits: Vec<RawLine>,
+    pub file_line: usize,
+}
+
+/// A customer's `REP`, written "Name:ListID:Initials" (ListID 1–3 says which name list the rep is
+/// on), or a document's `REP`, which is just the initials. Returned as "initials" or "initials:name".
+fn rep_of(value: &str) -> Option<String> {
+    let parts: Vec<&str> = value.split(':').map(str::trim).collect();
+    let rep = match parts.as_slice() {
+        [initials] => initials.to_string(),
+        [name, .., initials] if !initials.is_empty() => {
+            if name.is_empty() {
+                initials.to_string()
+            } else {
+                format!("{initials}:{name}")
+            }
+        }
+        _ => return None,
+    };
+    (!rep.is_empty()).then_some(rep)
+}
+
+/// The `CUSTFLD1`... values of a list row that has any, by field number (1-based).
+fn custom_values(row: &Row, count: usize) -> Vec<(usize, String)> {
+    (1..=count).filter_map(|n| row.text(&format!("CUSTFLD{n}")).map(|v| (n, v))).collect()
+}
+
+/// Custom field labels: `CUSTNAMEDICT` (customers and vendors share 15 labels, each switched on per
+/// list) and `CUSTITEMDICT` (5 for items). Row `INDEX` 0 labels `CUSTFLD1`, and so on. A value
+/// whose label the file does not give is kept under "Custom field N".
+#[derive(Default)]
+struct FieldLabels {
+    names: HashMap<usize, String>,
+    items: HashMap<usize, String>,
+}
+
+impl FieldLabels {
+    fn resolve(map: &HashMap<usize, String>, values: Vec<(usize, String)>) -> Vec<(String, String)> {
+        values.into_iter().map(|(n, v)| (map.get(&n).cloned().unwrap_or_else(|| format!("Custom field {n}")), v)).collect()
+    }
 }
 
 fn item_kind(code: &str) -> Option<&'static str> {
@@ -214,6 +262,11 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let mut blocks: Vec<Block> = Vec::new();
     let mut open: Option<Block> = None;
     let mut problems: Vec<String> = Vec::new();
+    let mut labels = FieldLabels::default();
+    let mut sales_lists = SourceSalesLists::default();
+    // (is a customer, party id, values) and (item index, values), labeled once the dictionaries are read.
+    let mut party_fields: Vec<(bool, i64, Vec<(usize, String)>)> = Vec::new();
+    let mut item_fields: Vec<(usize, Vec<(usize, String)>)> = Vec::new();
 
     for (n, line) in text.lines().enumerate() {
         let line_no = n + 1;
@@ -250,7 +303,14 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                             Some("UNDEPOSIT") => "OTHER_CURRENT_ASSET",
                             _ => t,
                         };
-                        accounts.declare(name, t, !row.yes("HIDDEN"));
+                        let id = accounts.declare(name, t, !row.yes("HIDDEN"));
+                        // Some exports name the tax line (TAXLINE); QuickBooks writes its number (SCD).
+                        let tax_line = row.text("TAXLINE").and_then(|t| crate::accountant_reports::imported_tax_line(&t)).or_else(|| {
+                            row.get("SCD").and_then(|n| n.trim().parse::<i64>().ok()).filter(|n| *n > 0).map(crate::accountant_reports::quickbooks_tax_line)
+                        });
+                        if let Some(a) = accounts.list.iter_mut().find(|a| a.id == id) {
+                            a.tax_line = tax_line;
+                        }
                     }
                     None => nonposting.push(name.to_lowercase()),
                 }
@@ -268,6 +328,11 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.terms_days = row.get("TERMS").and_then(terms_days);
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
+                p.sales_rep = row.get("REP").and_then(rep_of);
+                if let Some(rep) = &p.sales_rep {
+                    sales_lists.add_rep(rep, true);
+                }
+                party_fields.push((true, id, custom_values(&row, 15)));
             }
             "VEND" => {
                 let Some(name) = row.get("NAME") else { continue };
@@ -284,6 +349,17 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.is_1099 = row.yes("1099");
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
+                party_fields.push((false, id, custom_values(&row, 15)));
+            }
+            "SHIPMETH" => {
+                if let Some(name) = row.get("NAME") {
+                    sales_lists.add_ship_method(name, !row.yes("HIDDEN"));
+                }
+            }
+            "CUSTNAMEDICT" | "CUSTITEMDICT" => {
+                let (Some(index), Some(label)) = (row.get("INDEX").and_then(|i| i.parse::<usize>().ok()), row.text("LABEL")) else { continue };
+                let map = if keyword == "CUSTNAMEDICT" { &mut labels.names } else { &mut labels.items };
+                map.insert(index + 1, label);
             }
             "INVITEM" => {
                 let (Some(name), Some(kind)) = (row.get("NAME"), row.get("INVITEMTYPE").and_then(item_kind)) else { continue };
@@ -298,7 +374,9 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                     kind,
                     taxable: row.yes("TAXABLE"),
                     active: !row.yes("HIDDEN"),
+                    custom_fields: Vec::new(),
                 });
+                item_fields.push((items.len() - 1, custom_values(&row, 5)));
             }
             "TRNS" => {
                 if let Some(unclosed) = open.replace(Block { trns: RawLine::from(&row), splits: Vec::new(), file_line: line_no }) {
@@ -317,6 +395,15 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
         problems.push(format!("line {}: TRNS without ENDTRNS", unclosed.file_line));
         blocks.push(unclosed);
     }
+    for (index, values) in item_fields {
+        items[index].custom_fields = FieldLabels::resolve(&labels.items, values);
+    }
+    for (is_customer, id, values) in party_fields {
+        let list = if is_customer { &mut names.customers } else { &mut names.vendors };
+        if let Some(p) = list.iter_mut().find(|p| p.id == id) {
+            p.custom_fields = FieldLabels::resolve(&labels.names, values);
+        }
+    }
     if blocks.is_empty() && accounts.list.is_empty() && names.customers.is_empty() && names.vendors.is_empty() && items.is_empty() {
         return Err(match problems.first() {
             Some(p) => format!("IIF_EMPTY: no lists or transactions could be read ({p})"),
@@ -324,6 +411,21 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
         });
     }
 
+    Ok(assemble(accounts, nonposting, names, items, sales_lists, &blocks))
+}
+
+/// Resolves transaction blocks against the lists into a ledger: accounts and names a block uses
+/// without the lists declaring them are created, payments are applied, and transactions that do
+/// not balance are set apart. `nonposting` holds the lowercased paths of non-posting accounts;
+/// reps and shipping methods the transactions use are added to `sales_lists`.
+pub(crate) fn assemble(
+    accounts: Accounts,
+    nonposting: Vec<String>,
+    names: Names,
+    mut items: Vec<SourceItem>,
+    mut sales_lists: SourceSalesLists,
+    blocks: &[Block],
+) -> Ledger {
     let item_ids: HashMap<String, (i64, Option<i64>)> = items.iter().map(|i| (i.name.to_lowercase(), (i.id, i.income_account_id))).collect();
     let mut reader = Transactions { accounts, nonposting, names, item_ids, unreadable: Vec::new() };
     let mut transactions: Vec<SourceTransaction> = Vec::new();
@@ -340,7 +442,17 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let Transactions { accounts, mut names, unreadable, .. } = reader;
     names.sort();
     items.sort_by_key(|i| i.name.to_lowercase());
-    Ok(Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality })
+    for t in transactions.iter().chain(&unbalanced) {
+        if let Some(SourceDocument::Invoice { sales, .. } | SourceDocument::SalesReceipt { sales, .. } | SourceDocument::Estimate { sales, .. }) = &t.document {
+            if let Some(rep) = &sales.rep {
+                sales_lists.add_rep(rep, true);
+            }
+            if let Some(ship) = &sales.ship_via {
+                sales_lists.add_ship_method(ship, true);
+            }
+        }
+    }
+    Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality, sales_lists }
 }
 
 /// Resolves transaction blocks against the lists.
@@ -454,10 +566,15 @@ impl Transactions {
         let customer = |names: &mut Names| name.as_deref().map(|n| names.ensure_customer(n));
         let vendor = |names: &mut Names| name.as_deref().map(|n| names.ensure_vendor(n));
         let method = || payment_method(block.trns.pay_method.as_deref().or(block.splits.iter().find_map(|s| s.pay_method.as_deref()))).to_string();
+        let sales = SourceSales {
+            rep: block.trns.rep.as_deref().and_then(rep_of),
+            ship_date: block.trns.ship_date.as_deref().and_then(|d| parse_date(d).ok()),
+            ship_via: block.trns.ship_via.clone(),
+        };
         Some(match trnstype {
-            "INVOICE" => SourceDocument::Invoice { customer_id: customer(&mut self.names)?, number, due_date, lines: form },
+            "INVOICE" => SourceDocument::Invoice { customer_id: customer(&mut self.names)?, number, due_date, lines: form, sales },
             "CREDIT MEMO" => SourceDocument::CreditMemo { customer_id: customer(&mut self.names)?, number, lines: form, applied_to: Vec::new() },
-            "CASH SALE" => SourceDocument::SalesReceipt { customer_id: customer(&mut self.names), number, method: method(), lines: form },
+            "CASH SALE" => SourceDocument::SalesReceipt { customer_id: customer(&mut self.names), number, method: method(), lines: form, sales },
             "PAYMENT" => SourceDocument::Payment { customer_id: customer(&mut self.names)?, reference: number, method: method(), applied_to: Vec::new() },
             "DEPOSIT" => SourceDocument::Deposit { payments: Vec::new() },
             // An item receipt is a bill for goods received before the bill itself arrived.
@@ -481,6 +598,7 @@ impl Transactions {
                 expires: due_date,
                 memo: block.trns.memo.clone(),
                 lines: form.into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect(),
+                sales,
             },
             "PURCHORD" => SourceDocument::PurchaseOrder {
                 vendor_id: vendor(&mut self.names)?,
@@ -563,209 +681,4 @@ fn apply_payments(transactions: &mut [SourceTransaction], accounts: &Accounts) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Intuit's sample files (IIF Import Kit), trimmed to the columns they use, joined into one file.
-    const SAMPLE: &str = "!ACCNT\tNAME\tACCNTTYPE\tDESC\tACCNUM\tEXTRA\r
-ACCNT\tAccounts Receivable\tAR\t\t1200\t\r
-ACCNT\tUndeposited Funds\tOCASSET\t\t1400\tUNDEPOSIT\r
-ACCNT\tChecking\tBANK\t\t\t\r
-ACCNT\tAccounts Payable\tAP\t\t2000\t\r
-ACCNT\tConstruction:Labor\tINC\t\t4100\t\r
-ACCNT\tConstruction:Materials\tINC\t\t4200\t\r
-ACCNT\tRepairs\tEXP\t\t6100\t\r
-ACCNT\tEstimates\tNONPOSTING\t\t\t\r
-!INVITEM\tNAME\tINVITEMTYPE\tDESC\tACCNT\tPRICE\tTAXABLE\r
-INVITEM\tFraming\tSERV\tFraming labor\tConstruction:Labor\t55\tN\r
-INVITEM\tWood Door:Exterior\tINVENTORY\tExterior wood door\tConstruction:Materials\t120\tY\r
-!CUST\tNAME\tBADDR1\tBADDR2\tBADDR3\tPHONE1\tTERMS\tCOMPANYNAME\tFIRSTNAME\tLASTNAME\r
-CUST\tCustomer\tJoe Customer\t444 Road Rd\t\"Anywhere, AZ 85740\"\t5554443333\tNet 30\t\tJoe\tCustomer\r
-!VEND\tNAME\tADDR1\tTAXID\t1099\r
-VEND\tVendor\tJon Vendor\t12-3456789\tY\r
-!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\tDUEDATE\r
-!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\tQNTY\tPRICE\tINVITEM\r
-!ENDTRNS\r
-TRNS\t\tINVOICE\t7/16/98\tAccounts Receivable\tCustomer\t\t175\t1\t\t8/15/98\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\t\t-55\t\tFraming labor\t\t55\tFraming\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Materials\t\t\t-120\t\tExterior wood door\t-1\t120\tWood Door:Exterior\r
-ENDTRNS\r
-TRNS\t\tPAYMENT\t7/20/98\tUndeposited Funds\tCustomer\t\t100\t\t\t\r
-SPL\t\tPAYMENT\t7/20/98\tAccounts Receivable\tCustomer\t\t-100\t\t\t\r
-ENDTRNS\r
-TRNS\t\tDEPOSIT\t7/21/98\tChecking\t\t\t100\t\t\t\r
-SPL\t\tDEPOSIT\t7/21/98\tUndeposited Funds\tCustomer\t\t-100\t\t\t\r
-ENDTRNS\r
-TRNS\t\tBILL\t7/10/98\tAccounts Payable\tVendor\t\t-35\t88\t\t\r
-SPL\t\tBILL\t7/10/98\tRepairs\t\t\t35\t\tFix door\t\r
-ENDTRNS\r
-TRNS\t\tBILLPMT\t7/16/1998\tChecking\tVendor\t\t-35\t\tTest Memo\t\r
-SPL\t\tBILLPMT\t7/16/1998\tAccounts Payable\tVendor\t\t35\t\t\t\r
-ENDTRNS\r
-TRNS\t\tGENERAL JOURNAL\t7/1/98\tChecking\t\t\t650\t\t\t\r
-SPL\t\tGENERAL JOURNAL\t7/1/98\tConstruction:Labor\t\t\t-650\t\t\t\r
-ENDTRNS\r
-TRNS\t\tESTIMATES\t7/2/98\tEstimates\tCustomer\t\t55\t7\t\t\r
-SPL\t\tESTIMATES\t7/2/98\tEstimates\t\t\t-55\t\tFraming labor\t1\t55\tFraming\r
-ENDTRNS\r
-";
-
-    fn by_kind<'a>(ledger: &'a Ledger, kind: &str) -> &'a SourceTransaction {
-        ledger.transactions.iter().find(|t| t.kind == kind).unwrap_or_else(|| panic!("no {kind}"))
-    }
-
-    #[test]
-    fn reads_intuits_sample_lists() {
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        let labor = ledger.accounts.iter().find(|a| a.full_name == "Construction:Labor").unwrap();
-        assert_eq!(labor.account_type, "INCOME");
-        let parent = ledger.accounts.iter().find(|a| a.full_name == "Construction").unwrap();
-        assert_eq!(labor.parent_id, Some(parent.id));
-        assert!(!ledger.accounts.iter().any(|a| a.name == "Estimates"), "non-posting accounts are not imported");
-        assert_eq!(ledger.accounts.iter().find(|a| a.name == "Undeposited Funds").unwrap().account_type, "OTHER_CURRENT_ASSET");
-
-        let customer = &ledger.customers[0];
-        assert_eq!(customer.name, "Customer");
-        assert_eq!(customer.address.as_deref(), Some("Joe Customer\n444 Road Rd\nAnywhere, AZ 85740"));
-        assert_eq!(customer.company_name.as_deref(), Some("Joe Customer"));
-        assert_eq!(customer.terms_days, Some(30));
-        let vendor = &ledger.vendors[0];
-        assert_eq!((vendor.tax_id.as_deref(), vendor.is_1099), (Some("12-3456789"), true));
-
-        let door = ledger.items.iter().find(|i| i.name == "Wood Door:Exterior").unwrap();
-        assert_eq!((door.kind, door.rate_cents, door.taxable), ("Inventory part", 12_000, true));
-    }
-
-    #[test]
-    fn transactions_balance_with_ledger_signs() {
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        assert!(ledger.unbalanced.is_empty());
-        assert_eq!(ledger.transactions.len(), 7);
-        let journal = by_kind(&ledger, "Journal entry");
-        assert_eq!(journal.date, NaiveDate::from_ymd_opt(1998, 7, 1).unwrap());
-        // 650 debited to Checking is -650 in the ledger's sign.
-        assert_eq!(journal.lines[0].cents, -65_000);
-        assert_eq!(by_kind(&ledger, "Bill payment").date, NaiveDate::from_ymd_opt(1998, 7, 16).unwrap());
-    }
-
-    #[test]
-    fn invoices_keep_their_form_lines() {
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        let invoice = by_kind(&ledger, "Invoice");
-        let Some(SourceDocument::Invoice { number, due_date, lines, .. }) = &invoice.document else { panic!("{:?}", invoice.document) };
-        assert_eq!(number.as_deref(), Some("1"));
-        assert_eq!(*due_date, NaiveDate::from_ymd_opt(1998, 8, 15));
-        assert_eq!(lines.len(), 2);
-        let door = &lines[1];
-        assert_eq!((door.quantity_e4, door.rate_cents, door.cents), (10_000, 12_000, 12_000));
-        assert!(door.item_id.is_some());
-        assert_eq!(door.description.as_deref(), Some("Exterior wood door"));
-    }
-
-    #[test]
-    fn payments_apply_to_the_oldest_open_invoice_and_deposits_find_them() {
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        let invoice = by_kind(&ledger, "Invoice").id;
-        let payment = by_kind(&ledger, "Payment");
-        let Some(SourceDocument::Payment { applied_to, .. }) = &payment.document else { panic!() };
-        assert_eq!(applied_to, &[Applied { transaction_id: invoice, cents: 10_000 }]);
-        let Some(SourceDocument::Deposit { payments }) = &by_kind(&ledger, "Deposit").document else { panic!() };
-        assert_eq!(payments, &[Applied { transaction_id: payment.id, cents: 10_000 }]);
-
-        let bill = by_kind(&ledger, "Bill").id;
-        let Some(SourceDocument::BillPayment { applied_to, .. }) = &by_kind(&ledger, "Bill payment").document else { panic!() };
-        assert_eq!(applied_to, &[Applied { transaction_id: bill, cents: 3_500 }]);
-    }
-
-    #[test]
-    fn estimates_post_nothing_but_keep_their_lines() {
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        let estimate = by_kind(&ledger, "Estimate");
-        assert!(estimate.lines.is_empty());
-        let Some(SourceDocument::Estimate { lines, .. }) = &estimate.document else { panic!() };
-        assert_eq!(lines[0].cents, 5_500);
-    }
-
-    #[test]
-    fn undeclared_accounts_and_names_are_created_and_bad_rows_reported() {
-        let file = "!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\n!SPL\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\n!ENDTRNS\n\
-TRNS\tCHECK\t1/5/2024\tBusiness Checking\tAcme Supply\t-80\n\
-SPL\tCHECK\t1/5/2024\tOffice Supplies\t\t80\n\
-ENDTRNS\n\
-TRNS\tGENERAL JOURNAL\t1/6/2024\tBusiness Checking\t\t10\n\
-SPL\tGENERAL JOURNAL\t1/6/2024\tOffice Supplies\t\tten\n\
-ENDTRNS\n";
-        let ledger = read(file.as_bytes()).unwrap();
-        let kind_of = |name: &str| ledger.accounts.iter().find(|a| a.name == name).unwrap().account_type;
-        assert_eq!(kind_of("Business Checking"), "BANK");
-        assert_eq!(kind_of("Office Supplies"), "EXPENSE");
-        assert_eq!(ledger.transactions.len(), 1);
-        assert_eq!(ledger.unbalanced.len(), 1, "the line that could not be read leaves its entry unbalanced");
-        assert_eq!(ledger.unreadable.len(), 1);
-        assert_eq!(ledger.quality.unreadable_lines, 1);
-        // A payee on an ordinary check is not made a vendor.
-        assert!(ledger.vendors.is_empty());
-    }
-
-    #[test]
-    fn rejects_a_file_that_is_not_iif() {
-        assert!(read(b"Date,Amount\n1/1/2024,5\n").unwrap_err().starts_with("IIF_EMPTY"));
-    }
-
-    /// The sample goes all the way through staging and a full import: native invoice, payment,
-    /// deposit, bill, bill payment and estimate, with nothing falling back to a journal entry.
-    #[tokio::test]
-    async fn a_full_import_of_an_iif_file_creates_native_documents() {
-        use crate::qbw_ledger_import::{auto_map_accounts, batch_summary, post_batch, stage, ImportMode, PostLedgerInput};
-        let pool = crate::db::test_pool().await;
-        let ledger = read(SAMPLE.as_bytes()).unwrap();
-        let batch = stage(&pool, std::path::Path::new("/exports/Sample.iif"), SAMPLE.len() as i64, &ledger).await.unwrap();
-        auto_map_accounts(&pool, batch).await.unwrap();
-        let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
-        let full = posted.full.unwrap();
-        assert_eq!(
-            (full.invoices, full.payments, full.deposits, full.bills, full.bill_payments, full.estimates, full.fell_back),
-            (1, 1, 1, 1, 1, 1, 0),
-            "{full:?}"
-        );
-        assert_eq!(full.journal_entries, 1, "only the general journal entry is a journal entry");
-        let summary = batch_summary(&pool, batch).await.unwrap();
-        assert!(summary.fallbacks.is_empty(), "{:?}", summary.fallbacks.iter().map(|f| &f.reason).collect::<Vec<_>>());
-
-        let (status, total, paid): (String, i64, i64) =
-            sqlx::query_as("SELECT status, total_cents, amount_paid_cents FROM invoices").fetch_one(&pool).await.unwrap();
-        assert_eq!((status.as_str(), total, paid), ("PARTIAL", 17_500, 10_000));
-        let bill_status: String = sqlx::query_scalar("SELECT status FROM bills").fetch_one(&pool).await.unwrap();
-        assert_eq!(bill_status, "PAID");
-        assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty(), "the deposit swept the payment");
-    }
-
-    /// Reads every IIF sample in Intuit's import kit: set LOCALBOOKS_IIF_DIR to the unpacked kit.
-    /// Each must read with every transaction balanced, no line unreadable, and every transaction
-    /// of a known kind, or hold nothing LocalBooks imports.
-    #[test]
-    #[ignore]
-    fn reads_the_import_kit_samples() {
-        let dir = std::env::var("LOCALBOOKS_IIF_DIR").expect("set LOCALBOOKS_IIF_DIR");
-        let mut stack = vec![std::path::PathBuf::from(dir)];
-        let mut files = 0;
-        while let Some(path) = stack.pop() {
-            if path.is_dir() {
-                stack.extend(std::fs::read_dir(&path).unwrap().filter_map(Result::ok).map(|e| e.path()));
-            } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iif")) {
-                let name = path.file_name().unwrap().to_string_lossy().into_owned();
-                let ledger = match read(&std::fs::read(&path).unwrap()) {
-                    Ok(ledger) => ledger,
-                    // The kit also has files of records LocalBooks has no use for (timer activities).
-                    Err(e) if e.starts_with("IIF_EMPTY") => continue,
-                    Err(e) => panic!("{name}: {e}"),
-                };
-                assert!(ledger.unbalanced.is_empty(), "{name}: unbalanced transactions");
-                assert!(ledger.unreadable.is_empty(), "{name}: unreadable lines");
-                assert!(ledger.transactions.iter().all(|t| t.kind != "Other"), "{name}: unknown transaction type");
-                files += 1;
-            }
-        }
-        assert!(files > 0, "no .iif files under LOCALBOOKS_IIF_DIR");
-    }
-}
+mod tests;

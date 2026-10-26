@@ -1,11 +1,14 @@
 import { COMMON_CURRENCIES, parseRateE6 } from '../lib/money.js';
+import { useSuggestedRate } from './RateSuggestion.jsx';
 
 /**
  * Currency picker plus exchange rate for documents that may be in a foreign currency.
- * `currency` is '' for the home currency. The rate is home units per one foreign unit.
+ * `currency` is '' for the home currency. The rate is home units per one foreign unit. With rate
+ * lookup on, an empty rate is filled with the ECB rate for `date`; a saved rate is kept.
  */
-export default function CurrencyFields({ homeCurrency, currency, setCurrency, rate, setRate, disabled = false }) {
+export default function CurrencyFields({ homeCurrency, currency, setCurrency, rate, setRate, date, disabled = false }) {
   const rateE6 = parseRateE6(rate);
+  const { note } = useSuggestedRate({ currency: disabled ? '' : currency, date, rate, setRate });
   const options = [homeCurrency, ...COMMON_CURRENCIES.filter((c) => c !== homeCurrency)];
   return (
     <>
@@ -28,16 +31,19 @@ export default function CurrencyFields({ homeCurrency, currency, setCurrency, ra
           <span className="qb-label" title={`How many ${homeCurrency} one ${currency} is worth`}>
             1 {currency} = ? {homeCurrency}
           </span>
-          <input
-            className="qb-input num w-[104px]"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            placeholder="1.000000"
-            inputMode="decimal"
-            disabled={disabled}
-            aria-invalid={rate !== '' && rateE6 === null}
-            aria-label="Exchange rate"
-          />
+          <span className="flex items-center gap-1.5">
+            <input
+              className="qb-input num w-[104px]"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="1.000000"
+              inputMode="decimal"
+              disabled={disabled}
+              aria-invalid={rate !== '' && rateE6 === null}
+              aria-label="Exchange rate"
+            />
+            {note}
+          </span>
         </label>
       )}
     </>

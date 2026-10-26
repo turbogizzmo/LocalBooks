@@ -1,0 +1,17 @@
+---
+source: src/harness/accountant_reports.rs
+expression: "text(\"Open Purchase Orders\",\n&ar::open_purchase_orders(&pool, d(2025, 12, 31)).await.unwrap())"
+---
+Open Purchase Orders, all dates to 2025-12-31
+
+Type                           Date          Num                       Memo                      Expected             Amount
+Pacific Office Outfitter
+  Purchase Order               2025-12-18    1                         Paper and toner           2026-01-15           640.00
+Total Pacific Office Out                                                                                              640.00
+Riverside Print Shop
+  Purchase Order               2025-12-22    2                         Paper and toner           2026-01-15           235.00
+Total Riverside Print Sh                                                                                              235.00
+TOTAL                                                                                                                 875.00
+
+2 lines
+Note: 2 open purchase orders as of 2025-12-31. Purchase orders do not post to the books.

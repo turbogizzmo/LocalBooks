@@ -3,8 +3,8 @@
 Bring your bank's transactions into LocalBooks, then approve each one into your books. There are two
 ways to get them:
 
-- **Import a statement file** you download from your bank: **OFX**, **QFX**, **QBO** or **CSV**.
-  Free, and works with almost any bank.
+- **Import a statement file** you download from your bank: **OFX**, **QFX**, **QBO**, **CSV**, or a
+  **PDF** bank or card statement. Free, and works with almost any bank.
 - **Connect a bank** through SimpleFIN to fetch new transactions with one click. This needs a
   SimpleFIN Bridge subscription (about $15 a year, paid to SimpleFIN, not LocalBooks).
 
@@ -13,13 +13,58 @@ Either way, transactions wait under **For review** until you approve them. Nothi
 ## Import a statement
 
 1. Download a statement from your bank's website. Choose OFX, QFX or QBO if offered: those files
-   carry the bank's own ID for each transaction.
+   carry the bank's own ID for each transaction. If your bank only offers PDF statements, see
+   [Import a PDF statement](#import-a-pdf-statement).
 2. In LocalBooks go to **Banking › Bank Feeds** and choose the **Account** the statement is for.
 3. Click **Import statement…** and choose the file. The new transactions appear under **For review**.
 
 You can import overlapping statements safely. Transactions already imported are skipped and
 counted as "already imported", while two genuinely identical purchases on the same day are both
 kept.
+
+## Import a PDF statement
+
+PDF statements are useful for rebuilding older history, because banks usually keep years of them
+online when CSV or OFX downloads only go back a few months.
+
+1. Choose the **Account** the statement is for, click **Import statement…** and choose the PDF.
+2. LocalBooks reads the transaction table from the PDF and opens the **Which columns are which?**
+   window. Its columns are named after the statement's column titles (for example *Date*,
+   *Description*, *Withdrawals*, *Deposits*, *Balance*).
+3. Check the columns and the **Preview**, as for a CSV file (see
+   [When LocalBooks asks which columns are which](#when-localbooks-asks-which-columns-are-which)).
+4. Read the **balance check** above the preview:
+   - **Balances check out** means the opening balance plus the transactions equals the closing
+     balance, and every running balance follows from the one before it. Nothing was missed.
+   - **Balances don't add up** means a transaction was missed or misread, or a column is wrong.
+     The message says how far off the total is and at which transaction the running balance first
+     stops matching. Compare the preview with the statement before importing.
+   - Some statements print no opening and closing balance, so there is nothing to check against.
+5. Click **Import … transactions**. LocalBooks remembers the columns for the next statement with the
+   same column titles.
+
+What LocalBooks handles:
+
+- **Descriptions on two or more lines** are joined into one.
+- **Dates without a year** (01/15, Jan 15) take their year from the statement period printed on the
+  statement, including statements that run from December into January.
+- **A date printed once** for several transactions on the same day.
+- **One amount column or separate money-in and money-out columns**, amounts like `(12.00)`,
+  `12.00-`, and `CR` / `DR` markers.
+- **Card statements**, which print charges as positive amounts. When you import into a credit card
+  account, charges come in as money out and payments as money in. If the balances only add up with
+  every sign reversed, LocalBooks reverses them and says so.
+- **Statements over several pages**, with the column titles repeated on each page. Totals, page
+  footers and summary tables (such as a daily balance list) are skipped.
+- **Re-importing** a statement, or a CSV file covering the same days, skips what is already there.
+
+Good to know:
+
+- **Scanned statements can't be imported.** A statement that was scanned or photographed is only a
+  picture, and LocalBooks does not do OCR (text recognition). LocalBooks says "this PDF has no
+  text". Download the statement from your bank's website instead: those PDFs contain text.
+- **Password-protected PDFs** must be opened and saved without a password first.
+- Everything is read on your computer. The PDF is not sent anywhere.
 
 ## Connect a bank (SimpleFIN)
 
@@ -71,7 +116,8 @@ Deposits/Withdrawals or Paid in/Paid out. Otherwise a window opens:
 
 LocalBooks remembers your choices, so the next file with the same columns imports directly. The
 window also opens when every date in a file could be read either way (such as 03/07), so you can
-confirm the day/month order once.
+confirm the day/month order once. For PDF statements it always opens, so you can check the table
+LocalBooks read and its balance check.
 
 ## Approve or exclude each transaction
 
@@ -81,8 +127,38 @@ confirm the day/month order once.
 3. Click **Approve** to post it, or **Exclude** to skip it (for example a duplicate, or a transfer
    you already recorded).
 
-Approved money out becomes an expense; approved money in becomes a deposit. LocalBooks learns from
-what you approve and suggests the same category for that payee next time.
+Approved money out becomes an expense; approved money in becomes a deposit. For money out you can
+also fill in the **Payee**, which becomes the expense's vendor (a new name adds a vendor).
+
+## How categories are suggested
+
+LocalBooks suggests a category for every transaction, in this order:
+
+1. **Rules.** A built-in vendor list (for example fuel stations go to Fuel & Auto), and a rule
+   learned from each transaction you approve, matching the first distinctive words of its
+   description. The note under the category says which kind of rule matched.
+2. **Similar past transactions.** When no rule matches, LocalBooks looks for the past transactions
+   in this company file that are most like this one: words in the description, the exact amount,
+   roughly the same amount, the same bank account and the same time of the month. It suggests the
+   category most of them used, with a **High**, **Medium** or **Low** confidence badge and a
+   *Because similar to …* line naming the closest one. A Target purchase at a store you haven't
+   used before, or this month's rent check, usually gets the right category this way.
+3. **Uncategorized** Expense or Income, when nothing is similar enough.
+
+The **Payee** is suggested from similar past expenses as well, including when a rule chose the
+category.
+
+Good to know:
+
+- **Suggestions never post on their own.** You still approve every transaction, and you can change
+  the category or payee first.
+- **It learns as you go.** Each approval is learned immediately. Excluded transactions teach it
+  nothing. Expenses and deposits you enter directly count as past transactions too, so a file
+  imported from QuickBooks gets useful suggestions from the start.
+- **It stays on your computer.** Suggestions are worked out from your company file in memory. Nothing
+  is sent anywhere and nothing extra is stored.
+- **Voiding** an approved transaction sends it back for review, and LocalBooks forgets it.
+- Inactive accounts are never suggested.
 
 > **Tip:** Approving a bank transaction that you already entered by hand records it twice. Exclude
 > it instead.

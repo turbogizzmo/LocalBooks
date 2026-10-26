@@ -1,14 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod accountant_reports;
 mod accounts;
+mod ach;
 mod audit_chain;
 mod backup;
 mod bank;
+mod bank_pdf;
 mod banking;
 mod classes;
 mod closing;
 mod commands;
+mod company_setup;
 mod credits;
+mod custom_fields;
+mod custom_reports;
+mod crypto;
 mod db;
 mod edits;
 mod email_log;
@@ -16,18 +23,29 @@ mod estimates;
 mod expenses;
 mod forensic;
 mod forms;
+mod fx_rates;
+mod gnucash_import;
+#[cfg(test)]
+mod docs_checks;
+#[cfg(test)]
+mod frontend_checks;
 mod iif_import;
 mod export_engine;
 mod file_dentist;
 mod file_menu;
+mod finance_charges;
 mod instance;
 mod inventory;
 mod invoices;
+mod item_prices;
+mod job_reports;
 mod ledger;
 mod mail_app;
 mod parties;
+mod permissions;
 mod pdf;
 mod mcp_server;
+mod nacha;
 mod preferences;
 mod qbw_backup;
 mod qbw_company;
@@ -38,13 +56,19 @@ mod qbw_ledger_import;
 mod qbw_pages;
 mod qbw_records;
 mod qif_import;
+mod report_import;
 mod reconcile;
 mod registers;
 mod report_center;
+mod release_check;
 mod reports;
 mod revaluation;
 mod sales;
+mod sales_lists;
 mod sales_tax;
+mod tax_ids;
+#[cfg(test)]
+mod test_companies;
 mod secrets;
 mod simplefin;
 mod smtp;
@@ -52,8 +76,13 @@ mod statements;
 mod storage;
 mod text_import;
 mod timesheet;
+mod users;
 mod windows;
 mod workflows;
+mod xlsx_export;
+
+#[cfg(test)]
+mod harness;
 
 use tauri::Manager;
 
@@ -70,6 +99,10 @@ fn data_dirs(app: &tauri::App) -> tauri::Result<(std::path::PathBuf, std::path::
 }
 
 fn main() {
+    // Internal: the release check's headless company-file probe (see release_check.rs).
+    if let Some(code) = release_check::run_from_args() {
+        std::process::exit(code);
+    }
     tauri::Builder::default()
         .menu(|handle| {
             let menu = tauri::menu::Menu::default(handle)?;
@@ -120,14 +153,17 @@ fn main() {
                     return Ok(());
                 }
             };
+            tauri::async_runtime::block_on(database.refresh_gate());
             app.manage(database);
             app.manage(simplefin::SimpleFin::new(simplefin::secret_store(&config_dir))?);
+            app.manage(fx_rates::ReqwestHttp::new()?);
+            app.manage(bank::suggest::Suggester::default());
             // The local MCP server (off unless turned on in Settings) reads whichever company file is
-            // live at the time of each request.
+            // live at the time of each request, and none while its users are signed out.
             let pool_handle = app.handle().clone();
             let pools: mcp_server::PoolSource = std::sync::Arc::new(move || {
                 let handle = pool_handle.clone();
-                Box::pin(async move { handle.state::<db::Db>().pool().await })
+                Box::pin(async move { handle.state::<db::Db>().readable_pool().await })
             });
             app.manage(mcp_server::McpService::new(config_dir.clone(), pools));
             let mcp_handle = app.handle().clone();
@@ -159,231 +195,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::list_accounts,
-            commands::list_account_types,
-            commands::create_account,
-            commands::update_account,
-            commands::set_account_active,
-            commands::list_classes,
-            commands::create_class,
-            commands::update_class,
-            commands::set_class_active,
-            commands::delete_class,
-            commands::list_reclass_lines,
-            commands::get_account_register,
-            commands::get_party,
-            commands::update_party,
-            commands::set_party_active,
-            commands::update_product,
-            commands::set_product_active,
-            commands::list_credit_memos,
-            commands::create_credit_memo,
-            commands::apply_customer_credit,
-            commands::list_customer_credit_applications,
-            commands::remove_customer_credit,
-            commands::refund_customer_credit,
-            commands::list_vendor_credits,
-            commands::create_vendor_credit,
-            commands::apply_vendor_credit,
-            commands::list_vendor_credit_applications,
-            commands::remove_vendor_credit,
-            commands::refund_vendor_credit,
-            commands::reclassify_lines,
-            commands::get_dashboard,
-            commands::post_journal_entry,
-            commands::list_invoices,
-            commands::create_invoice,
-            commands::record_invoice_payment,
-            commands::list_invoice_payments,
-            commands::get_ar_aging,
-            commands::inspect_bank_file,
-            commands::list_inventory_items,
-            commands::track_inventory,
-            commands::adjust_inventory,
-            commands::list_stock_movements,
-            commands::preview_fx_revaluation,
-            commands::post_fx_revaluation,
-            commands::list_fx_revaluations,
-            commands::void_fx_revaluation,
-            commands::get_estimate_detail,
-            commands::invoice_from_estimate,
-            commands::import_bank_csv,
-            commands::list_bank_transactions,
-            commands::simplefin_list,
-            commands::simplefin_connect,
-            commands::simplefin_reconnect,
-            commands::simplefin_refresh_accounts,
-            commands::simplefin_link,
-            commands::simplefin_unlink,
-            commands::simplefin_suggested_start,
-            commands::simplefin_sync,
-            commands::simplefin_disconnect,
-            commands::approve_bank_transaction,
-            commands::exclude_bank_transaction,
-            commands::get_reconcile_state,
-            commands::get_unreconciled_lines,
-            commands::list_reconciliations,
-            commands::start_reconciliation,
-            commands::set_lines_cleared,
-            commands::lock_reconciliation,
-            commands::cancel_reconciliation,
-            commands::get_profit_and_loss,
-            commands::get_profit_and_loss_by_class,
-            commands::get_profit_and_loss_periods,
-            commands::get_trial_balance_as_of,
-            commands::get_cash_flow,
-            commands::get_general_ledger,
-            commands::get_aging,
-            commands::get_summary_report,
-            commands::list_tax_rates,
-            commands::create_tax_rate,
-            commands::update_tax_rate,
-            commands::set_tax_rate_active,
-            commands::pay_sales_tax,
-            commands::list_sales_tax_payments,
-            commands::get_tax_liability,
-            commands::replace_invoice,
-            commands::replace_bill,
-            commands::replace_expense,
-            commands::replace_journal_entry,
-            commands::get_document_lines,
-            commands::get_customer_statement,
-            commands::list_statement_customers,
-            commands::get_1099_report,
-            commands::list_recurring,
-            commands::save_recurring,
-            commands::set_recurring_active,
-            commands::delete_recurring,
-            commands::enter_recurring,
-            commands::list_purchase_orders,
-            commands::get_purchase_order_lines,
-            commands::create_purchase_order,
-            commands::set_purchase_order_closed,
-            commands::bill_purchase_order,
-            commands::search_books,
-            commands::add_attachment,
-            commands::list_attachments,
-            commands::save_attachment,
-            commands::delete_attachment,
-            commands::list_budgets,
-            commands::create_budget,
-            commands::delete_budget,
-            commands::get_budget_amounts,
-            commands::set_budget_amounts,
-            commands::get_budget_vs_actual,
-            commands::get_balance_sheet,
-            commands::list_customers,
-            commands::create_customer,
-            commands::list_products,
-            commands::create_product,
-            commands::post_sales_receipt,
-            commands::list_all_sales,
-            commands::list_vendors,
-            commands::create_vendor,
-            commands::list_bills,
-            commands::post_vendor_bill,
-            commands::pay_vendor_bill,
-            commands::pay_vendor_bills,
-            commands::list_bill_payments,
-            commands::post_expense,
-            commands::list_expenses,
-            commands::record_invoice_payments,
-            commands::void_transaction,
-            commands::list_journal_entries,
-            commands::get_journal_entry_lines,
-            commands::list_audit_log,
-            commands::verify_ledger_integrity,
-            commands::file_dentist_checkup,
-            commands::file_dentist_rebuild,
-            commands::propose_forensic_corrections,
-            commands::apply_forensic_correction,
-            commands::open_company_file,
-            commands::get_start_screen,
-            commands::forget_recent_company,
-            commands::find_company_files,
-            commands::create_company_file,
-            commands::restore_backup_as,
-            commands::close_company_file,
-            commands::get_closing_status,
-            commands::set_closing_date,
-            commands::get_startup_failure,
-            commands::get_mcp_status,
-            commands::set_mcp_enabled,
-            commands::regenerate_mcp_token,
-            commands::list_undeposited,
-            commands::post_bank_deposit,
-            commands::post_transfer,
-            commands::list_banking_activity,
-            commands::list_estimates,
-            commands::create_estimate,
-            commands::set_estimate_status,
-            commands::convert_estimate_to_invoice,
-            commands::list_employees,
-            commands::create_employee,
-            commands::create_time_activities,
-            commands::list_time_activities,
-            commands::export_company_file,
-            commands::inspect_company_file,
-            commands::import_company_file,
-            commands::list_backups,
-            commands::backup_now,
-            commands::get_preferences,
-            commands::set_preference,
-            commands::list_tax_forms,
-            commands::get_fiscal_periods,
-            commands::get_tax_calendar,
-            commands::report_csv,
-            commands::save_report_to_disk,
-            commands::print_report,
-            commands::list_form_styles,
-            commands::create_form_style,
-            commands::rename_form_style,
-            commands::set_default_form_style,
-            commands::delete_form_style,
-            commands::get_form_template,
-            commands::save_form_template,
-            commands::reset_form_template,
-            commands::preview_form,
-            commands::render_form,
-            commands::save_form_pdf,
-            commands::get_email_draft,
-            commands::email_form_with_mail_app,
-            commands::email_form_with_smtp,
-            commands::get_smtp_settings,
-            commands::save_smtp_settings,
-            commands::test_smtp_settings,
-            commands::send_smtp_test_email,
-            commands::get_email_history,
-            commands::list_email_statuses,
-            commands::set_email_later,
-            commands::list_email_queue,
-            commands::get_storage_status,
-            commands::inspect_database_directory,
-            commands::update_database_directory,
-            commands::set_company_logo,
-            commands::clear_company_logo,
-            commands::get_company_logo,
-            commands::get_invoice_detail,
-            commands::ingest_raw_qbw,
-            commands::list_qbw_batches,
-            commands::get_qbw_batch,
-            commands::set_qbw_mapping,
-            commands::auto_create_qbw_accounts,
-            commands::post_qbw_batch,
-            commands::discard_qbw_batch,
-            commands::list_ledger_batches,
-            commands::get_ledger_batch,
-            commands::set_ledger_account,
-            commands::auto_map_ledger_accounts,
-            commands::import_ledger_lists,
-            commands::post_ledger_batch,
-            commands::reverse_ledger_batch,
-            commands::discard_ledger_batch,
-            commands::start_over_ledger_batch,
-            commands::reverse_qbw_batch,
-            commands::open_window,
-        ])
+        .invoke_handler(guarded(commands::handler()))
         .build(tauri::generate_context!())
         .expect("error while building LocalBooks")
         .run(|app, event| match event {
@@ -411,4 +223,26 @@ fn main() {
             }),
             _ => {}
         });
+}
+
+/// Checks the signed-in user's role ([`permissions`]) before handing a command to `handler`; a
+/// refused command fails with the reason and never runs.
+fn guarded(handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let command = invoke.message.command();
+        let need = permissions::need(command);
+        let activity = matches!(need, permissions::Need::Write | permissions::Need::Admin) || command == "touch_session";
+        // Without a company file manager (startup failed), nothing is open to protect.
+        if let Some(db) = invoke.message.webview().try_state::<db::Db>() {
+            if let Err(reason) = db.check(need, activity) {
+                if reason == permissions::IDLE_SIGNED_OUT {
+                    let app = invoke.message.webview().app_handle().clone();
+                    tauri::async_runtime::spawn(async move { commands::sign_out_after_idle(&app).await });
+                }
+                invoke.resolver.reject(reason);
+                return true;
+            }
+        }
+        handler(invoke)
+    }
 }

@@ -1,9 +1,26 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
-import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveText, toCsv } from './ReportParts.jsx';
+import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveReportXlsx, saveText, saveXlsx, statementSheet, toCsv } from './ReportParts.jsx';
 import { useCompany } from './PrintDocuments.jsx';
-import { AgingReport, BudgetVsActualReport, CashFlowReport, Vendors1099Report, GeneralLedgerReport, SalesTaxLiabilityReport, SummaryReport, TrialBalanceReport } from './MoreReports.jsx';
+import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
+import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
+import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
+import {
+  AgingReport,
+  BalanceSheetBudgetVsActualReport,
+  BudgetVsActualReport,
+  CashFlowReport,
+  GeneralLedgerReport,
+  InventoryValuationDetailReport,
+  InventoryValuationReport,
+  MissingChecksReport,
+  SalesTaxLiabilityReport,
+  StockStatusReport,
+  SummaryReport,
+  TrialBalanceReport,
+  Vendors1099Report,
+} from './MoreReports.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -33,7 +50,7 @@ export function splitPeriods(start, end, mode) {
   return columns;
 }
 
-const shiftYear = (date) => {
+export const shiftYear = (date) => {
   const [y, m, d] = date.split('-').map(Number);
   return iso(y - 1, m, Math.min(d, lastDay(y - 1, m)));
 };
@@ -49,7 +66,7 @@ export function priorRange(start, end, mode) {
 const RANGE_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const shortRange = (from, to) => `${RANGE_LABEL.format(new Date(`${from}T00:00:00Z`))} – ${RANGE_LABEL.format(new Date(`${to}T00:00:00Z`))}`;
 
-function ProfitAndLoss({ byClass = false, navigate }) {
+function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null, navigate }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
   const [period, setPeriod] = useState('fiscalYearToDate');
   const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
@@ -60,7 +77,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
   const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
   const [basis, setBasis] = useState('ACCRUAL');
   const [split, setSplit] = useState('total'); // total | months | quarters
-  const [compare, setCompare] = useState('none'); // none | period | year
+  const [compare, setCompare] = useState(initialCompare); // none | period | year
   const periodColumns = () => {
     if (split !== 'total') return splitPeriods(start, end, split);
     if (compare === 'none') return null;
@@ -178,7 +195,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
               const columns = data.columns ?? [{ label: 'Total' }];
               const rows = [
                 [company.name],
-                ['Profit and Loss'],
+                [title ?? 'Profit and Loss'],
                 [subtitle],
                 [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
                 [],
@@ -189,6 +206,19 @@ function ProfitAndLoss({ byClass = false, navigate }) {
                 ]),
               ];
               return saveText(toCsv(rows), `Profit-and-Loss_${start}_to_${end}.csv`, setNotice);
+            }}
+            onXlsx={() => {
+              if (byClass) return saveReportXlsx('profit_and_loss_by_class', { startDate: start, endDate: end }, `Profit-and-Loss-by-Class_${start}_to_${end}.xlsx`, setNotice);
+              if (!multi && basis === 'ACCRUAL') return saveReportXlsx('profit_and_loss', { startDate: start, endDate: end, classFilter }, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
+              const sheet = statementSheet({
+                company: company.name,
+                title: title ?? 'Profit and Loss',
+                subtitle,
+                notes: [`${basis === 'CASH' ? 'Cash' : 'Accrual'} basis`],
+                lines: data.lines,
+                columns: data.columns ?? null,
+              });
+              return saveXlsx(sheet, `Profit-and-Loss_${start}_to_${end}.xlsx`, setNotice);
             }}
           />
         </div>
@@ -201,7 +231,7 @@ function ProfitAndLoss({ byClass = false, navigate }) {
       )}
       {data && (
         <Statement
-          title={byClass ? 'Profit and Loss by Class' : 'Profit and Loss'}
+          title={title ?? (byClass ? 'Profit and Loss by Class' : 'Profit and Loss')}
           subtitle={subtitle}
           lines={data.lines}
           columns={byClass || multi ? data.columns : null}
@@ -245,7 +275,11 @@ function BalanceSheet({ navigate }) {
           </div>
         )}
         <div className={data ? '' : 'ml-auto'}>
-          <ExportMenu onNotice={setNotice} onCsv={() => saveCsv('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.csv`, setNotice)} />
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() => saveCsv('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.csv`, setNotice)}
+            onXlsx={() => saveReportXlsx('balance_sheet', { asOf }, `Balance-Sheet_${asOf}.xlsx`, setNotice)}
+          />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -263,6 +297,64 @@ function BalanceSheet({ navigate }) {
   );
 }
 
+/** Balance Sheet as of a date beside the same date a year earlier, with $ and % change. */
+function BalanceSheetComparison({ navigate }) {
+  const [asOf, setAsOf] = useState(todayIso());
+  const [notice, setNotice] = useState(null);
+  const company = useCompany();
+  const prior = asOf ? shiftYear(asOf) : null;
+  const { data, error, reload } = useLedgerQuery(() =>
+    asOf ? api.getBalanceSheetColumns([{ label: RANGE_LABEL.format(new Date(`${asOf}T00:00:00Z`)), asOf }, { label: RANGE_LABEL.format(new Date(`${prior}T00:00:00Z`)), asOf: prior }], true) : Promise.resolve(null),
+  );
+  useEffect(() => {
+    reload();
+  }, [asOf, reload]);
+  const title = 'Balance Sheet Prev Year Comparison';
+  const subtitle = asOf ? `As of ${longDate(asOf)} and ${longDate(prior)}` : '';
+  return (
+    <>
+      <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
+        <label>
+          <span className="qb-label">As of</span>
+          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+        </label>
+        <div className="ml-auto">
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() =>
+              saveText(
+                toCsv([
+                  [company.name],
+                  [title],
+                  [subtitle],
+                  [],
+                  ['Account', ...data.columns.map((c) => c.label)],
+                  ...data.lines.map((l) => [`${'  '.repeat(l.depth)}${l.label}`, ...l.amountsCents.map((a, i) => (data.columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a)))]),
+                ]),
+                `Balance-Sheet-Prev-Year-Comparison_${asOf}.csv`,
+                setNotice,
+              )
+            }
+            onXlsx={() => saveXlsx(statementSheet({ company: company.name, title, subtitle, notes: ['Accrual basis'], lines: data.lines, columns: data.columns }), `Balance-Sheet-Prev-Year-Comparison_${asOf}.xlsx`, setNotice)}
+          />
+        </div>
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {error && <Notice kind="error" text={error} />}
+      {data && (
+        <Statement
+          title={title}
+          subtitle={subtitle}
+          lines={data.lines}
+          columns={data.columns}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: null, endDate: asOf, includeSubaccounts: line.kind === 'subtotal' })}
+          footer="Accrual basis · each column closes earlier fiscal years' profit into Retained Earnings · % Change is against the earlier date"
+        />
+      )}
+    </>
+  );
+}
+
 /** The report list, grouped as in classic desktop accounting software. */
 const REPORT_GROUPS = [
   {
@@ -270,16 +362,23 @@ const REPORT_GROUPS = [
     reports: [
       ['pl', 'Profit and Loss'],
       ['plc', 'Profit and Loss by Class'],
+      ['pl-py', 'Profit and Loss Prev Year Comparison'],
       ['bs', 'Balance Sheet'],
+      ['bs-py', 'Balance Sheet Prev Year Comparison'],
       ['cf', 'Statement of Cash Flows'],
-      ['bva', 'Budget vs. Actuals'],
+    ],
+  },
+  {
+    title: 'Budgets',
+    reports: [
+      ['bva', 'Profit and Loss Budget vs. Actual'],
+      ['bs-bva', 'Balance Sheet Budget vs. Actual'],
     ],
   },
   {
     title: 'Who owes you',
     reports: [
       ['ar', 'A/R Aging Summary'],
-      ['ar-detail', 'Open Invoices (A/R Aging Detail)'],
     ],
   },
   {
@@ -287,13 +386,14 @@ const REPORT_GROUPS = [
     reports: [
       ['sales-customer', 'Sales by Customer Summary'],
       ['sales-product', 'Sales by Product/Service Summary'],
+      ['sales-rep', 'Sales by Rep Summary'],
     ],
   },
+  { title: 'Jobs', reports: JOB_REPORTS },
   {
     title: 'What you owe',
     reports: [
       ['ap', 'A/P Aging Summary'],
-      ['ap-detail', 'Unpaid Bills (A/P Aging Detail)'],
       ['sales-tax', 'Sales Tax Liability'],
     ],
   },
@@ -305,23 +405,37 @@ const REPORT_GROUPS = [
     ],
   },
   {
-    title: 'For my accountant',
+    title: 'Inventory',
+    reports: [
+      ['inv-val', 'Inventory Valuation Summary'],
+      ['inv-detail', 'Inventory Valuation Detail'],
+      ['stock-status', 'Inventory Stock Status by Item'],
+    ],
+  },
+  {
+    title: 'Banking',
+    reports: [['missing-checks', 'Missing Checks']],
+  },
+  {
+    title: 'Accountant & Taxes',
     reports: [
       ['tb', 'Trial Balance'],
       ['gl', 'General Ledger'],
+      ...ACCOUNTANT_REPORTS,
     ],
   },
 ];
 
 export default function Reports({ navigate, intent }) {
   const [report, setReport] = useState(() => intent?.data?.report ?? 'pl');
+  const custom = useCustomReports();
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]);
   return (
     <div className="flex h-full gap-2 p-2">
       <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
-        {REPORT_GROUPS.map((group) => (
+        {withCustomReports(REPORT_GROUPS, custom).map((group) => (
           <div key={group.title} className="mb-1">
             <div className="px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">{group.title}</div>
             {group.reports.map(([id, label]) => (
@@ -353,18 +467,27 @@ export default function Reports({ navigate, intent }) {
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
         {report === 'bs' && <BalanceSheet navigate={navigate} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
-        {report === 'ar' && <AgingReport key="ar" payable={false} detail={false} />}
-        {report === 'ar-detail' && <AgingReport key="ard" payable={false} detail />}
-        {report === 'ap' && <AgingReport key="ap" payable detail={false} />}
-        {report === 'ap-detail' && <AgingReport key="apd" payable detail />}
+        {report === 'ar' && <AgingReport key="ar" payable={false} />}
+        {report === 'ap' && <AgingReport key="ap" payable />}
         {report === 'sales-customer' && <SummaryReport key="sc" by="customer" />}
         {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
+        {report === 'sales-rep' && <SummaryReport key="sr" by="rep" />}
         {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
+        {report === 'pl-py' && <ProfitAndLoss key="pl-py" initialCompare="year" title="Profit and Loss Prev Year Comparison" navigate={navigate} />}
+        {report === 'bs-py' && <BalanceSheetComparison navigate={navigate} />}
         {report === 'bva' && <BudgetVsActualReport navigate={navigate} />}
+        {report === 'bs-bva' && <BalanceSheetBudgetVsActualReport navigate={navigate} />}
+        {report === 'inv-val' && <InventoryValuationReport />}
+        {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
+        {report === 'stock-status' && <StockStatusReport />}
+        {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
+        {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
+        {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
+        {isCustomReport(report) && <CustomReport key={report} report={report} custom={custom} navigate={navigate} onOpen={setReport} />}
       </div>
     </div>
   );

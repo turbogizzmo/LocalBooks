@@ -1,0 +1,24 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Unpaid Bills, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Due Date              Aging  Open Balance
+Lumen Media
+                               Bill                      2025-12-01    LM-88                     Bill #LM-88 - Lumen Medi  2025-12-16               15      1,125.00
+Total Lumen Media                                                                                                                                           1,125.00
+Northwind Software
+                               Bill                      2025-12-03    NW-12                     Bill #NW-12 - Northwind   2026-01-02                         129.00
+Total Northwind Software                                                                                                                                      129.00
+Pinecrest Office Supply
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  2025-10-05               87        542.50
+                               Bill                      2025-11-20    PC-4521                   Bill #PC-4521 - Pinecres  2025-12-20               11        187.40
+Total Pinecrest Office S                                                                                                                                      729.90
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   2025-12-10               21        425.00
+                               Vendor Credit             2025-11-25    RP-C1                     Vendor credit #RP-C1 - R  2025-11-25               36        -35.00
+Total Riverside Print Sh                                                                                                                                      390.00
+TOTAL                                                                                                                                                       2,373.90
+
+6 lines

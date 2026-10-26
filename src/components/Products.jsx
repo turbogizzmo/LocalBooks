@@ -1,10 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import ChangePrices from './ChangePrices.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
+import { CustomFieldInputs } from './SalesLists.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
+import { todayIso } from '../lib/dates.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
@@ -16,7 +21,11 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [fields, setFields] = useState([]);
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
+  useEffect(() => {
+    api.getCustomValues('ITEM', product.id).then(setFields, () => setFields([]));
+  }, [product.id]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -24,6 +33,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     setBusy(true);
     try {
       const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId, isTaxable: taxable });
+      if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
     } catch (err) {
       setError(errorText(err));
@@ -55,6 +65,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
             <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
             Taxable: charge sales tax when this is sold
           </label>
+          <CustomFieldInputs fields={fields} onChange={setFields} />
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
@@ -81,6 +92,7 @@ export default function Products({ accounts }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [changingPrices, setChangingPrices] = useState(false);
   const setActive = async (p, active) => {
     try {
       await api.setProductActive(p.id, active);
@@ -89,6 +101,43 @@ export default function Products({ accounts }) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
+
+  const company = useCompany();
+  const exports = tableExports({
+    company: company.name,
+    title: 'Products & Services List',
+    subtitle: `As of ${longDate(todayIso())}`,
+    columns: [
+      { label: 'Name', kind: 'text' },
+      { label: 'Description', kind: 'text' },
+      { label: 'Rate', kind: 'money' },
+      { label: 'Income account', kind: 'text' },
+      { label: 'Taxable', kind: 'text' },
+      { label: 'On hand', kind: 'number' },
+      { label: 'Avg cost', kind: 'money' },
+      { label: 'Stock value', kind: 'money' },
+    ],
+    rows: () =>
+      (data ?? [])
+        .filter((p) => showInactive || p.isActive)
+        .map((p) => {
+          const item = items.get(p.id);
+          return {
+            cells: [
+              `${p.name}${p.isActive ? '' : ' (inactive)'}`,
+              p.description ?? '',
+              p.rateCents || null,
+              accountLabel(accounts, p.incomeAccountId),
+              p.isTaxable ? 'Yes' : 'No',
+              item ? item.qtyOnHandE4 / 10_000 : null,
+              item?.averageCostCents ?? null,
+              item ? item.valueCents : null,
+            ],
+          };
+        }),
+    filename: 'Products-and-Services',
+    onNotice: setNotice,
+  });
 
   const chosenAccount = accountId ?? defaultIncome;
   const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
@@ -152,14 +201,21 @@ export default function Products({ accounts }) {
           }}
         />
       )}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col">
+      {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
+      <section className={`qb-panel min-h-0 flex-1 flex-col ${changingPrices ? 'hidden' : 'flex'}`}>
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
-          <label className="ml-auto flex flex-none items-center gap-1 text-sm">
+          <button type="button" className="qb-btn qb-btn-secondary ml-auto mr-2 h-row flex-none" onClick={() => setChangingPrices(true)}>
+            Change prices…
+          </button>
+          <label className="flex flex-none items-center gap-1 text-sm">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive
           </label>
+          <div className="ml-2 flex-none">
+            <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          </div>
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}

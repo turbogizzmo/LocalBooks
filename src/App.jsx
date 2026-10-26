@@ -7,6 +7,7 @@ import Invoices from './components/Invoices.jsx';
 import Estimates from './components/Estimates.jsx';
 import PartyList from './components/PartyList.jsx';
 import Products from './components/Products.jsx';
+import SalesLists from './components/SalesLists.jsx';
 import ExpensesChecks from './components/ExpensesChecks.jsx';
 import Bills from './components/Bills.jsx';
 import TimeTracking from './components/TimeTracking.jsx';
@@ -29,12 +30,15 @@ import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
 import Statements from './components/Statements.jsx';
+import FinanceCharges from './components/FinanceCharges.jsx';
 import SendForms from './components/SendForms.jsx';
 import Recurring, { useDueRecurring } from './components/Recurring.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
-import { useCompanyFileActions } from './components/CompanyFiles.jsx';
+import FindTransactions from './components/FindTransactions.jsx';
+import { hasPendingMigration, useCompanyFileActions } from './components/CompanyFiles.jsx';
+import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
@@ -52,6 +56,8 @@ const IS_MAC = /Mac/.test(navigator.userAgent);
 
 function initialView() {
   if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
+  // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
+  if (hasPendingMigration()) return 'accounting/qbw-import';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && findNav(saved) && !findNav(saved).item.children) return saved;
@@ -71,6 +77,12 @@ export default function App() {
   const prefs = useLedgerQuery(api.getPreferences);
   const logo = useLedgerQuery(api.getCompanyLogo);
   const storage = useLedgerQuery(api.getStorageStatus);
+  const signIn = useLedgerQuery(api.getSignInState);
+  const signedIn = signIn.data?.user ?? null;
+  useIdleLock(signIn.data);
+  // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
+  // nobody counts as an Admin, so a View-only or Standard user never sees Admin screens first.
+  const isAdmin = signIn.data ? !signIn.data.usersEnabled || signedIn?.role === 'ADMIN' : false;
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
@@ -86,6 +98,7 @@ export default function App() {
     ein: prefs.data?.company_ein ?? '',
     logo: logo.data ?? null,
     homeCurrency: prefs.data?.home_currency_code ?? 'USD',
+    fxLookup: prefs.data?.exchange_rate_lookup === 'true',
   };
 
   // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
@@ -182,6 +195,16 @@ export default function App() {
             </button>
           )}
           <GlobalSearch navigate={select} />
+          {signedIn && (
+            <button
+              type="button"
+              className="flex-none rounded-xs px-2 py-0.5 text-xs font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+              onClick={() => select('settings', 'users')}
+              title="Your sign-in, in Settings › Users & Passwords"
+            >
+              {signedIn.displayName}
+            </button>
+          )}
           {storage.data && (
             <span
               className="flex min-w-0 max-w-[480px] items-center gap-1.5 text-xs text-qb-ink-muted"
@@ -244,6 +267,11 @@ export default function App() {
             <Notice kind="info" text={`${storage.data.startupWarning} Change it in Settings › File & Data Controls.`} />
           </div>
         )}
+        {signedIn?.role === 'VIEW_ONLY' && (
+          <div className="no-print">
+            <Notice kind="info" text={`Signed in as ${signedIn.displayName}, view only: you can look at the books and run reports, but not change anything.`} />
+          </div>
+        )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           {view === 'dashboard' && <Dashboard />}
@@ -253,8 +281,10 @@ export default function App() {
           {view === 'sales/credits' && <CreditMemos {...props} />}
           {view === 'sales/customers' && <PartyList kind="customer" />}
           {view === 'sales/products' && <Products accounts={list} />}
+          {view === 'sales/lists' && <SalesLists />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
           {view === 'sales/statements' && <Statements />}
+          {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={select} />}
           {view === 'sales/send-forms' && <SendForms />}
           {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
           {view === 'expenses/bills' && <Bills {...props} />}
@@ -270,13 +300,15 @@ export default function App() {
           {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
           {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
+          {view === 'accounting/find' && <FindTransactions {...props} />}
           {view === 'accounting/recurring' && <Recurring />}
           {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}
-          {view === 'accounting/qbw-import' && <QbwImporter accounts={list} />}
+          {view === 'accounting/qbw-import' &&
+            (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} />}
+          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} />}
         </div>
       </main>
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}

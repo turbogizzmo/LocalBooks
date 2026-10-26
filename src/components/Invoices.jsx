@@ -8,10 +8,12 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
+import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
+import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const TERMS = [
@@ -41,6 +43,8 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const money = (c) => formatMoney(c, foreign);
   const [rate, setRate] = useState(foreign ? formatRate(invoice.exchangeRateE6) : '');
   const rateE6 = foreign ? parseRateE6(rate) : null;
+  // The invoice's rate is only a starting point: with lookup on, the payment date's rate replaces it.
+  const suggested = useSuggestedRate({ currency: foreign, date, rate, setRate, initialIsDefault: true });
   const [method, setMethod] = useState('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -97,7 +101,10 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
           {foreign && (
             <label>
               <span className="qb-label">1 {foreign} = ? {invoice.homeCurrency}</span>
-              <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(rateError)} />
+              <span className="flex items-center gap-1.5">
+                <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(rateError)} />
+                {suggested.note}
+              </span>
             </label>
           )}
           <label>
@@ -178,12 +185,13 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.invoiceNumber - b.invoiceNumber);
   const money = (c) => formatMoney(c, currency || null);
   const rateE6 = currency ? parseRateE6(rate) : null;
+  const suggested = useSuggestedRate({ currency, date, rate, setRate });
   const pickCustomer = (name) => {
     setCustomer(name);
     const first = open.find((i) => i.customerName === name);
     const code = first?.currencyCode ?? '';
     setCurrency(code);
-    setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+    suggested.adopt(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
     setApplied({});
     setReceived('');
   };
@@ -259,7 +267,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
               onChange={(e) => {
                 setCurrency(e.target.value);
                 const first = customerInvoices.find((i) => (i.currencyCode ?? '') === e.target.value);
-                setRate(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
+                suggested.adopt(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
                 setApplied({});
                 setReceived('');
               }}
@@ -273,7 +281,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
         {currency && (
           <label>
             <span className="qb-label">1 {currency} = ? {homeCurrency}</span>
-            <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rate !== '' && rateE6 === null} />
+            <span className="flex items-center gap-1.5">
+              <input className="qb-input num w-[96px]" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rate !== '' && rateE6 === null} />
+              {suggested.note}
+            </span>
           </label>
         )}
         <label>
@@ -382,7 +393,9 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
-  const COLS = 9;
+  // The Rep column shows once any invoice has a rep.
+  const withRep = (data ?? []).some((inv) => inv.salesRep);
+  const COLS = withRep ? 10 : 9;
   const [printPortal, forms] = useFormPrinter(onNotice);
   const emailed = useEmailStatuses('INVOICE');
   const [unsentOnly, setUnsentOnly] = useState(false);
@@ -409,6 +422,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
           <colgroup>
             <col className="w-[136px]" />
             <col />
+            {withRep && <col className="w-[56px]" />}
             <col className="w-[92px]" />
             <col className="w-[92px]" />
             <col className="w-[112px]" />
@@ -421,6 +435,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
             <tr>
               <th className="qb-grid-head">No.</th>
               <th className="qb-grid-head">Customer</th>
+              {withRep && <th className="qb-grid-head">Rep</th>}
               <th className="qb-grid-head">Date</th>
               <th className="qb-grid-head">Due</th>
               <th className="qb-grid-head text-right">Total</th>
@@ -453,9 +468,11 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                   >
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
+                      {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
+                    {withRep && <td className="qb-grid-cell">{inv.salesRep ?? ''}</td>}
                     <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                     <td className={`qb-grid-cell ${overdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
                     <td className="qb-grid-cell num" title={inv.currencyCode ? `${formatCents(inv.homeTotalCents)} booked at ${formatRate(inv.exchangeRateE6)}` : undefined}>
@@ -470,6 +487,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     </td>
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
+                        label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
                           {
@@ -536,6 +554,7 @@ export default function Invoices({ accounts, intent }) {
   const [discountText, setDiscountText] = useState('');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data);
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -552,8 +571,9 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
-        ({ estimate, lines: estimateLines }) => {
+        ({ estimate, lines: estimateLines, details }) => {
           setCustomer(estimate.customerName);
+          sales.set(details);
           setLines([
             ...estimateLines.map((l) => ({
               ...blankLine(l.incomeAccountId),
@@ -589,8 +609,9 @@ export default function Invoices({ accounts, intent }) {
 
   const loadForEdit = (inv) => {
     api.getInvoiceDetail(inv.id).then(
-      ({ invoice, items }) => {
+      ({ invoice, items, details }) => {
         setReceiving(false);
+        sales.set(details);
         setFromEstimate(null);
         setEditing({ id: invoice.id, number: invoice.invoiceNumber });
         setCustomer(invoice.customerName);
@@ -631,6 +652,7 @@ export default function Invoices({ accounts, intent }) {
     setDiscountText('');
     formClass.reset();
     tax.reset();
+    sales.reset();
   };
 
   const [memorizing, setMemorizing] = useState(null);
@@ -669,6 +691,7 @@ export default function Invoices({ accounts, intent }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
+        ...sales.payload(),
       };
       if (mode === 'memorize') return setMemorizing(input);
       if (editing) {
@@ -780,6 +803,7 @@ export default function Invoices({ accounts, intent }) {
               }}
             />
           </label>
+          {sales.picker}
           {formClass.header}
           {tax.picker}
           <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
@@ -788,7 +812,7 @@ export default function Invoices({ accounts, intent }) {
               Receive payment
             </button>
           )}
-          <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} />
+          <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={issueDate} />
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
             <div className="num text-3xl font-semibold leading-none">{formatMoney(total, currency || null)}</div>

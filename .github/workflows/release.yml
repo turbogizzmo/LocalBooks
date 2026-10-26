@@ -153,6 +153,22 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        shell: bash
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          # The section under "## [<version>]", up to the next "## [".
+          notes=$(awk -v v="## [$version]" '$0 == v { on = 1; next } /^## \[/ { on = 0 } on' CHANGELOG.md)
+          if [ -z "$(echo "$notes" | tr -d '[:space:]')" ]; then
+            echo "::warning::CHANGELOG.md has no section for $version; the release notes list downloads only"
+          fi
+          {
+            echo 'body<<NOTES_END'
+            echo "$notes"
+            echo 'NOTES_END'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and package with Tauri
         id: tauri
         uses: tauri-apps/tauri-action@v1
@@ -167,6 +183,9 @@ jobs:
           releaseName: LocalBooks v__VERSION__
           releaseBody: |
             LocalBooks v__VERSION__: local-first, double-entry accounting.
+
+            **What's new**
+            ${{ steps.notes.outputs.body }}
 
             **Downloads**
             - macOS (Apple Silicon and Intel): `.dmg`

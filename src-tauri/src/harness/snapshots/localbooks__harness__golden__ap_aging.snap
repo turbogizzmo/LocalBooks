@@ -1,0 +1,17 @@
+---
+source: src/harness/golden.rs
+expression: aging(true).await
+---
+PAYABLE aging as of 2025-12-31
+
+Name                               Current        1 - 30       31 - 60       61 - 90   91 and over         Total
+Lumen Media                           0.00      1,125.00          0.00          0.00          0.00      1,125.00
+Northwind Software                  129.00          0.00          0.00          0.00          0.00        129.00
+Pinecrest Office Supply               0.00        187.40          0.00        542.50          0.00        729.90
+TOTAL                               129.00      1,312.40          0.00        542.50          0.00      1,983.90
+
+Open items
+Lumen Media                 Bill          LM-88     2025-12-01  due 2025-12-16    15 days past due      1,125.00
+Northwind Software          Bill          NW-12     2025-12-03  due 2026-01-02    -2 days past due        129.00
+Pinecrest Office Supply     Bill          PC-4410   2025-09-05  due 2025-10-05    87 days past due        542.50
+Pinecrest Office Supply     Bill          PC-4521   2025-11-20  due 2025-12-20    11 days past due        187.40

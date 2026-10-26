@@ -1,15 +1,158 @@
 import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
+import { CustomFieldInputs } from './SalesLists.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
+import { todayIso } from '../lib/dates.js';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
   vendor: { list: api.listVendors, create: api.createVendor, noun: 'vendor', title: 'Vendors', balance: 'Open balance (A/P)' },
 };
+
+/**
+ * A vendor's tax ID. Shown masked until opened; locked (masked, read-only) for users who may not
+ * see sensitive data.
+ */
+function TaxIdField({ form, setForm }) {
+  const [open, setOpen] = useState(!form.taxIdMasked);
+  if (form.taxIdLocked) {
+    return (
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Tax ID (EIN or SSN)</span>
+        <input className="qb-input bg-qb-canvas" value={form.taxIdMasked ?? ''} placeholder="None" readOnly aria-describedby="tax-id-locked" />
+        <span id="tax-id-locked" className="text-2xs text-qb-ink-faint">Only users who can see sensitive data can view or change it.</span>
+      </label>
+    );
+  }
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="font-semibold text-qb-ink-muted">Tax ID (EIN or SSN)</span>
+      {open ? (
+        <input className="qb-input" value={form.taxId ?? ''} onChange={(e) => setForm((f) => ({ ...f, taxId: e.target.value }))} autoComplete="off" spellCheck={false} />
+      ) : (
+        <span className="flex gap-1">
+          <input className="qb-input min-w-0 flex-1 bg-qb-canvas" value={form.taxIdMasked} readOnly />
+          <button type="button" className="qb-btn qb-btn-secondary flex-none px-2" onClick={() => setOpen(true)}>
+            Show
+          </button>
+        </span>
+      )}
+    </label>
+  );
+}
+
+/** Whether a routing number passes its ABA check digit (weights 3, 7, 1). */
+export const routingNumberOk = (routing) =>
+  /^\d{9}$/.test(routing) && [...routing].reduce((sum, d, i) => sum + Number(d) * [3, 7, 1][i % 3], 0) % 10 === 0;
+
+/**
+ * A vendor's bank details for paying by ACH file. Masked until opened; locked (masked, read-only)
+ * for users who may not see sensitive data. `bank.draft` holds what the user typed; `null` there
+ * removes the details on save.
+ */
+function BankDetailsFields({ bank, setBank }) {
+  const view = bank.view;
+  if (view?.locked) {
+    return (
+      <div className="col-span-2 flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Bank details (ACH)</span>
+        <input className="qb-input bg-qb-canvas" value={`Routing ${view.routingMasked} · Account ${view.accountMasked} · ${view.accountType.toLowerCase()}`} readOnly aria-describedby="bank-locked" />
+        <span id="bank-locked" className="text-2xs text-qb-ink-faint">Only users who can see sensitive data can view or change them.</span>
+      </div>
+    );
+  }
+  const draft = bank.draft;
+  if (draft === undefined) {
+    return (
+      <div className="col-span-2 flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Bank details (ACH)</span>
+        <span className="flex gap-1">
+          <input
+            className="qb-input min-w-0 flex-1 bg-qb-canvas"
+            value={view ? `Routing ${view.routingMasked} · Account ${view.accountMasked} · ${view.accountType.toLowerCase()} · ${view.secCode === 'PPD' ? 'person' : 'business'}` : ''}
+            placeholder="None: add them to pay this vendor by ACH file"
+            readOnly
+          />
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary flex-none px-2"
+            onClick={() =>
+              setBank((b) => ({
+                ...b,
+                draft: {
+                  routingNumber: view?.routingNumber ?? '',
+                  accountNumber: view?.accountNumber ?? '',
+                  accountType: view?.accountType ?? 'CHECKING',
+                  secCode: view?.secCode ?? 'CCD',
+                },
+              }))
+            }
+          >
+            {view ? 'Show / change' : 'Add'}
+          </button>
+        </span>
+      </div>
+    );
+  }
+  if (draft === null) {
+    return (
+      <div className="col-span-2 flex items-center gap-2">
+        <span className="font-semibold text-qb-ink-muted">Bank details (ACH)</span>
+        <span className="text-qb-ink-muted">Removed when you save.</span>
+        <button type="button" className="qb-btn qb-btn-secondary px-2" onClick={() => setBank((b) => ({ ...b, draft: undefined }))}>
+          Undo
+        </button>
+      </div>
+    );
+  }
+  const set = (key) => (e) => setBank((b) => ({ ...b, draft: { ...b.draft, [key]: e.target.value } }));
+  const routing = draft.routingNumber.replace(/[\s-]/g, '');
+  const routingBad = routing !== '' && !routingNumberOk(routing);
+  return (
+    <fieldset className="col-span-2 grid grid-cols-2 gap-2 rounded border border-qb-border p-2">
+      <legend className="px-1 font-semibold text-qb-ink-muted">Bank details (ACH)</legend>
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Routing number</span>
+        <input className="qb-input num" value={draft.routingNumber} onChange={set('routingNumber')} inputMode="numeric" autoComplete="off" spellCheck={false} aria-invalid={routingBad} placeholder="9 digits" />
+        {routingBad && <span className="text-2xs text-qb-negative">This routing number fails its check digit.</span>}
+      </label>
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Account number</span>
+        <input className="qb-input num" value={draft.accountNumber} onChange={set('accountNumber')} autoComplete="off" spellCheck={false} />
+      </label>
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Account type</span>
+        <select className="qb-input" value={draft.accountType} onChange={set('accountType')}>
+          <option value="CHECKING">Checking</option>
+          <option value="SAVINGS">Savings</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Pay as</span>
+        <select className="qb-input" value={draft.secCode} onChange={set('secCode')}>
+          <option value="CCD">A business (CCD)</option>
+          <option value="PPD">A person (PPD)</option>
+        </select>
+      </label>
+      <div className="col-span-2 flex gap-2">
+        <button type="button" className="qb-btn qb-btn-secondary px-2" onClick={() => setBank((b) => ({ ...b, draft: undefined }))}>
+          Keep as before
+        </button>
+        {view && (
+          <button type="button" className="qb-btn qb-btn-secondary px-2" onClick={() => setBank((b) => ({ ...b, draft: null }))}>
+            Remove bank details
+          </button>
+        )}
+      </div>
+    </fieldset>
+  );
+}
 
 /** The full customer or vendor record: contact details, default terms and (vendors) 1099 status. */
 function PartyDialog({ kind, id, onClose, onSaved }) {
@@ -19,12 +162,20 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const salesTax = useSalesTax();
   const { data: formStyles } = useLedgerQuery(api.listFormStyles);
+  const reps = useLedgerQuery(api.listSalesReps).data ?? [];
+  const [fields, setFields] = useState([]);
+  // Vendors' bank details: `view` as stored, `draft` while being changed (undefined = unchanged).
+  const [bank, setBank] = useState({ view: null, draft: undefined });
 
   useEffect(() => {
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, termsDays: p.termsDays ?? '' }),
+      (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId }),
       (err) => setError(errorText(err)),
     );
+    api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
+    if (kind === 'vendor') {
+      api.getVendorBank(id).then((view) => setBank({ view, draft: undefined }), (err) => setError(errorText(err)));
+    }
   }, [kind, id]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -42,12 +193,20 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         termsDays: terms === '' ? null : Number(terms),
         notes: form.notes,
         taxId: form.taxId,
+        // Unchanged (or not ours to change): the stored value stays as it is.
+        keepTaxId: Boolean(form.taxIdLocked) || (form.taxId ?? '') === (form.originalTaxId ?? ''),
         is1099: Boolean(form.is1099),
         taxRateId: form.taxRateId ?? null,
         isTaxExempt: Boolean(form.isTaxExempt),
         taxExemption: form.taxExemption,
         formStyleId: form.formStyleId ?? null,
+        salesRepId: form.salesRepId ?? null,
+        customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
+      if (kind === 'vendor' && bank.draft !== undefined) {
+        const view = await api.setVendorBank(id, bank.draft);
+        setBank({ view, draft: undefined });
+      }
       onSaved(`Saved ${noun} ${saved.name}.`);
     } catch (err) {
       setError(errorText(err));
@@ -78,7 +237,8 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
               <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
             </label>
             {field('Terms (days)', 'termsDays', { inputMode: 'numeric', placeholder: kind === 'customer' ? 'e.g. 30 for Net 30' : 'e.g. 30' })}
-            {kind === 'vendor' && field('Tax ID (EIN or SSN)', 'taxId')}
+            {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
+            {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
             {kind === 'vendor' && (
               <label className="col-span-2 flex items-center gap-1.5 text-sm">
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
@@ -122,6 +282,24 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
                 </select>
               </label>
             )}
+            {kind === 'customer' && (reps.length > 0 || form.salesRepId) && (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Sales rep</span>
+                <select className="qb-input" value={form.salesRepId ?? ''} onChange={(e) => setForm((f) => ({ ...f, salesRepId: e.target.value === '' ? null : Number(e.target.value) }))}>
+                  <option value="">None</option>
+                  {reps
+                    .filter((r) => r.isActive || r.id === form.salesRepId)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.initials}
+                        {r.name ? ` (${r.name})` : ''}
+                        {r.isActive ? '' : ' (inactive)'}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            <CustomFieldInputs fields={fields} onChange={setFields} />
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>
               <textarea className="qb-input h-[44px] py-1" value={form.notes ?? ''} onChange={set('notes')} />
@@ -195,6 +373,23 @@ export default function PartyList({ kind }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
+  const company = useCompany();
+  const exports = tableExports({
+    company: company.name,
+    title: `${cfg.title} List`,
+    subtitle: `As of ${longDate(todayIso())}${query.trim() ? ` · matching "${query.trim()}"` : ''}`,
+    columns: [
+      { label: 'Name', kind: 'text' },
+      { label: 'Email', kind: 'text' },
+      { label: cfg.balance, kind: 'money' },
+    ],
+    rows: () => [
+      ...rows.map((p) => ({ depth: p.name.split(':').length - 1, cells: [`${p.name}${p.isActive ? '' : ' (inactive)'}`, p.email ?? '', p.openBalanceCents || null] })),
+      { kind: 'total', cells: ['TOTAL', '', total] },
+    ],
+    filename: `${cfg.title}-List`,
+    onNotice: setNotice,
+  });
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -220,6 +415,7 @@ export default function PartyList({ kind }) {
           <span className="ml-auto text-sm text-qb-ink-muted">
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
+          <ExportMenu printable={false} onNotice={setNotice} {...exports} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}

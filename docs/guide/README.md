@@ -7,11 +7,12 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 - [Set up your company](getting-started.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
+- [Users, passwords and sensitive data](users-and-passwords.md)
 
 ## Sales and customers
 
 - [Create and send an invoice](invoices.md)
-- [Record customer payments](customer-payments.md)
+- [Record customer payments](customer-payments.md) (and charge interest on overdue invoices)
 - [Sales receipts and estimates](sales-receipts-and-estimates.md)
 - [Design your invoices and estimates](custom-forms.md)
 - [Customers, products and services](customers-and-products.md)
@@ -19,7 +20,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 ## Expenses and vendors
 
-- [Record expenses and write checks](expenses-and-checks.md)
+- [Record expenses, write checks and record card credits](expenses-and-checks.md)
 - [Enter and pay bills](bills.md)
 
 ## Employees
@@ -37,7 +38,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Journal entries and voiding](journal-entries-and-voids.md)
 - [Verify and correct the ledger](ledger-integrity.md)
 - [Close a period](closing-the-books.md)
-- [Desktop Migration Wizard (.qbw import)](desktop-migration.md)
+- [Desktop Migration Wizard (.qbw, IIF, QIF and QuickBooks report imports)](desktop-migration.md)
 - [Revalue foreign-currency invoices](currency-revaluation.md)
 
 ## Reports and more

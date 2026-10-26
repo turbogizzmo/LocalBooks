@@ -11,6 +11,10 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
+pub mod suggest;
+
+use suggest::{Example, Query, SimilarTo, Suggester};
+
 use crate::banking::{write_deposit, DepositInput, DepositOtherLine};
 use crate::expenses::{write_expense, ExpenseInput, SplitLineInput};
 use crate::ledger::{db_err, rollback, MAX_LINE_CENTS};
@@ -20,8 +24,19 @@ use crate::ledger::{db_err, rollback, MAX_LINE_CENTS};
 pub struct CategorySuggestion {
     pub account_id: i64,
     pub rule_id: Option<i64>,
-    /// `LEARNED` (from past approvals), `BUILT_IN` (vendor list) or `DEFAULT` (uncategorized fallback).
+    /// `LEARNED` (a rule from past approvals), `BUILT_IN` (vendor list), `MODEL` (similar past
+    /// transactions, see [`suggest`]) or `DEFAULT` (uncategorized fallback).
     pub origin: String,
+    /// For `MODEL` suggestions: 0-100, and the past transaction this line is most like.
+    pub confidence: Option<u8>,
+    pub confidence_level: Option<&'static str>,
+    pub similar_to: Option<SimilarTo>,
+}
+
+impl CategorySuggestion {
+    fn plain(account_id: i64, rule_id: Option<i64>, origin: &str) -> Self {
+        CategorySuggestion { account_id, rule_id, origin: origin.into(), confidence: None, confidence_level: None, similar_to: None }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,6 +48,8 @@ pub struct BankTransactionView {
     pub description: String,
     pub amount_cents: i64,
     pub suggestion: Option<CategorySuggestion>,
+    /// A payee learned from similar past expenses (money out only).
+    pub payee: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -271,6 +288,8 @@ pub struct ColumnMapping {
 pub enum BankFileFormat {
     Csv,
     Ofx,
+    /// A statement PDF, read as a table by `bank_pdf`.
+    Pdf,
 }
 
 /// Bank files are usually UTF-8, but OFX 1.x and older CSV exports are often Windows-1252.
@@ -311,7 +330,7 @@ pub fn detect_mapping(headers: &[String]) -> Option<ColumnMapping> {
     let description = find(&["description", "memo", "payee", "name", "details"])?;
     let name = |i: usize| headers[i].trim().to_string();
     let exact_amount = norm.iter().position(|h| h == "amount");
-    let out = find(&["debit", "withdrawal", "money out", "paid out"]);
+    let out = find(&["debit", "withdrawal", "money out", "paid out", "purchase", "charges"]);
     let into = find(&["credit", "deposit", "money in", "paid in"]);
     let (amount, money_in, money_out) = match (exact_amount, into, out) {
         (Some(a), _, _) => (Some(name(a)), None, None),
@@ -322,12 +341,20 @@ pub fn detect_mapping(headers: &[String]) -> Option<ColumnMapping> {
 }
 
 /// A CSV file read into memory: its headers and its non-empty records with their line numbers.
+/// A statement PDF's transaction table is read into the same shape, numbered by transaction.
 pub struct CsvTable {
     pub headers: Vec<String>,
     records: Vec<(u64, csv::StringRecord)>,
+    /// How errors name a record: `BANK_CSV_ROW: line 3` or `BANK_PDF_ROW: transaction 3`.
+    row_error: (&'static str, &'static str),
 }
 
 impl CsvTable {
+    pub fn from_pdf(table: crate::bank_pdf::PdfTable) -> Self {
+        let records = table.records.into_iter().map(|(n, cells)| (n, csv::StringRecord::from(cells))).collect();
+        CsvTable { headers: table.headers, records, row_error: ("BANK_PDF_ROW", "transaction") }
+    }
+
     pub fn read(text: &str) -> Result<Self, String> {
         let mut csv = csv::ReaderBuilder::new().has_headers(true).flexible(true).trim(csv::Trim::All).from_reader(text.as_bytes());
         let headers = csv.headers().map_err(|e| format!("BANK_CSV_READ: {e}"))?.iter().map(|h| h.trim_start_matches('\u{feff}').trim().to_string()).collect();
@@ -338,7 +365,7 @@ impl CsvTable {
                 records.push((record.position().map_or(0, |p| p.line()), record));
             }
         }
-        Ok(CsvTable { headers, records })
+        Ok(CsvTable { headers, records, row_error: ("BANK_CSV_ROW", "line") })
     }
 
     fn column(&self, name: &str) -> Result<usize, String> {
@@ -371,7 +398,8 @@ impl CsvTable {
         let mut rows = Vec::with_capacity(self.records.len());
         for (line, record) in &self.records {
             let field = |i: usize| record.get(i).unwrap_or("");
-            let err = |e: String| format!("BANK_CSV_ROW: line {line}: {e}");
+            let (code, noun) = self.row_error;
+            let err = |e: String| format!("{code}: {noun} {line}: {e}");
             let date = parse_date_ordered(field(date_col), mapping.date_order).map_err(err)?;
             let amount_cents = match amounts {
                 Amounts::Signed(i) => parse_amount_cents(field(i)).map_err(err)?,
@@ -485,6 +513,166 @@ pub struct BankFileInspection {
     pub preview: Vec<BankRow>,
     /// Why the file cannot be read with this mapping (shown in the dialog), if it cannot.
     pub problem: Option<String>,
+    /// For a statement PDF: whether its transactions add up to the balances it prints.
+    pub balance_check: Option<BalanceCheck>,
+}
+
+/// Whether a statement's transactions take its opening balance to its closing balance, and each
+/// running balance to the next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceCheck {
+    /// `MATCHES`, `DIFFERS`, or `NOT_PRINTED` when the statement shows no balances to check.
+    pub status: &'static str,
+    pub opening_cents: Option<i64>,
+    pub closing_cents: Option<i64>,
+    /// What the transactions add to the printed balance.
+    pub change_cents: i64,
+    /// Closing balance minus (opening balance plus change); zero when it matches.
+    pub difference_cents: i64,
+    /// The printed balances are what is owed (a card or loan account), so charges raise them.
+    pub owed: bool,
+    /// The amounts were read with the opposite sign, which the balances showed to be right.
+    pub signs_reversed: bool,
+    /// The first transaction whose running balance does not follow from the one before it.
+    pub first_mismatch_row: Option<u64>,
+}
+
+/// The balances a statement PDF prints, to check its transactions against.
+struct StatementBalances {
+    opening_cents: Option<i64>,
+    closing_cents: Option<i64>,
+    balance_column: Option<String>,
+}
+
+/// A bank file read into memory.
+enum BankFile {
+    Ofx(String),
+    Table { format: BankFileFormat, table: CsvTable, signature: String, balances: Option<StatementBalances> },
+}
+
+fn is_pdf(bytes: &[u8]) -> bool {
+    bytes.get(..1024).unwrap_or(bytes).windows(5).any(|w| w == b"%PDF-")
+}
+
+fn read_bank_file(path: &Path) -> Result<BankFile, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("BANK_FILE_OPEN: {}: {e}", path.display()))?;
+    if is_pdf(&bytes) {
+        let pdf = crate::bank_pdf::read_table(&bytes)?;
+        let balances = StatementBalances { opening_cents: pdf.opening_cents, closing_cents: pdf.closing_cents, balance_column: pdf.balance_column.clone() };
+        // PDF layouts are remembered apart from CSV files that happen to share their titles.
+        let signature = format!("pdf:{}", header_signature(&pdf.headers));
+        return Ok(BankFile::Table { format: BankFileFormat::Pdf, table: CsvTable::from_pdf(pdf), signature, balances: Some(balances) });
+    }
+    let text = decode_text(&bytes);
+    if is_ofx(&text) {
+        return Ok(BankFile::Ofx(text));
+    }
+    let table = CsvTable::read(&text)?;
+    let signature = header_signature(&table.headers);
+    Ok(BankFile::Table { format: BankFileFormat::Csv, table, signature, balances: None })
+}
+
+/// The mapping a table will be read with: given, saved for its headers, or detected. Also returns
+/// where it came from and whether the date order is certain.
+async fn choose_mapping(pool: &SqlitePool, table: &CsvTable, signature: &str, given: Option<ColumnMapping>) -> Result<(Option<ColumnMapping>, Option<&'static str>, bool), String> {
+    if let Some(m) = given {
+        return Ok((Some(m), Some("GIVEN"), true));
+    }
+    if let Some(m) = saved_mapping(pool, signature).await? {
+        return Ok((Some(m), Some("SAVED"), true));
+    }
+    Ok(match detect_mapping(&table.headers) {
+        Some(mut m) => {
+            let (order, certain) = detect_date_order(table.values(&m.date));
+            m.date_order = order;
+            (Some(m), Some("DETECTED"), certain)
+        }
+        None => (None, None, false),
+    })
+}
+
+/// Whether the balances of `bank_account_id` are what is owed (a card, loan or other liability).
+async fn balance_is_owed(pool: &SqlitePool, bank_account_id: Option<i64>) -> Result<bool, String> {
+    let Some(id) = bank_account_id else { return Ok(false) };
+    let owed: Option<bool> = sqlx::query_scalar(
+        "SELECT t.classification = 'LIABILITY' FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(owed.unwrap_or(false))
+}
+
+/// Checks a statement's rows against its balances. If they only add up with every amount's sign
+/// reversed (a card statement printing charges as positive amounts, say), the rows are reversed.
+fn check_balances(rows: &mut [BankRow], table: &CsvTable, printed: &StatementBalances, owed: bool) -> BalanceCheck {
+    let running: Vec<Option<i64>> = match &printed.balance_column {
+        Some(col) => table.values(col).map(|v| parse_amount_cents(v).ok()).collect(),
+        None => Vec::new(),
+    };
+    let running = |i: usize| running.get(i).copied().flatten();
+    // Statements listed newest first are checked oldest first.
+    let mut order: Vec<usize> = (0..rows.len()).collect();
+    if rows.first().zip(rows.last()).is_some_and(|(a, b)| a.date > b.date) {
+        order.reverse();
+    }
+
+    // `sign` is what one unit of a row's amount adds to the printed balance.
+    let evaluate = |sign: i64| {
+        let effect = |i: usize| sign * rows[i].amount_cents;
+        let mut balance = printed.opening_cents;
+        let mut first_mismatch = None;
+        let mut derived_opening = None;
+        let mut sum_before = 0;
+        for &i in &order {
+            balance = balance.map(|b| b + effect(i));
+            sum_before += effect(i);
+            if let Some(shown) = running(i) {
+                match balance {
+                    Some(b) if b != shown => {
+                        first_mismatch.get_or_insert(rows[i].row);
+                    }
+                    Some(_) => {}
+                    None => derived_opening = Some(shown - sum_before),
+                }
+                balance = Some(shown);
+            }
+        }
+        let change: i64 = order.iter().map(|&i| effect(i)).sum();
+        let opening = printed.opening_cents.or(derived_opening);
+        // Without a printed closing balance, the last running balance stands in for it.
+        let any_running = order.iter().any(|&i| running(i).is_some());
+        let closing = printed.closing_cents.or(balance.filter(|_| any_running));
+        let difference = match (opening, closing) {
+            (Some(o), Some(c)) => c - (o + change),
+            _ => 0,
+        };
+        (opening, closing, change, difference, first_mismatch)
+    };
+
+    let expected = if owed { -1 } else { 1 };
+    let mut result = evaluate(expected);
+    let mut signs_reversed = false;
+    let adds_up = |r: &(Option<i64>, Option<i64>, i64, i64, Option<u64>)| r.0.is_some() && r.1.is_some() && r.3 == 0 && r.4.is_none();
+    if result.0.is_some() && result.1.is_some() && !adds_up(&result) && result.2 != 0 {
+        let reversed = evaluate(-expected);
+        if adds_up(&reversed) {
+            for row in rows.iter_mut() {
+                row.amount_cents = -row.amount_cents;
+            }
+            result = reversed;
+            signs_reversed = true;
+        }
+    }
+    let (opening_cents, closing_cents, change_cents, difference_cents, first_mismatch_row) = result;
+    let status = match (opening_cents, closing_cents) {
+        (Some(_), Some(_)) if difference_cents == 0 && first_mismatch_row.is_none() => "MATCHES",
+        (Some(_), Some(_)) => "DIFFERS",
+        _ => "NOT_PRINTED",
+    };
+    BalanceCheck { status, opening_cents, closing_cents, change_cents, difference_cents, owed, signs_reversed, first_mismatch_row }
 }
 
 /// Saved column layouts for CSV files, keyed by their headers.
@@ -531,52 +719,46 @@ async fn save_mapping(pool: &SqlitePool, signature: &str, m: &ColumnMapping) -> 
     .map_err(db_err)
 }
 
-fn read_text(path: &Path) -> Result<String, String> {
-    std::fs::read(path).map(|b| decode_text(&b)).map_err(|e| format!("BANK_FILE_OPEN: {}: {e}", path.display()))
-}
-
-/// Reads a bank file and reports how it would be imported, without importing anything.
-pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMapping>) -> Result<BankFileInspection, String> {
-    let text = read_text(path)?;
-    if is_ofx(&text) {
-        let (rows, problem) = match parse_ofx(&text) {
-            Ok(rows) => (rows, None),
-            Err(e) => (Vec::new(), Some(e)),
-        };
-        return Ok(BankFileInspection {
-            format: BankFileFormat::Ofx,
-            headers: Vec::new(),
-            mapping: None,
-            mapping_source: None,
-            date_order_certain: true,
-            row_count: rows.len(),
-            preview: rows.into_iter().take(8).collect(),
-            problem,
-        });
-    }
-
-    let table = CsvTable::read(&text)?;
-    let signature = header_signature(&table.headers);
-    let (mapping, source, certain) = if let Some(m) = given {
-        (Some(m), Some("GIVEN"), true)
-    } else if let Some(m) = saved_mapping(pool, &signature).await? {
-        (Some(m), Some("SAVED"), true)
-    } else if let Some(mut m) = detect_mapping(&table.headers) {
-        let (order, certain) = detect_date_order(table.values(&m.date));
-        m.date_order = order;
-        (Some(m), Some("DETECTED"), certain)
-    } else {
-        (None, None, false)
+/// Reads a bank file and reports how it would be imported into `bank_account_id` (which decides
+/// how a statement's balances read: owed on a card, held in a bank account), importing nothing.
+pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMapping>, bank_account_id: Option<i64>) -> Result<BankFileInspection, String> {
+    let (format, table, signature, balances) = match read_bank_file(path)? {
+        BankFile::Ofx(text) => {
+            let (rows, problem) = match parse_ofx(&text) {
+                Ok(rows) => (rows, None),
+                Err(e) => (Vec::new(), Some(e)),
+            };
+            return Ok(BankFileInspection {
+                format: BankFileFormat::Ofx,
+                headers: Vec::new(),
+                mapping: None,
+                mapping_source: None,
+                date_order_certain: true,
+                row_count: rows.len(),
+                preview: rows.into_iter().take(8).collect(),
+                problem,
+                balance_check: None,
+            });
+        }
+        BankFile::Table { format, table, signature, balances } => (format, table, signature, balances),
     };
-    let (rows, problem) = match &mapping {
-        None => (Vec::new(), Some("Choose which columns hold the date, description and amount.".to_string())),
+
+    let (mapping, source, certain) = choose_mapping(pool, &table, &signature, given).await?;
+    let (rows, problem, balance_check) = match &mapping {
+        None => (Vec::new(), Some("Choose which columns hold the date, description and amount.".to_string()), None),
         Some(m) => match table.rows(m) {
-            Ok(rows) => (rows, None),
-            Err(e) => (Vec::new(), Some(e)),
+            Ok(mut rows) => {
+                let check = match &balances {
+                    Some(b) => Some(check_balances(&mut rows, &table, b, balance_is_owed(pool, bank_account_id).await?)),
+                    None => None,
+                };
+                (rows, None, check)
+            }
+            Err(e) => (Vec::new(), Some(e), None),
         },
     };
     Ok(BankFileInspection {
-        format: BankFileFormat::Csv,
+        format,
         headers: table.headers,
         mapping,
         mapping_source: source,
@@ -584,6 +766,7 @@ pub async fn inspect_file(pool: &SqlitePool, path: &Path, given: Option<ColumnMa
         row_count: rows.len(),
         preview: rows.into_iter().take(8).collect(),
         problem,
+        balance_check,
     })
 }
 
@@ -661,17 +844,45 @@ impl RuleSet {
         })
     }
 
-    pub fn suggest(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
+    /// The first rule matching the line, if any.
+    pub fn matching(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
         let direction = if amount_cents < 0 { "OUTFLOW" } else { "INFLOW" };
         self.rules
             .iter()
             .find(|r| (r.direction == "ANY" || r.direction == direction) && r.regex.is_match(description))
-            .map(|r| CategorySuggestion { account_id: r.account_id, rule_id: Some(r.id), origin: r.origin.clone() })
-            .or_else(|| {
-                let fallback = if amount_cents < 0 { self.uncategorized_expense } else { self.uncategorized_income };
-                fallback.map(|account_id| CategorySuggestion { account_id, rule_id: None, origin: "DEFAULT".into() })
-            })
+            .map(|r| CategorySuggestion::plain(r.account_id, Some(r.id), &r.origin))
     }
+
+    /// Uncategorized Expense or Income, for a line nothing else suggests a category for.
+    pub fn fallback(&self, amount_cents: i64) -> Option<CategorySuggestion> {
+        let fallback = if amount_cents < 0 { self.uncategorized_expense } else { self.uncategorized_income };
+        fallback.map(|account_id| CategorySuggestion::plain(account_id, None, "DEFAULT"))
+    }
+
+    /// Rules only: the first matching rule, else the uncategorized fallback.
+    #[cfg(test)]
+    pub fn suggest(&self, description: &str, amount_cents: i64) -> Option<CategorySuggestion> {
+        self.matching(description, amount_cents).or_else(|| self.fallback(amount_cents))
+    }
+}
+
+/// What a bank line is categorized as: an explicit rule first; otherwise the model's suggestion from
+/// similar past transactions; otherwise uncategorized. The model's payee is offered either way.
+pub fn combine(rules: &RuleSet, amount_cents: i64, ruled: Option<CategorySuggestion>, predicted: Option<suggest::Prediction>) -> (Option<CategorySuggestion>, Option<String>) {
+    let payee = predicted.as_ref().and_then(|p| p.payee.clone()).filter(|_| amount_cents < 0);
+    let suggestion = ruled
+        .or_else(|| {
+            predicted.map(|p| CategorySuggestion {
+                account_id: p.account_id,
+                rule_id: None,
+                origin: "MODEL".into(),
+                confidence: Some(p.confidence),
+                confidence_level: Some(suggest::confidence_level(p.confidence)),
+                similar_to: Some(p.similar_to),
+            })
+        })
+        .or_else(|| rules.fallback(amount_cents));
+    (suggestion, payee)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -690,30 +901,22 @@ fn normalize_description(description: &str) -> String {
 /// amount, description and their occurrence count within the file, so two identical same-day
 /// purchases both import while an overlapping or repeated statement adds nothing twice.
 pub async fn import_file(pool: &SqlitePool, path: &Path, bank_account_id: i64, given: Option<ColumnMapping>) -> Result<ImportSummary, String> {
-    let text = read_text(path)?;
-    let rows = if is_ofx(&text) {
-        parse_ofx(&text)?
-    } else {
-        let table = CsvTable::read(&text)?;
-        let signature = header_signature(&table.headers);
-        let mapping = match &given {
-            Some(m) => m.clone(),
-            None => match saved_mapping(pool, &signature).await? {
-                Some(m) => m,
-                None => {
-                    let mut m = detect_mapping(&table.headers).ok_or_else(|| {
-                        format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", "))
-                    })?;
-                    m.date_order = detect_date_order(table.values(&m.date)).0;
-                    m
-                }
-            },
-        };
-        let rows = table.rows(&mapping)?;
-        if given.is_some() {
-            save_mapping(pool, &signature, &mapping).await?;
+    let rows = match read_bank_file(path)? {
+        BankFile::Ofx(text) => parse_ofx(&text)?,
+        BankFile::Table { table, signature, balances, .. } => {
+            let chosen = given.is_some();
+            let mapping = choose_mapping(pool, &table, &signature, given).await?.0.ok_or_else(|| {
+                format!("BANK_CSV_COLUMNS: could not tell which columns hold the date, description and amount (headers: {})", table.headers.join(", "))
+            })?;
+            let mut rows = table.rows(&mapping)?;
+            if let Some(b) = &balances {
+                check_balances(&mut rows, &table, b, balance_is_owed(pool, Some(bank_account_id)).await?);
+            }
+            if chosen {
+                save_mapping(pool, &signature, &mapping).await?;
+            }
+            rows
         }
-        rows
     };
 
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
@@ -784,8 +987,10 @@ pub(crate) async fn insert_line(
     Ok(result.rows_affected() == 1)
 }
 
-pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>, String> {
-    let rows: Vec<(i64, i64, String, String, i64)> = sqlx::query_as(
+/// Pending lines with their suggestions. `file` names the open company file, so the cached model is
+/// never used for another one.
+pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) -> Result<Vec<BankTransactionView>, String> {
+    let rows: Vec<(i64, i64, NaiveDate, String, i64)> = sqlx::query_as(
         "SELECT id, bank_account_id, txn_date, description, amount_cents
          FROM bank_transactions WHERE status = 'PENDING'
          ORDER BY txn_date DESC, id DESC",
@@ -795,38 +1000,49 @@ pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<BankTransactionView>,
     .map_err(db_err)?;
 
     let rules = RuleSet::load(pool).await?;
+    let ruled: Vec<Option<CategorySuggestion>> = rows.iter().map(|r| rules.matching(&r.3, r.4)).collect();
+    let queries: Vec<Query> =
+        rows.iter().map(|r| Query { bank_account_id: r.1, date: r.2, description: &r.3, amount_cents: r.4 }).collect();
+    let only: Vec<Option<i64>> = ruled.iter().map(|s| s.as_ref().map(|s| s.account_id)).collect();
+    let predicted = suggester.with_model(pool, file, |m| m.predict_batch(&queries, &only)).await?;
+    drop(queries);
     Ok(rows
         .into_iter()
-        .map(|(id, bank_account_id, date, description, amount_cents)| BankTransactionView {
-            suggestion: rules.suggest(&description, amount_cents),
-            id,
-            bank_account_id,
-            date,
-            description,
-            amount_cents,
+        .zip(ruled.into_iter().zip(predicted))
+        .map(|((id, bank_account_id, date, description, amount_cents), (ruled, predicted))| {
+            let (suggestion, payee) = combine(&rules, amount_cents, ruled, predicted);
+            BankTransactionView { suggestion, payee, id, bank_account_id, date: date.to_string(), description, amount_cents }
         })
         .collect())
 }
 
-/// Posts a pending bank line to the ledger against `category_account_id` (and optional class) and
-/// learns a matching rule.
-pub async fn approve(pool: &SqlitePool, transaction_id: i64, category_account_id: i64, class_id: Option<i64>) -> Result<i64, String> {
+/// What the user chose for a pending line.
+#[derive(Debug, Clone, Default)]
+pub struct Approval {
+    pub category_account_id: i64,
+    pub class_id: Option<i64>,
+    /// The vendor on the expense (money out only); a new name adds a vendor.
+    pub payee_name: Option<String>,
+}
+
+/// Posts a pending bank line to the ledger against the chosen category (and optional class and
+/// payee), learns a matching rule, and adds the line to the suggestion model.
+pub async fn approve(pool: &SqlitePool, suggester: &Suggester, file: &str, transaction_id: i64, approval: Approval) -> Result<i64, String> {
+    let before = Suggester::signature(pool).await?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
-    match write_approval(&mut tx, transaction_id, category_account_id, class_id).await {
-        Ok(entry_id) => {
+    match write_approval(&mut tx, transaction_id, &approval).await {
+        Ok((entry_id, example)) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            suggester.learn(pool, file, &before, example).await?;
             Ok(entry_id)
         }
         Err(err) => Err(rollback(tx, err).await),
     }
 }
 
-async fn write_approval(
-    tx: &mut Transaction<'_, Sqlite>,
-    transaction_id: i64,
-    category_account_id: i64,
-    class_id: Option<i64>,
-) -> Result<i64, String> {
+async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, approval: &Approval) -> Result<(i64, Example), String> {
+    let Approval { category_account_id, class_id, .. } = *approval;
+    let payee_name = approval.payee_name.as_deref().map(str::trim).filter(|p| !p.is_empty());
     let row: Option<(i64, NaiveDate, String, i64, String)> = sqlx::query_as(
         "SELECT bank_account_id, txn_date, description, amount_cents, status FROM bank_transactions WHERE id = ?1",
     )
@@ -849,13 +1065,13 @@ async fn write_approval(
     let (entry_id, direction) = if amount_cents < 0 {
         let expense = ExpenseInput {
             kind: "EXPENSE".into(),
-            payee_name: None,
+            payee_name: payee_name.map(str::to_string),
             payment_account_id: bank_account_id,
             expense_date: date,
             check_number: None,
             payment_method: None,
             memo: Some(description.clone()),
-            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id }],
+            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id, customer_id: None }],
             currency: None,
         };
         (write_expense(tx, &expense).await?.1, "OUTFLOW")
@@ -903,7 +1119,8 @@ async fn write_approval(
         .map_err(db_err)?;
     }
 
-    Ok(entry_id)
+    let payee = if amount_cents < 0 { payee_name.map(str::to_string) } else { None };
+    Ok((entry_id, Example { bank_account_id, date, description, amount_cents, account_id: category_account_id, payee }))
 }
 
 /// Removes a pending line from the review queue without posting it (e.g. a transfer already recorded).
@@ -923,382 +1140,4 @@ pub async fn exclude(pool: &SqlitePool, transaction_id: i64) -> Result<(), Strin
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_pool;
-
-    async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-            .bind(number)
-            .fetch_one(pool)
-            .await
-            .expect("seeded account exists")
-    }
-
-    #[test]
-    fn parses_amounts_to_exact_cents() {
-        let cases = [
-            ("12.34", 1_234),
-            ("-12.34", -1_234),
-            ("$1,234.56", 123_456),
-            ("(45.00)", -4_500),
-            ("45.00-", -4_500),
-            ("+3", 300),
-            ("0.1", 10),
-            (".05", 5),
-            ("7.500", 750),
-            ("-$0.99", -99),
-        ];
-        for (raw, cents) in cases {
-            assert_eq!(parse_amount_cents(raw), Ok(cents), "{raw}");
-        }
-        for bad in ["", "abc", "1.234", "1.2.3", "12e3", "--5", "."] {
-            assert!(parse_amount_cents(bad).is_err(), "{bad} should fail");
-        }
-    }
-
-    #[test]
-    fn parses_common_date_formats() {
-        let expected = NaiveDate::from_ymd_opt(2026, 3, 7).unwrap();
-        for raw in [
-            "2026-03-07", "03/07/2026", "3/7/2026", "3/7/26", "Mar 07, 2026", "2026-03-07 00:00:00", "2026-03-07T09:30:00Z",
-            "2026/03/07", "03-07-2026", "7 Mar 2026", "07-Mar-2026", "March 7, 2026", "20260307", "20260307120000.000[-5:EST]",
-        ] {
-            assert_eq!(parse_date(raw), Ok(expected), "{raw}");
-        }
-        for raw in ["07/03/2026", "7.3.2026", "07-03-26"] {
-            assert_eq!(parse_date_ordered(raw, DateOrder::Dmy), Ok(expected), "{raw}");
-        }
-        for bad in ["", "2026", "2026-02-30", "13/45/2026", "Smarch 7, 2026", "2026-03", "1/2/3/4", "12345", "03/07/123456", "3/7/1850"] {
-            assert!(parse_date(bad).is_err(), "{bad} should be rejected");
-        }
-    }
-
-    /// The date parser the single-pass one replaced: chrono formats tried in turn.
-    fn legacy_parse_date(raw: &str) -> Result<NaiveDate, String> {
-        const FORMATS: &[&str] = &["%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y", "%m-%d-%y", "%m-%d-%Y", "%Y/%m/%d", "%b %d, %Y", "%d %b %Y"];
-        let s = raw.trim();
-        let s = s.split_once(' ').filter(|(d, _)| d.contains(['-', '/'])).map_or(s, |(d, _)| d);
-        FORMATS
-            .iter()
-            .find_map(|fmt| NaiveDate::parse_from_str(s, fmt).ok())
-            .filter(|d| (1900..=2200).contains(&d.year()))
-            .ok_or_else(|| format!("unrecognized date '{raw}'"))
-    }
-
-    fn date_samples() -> Vec<String> {
-        let mut samples = Vec::new();
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        for (y, yy) in [(1999, 99), (2000, 0), (2024, 24), (2026, 26), (2069, 69), (1970, 70)] {
-            for m in 1..=12u32 {
-                for d in [1u32, 9, 12, 13, 28, 29, 30, 31] {
-                    samples.push(format!("{y}-{m:02}-{d:02}"));
-                    samples.push(format!("{m:02}/{d:02}/{y}"));
-                    samples.push(format!("{m}/{d}/{yy:02}"));
-                    samples.push(format!("{m:02}-{d:02}-{y}"));
-                    samples.push(format!("{y}/{m:02}/{d:02}"));
-                    samples.push(format!("{} {d:02}, {y}", months[m as usize - 1]));
-                    samples.push(format!("{d} {} {y}", months[m as usize - 1]));
-                    samples.push(format!("{m:02}/{d:02}/{y} 10:15:00"));
-                }
-            }
-        }
-        samples
-    }
-
-    #[test]
-    fn single_pass_date_parser_agrees_with_the_chrono_formats_it_replaced() {
-        let samples = date_samples();
-        for raw in &samples {
-            assert_eq!(parse_date(raw), legacy_parse_date(raw), "{raw}");
-        }
-        assert!(samples.len() > 2_000);
-    }
-
-    #[test]
-    fn detects_day_first_dates_and_says_when_it_is_guessing() {
-        assert_eq!(detect_date_order(["03/07/2026", "15/07/2026"]), (DateOrder::Dmy, true));
-        assert_eq!(detect_date_order(["03/07/2026", "07/15/2026"]), (DateOrder::Mdy, true));
-        assert_eq!(detect_date_order(["03/07/2026", "05/06/2026"]), (DateOrder::Mdy, false), "every date reads both ways");
-        assert_eq!(detect_date_order(["2026-03-07", "2026-03-08"]), (DateOrder::Mdy, true), "ISO dates are unambiguous");
-        assert_eq!(detect_date_order(["01/01/2026"]), (DateOrder::Mdy, true), "same date either way");
-    }
-
-    #[test]
-    #[ignore]
-    fn benchmark_date_parsing() {
-        let samples = date_samples();
-        let rounds = 50;
-        let time = |f: &dyn Fn(&str) -> Result<NaiveDate, String>| {
-            let start = std::time::Instant::now();
-            let mut ok = 0;
-            for _ in 0..rounds {
-                for s in &samples {
-                    ok += usize::from(f(std::hint::black_box(s)).is_ok());
-                }
-            }
-            (start.elapsed(), ok)
-        };
-        let (old, old_ok) = time(&legacy_parse_date);
-        let (new, new_ok) = time(&parse_date);
-        let n = (samples.len() * rounds) as f64;
-        println!(
-            "{} dates: chrono formats {:.0} ns/date, single pass {:.0} ns/date ({:.1}x faster)",
-            samples.len() * rounds,
-            old.as_nanos() as f64 / n,
-            new.as_nanos() as f64 / n,
-            old.as_secs_f64() / new.as_secs_f64()
-        );
-        assert_eq!(old_ok, new_ok);
-    }
-
-    #[test]
-    fn recognizes_column_layouts() {
-        let h = |cols: &[&str]| cols.iter().map(|c| c.to_string()).collect::<Vec<_>>();
-        let signed = detect_mapping(&h(&["Posted Date", "Reference Number", "Payee", "Address", "Amount"])).unwrap();
-        assert_eq!((signed.date.as_str(), signed.description.as_str(), signed.amount.as_deref()), ("Posted Date", "Payee", Some("Amount")));
-
-        // "Debit Amount"/"Credit Amount" contain "amount" but are a split layout, not a signed amount.
-        let split = detect_mapping(&h(&["Date", "Description", "Debit Amount", "Credit Amount"])).unwrap();
-        assert_eq!((split.amount, split.money_in.as_deref(), split.money_out.as_deref()), (None, Some("Credit Amount"), Some("Debit Amount")));
-
-        let uk = detect_mapping(&h(&["Date", "Details", "Paid out", "Paid in", "Balance"])).unwrap();
-        assert_eq!((uk.money_in.as_deref(), uk.money_out.as_deref()), (Some("Paid in"), Some("Paid out")));
-        let plural = detect_mapping(&h(&["Transaction Date", "Description", "Withdrawals", "Deposits"])).unwrap();
-        assert_eq!((plural.money_in.as_deref(), plural.money_out.as_deref()), (Some("Deposits"), Some("Withdrawals")));
-
-        assert!(detect_mapping(&h(&["Fecha", "Concepto", "Importe"])).is_none(), "unrecognized: the user maps it");
-    }
-
-    #[test]
-    fn split_columns_net_money_in_minus_money_out_whatever_their_signs() {
-        let csv = "Date,Description,Debit Amount,Credit Amount\n10/01/2026,RENT,1200.00,\n10/02/2026,CLIENT,,-450.00\n10/03/2026,FEE,-2.50,\n";
-        let rows = parse_bank_csv_reader(csv.as_bytes()).unwrap();
-        assert_eq!(rows.iter().map(|r| r.amount_cents).collect::<Vec<_>>(), [-120_000, 45_000, -250]);
-    }
-
-    #[test]
-    fn reads_day_first_csv_and_windows_1252_text() {
-        let mut bytes = b"Date,Description,Amount\n03/07/2026,Caf\xe9 \x93Bleu\x94,-4.50\n15/07/2026,Refund,4.50\n".to_vec();
-        bytes.extend_from_slice(b"");
-        let rows = parse_bank_csv_reader(bytes.as_slice()).unwrap();
-        assert_eq!(rows[0].date, NaiveDate::from_ymd_opt(2026, 7, 3).unwrap(), "15/07 shows the file is day-first");
-        assert_eq!(rows[0].description, "Café “Bleu”");
-    }
-
-    const OFX_SGML: &str = "OFXHEADER:100\r\nDATA:OFXSGML\r\nVERSION:102\r\nCHARSET:1252\r\n\r\n<OFX>\r\n<BANKMSGSRSV1><STMTTRNRS><STMTRS>\r\n<BANKTRANLIST>\r\n<DTSTART>20261001\r\n\
-<STMTTRN>\r\n<TRNTYPE>DEBIT\r\n<DTPOSTED>20261001120000.000[-5:EST]\r\n<TRNAMT>-18.75\r\n<FITID>2026100101\r\n<NAME>JOES DINER &amp; GRILL\r\n<MEMO>POS PURCHASE\r\n\
-<STMTTRN>\r\n<TRNTYPE>CREDIT\r\n<DTPOSTED>20261002\r\n<TRNAMT>+1500.00\r\n<FITID>2026100202\r\n<NAME>STRIPE TRANSFER\r\n\
-<STMTTRN>\r\n<TRNTYPE>DEBIT\r\n<DTPOSTED>20261003\r\n<TRNAMT>-4.5\r\n<FITID>2026100303\r\n<MEMO>Coffee\r\n\
-</BANKTRANLIST>\r\n</STMTRS></STMTTRNRS></BANKMSGSRSV1>\r\n</OFX>\r\n";
-
-    #[test]
-    fn parses_sgml_and_xml_ofx() {
-        assert!(is_ofx(OFX_SGML));
-        let rows = parse_ofx(OFX_SGML).unwrap();
-        let got: Vec<(String, i64, &str, Option<&str>)> =
-            rows.iter().map(|r| (r.date.to_string(), r.amount_cents, r.description.as_str(), r.fitid.as_deref())).collect();
-        assert_eq!(
-            got,
-            [
-                ("2026-10-01".into(), -1_875, "JOES DINER & GRILL POS PURCHASE", Some("2026100101")),
-                ("2026-10-02".into(), 150_000, "STRIPE TRANSFER", Some("2026100202")),
-                ("2026-10-03".into(), -450, "Coffee", Some("2026100303")),
-            ]
-        );
-
-        let xml = r#"<?xml version="1.0"?><?OFX OFXHEADER="200" VERSION="220"?><OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
-            <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20261005</DTPOSTED><TRNAMT>-99.00</TRNAMT><FITID>X1</FITID><NAME>Hardware Store</NAME><MEMO>Hardware Store</MEMO></STMTTRN>
-            </BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"#;
-        assert!(is_ofx(xml));
-        let rows = parse_ofx(xml).unwrap();
-        assert_eq!((rows[0].amount_cents, rows[0].description.as_str(), rows[0].fitid.as_deref()), (-9_900, "Hardware Store", Some("X1")));
-
-        assert!(parse_ofx("OFXHEADER:100\n<OFX></OFX>").unwrap_err().starts_with("BANK_OFX_EMPTY"));
-        let broken = OFX_SGML.replace("<TRNAMT>+1500.00", "<TRNAMT>lots");
-        assert!(parse_ofx(&broken).unwrap_err().starts_with("BANK_OFX_ROW: transaction at line 17"));
-        assert!(!is_ofx("Date,Description,Amount\n"));
-    }
-
-    fn temp_file(name: &str, contents: &[u8]) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("localbooks-bank-{}-{name}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(name);
-        std::fs::write(&path, contents).unwrap();
-        path
-    }
-
-    #[tokio::test]
-    async fn overlapping_ofx_statements_import_each_transaction_once() {
-        let pool = test_pool().await;
-        let checking = account_id(&pool, "1010").await;
-        let first = temp_file("sept.ofx", OFX_SGML.as_bytes());
-        assert_eq!(import_file(&pool, &first, checking, None).await.unwrap(), ImportSummary { imported: 3, duplicates: 0, skipped_zero: 0 });
-
-        // The next download overlaps: two transactions again, plus one new one.
-        let next = OFX_SGML
-            .replacen("<STMTTRN>\r\n<TRNTYPE>DEBIT\r\n<DTPOSTED>20261001120000.000[-5:EST]\r\n<TRNAMT>-18.75\r\n<FITID>2026100101\r\n<NAME>JOES DINER &amp; GRILL\r\n<MEMO>POS PURCHASE\r\n", "", 1)
-            .replace("</BANKTRANLIST>", "<STMTTRN>\r\n<DTPOSTED>20261004\r\n<TRNAMT>-60.00\r\n<FITID>2026100404\r\n<NAME>FUEL\r\n</BANKTRANLIST>");
-        let second = temp_file("oct.ofx", next.as_bytes());
-        assert_eq!(import_file(&pool, &second, checking, None).await.unwrap(), ImportSummary { imported: 1, duplicates: 2, skipped_zero: 0 });
-        assert_eq!(list_pending(&pool).await.unwrap().len(), 4);
-        std::fs::remove_dir_all(first.parent().unwrap()).unwrap();
-        std::fs::remove_dir_all(second.parent().unwrap()).unwrap();
-    }
-
-    #[tokio::test]
-    async fn unrecognized_csv_is_mapped_once_and_remembered() {
-        let pool = test_pool().await;
-        let checking = account_id(&pool, "1010").await;
-        let csv = "Fecha,Concepto,Importe\n03/07/2026,Supermercado,-45.10\n05/07/2026,Nomina,1800.00\n";
-        let path = temp_file("santander.csv", csv.as_bytes());
-
-        let seen = inspect_file(&pool, &path, None).await.unwrap();
-        assert_eq!((seen.format, seen.mapping.is_none(), seen.headers.len()), (BankFileFormat::Csv, true, 3));
-        assert!(seen.problem.is_some());
-        assert!(import_file(&pool, &path, checking, None).await.unwrap_err().starts_with("BANK_CSV_COLUMNS"));
-
-        let mapping = ColumnMapping {
-            date: "Fecha".into(),
-            description: "Concepto".into(),
-            amount: Some("Importe".into()),
-            money_in: None,
-            money_out: None,
-            date_order: DateOrder::Dmy,
-        };
-        let preview = inspect_file(&pool, &path, Some(mapping.clone())).await.unwrap();
-        assert_eq!((preview.mapping_source, preview.row_count, preview.problem.clone()), (Some("GIVEN"), 2, None));
-        assert_eq!(preview.preview[0].date, NaiveDate::from_ymd_opt(2026, 7, 3).unwrap());
-
-        let summary = import_file(&pool, &path, checking, Some(mapping.clone())).await.unwrap();
-        assert_eq!(summary.imported, 2);
-
-        // The same bank's next file imports with the saved layout.
-        let later = temp_file("santander-aug.csv", "Fecha,Concepto,Importe\n02/08/2026,Gasolina,-60.00\n".as_bytes());
-        let seen = inspect_file(&pool, &later, None).await.unwrap();
-        assert_eq!((seen.mapping_source, seen.mapping.as_ref()), (Some("SAVED"), Some(&mapping)));
-        assert_eq!(import_file(&pool, &later, checking, None).await.unwrap().imported, 1);
-        let dates: Vec<String> = list_pending(&pool).await.unwrap().into_iter().map(|t| t.date).collect();
-        assert_eq!(dates, ["2026-08-02", "2026-07-05", "2026-07-03"]);
-
-        let bad = ColumnMapping { money_in: Some("Importe".into()), ..mapping };
-        assert!(inspect_file(&pool, &path, Some(bad)).await.unwrap().problem.unwrap().starts_with("BANK_CSV_MAPPING"));
-        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::remove_dir_all(later.parent().unwrap()).unwrap();
-    }
-
-    #[test]
-    fn parses_signed_amount_csv() {
-        let csv = "\u{feff}Date,Description,Amount\n10/01/2026,AWS EMEA  aws.amazon.com,-120.50\n10/02/2026,STRIPE TRANSFER,1500.00\n,,\n";
-        let rows = parse_bank_csv_reader(csv.as_bytes()).expect("parses");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].description, "AWS EMEA aws.amazon.com");
-        assert_eq!(rows[0].amount_cents, -12_050);
-        assert_eq!(rows[1].amount_cents, 150_000);
-        assert_eq!(rows[1].row, 3);
-    }
-
-    #[test]
-    fn parses_split_debit_credit_csv() {
-        let csv = "Posted Date,Payee,Withdrawal,Deposit\n2026-10-01,EXXONMOBIL 4421,52.10,\n2026-10-02,CLIENT ACH,,900\n";
-        let rows = parse_bank_csv_reader(csv.as_bytes()).expect("parses");
-        assert_eq!(rows.iter().map(|r| r.amount_cents).collect::<Vec<_>>(), vec![-5_210, 90_000]);
-    }
-
-    #[test]
-    fn reports_bad_row_with_line_number() {
-        let csv = "Date,Description,Amount\n2026-10-01,OK,1.00\n2026-10-02,BAD,twelve\n";
-        let err = parse_bank_csv_reader(csv.as_bytes()).expect_err("bad amount");
-        assert!(err.starts_with("BANK_CSV_ROW: line 3"), "{err}");
-    }
-
-    #[test]
-    fn learns_patterns_that_ignore_noise() {
-        let pattern = learned_pattern("SQ *BLUE BOTTLE #123 OAKLAND").expect("pattern");
-        let regex = RegexBuilder::new(&pattern).case_insensitive(true).build().unwrap();
-        assert!(regex.is_match("SQ *BLUE BOTTLE #998 SF"));
-        assert!(regex.is_match("Blue-Bottle Coffee"));
-        assert!(!regex.is_match("BLUE APRON"));
-        assert_eq!(learned_pattern("POS DEBIT 0042 #"), None);
-    }
-
-    #[tokio::test]
-    async fn built_in_rules_suggest_vendor_categories() {
-        let pool = test_pool().await;
-        let rules = RuleSet::load(&pool).await.expect("rules compile");
-        let expect = |desc: &str, amount: i64| rules.suggest(desc, amount).map(|s| s.account_id);
-
-        assert_eq!(expect("AWS EMEA aws.amazon.com", -12_050), Some(account_id(&pool, "6350").await));
-        assert_eq!(expect("EXXONMOBIL 4421 HOUSTON", -5_210), Some(account_id(&pool, "6100").await));
-        assert_eq!(expect("UBER EATS 8005928996", -2_399), Some(account_id(&pool, "6200").await));
-        assert_eq!(expect("UBER *TRIP", -1_850), Some(account_id(&pool, "6450").await));
-        assert_eq!(expect("STRIPE TRANSFER", 150_000), Some(account_id(&pool, "4000").await));
-        assert_eq!(expect("RANDOM VENDOR", -100), Some(account_id(&pool, "6900").await));
-        assert_eq!(expect("RANDOM PAYER", 100), Some(account_id(&pool, "4900").await));
-    }
-
-    #[tokio::test]
-    async fn import_dedupes_and_approval_posts_and_learns() {
-        let pool = test_pool().await;
-        let checking = account_id(&pool, "1010").await;
-        let meals = account_id(&pool, "6200").await;
-
-        let dir = std::env::temp_dir().join(format!("localbooks-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("feed.csv");
-        std::fs::write(
-            &path,
-            "Date,Description,Amount\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-01,JOES DINER 0042,-18.75\n2026-10-02,TRANSFER,0.00\n",
-        )
-        .unwrap();
-
-        let first = import_file(&pool, &path, checking, None).await.expect("imports");
-        assert_eq!(first, ImportSummary { imported: 2, duplicates: 0, skipped_zero: 1 });
-        let again = import_file(&pool, &path, checking, None).await.expect("re-imports");
-        assert_eq!(again, ImportSummary { imported: 0, duplicates: 2, skipped_zero: 1 });
-        std::fs::remove_dir_all(&dir).unwrap();
-
-        let pending = list_pending(&pool).await.expect("pending");
-        assert_eq!(pending.len(), 2);
-        assert_eq!(pending[0].suggestion.as_ref().map(|s| s.origin.as_str()), Some("DEFAULT"));
-
-        approve(&pool, pending[0].id, meals, None).await.expect("approves");
-        let (checking_balance, meals_balance): (i64, i64) = sqlx::query_as(
-            "SELECT (SELECT balance_cents FROM v_account_balances WHERE account_id = ?1),
-                    (SELECT balance_cents FROM v_account_balances WHERE account_id = ?2)",
-        )
-        .bind(checking)
-        .bind(meals)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!((checking_balance, meals_balance), (-1_875, 1_875));
-
-        let remaining = list_pending(&pool).await.expect("pending");
-        assert_eq!(remaining.len(), 1);
-        let learned = remaining[0].suggestion.as_ref().expect("suggestion");
-        assert_eq!((learned.account_id, learned.origin.as_str()), (meals, "LEARNED"));
-
-        let err = approve(&pool, pending[0].id, meals, None).await.expect_err("already approved");
-        assert!(err.starts_with("BANK_TXN_NOT_PENDING"), "{err}");
-
-        exclude(&pool, remaining[0].id).await.expect("excludes");
-        assert!(list_pending(&pool).await.unwrap().is_empty());
-
-        // The approval is a real Expense document; voiding it sends the line back for review.
-        let entry_id: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE kind = 'EXPENSE'")
-            .fetch_one(&pool)
-            .await
-            .expect("approval created an expense");
-        crate::ledger::void_transaction(&pool, entry_id).await.expect("voids");
-        let back = list_pending(&pool).await.unwrap();
-        assert_eq!(back.len(), 1);
-        assert_eq!(back[0].id, pending[0].id);
-        let checking_after: i64 = sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-            .bind(checking)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert_eq!(checking_after, 0);
-    }
-}
+mod tests;

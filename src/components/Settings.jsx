@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
-import { NewCompanyDialog } from './CompanyFiles.jsx';
+import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
+import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -269,6 +272,7 @@ function CompanyLogoField() {
 function PreferencesConsole() {
   const { data: prefs, error } = useLedgerQuery(api.getPreferences);
   const { data: forms } = useLedgerQuery(api.listTaxForms);
+  const { data: accounts } = useLedgerQuery(api.listAccounts);
   if (error) return <Notice kind="error" text={error} />;
   if (!prefs) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
   const field = (props) => <PrefField prefs={prefs} {...props} />;
@@ -341,6 +345,24 @@ function PreferencesConsole() {
               </span>
             ),
           })}
+          {field({
+            label: 'Exchange rates',
+            prefKey: 'exchange_rate_lookup',
+            hint: (
+              <>
+                Suggests the European Central Bank’s rate for a foreign-currency transaction’s date, through the Frankfurter service
+                (api.frankfurter.dev). Only the two currency codes and the date are sent; nothing about your company or its transactions.
+                Rates are saved in the company file, so a date is looked up once and works offline. You can always type a different rate,
+                and saved transactions keep theirs.
+              </>
+            ),
+            children: ({ id, value, commit }) => (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                Look up daily exchange rates
+              </label>
+            ),
+          })}
         </Group>
         <Group title="Class tracking" id="class-tracking">
           {field({
@@ -378,6 +400,48 @@ function PreferencesConsole() {
                 </label>
               ),
             })}
+        </Group>
+        <Group title="Finance charges" id="finance-charges">
+          {field({
+            label: 'Annual interest rate',
+            prefKey: 'finance_charge_annual_rate',
+            hint: 'Percent a year, charged per day on overdue balances (a year counts as 365 days)',
+            children: ({ id, value, setValue, commit, invalid }) => (
+              <span className="flex items-center gap-1">
+                <input id={id} className="qb-input num w-[80px]" value={value} inputMode="decimal" onChange={(e) => setValue(e.target.value)} onBlur={() => commit()} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} aria-invalid={invalid} />
+                <span className="text-sm">%</span>
+              </span>
+            ),
+          })}
+          {field({ label: 'Minimum charge', prefKey: 'finance_charge_minimum', hint: 'A smaller charge is raised to this amount', children: textInput({ inputMode: 'decimal', className: 'qb-input num w-[100px]' }) })}
+          {field({ label: 'Grace period', prefKey: 'finance_charge_grace_days', hint: 'Days past the due date before an invoice is charged; interest still runs from the due date', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
+          {field({
+            label: 'Finance charge account',
+            prefKey: 'finance_charge_account_id',
+            hint: 'The income account finance charge invoices credit',
+            children: ({ id, value, commit, invalid }) => (
+              <AccountSelect
+                id={id}
+                accounts={accounts ?? []}
+                filter={(a) => a.classification === 'INCOME'}
+                value={value === '' ? null : Number(value)}
+                onChange={(next) => commit(next === null ? '' : String(next))}
+                placeholder="Choose an income account"
+                aria-invalid={invalid}
+              />
+            ),
+          })}
+          {field({
+            label: 'Charge on finance charges',
+            prefKey: 'finance_charge_on_finance_charges',
+            hint: 'Whether overdue finance charge invoices themselves earn finance charges',
+            children: ({ id, value, commit }) => (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input id={id} type="checkbox" className="accent-qb-green" checked={value === 'true'} onChange={(e) => commit(e.target.checked ? 'true' : 'false')} />
+                Assess finance charges on overdue finance charges
+              </label>
+            ),
+          })}
         </Group>
         <Group title="Automatic backups">
           {field({
@@ -571,7 +635,7 @@ function RestoreConfirm({ info, onConfirm, onCancel, busy }) {
   );
 }
 
-function FileAndData({ companyName }) {
+function FileAndData({ companyName, isAdmin, navigate }) {
   const backups = useLedgerQuery(api.listBackups);
   const [notice, setNotice] = useState(null);
   const [pending, setPending] = useState(null);
@@ -621,20 +685,30 @@ function FileAndData({ companyName }) {
   };
 
   const chooseRestore = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (path) prepareRestore(path);
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_FILTER_EXTENSIONS] }],
+    });
+    if (!path) return;
+    // A QuickBooks backup can't replace these books: it becomes a new company through the migration wizard.
+    if (!isQuickBooksFile(path)) return prepareRestore(path);
+    try {
+      await migrateQuickBooksFile(path);
+    } catch (err) {
+      setNotice({ kind: 'error', text: `This file can't be restored: ${errorText(err)}` });
+    }
   };
 
   // Opens another company file in place for this session (the same as double-clicking it).
   const openCompanyFile = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (!path) return;
     setBusy(true);
     setNotice(null);
     try {
-      await api.openCompanyFile(path);
+      await openOrRestoreCompany();
     } catch (err) {
       setNotice({ kind: 'error', text: `This file can't be opened: ${errorText(err)}` });
+    } finally {
       setBusy(false);
     }
   };
@@ -695,6 +769,11 @@ function FileAndData({ companyName }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => setCreatingCompany(true)} disabled={busy}>
             New Company…
           </button>
+          {isAdmin && navigate && (
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => navigate('accounting/qbw-import')} disabled={busy}>
+              Desktop Migration Wizard…
+            </button>
+          )}
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={closeCompany} disabled={busy}>
             Close Company
           </button>
@@ -857,8 +936,8 @@ function LocalAiAccess() {
                 type="button"
                 className="qb-btn qb-btn-secondary h-row px-2 text-xs"
                 disabled={busy}
-                onClick={() => {
-                  if (window.confirm('Issue a new access token? Assistants using the current token will stop working until you update them.')) {
+                onClick={async () => {
+                  if (await askConfirm('Issue a new access token? Assistants using the current token will stop working until you update them.', { confirmLabel: 'Issue New Token' })) {
                     run(api.regenerateMcpToken);
                   }
                 }}
@@ -887,32 +966,43 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', updates: 'updates' };
+const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', 'finance-charges': 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
 
-export default function Settings({ companyName, intent }) {
-  const [tab, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? 'preferences');
+const ALL_TABS = [
+  ['preferences', 'Preferences Console'],
+  ['forms', 'Custom Forms'],
+  ['email', 'Email'],
+  ['data', 'File & Data Controls'],
+  ['ai', 'AI Access (MCP)'],
+  ['users', 'Users & Passwords'],
+  ['updates', 'Updates'],
+];
+// Company-wide settings are an Admin's; everyone manages their own sign-in.
+const NON_ADMIN_TABS = new Set(['users', 'updates']);
+
+export default function Settings({ companyName, intent, isAdmin = true, navigate }) {
+  const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
+  const allowed = (id) => tabs.some(([t]) => t === id);
+  // The tab asked for (null: the first one). Which tabs are allowed can change after the first
+  // render, when the signed-in user's role arrives, so a tab no longer allowed is never shown.
+  const [chosen, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? null);
+  const tab = chosen && allowed(chosen) ? chosen : tabs[0][0];
 
   // Help shortcuts open a specific tab (and, for the closing date, scroll to it).
   useEffect(() => {
     const target = SETTINGS_TABS[intent?.action];
-    if (!target) return;
+    if (!target || !allowed(target)) return;
     setTab(target);
-    if (intent.action === 'closing') {
-      const timer = setTimeout(() => document.getElementById('closing-date')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    const anchor = { closing: 'closing-date', 'finance-charges': 'finance-charges' }[intent.action];
+    if (anchor) {
+      const timer = setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
       return () => clearTimeout(timer);
     }
   }, [intent]);
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       <div className="flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
-        {[
-          ['preferences', 'Preferences Console'],
-          ['forms', 'Custom Forms'],
-          ['email', 'Email'],
-          ['data', 'File & Data Controls'],
-          ['ai', 'AI Access (MCP)'],
-          ['updates', 'Updates'],
-        ].map(([id, label]) => (
+        {tabs.map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -925,11 +1015,13 @@ export default function Settings({ companyName, intent }) {
           </button>
         ))}
       </div>
+      {!isAdmin && <Notice kind="info" text="Company-wide settings are managed by an Admin." />}
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}
-      {tab === 'data' && <FileAndData companyName={companyName} />}
+      {tab === 'data' && <FileAndData companyName={companyName} isAdmin={isAdmin} navigate={navigate} />}
       {tab === 'ai' && <LocalAiAccess />}
+      {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
     </div>
   );

@@ -5,32 +5,20 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
+import { takePendingMigration } from './CompanyFiles.jsx';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
-const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif'];
-const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export' };
+/** QuickBooks report exports: several can be read together (a report and its lists). */
+const REPORT_EXTENSIONS = ['csv', 'xlsx', 'xls'];
+const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif', 'gnucash', 'gnc', ...REPORT_EXTENSIONS];
+const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export', REPORT: 'QuickBooks report export', GNUCASH: 'GnuCash book' };
 const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
-const ACCOUNT_TYPE_NAMES = {
-  BANK: 'Bank',
-  ACCOUNTS_RECEIVABLE: 'Accounts Receivable',
-  OTHER_CURRENT_ASSET: 'Other Current Asset',
-  FIXED_ASSET: 'Fixed Asset',
-  OTHER_ASSET: 'Other Asset',
-  ACCOUNTS_PAYABLE: 'Accounts Payable',
-  CREDIT_CARD: 'Credit Card',
-  OTHER_CURRENT_LIABILITY: 'Other Current Liability',
-  LONG_TERM_LIABILITY: 'Long Term Liability',
-  EQUITY: 'Equity',
-  INCOME: 'Income',
-  COST_OF_GOODS_SOLD: 'Cost of Goods Sold',
-  EXPENSE: 'Expense',
-  OTHER_INCOME: 'Other Income',
-  OTHER_EXPENSE: 'Other Expense',
-};
 const STAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
 function formatBytes(n) {
@@ -105,7 +93,7 @@ function ChooseFile({ busy, onFile }) {
           else if (type === 'leave') setHover(false);
           else if (type === 'drop') {
             setHover(false);
-            if (!busy && paths?.length) onFile(paths[0]);
+            if (!busy && paths?.length) onFile(paths);
           }
         })
         .then((fn) => (cancelled ? fn() : (unlisten = fn)))
@@ -120,8 +108,13 @@ function ChooseFile({ busy, onFile }) {
   }, [busy, onFile]);
 
   const browse = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'Company file, backup or export (.qbw, .qbb, .iif, .qif)', extensions: EXTENSIONS }] });
-    if (typeof path === 'string') onFile(path);
+    const picked = await open({
+      multiple: true,
+      directory: false,
+      filters: [{ name: 'Company file, backup, export or book (.qbw, .qbb, .iif, .qif, .gnucash, .csv, .xlsx)', extensions: EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]) }],
+    });
+    const paths = typeof picked === 'string' ? [picked] : picked;
+    if (paths?.length) onFile(paths);
   };
 
   return (
@@ -135,12 +128,21 @@ function ChooseFile({ busy, onFile }) {
           Choose a file…
         </button>
         <div className="text-xs text-qb-ink-muted">
-          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, or a Quicken .qif export. You can also drag it here. It is only
-          read, never changed, and nothing is added to your books yet.
+          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, a Quicken .qif export, a GnuCash .gnucash book, or QuickBooks reports exported to .csv or
+          .xlsx: a Journal or General Ledger, with the Account Listing, contact lists and Item List if you have them (choose them together). You can
+          also drag files here. They are only read, never changed, and nothing is added to your books yet.
         </div>
       </div>
     </div>
   );
+}
+
+/** What an import was read from, by its file's extension. */
+function sourceLabel(fileName) {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (REPORT_EXTENSIONS.includes(ext)) return 'Report export';
+  if (ext === 'iif' || ext === 'qif') return `${ext.toUpperCase()} export`;
+  return 'Company file';
 }
 
 function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, onDelete }) {
@@ -187,11 +189,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                     ? 'Invoice lines'
                     : b.listsOnly
                       ? 'Lists only'
-                      : b.liveEntryCount === 0
-                        ? 'Company file'
-                        : b.mode === 'FULL'
-                          ? 'Company file · full import'
-                          : 'Company file · journal import'}
+                      : `${sourceLabel(b.fileName)}${b.liveEntryCount === 0 ? '' : b.mode === 'FULL' ? ' · full import' : ' · journal import'}`}
                 </div>
               </td>
               <td className="qb-grid-cell text-qb-ink-muted">{STAMP.format(new Date(b.importedAt))}</td>
@@ -588,14 +586,14 @@ function LedgerReview({ summary, accounts, busy, run }) {
         : 'locked';
 
   // A file of lists only: add its accounts, customers, vendors and items, and post nothing.
-  const addLists = () => {
+  const addLists = async () => {
     const l = summary.lists;
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Add this file’s lists to your books?\n\n${countOf(used.length, ['account', 'accounts'])}, ${countOf(l.customers, ['customer', 'customers'])}, ` +
           `${countOf(l.vendors, ['vendor', 'vendors'])} and ${countOf(l.items, ['item', 'items'])}: each matches an existing record of the same name or is created. ` +
           'No transactions are posted. You can undo it later with "Reverse added lists" or "Start over".',
-      )
+      ))
     )
       return;
     run(
@@ -616,12 +614,12 @@ function LedgerReview({ summary, accounts, busy, run }) {
     );
   };
 
-  const post = () => {
+  const post = async () => {
     const question =
       mode === 'FULL'
         ? `Bring ${summary.postableCount.toLocaleString()} transactions into your books as a full import?\n\nCustomers, vendors and items are added first, then invoices, credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, transfers, estimates and purchase orders as LocalBooks documents, and everything else as journal entries. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Start over".`
         : `Post ${summary.postableCount.toLocaleString()} journal entries to your books?\n\nEach is one transaction from the file, balanced as it was there. Compare the account balances above with the original program’s trial balance first. You can undo it later with "Reverse posted entries".`;
-    if (!window.confirm(question)) return;
+    if (!(await askConfirm(question, { confirmLabel: mode === 'FULL' ? 'Import' : 'Post' }))) return;
     run(
       () => api.postLedgerBatch({ batchId: summary.id, mode }),
       (r) => {
@@ -638,6 +636,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
               [f.billPayments, DOCUMENT_WORDS.billPayment],
               [f.checks, ['check', 'checks']],
               [f.expenses, ['card charge', 'card charges']],
+              [f.cardCredits, ['card credit', 'card credits']],
               [f.transfers, DOCUMENT_WORDS.transfer],
               [f.estimates, DOCUMENT_WORDS.estimate],
               [f.purchaseOrders, DOCUMENT_WORDS.purchaseOrder],
@@ -683,7 +682,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
             ? `Read from ${summary.decodedPages.toLocaleString()} of ${summary.rowPages.toLocaleString()} data pages`
             : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
           {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
-          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}.
+          {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}
+          {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}.
         </p>
         {summary.unreadable.length > 0 && (
           <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
@@ -811,7 +811,7 @@ let reading = null;
 let lastOpened = null;
 
 /** Starts reading a file, collecting its progress whether or not the screen is showing. */
-function startReading(path, ext) {
+function startReading(paths, ext) {
   const first = ext === 'qbb' ? 'Unpacking backup' : 'Reading file';
   const subscribers = new Set();
   const r = {
@@ -831,7 +831,8 @@ function startReading(path, ext) {
   })
     .then((fn) => (unlisten = fn))
     .catch(() => {});
-  r.promise = listening.then(() => api.ingestRawQbw(path)).finally(() => unlisten?.());
+  const ingest = REPORT_EXTENSIONS.includes(ext) ? () => api.ingestReportExports(paths) : () => api.ingestRawQbw(paths[0]);
+  r.promise = listening.then(ingest).finally(() => unlisten?.());
   return r;
 }
 
@@ -908,12 +909,13 @@ export default function QbwImporter({ accounts }) {
         if (result.kind === 'ledger') {
           const complete = batch.transactionCount - batch.unbalanced.length;
           const l = batch.lists;
+          const sources = result.sources?.length ? ` (${result.sources.join('; ')})` : '';
           setNotice({
             kind: 'success',
             text: batch.listsOnly
-              ? `Read the ${FORMAT_NAMES[batch.sourceFormat]}: lists only, with ${batch.accounts.length} accounts, ${l.customers} customers, ${l.vendors} vendors and ${l.items} items, and no transactions. Nothing is in your books yet: review step 2 below, then add the lists in step 3.`
+              ? `Read the ${FORMAT_NAMES[batch.sourceFormat]}${sources}: lists only, with ${batch.accounts.length} accounts, ${l.customers} customers, ${l.vendors} vendors and ${l.items} items, and no transactions. Nothing is in your books yet: review step 2 below, then add the lists in step 3.`
               :
-              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
+              `Read the ${batch.sourceFormat === 'QBW' ? 'full ledger' : FORMAT_NAMES[batch.sourceFormat]}${sources}: ${complete.toLocaleString()} transactions and ${batch.accounts.filter((a) => a.lineCount > 0).length} accounts.` +
               (batch.unbalanced.length ? ` ${batch.unbalanced.length} could not be read completely and are listed below.` : '') +
               ' Nothing is in your books yet: review step 2 below.',
           });
@@ -942,17 +944,31 @@ export default function QbwImporter({ accounts }) {
   }, [follow]);
 
   const ingest = useCallback(
-    async (path) => {
-      const ext = path.split('.').pop()?.toLowerCase();
-      if (!EXTENSIONS.includes(ext)) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, or an .iif or .qif export.' });
+    async (paths) => {
+      const exts = paths.map((p) => p.split('.').pop()?.toLowerCase());
+      const ext = exts[0];
+      if (!exts.every((e) => EXTENSIONS.includes(e))) {
+        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, an .iif or .qif export, a .gnucash book, or QuickBooks reports exported to .csv or .xlsx.' });
         return;
       }
-      reading = startReading(path, ext);
+      if (paths.length > 1 && !exts.every((e) => REPORT_EXTENSIONS.includes(e))) {
+        setNotice({
+          kind: 'error',
+          text: 'Choose one company file or export at a time. Only QuickBooks report exports (.csv, .xlsx) can be read together, such as a Journal with the Account Listing.',
+        });
+        return;
+      }
+      reading = startReading(paths, ext);
       follow(reading);
     },
     [follow],
   );
+
+  // Open or Restore Company was given a QuickBooks file: read it as soon as the wizard opens.
+  useEffect(() => {
+    const path = takePendingMigration();
+    if (path && !reading) ingest([path]);
+  }, [ingest]);
 
   const run = async (fn, success) => {
     setBusy(true);
@@ -971,13 +987,13 @@ export default function QbwImporter({ accounts }) {
     }
   };
 
-  const reverse = (b) => {
+  const reverse = async (b) => {
     if (
-      !window.confirm(
+      !(await askConfirm(
         b.listsAdded
           ? `Reverse the lists added from ${b.fileName}?\n\nThe accounts, customers, vendors and items the import created are deactivated (accounts used since stay active). Records that were already in your books are left alone.`
           : `Reverse the import of ${b.fileName}?\n\nEach of its ${b.liveEntryCount.toLocaleString()} entries gets a reversing entry, so your balances return to what they were before the import. Accounts the importer created are deactivated. This can take a moment for large imports.`,
-      )
+      ))
     )
       return;
     run(
@@ -997,17 +1013,17 @@ export default function QbwImporter({ accounts }) {
   const startOver = async (b) => {
     const when = STAMP.format(new Date(b.startOver.takenAt));
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Start over: put your books back to how they were just before ${b.fileName} was posted (${when})?\n\n` +
           (b.listsAdded
             ? 'This removes the customers, vendors and items it added, and the accounts it created then. Accounts set up in step 2 before that stay, so the lists can be added again.\n\n'
             : `This removes the ${b.liveEntryCount.toLocaleString()} imported entries, with no reversing entries left behind. The accounts set up for the import stay, so it can be posted again.\n\n`) +
           `It also undoes ANYTHING else recorded since ${when}: invoices, payments, edits, other imports.\n\n` +
           `Your books as they are now are saved as a backup first (Settings › Backups), so this can be undone.`,
-      )
+      ))
     )
       return;
-    const typed = window.prompt('This replaces your company file. Type START OVER to confirm.');
+    const typed = await askText('This replaces your company file. Type START OVER to confirm.');
     if (typed?.trim().toUpperCase() !== 'START OVER') {
       if (typed !== null) setNotice({ kind: 'info', text: 'Start over cancelled: the confirmation text did not match. Nothing was changed.' });
       return;
@@ -1035,7 +1051,7 @@ export default function QbwImporter({ accounts }) {
   };
 
   const remove = async (b) => {
-    if (!window.confirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`)) return;
+    if (!(await askConfirm(`Delete the import of ${b.fileName}? Its staged lines are removed. Your books are not affected.`, { confirmLabel: 'Delete', danger: true }))) return;
     setBusy(true);
     setNotice(null);
     try {
@@ -1060,12 +1076,12 @@ export default function QbwImporter({ accounts }) {
   const step2 = !invoiceSummary ? 'locked' : unmapped === 0 && invoiceSummary.lineCount > 0 ? 'done' : 'active';
   const step3 = !invoiceSummary ? 'locked' : invoiceSummary.liveEntryCount > 0 && postable === 0 ? 'done' : ready ? 'active' : 'locked';
 
-  const post = () => {
+  const post = async () => {
     const total = formatCents(invoiceSummary.totalCents);
     if (
-      !window.confirm(
+      !(await askConfirm(
         `Post ${postable.toLocaleString()} journal entries (${total} in total) to your books?\n\nCheck this total against the original program’s reports first. You can undo it later with "Reverse posted entries".`,
-      )
+      ))
     )
       return;
     run(
@@ -1086,7 +1102,8 @@ export default function QbwImporter({ accounts }) {
           <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · built on the open-source OpenQBW work</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports and Quicken .qif exports. Newer company files and both exports
+          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports, Quicken .qif exports, GnuCash books (.gnucash) and QuickBooks report exports (a Journal or
+          General Ledger as .csv or .xlsx, from QuickBooks Desktop for Windows or Mac, or QuickBooks Online). Newer company files, GnuCash books and the exports
           come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
           as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}
           <strong>invoice line amounts only</strong>, posted against an offset account you choose. Compare the totals with your original program’s reports before posting; anything posted can be reversed

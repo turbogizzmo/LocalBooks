@@ -10,10 +10,32 @@ import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
 const ORIGIN_TEXT = {
-  LEARNED: 'Suggested from your past approvals',
+  LEARNED: 'Suggested by a rule learned from your past approvals',
   BUILT_IN: 'Suggested by vendor match',
+  MODEL: 'Suggested from similar past transactions',
   DEFAULT: 'No match found: uncategorized',
 };
+
+const LEVEL_TEXT = { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
+const LEVEL_CLASS = {
+  HIGH: 'border-qb-green text-qb-green-active',
+  MEDIUM: 'border-qb-border-strong text-qb-ink',
+  LOW: 'border-qb-border text-qb-ink-muted',
+};
+
+/** The confidence of a suggestion made from similar past transactions, as a small badge. */
+function Confidence({ suggestion }) {
+  if (suggestion?.origin !== 'MODEL') return null;
+  const level = suggestion.confidenceLevel;
+  return (
+    <span
+      className={`ml-1 inline-block flex-none whitespace-nowrap rounded-xs border px-1 text-2xs font-semibold leading-tight ${LEVEL_CLASS[level]}`}
+      title={`${suggestion.confidence}% confident, from similar past transactions`}
+    >
+      {LEVEL_TEXT[level]} {suggestion.confidence}%
+    </span>
+  );
+}
 
 const isFeedAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 
@@ -21,8 +43,10 @@ export default function BankFeed({ accounts }) {
   const feedAccounts = useMemo(() => accounts.filter((a) => a.isActive && isFeedAccount(a)), [accounts]);
   const [bankAccountId, setBankAccountId] = useState(null);
   const { data, error } = useLedgerQuery(api.listBankTransactions);
+  const { data: vendors } = useLedgerQuery(api.listVendors);
   const [selectedId, setSelectedId] = useState(null);
   const [overrides, setOverrides] = useState({});
+  const [payees, setPayees] = useState({}); // bank line id → payee typed by the user
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [flashId, setFlashId] = useState(null);
@@ -86,6 +110,8 @@ export default function BankFeed({ accounts }) {
   const tracking = useClassTracking();
   const [classes, setClasses] = useState({}); // bank line id → chosen class
   const classId = selected ? (classes[selected.id] ?? null) : null;
+  // Only money out has a payee: it becomes the vendor on the expense.
+  const payee = selected && selected.amountCents < 0 ? (payees[selected.id] ?? selected.payee ?? '') : '';
 
   const reportImport = (r, path) => {
     const extras = [
@@ -99,19 +125,21 @@ export default function BankFeed({ accounts }) {
   };
 
   // OFX/QFX and recognized CSV layouts import straight away; otherwise the user maps the columns.
+  // A PDF statement always shows its columns and balance check first: its table was read from the
+  // page layout, so the user confirms it.
   const importStatement = async () => {
     if (bankAccountId === null) return;
     try {
       const path = await open({
         multiple: false,
         directory: false,
-        filters: [{ name: 'Bank statement (CSV, OFX, QFX)', extensions: ['csv', 'CSV', 'ofx', 'OFX', 'qfx', 'QFX', 'qbo', 'QBO'] }],
+        filters: [{ name: 'Bank statement (CSV, OFX, QFX, PDF)', extensions: ['csv', 'CSV', 'ofx', 'OFX', 'qfx', 'QFX', 'qbo', 'QBO', 'pdf', 'PDF'] }],
       });
       if (!path) return;
       setBusy(true);
       setNotice(null);
-      const inspection = await api.inspectBankFile(path);
-      const confident = inspection.format === 'OFX' || (inspection.mapping && inspection.dateOrderCertain);
+      const inspection = await api.inspectBankFile(path, null, bankAccountId);
+      const confident = inspection.format === 'OFX' || (inspection.format === 'CSV' && inspection.mapping && inspection.dateOrderCertain);
       if (inspection.format === 'OFX' && inspection.problem) throw new Error(inspection.problem);
       if (!confident) {
         setMappingFile({ path, inspection });
@@ -134,7 +162,7 @@ export default function BankFeed({ accounts }) {
     if (!selected || categoryId === null) return;
     setBusy(true);
     try {
-      await api.approveBankTransaction(selected.id, categoryId, classId);
+      await api.approveBankTransaction(selected.id, categoryId, classId, payee.trim() || null);
       setFlashId(selected.id);
       setNotice({
         kind: 'success',
@@ -197,6 +225,7 @@ export default function BankFeed({ accounts }) {
         <BankColumnMapping
           path={mappingFile.path}
           inspection={mappingFile.inspection}
+          bankAccountId={bankAccountId}
           accountName={accountLabel(accounts, bankAccountId)}
           onCancel={() => setMappingFile(null)}
           onImport={async (mapping) => {
@@ -255,7 +284,7 @@ export default function BankFeed({ accounts }) {
                 <col />
                 <col className="w-[104px]" />
                 <col className="w-[104px]" />
-                <col className="w-[180px]" />
+                <col className="w-[220px]" />
               </colgroup>
               <thead>
                 <tr>
@@ -289,7 +318,10 @@ export default function BankFeed({ accounts }) {
                       <td className="qb-grid-cell num">{t.amountCents < 0 ? formatCents(-t.amountCents) : ''}</td>
                       <td className="qb-grid-cell num">{t.amountCents > 0 ? formatCents(t.amountCents) : ''}</td>
                       <td className={`qb-grid-cell ${t.suggestion?.origin === 'DEFAULT' ? 'text-qb-ink-faint' : ''}`}>
-                        {chosen !== null ? accountLabel(accounts, chosen) : ''}
+                        <div className="flex min-w-0 items-center">
+                          <span className="min-w-0 truncate">{chosen !== null ? accountLabel(accounts, chosen) : ''}</span>
+                          {overrides[t.id] === undefined && <Confidence suggestion={t.suggestion} />}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -326,9 +358,38 @@ export default function BankFeed({ accounts }) {
                   placeholder="Select category"
                 />
                 {selected.suggestion && overrides[selected.id] === undefined && (
-                  <span className="mt-0.5 block text-xs text-qb-ink-muted">{ORIGIN_TEXT[selected.suggestion.origin]}</span>
+                  <span className="mt-0.5 block text-xs text-qb-ink-muted">
+                    {ORIGIN_TEXT[selected.suggestion.origin]}
+                    <Confidence suggestion={selected.suggestion} />
+                  </span>
+                )}
+                {selected.suggestion?.similarTo && overrides[selected.id] === undefined && (
+                  <span className="block text-xs text-qb-ink-muted" data-testid="similar-to">
+                    Because similar to “{selected.suggestion.similarTo.description}”,{' '}
+                    {formatCents(Math.abs(selected.suggestion.similarTo.amountCents))} on {formatDate(selected.suggestion.similarTo.date)}
+                  </span>
                 )}
               </label>
+              {selected.amountCents < 0 && (
+                <label>
+                  <span className="qb-label">Payee</span>
+                  <input
+                    className="qb-input w-full"
+                    value={payee}
+                    onChange={(e) => setPayees((p) => ({ ...p, [selected.id]: e.target.value }))}
+                    list="bank-feed-vendors"
+                    placeholder="Vendor (optional)"
+                  />
+                  <datalist id="bank-feed-vendors">
+                    {(vendors ?? []).map((v) => (
+                      <option key={v.id} value={v.name} />
+                    ))}
+                  </datalist>
+                  {selected.payee && payees[selected.id] === undefined && (
+                    <span className="mt-0.5 block text-xs text-qb-ink-muted">Suggested from similar past transactions</span>
+                  )}
+                </label>
+              )}
               {tracking.enabled && tracking.hasClasses && (
                 <label>
                   <span className="qb-label">Class</span>

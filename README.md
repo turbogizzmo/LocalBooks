@@ -12,8 +12,9 @@ for a high-density, keyboard-friendly interface.
 > [**tester page**](https://turbogizzmo.github.io/LocalBooks/). Installed copies update themselves.
 >
 > **Using LocalBooks?** Start with the [**user guide**](docs/guide/README.md): step-by-step guides
-> for invoices, payments, bills, banking, reconciling, reports, closing the books, backups and more.
-> The same guides are built into the app's Help (press F1).
+> for invoices, payments, bills, banking, reconciling, reports, closing the books, backups, users and
+> passwords, and more. The same guides are built into the app's Help (press F1). What changed in each
+> release is in the [changelog](CHANGELOG.md).
 
 ## Contents
 
@@ -73,6 +74,14 @@ foreign unit, stored as an integer scaled by 1,000,000).
   cumulatively, so the final payment clears it to the cent. The difference posts to the system
   account **Exchange Gain or Loss**.
 - The home currency is a preference and locks once foreign transactions exist.
+- **Optional daily exchange rates (uses the network).** With *Look up daily exchange rates* on
+  (Settings › Preferences Console, off by default), rate fields are pre-filled with the European
+  Central Bank's reference rate for the transaction date, through the open-source
+  [Frankfurter](https://github.com/lineofflight/frankfurter) API at `api.frankfurter.dev`. Each
+  lookup sends only the two currency codes and a date. Answers are cached in the company file
+  (`exchange_rate_cache`), so a date is fetched once and works offline. Weekends and holidays use
+  the previous business day's rate. The suggestion can always be overridden, and saved
+  transactions keep the rate they were saved with.
 
 ### Double-entry enforced at two layers
 
@@ -182,6 +191,19 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    source invoice ID stops the same invoice being posted twice. Voiding an imported entry
    releases its invoice so it can be posted again.
 
+The wizard also reads the full ledger (accounts, customers, vendors and every transaction) from
+newer company files, QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
+(`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
+and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
+
+Without a readable company file, the wizard also takes **QuickBooks report exports** (`.csv` or
+`.xlsx`) from QuickBooks Desktop for Windows or Mac, or QuickBooks Online: the Journal or General
+Ledger, with the Account Listing, contact lists and Item List chosen together. `report_import.rs`
+finds each report by its column headings, skips title, total and footer rows, and hands the
+transactions to the same resolver as the IIF reader. An expired QuickBooks Desktop for Mac can
+still run these reports in view-only mode. See
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#import-quickbooks-reports).
+
 ---
 
 ## Architecture
@@ -189,9 +211,9 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
 ```mermaid
 flowchart LR
     subgraph UI["React + Tailwind (Tauri webview)"]
-        V[Views & forms] --> A[lib/api.js]
+        V[Views & forms] --> A[lib/api/<br/>one file per feature]
     end
-    A -- "invoke()" --> C[commands.rs<br/>74 Tauri commands]
+    A -- "invoke()" --> C[commands/<br/>one file per feature]
     subgraph Engine["Rust engine"]
         C --> D[Document modules<br/>invoices · sales · expenses · banking<br/>estimates · bank · reconcile · timesheet]
         D --> L[ledger.rs<br/>validate · post · void]
@@ -210,18 +232,48 @@ Every successful write emits a `ledger-changed` event, so open screens refresh l
 
 ## Feature blueprint
 
-### Navigation
+### Features
 
-| Group | Screens | What you can do |
-|---|---|---|
-| **Dashboard** | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging widget |
-| **Sales** | All Sales · Invoices · Estimates · Customers · Products & Services · Send Forms | Invoices with inline line-item grid, full & partial payments, sales receipts, estimates → invoice conversion, a form designer for invoices and estimates with PDF files, emailed through your mail app or SMTP, with sent history and an Email later queue |
-| **Expenses** | Expenses & Checks · Bills · Vendors | Split-line bills with total validation, Pay Bills batch, expenses, checks with auto-numbering |
-| **Employees** | Time Tracking | Single time activities and weekly timesheets (billable hours, rates) |
-| **Banking** | Bank Feeds · Deposits & Transfers · Reconcile | CSV/OFX bank import and SimpleFIN bank connections with rule learning, bank deposits from Undeposited Funds, transfers, statement reconciliation |
-| **Accounting** | Journal Entries · Audit Log · Currency Revaluation · Desktop Migration Wizard | Balanced manual journal entries, register with void/reversal pairs, read-only audit trail, `.qbw` import via staging |
-| **Reports** | Profit and Loss · Balance Sheet | Fiscal-year-aware statements, CSV export, Print / Save as PDF with company logo |
-| **Settings** | Preferences Console · Custom Forms · Email · File & Data Controls · AI Access (MCP) | Company details, logo, fiscal year, currency symbol, tax calendar, invoice and estimate form designer, emailing through your mail app or SMTP, backups & restore, open company file, company file location, local read-only AI access |
+One row per feature, in alphabetical order, each on its own line, so features added in parallel
+land on different lines. Keep a row to one short line and put the details in the feature's guide
+under [`docs/guide/`](docs/guide/README.md).
+
+| Feature | Where | What you can do | Guide |
+|---|---|---|---|
+| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
+| AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
+| Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
+| Backups & company files | Settings › File & Data Controls | Backups and restore, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
+| Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
+| Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once | [guide](docs/guide/bills.md) |
+| Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
+| Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
+| Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
+| Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
+| Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Custom forms & email | Settings › Custom Forms · Email; Sales › Send Forms | Invoice and estimate designer, PDFs, mail app or SMTP, sent history, Email later queue | [guide](docs/guide/custom-forms.md) |
+| Custom reports | Reports | Detail reports (P&L and Balance Sheet Detail, aging details, Open Invoices, customer and vendor balances, sales, purchases and income by name or item, Check and Deposit Detail, 1099 Detail, Journal, Transaction List) you can filter, regroup and save as memorized reports | [guide](docs/guide/reports.md#customize-a-report) |
+| Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/custom-forms.md) |
+| Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
+| Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
+| Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
+| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
+| Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
+| Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
+| Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
+| Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
+| Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
+| Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
+| New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
+| Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
+| Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
+| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
+| Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
+| Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
 
 ### `+ New` quick-create matrix
 
@@ -234,6 +286,7 @@ its entry form with focus in the first field.
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
 | Estimate | Bill | | Transfer |
 | Sales Receipt | Pay Bills | | |
+| | Credit Card Credit | | |
 
 ---
 
@@ -242,12 +295,14 @@ its entry form with focus in the first field.
 | Transaction | Debit | Credit |
 |---|---|---|
 | Invoice | Accounts Receivable | Income (per line's account) |
+| Finance charge (an invoice per customer, from Assess Finance Charges) | Accounts Receivable | The finance charge income account |
 | Receive payment | Bank or Undeposited Funds | Accounts Receivable |
 | Sales receipt | Bank or Undeposited Funds | Income |
 | Bill | Expense / asset (one debit per distinct split account) | Accounts Payable |
 | Payment on a foreign invoice | Bank (at payment rate) + Exchange **loss** | A/R (at booked rate) + Exchange **gain** |
 | Pay bill | Accounts Payable | Bank or Credit Card |
 | Expense / Check | Expense / asset (per split) | Bank (or Credit Card for expenses) |
+| Credit card credit | Credit Card | Expense / asset (per split) |
 | Bank deposit | Bank | Undeposited Funds (selected payments) + other lines |
 | Transfer | To-account | From-account |
 | Bank feed approval | Becomes a real Expense (money out) or Deposit (money in) | |
@@ -339,11 +394,29 @@ version upgrades a company file's schema, it saves a verified copy to the local 
 
 To ship a release:
 
-1. Bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`; commit.
+1. In one release PR:
+   - bump `version` in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json` (and
+     the lockfiles);
+   - add a `## [<version>]` section to `CHANGELOG.md`, written for the people using LocalBooks. It
+     becomes the release notes on GitHub and in the app's update window;
+   - update the tester page (`site/index.html`): **What's new to test in <major.minor>**, the sample
+     update bar, and any install, update or **Move your books** steps the release changes;
+   - check that every feature in the release has its guide section, Help topic and README row (see
+     [docs/dev/parallel-work.md](docs/dev/parallel-work.md)).
+
+   `docs_checks` fails the PR if the changelog section or the tester page's What's new is missing
+   for the new version, or if a guide isn't linked from the page, Help and the guide index.
 2. `git tag v0.2.0 && git push origin v0.2.0`. CI tests on all three platforms, builds signed
    installers and `latest.json`, and attaches them to a **draft** release.
-3. Edit the draft's notes (they appear in the app's update prompt) and click **Publish**. Installed
-   copies see the update only after publishing.
+3. Edit the draft's notes (they appear in the app's update prompt) and publish it as a
+   **pre-release** (a preview on the tester page). Installed copies don't see it yet: the
+   updater follows the latest release.
+4. Publishing starts the **Release check** (`release-check.yml`, also runnable by hand with the tag).
+   On macOS, Windows and Linux it verifies the signed installers and `latest.json`, upgrades test
+   companies seeded by the previous release, and launches the installed app. See
+   [docs/testing/release-check.md](docs/testing/release-check.md).
+5. Once the release check is green on all three platforms, promote the release to **latest**.
+   Installed copies then offer the update.
 
 Windows updates use the per-user `-setup.exe` installer, the one the tester page recommends.
 
@@ -352,8 +425,10 @@ Windows updates use the per-user `-setup.exe` installer, the one the tester page
 | Workflow | When | What |
 |---|---|---|
 | `release.yml` | push, pull request, tag, manual | Tests on macOS, Windows, Linux; installers on tags and manual runs |
+| `release-check.yml` | pre-release or draft published/edited, manual | The gate before latest: signatures and `latest.json`, upgrade from the previous release, launch smoke, on all three platforms |
 | `codeql.yml` | push, pull request, weekly | Static security analysis of Rust, JavaScript and the workflows |
 | `audit.yml` | lockfile changes, weekly | RustSec and npm advisories for shipped dependencies |
+| `notices.yml` | lockfile changes, weekly | Fails when `THIRD-PARTY-NOTICES.txt` no longer matches the shipped dependencies |
 | `pages.yml` | changes to `site/` | Publishes the [tester page](https://turbogizzmo.github.io/LocalBooks/) |
 | Dependabot | weekly | Grouped update PRs for Cargo, npm and GitHub Actions |
 
@@ -429,7 +504,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
 ├── src/                        # React frontend
 │   ├── App.jsx                 # routing, + New intents, company context
 │   ├── components/             # one file per screen plus shared grids, menus and print documents
-│   ├── lib/                    # api.js (Tauri bindings), money.js (cents math), dates.js
+│   ├── lib/                    # api.js + api/ (Tauri bindings, one file per feature), money.js, dates.js
 │   └── styles/print.css        # US Letter print designer
 ├── tailwind.config.js          # color tokens and dense components
 └── src-tauri/
@@ -437,17 +512,22 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
     ├── capabilities/           # Tauri permission set
     ├── tauri.conf.json
     └── src/
-        ├── main.rs             # app setup, command registration, clean shutdown
-        ├── commands.rs         # Tauri command layer
+        ├── main.rs             # app setup, clean shutdown
+        ├── commands/           # Tauri command layer, one file per feature (see docs/dev/parallel-work.md)
         ├── db.rs               # connection handling, migrations, hot-swap & relocation
         ├── ledger.rs           # validation, posting, voiding, journal register, audit queries
-        ├── invoices.rs, sales.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
+        ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
+        ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
+        ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache
+        ├── bank_pdf.rs         # PDF bank and card statements: text layout to transaction table
         ├── forms.rs, pdf.rs    # form designer layouts and the PDF writer
         ├── mail_app.rs, smtp.rs, secrets.rs   # emailing forms; credentials on this computer
         ├── email_log.rs        # sent history (append-only) and the Email later queue
         ├── statements.rs, reports.rs, export_engine.rs   # P&L, Balance Sheet, dashboard, CSV
+        ├── custom_reports.rs   # custom report engine: detail-report presets, memorized reports
+        ├── xlsx_export.rs      # Excel workbooks with typed cells (rust_xlsxwriter)
         └── backup.rs, preferences.rs, storage.rs         # backups, settings, tax calendar, storage
 ```
 
@@ -480,11 +560,17 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
-- **No sales tax** on invoices or receipts.
+- **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
+  have no cost column, so estimates vs. actuals compare revenue, and an estimate becomes a single
+  invoice (no partial progress invoices).
+- **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
+  returns.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
   receipts, and estimates are home-currency only, and bank accounts are always home currency. Open
   foreign-currency invoices can be revalued at period end (Accounting › Currency Revaluation).
-- **Single user.** One person at a time per company file, including on shared folders.
+- **One person at a time.** A company file can have several users, each with a password and a role
+  (Settings › Users & Passwords), but only one person can have it open at a time, including on
+  shared folders.
 - Whether the `.localbooks` file type is registered on Linux depends on the desktop environment.
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
@@ -497,6 +583,16 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **IIF and QIF imports.** IIF files don't link payments to invoices, so payments apply to the
   oldest open invoices, as QuickBooks does. QIF investment accounts are skipped. A file with lists
   but no transactions adds its accounts, customers, vendors and items and posts nothing.
+- **QuickBooks report imports** (Journal or General Ledger exported to CSV or Excel, with the
+  Account Listing, contact lists and Item List) read Debit and Credit columns only; a report with
+  just an Amount column is refused. Like IIF, they don't link payments to invoices, so payments
+  apply to the oldest open invoices. QuickBooks Online's Journal has no transaction number, so its
+  lines are grouped by date, type and number until they balance. A General Ledger's lines are
+  paired back into transactions through its Split column; lines that can't be paired are listed,
+  not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
+- **GnuCash imports.** Stock and mutual fund accounts are skipped. Amounts that aren't whole cents,
+  and foreign-currency transactions with no home-currency amount, are listed for manual entry
+  rather than rounded or converted. Scheduled transactions, budgets and prices aren't imported.
 - **Inventory** uses moving average cost (no FIFO/LIFO). Stock is bought on bills (not on expenses or
   checks) and can't be sold on foreign-currency invoices. Selling below zero is allowed: those units
   are costed at the last purchase cost and trued up to actual cost when the stock is bought.
@@ -512,3 +608,17 @@ qualified accountant before filing.*
 ## License
 
 LocalBooks is released under the [MIT License](LICENSE).
+
+It includes open-source components under their own licenses, among them
+[OpenQBW](https://github.com/Sigilweaver/OpenQBW) and
+[OpenSQLAnywhere](https://github.com/Sigilweaver/OpenSQLAnywhere) (Apache-2.0, by Nathan Riley),
+which read QuickBooks company files. [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists every
+shipped Rust crate and npm package with its license, and reproduces their NOTICE files and license
+texts. The installers carry it, and the app shows it under Help › About LocalBooks.
+
+After changing dependencies (`Cargo.lock` or `package-lock.json`), run `npm ci` and then
+`node scripts/third-party-notices.mjs`, and commit the regenerated file; `notices.yml` fails on pull
+requests until it matches. Dependabot pull requests need the same step.
+
+QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is
+not affiliated with, endorsed by, or sponsored by Intuit Inc.

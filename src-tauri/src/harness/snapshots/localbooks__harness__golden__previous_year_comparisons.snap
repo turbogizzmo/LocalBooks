@@ -1,0 +1,76 @@
+---
+source: src/harness/golden.rs
+expression: out
+---
+Profit & Loss comparison
+
+                                                        Jul-Dec 2025    Jan-Jun 2025        $ Change        % Change
+Income                                                                                                              
+  4000 Sales                                                3,926.25        3,926.25            0.00           0.00%
+  4100 Services                                            68,958.00       63,750.00        5,208.00           8.17%
+Total Income                                               72,884.25       67,676.25        5,208.00           7.70%
+Gross Profit                                               72,884.25       67,676.25        5,208.00           7.70%
+Expenses                                                                                                            
+  6000 Advertising & Marketing                              1,800.00            0.00        1,800.00                
+  6050 Bank Charges & Fees                                     90.00           90.00            0.00           0.00%
+  6250 Office Supplies                                        829.90            0.00          829.90                
+  6300 Rent & Lease                                        14,400.00       14,400.00            0.00           0.00%
+  6350 Software & Cloud Services                              774.00          774.00            0.00           0.00%
+  6400 Contractors                                          2,850.00        2,850.00            0.00           0.00%
+  6500 Utilities                                            1,183.50        1,183.50            0.00           0.00%
+  6700 Wages                                               39,000.00       36,750.00        2,250.00           6.12%
+  6710 Payroll Taxes                                        2,983.49        2,811.36          172.13           6.12%
+Total Expenses                                             63,910.89       58,858.86        5,052.03           8.58%
+Net Operating Income                                        8,973.36        8,817.39          155.97           1.77%
+Other Expenses                                                                                                      
+  8000 Interest Expense                                       210.00          570.00         -360.00         -63.16%
+  8100 Exchange Gain or Loss                                  -52.50            0.00          -52.50                
+Total Other Expenses                                          157.50          570.00         -412.50         -72.37%
+Net Other Income                                             -157.50         -570.00          412.50          72.37%
+Net Income                                                  8,815.86        8,247.39          568.47           6.89%
+
+Balance Sheet comparison
+
+                                                        Jan 15, 2026    Jun 30, 2025        $ Change        % Change
+ASSETS                                                                                                              
+  Current Assets                                                                                                    
+    Bank Accounts                                                                                                   
+      1010 Checking                                         3,363.22       27,797.57      -24,434.35         -87.90%
+      1020 Savings                                         15,000.00       15,000.00            0.00           0.00%
+    Total Bank Accounts                                    18,363.22       42,797.57      -24,434.35         -57.09%
+    Accounts Receivable                                                                                             
+      1200 Accounts Receivable (A/R)                       12,408.81       10,683.72        1,725.09          16.15%
+    Total Accounts Receivable                              12,408.81       10,683.72        1,725.09          16.15%
+    Other Current Assets                                                                                            
+      1300 Undeposited Funds                               12,047.67            0.00       12,047.67                
+    Total Other Current Assets                             12,047.67            0.00       12,047.67                
+  Total Current Assets                                     42,819.70       53,481.29      -10,661.59         -19.94%
+  Fixed Assets                                                                                                      
+    1500 Equipment                                         18,750.00       18,750.00            0.00           0.00%
+  Total Fixed Assets                                       18,750.00       18,750.00            0.00           0.00%
+TOTAL ASSETS                                               61,569.70       72,231.29      -10,661.59         -14.76%
+LIABILITIES AND EQUITY                                                                                              
+  Liabilities                                                                                                       
+    Current Liabilities                                                                                             
+      Accounts Payable                                                                                              
+        2000 Accounts Payable (A/P)                         1,983.90            0.00        1,983.90                
+      Total Accounts Payable                                1,983.90            0.00        1,983.90                
+      Credit Cards                                                                                                  
+        2100 Credit Card                                      375.00            0.00          375.00                
+      Total Credit Cards                                      375.00            0.00          375.00                
+      Other Current Liabilities                                                                                     
+        2200 Sales Tax Payable                                146.18          130.78           15.40          11.78%
+        2300 Payroll Liabilities                            2,001.37        1,853.12          148.25           8.00%
+      Total Other Current Liabilities                       2,147.55        1,983.90          163.65           8.25%
+    Total Current Liabilities                               4,506.45        1,983.90        2,522.55         127.15%
+    Long-Term Liabilities                                                                                           
+      2500 Loan Payable                                         0.00       12,000.00      -12,000.00        -100.00%
+    Total Long-Term Liabilities                                 0.00       12,000.00      -12,000.00        -100.00%
+  Total Liabilities                                         4,506.45       13,983.90       -9,477.45         -67.77%
+  Equity                                                                                                            
+    3100 Owner's Investment                                50,000.00       50,000.00            0.00           0.00%
+    3200 Owner's Draw                                     -10,000.00            0.00      -10,000.00                
+    3900 Retained Earnings                                 17,063.25            0.00       17,063.25                
+    Net Income                                                  0.00        8,247.39       -8,247.39        -100.00%
+  Total Equity                                             57,063.25       58,247.39       -1,184.14          -2.03%
+TOTAL LIABILITIES AND EQUITY                               61,569.70       72,231.29      -10,661.59         -14.76%

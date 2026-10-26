@@ -1,0 +1,259 @@
+# LocalBooks release check
+#
+# The gate before a test build is promoted to latest (which every installed copy then updates to).
+# On macOS, Windows and Linux, against the release's own published files:
+#
+#   Artifacts    every installer and update bundle verifies against the updater public key in the
+#                release's tauri.conf.json (unchanged since the previous release), latest.json lists
+#                each platform, and its URLs download those same signed files. On macOS,
+#                `codesign --verify` of the app is reported (unsigned for now, so never a failure).
+#   Upgrade      the test companies are seeded by the PREVIOUS release (its seeder, built from its
+#                tag), then the new release's hidden `--check-file` opens a copy of each: upgrade
+#                with its pre-upgrade copy, then File Dentist's check-up. Balances must not change.
+#   Launch       the installed app is started on a copy of each seeded company; it must still be
+#                running after 30 s with no crash report, quit, and leave that file upgraded (with a
+#                pre-upgrade copy), intact and with unchanged balances.
+#
+# A pull request that changes the release check runs it against the newest release.
+#
+# Releases older than `--check-file` (v0.6.0 and earlier) skip the Upgrade step; the launch still
+# checks their upgrade, without File Dentist. How to read the results: docs/testing/release-check.md.
+
+name: Release check
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to check (for example v0.6.0)
+        required: true
+      previous:
+        description: "Release tag to upgrade from (default: the newest published release before it)"
+        required: false
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/release-check.yml
+      - .github/release-check/**
+      - src-tauri/src/release_check.rs
+
+# Reading draft releases and their assets needs write access to contents; nothing here writes.
+# The token is given only to the steps that download, never to the steps that run the release.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-check-${{ inputs.tag || github.event.release.tag_name || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPO: ${{ github.repository }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    # Published latest releases are past the gate; check test builds (pre-releases) and drafts.
+    if: github.event_name != 'release' || github.event.release.prerelease || github.event.release.draft
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      previous: ${{ steps.plan.outputs.previous }}
+      app_schema: ${{ steps.plan.outputs.app_schema }}
+      check_mode: ${{ steps.plan.outputs.check_mode }}
+    steps:
+      - name: Find the previous release and what the release supports
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          PREVIOUS: ${{ inputs.previous }}
+        run: |
+          # A pull request checks the newest release that is not a draft.
+          [ -n "$TAG" ] || TAG=$(gh release list --repo "$REPO" --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName')
+          gh release view "$TAG" --repo "$REPO" --json tagName,isDraft,isPrerelease
+          if [ -z "$PREVIOUS" ]; then
+            # The newest published (non-draft) release that sorts before this tag.
+            PREVIOUS=$( { gh release list --repo "$REPO" --limit 100 --exclude-drafts --json tagName --jq '.[].tagName'; echo "$TAG"; } \
+              | sort -uV | awk -v tag="$TAG" '$0 == tag { print prev; exit } { prev = $0 }')
+          fi
+          [ -n "$PREVIOUS" ] || { echo "::error::No release before $TAG to upgrade from"; exit 1; }
+          migrations=$(gh api "repos/$REPO/contents/src-tauri/migrations?ref=$TAG" --jq '.[].name')
+          app_schema=$(echo "$migrations" | grep -o '^[0-9]*' | sort -n | tail -1 | sed 's/^0*//')
+          if gh api "repos/$REPO/contents/src-tauri/src/release_check.rs?ref=$TAG" --silent 2>/dev/null; then check_mode=true; else check_mode=false; fi
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+            echo "previous=$PREVIOUS"
+            echo "app_schema=$app_schema"
+            echo "check_mode=$check_mode"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  check:
+    name: Check (${{ matrix.name }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            platform: darwin
+            assets: -p latest.json -p '*.dmg' -p '*.app.tar.gz' -p '*.app.tar.gz.sig'
+          - name: Windows
+            os: windows-latest
+            platform: windows
+            assets: -p latest.json -p '*-setup.exe' -p '*-setup.exe.sig' -p '*.msi' -p '*.msi.sig'
+          - name: Linux
+            os: ubuntu-latest
+            platform: linux
+            assets: -p latest.json -p '*.deb' -p '*.deb.sig' -p '*.rpm' -p '*.rpm.sig' -p '*.AppImage' -p '*.AppImage.sig'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      PREVIOUS: ${{ needs.plan.outputs.previous }}
+      APP_SCHEMA: ${{ needs.plan.outputs.app_schema }}
+      WORK: ${{ github.workspace }}/release-check-work
+      SEEDED: ${{ github.workspace }}/release-check-work/seeded
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+      # Seeding only needs a quick optimized build, not the shipping profile's LTO.
+      CARGO_PROFILE_RELEASE_LTO: 'off'
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+    steps:
+      - name: Checkout (scripts)
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Summary header
+        run: |
+          {
+            echo "## Release check: $TAG on ${{ matrix.name }}"
+            echo
+            echo "Upgrading from **$PREVIOUS** (schema $APP_SCHEMA in $TAG)."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$WORK"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install the signature library
+        run: python -m pip install --quiet cryptography
+
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$TAG" --repo "$REPO" --dir "$WORK/release" ${{ matrix.assets }}
+          for ref in "$TAG" "$PREVIOUS"; do
+            gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/src-tauri/tauri.conf.json?ref=$ref" > "$WORK/tauri.conf.$ref.json"
+          done
+          ls -l "$WORK/release"
+
+      - name: Artifacts
+        id: artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python -I .github/release-check/release_check.py artifacts
+          --release-dir "$WORK/release" --platform ${{ matrix.platform }} --version "${{ needs.plan.outputs.version }}"
+          --config "$WORK/tauri.conf.$TAG.json" --previous-config "$WORK/tauri.conf.$PREVIOUS.json"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+          Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Install the release
+        id: install
+        if: ${{ !cancelled() }}
+        run: |
+          app=$(python -I .github/release-check/release_check.py install --release-dir "$WORK/release" --platform ${{ matrix.platform }} --dest "$WORK/apps")
+          echo "Installed: $app"
+          echo "APP=$app" >> "$GITHUB_ENV"
+
+      - name: Code signature (report only)
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.install.outcome == 'success' }}
+        run: python -I .github/release-check/release_check.py codesign --app "$APP"
+
+      - name: Checkout the previous release
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.previous }}
+          path: previous-release
+          persist-credentials: false
+
+      - name: Set up Rust (stable)
+        if: ${{ !cancelled() }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        if: ${{ !cancelled() }}
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: previous-release/src-tauri -> target
+          shared-key: release-check-${{ matrix.os }}
+
+      - name: Seed the test companies with ${{ needs.plan.outputs.previous }}
+        id: seed
+        if: ${{ !cancelled() }}
+        working-directory: previous-release/src-tauri
+        env:
+          LOCALBOOKS_SEED_DIR: ${{ github.workspace }}/release-check-work/seeded
+        run: |
+          # The seeder never shows a window, but an optimized build embeds the frontend folder.
+          [ -f ../dist/index.html ] || { mkdir -p ../dist && echo '<!doctype html>' > ../dist/index.html; }
+          cargo test --release --locked -- --ignored seed_test_companies --nocapture
+
+      - name: Balances before the upgrade
+        id: balances
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        run: python -I .github/release-check/release_check.py balances --seed-dir "$SEEDED" --out "$WORK/before" --previous "$PREVIOUS"
+
+      - name: Upgrade with --check-file
+        if: ${{ !cancelled() && steps.balances.outcome == 'success' && steps.install.outcome == 'success' && needs.plan.outputs.check_mode == 'true' }}
+        run: >
+          python -I .github/release-check/release_check.py upgrade --app "$APP" --seed-dir "$SEEDED"
+          --before "$WORK/before" --work "$WORK/upgrade" --app-schema "$APP_SCHEMA"
+
+      - name: Upgrade with --check-file (not in this release)
+        if: ${{ !cancelled() && needs.plan.outputs.check_mode != 'true' }}
+        run: |
+          msg="$TAG predates --check-file: the upgrade is checked by the launch below (pre-upgrade copy, integrity, links, balances), without File Dentist."
+          echo "::notice::$msg"
+          printf '### Upgrade with `--check-file`\n\n⚠️ %s\n\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Launch smoke
+        if: ${{ !cancelled() && steps.balances.outcome == 'success' && steps.install.outcome == 'success' }}
+        run: >
+          python -I .github/release-check/release_check.py launch --app "$APP" --seed-dir "$SEEDED"
+          --before "$WORK/before" --work "$WORK/launch" --app-schema "$APP_SCHEMA"
+
+      - name: Keep the company files and results (7 days)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-check-${{ matrix.platform }}
+          path: |
+            release-check-work/before
+            release-check-work/upgrade
+            release-check-work/launch
+            release-check-work/seeded
+          retention-days: 7
+          if-no-files-found: ignore

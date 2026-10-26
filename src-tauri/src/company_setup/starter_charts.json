@@ -1,0 +1,5042 @@
+{
+ "accounts": [
+  {
+   "number": "10900",
+   "name": "Client Trust Account",
+   "type": "BANK",
+   "parent": null,
+   "description": "Money held for clients in a separate trust bank account"
+  },
+  {
+   "number": "10950",
+   "name": "Cash in Drawer",
+   "type": "BANK",
+   "parent": null,
+   "description": "Cash kept in registers for making change"
+  },
+  {
+   "number": "11100",
+   "name": "Allowance for Doubtful Accounts",
+   "type": "ACCOUNTS_RECEIVABLE",
+   "parent": null,
+   "description": "Estimate of customer balances that will not be paid (reduces A/R)"
+  },
+  {
+   "number": "11200",
+   "name": "Pledges Receivable",
+   "type": "ACCOUNTS_RECEIVABLE",
+   "parent": null,
+   "description": "Pledges donors have promised but not yet paid"
+  },
+  {
+   "number": "11300",
+   "name": "Allowance for Doubtful Pledges",
+   "type": "ACCOUNTS_RECEIVABLE",
+   "parent": null,
+   "description": "Estimate of pledges that will not be paid (reduces pledges receivable)"
+  },
+  {
+   "number": "11400",
+   "name": "Grants Receivable",
+   "type": "ACCOUNTS_RECEIVABLE",
+   "parent": null,
+   "description": "Grants awarded but not yet received"
+  },
+  {
+   "number": "12100",
+   "name": "Inventory Asset",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Cost of products on hand for sale"
+  },
+  {
+   "number": "12200",
+   "name": "Accrued Revenue",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Income earned this period that will be collected later"
+  },
+  {
+   "number": "12300",
+   "name": "Advanced Client Costs",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Costs paid on a client's behalf, to be billed back"
+  },
+  {
+   "number": "12310",
+   "name": "Court Costs",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": "12300",
+   "description": "Court costs paid for clients, to be billed back"
+  },
+  {
+   "number": "12320",
+   "name": "Expert Witness Fees",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": "12300",
+   "description": "Expert witness fees paid for clients, to be billed back"
+  },
+  {
+   "number": "12330",
+   "name": "Filing Fees",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": "12300",
+   "description": "Filing fees paid for clients, to be billed back"
+  },
+  {
+   "number": "12400",
+   "name": "Food Inventory",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Food on hand, at cost"
+  },
+  {
+   "number": "12500",
+   "name": "Bar Inventory",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Liquor, beer, wine and mixers on hand, at cost"
+  },
+  {
+   "number": "12600",
+   "name": "Construction in Progress",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Costs of jobs underway that are not yet billed"
+  },
+  {
+   "number": "12700",
+   "name": "Driver Advances",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Cash advanced to drivers, to be repaid or settled"
+  },
+  {
+   "number": "12800",
+   "name": "Employee Advances",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Short-term advances to employees, to be repaid"
+  },
+  {
+   "number": "12900",
+   "name": "Raw Materials Inventory",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Materials on hand to be used in production"
+  },
+  {
+   "number": "13000",
+   "name": "Prepaid Expenses",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Costs paid ahead for future periods"
+  },
+  {
+   "number": "13100",
+   "name": "Prepaid Insurance",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Insurance premiums paid ahead for future periods"
+  },
+  {
+   "number": "13200",
+   "name": "Work in Progress",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Partly finished goods in production"
+  },
+  {
+   "number": "13300",
+   "name": "Finished Goods Inventory",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Completed goods on hand, ready to sell"
+  },
+  {
+   "number": "13400",
+   "name": "Retainage Receivable",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Amounts customers held back on jobs until completion"
+  },
+  {
+   "number": "13500",
+   "name": "Supplies Inventory",
+   "type": "OTHER_CURRENT_ASSET",
+   "parent": null,
+   "description": "Supplies bought but not yet used"
+  },
+  {
+   "number": "15000",
+   "name": "Furniture and Equipment",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Furniture, computers and equipment kept longer than a year"
+  },
+  {
+   "number": "15100",
+   "name": "Buildings - Operating",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Buildings the organization owns and uses"
+  },
+  {
+   "number": "15200",
+   "name": "Buildings and Improvements",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Buildings and permanent improvements the business owns"
+  },
+  {
+   "number": "15300",
+   "name": "Construction Equipment",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Heavy equipment used on construction jobs"
+  },
+  {
+   "number": "15400",
+   "name": "Custom Software",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Software developed or purchased for long-term use"
+  },
+  {
+   "number": "15500",
+   "name": "Facility Construction",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Costs of buildings under construction for the organization's own use"
+  },
+  {
+   "number": "15600",
+   "name": "Land",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Land the business owns (not depreciated)"
+  },
+  {
+   "number": "15700",
+   "name": "Land - Operating",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Land the organization owns and uses"
+  },
+  {
+   "number": "15800",
+   "name": "Landscaping Equipment",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Mowers, trimmers and other landscaping equipment"
+  },
+  {
+   "number": "15900",
+   "name": "Leasehold Improvements",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Improvements made to rented space"
+  },
+  {
+   "number": "16000",
+   "name": "Library",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Books and reference collections"
+  },
+  {
+   "number": "16100",
+   "name": "Medical Equipment",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Medical and dental equipment kept longer than a year"
+  },
+  {
+   "number": "16200",
+   "name": "Purchased Livestock",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Livestock bought for breeding, dairy or draft use"
+  },
+  {
+   "number": "16300",
+   "name": "Tractors and Trailers",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Tractors, trucks and trailers the business owns"
+  },
+  {
+   "number": "16400",
+   "name": "Vehicles",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Cars and trucks the business owns"
+  },
+  {
+   "number": "16500",
+   "name": "Warehouse Equipment",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Racks, forklifts and other warehouse equipment"
+  },
+  {
+   "number": "17000",
+   "name": "Accumulated Depreciation",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Total depreciation taken on fixed assets (reduces their value)"
+  },
+  {
+   "number": "17100",
+   "name": "Accum Depr - Furn and Equip",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Depreciation taken on furniture and equipment"
+  },
+  {
+   "number": "17200",
+   "name": "Accum Depr - Building",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Depreciation taken on buildings"
+  },
+  {
+   "number": "17300",
+   "name": "Accum Depr - Leasehold Imps",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Depreciation taken on leasehold improvements"
+  },
+  {
+   "number": "17400",
+   "name": "Accum Depr - Vehicles",
+   "type": "FIXED_ASSET",
+   "parent": null,
+   "description": "Depreciation taken on vehicles"
+  },
+  {
+   "number": "18000",
+   "name": "Marketable Securities",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Stocks, bonds and other securities held as investments"
+  },
+  {
+   "number": "18100",
+   "name": "Land and Buildings - Investment",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Land and buildings held as investments"
+  },
+  {
+   "number": "18200",
+   "name": "Accum Depr - Investment Assets",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Depreciation taken on investment property"
+  },
+  {
+   "number": "18300",
+   "name": "Other Investments",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Other long-term investments"
+  },
+  {
+   "number": "18400",
+   "name": "Loans Receivable",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Money lent to others, due after a year"
+  },
+  {
+   "number": "18500",
+   "name": "Doubtful Loans Allowance",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Estimate of loans receivable that will not be repaid"
+  },
+  {
+   "number": "18600",
+   "name": "Other Assets",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Other long-term assets"
+  },
+  {
+   "number": "18700",
+   "name": "Security Deposits Asset",
+   "type": "OTHER_ASSET",
+   "parent": null,
+   "description": "Deposits paid to landlords or utilities, to be returned later"
+  },
+  {
+   "number": "20100",
+   "name": "Grants Payable",
+   "type": "ACCOUNTS_PAYABLE",
+   "parent": null,
+   "description": "Grants awarded to others but not yet paid"
+  },
+  {
+   "number": "24100",
+   "name": "Accrued Leave and Payroll",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Vacation and wages earned by staff but not yet paid"
+  },
+  {
+   "number": "24200",
+   "name": "Accrued Expenses",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Expenses incurred but not yet billed or paid"
+  },
+  {
+   "number": "24300",
+   "name": "Client Retainers",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Retainers clients paid ahead of work"
+  },
+  {
+   "number": "24400",
+   "name": "Client Deposits",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Deposits clients paid ahead of work"
+  },
+  {
+   "number": "24500",
+   "name": "Advance Customer Payments",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Payments customers made before being invoiced"
+  },
+  {
+   "number": "24600",
+   "name": "Customer Deposits Received",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Deposits received from customers for future work or goods"
+  },
+  {
+   "number": "24700",
+   "name": "Customer Deposits",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Deposits received from customers for future work or goods"
+  },
+  {
+   "number": "24800",
+   "name": "Tenant Security Deposits Held",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Security deposits held for tenants, to be returned"
+  },
+  {
+   "number": "24900",
+   "name": "Construction Loan Draws",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Money drawn on a construction loan"
+  },
+  {
+   "number": "25000",
+   "name": "Current Portion of Loans",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Loan principal due within the next year"
+  },
+  {
+   "number": "25100",
+   "name": "Employee Tips Payable",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Tips owed to employees"
+  },
+  {
+   "number": "25200",
+   "name": "Gift Certificates Outstanding",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Gift certificates sold but not yet redeemed"
+  },
+  {
+   "number": "25400",
+   "name": "Loans from Officers, Directors",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Money owed to officers or directors"
+  },
+  {
+   "number": "25500",
+   "name": "Sales Tax Payable",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Sales tax collected and owed to the tax agency"
+  },
+  {
+   "number": "25600",
+   "name": "Short-term Notes - Credit Line",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Short-term notes and credit line balances"
+  },
+  {
+   "number": "25700",
+   "name": "Trust Account Liability",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Money held in trust that belongs to clients"
+  },
+  {
+   "number": "25800",
+   "name": "Unearned or Deferred Revenue",
+   "type": "OTHER_CURRENT_LIABILITY",
+   "parent": null,
+   "description": "Payments received for work or goods not yet delivered"
+  },
+  {
+   "number": "27000",
+   "name": "Government Owned Fixed Assets",
+   "type": "LONG_TERM_LIABILITY",
+   "parent": null,
+   "description": "Liability for fixed assets that remain government property"
+  },
+  {
+   "number": "27100",
+   "name": "Notes, Mortgages, and Leases",
+   "type": "LONG_TERM_LIABILITY",
+   "parent": null,
+   "description": "Long-term notes, mortgages and capital leases"
+  },
+  {
+   "number": "27200",
+   "name": "Other Liabilities",
+   "type": "LONG_TERM_LIABILITY",
+   "parent": null,
+   "description": "Other long-term liabilities"
+  },
+  {
+   "number": "27300",
+   "name": "Refundable Deposits Payable",
+   "type": "LONG_TERM_LIABILITY",
+   "parent": null,
+   "description": "Deposits that must be refunded after a year"
+  },
+  {
+   "number": "27400",
+   "name": "Tax-exempt Bonds Payable",
+   "type": "LONG_TERM_LIABILITY",
+   "parent": null,
+   "description": "Tax-exempt bonds issued by the organization"
+  },
+  {
+   "number": "41000",
+   "name": "Accounting Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for accounting services"
+  },
+  {
+   "number": "41100",
+   "name": "Administrative Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged for administration"
+  },
+  {
+   "number": "41200",
+   "name": "Agricultural Program Payments",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Payments from government farm programs"
+  },
+  {
+   "number": "41300",
+   "name": "Banquets and Events Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from banquets and events"
+  },
+  {
+   "number": "41400",
+   "name": "Bar Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of drinks from the bar"
+  },
+  {
+   "number": "41500",
+   "name": "Benevolence Offerings",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Offerings given for the benevolence fund"
+  },
+  {
+   "number": "41600",
+   "name": "Bookkeeping Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for bookkeeping services"
+  },
+  {
+   "number": "41700",
+   "name": "Booth Rental Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Rent received for chairs or booths"
+  },
+  {
+   "number": "41800",
+   "name": "Building Fund",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Gifts given for the building fund"
+  },
+  {
+   "number": "41900",
+   "name": "CAM Charges and Tenant Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Common-area charges and other fees billed to tenants"
+  },
+  {
+   "number": "42000",
+   "name": "Capitation Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Per-patient payments from health plans"
+  },
+  {
+   "number": "42100",
+   "name": "Catering Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales from catering"
+  },
+  {
+   "number": "42200",
+   "name": "Children's Church Offering",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Offerings collected in children's church"
+  },
+  {
+   "number": "42300",
+   "name": "Commission Adjustments",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Corrections to commissions previously recorded"
+  },
+  {
+   "number": "42400",
+   "name": "Commission Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Commissions earned on sales"
+  },
+  {
+   "number": "42500",
+   "name": "Commodity Credit Loans",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Loans from the Commodity Credit Corporation reported as income"
+  },
+  {
+   "number": "42600",
+   "name": "Construction Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from construction contracts"
+  },
+  {
+   "number": "42700",
+   "name": "Consulting Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for consulting services"
+  },
+  {
+   "number": "42800",
+   "name": "Cooperative Distributions",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Distributions received from cooperatives"
+  },
+  {
+   "number": "42900",
+   "name": "Crop Insurance Proceeds",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Insurance payments for crop losses"
+  },
+  {
+   "number": "43000",
+   "name": "Crop Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from crops sold"
+  },
+  {
+   "number": "43100",
+   "name": "Custom Hire Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from custom work done for other farms"
+  },
+  {
+   "number": "43200",
+   "name": "Design Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for design work"
+  },
+  {
+   "number": "43300",
+   "name": "Direct Public Grants",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Grants from the public and private organizations"
+  },
+  {
+   "number": "43310",
+   "name": "Corporate and Business Grants",
+   "type": "INCOME",
+   "parent": "43300",
+   "description": "Grants from companies"
+  },
+  {
+   "number": "43320",
+   "name": "Discounts - Long-term Grants",
+   "type": "INCOME",
+   "parent": "43300",
+   "description": "Discount on grants paid over several years"
+  },
+  {
+   "number": "43330",
+   "name": "Foundation and Trust Grants",
+   "type": "INCOME",
+   "parent": "43300",
+   "description": "Grants received from foundations and trusts"
+  },
+  {
+   "number": "43340",
+   "name": "Nonprofit Organization Grants",
+   "type": "INCOME",
+   "parent": "43300",
+   "description": "Grants from other nonprofits"
+  },
+  {
+   "number": "43400",
+   "name": "Direct Public Support",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Gifts from individuals and organizations"
+  },
+  {
+   "number": "43410",
+   "name": "Corporate Contributions",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Gifts from companies"
+  },
+  {
+   "number": "43420",
+   "name": "Donated Art",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Donated artwork"
+  },
+  {
+   "number": "43430",
+   "name": "Donated Prof Fees, Facilities",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Donated professional services and facilities"
+  },
+  {
+   "number": "43440",
+   "name": "Gifts in Kind - Goods",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Donated goods"
+  },
+  {
+   "number": "43450",
+   "name": "Individ, Business Contributions",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Gifts from individuals and businesses"
+  },
+  {
+   "number": "43460",
+   "name": "Legacies and Bequests",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Gifts received through wills and estates"
+  },
+  {
+   "number": "43470",
+   "name": "Uncollectible Pledges - Est",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Estimate of pledges that will not be paid"
+  },
+  {
+   "number": "43480",
+   "name": "Volunteer Services - Non-GAAP",
+   "type": "INCOME",
+   "parent": "43400",
+   "description": "Value of volunteer time (not recognized under GAAP)"
+  },
+  {
+   "number": "43500",
+   "name": "Facial Treatments",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for facial treatments"
+  },
+  {
+   "number": "43600",
+   "name": "Farmers Market Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales at farmers markets"
+  },
+  {
+   "number": "43700",
+   "name": "Fee for Service Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged per service"
+  },
+  {
+   "number": "43800",
+   "name": "Food Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of food"
+  },
+  {
+   "number": "43900",
+   "name": "Food and Beverage Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of food and drinks"
+  },
+  {
+   "number": "44000",
+   "name": "Fuel Surcharge",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fuel surcharges billed to customers"
+  },
+  {
+   "number": "44100",
+   "name": "Fuel Tax Credits and Other Inc.",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fuel tax credits and other income"
+  },
+  {
+   "number": "44200",
+   "name": "General Fund",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Gifts to the general fund"
+  },
+  {
+   "number": "44300",
+   "name": "Gift Shop and Vending Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales from the gift shop and vending machines"
+  },
+  {
+   "number": "44400",
+   "name": "Government Contracts",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from government contracts"
+  },
+  {
+   "number": "44410",
+   "name": "Agency (Government) Contracts",
+   "type": "INCOME",
+   "parent": "44400",
+   "description": "Contracts with government agencies"
+  },
+  {
+   "number": "44420",
+   "name": "Federal Contracts",
+   "type": "INCOME",
+   "parent": "44400",
+   "description": "Contracts with the federal government"
+  },
+  {
+   "number": "44430",
+   "name": "Local Government Contracts",
+   "type": "INCOME",
+   "parent": "44400",
+   "description": "Contracts with local governments"
+  },
+  {
+   "number": "44440",
+   "name": "Medicare and Medicaid Payments",
+   "type": "INCOME",
+   "parent": "44400",
+   "description": "Medicare and Medicaid payments"
+  },
+  {
+   "number": "44450",
+   "name": "State Contracts",
+   "type": "INCOME",
+   "parent": "44400",
+   "description": "Contracts with state governments"
+  },
+  {
+   "number": "44500",
+   "name": "Government Grants",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Grants from government"
+  },
+  {
+   "number": "44510",
+   "name": "Agency (Government) Grants",
+   "type": "INCOME",
+   "parent": "44500",
+   "description": "Grants received from government agencies"
+  },
+  {
+   "number": "44520",
+   "name": "Federal Grants",
+   "type": "INCOME",
+   "parent": "44500",
+   "description": "Grants received from federal programs"
+  },
+  {
+   "number": "44530",
+   "name": "Local Government Grants",
+   "type": "INCOME",
+   "parent": "44500",
+   "description": "Grants from local governments"
+  },
+  {
+   "number": "44540",
+   "name": "State Grants",
+   "type": "INCOME",
+   "parent": "44500",
+   "description": "Grants received from state programs"
+  },
+  {
+   "number": "44600",
+   "name": "Gross Trucking Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from hauling freight"
+  },
+  {
+   "number": "44700",
+   "name": "Hair Coloring Services",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for hair coloring"
+  },
+  {
+   "number": "44800",
+   "name": "Indirect Public Support",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Support received through other organizations"
+  },
+  {
+   "number": "44810",
+   "name": "Affiliated Org. Contributions",
+   "type": "INCOME",
+   "parent": "44800",
+   "description": "Gifts from affiliated organizations"
+  },
+  {
+   "number": "44820",
+   "name": "United Way, CFC Contributions",
+   "type": "INCOME",
+   "parent": "44800",
+   "description": "Gifts through United Way and the Combined Federal Campaign"
+  },
+  {
+   "number": "44900",
+   "name": "Installation Services",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for installation work"
+  },
+  {
+   "number": "45000",
+   "name": "Investments",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from investments"
+  },
+  {
+   "number": "45010",
+   "name": "Costs of Other Asset Sales",
+   "type": "INCOME",
+   "parent": "45000",
+   "description": "Cost basis of other assets sold"
+  },
+  {
+   "number": "45020",
+   "name": "Dividend, Interest (Securities)",
+   "type": "INCOME",
+   "parent": "45000",
+   "description": "Dividends and interest from securities"
+  },
+  {
+   "number": "45030",
+   "name": "Interest-Savings, Short-term CD",
+   "type": "INCOME",
+   "parent": "45000",
+   "description": "Interest from savings and short-term CDs"
+  },
+  {
+   "number": "45040",
+   "name": "Other Asset Sales",
+   "type": "INCOME",
+   "parent": "45000",
+   "description": "Proceeds from selling other assets"
+  },
+  {
+   "number": "45050",
+   "name": "Other Investment Revenue",
+   "type": "INCOME",
+   "parent": "45000",
+   "description": "Other investment income"
+  },
+  {
+   "number": "45100",
+   "name": "Job Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from jobs"
+  },
+  {
+   "number": "45200",
+   "name": "Labor Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Charges for labor"
+  },
+  {
+   "number": "45300",
+   "name": "Layover Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged for layovers"
+  },
+  {
+   "number": "45400",
+   "name": "Legal Fee Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for legal services"
+  },
+  {
+   "number": "45500",
+   "name": "Livestock Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from livestock sold"
+  },
+  {
+   "number": "45600",
+   "name": "Lodging Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Room sales"
+  },
+  {
+   "number": "45700",
+   "name": "Maintenance Services",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for maintenance work"
+  },
+  {
+   "number": "45800",
+   "name": "Manicure/Pedicure Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for manicures and pedicures"
+  },
+  {
+   "number": "45900",
+   "name": "Massage Services",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for massage"
+  },
+  {
+   "number": "46000",
+   "name": "Merchandise Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from merchandise sold"
+  },
+  {
+   "number": "46100",
+   "name": "Mission Offerings",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Offerings given for missions"
+  },
+  {
+   "number": "46200",
+   "name": "Nonmedical Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from sources other than patient care"
+  },
+  {
+   "number": "46300",
+   "name": "Other Medical Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Other income from medical services"
+  },
+  {
+   "number": "46400",
+   "name": "Other Types of Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Other kinds of revenue"
+  },
+  {
+   "number": "46410",
+   "name": "Advertising Sales",
+   "type": "INCOME",
+   "parent": "46400",
+   "description": "Sales of advertising"
+  },
+  {
+   "number": "46420",
+   "name": "Inventory Sales",
+   "type": "INCOME",
+   "parent": "46400",
+   "description": "Sales of inventory"
+  },
+  {
+   "number": "46430",
+   "name": "Miscellaneous Revenue",
+   "type": "INCOME",
+   "parent": "46400",
+   "description": "Revenue that fits no other account"
+  },
+  {
+   "number": "46500",
+   "name": "Pallet Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged for pallets"
+  },
+  {
+   "number": "46600",
+   "name": "Parts and Materials Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of parts and materials"
+  },
+  {
+   "number": "46700",
+   "name": "Parts Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of parts"
+  },
+  {
+   "number": "46800",
+   "name": "Payroll Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for payroll services"
+  },
+  {
+   "number": "46900",
+   "name": "Photo and Video Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for photo and video work"
+  },
+  {
+   "number": "47000",
+   "name": "Pledges",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Pledged gifts"
+  },
+  {
+   "number": "47100",
+   "name": "Product Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from products sold"
+  },
+  {
+   "number": "47200",
+   "name": "Program Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from programs"
+  },
+  {
+   "number": "47210",
+   "name": "Bad debts, Est - Program Sales",
+   "type": "INCOME",
+   "parent": "47200",
+   "description": "Estimate of program sales that will not be collected"
+  },
+  {
+   "number": "47220",
+   "name": "Member Assessments",
+   "type": "INCOME",
+   "parent": "47200",
+   "description": "Assessments charged to members"
+  },
+  {
+   "number": "47230",
+   "name": "Membership Dues",
+   "type": "INCOME",
+   "parent": "47200",
+   "description": "Dues paid by members"
+  },
+  {
+   "number": "47240",
+   "name": "Program Service Fees",
+   "type": "INCOME",
+   "parent": "47200",
+   "description": "Fees charged for program services"
+  },
+  {
+   "number": "47300",
+   "name": "Refunds",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Refunds received"
+  },
+  {
+   "number": "47400",
+   "name": "Rental Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Rent received"
+  },
+  {
+   "number": "47500",
+   "name": "Rentals",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Rental revenue"
+  },
+  {
+   "number": "47510",
+   "name": "Rent Revenue - Debt Property",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Rent from property financed with debt"
+  },
+  {
+   "number": "47520",
+   "name": "Cost of Rent Rev - Debt Prop",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Costs of rental property financed with debt"
+  },
+  {
+   "number": "47530",
+   "name": "Rent Revenue - Nondebt Prop",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Rent from property with no debt"
+  },
+  {
+   "number": "47540",
+   "name": "Cost of Rent Rev - Nondebt Prop",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Costs of rental property with no debt"
+  },
+  {
+   "number": "47550",
+   "name": "Personal Property Rent Revenue",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Rent from equipment and other personal property"
+  },
+  {
+   "number": "47560",
+   "name": "Cost of Personal Property Rent",
+   "type": "INCOME",
+   "parent": "47500",
+   "description": "Costs of renting out personal property"
+  },
+  {
+   "number": "47600",
+   "name": "Retail Product Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of retail products"
+  },
+  {
+   "number": "47700",
+   "name": "Rev Released from Restrictions",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Restricted gifts released for use"
+  },
+  {
+   "number": "47800",
+   "name": "Royalties Received",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Royalties received"
+  },
+  {
+   "number": "47900",
+   "name": "Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of products and services"
+  },
+  {
+   "number": "48000",
+   "name": "Sales - Hardware",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of computer hardware"
+  },
+  {
+   "number": "48100",
+   "name": "Sales - Software",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of software"
+  },
+  {
+   "number": "48200",
+   "name": "Sales - Support and Maintenance",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for support and maintenance contracts"
+  },
+  {
+   "number": "48300",
+   "name": "Sales Discounts",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Discounts given to customers (reduces sales)"
+  },
+  {
+   "number": "48400",
+   "name": "Securities",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from securities"
+  },
+  {
+   "number": "48410",
+   "name": "Security Sales",
+   "type": "INCOME",
+   "parent": "48400",
+   "description": "Proceeds from selling securities"
+  },
+  {
+   "number": "48420",
+   "name": "Cost of Security Sales",
+   "type": "INCOME",
+   "parent": "48400",
+   "description": "Cost basis of securities sold"
+  },
+  {
+   "number": "48500",
+   "name": "Seminars-Registration",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Seminar registration fees"
+  },
+  {
+   "number": "48600",
+   "name": "Service Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from services provided"
+  },
+  {
+   "number": "48700",
+   "name": "Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for services"
+  },
+  {
+   "number": "48800",
+   "name": "Settlement Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from settlements"
+  },
+  {
+   "number": "48900",
+   "name": "Shipping and Delivery Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Shipping and delivery charges billed to customers"
+  },
+  {
+   "number": "49000",
+   "name": "Special Events Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from special events"
+  },
+  {
+   "number": "49010",
+   "name": "Special Events Contributions",
+   "type": "INCOME",
+   "parent": "49000",
+   "description": "Gifts received at special events"
+  },
+  {
+   "number": "49020",
+   "name": "Special Events Sales (Nongift)",
+   "type": "INCOME",
+   "parent": "49000",
+   "description": "Sales at special events (not gifts)"
+  },
+  {
+   "number": "49100",
+   "name": "Special Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Income from special services"
+  },
+  {
+   "number": "49200",
+   "name": "Stop Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged for extra stops"
+  },
+  {
+   "number": "49300",
+   "name": "Tape/Book Sales",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Sales of recordings and books"
+  },
+  {
+   "number": "49400",
+   "name": "Tax Preparation Services Income",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees for tax preparation"
+  },
+  {
+   "number": "49500",
+   "name": "Tithes/Offerings",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Tithes and offerings"
+  },
+  {
+   "number": "49600",
+   "name": "Unloading Fees",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Fees charged for unloading"
+  },
+  {
+   "number": "49700",
+   "name": "Youth Group",
+   "type": "INCOME",
+   "parent": null,
+   "description": "Gifts and fees for the youth group"
+  },
+  {
+   "number": "50100",
+   "name": "Blueprints and Reproduction",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Printing blueprints and copies for jobs"
+  },
+  {
+   "number": "50200",
+   "name": "Bond Expense",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Cost of bonds required for jobs"
+  },
+  {
+   "number": "50300",
+   "name": "Commissions Paid",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Commissions paid to others"
+  },
+  {
+   "number": "50400",
+   "name": "Construction Materials Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Materials bought for construction jobs"
+  },
+  {
+   "number": "50500",
+   "name": "Contracted Services",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Contractors who perform client work"
+  },
+  {
+   "number": "50700",
+   "name": "Cost of Sales - Inventory Sales",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Cost of inventory sold"
+  },
+  {
+   "number": "50800",
+   "name": "Equipment Rental for Jobs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Equipment rented for jobs"
+  },
+  {
+   "number": "50900",
+   "name": "Food Purchases",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Food bought for resale"
+  },
+  {
+   "number": "51000",
+   "name": "Bar Purchases",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Liquor, beer and wine bought for resale"
+  },
+  {
+   "number": "51100",
+   "name": "Freight and Shipping Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Freight and shipping on goods sold"
+  },
+  {
+   "number": "51200",
+   "name": "Freight Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Freight on goods bought and sold"
+  },
+  {
+   "number": "51300",
+   "name": "Fuel for Hired Vehicles",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Fuel for hired trucks"
+  },
+  {
+   "number": "51400",
+   "name": "Job Materials Purchased",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Materials bought for jobs"
+  },
+  {
+   "number": "51500",
+   "name": "Linens and Lodging Supplies",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Linens and guest supplies"
+  },
+  {
+   "number": "51600",
+   "name": "Materials Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Materials used in customer work"
+  },
+  {
+   "number": "51700",
+   "name": "Media Purchased for Clients",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Advertising media bought for clients"
+  },
+  {
+   "number": "51800",
+   "name": "Merchant Account Fees",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Card processing and merchant service fees"
+  },
+  {
+   "number": "51900",
+   "name": "Other Construction Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Other direct costs of construction jobs"
+  },
+  {
+   "number": "52000",
+   "name": "Other Job Related Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Other direct costs of jobs"
+  },
+  {
+   "number": "52100",
+   "name": "Outsourced Service Providers",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Outside providers who serve clients"
+  },
+  {
+   "number": "52200",
+   "name": "Parts Purchases",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Parts bought for repairs and resale"
+  },
+  {
+   "number": "52300",
+   "name": "Product Samples Expense",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Product samples given away"
+  },
+  {
+   "number": "52400",
+   "name": "Production and Supplies Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Production costs and supplies"
+  },
+  {
+   "number": "52500",
+   "name": "Purchase Discounts",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Early-payment discounts from vendors (reduces costs)"
+  },
+  {
+   "number": "52600",
+   "name": "Purchases - Food and Beverage",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Food and drinks bought for resale"
+  },
+  {
+   "number": "52700",
+   "name": "Purchases - Hardware for Resale",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Hardware bought for resale"
+  },
+  {
+   "number": "52800",
+   "name": "Purchases - Parts and Materials",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Parts and materials bought for resale or jobs"
+  },
+  {
+   "number": "52900",
+   "name": "Purchases - Resale Items",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Goods bought for resale"
+  },
+  {
+   "number": "53000",
+   "name": "Purchases - Software for Resale",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Software bought for resale"
+  },
+  {
+   "number": "53100",
+   "name": "Restaurant Supplies",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Supplies used in food service"
+  },
+  {
+   "number": "53200",
+   "name": "Show and Exhibitor Fees Expense",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Booth and exhibitor fees at shows"
+  },
+  {
+   "number": "53300",
+   "name": "Studio and Location Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Studio and location costs for projects"
+  },
+  {
+   "number": "53400",
+   "name": "Subcontracted Legal Services",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Legal work done by outside attorneys"
+  },
+  {
+   "number": "53500",
+   "name": "Subcontracted Services",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Outside contractors who serve clients"
+  },
+  {
+   "number": "53600",
+   "name": "Subcontractors Expense",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Subcontractors on jobs"
+  },
+  {
+   "number": "53700",
+   "name": "Tools and Craft Supplies",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Tools and craft supplies used in work"
+  },
+  {
+   "number": "53800",
+   "name": "Tools and Small Equipment",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Small tools and equipment used on jobs"
+  },
+  {
+   "number": "53900",
+   "name": "Travel Expenses for Drivers",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Drivers' travel costs"
+  },
+  {
+   "number": "54000",
+   "name": "Truck Maintenance Costs",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Maintenance on trucks"
+  },
+  {
+   "number": "54100",
+   "name": "Worker's Compensation Insurance",
+   "type": "COST_OF_GOODS_SOLD",
+   "parent": null,
+   "description": "Workers' compensation insurance for job crews"
+  },
+  {
+   "number": "60000",
+   "name": "Advertising and Promotion",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Advertising, marketing and promotion"
+  },
+  {
+   "number": "60100",
+   "name": "Auto and Truck Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fuel, repairs and upkeep of autos and trucks"
+  },
+  {
+   "number": "60200",
+   "name": "Automobile Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fuel, repairs and upkeep of business vehicles"
+  },
+  {
+   "number": "60300",
+   "name": "Awards and Grants",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Grants and awards given"
+  },
+  {
+   "number": "60310",
+   "name": "Benefits Paid To or For Members",
+   "type": "EXPENSE",
+   "parent": "60300",
+   "description": "Benefits paid to or for members"
+  },
+  {
+   "number": "60320",
+   "name": "Cash Awards and Grants",
+   "type": "EXPENSE",
+   "parent": "60300",
+   "description": "Cash grants and awards"
+  },
+  {
+   "number": "60330",
+   "name": "Noncash Awards and Grants",
+   "type": "EXPENSE",
+   "parent": "60300",
+   "description": "Grants and awards given as goods or services"
+  },
+  {
+   "number": "60340",
+   "name": "Specific Assist to Individuals",
+   "type": "EXPENSE",
+   "parent": "60300",
+   "description": "Help given to individuals"
+  },
+  {
+   "number": "60400",
+   "name": "Bank Service Charges",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Bank fees and charges"
+  },
+  {
+   "number": "60500",
+   "name": "Billing Service Fees Paid",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fees paid to billing services"
+  },
+  {
+   "number": "60800",
+   "name": "Building and Property Security",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Security for buildings and property"
+  },
+  {
+   "number": "60900",
+   "name": "Business Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "General business costs"
+  },
+  {
+   "number": "60910",
+   "name": "Bad Debts",
+   "type": "EXPENSE",
+   "parent": "60900",
+   "description": "Amounts written off as uncollectible"
+  },
+  {
+   "number": "60920",
+   "name": "Business Registration Fees",
+   "type": "EXPENSE",
+   "parent": "60900",
+   "description": "Registration fees"
+  },
+  {
+   "number": "60930",
+   "name": "Fines, Penalties, Judgments",
+   "type": "EXPENSE",
+   "parent": "60900",
+   "description": "Fines, penalties and judgments"
+  },
+  {
+   "number": "60940",
+   "name": "Taxes - Not UBIT",
+   "type": "EXPENSE",
+   "parent": "60900",
+   "description": "Taxes paid other than UBIT"
+  },
+  {
+   "number": "60950",
+   "name": "UBITaxes",
+   "type": "EXPENSE",
+   "parent": "60900",
+   "description": "Unrelated business income tax"
+  },
+  {
+   "number": "61000",
+   "name": "Business Licenses and Permits",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Licenses, permits and registration fees"
+  },
+  {
+   "number": "61100",
+   "name": "Car and Truck Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fuel, repairs and upkeep of cars and trucks"
+  },
+  {
+   "number": "61200",
+   "name": "Cash Drawer Payouts",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Expenses paid out of the cash drawer"
+  },
+  {
+   "number": "61300",
+   "name": "Cash Over and Short",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Differences found when counting the cash drawer"
+  },
+  {
+   "number": "61400",
+   "name": "Charitable Contributions",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Gifts to charities"
+  },
+  {
+   "number": "61500",
+   "name": "Chemicals Purchased",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Chemicals bought"
+  },
+  {
+   "number": "61600",
+   "name": "Commissions Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Commissions paid"
+  },
+  {
+   "number": "61700",
+   "name": "Computer and Internet Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Software, online services, internet and computer supplies"
+  },
+  {
+   "number": "61800",
+   "name": "Conferences and Meetings",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Conferences and meetings"
+  },
+  {
+   "number": "61810",
+   "name": "Conference Attendance Fees",
+   "type": "EXPENSE",
+   "parent": "61800",
+   "description": "Conference registration fees"
+  },
+  {
+   "number": "61820",
+   "name": "Conference Travel",
+   "type": "EXPENSE",
+   "parent": "61800",
+   "description": "Travel to conferences"
+  },
+  {
+   "number": "61830",
+   "name": "Offerings at Conferences",
+   "type": "EXPENSE",
+   "parent": "61800",
+   "description": "Offerings given at conferences"
+  },
+  {
+   "number": "61840",
+   "name": "Teaching Material",
+   "type": "EXPENSE",
+   "parent": "61800",
+   "description": "Teaching materials"
+  },
+  {
+   "number": "61900",
+   "name": "Conservation Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Conservation costs"
+  },
+  {
+   "number": "62000",
+   "name": "Continuing Education",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Courses, seminars and training"
+  },
+  {
+   "number": "62100",
+   "name": "Contract Services",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Outside contract services"
+  },
+  {
+   "number": "62110",
+   "name": "Accounting Fees",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Accounting fees"
+  },
+  {
+   "number": "62120",
+   "name": "Donated Prof Fees - GAAP",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Donated professional services (recognized under GAAP)"
+  },
+  {
+   "number": "62130",
+   "name": "Fundraising Fees",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Fees paid to fundraisers"
+  },
+  {
+   "number": "62140",
+   "name": "Legal Fees",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Legal fees"
+  },
+  {
+   "number": "62150",
+   "name": "Outside Contract Services",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Other outside contract services"
+  },
+  {
+   "number": "62160",
+   "name": "Volunteer Services - Non-GAAP",
+   "type": "EXPENSE",
+   "parent": "62100",
+   "description": "Value of volunteer time (not recognized under GAAP)"
+  },
+  {
+   "number": "62200",
+   "name": "Credit Card Discount Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fees charged for accepting credit cards"
+  },
+  {
+   "number": "62300",
+   "name": "Custom Hire and Contract Labor",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Custom hire and contract labor"
+  },
+  {
+   "number": "62400",
+   "name": "Depreciation Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Depreciation on fixed assets"
+  },
+  {
+   "number": "62500",
+   "name": "Dues and Subscriptions",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Memberships and subscriptions"
+  },
+  {
+   "number": "62600",
+   "name": "Equipment Rental",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Equipment rented"
+  },
+  {
+   "number": "62700",
+   "name": "Evangelism and Special Events",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Evangelism and special events"
+  },
+  {
+   "number": "62710",
+   "name": "Honorarium-Special Meetings",
+   "type": "EXPENSE",
+   "parent": "62700",
+   "description": "Honorariums for special meetings"
+  },
+  {
+   "number": "62720",
+   "name": "Meals",
+   "type": "EXPENSE",
+   "parent": "62700",
+   "description": "Meals at special events"
+  },
+  {
+   "number": "62730",
+   "name": "Travel",
+   "type": "EXPENSE",
+   "parent": "62700",
+   "description": "Travel for special events"
+  },
+  {
+   "number": "62800",
+   "name": "Facilities and Equipment",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Facilities and equipment costs"
+  },
+  {
+   "number": "62810",
+   "name": "Depr and Amort - Allowable",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Depreciation and amortization that is allowable"
+  },
+  {
+   "number": "62820",
+   "name": "Depr and Amort - Non-allowable",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Depreciation and amortization that is not allowable"
+  },
+  {
+   "number": "62830",
+   "name": "Donated Facilities",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Donated use of facilities"
+  },
+  {
+   "number": "62840",
+   "name": "Equip Rental and Maintenance",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Equipment rental and maintenance"
+  },
+  {
+   "number": "62850",
+   "name": "Janitorial Services",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Janitorial services"
+  },
+  {
+   "number": "62860",
+   "name": "Mortgage Interest",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Interest on mortgages"
+  },
+  {
+   "number": "62870",
+   "name": "Property Insurance",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Property insurance"
+  },
+  {
+   "number": "62880",
+   "name": "Real Estate, Personal Prop Tax",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Real estate and personal property taxes"
+  },
+  {
+   "number": "62890",
+   "name": "Rent, Parking, Utilities",
+   "type": "EXPENSE",
+   "parent": "62800",
+   "description": "Rent, parking and utilities"
+  },
+  {
+   "number": "62900",
+   "name": "Feed Purchased",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Feed bought"
+  },
+  {
+   "number": "63000",
+   "name": "Fertilizers and Lime",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fertilizer and lime"
+  },
+  {
+   "number": "63100",
+   "name": "Freight and Trucking",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Freight and trucking"
+  },
+  {
+   "number": "63200",
+   "name": "Gasoline, Fuel and Oil",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Gasoline, fuel and oil"
+  },
+  {
+   "number": "63300",
+   "name": "Insurance Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Business insurance"
+  },
+  {
+   "number": "63310",
+   "name": "General Liability Insurance",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "General liability insurance"
+  },
+  {
+   "number": "63320",
+   "name": "Health Insurance",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "Health insurance"
+  },
+  {
+   "number": "63330",
+   "name": "Life and Disability Insurance",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "Life and disability insurance"
+  },
+  {
+   "number": "63340",
+   "name": "Malpractice Insurance",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "Malpractice insurance"
+  },
+  {
+   "number": "63350",
+   "name": "Professional Liability",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "Professional liability insurance"
+  },
+  {
+   "number": "63360",
+   "name": "Worker's Compensation",
+   "type": "EXPENSE",
+   "parent": "63300",
+   "description": "Workers' compensation insurance"
+  },
+  {
+   "number": "63400",
+   "name": "Interest Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Interest on loans and credit"
+  },
+  {
+   "number": "63500",
+   "name": "Janitorial Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Cleaning and janitorial"
+  },
+  {
+   "number": "63600",
+   "name": "Laboratory Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Laboratory fees"
+  },
+  {
+   "number": "63700",
+   "name": "Landscaping and Groundskeeping",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Landscaping and grounds care"
+  },
+  {
+   "number": "63800",
+   "name": "Landscaping Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Landscaping"
+  },
+  {
+   "number": "63900",
+   "name": "Legal Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Legal fees"
+  },
+  {
+   "number": "64000",
+   "name": "Linen Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Linens and laundry"
+  },
+  {
+   "number": "64100",
+   "name": "Management Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Management fees"
+  },
+  {
+   "number": "64200",
+   "name": "Marketing Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Marketing"
+  },
+  {
+   "number": "64300",
+   "name": "Meals and Entertainment",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Business meals and entertainment"
+  },
+  {
+   "number": "64400",
+   "name": "Medical Records and Supplies",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Medical records and supplies"
+  },
+  {
+   "number": "64410",
+   "name": "Medical Records Supplies",
+   "type": "EXPENSE",
+   "parent": "64400",
+   "description": "Supplies for medical records"
+  },
+  {
+   "number": "64420",
+   "name": "Medical Supplies",
+   "type": "EXPENSE",
+   "parent": "64400",
+   "description": "Medical supplies"
+  },
+  {
+   "number": "64600",
+   "name": "Ministry Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Ministry costs"
+  },
+  {
+   "number": "64610",
+   "name": "Adult Education",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Adult education"
+  },
+  {
+   "number": "64620",
+   "name": "Benevolence Fund",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Benevolence fund"
+  },
+  {
+   "number": "64630",
+   "name": "Books and Teaching Materials",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Books and teaching materials"
+  },
+  {
+   "number": "64640",
+   "name": "Leadership and Fellowship",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Leadership and fellowship"
+  },
+  {
+   "number": "64650",
+   "name": "Local Outreach",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Local outreach"
+  },
+  {
+   "number": "64660",
+   "name": "Men's Ministry",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Men's ministry"
+  },
+  {
+   "number": "64670",
+   "name": "Ministry Operating Supplies",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Ministry supplies"
+  },
+  {
+   "number": "64680",
+   "name": "Missions",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Missions"
+  },
+  {
+   "number": "64690",
+   "name": "Music Ministry",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Music ministry"
+  },
+  {
+   "number": "64692",
+   "name": "Women's Ministry",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Women's ministry"
+  },
+  {
+   "number": "64694",
+   "name": "Youth Ministry",
+   "type": "EXPENSE",
+   "parent": "64600",
+   "description": "Youth ministry"
+  },
+  {
+   "number": "64700",
+   "name": "Miscellaneous Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Small expenses that fit no other account"
+  },
+  {
+   "number": "64800",
+   "name": "Music and Entertainment",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Music and entertainment for guests"
+  },
+  {
+   "number": "64900",
+   "name": "Office Supplies",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Office supplies"
+  },
+  {
+   "number": "65000",
+   "name": "Operations",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Operating costs"
+  },
+  {
+   "number": "65010",
+   "name": "Books, Subscriptions, Reference",
+   "type": "EXPENSE",
+   "parent": "65000",
+   "description": "Books, subscriptions and reference materials"
+  },
+  {
+   "number": "65020",
+   "name": "Postage, Mailing Service",
+   "type": "EXPENSE",
+   "parent": "65000",
+   "description": "Postage and mailing services"
+  },
+  {
+   "number": "65030",
+   "name": "Printing and Copying",
+   "type": "EXPENSE",
+   "parent": "65000",
+   "description": "Printing and copying"
+  },
+  {
+   "number": "65040",
+   "name": "Supplies",
+   "type": "EXPENSE",
+   "parent": "65000",
+   "description": "Supplies"
+  },
+  {
+   "number": "65050",
+   "name": "Telephone, Telecommunications",
+   "type": "EXPENSE",
+   "parent": "65000",
+   "description": "Telephone and telecommunications"
+  },
+  {
+   "number": "65100",
+   "name": "Other Types of Expenses",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Other kinds of expenses"
+  },
+  {
+   "number": "65110",
+   "name": "Advertising Expenses",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Advertising"
+  },
+  {
+   "number": "65120",
+   "name": "Insurance - Liability, D and O",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Liability and directors-and-officers insurance"
+  },
+  {
+   "number": "65130",
+   "name": "Interest Expense - General",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "General interest"
+  },
+  {
+   "number": "65140",
+   "name": "List Rental",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Mailing list rental"
+  },
+  {
+   "number": "65150",
+   "name": "Memberships and Dues",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Memberships and dues"
+  },
+  {
+   "number": "65160",
+   "name": "Other Costs",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Other costs"
+  },
+  {
+   "number": "65170",
+   "name": "Staff Development",
+   "type": "EXPENSE",
+   "parent": "65100",
+   "description": "Staff training and development"
+  },
+  {
+   "number": "65200",
+   "name": "Outside Services",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Outside services"
+  },
+  {
+   "number": "66500",
+   "name": "Postage and Delivery",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Postage, shipping and delivery"
+  },
+  {
+   "number": "66600",
+   "name": "Printing and Reproduction",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Printing and copying"
+  },
+  {
+   "number": "66700",
+   "name": "Professional Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Accounting, legal and other professional fees"
+  },
+  {
+   "number": "66800",
+   "name": "Property Management Fees",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Fees paid to property managers"
+  },
+  {
+   "number": "67000",
+   "name": "Reference Materials",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Reference materials"
+  },
+  {
+   "number": "67100",
+   "name": "Rent Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Rent for office, shop or store space"
+  },
+  {
+   "number": "67200",
+   "name": "Repairs and Maintenance",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Repairs and maintenance"
+  },
+  {
+   "number": "67300",
+   "name": "Research Services",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Research services"
+  },
+  {
+   "number": "67400",
+   "name": "Salon Supplies, Linens, Laundry",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Salon supplies, linens and laundry"
+  },
+  {
+   "number": "67500",
+   "name": "Seeds and Plants Purchased",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Seeds and plants bought"
+  },
+  {
+   "number": "67600",
+   "name": "Shop Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Shop supplies and costs"
+  },
+  {
+   "number": "67700",
+   "name": "Small Medical Equipment",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Small medical equipment"
+  },
+  {
+   "number": "67800",
+   "name": "Small Tools and Equipment",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Small tools and equipment"
+  },
+  {
+   "number": "67900",
+   "name": "Storage and Warehousing",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Storage and warehousing"
+  },
+  {
+   "number": "68000",
+   "name": "Taxes - Property",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Property taxes"
+  },
+  {
+   "number": "68100",
+   "name": "Telephone Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Telephone and mobile service"
+  },
+  {
+   "number": "68200",
+   "name": "Transcription Services",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Transcription services"
+  },
+  {
+   "number": "68300",
+   "name": "Travel and Meetings",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Travel and meetings"
+  },
+  {
+   "number": "68310",
+   "name": "Conference, Convention, Meeting",
+   "type": "EXPENSE",
+   "parent": "68300",
+   "description": "Conferences, conventions and meetings"
+  },
+  {
+   "number": "68320",
+   "name": "Travel",
+   "type": "EXPENSE",
+   "parent": "68300",
+   "description": "Travel"
+  },
+  {
+   "number": "68400",
+   "name": "Travel Expense",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Business travel"
+  },
+  {
+   "number": "68500",
+   "name": "Uniforms",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Uniforms"
+  },
+  {
+   "number": "68600",
+   "name": "Utilities",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Electricity, water, gas and other utilities"
+  },
+  {
+   "number": "68700",
+   "name": "Vaccines and Medicines",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Vaccines and medicines"
+  },
+  {
+   "number": "68800",
+   "name": "Veterinary, Breeding, Medicine",
+   "type": "EXPENSE",
+   "parent": null,
+   "description": "Veterinary, breeding and medicine"
+  },
+  {
+   "number": "70000",
+   "name": "Finance Charge Income",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Finance charges billed to customers"
+  },
+  {
+   "number": "70100",
+   "name": "Insurance Proceeds Received",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Insurance payments received"
+  },
+  {
+   "number": "70200",
+   "name": "Interest Income",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Interest earned"
+  },
+  {
+   "number": "70300",
+   "name": "Late Fees Income",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Late fees charged"
+  },
+  {
+   "number": "70400",
+   "name": "Other Changes In Net Assets",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Other changes in net assets"
+  },
+  {
+   "number": "70500",
+   "name": "Proceeds from Sale of Assets",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Proceeds from selling business assets"
+  },
+  {
+   "number": "70600",
+   "name": "Unrealized Gains and Losses",
+   "type": "OTHER_INCOME",
+   "parent": null,
+   "description": "Unrealized gains and losses on investments"
+  },
+  {
+   "number": "80000",
+   "name": "Ask My Accountant",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Amounts to review with your accountant"
+  },
+  {
+   "number": "80100",
+   "name": "Capital Purchases",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Capital purchases"
+  },
+  {
+   "number": "80110",
+   "name": "Grant Capital Purchase - Land",
+   "type": "OTHER_EXPENSE",
+   "parent": "80100",
+   "description": "Land bought with grant money"
+  },
+  {
+   "number": "80120",
+   "name": "Grant Capital Purchase - Bldg",
+   "type": "OTHER_EXPENSE",
+   "parent": "80100",
+   "description": "Buildings bought with grant money"
+  },
+  {
+   "number": "80130",
+   "name": "Grant Capital Purchase - Equip",
+   "type": "OTHER_EXPENSE",
+   "parent": "80100",
+   "description": "Equipment bought with grant money"
+  },
+  {
+   "number": "80140",
+   "name": "Grant Capital Purchase- Vehicle",
+   "type": "OTHER_EXPENSE",
+   "parent": "80100",
+   "description": "Vehicles bought with grant money"
+  },
+  {
+   "number": "80200",
+   "name": "Payments to Affiliates",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Payments to affiliated organizations"
+  },
+  {
+   "number": "80300",
+   "name": "Additions to Reserves",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Additions to reserves"
+  },
+  {
+   "number": "80400",
+   "name": "Program Admin Allocations",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Program administration allocations"
+  },
+  {
+   "number": "80500",
+   "name": "Political Contributions",
+   "type": "OTHER_EXPENSE",
+   "parent": null,
+   "description": "Political contributions"
+  }
+ ],
+ "industries": [
+  {
+   "name": "Accounting or Bookkeeping",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "41000",
+    "42700",
+    "49400",
+    "50500",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63310",
+    "63330",
+    "63350",
+    "63360",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "70000"
+   ],
+   "recommended": [
+    "12800",
+    "15200",
+    "15900",
+    "16400",
+    "41600",
+    "46800",
+    "51800",
+    "52100",
+    "61400",
+    "62600",
+    "63320",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Advertising or Public Relations",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "47900",
+    "51700",
+    "53500",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64200",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24500",
+    "24700",
+    "42400",
+    "48300",
+    "50300",
+    "51800",
+    "61000",
+    "61400",
+    "62000",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Agriculture, Ranching, or Farming",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "41200",
+    "42500",
+    "42800",
+    "42900",
+    "43000",
+    "44100",
+    "60400",
+    "61100",
+    "61500",
+    "61700",
+    "62400",
+    "63000",
+    "63100",
+    "63200",
+    "63300",
+    "63400",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "67500",
+    "67800",
+    "67900",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16200",
+    "16300",
+    "16400",
+    "43100",
+    "43600",
+    "45500",
+    "47400",
+    "60000",
+    "61000",
+    "61400",
+    "61900",
+    "62300",
+    "62500",
+    "62600",
+    "62900",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "64300",
+    "64700",
+    "66500",
+    "68000",
+    "68400",
+    "68500",
+    "68800",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Art, Writing, or Photography",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "24500",
+    "47900",
+    "53500",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "62600",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "46900",
+    "47800",
+    "51800",
+    "52400",
+    "53200",
+    "53300",
+    "53700",
+    "61000",
+    "61400",
+    "62000",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Automotive Sales or Repair",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "47900",
+    "51800",
+    "52200",
+    "53500",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62400",
+    "62600",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "67600",
+    "67800",
+    "68100",
+    "68500",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24500",
+    "45200",
+    "46700",
+    "61400",
+    "62000",
+    "62500",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "68400",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Church or Religious Organization",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "41500",
+    "41800",
+    "42200",
+    "46100",
+    "47000",
+    "49100",
+    "49500",
+    "49700",
+    "60000",
+    "60200",
+    "60400",
+    "60800",
+    "61400",
+    "61700",
+    "61800",
+    "62400",
+    "62500",
+    "62700",
+    "63300",
+    "63400",
+    "63800",
+    "64600",
+    "64900",
+    "65200",
+    "66500",
+    "66600",
+    "66700",
+    "67100",
+    "67200",
+    "67800",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "44200",
+    "48500",
+    "49300",
+    "61000",
+    "61810",
+    "61820",
+    "61830",
+    "61840",
+    "62000",
+    "62600",
+    "62710",
+    "62720",
+    "62730",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64610",
+    "64620",
+    "64630",
+    "64640",
+    "64650",
+    "64660",
+    "64670",
+    "64680",
+    "64690",
+    "64692",
+    "64694",
+    "64700",
+    "68000",
+    "70100",
+    "70200",
+    "70500"
+   ]
+  },
+  {
+   "name": "Construction General Contractor",
+   "salesTax": false,
+   "core": [
+    "12600",
+    "13400",
+    "15000",
+    "17000",
+    "42600",
+    "50100",
+    "50200",
+    "50400",
+    "50800",
+    "51900",
+    "53600",
+    "53800",
+    "54100",
+    "60100",
+    "60400",
+    "61000",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15300",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24600",
+    "24900",
+    "47400",
+    "60000",
+    "61400",
+    "61700",
+    "62000",
+    "62500",
+    "63310",
+    "63320",
+    "63330",
+    "63500",
+    "64700",
+    "66500",
+    "68000",
+    "68400",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Construction Trades (Plumber, Electrician, HVAC, etc.)",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "15300",
+    "17000",
+    "24600",
+    "45100",
+    "50800",
+    "51400",
+    "52000",
+    "53600",
+    "53800",
+    "54100",
+    "60100",
+    "60400",
+    "61000",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12600",
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "51800",
+    "60000",
+    "61400",
+    "62000",
+    "62500",
+    "63310",
+    "63320",
+    "63330",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "68400",
+    "68500",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Design, Architecture, or Engineering",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "24500",
+    "42700",
+    "43200",
+    "50100",
+    "53500",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "42400",
+    "51800",
+    "60000",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "68000",
+    "68400",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Financial Services other than Accounting or Bookkeeping",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "42400",
+    "48700",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66600",
+    "66700",
+    "67100",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "13100",
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "47100",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "67200",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Hair Salon, Beauty Salon, or Barber Shop",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "18700",
+    "47600",
+    "48700",
+    "51800",
+    "52900",
+    "60000",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "67400",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "25200",
+    "41700",
+    "43500",
+    "44700",
+    "45800",
+    "45900",
+    "53500",
+    "60200",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "68500",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Information Technology (Computers, Software)",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "42700",
+    "48000",
+    "48100",
+    "48200",
+    "48900",
+    "51100",
+    "51800",
+    "52700",
+    "53000",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "13100",
+    "15200",
+    "15900",
+    "16400",
+    "18700",
+    "24700",
+    "48300",
+    "53500",
+    "61000",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "67200",
+    "67800",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Insurance Agency or Broker",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "17000",
+    "42400",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "42300",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Lawn Care or Landscaping",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "15800",
+    "17000",
+    "44900",
+    "45700",
+    "51600",
+    "54100",
+    "60000",
+    "60100",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "24500",
+    "50800",
+    "51800",
+    "52000",
+    "53500",
+    "53800",
+    "61000",
+    "61400",
+    "62500",
+    "63310",
+    "63320",
+    "63330",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "68500",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Legal Services",
+   "salesTax": false,
+   "core": [
+    "10900",
+    "12300",
+    "15000",
+    "17000",
+    "18700",
+    "45400",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "67300",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12310",
+    "12320",
+    "12330",
+    "12800",
+    "13100",
+    "16000",
+    "24300",
+    "24500",
+    "25700",
+    "41100",
+    "48800",
+    "51800",
+    "53400",
+    "61000",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "63900",
+    "64700",
+    "66600",
+    "68000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Lodging (Hotel, Motel)",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "15200",
+    "15600",
+    "17000",
+    "24700",
+    "43900",
+    "44300",
+    "45600",
+    "51500",
+    "51800",
+    "52900",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "63700",
+    "64900",
+    "66700",
+    "67200",
+    "67800",
+    "68100",
+    "68500",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15400",
+    "15900",
+    "16400",
+    "41300",
+    "48300",
+    "52600",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64300",
+    "64700",
+    "66500",
+    "68000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Manufacturer Representative or Agent",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "17000",
+    "42400",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "68100",
+    "68400",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "42300",
+    "60000",
+    "61000",
+    "61400",
+    "62000",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66600",
+    "67200",
+    "68000",
+    "68600",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Manufacturing",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "47900",
+    "48900",
+    "51100",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "12900",
+    "13100",
+    "13200",
+    "13300",
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24700",
+    "48300",
+    "51800",
+    "60000",
+    "61000",
+    "61400",
+    "62000",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Medical, Dental, or Health Service",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "16100",
+    "17000",
+    "18700",
+    "42000",
+    "43700",
+    "46200",
+    "47300",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "63500",
+    "63600",
+    "64300",
+    "64400",
+    "64900",
+    "66700",
+    "67000",
+    "67100",
+    "67200",
+    "67700",
+    "68100",
+    "68400",
+    "68500",
+    "68600",
+    "68700",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15400",
+    "15900",
+    "24500",
+    "46300",
+    "60500",
+    "61400",
+    "62200",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63340",
+    "63360",
+    "64410",
+    "64420",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "68200",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Non-Profit",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "18000",
+    "18600",
+    "18700",
+    "27200",
+    "43400",
+    "43410",
+    "43440",
+    "43450",
+    "44800",
+    "44820",
+    "45000",
+    "45030",
+    "46400",
+    "46430",
+    "47200",
+    "47230",
+    "47240",
+    "48410",
+    "60900",
+    "60920",
+    "62100",
+    "62110",
+    "62140",
+    "62150",
+    "62800",
+    "62810",
+    "62830",
+    "62840",
+    "62870",
+    "62890",
+    "65000",
+    "65010",
+    "65020",
+    "65030",
+    "65040",
+    "65050",
+    "65100",
+    "65120",
+    "65160",
+    "68300",
+    "68310",
+    "68320",
+    "80000"
+   ],
+   "recommended": [
+    "11100",
+    "11200",
+    "11300",
+    "11400",
+    "12200",
+    "12800",
+    "13000",
+    "13500",
+    "15100",
+    "15500",
+    "15700",
+    "15900",
+    "16400",
+    "17100",
+    "17200",
+    "17300",
+    "17400",
+    "18100",
+    "18200",
+    "18300",
+    "18400",
+    "18500",
+    "20100",
+    "24100",
+    "24200",
+    "25000",
+    "25400",
+    "25600",
+    "25800",
+    "27000",
+    "27100",
+    "27300",
+    "27400",
+    "43300",
+    "43310",
+    "43320",
+    "43330",
+    "43340",
+    "43420",
+    "43430",
+    "43460",
+    "43470",
+    "43480",
+    "44400",
+    "44410",
+    "44420",
+    "44430",
+    "44440",
+    "44450",
+    "44500",
+    "44510",
+    "44520",
+    "44530",
+    "44540",
+    "44810",
+    "45010",
+    "45020",
+    "45040",
+    "45050",
+    "46410",
+    "46420",
+    "47210",
+    "47220",
+    "47500",
+    "47510",
+    "47520",
+    "47530",
+    "47540",
+    "47550",
+    "47560",
+    "47700",
+    "48400",
+    "48420",
+    "49000",
+    "49010",
+    "49020",
+    "50700",
+    "60300",
+    "60310",
+    "60320",
+    "60330",
+    "60340",
+    "60910",
+    "60930",
+    "60940",
+    "60950",
+    "62120",
+    "62130",
+    "62160",
+    "62820",
+    "62850",
+    "62860",
+    "62880",
+    "65110",
+    "65130",
+    "65140",
+    "65150",
+    "65170",
+    "70400",
+    "70600",
+    "80100",
+    "80110",
+    "80120",
+    "80130",
+    "80140",
+    "80200",
+    "80300",
+    "80400"
+   ]
+  },
+  {
+   "name": "Professional Consulting",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "42700",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63310",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24400",
+    "42400",
+    "47100",
+    "51800",
+    "53500",
+    "61000",
+    "61400",
+    "62600",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Property Management or Home Association",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "17000",
+    "24800",
+    "60200",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "63700",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "66800",
+    "67100",
+    "67200",
+    "67800",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "60000",
+    "61000",
+    "61400",
+    "62000",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "68400",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Real Estate Brokerage or Developer",
+   "salesTax": false,
+   "core": [
+    "15000",
+    "17000",
+    "42400",
+    "50300",
+    "60000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62000",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66600",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "10900",
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "25700",
+    "61400",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "67800",
+    "68000",
+    "68400",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Rental",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "24800",
+    "47400",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67200",
+    "67800",
+    "68000",
+    "68100",
+    "68400",
+    "68600",
+    "70300",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "41900",
+    "61000",
+    "61400",
+    "61600",
+    "62600",
+    "63310",
+    "63330",
+    "63360",
+    "63500",
+    "64100",
+    "64700",
+    "66500",
+    "66600",
+    "67100",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Repair and Maintenance",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "46600",
+    "48700",
+    "52800",
+    "60000",
+    "60100",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24600",
+    "48300",
+    "50800",
+    "51800",
+    "52500",
+    "53600",
+    "54100",
+    "61000",
+    "61400",
+    "62000",
+    "62500",
+    "63310",
+    "63320",
+    "63330",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "67100",
+    "67200",
+    "68000",
+    "68400",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Restaurant, Caterer, or Bar",
+   "salesTax": true,
+   "core": [
+    "12400",
+    "15000",
+    "17000",
+    "18700",
+    "25100",
+    "43800",
+    "50900",
+    "51800",
+    "53100",
+    "60000",
+    "60400",
+    "61000",
+    "61700",
+    "62400",
+    "63300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68500",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "10950",
+    "12500",
+    "12800",
+    "13100",
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "25200",
+    "41400",
+    "42100",
+    "51000",
+    "60200",
+    "61200",
+    "61300",
+    "61400",
+    "62000",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63400",
+    "63500",
+    "64000",
+    "64300",
+    "64700",
+    "64800",
+    "65200",
+    "66500",
+    "66600",
+    "68000",
+    "68400",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Retail Shop or Online Commerce",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "18700",
+    "46000",
+    "48300",
+    "51800",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "63500",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68500",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "10950",
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "24700",
+    "25200",
+    "48600",
+    "52300",
+    "52500",
+    "52900",
+    "61000",
+    "61200",
+    "61300",
+    "61400",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "64700",
+    "66500",
+    "66600",
+    "67800",
+    "68000",
+    "68400",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Sales: Independent Agent",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "42400",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "68100",
+    "68400",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "42300",
+    "60000",
+    "61000",
+    "61400",
+    "62000",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "67100",
+    "67200",
+    "68000",
+    "68600",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Transportation, Trucking, or Delivery",
+   "salesTax": true,
+   "core": [
+    "12700",
+    "13100",
+    "15000",
+    "16300",
+    "17000",
+    "44000",
+    "44600",
+    "51300",
+    "53900",
+    "54000",
+    "60200",
+    "60400",
+    "61000",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "67800",
+    "68100",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "45300",
+    "46500",
+    "49200",
+    "49600",
+    "51800",
+    "53500",
+    "60000",
+    "61400",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "68400",
+    "68500",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Wholesale Distribution and Sales",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "16300",
+    "16500",
+    "17000",
+    "47900",
+    "48900",
+    "51200",
+    "51800",
+    "60000",
+    "60100",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66600",
+    "66700",
+    "67100",
+    "67200",
+    "68000",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15400",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24700",
+    "48300",
+    "50300",
+    "61000",
+    "61400",
+    "62000",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "General Product-based Business",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "47900",
+    "48900",
+    "51100",
+    "51800",
+    "52300",
+    "52900",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "62500",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66500",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24500",
+    "48300",
+    "52500",
+    "61000",
+    "61400",
+    "62000",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63360",
+    "63500",
+    "64700",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "General Service-based Business",
+   "salesTax": true,
+   "core": [
+    "15000",
+    "17000",
+    "47900",
+    "60000",
+    "60200",
+    "60400",
+    "61700",
+    "62400",
+    "63300",
+    "63400",
+    "64300",
+    "64900",
+    "66700",
+    "67100",
+    "67200",
+    "68100",
+    "68400",
+    "68600",
+    "80000"
+   ],
+   "recommended": [
+    "12800",
+    "13100",
+    "15200",
+    "15600",
+    "15900",
+    "16400",
+    "18700",
+    "24500",
+    "48300",
+    "51800",
+    "53500",
+    "61000",
+    "61400",
+    "62000",
+    "62500",
+    "62600",
+    "63310",
+    "63320",
+    "63330",
+    "63350",
+    "63360",
+    "63500",
+    "64700",
+    "66500",
+    "66600",
+    "68000",
+    "70000",
+    "70100",
+    "70200",
+    "70500",
+    "80500"
+   ]
+  },
+  {
+   "name": "Other/None",
+   "salesTax": false,
+   "core": [],
+   "recommended": []
+  }
+ ],
+ "equity": {
+  "sole_proprietorship": [
+   {
+    "number": "30800",
+    "name": "Owners Draw",
+    "description": "Money the owner took out of the business"
+   },
+   {
+    "number": "32000",
+    "name": "Owners Equity",
+    "description": "The owner's investment plus profits kept in the business"
+   }
+  ],
+  "partnership": [
+   {
+    "number": "31000",
+    "name": "Partner 1 Equity",
+    "description": "Partner 1's investment in the business"
+   },
+   {
+    "number": "30900",
+    "name": "Partner 1 Draws",
+    "description": "Money partner 1 took out of the business"
+   },
+   {
+    "number": "31200",
+    "name": "Partner 2 Equity",
+    "description": "Partner 2's investment in the business"
+   },
+   {
+    "number": "31100",
+    "name": "Partner 2 Draws",
+    "description": "Money partner 2 took out of the business"
+   },
+   {
+    "number": "32000",
+    "name": "Retained Earnings",
+    "description": "Profits kept in the business from prior years"
+   }
+  ],
+  "corporation": [
+   {
+    "number": "30100",
+    "name": "Capital Stock",
+    "description": "Value of stock issued"
+   },
+   {
+    "number": "30200",
+    "name": "Dividends Paid",
+    "description": "Dividends paid to shareholders"
+   },
+   {
+    "number": "32000",
+    "name": "Retained Earnings",
+    "description": "Profits kept in the business from prior years"
+   }
+  ],
+  "s_corporation": [
+   {
+    "number": "30100",
+    "name": "Capital Stock",
+    "description": "Value of stock issued"
+   },
+   {
+    "number": "31400",
+    "name": "Shareholder Distributions",
+    "description": "Profits paid out to shareholders"
+   },
+   {
+    "number": "32000",
+    "name": "Retained Earnings",
+    "description": "Profits kept in the business from prior years"
+   }
+  ],
+  "nonprofit": [
+   {
+    "number": "32000",
+    "name": "Unrestricted Net Assets",
+    "description": "Net assets with no donor restrictions"
+   },
+   {
+    "number": "31500",
+    "name": "Temp. Restricted Net Assets",
+    "description": "Net assets donors restricted for a time or purpose"
+   },
+   {
+    "number": "31300",
+    "name": "Perm. Restricted Net Assets",
+    "description": "Net assets donors restricted permanently"
+   }
+  ],
+  "other": [
+   {
+    "number": "32000",
+    "name": "Retained Earnings",
+    "description": "Profits kept in the business from prior years"
+   }
+  ],
+  "llc_single": [
+   {
+    "number": "30700",
+    "name": "Members Draw",
+    "description": "Money the member took out of the business"
+   },
+   {
+    "number": "32000",
+    "name": "Members Equity",
+    "description": "The member's investment plus profits kept in the business"
+   }
+  ],
+  "llc_multi": [
+   {
+    "number": "30400",
+    "name": "Member 1 Equity",
+    "description": "Member 1's investment in the business"
+   },
+   {
+    "number": "30300",
+    "name": "Member 1 Draws",
+    "description": "Money member 1 took out of the business"
+   },
+   {
+    "number": "30600",
+    "name": "Member 2 Equity",
+    "description": "Member 2's investment in the business"
+   },
+   {
+    "number": "30500",
+    "name": "Member 2 Draws",
+    "description": "Money member 2 took out of the business"
+   },
+   {
+    "number": "32000",
+    "name": "Retained Earnings",
+    "description": "Profits kept in the business from prior years"
+   }
+  ]
+ }
+}

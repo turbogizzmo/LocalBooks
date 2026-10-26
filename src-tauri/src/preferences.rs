@@ -13,6 +13,7 @@ pub const TAX_FORMS: &[(&str, &str)] = &[
     ("1065", "Form 1065 (partnership / multi-member LLC)"),
     ("1120S", "Form 1120-S (S corporation)"),
     ("1120", "Form 1120 (C corporation)"),
+    ("990", "Form 990 (tax-exempt organization)"),
 ];
 
 /// Validates a preference value; unknown keys are rejected so typos never persist.
@@ -33,6 +34,10 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             text(100, "company name")
         }
         "company_legal_name" => text(150, "legal name"),
+        "auto_lock_minutes" => match v.parse::<u32>() {
+            Ok(minutes) if minutes <= 240 => Ok(minutes.to_string()),
+            _ => Err("PREF_BAD_AUTO_LOCK: enter 0 (never) to 240 minutes".into()),
+        },
         "company_address" => text(300, "address"),
         "company_phone" => text(40, "phone"),
         "company_email" => {
@@ -75,7 +80,18 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
                 Err(format!("PREF_BAD_TAX_FORM: unknown tax form '{v}'"))
             }
         }
-        "class_tracking" | "class_prompt" | "sales_tax_enabled" => match v {
+        "finance_charge_annual_rate" => crate::finance_charges::parse_rate(v).map(crate::finance_charges::format_rate),
+        "finance_charge_minimum" => crate::finance_charges::parse_minimum(v).map(crate::ledger::format_cents).map(|m| m.replace(['$', ','], "")),
+        "finance_charge_grace_days" => match v.parse::<i64>() {
+            Ok(days) if (0..=crate::finance_charges::MAX_GRACE_DAYS).contains(&days) => Ok(days.to_string()),
+            _ => Err("PREF_BAD_FC_GRACE: enter 0 to 365 grace days".into()),
+        },
+        // An Income account, checked against the chart of accounts in `set`; blank turns finance charges off.
+        "finance_charge_account_id" => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_FC_ACCOUNT: choose an Income account".into()),
+        },
+        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
         },
@@ -140,6 +156,18 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
             .map_err(db_err)?;
         if has_foreign {
             return Err("PREF_HOME_CURRENCY_LOCKED: the home currency cannot change once foreign-currency transactions exist".into());
+        }
+    }
+    if key == "finance_charge_account_id" && !normalized.is_empty() {
+        let account: Option<(String, bool)> = sqlx::query_as(
+            "SELECT t.classification, a.is_active FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+        )
+        .bind(normalized.parse::<i64>().unwrap_or_default())
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+        if !matches!(account, Some((classification, true)) if classification == "INCOME") {
+            return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
         }
     }
     sqlx::query(
@@ -308,6 +336,7 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
     let return_months = |fy_start: NaiveDate, fy_end: NaiveDate| -> u32 {
         match tax_form {
             "1065" | "1120S" => 3,
+            "990" => 5,
             // C corporations with a June 30 year end kept the 3rd-month due date for tax years
             // beginning before 2026; every other C corporation files by the 4th month.
             "1120" if fy_end.month() == 6 && fy_start.year() < 2026 => 3,
@@ -318,6 +347,7 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
         "1065" => "Form 1065",
         "1120S" => "Form 1120-S",
         "1120" => "Form 1120",
+        "990" => "Form 990",
         _ => "Form 1040 / Schedule C",
     };
 
@@ -359,93 +389,4 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_pool;
-
-    /// Every preference a migration seeds must be settable to its own value, or its Settings control
-    /// would fail the first time it is used.
-    #[tokio::test]
-    async fn every_seeded_preference_is_settable() {
-        let pool = test_pool().await;
-        for (key, value) in get_all(&pool).await.unwrap() {
-            if key == "company_name" && value.is_empty() {
-                continue;
-            }
-            set(&pool, &key, &value).await.unwrap_or_else(|e| panic!("{key} = {value:?}: {e}"));
-        }
-    }
-
-    fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap()
-    }
-
-    #[tokio::test]
-    async fn preferences_validate_normalize_and_persist() {
-        let pool = test_pool().await;
-        let prefs = get_all(&pool).await.unwrap();
-        assert_eq!(prefs.get("fiscal_year_start").map(String::as_str), Some("01-01"));
-        assert_eq!(prefs.get("company_name").map(String::as_str), Some("LocalBooks Ledger"));
-
-        assert_eq!(set(&pool, "company_ein", "123456789").await.unwrap(), "12-3456789");
-        assert_eq!(set(&pool, "fiscal_year_start", "07-01").await.unwrap(), "07-01");
-        assert_eq!(fiscal_start_month(&pool).await.unwrap(), 7);
-        for (key, value) in [("fiscal_year_start", "07-15"), ("fiscal_year_start", "13-01"), ("company_name", "  "), ("tax_form", "990"), ("bogus", "x"), ("company_ein", "12-34")] {
-            assert!(set(&pool, key, value).await.is_err(), "{key}={value} should be rejected");
-        }
-        // The database guards the fiscal start even if the module is bypassed.
-        let err = sqlx::query("UPDATE system_preferences SET value = '02-30' WHERE key = 'fiscal_year_start'").execute(&pool).await.unwrap_err();
-        assert!(err.to_string().contains("PREF_BAD_FISCAL_START"), "{err}");
-    }
-
-    #[tokio::test]
-    async fn logo_is_validated_by_content_and_stored_as_a_data_url() {
-        let pool = test_pool().await;
-        assert_eq!(get_logo(&pool).await.unwrap(), None);
-        let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13];
-        let url = set_logo(&pool, &png).await.unwrap();
-        assert!(url.starts_with("data:image/png;base64,iVBORw0KGgo"), "{url}");
-        assert_eq!(get_logo(&pool).await.unwrap(), Some(url));
-        assert!(!get_all(&pool).await.unwrap().contains_key(LOGO_KEY), "kept out of the light preferences map");
-
-        assert!(set_logo(&pool, b"<svg onload=alert(1)>").await.unwrap_err().starts_with("PREF_LOGO_FORMAT"));
-        assert!(set_logo(&pool, &vec![0xFF; MAX_LOGO_BYTES + 1]).await.unwrap_err().starts_with("PREF_LOGO_TOO_LARGE"));
-        assert!(set(&pool, LOGO_KEY, "data:text/html,boom").await.unwrap_err().starts_with("PREF_LOGO"));
-        clear_logo(&pool).await.unwrap();
-        assert_eq!(get_logo(&pool).await.unwrap(), None);
-    }
-
-    #[test]
-    fn fiscal_periods_follow_the_configured_start() {
-        let p = fiscal_periods(ymd(2026, 10, 13), 7);
-        assert_eq!((p.this_year.start, p.this_year.end), (ymd(2026, 7, 1), ymd(2027, 6, 30)));
-        assert_eq!((p.last_year.start, p.last_year.end), (ymd(2025, 7, 1), ymd(2026, 6, 30)));
-        assert_eq!((p.this_quarter.start, p.this_quarter.end), (ymd(2026, 10, 1), ymd(2026, 12, 31)));
-        assert_eq!(p.year_to_date, DateRange { start: ymd(2026, 7, 1), end: ymd(2026, 10, 13) });
-
-        let jan = fiscal_periods(ymd(2026, 2, 28), 1);
-        assert_eq!((jan.this_year.start, jan.this_year.end), (ymd(2026, 1, 1), ymd(2026, 12, 31)));
-        assert_eq!((jan.this_quarter.start, jan.this_quarter.end), (ymd(2026, 1, 1), ymd(2026, 3, 31)));
-        let early = fiscal_periods(ymd(2026, 3, 5), 4);
-        assert_eq!(early.this_year.start, ymd(2025, 4, 1));
-    }
-
-    #[test]
-    fn tax_calendar_rolls_weekends_and_follows_entity_rules() {
-        // Calendar-year S corp: 2026 return due Mar 15, 2027 (Monday); 2025 return due Mar 15, 2026 (a Sunday → Mar 16).
-        let s = tax_calendar("1120S", 1, ymd(2026, 10, 13));
-        let returns: Vec<NaiveDate> = s.iter().filter(|d| d.form == "Form 1120-S").map(|d| d.due_date).collect();
-        assert_eq!(returns, vec![ymd(2026, 3, 16), ymd(2027, 3, 15)]);
-        assert!(s.iter().find(|d| d.due_date == ymd(2026, 3, 16)).unwrap().is_past);
-
-        // Sole proprietor: April 15 return and the four 1040-ES dates (the last in January).
-        let c = tax_calendar("SCHEDULE_C", 1, ymd(2026, 1, 5));
-        let es: Vec<NaiveDate> = c.iter().filter(|d| d.form == "Form 1040-ES").map(|d| d.statutory_date).collect();
-        assert_eq!(es, vec![ymd(2026, 4, 15), ymd(2026, 6, 15), ymd(2026, 9, 15), ymd(2027, 1, 15)]);
-
-        // C corp with a September 30 year end: return due the 15th day of the 4th month (Jan 15).
-        let corp = tax_calendar("1120", 10, ymd(2026, 11, 1));
-        assert!(corp.iter().any(|d| d.form == "Form 1120" && d.statutory_date == ymd(2028, 1, 15)));
-        assert_eq!(corp.iter().filter(|d| d.form == "Form 1120-W").count(), 4);
-    }
-}
+mod tests;

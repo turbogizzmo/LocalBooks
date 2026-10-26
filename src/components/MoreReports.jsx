@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, toCsv } from './ReportParts.jsx';
+import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, saveXlsx, statementSheet, tableSheet, toCsv, xlsxName } from './ReportParts.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
@@ -66,13 +66,14 @@ function TableReport({ title, subtitle, columns, rows, footer, toolbar, onCsvRow
   const [notice, setNotice] = useState(null);
   const filename = `${title.replace(/[^A-Za-z0-9]+/g, '-')}.csv`;
   const csv = () => saveText(toCsv([[company.name], [title], [subtitle], [], columns.map((c) => c.label), ...onCsvRows()]), filename, setNotice);
+  const xlsx = () => saveXlsx(tableSheet({ company: company.name, title, subtitle, columns, rows: onCsvRows(), footer }), xlsxName(filename), setNotice);
   const rowClass = (kind) => (kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'total' ? 'font-semibold border-t border-qb-ink' : kind === 'grand' ? 'font-semibold border-t-2 border-double border-qb-ink' : '');
   return (
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {toolbar}
         <div className="ml-auto">
-          <ExportMenu onNotice={setNotice} onCsv={csv} />
+          <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -160,12 +161,18 @@ export function CashFlowReport({ navigate }) {
       `Statement-of-Cash-Flows_${p.start}_to_${p.end}.csv`,
       setNotice,
     );
+  const xlsx = () =>
+    saveXlsx(
+      statementSheet({ company: company.name, title: 'Statement of Cash Flows', subtitle: rangeText(p.start, p.end), lines: data.lines, footer: 'Indirect method · cash is the total of the Bank accounts' }),
+      `Statement-of-Cash-Flows_${p.start}_to_${p.end}.xlsx`,
+      setNotice,
+    );
   return (
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {p.controls}
         <div className="ml-auto">
-          <ExportMenu onNotice={setNotice} onCsv={csv} />
+          <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
@@ -260,60 +267,28 @@ export function GeneralLedgerReport({ navigate }) {
   );
 }
 
-/** A/R or A/P aging, as a summary by name or a detail list of open items. */
-export function AgingReport({ payable, detail }) {
+/** A/R or A/P aging by name. The detail lists (Open Invoices, Unpaid Bills, the aging details) are custom report presets. */
+export function AgingReport({ payable }) {
   const [asOf, setAsOf] = useState(todayIso());
   const { data, error, reload } = useLedgerQuery(() => (asOf ? api.getAging(payable, asOf) : Promise.resolve(null)));
   useEffect(() => {
     reload();
   }, [asOf, reload]);
-  const side = payable ? 'A/P' : 'A/R';
-  const title = detail ? (payable ? 'Unpaid Bills (A/P Aging Detail)' : 'Open Invoices (A/R Aging Detail)') : `${side} Aging Summary`;
+  const title = `${payable ? 'A/P' : 'A/R'} Aging Summary`;
   const labels = data?.bucketLabels ?? ['Current', '1 - 30', '31 - 60', '61 - 90', '91 and over'];
-
-  if (!detail) {
-    const rows = data
-      ? [...data.rows.map((r) => ({ cells: [r.partyName, ...r.bucketsCents.map(money), formatCents(r.totalCents)] })), { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] }]
-      : [];
-    return (
-      <TableReport
-        title={title}
-        subtitle={data ? `As of ${longDate(data.asOf)}` : ''}
-        columns={[{ label: payable ? 'Vendor' : 'Customer' }, ...labels.map((l) => ({ label: l, align: 'right' })), { label: 'Total', align: 'right' }]}
-        rows={rows}
-        error={error}
-        toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-        footer={`Days past due · balances as of the report date · credit not yet used is negative`}
-        onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
-      />
-    );
-  }
-
-  const rows = [];
-  let current = null;
-  let subtotal = 0;
-  for (const item of data?.items ?? []) {
-    if (item.partyName !== current) {
-      if (current !== null) rows.push({ kind: 'total', cells: [`Total ${current}`, '', '', '', '', '', formatCents(subtotal)] });
-      rows.push({ kind: 'section', span: 7, cells: [item.partyName] });
-      current = item.partyName;
-      subtotal = 0;
-    }
-    subtotal += item.openCents;
-    rows.push({ cells: [item.kind, item.number ?? '', formatDate(item.date), formatDate(item.dueDate), item.daysPastDue > 0 ? item.daysPastDue : '', '', formatCents(item.openCents)] });
-  }
-  if (current !== null) rows.push({ kind: 'total', cells: [`Total ${current}`, '', '', '', '', '', formatCents(subtotal)] });
-  if (data) rows.push({ kind: 'grand', cells: ['TOTAL', '', '', '', '', '', formatCents(data.totalCents)] });
+  const rows = data
+    ? [...data.rows.map((r) => ({ cells: [r.partyName, ...r.bucketsCents.map(money), formatCents(r.totalCents)] })), { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] }]
+    : [];
   return (
     <TableReport
       title={title}
       subtitle={data ? `As of ${longDate(data.asOf)}` : ''}
-      columns={[{ label: 'Type' }, { label: 'No.' }, { label: 'Date' }, { label: 'Due date' }, { label: 'Past due', align: 'right' }, { label: '' }, { label: 'Open balance', align: 'right' }]}
+      columns={[{ label: payable ? 'Vendor' : 'Customer' }, ...labels.map((l) => ({ label: l, align: 'right' })), { label: 'Total', align: 'right' }]}
       rows={rows}
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-      footer="Balances as of the report date, after payments and credits dated on or before it"
-      onCsvRows={() => (data?.items ?? []).map((i) => [i.partyName, i.kind, i.number ?? '', i.date, i.dueDate, i.daysPastDue > 0 ? i.daysPastDue : '', plainAmount(i.openCents)])}
+      footer={`Days past due · balances as of the report date · credit not yet used is negative`}
+      onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
     />
   );
 }
@@ -321,6 +296,7 @@ export function AgingReport({ payable, detail }) {
 const SUMMARY = {
   customer: { title: 'Sales by Customer Summary', column: 'Customer' },
   product: { title: 'Sales by Product/Service Summary', column: 'Product/Service' },
+  rep: { title: 'Sales by Rep Summary', column: 'Rep' },
   vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor' },
 };
 
@@ -355,7 +331,13 @@ export function SummaryReport({ by }) {
       rows={rows}
       error={error}
       toolbar={p.controls}
-      footer={by === 'product' ? 'Invoices and sales receipts less credit memos, by document date' : 'Accrual basis · posted transactions only'}
+      footer={
+        by === 'product'
+          ? 'Invoices and sales receipts less credit memos, by document date'
+          : by === 'rep'
+            ? 'Invoices and sales receipts by the rep on each form, by document date (credit memos carry no rep)'
+            : 'Accrual basis · posted transactions only'
+      }
       onCsvRows={() => [...data.rows.map((r) => [r.label, ...(withQty ? [((r.quantityE4 ?? 0) / 10_000).toString(), ''] : []), plainAmount(r.amountCents), '']), ['TOTAL', ...(withQty ? ['', ''] : []), plainAmount(data.totalCents), '']]}
     />
   );
@@ -405,8 +387,10 @@ export function Vendors1099Report() {
   const shown = (data ?? []).filter((r) => all || r.overThreshold);
   const total = shown.reduce((s, r) => s + r.paidCents, 0);
   const columns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Paid', align: 'right' }];
+  // Tax IDs are masked on screen and in print; the Excel and CSV exports carry them in full for users who may see them.
+  const fullInCsv = shown.some((r) => r.taxId);
   const rows = [
-    ...shown.map((r) => ({ cells: [r.vendorName, r.taxId ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
+    ...shown.map((r) => ({ cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
     ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', formatCents(total)] }] : []),
   ];
   return (
@@ -432,8 +416,10 @@ export function Vendors1099Report() {
           </label>
         </>
       }
-      footer="Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors."
-      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
+      footer={`Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors. Tax IDs are masked here${
+        fullInCsv ? '; the Excel and CSV exports have them in full, so keep those files safe' : ''
+      }.`}
+      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? r.taxIdMasked ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
     />
   );
 }
@@ -501,13 +487,20 @@ export function BudgetVsActualReport({ navigate }) {
               saveText(
                 toCsv([
                   [company.name],
-                  ['Budget vs. Actuals'],
+                  ['Profit and Loss Budget vs. Actual'],
                   [budget?.name ?? ''],
                   [],
                   ['Account', ...data.columns.map((c) => c.label)],
                   ...data.lines.map((l) => [`${'  '.repeat(l.depth)}${l.label}`, ...l.amountsCents.map((a, i) => (data.columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a)))]),
                 ]),
-                'Budget-vs-Actuals.csv',
+                'Profit-and-Loss-Budget-vs-Actual.csv',
+                setNotice,
+              )
+            }
+            onXlsx={() =>
+              saveXlsx(
+                statementSheet({ company: company.name, title: 'Profit and Loss Budget vs. Actual', subtitle: `${budget.name} · ${rangeText(data.startDate, data.endDate)}`, lines: data.lines, columns: data.columns }),
+                'Profit-and-Loss-Budget-vs-Actual.xlsx',
                 setNotice,
               )
             }
@@ -518,7 +511,7 @@ export function BudgetVsActualReport({ navigate }) {
       {error && <Notice kind="error" text={error} />}
       {data && (
         <Statement
-          title="Budget vs. Actuals"
+          title="Profit and Loss Budget vs. Actual"
           subtitle={`${budget.name} · ${rangeText(data.startDate, data.endDate)}`}
           lines={data.lines}
           columns={data.columns}
@@ -527,5 +520,301 @@ export function BudgetVsActualReport({ navigate }) {
         />
       )}
     </>
+  );
+}
+
+/** CSV rows of a multi-column statement (percent columns as plain numbers: 12.5% → 12.5). */
+const columnCsvRows = (data) => [
+  ['Account', ...data.columns.map((c) => c.label)],
+  ...data.lines.map((l) => [`${'  '.repeat(l.depth)}${l.label}`, ...l.amountsCents.map((a, i) => (data.columns[i]?.kind === 'percent' ? (a === null ? '' : (a / 100).toFixed(1)) : plainAmount(a)))]),
+];
+
+export function BalanceSheetBudgetVsActualReport({ navigate }) {
+  const budgets = useLedgerQuery(api.listBudgets);
+  const [budgetId, setBudgetId] = useState(null);
+  const [period, setPeriod] = useState(12);
+  const list = budgets.data ?? [];
+  const budget = list.find((b) => b.id === budgetId) ?? list[0];
+  const { data, error, reload } = useLedgerQuery(() => (budget ? api.getBalanceSheetBudgetVsActual(budget.id, period) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [budget?.id, period, reload]);
+  const [notice, setNotice] = useState(null);
+  const company = useCompany();
+  if (budgets.data && list.length === 0) {
+    return <Notice kind="info" text="There are no budgets yet. Create one under Accounting › Budgets, choose Balance Sheet accounts, and enter the balances you expect at each month end." />;
+  }
+  const title = 'Balance Sheet Budget vs. Actual';
+  const subtitle = data ? `${budget.name} · As of ${longDate(data.endDate)}` : '';
+  return (
+    <>
+      <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
+        <label>
+          <span className="qb-label">Budget</span>
+          <select className="qb-input w-[220px]" value={budget?.id ?? ''} onChange={(e) => setBudgetId(Number(e.target.value))}>
+            {list.map((b) => (
+              <option key={b.id} value={b.id}>{b.name} (FY from {formatDate(b.fiscalYearStart)})</option>
+            ))}
+          </select>
+        </label>
+        {budget && (
+          <label>
+            <span className="qb-label">As of the end of</span>
+            <select className="qb-input w-[110px]" value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{fiscalMonthLabel(budget.fiscalYearStart, m)}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="ml-auto">
+          <ExportMenu
+            onNotice={setNotice}
+            onCsv={() => saveText(toCsv([[company.name], [title], [subtitle], [], ...columnCsvRows(data)]), `Balance-Sheet-Budget-vs-Actual_${data.endDate}.csv`, setNotice)}
+            onXlsx={() => saveXlsx(statementSheet({ company: company.name, title, subtitle, lines: data.lines, columns: data.columns }), `Balance-Sheet-Budget-vs-Actual_${data.endDate}.xlsx`, setNotice)}
+          />
+        </div>
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {error && <Notice kind="error" text={error} />}
+      {data && (
+        <Statement
+          title={title}
+          subtitle={subtitle}
+          lines={data.lines}
+          columns={data.columns}
+          onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: null, endDate: data.endDate, includeSubaccounts: line.kind === 'subtotal' })}
+          footer="Budget: the month-end balances entered for balance sheet accounts; budgeted Net Income is the budget's income less expenses for the year to date · Over budget is actual less budget"
+        />
+      )}
+    </>
+  );
+}
+
+const pctOf = (part, whole) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '');
+
+export function InventoryValuationReport() {
+  const [asOf, setAsOf] = useState(todayIso());
+  const { data, error, reload } = useLedgerQuery(() => (asOf ? api.getInventoryValuation(asOf) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [asOf, reload]);
+  const rows = data
+    ? [
+        ...data.rows.map((r) => ({
+          cells: [
+            r.name,
+            r.description ?? '',
+            formatQuantity(r.qtyOnHandE4),
+            r.averageCostCents == null ? '' : formatCents(r.averageCostCents),
+            formatCents(r.assetValueCents),
+            pctOf(r.assetValueCents, data.totalAssetValueCents),
+            formatCents(r.salesPriceCents),
+            formatCents(r.retailValueCents),
+            pctOf(r.retailValueCents, data.totalRetailValueCents),
+          ],
+        })),
+        { kind: 'grand', cells: ['TOTAL', '', '', '', formatCents(data.totalAssetValueCents), data.totalAssetValueCents ? '100.0%' : '', '', formatCents(data.totalRetailValueCents), data.totalRetailValueCents ? '100.0%' : ''] },
+      ]
+    : [];
+  return (
+    <TableReport
+      title="Inventory Valuation Summary"
+      subtitle={data ? `As of ${longDate(data.asOf)}` : ''}
+      columns={[
+        { label: 'Item' },
+        { label: 'Description' },
+        { label: 'On hand', align: 'right' },
+        { label: 'Avg cost', align: 'right' },
+        { label: 'Asset value', align: 'right' },
+        { label: '% of tot asset', align: 'right' },
+        { label: 'Sales price', align: 'right' },
+        { label: 'Retail value', align: 'right' },
+        { label: '% of tot retail', align: 'right' },
+      ]}
+      rows={rows}
+      error={error}
+      toolbar={<AsOf value={asOf} onChange={setAsOf} />}
+      footer="Moving average cost · stock movements dated on or before the report date, so the total agrees with the inventory asset accounts · track products under Sales › Products & Services"
+      onCsvRows={() => [
+        ...data.rows.map((r) => [r.name, r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), plainAmount(r.averageCostCents), plainAmount(r.assetValueCents), '', plainAmount(r.salesPriceCents), plainAmount(r.retailValueCents), '']),
+        ['TOTAL', '', '', '', plainAmount(data.totalAssetValueCents), '', '', plainAmount(data.totalRetailValueCents), ''],
+      ]}
+    />
+  );
+}
+
+const MOVEMENT_LABEL = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
+
+export function InventoryValuationDetailReport({ navigate }) {
+  const p = usePeriod('thisMonth');
+  const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getInventoryValuationDetail(p.start, p.end) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [p.start, p.end, reload]);
+  const type = (r) => (r.kind === 'VOID' ? 'Void' : (SOURCE_LABEL[r.sourceType] ?? MOVEMENT_LABEL[r.kind] ?? r.kind));
+  const rows = [];
+  for (const item of data?.items ?? []) {
+    rows.push({ kind: 'section', span: 9, cells: [item.name] });
+    rows.push({ cells: ['', '', '', 'Beginning balance', '', '', formatQuantity(item.openingQtyE4), '', formatCents(item.openingValueCents)] });
+    for (const r of item.rows) {
+      rows.push({
+        cells: [
+          formatDate(r.movementDate),
+          type(r),
+          r.entryNumber,
+          r.partyName ?? '',
+          formatQuantity(r.qtyChangeE4),
+          formatCents(r.valueChangeCents),
+          formatQuantity(r.qtyOnHandE4),
+          r.averageCostCents == null ? '' : formatCents(r.averageCostCents),
+          formatCents(r.assetValueCents),
+        ],
+        onClick: () => navigate?.('accounting/journal', 'open-entry', { entryId: r.journalEntryId }),
+      });
+    }
+    rows.push({ kind: 'total', cells: [`Total ${item.name}`, '', '', '', '', '', formatQuantity(item.closingQtyE4), '', formatCents(item.closingValueCents)] });
+  }
+  if (data) rows.push({ kind: 'grand', cells: ['TOTAL', '', '', '', '', '', '', '', formatCents(data.totalValueCents)] });
+  return (
+    <TableReport
+      title="Inventory Valuation Detail"
+      subtitle={data ? rangeText(data.startDate, data.endDate) : ''}
+      columns={[
+        { label: 'Date' },
+        { label: 'Type' },
+        { label: 'No.' },
+        { label: 'Name' },
+        { label: 'Qty', align: 'right' },
+        { label: 'Cost', align: 'right' },
+        { label: 'On hand', align: 'right' },
+        { label: 'Avg cost', align: 'right' },
+        { label: 'Asset value', align: 'right' },
+      ]}
+      rows={rows}
+      error={error}
+      toolbar={p.controls}
+      footer="Every stock movement at moving average cost · No. is the journal entry number · a void reverses the movement it cancels"
+      onCsvRows={() =>
+        (data?.items ?? []).flatMap((item) => [
+          [item.name],
+          ['', '', '', 'Beginning balance', '', '', (item.openingQtyE4 / 10_000).toString(), '', plainAmount(item.openingValueCents)],
+          ...item.rows.map((r) => [r.movementDate, type(r), r.entryNumber, r.partyName ?? '', (r.qtyChangeE4 / 10_000).toString(), plainAmount(r.valueChangeCents), (r.qtyOnHandE4 / 10_000).toString(), plainAmount(r.averageCostCents), plainAmount(r.assetValueCents)]),
+          [`Total ${item.name}`, '', '', '', '', '', (item.closingQtyE4 / 10_000).toString(), '', plainAmount(item.closingValueCents)],
+        ])
+      }
+    />
+  );
+}
+
+export function StockStatusReport() {
+  const p = usePeriod('fiscalYearToDate');
+  const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getStockStatus(p.start, p.end) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [p.start, p.end, reload]);
+  const rows = (data?.rows ?? []).map((r) => ({
+    cells: [
+      r.name,
+      r.sku ?? '',
+      r.description ?? '',
+      formatQuantity(r.qtyOnHandE4),
+      r.qtyOnOrderE4 ? formatQuantity(r.qtyOnOrderE4) : '',
+      r.nextDelivery ? formatDate(r.nextDelivery) : '',
+      formatQuantity(r.qtySoldE4),
+      formatQuantity(r.salesPerWeekE4),
+    ],
+  }));
+  return (
+    <TableReport
+      title="Inventory Stock Status by Item"
+      subtitle={data ? rangeText(data.startDate, data.endDate) : ''}
+      columns={[
+        { label: 'Item' },
+        { label: 'SKU' },
+        { label: 'Description' },
+        { label: 'On hand', align: 'right' },
+        { label: 'On PO', align: 'right' },
+        { label: 'Next deliv', align: 'right' },
+        { label: 'Sold', align: 'right' },
+        { label: 'Sales/week', align: 'right' },
+      ]}
+      rows={rows}
+      error={error}
+      toolbar={p.controls}
+      footer="On hand at the end of the period · On PO: open purchase orders (Next deliv is the earliest expected date) · Sold and Sales/week: units sold in the period, less voided sales"
+      onCsvRows={() =>
+        data.rows.map((r) => [r.name, r.sku ?? '', r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), (r.qtyOnOrderE4 / 10_000).toString(), r.nextDelivery ?? '', (r.qtySoldE4 / 10_000).toString(), (r.salesPerWeekE4 / 10_000).toString()])
+      }
+    />
+  );
+}
+
+export function MissingChecksReport({ navigate }) {
+  const accounts = useLedgerQuery(api.listAccounts);
+  const banks = (accounts.data ?? []).filter((a) => a.accountType === 'BANK' && a.isActive);
+  const [accountId, setAccountId] = useState(null);
+  const account = banks.find((a) => a.id === accountId) ?? banks[0];
+  const [range, setRange] = useState(['', '']);
+  const [from, to] = range;
+  const { data, error, reload } = useLedgerQuery(() => (account ? api.getMissingChecks(account.id, from, to) : Promise.resolve(null)));
+  useEffect(() => {
+    reload();
+  }, [account?.id, from, to, reload]);
+  if (accounts.data && banks.length === 0) {
+    return <Notice kind="info" text="There are no bank accounts yet. Missing Checks lists the checks written from a bank account." />;
+  }
+  const rows = [];
+  (data?.rows ?? []).forEach((r, i) => {
+    for (const gap of data.gaps.filter((g) => g.before === i)) {
+      const span = gap.first === gap.last ? `${gap.first}` : `${gap.first} – ${gap.last}`;
+      rows.push({ kind: 'section', span: 7, cells: [`*** Missing number${gap.first === gap.last ? '' : 's'} ${span} ***`] });
+    }
+    rows.push({
+      cells: [r.number, formatDate(r.date), r.kind, r.partyName ?? '', r.isDuplicate ? '*** Duplicate number ***' : r.isVoided ? 'VOID' : (r.memo ?? ''), r.isVoided ? '' : formatCents(r.amountCents), r.isVoided ? 'Void' : ''],
+      onClick: r.journalEntryId ? () => navigate?.('accounting/journal', 'open-entry', { entryId: r.journalEntryId }) : undefined,
+    });
+  });
+  const summary = data
+    ? `${data.rows.length} numbered check${data.rows.length === 1 ? '' : 's'} · ${data.missingCount} missing · ${data.duplicateCount} with a duplicate number${data.unnumberedCount ? ` · ${data.unnumberedCount} payment${data.unnumberedCount === 1 ? '' : 's'} with a reference that is not a check number` : ''}`
+    : '';
+  return (
+    <TableReport
+      title="Missing Checks"
+      subtitle={data ? `${data.accountName}${from || to ? ` · ${from ? longDate(from) : 'start'} – ${to ? longDate(to) : 'today'}` : ''}` : ''}
+      columns={[{ label: 'Num' }, { label: 'Date' }, { label: 'Type' }, { label: 'Name' }, { label: 'Memo' }, { label: 'Amount', align: 'right' }, { label: '' }]}
+      rows={rows}
+      error={error}
+      toolbar={
+        <>
+          <label>
+            <span className="qb-label">Bank account</span>
+            <select className="qb-input w-[200px]" value={account?.id ?? ''} onChange={(e) => setAccountId(Number(e.target.value))}>
+              {banks.map((a) => (
+                <option key={a.id} value={a.id}>{a.accountNumber ? `${a.accountNumber} · ` : ''}{a.fullName}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="qb-label">From (optional)</span>
+            <input type="date" className="qb-input w-[132px]" value={from} onChange={(e) => setRange([e.target.value, to])} />
+          </label>
+          <label>
+            <span className="qb-label">To (optional)</span>
+            <input type="date" className="qb-input w-[132px]" value={to} onChange={(e) => setRange([from, e.target.value])} aria-invalid={Boolean(from && to && to < from)} />
+          </label>
+          {data && <span className="self-center text-sm text-qb-ink-muted">{summary}</span>}
+        </>
+      }
+      footer="Checks, bill payments, sales tax payments and refunds from the account with a numeric check number, in number order · voided checks keep their number · one check paying several bills of a vendor counts once"
+      onCsvRows={() => [
+        ...data.rows.flatMap((r, i) => [
+          ...data.gaps.filter((g) => g.before === i).map((g) => [`Missing ${g.first === g.last ? g.first : `${g.first} - ${g.last}`}`]),
+          [r.number, r.date, r.kind, r.partyName ?? '', r.isDuplicate ? 'Duplicate number' : (r.memo ?? ''), r.isVoided ? '' : plainAmount(r.amountCents), r.isVoided ? 'Void' : ''],
+        ]),
+        [],
+        [summary],
+      ]}
+    />
   );
 }

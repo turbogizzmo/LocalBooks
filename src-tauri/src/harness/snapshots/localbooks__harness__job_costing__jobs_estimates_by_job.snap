@@ -1,0 +1,16 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(name, &report)"
+---
+estimates_by_job, 2025-01-01 to 2025-12-31
+
+Date                               Num                    Status                 Expires       Memo                          Amount
+Kestrel Homes:Lakeview Remodel
+  2025-10-05                       1001                   Invoiced                             Kitchen and bath            7,000.00
+Total Kestrel Homes:Lakeview Remod                                                                                         7,000.00
+Kestrel Homes:Maple St Addition
+  2025-11-01                       1002                   Pending                              Kitchen and bath            5,500.00
+Total Kestrel Homes:Maple St Addit                                                                                         5,500.00
+TOTAL                                                                                                                     12,500.00
+
+2 lines

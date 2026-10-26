@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
+import { useCompany } from './PrintDocuments.jsx';
+import { ExportMenu, tableExports } from './ReportParts.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 
@@ -12,6 +15,14 @@ const ACTION_STYLE = {
 };
 
 const TIMESTAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'medium' });
+
+/** A recorded UTC instant as local "YYYY-MM-DD HH:MM:SS", the form an Excel date-time cell takes. */
+const localStamp = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
 
 const STATUS_STYLE = {
   FIXABLE: { label: 'Correctable', className: 'text-qb-info' },
@@ -40,7 +51,7 @@ function Corrections({ onChanged }) {
 
   const apply = async (p) => {
     const label = p.entryNumber ? `#${p.entryNumber}` : `id ${p.entryId}`;
-    if (!window.confirm(`Post a correcting entry dated today for entry ${label}? The altered rows stay in the ledger as evidence.`)) return;
+    if (!(await askConfirm(`Post a correcting entry dated today for entry ${label}? The altered rows stay in the ledger as evidence.`, { confirmLabel: 'Post Correction' }))) return;
     setBusy(p.entryId);
     setError(null);
     try {
@@ -157,10 +168,40 @@ export default function AuditLog() {
     }
   };
   const rows = (data ?? []).filter((a) => action === 'ALL' || a.action === action);
+  const company = useCompany();
+  const [exportNotice, setExportNotice] = useState(null);
+  const exports = tableExports({
+    company: company.name,
+    title: 'Audit Log',
+    subtitle: action === 'ALL' ? 'All events' : `${ACTION_STYLE[action]?.label ?? action} events`,
+    columns: [
+      { label: 'When', kind: 'datetime' },
+      { label: 'Event', kind: 'text' },
+      { label: 'Source', kind: 'text' },
+      { label: 'Entry', kind: 'text' },
+      { label: 'Detail', kind: 'text' },
+      { label: 'Amount', kind: 'money' },
+    ],
+    rows: () =>
+      rows.map((a) => ({
+        cells: [
+          a.occurredAt ? localStamp(a.occurredAt) : '',
+          ACTION_STYLE[a.action]?.label ?? a.action,
+          a.sourceType ? (SOURCE_LABEL[a.sourceType] ?? a.sourceType) : '',
+          a.entryNumber == null ? '' : String(a.entryNumber),
+          a.detail ?? '',
+          a.amountCents,
+        ],
+      })),
+    footer: 'Recorded by the database itself · times are this computer\'s local time',
+    filename: `Audit-Log_${todayIso()}`,
+    onNotice: setExportNotice,
+  });
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {error && <Notice kind="error" text={`Could not load the audit log: ${error}`} />}
+      {exportNotice && <Notice kind={exportNotice.kind} text={exportNotice.text} onDismiss={() => setExportNotice(null)} />}
       {verification && <Verification result={verification} onDismiss={() => setVerification(null)} onChanged={verify} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
@@ -175,6 +216,7 @@ export default function AuditLog() {
           <button type="button" className="qb-btn-secondary" onClick={verify} disabled={verifying}>
             {verifying ? 'Verifying…' : 'Verify ledger integrity'}
           </button>
+          <ExportMenu printable={false} onNotice={setExportNotice} {...exports} />
         </div>
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <table className="qb-grid">

@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-use crate::ledger::db_err;
+use crate::ledger::{db_err, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -84,7 +84,7 @@ pub async fn account_register(
         None => 0,
     };
     let mut rows: Vec<RegisterRow> = sqlx::query_as(&format!(
-        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, e.source_type, e.source_id,
+        "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
                 (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
                  FROM journal_lines o JOIN v_chart_of_accounts o_a ON o_a.id = o.account_id
@@ -129,35 +129,4 @@ pub async fn account_register(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_pool;
-    use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
-
-    #[tokio::test]
-    async fn registers_run_a_balance_from_the_opening_and_name_the_other_side() {
-        let pool = test_pool().await;
-        let id = |n: &'static str| sqlx::query_scalar::<_, i64>("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(n);
-        let (checking, sales, rent, card) = (
-            id("1010").fetch_one(&pool).await.unwrap(),
-            id("4000").fetch_one(&pool).await.unwrap(),
-            id("6300").fetch_one(&pool).await.unwrap(),
-            id("2100").fetch_one(&pool).await.unwrap(),
-        );
-        let d = |m, day| NaiveDate::from_ymd_opt(2026, m, day).unwrap();
-        let post = |date, lines| post_journal_entry(&pool, JournalEntry { id: None, date, description: "x".into(), lines, currency: None });
-        post(d(1, 5), vec![JournalLine::debit(checking, 10_000), JournalLine::credit(sales, 10_000)]).await.unwrap();
-        post(d(2, 5), vec![JournalLine::debit(rent, 3_000), JournalLine::credit(checking, 3_000)]).await.unwrap();
-        post(d(2, 9), vec![JournalLine::debit(rent, 500), JournalLine::debit(card, 500), JournalLine::credit(checking, 1_000)]).await.unwrap();
-
-        let reg = account_register(&pool, checking, Some(d(2, 1)), None, false).await.unwrap();
-        assert_eq!(reg.opening_balance_cents, 10_000);
-        let rows: Vec<(Option<&str>, i64)> = reg.rows.iter().map(|r| (r.split.as_deref(), r.balance_cents)).collect();
-        assert_eq!(rows, [(Some("Rent & Lease"), 7_000), (Some("-Split-"), 6_000)]);
-        assert_eq!(reg.ending_balance_cents, 6_000);
-
-        // Credit-normal accounts run positive the other way.
-        let income = account_register(&pool, sales, None, None, false).await.unwrap();
-        assert_eq!((income.is_debit_normal, income.ending_balance_cents), (false, 10_000));
-    }
-}
+mod tests;

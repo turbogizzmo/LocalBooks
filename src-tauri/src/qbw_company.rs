@@ -65,6 +65,9 @@ pub struct SourceAccount {
     pub active: bool,
     /// Balance the file stores for the account (negative = debit), when readable.
     pub stored_balance_cents: Option<i64>,
+    /// The income tax line the file assigns, as LocalBooks keeps an imported one it cannot match
+    /// (see `accountant_reports::imported_tax_line`).
+    pub tax_line: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,6 +170,10 @@ pub struct SourceParty {
     pub balance_cents: Option<i64>,
     /// Details that have no field of their own (extra email addresses, alternate phones).
     pub notes: Option<String>,
+    /// Customers: the default sales rep, as initials or "initials:name".
+    pub sales_rep: Option<String>,
+    /// Custom fields with a value, as (label, value).
+    pub custom_fields: Vec<(String, String)>,
 }
 
 /// An item (service or product) from the file's item list.
@@ -183,6 +190,36 @@ pub struct SourceItem {
     /// Its sales tax code is a taxable one.
     pub taxable: bool,
     pub active: bool,
+    /// Custom fields with a value, as (label, value).
+    pub custom_fields: Vec<(String, String)>,
+}
+
+/// The file's sales rep and shipping method lists, by name, with whether each is active. They are
+/// also found or created from the customers and documents that use them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceSalesLists {
+    /// Initials, or "initials:name".
+    pub reps: Vec<(String, bool)>,
+    pub ship_methods: Vec<(String, bool)>,
+}
+
+impl SourceSalesLists {
+    /// Adds a rep once per set of initials; a later mention with a name fills the name in.
+    pub fn add_rep(&mut self, rep: &str, active: bool) {
+        let initials = |r: &str| r.split(':').next().unwrap_or_default().trim().to_lowercase();
+        match self.reps.iter_mut().find(|(r, _)| initials(r) == initials(rep)) {
+            Some((existing, _)) if !existing.contains(':') && rep.contains(':') => *existing = rep.to_string(),
+            Some(_) => {}
+            None => self.reps.push((rep.to_string(), active)),
+        }
+    }
+
+    pub fn add_ship_method(&mut self, name: &str, active: bool) {
+        let name = name.trim();
+        if !name.is_empty() && !self.ship_methods.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) {
+            self.ship_methods.push((name.to_string(), active));
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -198,6 +235,7 @@ pub struct Ledger {
     /// Line rows that did not decode in full, and what became of each.
     pub unreadable: Vec<UnreadableLine>,
     pub quality: LedgerQuality,
+    pub sales_lists: SourceSalesLists,
 }
 
 /// Decodes the file's pages, re-solving the last sector of pages whose rows do not decode.
@@ -262,6 +300,8 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
                 parent_id: r.get("parent_id").as_int().filter(|p| *p > 0),
                 active: !hidden,
                 stored_balance_cents: stored.get(&id).copied(),
+                // QuickBooks numbers its tax lines; 0 is unassigned. The file has no names for them.
+                tax_line: r.get("tax_line_id_num").as_int().filter(|n| *n > 0).map(|n| crate::accountant_reports::quickbooks_tax_line(n)),
             },
         );
     }
@@ -354,6 +394,86 @@ fn paths(names: &BTreeMap<i64, (String, Option<i64>)>) -> HashMap<i64, String> {
         .collect()
 }
 
+/// Which list a custom field definition is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FieldOwner {
+    Customer,
+    Vendor,
+    Item,
+}
+
+/// Labels and values of custom fields, from `abmc_custom_field_type` (one row per defined field:
+/// its position, its name, and which lists it is on) and `abmc_custom_field` (one row per value:
+/// the record's `abm_id`, the position and the text). Returns each record's (label, value) pairs
+/// in position order, for the records of `owner`.
+pub(crate) fn custom_values(
+    definitions: &[(i64, String, [bool; 3])],
+    values: &[(String, i64, String)],
+    owner: FieldOwner,
+) -> HashMap<String, Vec<(String, String)>> {
+    let index = match owner {
+        FieldOwner::Customer => 0,
+        FieldOwner::Vendor => 1,
+        FieldOwner::Item => 2,
+    };
+    let labels: HashMap<i64, &str> = definitions.iter().filter(|d| d.2[index]).map(|d| (d.0, d.1.as_str())).collect();
+    let mut sorted: Vec<&(String, i64, String)> = values.iter().filter(|v| !v.2.trim().is_empty()).collect();
+    sorted.sort_by_key(|v| v.1);
+    let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for (abm, position, value) in sorted {
+        if let Some(label) = labels.get(position) {
+            out.entry(abm.clone()).or_default().push((label.to_string(), value.trim().to_string()));
+        }
+    }
+    out
+}
+
+fn custom_values_of(pages: &[LogicalPage], catalog: &Catalog, owner: FieldOwner) -> HashMap<String, Vec<(String, String)>> {
+    let flag = |r: &Row, c: &str| r.get(c).as_int() == Some(1);
+    let definitions: Vec<(i64, String, [bool; 3])> = rows_of(pages, catalog, "abmc_custom_field_type")
+        .iter()
+        .filter_map(|r| {
+            let flags = [flag(r, "is_for_customer_bool"), flag(r, "is_for_vendor_bool"), flag(r, "is_for_item_bool")];
+            Some((r.get("custom_field_position").as_int()?, text(r, "custom_field_name")?, flags))
+        })
+        .collect();
+    if definitions.is_empty() {
+        return HashMap::new();
+    }
+    let values: Vec<(String, i64, String)> = rows_of(pages, catalog, "abmc_custom_field")
+        .iter()
+        .filter_map(|r| Some((r.get("abm_id").as_text()?, r.get("position").as_int()?, text(r, "field")?)))
+        .collect();
+    custom_values(&definitions, &values, owner)
+}
+
+/// The sales rep list (`abmc_sales_rep`: initials and the name record they belong to) as
+/// "initials" or "initials:name", with whether each is active; and the Ship Via list
+/// (`abmc_shipping`). Keyed by their ids, as headers and customers refer to them.
+pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (HashMap<i64, (String, bool)>, HashMap<i64, (String, bool)>) {
+    let active = |r: &Row| r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1);
+    let reps_rows = rows_of(pages, catalog, "abmc_sales_rep");
+    let contacts = if reps_rows.is_empty() { HashMap::new() } else { current_contacts(pages, catalog) };
+    let reps = reps_rows
+        .iter()
+        .filter_map(|r| {
+            let initials = text(r, "initials")?;
+            let contact = r.get("name_id").as_int().and_then(|n| contacts.get(&n));
+            let name = contact.and_then(|c| {
+                let person = [text(c, "first_name"), text(c, "last_name")].into_iter().flatten().collect::<Vec<_>>().join(" ");
+                (!person.is_empty()).then_some(person).or_else(|| text(c, "company_name"))
+            });
+            let rep = match name {
+                Some(n) => format!("{}:{}", initials.trim(), n.replace(':', "-")),
+                None => initials.trim().to_string(),
+            };
+            Some((r.get("sales_rep_id").as_int()?, (rep, active(r))))
+        })
+        .collect();
+    let ships = rows_of(pages, catalog, "abmc_shipping").iter().filter_map(|r| Some((r.get("shipping_id").as_int()?, (text(r, "name")?, active(r))))).collect();
+    (reps, ships)
+}
+
 fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<SourceParty> {
     let (user, internal, id_col) =
         if vendor { ("abmc_vendor_user", "abmc_vendor_internal", "vendor_id") } else { ("abmc_customer_user", "abmc_customer_internal", "customer_id") };
@@ -373,6 +493,9 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
         .filter_map(|r| Some((r.get(id_col).as_int()?, (text(r, "name")?, if vendor { None } else { r.get("parent_id").as_int() }))))
         .collect();
     let full = paths(&names);
+    let reps = if vendor { HashMap::new() } else { read_sales_lists(pages, catalog).0 };
+    let custom = custom_values_of(pages, catalog, if vendor { FieldOwner::Vendor } else { FieldOwner::Customer });
+    let abm_col = if vendor { "vendor_abm_id" } else { "customer_abm_id" };
     let mut out = Vec::new();
     for r in &users {
         let Some(id) = r.get(id_col).as_int() else { continue };
@@ -405,12 +528,15 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
             phone: field("telephone_num1"),
             address: (!address.is_empty()).then(|| address.join("\n")),
             terms_days: r.get("terms_id").as_int().and_then(|t| terms.get(&t).copied()),
-            tax_id: if vendor { text(r, "tax_identifier") } else { None },
+            // Newer QuickBooks files hold this encrypted with QuickBooks' own key, which cannot be read.
+            tax_id: if vendor { text(r, "tax_identifier").filter(|t| crate::tax_ids::looks_like_tax_id(t)) } else { None },
             is_1099: vendor && r.get("is_1099_vendor_bool").as_int() == Some(1),
             // As in Intuit's own conversion: an inactive name that still has a balance comes in active.
             active: !hidden || balance.is_some_and(|b| b != 0),
             balance_cents: balance,
             notes: (!notes.is_empty()).then(|| notes.join("\n")),
+            sales_rep: r.get("sales_rep_id").as_int().and_then(|s| reps.get(&s)).map(|(rep, _)| rep.clone()),
+            custom_fields: r.get(abm_col).as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
         });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -427,6 +553,7 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     let names: BTreeMap<i64, (String, Option<i64>)> =
         users.iter().filter_map(|r| Some((r.get("item_id").as_int()?, (text(r, "name")?, r.get("parent_id").as_int())))).collect();
     let full = paths(&names);
+    let custom = custom_values_of(pages, catalog, FieldOwner::Item);
     let mut out: Vec<SourceItem> = users
         .iter()
         .filter_map(|r| {
@@ -446,6 +573,7 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
                 },
                 taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
                 active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
+                custom_fields: r.get("item_abm_id").as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
             })
         })
         .collect();
@@ -627,211 +755,18 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let customers = read_parties(&pages, &catalog, false);
     let vendors = read_parties(&pages, &catalog, true);
     let items = read_items(&pages, &catalog);
-    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality })
+    let (reps, ships) = read_sales_lists(&pages, &catalog);
+    let mut sales_lists = SourceSalesLists::default();
+    for (rep, active) in reps.into_values() {
+        sales_lists.add_rep(&rep, active);
+    }
+    for (name, active) in ships.into_values() {
+        sales_lists.add_ship_method(&name, active);
+    }
+    sales_lists.reps.sort();
+    sales_lists.ship_methods.sort();
+    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn line(account_id: i64, cents: i64) -> SourceLine {
-        SourceLine { account_id, cents, memo: None }
-    }
-
-    fn txn(id: i64, lines: Vec<SourceLine>) -> SourceTransaction {
-        SourceTransaction { id, kind: "Check", date: NaiveDate::from_ymd_opt(2024, 7, 30).unwrap(), doc_num: None, name: None, memo: None, lines, document: None }
-    }
-
-    #[test]
-    fn damaged_lines_are_used_only_when_they_balance_their_transaction() {
-        let mut txns: BTreeMap<i64, SourceTransaction> = [
-            // Missing a -150000 line; one candidate matches exactly, another does not.
-            (1, txn(1, vec![line(7, 150_000)])),
-            // Missing -2700 in two lines that only balance together.
-            (2, txn(2, vec![line(10, 2_700)])),
-            // The candidate's amount is wrong: it must not be used.
-            (3, txn(3, vec![line(7, 1_998)])),
-            // Already balanced: a stray candidate must not unbalance it.
-            (4, txn(4, vec![line(7, 500), line(16, -500)])),
-        ]
-        .into_iter()
-        .collect();
-        let salvage: HashMap<i64, Vec<SourceLine>> = [
-            (1, vec![line(33, -1_000), line(16, -150_000)]),
-            (2, vec![line(23, -1_700), line(24, -1_000)]),
-            (3, vec![line(33, -1_997)]),
-            (4, vec![line(33, -500)]),
-            (9, vec![line(33, -10)]),
-        ]
-        .into_iter()
-        .collect();
-        assert_eq!(recover_damaged_lines(&mut txns, salvage).len(), 3);
-        assert_eq!(txns[&1].lines, vec![line(7, 150_000), line(16, -150_000)]);
-        assert_eq!(txns[&2].imbalance_cents(), 0);
-        assert_eq!(txns[&3].lines.len(), 1);
-        assert_eq!(txns[&3].imbalance_cents(), 1_998);
-        assert_eq!(txns[&4].lines.len(), 2);
-    }
-
-    #[test]
-    #[ignore]
-    fn lists_unreadable_line_rows() {
-        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-        let (pages, catalog, _, _) = read_pages(Path::new(&path)).unwrap();
-        for page in &pages {
-            let Some(name) = catalog.names.get(&page.owner) else { continue };
-            if !name.ends_with("_lineitem") || CHUNK_KINDS.contains(&page.kind) {
-                continue;
-            }
-            let cols = &catalog.columns[&page.owner];
-            for r in &page.rows {
-                let walks = r.chained && walk_row(page.row(r), cols).is_some();
-                if !walks {
-                    let zone = if r.start as usize >= S7_START { "s7" } else if (r.start + r.len) as usize > S7_START { "crosses" } else { "s0-6" };
-                    println!("{name:<36} page {:>5} kind {} row {:>4}+{:<4} chained {:<5} {zone:<7} s7 {:?} q {} r7 {} rows on page {}", page.number, page.kind, r.start, r.len, r.chained, page.sector7, page.q, page.r7, page.rows.len());
-                }
-            }
-        }
-    }
-
-    /// Traces the transactions that do not balance: every line row of the involved transactions,
-    /// readable or not (unreadable rows are partially decoded), with page and sector-7 status.
-    #[test]
-    #[ignore]
-    fn traces_unbalanced_transactions() {
-        use crate::qbw_records::walk_prefix;
-        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-        let (pages, catalog, _, _) = read_pages(Path::new(&path)).unwrap();
-        let ledger = read_ledger(Path::new(&path)).unwrap();
-        let wanted: HashSet<i64> = ledger.unbalanced.iter().map(|t| t.id).collect();
-        let names: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.full_name.as_str())).collect();
-        for t in &ledger.unbalanced {
-            println!("txn {} {} #{:?} {} off {}", t.id, t.kind, t.doc_num, t.date, crate::ledger::format_cents(t.imbalance_cents()));
-        }
-        for page in &pages {
-            let Some(name) = catalog.names.get(&page.owner) else { continue };
-            if !name.ends_with("_lineitem") || CHUNK_KINDS.contains(&page.kind) {
-                continue;
-            }
-            let cols = &catalog.columns[&page.owner];
-            for r in &page.rows {
-                let bytes = page.row(r);
-                let full = if r.chained { walk_row(bytes, cols) } else { None };
-                let (prefix, stop) = walk_prefix(bytes, cols);
-                let get = |k: &str| -> Value {
-                    match &full {
-                        Some(v) => v.get(k).cloned().unwrap_or(Value::Null),
-                        None => prefix.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()).unwrap_or(Value::Null),
-                    }
-                };
-                let tid = get("transaction_id").as_int().unwrap_or(-1);
-                let interesting = wanted.contains(&tid) || full.is_none();
-                if !interesting {
-                    continue;
-                }
-                let zone = if r.start as usize >= S7_START { "s7" } else if (r.start + r.len) as usize > S7_START { "crosses" } else { "s0-6" };
-                let acct = get("account_id").as_int();
-                println!(
-                    "{} {name:<34} page {:>5} k{} row {:>4}+{:<4} chained {:<5} {zone:<7} {:?} | txn {tid} target {:?} acct {:?} ({}) amt {:?} date {:?} | stop {stop}/{} after {:?}",
-                    if full.is_some() { "OK  " } else { "FAIL" },
-                    page.number, page.kind, r.start, r.len, r.chained, page.sector7,
-                    get("target_id").as_int(), acct, acct.and_then(|a| names.get(&a)).unwrap_or(&"?"),
-                    get("amount_amt").as_cents().map(crate::ledger::format_cents), get("transaction_date").as_date(),
-                    bytes.len(), prefix.last().map(|(n, _)| n.as_str())
-                );
-            }
-        }
-    }
-
-    /// Lists transaction headers that decode but have no lines in the ledger (whole transactions
-    /// missing), with the header's own total where the table has one.
-    #[test]
-    #[ignore]
-    fn lists_headers_without_lines() {
-        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-        let (pages, catalog, _, _) = read_pages(Path::new(&path)).unwrap();
-        let ledger = read_ledger(Path::new(&path)).unwrap();
-        let have: HashSet<i64> = ledger.transactions.iter().chain(&ledger.unbalanced).map(|t| t.id).collect();
-        for (stem, kind) in TRANSACTION_TABLES {
-            let mut missing = Vec::new();
-            for h in rows_of(&pages, &catalog, &format!("abmc_{stem}_header")) {
-                let Some(tid) = h.get("transaction_id").as_int() else { continue };
-                if h.get("is_no_post_bool").as_int() == Some(1) || have.contains(&tid) {
-                    continue;
-                }
-                missing.push(format!("{tid} {:?} #{:?} {:?}", h.get("transaction_date").as_date(), text(&h, "doc_num"), text(&h, "memo")));
-            }
-            if !missing.is_empty() {
-                println!("{kind}: {} headers without lines", missing.len());
-                for m in missing.iter().take(12) {
-                    println!("   {m}");
-                }
-            }
-        }
-    }
-
-    /// Ledger read of a real company file (read-only): set LOCALBOOKS_QBW_CHECK and run
-    /// `cargo test --release -- --ignored reads_the_ledger_of_a_real --nocapture`.
-    #[test]
-    #[ignore]
-    fn reads_the_ledger_of_a_real_file() {
-        let path = std::env::var("LOCALBOOKS_QBW_CHECK").expect("set LOCALBOOKS_QBW_CHECK");
-        let started = std::time::Instant::now();
-        let ledger = read_ledger(Path::new(&path)).unwrap();
-        let q = &ledger.quality;
-        println!("read in {:.1}s; refined pages {}; recovered lines {}", started.elapsed().as_secs_f64(), q.refined_pages, q.recovered_lines);
-        println!(
-            "accounts {} (stored balances matched {}/{}), transactions {} balanced, {} unbalanced; unreadable lines {}, rejected {}",
-            ledger.accounts.len(),
-            q.accounts_matching_stored,
-            q.accounts_with_stored_balance,
-            ledger.transactions.len(),
-            ledger.unbalanced.len(),
-            q.unreadable_lines,
-            q.rejected_lines
-        );
-        let mut by_kind: BTreeMap<&str, usize> = BTreeMap::new();
-        for t in &ledger.transactions {
-            *by_kind.entry(t.kind).or_default() += 1;
-        }
-        println!("by kind: {by_kind:?}");
-        println!("rejected: {:?}", q.rejected_by_reason);
-        for u in &ledger.unreadable {
-            println!("  unreadable line: {:?}", u);
-        }
-        println!(
-            "lists: {} customers ({} active), {} vendors, {} items",
-            ledger.customers.len(),
-            ledger.customers.iter().filter(|c| c.active).count(),
-            ledger.vendors.len(),
-            ledger.items.len()
-        );
-        for c in ledger.customers.iter().filter(|c| c.balance_cents.is_some_and(|b| b != 0)).take(5) {
-            println!("  customer with balance: {:?}", c);
-        }
-        for i in ledger.items.iter().take(4) {
-            println!("  item: {:?}", i);
-        }
-        if let (Some(first), Some(last)) = (ledger.transactions.first(), ledger.transactions.last()) {
-            println!("dates {} .. {}", first.date, last.date);
-        }
-        for t in &ledger.unbalanced {
-            println!("  unbalanced {} #{:?} {} {:?} off by {}", t.kind, t.doc_num, t.date, t.name, crate::ledger::format_cents(t.imbalance_cents()));
-        }
-        let names: HashMap<i64, &str> = ledger.accounts.iter().map(|a| (a.id, a.full_name.as_str())).collect();
-        let mut totals: HashMap<i64, i64> = HashMap::new();
-        for t in &ledger.transactions {
-            for l in &t.lines {
-                *totals.entry(l.account_id).or_default() += l.cents;
-            }
-        }
-        for a in ledger.accounts.iter().filter(|a| a.stored_balance_cents.is_some_and(|s| s != totals.get(&a.id).copied().unwrap_or(0))) {
-            println!(
-                "  differs: {:<40} stored {:>14} read {:>14}",
-                names[&a.id],
-                crate::ledger::format_cents(a.stored_balance_cents.unwrap()),
-                crate::ledger::format_cents(totals.get(&a.id).copied().unwrap_or(0))
-            );
-        }
-    }
-}
+mod tests;

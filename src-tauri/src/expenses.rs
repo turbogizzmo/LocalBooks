@@ -1,6 +1,7 @@
 //! Expenses: vendors, bills (accrual: Dr each split account / Cr Accounts Payable), bill payments
 //! (Dr Accounts Payable / Cr bank or credit card), and expenses & checks (cash basis: Dr each split
-//! account / Cr the bank or credit card). Bills support partial payments like invoices.
+//! account / Cr the bank or credit card), and credit card credits (the reverse of a card charge: Dr the
+//! card / Cr each split account). Bills support partial payments like invoices.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,9 @@ pub struct BillLineInput {
     pub product_service_id: Option<i64>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -241,10 +245,13 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
         if let Some(class) = line.class_id {
             crate::classes::check_usable(tx, class, &format!("BILL: line {n}")).await?;
         }
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("BILL: line {n}")).await?;
+        }
 
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id, customer_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(bill_id)
         .bind(n as i64)
@@ -255,6 +262,7 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
         .bind(line.rate_cents)
         .bind(line.product_service_id)
         .bind(line.class_id)
+        .bind(line.customer_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -300,7 +308,7 @@ pub async fn pay_vendor_bills(pool: &SqlitePool, inputs: Vec<BillPaymentInput>) 
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
-        if let Err(err) = write_bill_payment(&mut tx, input).await {
+        if let Err(err) = write_bill_payment(&mut tx, input, "STANDARD").await {
             return Err(rollback(tx, err).await);
         }
     }
@@ -318,11 +326,13 @@ pub struct BillPaymentView {
     pub reference: Option<String>,
     pub journal_entry_id: Option<i64>,
     pub is_voided: bool,
+    /// `STANDARD`, or `ACH` when paid by an ACH file.
+    pub kind: String,
 }
 
 pub async fn list_bill_payments(pool: &SqlitePool, bill_id: i64) -> Result<Vec<BillPaymentView>, String> {
     sqlx::query_as::<_, BillPaymentView>(
-        "SELECT id, payment_date, amount_cents, payment_account_id, reference, journal_entry_id, is_voided
+        "SELECT id, payment_date, amount_cents, payment_account_id, reference, journal_entry_id, is_voided, kind
          FROM bill_payments WHERE bill_id = ?1 ORDER BY payment_date, id",
     )
     .bind(bill_id)
@@ -331,7 +341,8 @@ pub async fn list_bill_payments(pool: &SqlitePool, bill_id: i64) -> Result<Vec<B
     .map_err(db_err)
 }
 
-async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput) -> Result<(), String> {
+/// Records one bill payment of `kind` (`STANDARD`, or `ACH` from an ACH file) and posts it. Returns its id.
+pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput, kind: &str) -> Result<i64, String> {
     if input.amount_cents <= 0 {
         return Err("BILL_BAD_AMOUNT: payment amount must be greater than zero".into());
     }
@@ -372,14 +383,15 @@ async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymen
     }
 
     let payment_id: i64 = sqlx::query_scalar(
-        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference)
-         VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference, kind)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
     )
     .bind(input.bill_id)
     .bind(input.payment_date)
     .bind(input.amount_cents)
     .bind(input.payment_account_id)
     .bind(clean(input.reference.as_deref()))
+    .bind(kind)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -409,7 +421,7 @@ async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymen
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    Ok(())
+    Ok(payment_id)
 }
 
 
@@ -425,12 +437,16 @@ pub struct SplitLineInput {
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseInput {
-    /// `EXPENSE` (paid by bank or card) or `CHECK` (written from a bank account).
+    /// `EXPENSE` (paid by bank or card), `CHECK` (written from a bank account) or `CARD_CREDIT`
+    /// (a refund or credit from a vendor onto a credit card).
     pub kind: String,
     pub payee_name: Option<String>,
     pub payment_account_id: i64,
@@ -448,6 +464,7 @@ pub struct ExpenseInput {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseView {
     pub id: i64,
+    /// `EXPENSE`, `CHECK` or `CARD_CREDIT`. A card credit's total is positive, like a charge's.
     pub kind: String,
     pub payee_name: Option<String>,
     pub payment_account_id: i64,
@@ -467,7 +484,7 @@ pub struct ExpenseView {
 }
 
 const EXPENSE_SELECT: &str = "
-    SELECT x.id, x.kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
+    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
            x.payment_method, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
            COALESCE(x.home_total_cents, x.total_cents) AS home_total_cents,
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
@@ -476,7 +493,8 @@ const EXPENSE_SELECT: &str = "
            x.journal_entry_id, x.is_voided
     FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
 
-/// Records an expense or check: Dr each split account / Cr the payment account, atomically.
+/// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
+/// (Dr the card / Cr each split account), atomically.
 pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<ExpenseView, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let (id, _) = match write_expense(&mut tx, &input).await {
@@ -494,9 +512,11 @@ pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<Expe
 /// Writes and posts an expense inside the caller's transaction; returns (expense id, entry id).
 /// Bank feed approvals use this so an approved outflow is a real Expense document.
 pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &ExpenseInput) -> Result<(i64, i64), String> {
-    let (kind, source): (&str, fn(i64) -> EntrySource) = match input.kind.as_str() {
-        "EXPENSE" => ("EXPENSE", EntrySource::Expense),
-        "CHECK" => ("CHECK", EntrySource::Check),
+    // A card credit is stored as an EXPENSE flagged as a credit and posts the other way round.
+    let (kind, is_credit, source): (&str, bool, fn(i64) -> EntrySource) = match input.kind.as_str() {
+        "EXPENSE" => ("EXPENSE", false, EntrySource::Expense),
+        "CARD_CREDIT" => ("EXPENSE", true, EntrySource::Expense),
+        "CHECK" => ("CHECK", false, EntrySource::Check),
         other => return Err(format!("EXP_BAD_KIND: unknown expense kind '{other}'")),
     };
     if input.lines.is_empty() {
@@ -513,9 +533,10 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-    match (kind, account_type.as_deref()) {
-        ("CHECK", Some("BANK")) | ("EXPENSE", Some("BANK")) | ("EXPENSE", Some("CREDIT_CARD")) => {}
-        ("CHECK", _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: checks are written from a Bank account".into()),
+    match (kind, is_credit, account_type.as_deref()) {
+        ("CHECK", _, Some("BANK")) | ("EXPENSE", false, Some("BANK" | "CREDIT_CARD")) | ("EXPENSE", true, Some("CREDIT_CARD")) => {}
+        ("CHECK", _, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: checks are written from a Bank account".into()),
+        (_, true, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: a card credit goes to a Credit Card account".into()),
         _ => return Err("EXP_BAD_PAYMENT_ACCOUNT: pay expenses from a Bank or Credit Card account".into()),
     }
     let vendor_id = match clean(input.payee_name.as_deref()) {
@@ -525,16 +546,15 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
 
     // Journal lines in the document's currency; the ledger converts foreign ones to home currency.
-    let mut lines: Vec<JournalLine> = input
-        .lines
-        .iter()
-        .map(|line| JournalLine::debit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id))
-        .collect();
-    lines.push(JournalLine::credit(input.payment_account_id, total));
+    // A charge debits each split and credits the payment account; a card credit is the reverse.
+    let split = |account, cents| if is_credit { JournalLine::credit(account, cents) } else { JournalLine::debit(account, cents) };
+    let mut lines: Vec<JournalLine> =
+        input.lines.iter().map(|line| split(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id)).collect();
+    lines.push(if is_credit { JournalLine::debit(input.payment_account_id, total) } else { JournalLine::credit(input.payment_account_id, total) });
     let home_total = match &input.currency {
         Some(currency) => {
             currency.validate()?;
-            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.1)
+            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.0 + l.1)
         }
         None => None,
     };
@@ -542,8 +562,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let expense_id: i64 = sqlx::query_scalar(
         "INSERT INTO expenses
             (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents,
-             currency_code, exchange_rate_e6, home_total_cents)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
+             currency_code, exchange_rate_e6, home_total_cents, is_credit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id",
     )
     .bind(kind)
     .bind(vendor_id)
@@ -556,13 +576,17 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
     .bind(home_total)
+    .bind(is_credit)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
 
     for (idx, line) in input.lines.iter().enumerate() {
+        if let Some(job) = line.customer_id {
+            crate::job_reports::check_job(tx, job, &format!("EXP: split line {}", idx + 1)).await?;
+        }
         sqlx::query(
-            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id, customer_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(expense_id)
         .bind(idx as i64 + 1)
@@ -570,6 +594,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .bind(line.amount_cents)
         .bind(clean(line.memo.as_deref()))
         .bind(line.class_id)
+        .bind(line.customer_id)
         .execute(&mut **tx)
         .await
         .map_err(|e| format!("{} (split line {})", db_err(e), idx + 1))?;
@@ -579,6 +604,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let label = match (kind, check_number) {
         ("CHECK", Some(n)) => format!("Check #{n}{payee}"),
         ("CHECK", None) => format!("Check{payee}"),
+        _ if is_credit => format!("Credit Card Credit{payee}"),
         _ => format!("Expense{payee}"),
     };
     let description = match clean(input.memo.as_deref()) {
@@ -613,231 +639,4 @@ async fn system_account(tx: &mut Transaction<'_, Sqlite>, account_type: &str) ->
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::test_pool;
-    use crate::statements::balance_sheet;
-
-    async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
-        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
-            .bind(number)
-            .fetch_one(pool)
-            .await
-            .expect("seeded account exists")
-    }
-
-    async fn balance(pool: &SqlitePool, account: i64) -> i64 {
-        sqlx::query_scalar("SELECT balance_cents FROM v_account_balances WHERE account_id = ?1")
-            .bind(account)
-            .fetch_one(pool)
-            .await
-            .unwrap()
-    }
-
-    fn d(day: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(2026, 10, day).unwrap()
-    }
-
-    fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
-        BillInput {
-            vendor_name: vendor.into(),
-            bill_number: Some("INV-778".into()),
-            bill_date: d(1),
-            due_date: d(31),
-            memo: None,
-            total_cents: lines.iter().map(|(_, cents)| cents).sum(),
-            lines: lines.into_iter().map(|(account, cents)| BillLineInput{ account_id: account, amount_cents: cents, memo: Some("Line".into()), quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None }).collect(),
-        }
-    }
-
-    fn pay(bill_id: i64, account: i64, cents: i64) -> BillPaymentInput {
-        BillPaymentInput { bill_id, payment_account_id: account, payment_date: d(10), amount_cents: cents, reference: Some("1001".into()) }
-    }
-
-    #[tokio::test]
-    async fn bill_accrues_payable_and_payments_relieve_it() {
-        let pool = test_pool().await;
-        let (ap, checking, card, rent, utilities) = (
-            account_id(&pool, "2000").await,
-            account_id(&pool, "1010").await,
-            account_id(&pool, "2100").await,
-            account_id(&pool, "6300").await,
-            account_id(&pool, "6500").await,
-        );
-
-        let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 150_000), (utilities, 12_345)])).await.expect("bill posts");
-        assert_eq!((posted.status.as_str(), posted.total_cents, posted.line_count), ("UNPAID", 162_345, 2));
-        assert_eq!(balance(&pool, ap).await, 162_345);
-        assert_eq!(balance(&pool, rent).await, 150_000);
-        assert_eq!(balance(&pool, utilities).await, 12_345);
-
-        let partial = pay_vendor_bill(&pool, pay(posted.id, checking, 100_000)).await.expect("partial payment");
-        assert_eq!((partial.status.as_str(), partial.balance_cents), ("PARTIAL", 62_345));
-        let err = pay_vendor_bill(&pool, pay(posted.id, checking, 62_346)).await.expect_err("overpayment");
-        assert!(err.starts_with("BILL_OVERPAYMENT"), "{err}");
-
-        let paid = pay_vendor_bill(&pool, pay(posted.id, card, 62_345)).await.expect("final payment by card");
-        assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
-        assert_eq!(balance(&pool, ap).await, 0);
-        assert_eq!(balance(&pool, checking).await, -100_000);
-        assert_eq!(balance(&pool, card).await, 62_345);
-
-        let vendors = list_vendors(&pool).await.unwrap();
-        assert_eq!((vendors.len(), vendors[0].open_balance_cents), (1, 0));
-        assert!(balance_sheet(&pool, d(31)).await.unwrap().is_balanced);
-    }
-
-    #[tokio::test]
-    async fn bill_rejects_bad_categories_and_rolls_back() {
-        let pool = test_pool().await;
-        let (rent, sales, ar) = (account_id(&pool, "6300").await, account_id(&pool, "4000").await, account_id(&pool, "1200").await);
-        for bad in [sales, ar] {
-            let err = post_vendor_bill(&pool, bill("Oops Inc", vec![(rent, 1_000), (bad, 500)])).await.expect_err("bad category");
-            assert!(err.starts_with("BILL_BAD_CATEGORY: line 2"), "{err}");
-        }
-        let (bills, entries, vendors): (i64, i64, i64) = sqlx::query_as(
-            "SELECT (SELECT COUNT(*) FROM bills), (SELECT COUNT(*) FROM journal_entries), (SELECT COUNT(*) FROM vendors)",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!((bills, entries, vendors), (0, 0, 0));
-
-        let mut early = bill("Late Co", vec![(rent, 1_000)]);
-        early.due_date = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
-        assert!(post_vendor_bill(&pool, early).await.unwrap_err().starts_with("BILL_DUE_BEFORE_DATE"));
-    }
-
-    #[tokio::test]
-    async fn split_bill_must_match_total_and_debits_each_account_once() {
-        let pool = test_pool().await;
-        let (ap, rent, utilities) = (account_id(&pool, "2000").await, account_id(&pool, "6300").await, account_id(&pool, "6500").await);
-
-        let mut short = bill("Landlord LLC", vec![(rent, 100_000), (utilities, 20_000)]);
-        short.total_cents = 125_000;
-        let err = post_vendor_bill(&pool, short).await.expect_err("split must match total");
-        assert!(err.starts_with("BILL_SPLIT_MISMATCH") && err.contains("$50.00 unallocated"), "{err}");
-
-        // Two splits to the same account collapse into one debit line on the journal entry.
-        let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 100_000), (utilities, 20_000), (rent, 5_000)])).await.unwrap();
-        let lines: Vec<(i64, i64, i64)> = sqlx::query_as(
-            "SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
-        )
-        .bind(posted.journal_entry_id)
-        .fetch_all(&pool)
-        .await
-        .unwrap();
-        assert_eq!(lines, vec![(rent, 105_000, 0), (utilities, 20_000, 0), (ap, 0, 125_000)]);
-        assert_eq!((posted.line_count, posted.category_account_id), (3, None));
-    }
-
-    #[tokio::test]
-    async fn expenses_and_checks_credit_the_payment_account() {
-        let pool = test_pool().await;
-        let (checking, card, rent, fuel, ar) =
-            (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await, account_id(&pool, "6100").await, account_id(&pool, "1200").await);
-        let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
-            kind: kind.into(),
-            payee_name: Some("Shell".into()),
-            payment_account_id: account,
-            expense_date: d(5),
-            check_number: Some("1042".into()),
-            payment_method: None,
-            memo: None,
-            lines: lines.into_iter().map(|(account_id, amount_cents)| SplitLineInput { account_id, amount_cents, memo: None, class_id: None }).collect(),
-            currency: None,
-        };
-
-        let check = post_expense(&pool, input("CHECK", checking, vec![(rent, 90_000), (fuel, 4_000)])).await.expect("check posts");
-        assert_eq!((check.kind.as_str(), check.check_number.as_deref(), check.total_cents), ("CHECK", Some("1042"), 94_000));
-        let card_expense = post_expense(&pool, input("EXPENSE", card, vec![(fuel, 6_000)])).await.expect("card expense posts");
-        assert_eq!(card_expense.check_number, None);
-
-        assert_eq!(balance(&pool, checking).await, -94_000);
-        assert_eq!(balance(&pool, card).await, 6_000);
-        assert_eq!(balance(&pool, fuel).await, 10_000);
-
-        let err = post_expense(&pool, input("CHECK", card, vec![(fuel, 100)])).await.expect_err("checks need a bank");
-        assert!(err.starts_with("EXP_BAD_PAYMENT_ACCOUNT"), "{err}");
-        let err = post_expense(&pool, input("EXPENSE", checking, vec![(ar, 100)])).await.expect_err("A/R needs a customer");
-        assert!(err.starts_with("EXP_BAD_CATEGORY"), "{err}");
-        assert_eq!(list_expenses(&pool).await.unwrap().len(), 2);
-    }
-
-    #[tokio::test]
-    async fn pay_bills_is_all_or_nothing() {
-        let pool = test_pool().await;
-        let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
-        let a = post_vendor_bill(&pool, bill("A Co", vec![(rent, 10_000)])).await.unwrap();
-        let b = post_vendor_bill(&pool, bill("B Co", vec![(rent, 20_000)])).await.unwrap();
-
-        let err = pay_vendor_bills(&pool, vec![pay(a.id, checking, 10_000), pay(b.id, checking, 99_999)]).await.expect_err("second overpays");
-        assert!(err.starts_with("BILL_OVERPAYMENT"), "{err}");
-        assert_eq!(balance(&pool, checking).await, 0, "first payment rolled back too");
-
-        assert_eq!(pay_vendor_bills(&pool, vec![pay(a.id, checking, 10_000), pay(b.id, checking, 5_000)]).await.unwrap(), 2);
-        assert_eq!(balance(&pool, checking).await, -15_000);
-        assert_eq!(list_bill_payments(&pool, b.id).await.unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn posted_bills_are_immutable_at_the_database_layer() {
-        let pool = test_pool().await;
-        let rent = account_id(&pool, "6300").await;
-        let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 5_000)])).await.unwrap();
-        let err = sqlx::query("UPDATE bills SET total_cents = 1 WHERE id = ?1").bind(posted.id).execute(&pool).await.unwrap_err();
-        assert!(err.to_string().contains("BILL_IMMUTABLE"), "{err}");
-        let err = sqlx::query("DELETE FROM bill_lines WHERE bill_id = ?1").bind(posted.id).execute(&pool).await.unwrap_err();
-        assert!(err.to_string().contains("BILL_IMMUTABLE"), "{err}");
-    }
-
-    #[tokio::test]
-    async fn foreign_expense_credits_the_bank_in_home_currency() {
-        let pool = test_pool().await;
-        let (checking, travel, meals) = (account_id(&pool, "1010").await, account_id(&pool, "6450").await, account_id(&pool, "6200").await);
-        let posted = post_expense(
-            &pool,
-            ExpenseInput {
-                kind: "EXPENSE".into(),
-                payee_name: Some("Hotel Tokyo".into()),
-                payment_account_id: checking,
-                expense_date: d(3),
-                check_number: None,
-                payment_method: Some("CREDIT_CARD".into()),
-                memo: None,
-                lines: vec![
-                    SplitLineInput { account_id: travel, amount_cents: 3_200_000, memo: Some("2 nights".into()), class_id: None },
-                    SplitLineInput { account_id: meals, amount_cents: 450_050, memo: None, class_id: None },
-                ],
-                currency: Some(ForeignCurrency { code: "JPY".into(), exchange_rate_e6: 6_667 }),
-            },
-        )
-        .await
-        .expect("foreign expense posts");
-        assert_eq!((posted.currency_code.as_deref(), posted.total_cents), (Some("JPY"), 3_650_050));
-        let (t, m, c) = (balance(&pool, travel).await, balance(&pool, meals).await, balance(&pool, checking).await);
-        // ¥3,200,000 → $213.344 and ¥450,050 → $30.0048 round to $243.34, but the ¥3,650,050 total
-        // converts to $243.35; the $0.01 difference lands on the largest debit (travel).
-        assert_eq!((t, m), (21_335, 3_000));
-        assert_eq!(c, -(t + m), "the bank credit equals the converted debits");
-        assert_eq!(posted.home_total_cents, t + m);
-    }
-
-    #[tokio::test]
-    async fn bill_lines_can_be_priced_by_quantity_and_rate() {
-        let pool = test_pool().await;
-        let (ap, supplies) = (account_id(&pool, "2000").await, account_id(&pool, "6250").await);
-        let priced = |q: i64, r: i64, amount: i64| BillLineInput{ account_id: supplies, amount_cents: amount, memo: Some("Paper".into()), quantity_e4: Some(q), rate_cents: Some(r), product_service_id: None, class_id: None };
-        let mut input = bill("Staples", vec![]);
-        input.lines = vec![priced(25_000, 1_299, 3_248)];
-        input.total_cents = 3_248;
-        post_vendor_bill(&pool, input.clone()).await.expect("2.5 × $12.99 = $32.475 → $32.48");
-        assert_eq!(balance(&pool, ap).await, 3_248);
-
-        input.lines = vec![priced(25_000, 1_299, 3_247)];
-        input.total_cents = 3_247;
-        assert!(post_vendor_bill(&pool, input.clone()).await.unwrap_err().starts_with("BILL_LINE_MISMATCH"));
-        input.lines = vec![BillLineInput { quantity_e4: Some(10_000), rate_cents: None, ..priced(0, 0, 3_247) }];
-        assert!(post_vendor_bill(&pool, input).await.unwrap_err().starts_with("BILL_LINE_INCOMPLETE"));
-    }
-}
+mod tests;

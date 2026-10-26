@@ -22,6 +22,7 @@ export const QUICK_CREATE = [
     items: [
       { id: 'expense', label: 'Expense', view: 'expenses/expenses' },
       { id: 'check', label: 'Check', view: 'expenses/expenses' },
+      { id: 'card-credit', label: 'Credit Card Credit', view: 'expenses/expenses' },
       { id: 'bill', label: 'Bill', view: 'expenses/bills' },
       { id: 'purchase-order', label: 'Purchase Order', view: 'expenses/purchase-orders' },
       { id: 'pay-bills', label: 'Pay Bills', view: 'expenses/bills' },

@@ -1,0 +1,142 @@
+# LocalBooks end-to-end tests
+#
+# Builds a debug app and drives its real screens and backend with WebdriverIO through tauri-driver,
+# on Windows (WebView2, via msedgedriver) and Linux (WebKitGTK, via WebKitWebDriver under xvfb).
+# macOS has no WebDriver for its webview, so it is not covered here.
+#
+# Each spec opens a fresh copy of a company made by the test-only seeder. On a failure, screenshots
+# of the failing step are kept as a workflow artifact for 7 days. How to run it locally:
+# docs/testing/end-to-end.md.
+
+name: End-to-end
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  TAURI_DRIVER_VERSION: 2.0.6
+  # Tauri v2 Linux build dependencies (as in release.yml), plus WebKitWebDriver and a virtual display.
+  LINUX_DEPS: >-
+    libwebkit2gtk-4.1-dev
+    build-essential
+    curl
+    wget
+    file
+    libxdo-dev
+    libssl-dev
+    libayatana-appindicator3-dev
+    librsvg2-dev
+    patchelf
+    webkit2gtk-driver
+    xvfb
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            e2e/package-lock.json
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: e2e-${{ matrix.platform }}
+
+      - name: Install tauri-driver
+        shell: bash
+        run: cargo install tauri-driver --version "$TAURI_DRIVER_VERSION" --locked
+
+      - name: Install msedgedriver matching WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $version = (Get-ItemProperty -Path $key).pv
+          Write-Host "WebView2 $version"
+          $zip = Join-Path $env:RUNNER_TEMP 'edgedriver.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'msedgedriver'
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath $dir -Force
+          Write-Host "msedgedriver: $(& "$dir\msedgedriver.exe" --version)"
+          "NATIVE_DRIVER=$(Join-Path $dir 'msedgedriver.exe')" >> $env:GITHUB_ENV
+          $dir >> $env:GITHUB_PATH
+
+      - name: Install frontend and test dependencies
+        shell: bash
+        run: |
+          npm ci
+          npm ci --prefix e2e
+
+      - name: Build the debug app
+        run: npx tauri build --debug --no-bundle
+
+      # Seeded here, so the Windows run below needs no writes outside the workspace.
+      - name: Seed the test companies
+        run: npm run seed --prefix e2e
+
+      - name: Run end-to-end tests (Linux)
+        if: runner.os == 'Linux'
+        env:
+          LOCALBOOKS_E2E_KEEP_SEEDS: '1'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1440x900x24" npm test --prefix e2e
+
+      # msedgedriver gives the app its --remote-debugging-port through WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+      # which WebView2 ignores in an elevated process, and the runner is elevated. gsudo runs the
+      # tests at medium integrity instead (as Tauri's own CI does); the workspace is opened up so
+      # that process can write to it. https://github.com/tauri-apps/wry/issues/1782
+      - name: Run end-to-end tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LOCALBOOKS_E2E_KEEP_SEEDS: '1'
+        run: |
+          winget install gerardog.gsudo --accept-source-agreements --accept-package-agreements
+          icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F" | Out-Null
+          sudo --integrity Medium npm test --prefix e2e
+
+      - name: Keep failure screenshots (7 days)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots-${{ matrix.platform }}
+          path: e2e/.work/screenshots/
+          retention-days: 7
+          if-no-files-found: ignore

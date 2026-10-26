@@ -1,0 +1,18 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+1099 Detail, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                          Amount       Balance
+Jordan Reyes
+                               Check                     2025-02-18    1004                      Check #1004 - Jordan Rey  Checking                         950.00        950.00
+                               Check                     2025-04-18    1007                      Check #1007 - Jordan Rey  Checking                         950.00      1,900.00
+                               Check                     2025-06-18    1010                      Check #1010 - Jordan Rey  Checking                         950.00      2,850.00
+                               Check                     2025-08-18    1013                      Check #1013 - Jordan Rey  Checking                         950.00      3,800.00
+                               Check                     2025-10-18    1016                      Check #1016 - Jordan Rey  Checking                         950.00      4,750.00
+                               Check                     2025-12-18    1019                      Check #1019 - Jordan Rey  Checking                         950.00      5,700.00
+Total Jordan Reyes                                                                                                                                        5,700.00      5,700.00
+TOTAL                                                                                                                                                     5,700.00
+
+6 lines

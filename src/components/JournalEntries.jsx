@@ -12,7 +12,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 export const SOURCE_LABEL = {
   JOURNAL: 'Journal Entry', INVOICE: 'Invoice', RECEIVE_PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt',
   CREDIT_MEMO: 'Credit Memo', BILL: 'Bill', BILL_PAYMENT: 'Bill Payment', VENDOR_CREDIT: 'Vendor Credit',
-  CHECK: 'Check', EXPENSE: 'Expense', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Balance',
+  CHECK: 'Check', EXPENSE: 'Expense', CARD_CREDIT: 'Credit Card Credit', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Balance',
 };
 
 let nextKey = 1;
@@ -22,6 +22,7 @@ const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit:
 function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
   const [date, setDate] = useState(editing?.entry.entryDate ?? todayIso());
   const [memo, setMemo] = useState(editing?.entry.memo ?? '');
+  const [adjusting, setAdjusting] = useState(editing?.entry.isAdjusting ?? false);
   const [rows, setRows] = useState(() =>
     editing
       ? editing.lines.map((l) => ({ ...blankRow(), accountId: l.accountId, classId: l.classId ?? null, debit: l.debitCents ? centsToInput(l.debitCents) : '', credit: l.creditCents ? centsToInput(l.creditCents) : '', memo: l.memo ?? '' }))
@@ -66,14 +67,15 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
     setBusy(true);
     try {
       if (editing) {
-        await api.replaceJournalEntry(editing.entry.id, { id: null, date, description: memo.trim(), lines });
+        await api.replaceJournalEntry(editing.entry.id, { id: null, date, description: memo.trim(), lines }, adjusting);
         onPosted(`Journal entry #${editing.entry.entryNumber} replaced: the original is voided and the edited entry is posted.`);
         return onCancel();
       }
-      await api.postJournalEntry({ id: null, date, description: memo.trim(), lines });
-      onPosted(`Journal entry posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
+      await api.postJournalEntry({ id: null, date, description: memo.trim(), lines }, adjusting);
+      onPosted(`${adjusting ? 'Adjusting journal entry' : 'Journal entry'} posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
       setRows([blankRow(), blankRow(), blankRow(), blankRow()]);
       setMemo('');
+      setAdjusting(false);
       formClass.reset();
       setError(null);
     } catch (err) {
@@ -94,6 +96,10 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
         <label>
           <span className="qb-label">Memo</span>
           <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reason for this entry" />
+        </label>
+        <label className="flex h-row items-center gap-1 self-end text-sm" title="An accountant's period-end adjustment; listed on the Adjusting Journal Entries report">
+          <input type="checkbox" checked={adjusting} onChange={(e) => setAdjusting(e.target.checked)} />
+          Adjusting entry
         </label>
         {formClass.header}
       </div>
@@ -241,7 +247,7 @@ export default function JournalEntries({ accounts, intent }) {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
   };
-  const rows = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : true));
+  const rows = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -266,6 +272,7 @@ export default function JournalEntries({ accounts, intent }) {
             <option value="ALL">All posted entries</option>
             <option value="MANUAL">Manual journal entries</option>
             <option value="VOIDS">Voids and reversals</option>
+            <option value="ADJUSTING">Adjusting entries</option>
           </select>
           <span className="text-xs text-qb-ink-muted">Click a row to see its lines</span>
           {!composing && (
@@ -317,6 +324,7 @@ export default function JournalEntries({ accounts, intent }) {
                       ) : (
                         <span className="text-qb-ink-muted">Posted</span>
                       )}
+                      {e.isAdjusting && <span className="ml-1 rounded-sm bg-qb-canvas px-1 text-2xs font-semibold uppercase text-qb-ink-muted">Adjusting</span>}
                     </td>
                     <td className="qb-grid-cell num">{formatCents(e.totalCents)}</td>
                     <td className="qb-grid-cell cell-tight text-center" onClick={(ev) => ev.stopPropagation()}>
