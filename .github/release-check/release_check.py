@@ -513,6 +513,8 @@ def cmd_launch(args):
 
 
 def main():
+    # Windows consoles default to a code page without ✅/❌.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("artifacts")
