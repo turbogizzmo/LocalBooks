@@ -252,6 +252,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
 | Custom forms & email | Settings › Custom Forms · Email; Sales › Send Forms | Invoice and estimate designer, PDFs, mail app or SMTP, sent history, Email later queue | [guide](docs/guide/custom-forms.md) |
+| Custom reports | Reports | Detail reports (P&L and Balance Sheet Detail, aging details, Open Invoices, customer and vendor balances, sales, purchases and income by name or item, Check and Deposit Detail, 1099 Detail, Journal, Transaction List) you can filter, regroup and save as memorized reports | [guide](docs/guide/reports.md#customize-a-report) |
 | Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/custom-forms.md) |
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
@@ -522,6 +523,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── mail_app.rs, smtp.rs, secrets.rs   # emailing forms; credentials on this computer
         ├── email_log.rs        # sent history (append-only) and the Email later queue
         ├── statements.rs, reports.rs, export_engine.rs   # P&L, Balance Sheet, dashboard, CSV
+        ├── custom_reports.rs   # custom report engine: detail-report presets, memorized reports
         ├── xlsx_export.rs      # Excel workbooks with typed cells (rust_xlsxwriter)
         └── backup.rs, preferences.rs, storage.rs         # backups, settings, tax calendar, storage
 ```

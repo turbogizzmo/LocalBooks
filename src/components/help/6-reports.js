@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, detail reports you can customize and memorize, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -33,9 +33,17 @@ export const topics = [
   {
     id: 'aging', area: 'reports', views: ['reports', 'sales/invoices', 'expenses/bills'],
     title: 'See who owes you and what you owe',
-    body: 'Reports › A/R Aging Summary and A/P Aging Summary show open balances by customer or vendor in current, 1–30, 31–60, 61–90 and 91+ days past due as of any date; Open Invoices and Unpaid Bills list each open item. Credit not yet used shows as a negative amount.',
+    body: 'Reports › A/R Aging Summary and A/P Aging Summary show open balances by customer or vendor in current, 1–30, 31–60, 61–90 and 91+ days past due as of any date; A/R and A/P Aging Detail, Open Invoices and Unpaid Bills list each open item, and Customer and Vendor Balance Summary and Detail show what makes up each balance. Credit not yet used shows as a negative amount.',
     keywords: 'aging ar aging ap aging open invoices unpaid bills receivables payables past due overdue customer balance vendor balance',
     go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'custom-reports', area: 'reports', views: ['reports'],
+    title: 'Customize a report and memorize it',
+    body: 'On any detail report (P&L Detail, Sales by Customer Detail, Check Detail, Journal and the others), Customize… chooses the columns, the subtotals and the filters: accounts, names, transaction types, class, product or service, paid or cleared status, an amount range and memo text; Summary turns it into one row per group, optionally by month, quarter or year. Save as… keeps it under Memorized reports to run again, and a click on a line opens its transaction.',
+    keywords: 'custom report transaction detail customize filter columns memorize memorized saved report p&l detail balance sheet detail sales by customer detail purchases by vendor check detail deposit detail journal transaction list 1099 detail',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
   },
   {
     id: 'accountant-reports', area: 'reports', views: ['reports'],
