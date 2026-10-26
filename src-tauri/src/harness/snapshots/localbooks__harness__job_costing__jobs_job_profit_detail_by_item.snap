@@ -1,0 +1,39 @@
+---
+source: src/harness/job_costing.rs
+expression: "render(name, &report)"
+---
+job_profit_detail_by_item, 2025-01-01 to 2025-12-31
+
+Product/Service                        Act. Cost  Act. Revenue     ($) Diff.
+Alder & Finch LLP
+  No product/service                        0.00     44,837.50     44,837.50 ▸
+Total Alder & Finch LLP                     0.00     44,837.50     44,837.50 ▸
+Bonn Studio GmbH
+  No product/service                      -52.50      5,208.00      5,260.50 ▸
+Total Bonn Studio GmbH                    -52.50      5,208.00      5,260.50 ▸
+Brightwater Cafe
+  No product/service                        0.00     47,337.50     47,337.50 ▸
+Total Brightwater Cafe                      0.00     47,337.50     47,337.50 ▸
+Cobalt Outfitters
+  No product/service                        0.00     42,337.50     42,337.50 ▸
+Total Cobalt Outfitters                     0.00     42,337.50     42,337.50 ▸
+Kestrel Homes
+  Site Survey                               0.00        600.00        600.00 ▸
+Total Kestrel Homes                         0.00        600.00        600.00 ▸
+Kestrel Homes:Lakeview Remodel
+  Framing Labor                             0.00      3,230.00      3,230.00 ▸
+  Oak Panels                            1,500.00      3,000.00      1,500.00 ▸
+  Site Survey                               0.00        600.00        600.00 ▸
+  No product/service                    2,120.00          0.00     -2,120.00 ▸
+Total Kestrel Homes:Lakeview Remod      3,620.00      6,830.00      3,210.00 ▸
+Kestrel Homes:Maple St Addition
+  Framing Labor                             0.00      2,550.00      2,550.00 ▸
+  Oak Panels                              300.00        600.00        300.00 ▸
+  No product/service                    1,250.00          0.00     -1,250.00 ▸
+Total Kestrel Homes:Maple St Addit      1,550.00      3,150.00      1,600.00 ▸
+No customer/job
+  No product/service                  123,849.75        840.00   -123,009.75 ▸
+Total No customer/job                 123,849.75        840.00   -123,009.75 ▸
+TOTAL                                 128,967.25    151,140.50     22,173.25
+
+144 lines

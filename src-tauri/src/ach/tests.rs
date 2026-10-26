@@ -23,7 +23,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: Option<&str>, cents: i64)
         due_date: d(31),
         memo: None,
         total_cents: cents,
-        lines: vec![BillLineInput { account_id: rent, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None }],
+        lines: vec![BillLineInput { account_id: rent, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
     };
     post_vendor_bill(pool, input).await.unwrap().id
 }

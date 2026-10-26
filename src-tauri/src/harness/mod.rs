@@ -8,6 +8,7 @@
 
 mod fixture;
 mod golden;
+mod job_costing;
 mod ledger_props;
 mod report_presets;
 

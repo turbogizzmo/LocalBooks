@@ -13,6 +13,10 @@ later, see [Enter and pay bills](bills.md).)
    lines.
 5. Click **Save & Post Expense**. The expense reduces the payment account and adds to each category.
 
+Checks, card charges and card credits have the same **Customer:Job** column on each line as bills:
+choose a customer or job to count that line as the job's cost in the
+[job costing reports](reports.md#job-costing-reports). Vendor credits have it too.
+
 ## Write a check
 
 1. On the same screen click **Write check** (or **+ New › Check**).

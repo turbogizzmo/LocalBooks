@@ -128,13 +128,14 @@ pub struct DocumentLineView {
     pub rate_cents: Option<i64>,
     pub product_service_id: Option<i64>,
     pub class_id: Option<i64>,
+    pub customer_id: Option<i64>,
 }
 
 /// A bill's or expense's lines, for loading it into its form.
 pub async fn document_lines(pool: &SqlitePool, kind: &str, id: i64) -> Result<Vec<DocumentLineView>, String> {
     let sql = match kind {
-        "bill" => "SELECT account_id, amount_cents, NULLIF(memo, '') AS memo, quantity_e4, rate_cents, product_service_id, class_id FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number",
-        "expense" => "SELECT account_id, amount_cents, memo, NULL AS quantity_e4, NULL AS rate_cents, NULL AS product_service_id, class_id FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number",
+        "bill" => "SELECT account_id, amount_cents, NULLIF(memo, '') AS memo, quantity_e4, rate_cents, product_service_id, class_id, customer_id FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number",
+        "expense" => "SELECT account_id, amount_cents, memo, NULL AS quantity_e4, NULL AS rate_cents, NULL AS product_service_id, class_id, customer_id FROM expense_lines WHERE expense_id = ?1 ORDER BY line_number",
         other => return Err(format!("EDIT_BAD_KIND: '{other}' has no lines to load")),
     };
     sqlx::query_as::<_, DocumentLineView>(sql).bind(id).fetch_all(pool).await.map_err(db_err)

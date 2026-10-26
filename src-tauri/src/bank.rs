@@ -1071,7 +1071,7 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
             check_number: None,
             payment_method: None,
             memo: Some(description.clone()),
-            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id }],
+            lines: vec![SplitLineInput { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id, customer_id: None }],
             currency: None,
         };
         (write_expense(tx, &expense).await?.1, "OUTFLOW")
