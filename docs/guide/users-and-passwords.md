@@ -2,7 +2,8 @@
 
 A new company file opens for anyone who starts LocalBooks on the computer. Turn on users when more
 than one person keeps the books, or when vendor tax IDs (SSNs and EINs) need protecting: everyone then
-signs in with their own password, and tax IDs are encrypted so only the people you allow can read them.
+signs in with their own password, and tax IDs and vendors' bank details are encrypted so only the
+people you allow can read them.
 
 ## Turn on users
 
@@ -32,8 +33,9 @@ sign-in screen.
      restores, bank connections and AI access.
    - **Standard**: all the day-to-day bookkeeping, but not those Admin areas.
    - **View only**: looks at the books and runs reports; changes nothing.
-4. Tick **Can see sensitive data (vendor tax IDs)** if this person needs full tax IDs, for example
-   to file 1099s. Admins always can.
+4. Tick **Can see sensitive data (vendor tax IDs and bank details)** if this person needs full tax IDs, for example
+   to file 1099s, or needs to see and change vendors' bank details and pay bills by ACH file. Admins
+   always can.
 5. Enter a **Temporary password** twice and click **Add User**. Tell the user the password; they
    choose their own the first time they sign in.
 

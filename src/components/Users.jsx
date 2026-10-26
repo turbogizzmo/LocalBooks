@@ -486,7 +486,7 @@ function UserDialog({ user, me, onClose, onSaved }) {
         </fieldset>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isAdmin || sensitive} disabled={busy || isAdmin} onChange={(e) => setSensitive(e.target.checked)} />
-          Can see sensitive data (vendor tax IDs){isAdmin && <span className="text-xs text-qb-ink-muted">: Admins always can</span>}
+          Can see sensitive data (vendor tax IDs and bank details){isAdmin && <span className="text-xs text-qb-ink-muted">: Admins always can</span>}
         </label>
         {editing && !self && (
           <label className="flex items-center gap-2 text-sm">

@@ -112,7 +112,7 @@ async fn clear(conn: &mut SqliteConnection, vendor_id: i64) -> Result<(), String
     Ok(())
 }
 
-/// Encrypts every plain tax ID, and drops the copies imports staged for vendors already created.
+/// Encrypts every plain tax ID (and bank detail, see [`crate::ach::protect_all`]), and drops the copies imports staged for vendors already created.
 /// QuickBooks' own encrypted values ([`is_quickbooks_encrypted`]) are cleared instead, including
 /// ones encrypted before that check existed. Returns how many were encrypted.
 pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<usize, String> {
@@ -147,6 +147,8 @@ pub async fn protect_all(conn: &mut SqliteConnection, key: &DataKey) -> Result<u
         .execute(&mut *conn)
         .await
         .map_err(db_err)?;
+    // Vendors' bank details are sensitive in the same way.
+    crate::ach::protect_all(conn, key).await?;
     Ok(protected)
 }
 

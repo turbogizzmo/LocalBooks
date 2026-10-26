@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
+import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
@@ -165,6 +166,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   );
 }
 
+const newRequestId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
 function PayBills({ bills, accounts, onDone, onCancel }) {
   const open = bills.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const defaultAccount = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
@@ -174,19 +177,64 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const firstRef = useRef(null);
+  // Pay by ACH file: the date vendors are paid, the account's originator details (undefined while
+  // loading, null when not set up), and which vendors have bank details.
+  const [method, setMethod] = useState('STANDARD');
+  const [effectiveDate, setEffectiveDate] = useState(nextBusinessDay(todayIso()));
+  const [originator, setOriginator] = useState(undefined);
+  const [editingOriginator, setEditingOriginator] = useState(false);
+  const [banks, setBanks] = useState({});
+  // One per Pay click that succeeds: paying again with it returns the same file instead of paying twice.
+  const requestId = useRef(newRequestId());
+  const ach = method === 'ACH';
+  const account = accounts.find((a) => a.id === accountId);
 
   useEffect(() => firstRef.current?.focus(), []);
+
+  useEffect(() => {
+    if (!ach || accountId === null) return undefined;
+    let cancelled = false;
+    setOriginator(undefined);
+    api.getAchOriginator(accountId).then(
+      (o) => !cancelled && setOriginator(o),
+      (err) => !cancelled && setError(errorText(err)),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [ach, accountId]);
+
+  const vendorIds = useMemo(() => [...new Set(open.map((b) => b.vendorId))], [bills]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ach) return undefined;
+    let cancelled = false;
+    Promise.all(vendorIds.map((id) => api.getVendorBank(id).then((bank) => [id, bank]))).then(
+      (pairs) => !cancelled && setBanks(Object.fromEntries(pairs)),
+      (err) => !cancelled && setError(errorText(err)),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [ach, vendorIds]);
+
+  const chooseMethod = (next) => {
+    setMethod(next);
+    setError(null);
+    if (next === 'ACH' && account?.accountType !== 'BANK') setAccountId(defaultAccount);
+  };
 
   const toggle = (bill, on) => setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
   const picked = open.filter((b) => selected[b.id] !== undefined);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
   const bad = picked.filter((b) => cents(b) === null || cents(b) <= 0 || cents(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
+  const noBank = ach ? [...new Set(picked.filter((b) => banks[b.vendorId] === null).map((b) => b.vendorName))] : [];
 
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
     if (bad.length > 0) return setError('Each payment must be above zero and no more than the open balance.');
     if (picked.some((b) => date < b.billDate)) return setError('The payment date is earlier than one of the bill dates.');
+    if (ach) return payByAch();
     setBusy(true);
     try {
       const count = await api.payVendorBills(
@@ -200,18 +248,73 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     }
   };
 
+  const payByAch = async () => {
+    if (!originator) return setError('Set up this bank account\'s ACH details first.');
+    if (noBank.length > 0) return setError(`${noBank.join(', ')} ${noBank.length === 1 ? 'has' : 'have'} no bank details. Add them on the vendor, or pay those bills another way.`);
+    if (effectiveDate < date) return setError('The date vendors are paid cannot be before the payment date.');
+    const path = await chooseAchPath(`ACH-${todayIso().replaceAll('-', '')}.ach`);
+    if (!path) return undefined;
+    setBusy(true);
+    try {
+      const file = await api.payBillsByAch(
+        { requestId: requestId.current, paymentAccountId: accountId, paymentDate: date, effectiveDate, bills: picked.map((b) => ({ billId: b.id, amountCents: cents(b) })) },
+        path,
+      );
+      requestId.current = newRequestId();
+      const vendors = file.entries.length;
+      onDone(
+        `Paid ${picked.length} bill${picked.length === 1 ? '' : 's'} to ${vendors} vendor${vendors === 1 ? '' : 's'} by ACH (${formatCents(file.totalCents)}) and saved ${path}. ` +
+          'Upload it to your bank once. If this is your first ACH file, have the bank check it before it goes out.',
+      );
+    } catch (err) {
+      const text = errorText(err);
+      if (String(text).includes('ACH_FILE_NOT_SAVED')) {
+        requestId.current = newRequestId();
+        onDone(text, 'error');
+      } else {
+        setError(text);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="qb-panel flex-none">
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Pay bills</h2>
         <label>
+          <span className="qb-label">Pay by</span>
+          <select className="qb-input w-[150px]" value={method} onChange={(e) => chooseMethod(e.target.value)}>
+            <option value="STANDARD">Check or transfer</option>
+            <option value="ACH">Pay by ACH file</option>
+          </select>
+        </label>
+        <label>
           <span className="qb-label">Payment account</span>
-          <AccountSelect accounts={accounts} filter={isPaymentAccount} value={accountId} onChange={setAccountId} className="qb-input w-[200px]" />
+          <AccountSelect
+            accounts={accounts}
+            filter={ach ? (a) => a.accountType === 'BANK' : isPaymentAccount}
+            value={accountId}
+            onChange={setAccountId}
+            className="qb-input w-[200px]"
+          />
         </label>
         <label>
           <span className="qb-label">Payment date</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+        {ach && (
+          <label>
+            <span className="qb-label">Vendors paid on</span>
+            <input type="date" className="qb-input w-[132px]" value={effectiveDate} min={date} onChange={(e) => setEffectiveDate(e.target.value)} />
+          </label>
+        )}
+        {ach && originator !== undefined && (
+          <button type="button" className="qb-btn qb-btn-secondary h-row self-end" onClick={() => setEditingOriginator(true)}>
+            {originator ? 'ACH details…' : 'Set up ACH…'}
+          </button>
+        )}
         <div className="ml-auto text-right">
           <div className="qb-label">Total payment</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
@@ -249,7 +352,11 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                 <td className="qb-grid-cell text-center">
                   <input ref={i === 0 ? firstRef : undefined} type="checkbox" className="accent-qb-green" checked={on} onChange={(e) => toggle(b, e.target.checked)} aria-label={`Pay ${b.vendorName}`} />
                 </td>
-                <td className="qb-grid-cell font-semibold">{b.vendorName}</td>
+                <td className="qb-grid-cell font-semibold">
+                  {b.vendorName}
+                  {ach && banks[b.vendorId] === null && <span className="ml-2 font-normal text-qb-negative">No bank details</span>}
+                  {ach && banks[b.vendorId] && <span className="ml-2 font-normal text-qb-ink-muted">Account {banks[b.vendorId].accountMasked}</span>}
+                </td>
                 <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
                 <td className={`qb-grid-cell ${b.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
@@ -270,17 +377,38 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })}
         </tbody>
       </table>
+      {ach && originator === null && (
+        <div className="px-2 py-1 text-sm text-qb-ink-muted">
+          To pay by ACH file, enter the details your bank gave you for sending ACH files from {account?.name ?? 'this account'}: choose Set up ACH.
+        </div>
+      )}
+      {ach && originator && (
+        <div className="px-2 py-1 text-xs text-qb-ink-muted">
+          Records one payment per bill and writes one NACHA file that pays each vendor once. Upload it to your bank yourself; check your first file with the bank.
+        </div>
+      )}
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={pay} disabled={busy || accountId === null}>
-            {busy ? 'Paying…' : `Pay ${picked.length || ''} selected bill${picked.length === 1 ? '' : 's'}`}
+          <button type="button" className="qb-btn qb-btn-primary" onClick={pay} disabled={busy || accountId === null || (ach && !originator)}>
+            {busy ? 'Paying…' : ach ? `Pay ${picked.length || ''} by ACH file…` : `Pay ${picked.length || ''} selected bill${picked.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>
+      {editingOriginator && account && (
+        <OriginatorDialog
+          account={account}
+          current={originator}
+          onClose={() => setEditingOriginator(false)}
+          onSaved={(saved) => {
+            setOriginator(saved);
+            setEditingOriginator(false);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -293,6 +421,7 @@ export default function Bills({ accounts, intent }) {
   const [paying, setPaying] = useState(intent?.action === 'pay-bills');
   const [payments, setPayments] = useState({});
   const [editing, setEditing] = useState(null); // { bill, lines }
+  const [achFiles, setAchFiles] = useState(false);
   const vendorRef = useRef(null);
   const startEdit = (bill) =>
     api.getDocumentLines('bill', bill.id).then(
@@ -352,9 +481,9 @@ export default function Bills({ accounts, intent }) {
           bills={bills}
           accounts={accounts}
           onCancel={() => setPaying(false)}
-          onDone={(text) => {
+          onDone={(text, kind = 'success') => {
             setPaying(false);
-            setNotice({ kind: 'success', text });
+            setNotice({ kind, text });
           }}
         />
       ) : (
@@ -371,13 +500,17 @@ export default function Bills({ accounts, intent }) {
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load bills: ${error}`} />}
+      {achFiles && <AchFilesPanel onClose={() => setAchFiles(false)} />}
 
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Bills tracker</h2>
           <span className="text-xs text-qb-ink-muted">{open.length} open · ▾ for void options</span>
+          <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setAchFiles((v) => !v)}>
+            ACH files
+          </button>
           {!paying && (
-            <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setPaying(true)} disabled={open.length === 0}>
+            <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setPaying(true)} disabled={open.length === 0}>
               Pay bills
             </button>
           )}

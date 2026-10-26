@@ -301,7 +301,7 @@ pub async fn pay_vendor_bills(pool: &SqlitePool, inputs: Vec<BillPaymentInput>) 
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
-        if let Err(err) = write_bill_payment(&mut tx, input).await {
+        if let Err(err) = write_bill_payment(&mut tx, input, "STANDARD").await {
             return Err(rollback(tx, err).await);
         }
     }
@@ -319,11 +319,13 @@ pub struct BillPaymentView {
     pub reference: Option<String>,
     pub journal_entry_id: Option<i64>,
     pub is_voided: bool,
+    /// `STANDARD`, or `ACH` when paid by an ACH file.
+    pub kind: String,
 }
 
 pub async fn list_bill_payments(pool: &SqlitePool, bill_id: i64) -> Result<Vec<BillPaymentView>, String> {
     sqlx::query_as::<_, BillPaymentView>(
-        "SELECT id, payment_date, amount_cents, payment_account_id, reference, journal_entry_id, is_voided
+        "SELECT id, payment_date, amount_cents, payment_account_id, reference, journal_entry_id, is_voided, kind
          FROM bill_payments WHERE bill_id = ?1 ORDER BY payment_date, id",
     )
     .bind(bill_id)
@@ -332,7 +334,8 @@ pub async fn list_bill_payments(pool: &SqlitePool, bill_id: i64) -> Result<Vec<B
     .map_err(db_err)
 }
 
-async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput) -> Result<(), String> {
+/// Records one bill payment of `kind` (`STANDARD`, or `ACH` from an ACH file) and posts it. Returns its id.
+pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput, kind: &str) -> Result<i64, String> {
     if input.amount_cents <= 0 {
         return Err("BILL_BAD_AMOUNT: payment amount must be greater than zero".into());
     }
@@ -373,14 +376,15 @@ async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymen
     }
 
     let payment_id: i64 = sqlx::query_scalar(
-        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference)
-         VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference, kind)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
     )
     .bind(input.bill_id)
     .bind(input.payment_date)
     .bind(input.amount_cents)
     .bind(input.payment_account_id)
     .bind(clean(input.reference.as_deref()))
+    .bind(kind)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -410,7 +414,7 @@ async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymen
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    Ok(())
+    Ok(payment_id)
 }
 
 

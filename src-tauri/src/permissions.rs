@@ -69,6 +69,8 @@ const ADMIN: &[&str] = &[
     "get_smtp_settings",
     "save_smtp_settings",
     "test_smtp_settings",
+    // A bank account's ACH originator details (what the bank's files are sent as).
+    "set_ach_originator",
     "send_smtp_test_email",
     "get_mcp_status",
     "set_mcp_enabled",
