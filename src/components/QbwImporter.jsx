@@ -6,6 +6,7 @@ import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
+import { takePendingMigration } from './CompanyFiles.jsx';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 
@@ -978,6 +979,12 @@ export default function QbwImporter({ accounts }) {
     },
     [follow],
   );
+
+  // Open or Restore Company was given a QuickBooks file: read it as soon as the wizard opens.
+  useEffect(() => {
+    const path = takePendingMigration();
+    if (path && !reading) ingest([path]);
+  }, [ingest]);
 
   const run = async (fn, success) => {
     setBusy(true);

@@ -9,7 +9,7 @@ import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
-import { NewCompanyDialog } from './CompanyFiles.jsx';
+import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -685,20 +685,30 @@ function FileAndData({ companyName }) {
   };
 
   const chooseRestore = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (path) prepareRestore(path);
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'LocalBooks or QuickBooks backup', extensions: ['localbooks', 'db', ...QUICKBOOKS_EXTENSIONS] }],
+    });
+    if (!path) return;
+    // A QuickBooks backup can't replace these books: it becomes a new company through the migration wizard.
+    if (!isQuickBooksFile(path)) return prepareRestore(path);
+    try {
+      await migrateQuickBooksFile(path);
+    } catch (err) {
+      setNotice({ kind: 'error', text: `This file can't be restored: ${errorText(err)}` });
+    }
   };
 
   // Opens another company file in place for this session (the same as double-clicking it).
   const openCompanyFile = async () => {
-    const path = await open({ multiple: false, directory: false, filters: [{ name: 'LocalBooks company file', extensions: ['localbooks', 'db'] }] });
-    if (!path) return;
     setBusy(true);
     setNotice(null);
     try {
-      await api.openCompanyFile(path);
+      await openOrRestoreCompany();
     } catch (err) {
       setNotice({ kind: 'error', text: `This file can't be opened: ${errorText(err)}` });
+    } finally {
       setBusy(false);
     }
   };
