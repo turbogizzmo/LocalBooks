@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import { useSuggestedRate } from './RateSuggestion.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents, formatMoney, formatRate, parseRateE6 } from '../lib/money.js';
@@ -13,12 +14,33 @@ function lastMonthEnd(iso) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** One currency's period-end rate; with lookup on, the ECB rate for the revaluation date is offered. */
+function PeriodEndRate({ code, homeCurrency, asOf, value, onChange }) {
+  const setRate = useCallback((text) => onChange(code, text), [code, onChange]);
+  const { note } = useSuggestedRate({ currency: code, date: asOf, rate: value, setRate });
+  return (
+    <label className="flex w-[150px] flex-col gap-0.5 text-xs">
+      <span className="font-semibold text-qb-ink-muted">1 {code} = ? {homeCurrency}</span>
+      <input
+        className="qb-input num"
+        value={value}
+        onChange={(e) => setRate(e.target.value)}
+        inputMode="decimal"
+        placeholder="1.000000"
+        aria-invalid={value !== '' && parseRateE6(value) === null}
+      />
+      {note}
+    </label>
+  );
+}
+
 /** Period-end revaluation of open foreign-currency invoices (unrealized gains and losses). */
 export default function FxRevaluation() {
   const { homeCurrency } = useCompany();
   const history = useLedgerQuery(api.listFxRevaluations);
   const [asOf, setAsOf] = useState(() => lastMonthEnd(todayIso()));
   const [rates, setRates] = useState({});
+  const setCurrencyRate = useCallback((code, text) => setRates((r) => ({ ...r, [code]: text })), []);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -86,23 +108,13 @@ export default function FxRevaluation() {
           chosen and reversing it the next day. The period’s Balance Sheet and Profit and Loss then reflect period-end rates, while
           payments still record their realized gain or loss against each invoice’s original rate.
         </p>
-        <div className="flex flex-wrap items-end gap-3 px-3 py-2">
+        <div className="flex flex-wrap items-start gap-3 px-3 py-2">
           <label className="flex flex-col gap-0.5 text-xs">
             <span className="font-semibold text-qb-ink-muted">Revalue as of</span>
             <input type="date" className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </label>
           {currencies.map((code) => (
-            <label key={code} className="flex w-[150px] flex-col gap-0.5 text-xs">
-              <span className="font-semibold text-qb-ink-muted">1 {code} = ? {homeCurrency}</span>
-              <input
-                className="qb-input num"
-                value={rates[code] ?? ''}
-                onChange={(e) => setRates((r) => ({ ...r, [code]: e.target.value }))}
-                inputMode="decimal"
-                placeholder="1.000000"
-                aria-invalid={rates[code] !== undefined && rates[code] !== '' && parseRateE6(rates[code]) === null}
-              />
-            </label>
+            <PeriodEndRate key={code} code={code} homeCurrency={homeCurrency} asOf={asOf} value={rates[code] ?? ''} onChange={setCurrencyRate} />
           ))}
           {preview && preview.lines.length === 0 && <span className="pb-1 text-sm text-qb-ink-muted">No foreign-currency invoices were open on that date.</span>}
         </div>

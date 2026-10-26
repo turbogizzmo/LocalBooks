@@ -95,6 +95,7 @@ export default function App() {
     ein: prefs.data?.company_ein ?? '',
     logo: logo.data ?? null,
     homeCurrency: prefs.data?.home_currency_code ?? 'USD',
+    fxLookup: prefs.data?.exchange_rate_lookup === 'true',
   };
 
   // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
