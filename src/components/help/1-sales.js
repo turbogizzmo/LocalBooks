@@ -208,10 +208,11 @@ export const topics = [
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
   },
   {
-    id: 'search', area: 'accounting', views: ['accounting/journal'],
+    id: 'search', area: 'accounting', views: ['accounting/journal', 'accounting/find'],
     title: 'Find a transaction',
-    body: 'Type in the search box at the top of the window (⌘K or Ctrl+K) to find transactions by number, name, memo, reference or exact amount, and customers, vendors, products and accounts by name. Choose a result to open it.',
-    keywords: 'search find lookup locate amount check number invoice number',
-    go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
+    body: 'Type in the search box at the top of the window (⌘K or Ctrl+K) to find transactions by number, name, memo, reference or exact amount, and customers, vendors, products and accounts by name. Choose a result to open it. For more, choose Advanced search… at the bottom of the results, or Accounting › Find Transactions: narrow by dates, transaction type, customer or vendor, account, amount (equal to, at least, at most or between) and number, with a count and total of what matches.',
+    keywords: 'search find lookup locate amount check number invoice number advanced filter',
+    go: { label: 'Go to Find Transactions', view: 'accounting/find' },
+    guide: 'journal-entries-and-voids',
   },
 ];

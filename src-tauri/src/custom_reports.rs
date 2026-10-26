@@ -26,6 +26,8 @@ use crate::ledger::{db_err, DISPLAY_SOURCE_TYPE};
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::report_center::{aging_bucket, AGING_LABELS};
 
+pub mod find;
+
 // ------------------------------------------------------------------------------------------------
 // Settings
 // ------------------------------------------------------------------------------------------------

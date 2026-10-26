@@ -114,6 +114,7 @@ const READ: &[&str] = &[
     // Counts as activity (see `main.rs`); refused like any other command once the limit has passed.
     "touch_session",
     "search_books",
+    "find_transactions",
     "verify_ledger_integrity",
     "file_dentist_checkup",
     "propose_forensic_corrections",
