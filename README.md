@@ -389,6 +389,7 @@ Windows updates use the per-user `-setup.exe` installer, the one the tester page
 | `release-check.yml` | pre-release or draft published/edited, manual | The gate before latest: signatures and `latest.json`, upgrade from the previous release, launch smoke, on all three platforms |
 | `codeql.yml` | push, pull request, weekly | Static security analysis of Rust, JavaScript and the workflows |
 | `audit.yml` | lockfile changes, weekly | RustSec and npm advisories for shipped dependencies |
+| `notices.yml` | lockfile changes, weekly | Fails when `THIRD-PARTY-NOTICES.txt` no longer matches the shipped dependencies |
 | `pages.yml` | changes to `site/` | Publishes the [tester page](https://turbogizzmo.github.io/LocalBooks/) |
 | Dependabot | weekly | Grouped update PRs for Cargo, npm and GitHub Actions |
 
@@ -564,3 +565,17 @@ qualified accountant before filing.*
 ## License
 
 LocalBooks is released under the [MIT License](LICENSE).
+
+It includes open-source components under their own licenses, among them
+[OpenQBW](https://github.com/Sigilweaver/OpenQBW) and
+[OpenSQLAnywhere](https://github.com/Sigilweaver/OpenSQLAnywhere) (Apache-2.0, by Nathan Riley),
+which read QuickBooks company files. [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists every
+shipped Rust crate and npm package with its license, and reproduces their NOTICE files and license
+texts. The installers carry it, and the app shows it under Help › About LocalBooks.
+
+After changing dependencies (`Cargo.lock` or `package-lock.json`), run `npm ci` and then
+`node scripts/third-party-notices.mjs`, and commit the regenerated file; `notices.yml` fails on pull
+requests until it matches. Dependabot pull requests need the same step.
+
+QuickBooks® is a registered trademark of Intuit Inc. LocalBooks is an independent project and is
+not affiliated with, endorsed by, or sponsored by Intuit Inc.

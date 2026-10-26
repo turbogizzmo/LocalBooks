@@ -23,7 +23,7 @@ hmac = "=0.12.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-native-tls"] }
 libc = "0.2"
-openqbw = "=0.1.5"
+openqbw = "=0.1.6"
 opensqlany = "=0.2.0"
 pdf-extract = "0.12"
 quick-xml = "0.42"
