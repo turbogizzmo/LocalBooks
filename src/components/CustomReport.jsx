@@ -128,7 +128,7 @@ function Builder({ source, custom, navigate, onOpen }) {
       const saved = await api.saveCustomReport(saving.name, source.preset?.id ?? null, { ...settings, title, dateMode: source.dateMode, period, startDate: asOf ? null : start, endDate: asOf ? null : end }, replace);
       setSaving(null);
       await custom.reloadSaved();
-      setNotice({ kind: 'success', text: `Saved as “${saved.name}”. It is listed under Memorized reports.` });
+      // Opens the saved report, selected under Memorized reports in the list.
       onOpen?.(`saved:${saved.id}`);
     } catch (err) {
       const text = typeof err === 'string' ? err : String(err?.message ?? err);

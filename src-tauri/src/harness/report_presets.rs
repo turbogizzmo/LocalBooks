@@ -358,7 +358,42 @@ async fn presets() {
         let report = run(&pool, &settings).await;
         assert!(report.line_count > 0, "{} has lines", preset.id);
         insta::assert_snapshot!(format!("preset_{}", preset.id.replace('-', "_")), render(preset.title, &report));
+        assert!(excel(preset.title, &report).starts_with(b"PK"), "{} exports to Excel", preset.id);
     }
+}
+
+/// The workbook the screen's Export to Excel saves (`reportExports` in `CustomReport.jsx`):
+/// quantity columns become plain numbers, every other cell goes as the engine returned it.
+fn excel(title: &str, report: &CustomReport) -> Vec<u8> {
+    let columns: Vec<Value> = report
+        .columns
+        .iter()
+        .map(|c| {
+            let kind = match c.kind {
+                ColumnKind::Text => "text",
+                ColumnKind::Date => "date",
+                ColumnKind::Money => "money",
+                ColumnKind::Quantity | ColumnKind::Number => "number",
+            };
+            serde_json::json!({ "label": c.label, "kind": kind })
+        })
+        .collect();
+    let rows: Vec<Value> = report
+        .rows
+        .iter()
+        .map(|r| {
+            let cells: Vec<Value> = r
+                .cells
+                .iter()
+                .zip(&report.columns)
+                .map(|(v, c)| if c.kind == ColumnKind::Quantity && !v.is_null() { serde_json::json!(cents(v) as f64 / 10_000.0) } else { v.clone() })
+                .collect();
+            serde_json::json!({ "kind": r.kind, "depth": r.depth.min(15), "cells": cells })
+        })
+        .collect();
+    let sheet: crate::xlsx_export::Sheet =
+        serde_json::from_value(serde_json::json!({ "company": "Harbor Lane Design Co.", "title": title, "subtitle": "", "columns": columns, "rows": rows })).expect("the screen's sheet is a valid Sheet");
+    crate::xlsx_export::to_xlsx(&sheet, "$").expect("workbook")
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -480,4 +515,32 @@ async fn one_row_per_transaction() {
     assert_eq!(report.line_count as i64, entries);
     let total: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM v_posted_lines WHERE entry_date BETWEEN '2025-01-01' AND '2025-12-31'").fetch_one(&pool).await.unwrap();
     assert_eq!(cents(&report.rows.last().unwrap().cells[2]), total);
+}
+
+/// Speed check on a large company file: `LOCALBOOKS_REPORT_FILE=<a copy of Five Years.localbooks>
+/// cargo test --release -- --ignored presets_on_a_company_file --nocapture` runs every preset over
+/// all dates and prints how long each took. `LOCALBOOKS_REPORT_DUMP=<folder>` also writes each
+/// result as JSON (for trying the screen without the app).
+#[tokio::test]
+#[ignore]
+async fn presets_on_a_company_file() {
+    let path = std::env::var("LOCALBOOKS_REPORT_FILE").expect("set LOCALBOOKS_REPORT_FILE to a copied company file");
+    let pool = crate::db::open(std::path::Path::new(&path)).await.expect("open the copy");
+    let dump = std::env::var("LOCALBOOKS_REPORT_DUMP").ok();
+    if let Some(dir) = &dump {
+        std::fs::write(format!("{dir}/presets.json"), serde_json::to_string(&custom_reports::presets()).unwrap()).unwrap();
+    }
+    for preset in custom_reports::presets() {
+        let mut settings = preset.settings.clone();
+        settings.end_date = Some(d(2025, 12, 31));
+        if preset.date_mode == custom_reports::DateMode::Range {
+            settings.start_date = Some(d(2025, 1, 1));
+        }
+        let started = std::time::Instant::now();
+        let report = run(&pool, &settings).await;
+        println!("{:<28}{:>8} lines{:>8} ms", preset.id, report.line_count, started.elapsed().as_millis());
+        if let Some(dir) = &dump {
+            std::fs::write(format!("{dir}/{}.json", preset.id), serde_json::to_string(&report).unwrap()).unwrap();
+        }
+    }
 }
