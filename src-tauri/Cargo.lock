@@ -2994,9 +2994,9 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openqbw"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e98e401102bfdf06b1c3953e57c5862e4ffe592316eba2f5b1f278a48caaaa3"
+checksum = "a7f16b241a1f0425f33c8f854c804b1f0092433c7c0af0672e69ffd39706f526"
 dependencies = [
  "opensqlany",
  "thiserror 2.0.21",

@@ -1747,6 +1747,13 @@ pub fn get_startup_failure(app: AppHandle) -> Option<StartupFailure> {
     app.try_state::<StartupFailure>().map(|s| s.inner().clone())
 }
 
+/// THIRD-PARTY-NOTICES.txt, which the installers carry as a resource (Help › About LocalBooks).
+#[tauri::command]
+pub fn get_third_party_notices(app: AppHandle) -> Result<String, String> {
+    let path = app.path().resolve("THIRD-PARTY-NOTICES.txt", tauri::path::BaseDirectory::Resource).map_err(|e| e.to_string())?;
+    std::fs::read_to_string(&path).map_err(|e| format!("could not read {}: {e}", path.display()))
+}
+
 // ------------------------------------------------------------------------------------------------
 // Inventory
 // ------------------------------------------------------------------------------------------------
