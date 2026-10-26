@@ -154,6 +154,9 @@ const text = render([...rustPackages().sort(byName), ...npmPackages().sort(byNam
 if (process.argv.includes('--check')) {
   const current = existsSync(output) ? readFileSync(output, 'utf8') : '';
   if (current !== text) {
+    const [had, want] = [current.split('\n'), text.split('\n')];
+    const at = want.findIndex((line, i) => line !== had[i]);
+    console.error(`First difference at line ${at + 1}:\n  file:     ${had[at] ?? '(end of file)'}\n  expected: ${want[at] ?? '(end of file)'}`);
     console.error('THIRD-PARTY-NOTICES.txt is out of date: run `node scripts/third-party-notices.mjs` and commit the result.');
     process.exit(1);
   }
