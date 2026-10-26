@@ -13,6 +13,7 @@ pub const TAX_FORMS: &[(&str, &str)] = &[
     ("1065", "Form 1065 (partnership / multi-member LLC)"),
     ("1120S", "Form 1120-S (S corporation)"),
     ("1120", "Form 1120 (C corporation)"),
+    ("990", "Form 990 (tax-exempt organization)"),
 ];
 
 /// Validates a preference value; unknown keys are rejected so typos never persist.
@@ -335,6 +336,7 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
     let return_months = |fy_start: NaiveDate, fy_end: NaiveDate| -> u32 {
         match tax_form {
             "1065" | "1120S" => 3,
+            "990" => 5,
             // C corporations with a June 30 year end kept the 3rd-month due date for tax years
             // beginning before 2026; every other C corporation files by the 4th month.
             "1120" if fy_end.month() == 6 && fy_start.year() < 2026 => 3,
@@ -345,6 +347,7 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
         "1065" => "Form 1065",
         "1120S" => "Form 1120-S",
         "1120" => "Form 1120",
+        "990" => "Form 990",
         _ => "Form 1040 / Schedule C",
     };
 

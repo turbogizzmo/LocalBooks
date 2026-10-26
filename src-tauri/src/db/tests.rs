@@ -190,8 +190,8 @@ async fn new_company_files_are_created_named_and_never_replace_a_file() {
     post_one(&db).await;
 
     let acme = tmp.0.join("clients").join("Acme Ltd.localbooks");
-    assert!(db.create(&acme, "   ").await.unwrap_err().starts_with("NEW_COMPANY_NAME"));
-    let status = db.create(&acme, " Acme Ltd ").await.unwrap();
+    assert!(db.create(&acme, "   ", None).await.unwrap_err().starts_with("NEW_COMPANY_NAME"));
+    let status = db.create(&acme, " Acme Ltd ", None).await.unwrap();
     assert_eq!((status.company_name.as_deref(), status.file_name.as_str()), (Some("Acme Ltd"), "Acme Ltd.localbooks"));
     assert!(status.opened_from_file && !status.is_default);
     assert_eq!(entries(&db).await, 0, "a new company starts empty");
@@ -200,7 +200,7 @@ async fn new_company_files_are_created_named_and_never_replace_a_file() {
     assert_eq!(storage::read_config(&cfg.config_dir), AppConfig::default(), "creating a company does not change the saved location");
 
     // An existing file is never replaced, and the open company stays open.
-    assert!(db.create(&cfg.default_path, "Other").await.unwrap_err().starts_with("NEW_COMPANY_EXISTS"));
+    assert!(db.create(&cfg.default_path, "Other", None).await.unwrap_err().starts_with("NEW_COMPANY_EXISTS"));
     assert_eq!(db.status().await.unwrap().file_name, "Acme Ltd.localbooks");
 
     // Switching back finds the first company's books intact.
@@ -220,7 +220,7 @@ async fn closing_releases_the_file_and_its_lock_and_refuses_company_work() {
 
     // A company in a synced folder is opened single-user, with a lock file.
     let shared = tmp.0.join("Dropbox").join("Shared Co.localbooks");
-    let status = db.create(&shared, "Shared Co").await.unwrap();
+    let status = db.create(&shared, "Shared Co", None).await.unwrap();
     assert_eq!(status.storage.kind, storage::StorageKind::Synced);
     assert_eq!(status.journal_mode, "delete");
     assert!(storage::lock_path(&shared).exists());
@@ -245,7 +245,7 @@ async fn closing_releases_the_file_and_its_lock_and_refuses_company_work() {
 
     // A local company file is checkpointed on close (no WAL left behind) and reopens.
     let local = tmp.0.join("Local Co.localbooks");
-    db.create(&local, "Local Co").await.unwrap();
+    db.create(&local, "Local Co", None).await.unwrap();
     post_one(&db).await;
     db.close().await;
     assert!(!PathBuf::from(format!("{}-wal", local.display())).exists());
@@ -264,7 +264,7 @@ async fn a_company_closed_at_quit_stays_closed_at_the_next_launch() {
 
     // A file the operating system hands over still opens.
     let acme = tmp.0.join("Acme.localbooks");
-    Db::closed(cfg.clone()).create(&acme, "Acme").await.unwrap();
+    Db::closed(cfg.clone()).create(&acme, "Acme", None).await.unwrap();
     let db = Db::startup_with_file(cfg.clone(), Some(acme)).await.unwrap();
     assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme"));
 }
