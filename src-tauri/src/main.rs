@@ -54,6 +54,7 @@ mod report_import;
 mod reconcile;
 mod registers;
 mod report_center;
+mod release_check;
 mod reports;
 mod revaluation;
 mod sales;
@@ -92,6 +93,10 @@ fn data_dirs(app: &tauri::App) -> tauri::Result<(std::path::PathBuf, std::path::
 }
 
 fn main() {
+    // Internal: the release check's headless company-file probe (see release_check.rs).
+    if let Some(code) = release_check::run_from_args() {
+        std::process::exit(code);
+    }
     tauri::Builder::default()
         .menu(|handle| {
             let menu = tauri::menu::Menu::default(handle)?;
