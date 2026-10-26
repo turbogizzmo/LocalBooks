@@ -27,7 +27,7 @@ const BLANK = { text: '', number: '', types: [], names: [], accountIds: [], amou
 
 const nameKey = (n) => (typeof n === 'object' ? `${n.kind}:${n.id}` : String(n));
 
-/** `value`, once it has stopped changing for `ms`. */
+/** `value` (a string or number: objects would reset the timer every render), once it has stopped changing for `ms`. */
 function useSettled(value, ms = 250) {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
@@ -78,12 +78,13 @@ export default function FindTransactions({ intent, navigate }) {
   };
 
   const [min, max] = amountBounds(f.amountMode, f.amountA, f.amountB);
-  const typed = useSettled({ text: f.text, number: f.number });
+  const text = useSettled(f.text);
+  const number = useSettled(f.number);
   const query = {
     startDate: start,
     endDate: end,
-    text: typed.text.trim() || null,
-    number: typed.number.trim() || null,
+    text: text.trim() || null,
+    number: number.trim() || null,
     filters: { transactionTypes: f.types, names: f.names, accountIds: f.accountIds, amountMinCents: min, amountMaxCents: max, excludeVoided: !f.includeVoided },
   };
   const valid = Boolean(end) && (!start || start <= end) && (min === null || max === null || min <= max);
