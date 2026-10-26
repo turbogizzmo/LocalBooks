@@ -701,11 +701,11 @@ function FileAndData({ companyName, isAdmin, navigate }) {
   };
 
   // Opens another company file in place for this session (the same as double-clicking it).
-  const openCompanyFile = async () => {
+  const openCompanyFile = async (e) => {
     setBusy(true);
     setNotice(null);
     try {
-      await openOrRestoreCompany();
+      await openOrRestoreCompany(e?.altKey === true);
     } catch (err) {
       setNotice({ kind: 'error', text: `This file can't be opened: ${errorText(err)}` });
     } finally {

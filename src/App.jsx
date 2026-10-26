@@ -37,7 +37,7 @@ import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
 import FindTransactions from './components/FindTransactions.jsx';
-import { hasPendingMigration, useCompanyFileActions } from './components/CompanyFiles.jsx';
+import { hasPendingMigration, takeWindowlessOpen, useCompanyFileActions, WINDOWLESS_KEY_NAME } from './components/CompanyFiles.jsx';
 import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
@@ -53,8 +53,19 @@ const STORAGE_KEY = 'localbooks.view';
 const START = startPage();
 const MAIN_WINDOW = isMainWindow();
 const IS_MAC = /Mac/.test(navigator.userAgent);
+// The company was just opened without restoring windows: start on a plain home page, not the page
+// last shown (or this window's own page), and forget that page so it does not come back next time.
+const WINDOWLESS = takeWindowlessOpen();
+if (WINDOWLESS && MAIN_WINDOW) {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage unavailable: nothing is remembered to forget.
+  }
+}
 
 function initialView() {
+  if (WINDOWLESS) return 'dashboard';
   if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
   // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
   if (hasPendingMigration()) return 'accounting/qbw-import';
@@ -70,7 +81,9 @@ function initialView() {
 export default function App() {
   const [view, setView] = useState(initialView);
   // An intent asks the destination view to open a specific entry form ({ action, nonce }).
-  const [intent, setIntent] = useState(() => (START?.action ? { action: START.action, data: START.data, nonce: Date.now() } : null));
+  const [intent, setIntent] = useState(() => (START?.action && !WINDOWLESS ? { action: START.action, data: START.data, nonce: Date.now() } : null));
+  // Opened without restoring windows: the plain home page shows until a page is chosen.
+  const [windowless, setWindowless] = useState(WINDOWLESS);
   const [creating, setCreating] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const accounts = useLedgerQuery(api.listAccounts);
@@ -103,6 +116,7 @@ export default function App() {
 
   // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
   const select = useCallback((id, action = null, data = null) => {
+    setWindowless(false);
     setView(id);
     setIntent(action ? { action, data, nonce: Date.now() } : null);
     if (!MAIN_WINDOW) return;
@@ -173,13 +187,13 @@ export default function App() {
   }, [view, openNewWindow]);
 
   const dueRecurring = useDueRecurring();
-  const { item, parent } = findNav(view);
+  const { item, parent } = windowless ? { item: { label: 'Home' }, parent: null } : findNav(view);
   const props = { accounts: list, intent, navigate: select };
 
   return (
     <CompanyContext.Provider value={company}>
     <div className="flex h-full">
-      <Sidebar current={view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />
+      <Sidebar current={windowless ? null : view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
@@ -274,7 +288,8 @@ export default function App() {
         )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
-          {view === 'dashboard' && <Dashboard />}
+          {windowless && <WindowlessHome companyName={openCompany ?? companyName} onDashboard={() => select('dashboard')} />}
+          {view === 'dashboard' && !windowless && <Dashboard />}
           {view === 'sales/all' && <AllSales {...props} />}
           {view === 'sales/invoices' && <Invoices {...props} />}
           {view === 'sales/estimates' && <Estimates {...props} />}
@@ -331,5 +346,26 @@ export default function App() {
       )}
     </div>
     </CompanyContext.Provider>
+  );
+}
+
+/** The page a company opens on without restoring windows: nothing on it reads the books. */
+function WindowlessHome({ companyName, onDashboard }) {
+  return (
+    <div className="p-3">
+      <section className="qb-panel max-w-[560px] p-3">
+        <h2 className="mb-1 text-md font-semibold">{companyName} is open</h2>
+        <p className="mb-2 text-sm text-qb-ink-muted">
+          It was opened without restoring windows, so the page you last had open was not reopened and any other windows were closed. Choose a page from the sidebar to
+          carry on.
+        </p>
+        <p className="mb-3 text-sm text-qb-ink-muted">
+          To open a company this way, hold {WINDOWLESS_KEY_NAME} while clicking Open, or choose File › Open Company Without Restoring Windows…
+        </p>
+        <button type="button" className="qb-btn qb-btn-primary" onClick={onDashboard}>
+          Go to the Dashboard
+        </button>
+      </section>
+    </div>
   );
 }
