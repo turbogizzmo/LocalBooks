@@ -433,7 +433,13 @@ function MultiPick({ label, options, value, onChange, keyOf = String }) {
 }
 
 function MoneyBound({ label, cents, onChange }) {
-  const [text, setText] = useState(cents === null || cents === undefined ? '' : centsToInput(cents));
+  const shown = cents === null || cents === undefined ? '' : centsToInput(cents);
+  const [text, setText] = useState(shown);
+  const [editing, setEditing] = useState(false);
+  // Follow the filter when it changes from outside (Reset to preset, Back to summary), but not while typing.
+  useEffect(() => {
+    if (!editing) setText(shown);
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
   const parsed = text.trim() === '' ? null : parseMoneyToCents(text);
   return (
     <label>
@@ -442,8 +448,12 @@ function MoneyBound({ label, cents, onChange }) {
         className="qb-input w-[100px] text-right"
         value={text}
         aria-invalid={text.trim() !== '' && parsed === null}
+        onFocus={() => setEditing(true)}
         onChange={(e) => setText(e.target.value)}
-        onBlur={() => (text.trim() === '' || parsed !== null) && onChange(parsed === null ? null : Math.abs(parsed))}
+        onBlur={() => {
+          setEditing(false);
+          if (text.trim() === '' || parsed !== null) onChange(parsed === null ? null : Math.abs(parsed));
+        }}
       />
     </label>
   );
