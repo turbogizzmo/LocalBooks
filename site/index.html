@@ -476,17 +476,20 @@
         sourcesEl.textContent = '';
         DATA.forEach((src, i) => sourcesEl.appendChild(choice(src.name, src.sub, i === current, () => pickSource(i))));
       }
+      // Update the pressed state in place, so a keyboard user's focus stays on the button they used.
+      function markPressed(container, index) {
+        container.querySelectorAll('.mig-choice').forEach((c, j) => c.setAttribute('aria-pressed', String(j === index)));
+      }
       function pickSource(i) {
         current = i;
-        renderSources();
+        markPressed(sourcesEl, i);
         const src = DATA[i];
         typesEl.textContent = '';
         resultEl.textContent = '';
         if (src.types.length === 1) { typesWrap.hidden = true; show(src.types[0]); return; }
         typesWrap.hidden = false;
-        src.types.forEach((t) => typesEl.appendChild(choice(t.name, t.sub, false, (e) => {
-          typesEl.querySelectorAll('.mig-choice').forEach((c) => c.setAttribute('aria-pressed', 'false'));
-          e.currentTarget.setAttribute('aria-pressed', 'true');
+        src.types.forEach((t, j) => typesEl.appendChild(choice(t.name, t.sub, false, () => {
+          markPressed(typesEl, j);
           show(t);
         })));
       }
