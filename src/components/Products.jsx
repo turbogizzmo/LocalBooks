@@ -77,7 +77,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   );
 }
 
-export default function Products({ accounts }) {
+export default function Products({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listProducts);
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
@@ -93,6 +93,10 @@ export default function Products({ accounts }) {
   const [notice, setNotice] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
   const [changingPrices, setChangingPrices] = useState(false);
+  // Customers › Change Item Prices (menu bar) opens the price changer.
+  useEffect(() => {
+    if (intent?.action === 'change-prices') setChangingPrices(true);
+  }, [intent]);
   const setActive = async (p, active) => {
     try {
       await api.setProductActive(p.id, active);

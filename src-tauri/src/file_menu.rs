@@ -20,6 +20,9 @@ const NO_RECENT: &str = "file-no-recent";
 /// A recent company's menu id is this prefix followed by its path.
 const RECENT_PREFIX: &str = "file-recent:";
 
+/// How many items `add_company_items` puts at the top of File.
+pub const COMPANY_ITEM_COUNT: usize = 6;
+
 /// The items whose contents follow the open company.
 struct CompanyItems {
     recent: Submenu<Wry>,
@@ -41,7 +44,7 @@ pub fn add_company_items(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()>
     };
     let recent = Submenu::new(app, "Open Previous Company", true)?;
     let close = MenuItem::with_id(app, CLOSE_COMPANY, "Close Company", false, None::<&str>)?;
-    let items: [&dyn IsMenuItem<Wry>; 6] = [
+    let items: [&dyn IsMenuItem<Wry>; COMPANY_ITEM_COUNT] = [
         &MenuItem::with_id(app, NEW_COMPANY, "New Company…", true, None::<&str>)?,
         &MenuItem::with_id(app, OPEN_COMPANY, "Open or Restore Company…", true, Some("CmdOrCtrl+O"))?,
         &recent,
@@ -106,13 +109,7 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
 
 /// Asks the focused window (or the main one) to run a File menu action that needs the page.
 fn ask_page(app: &AppHandle, action: &str) {
-    let windows = app.webview_windows();
-    let target = windows
-        .values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| windows.get(crate::windows::MAIN))
-        .or_else(|| windows.values().next());
-    if let Some(window) = target {
+    if let Some(window) = crate::windows::target(app) {
         let _ = window.emit_to(window.label(), FILE_MENU_REQUESTED, action);
         crate::windows::focus(app);
     }

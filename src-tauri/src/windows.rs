@@ -15,9 +15,7 @@ pub const MAIN: &str = "main";
 /// Labels of the extra windows; `capabilities/default.json` grants them the main window's access.
 const EXTRA_PREFIX: &str = "window-";
 /// Sent to the focused window when Window › New Window is chosen, so it opens the page it shows.
-#[cfg(target_os = "macos")]
 const NEW_WINDOW_REQUESTED: &str = "new-window-requested";
-#[cfg(target_os = "macos")]
 const MENU_NEW_WINDOW: &str = "new-window";
 
 static NEXT_WINDOW: AtomicUsize = AtomicUsize::new(1);
@@ -61,13 +59,29 @@ pub fn open(app: &AppHandle, title: &str, view: Option<&str>, action: Option<&st
     Ok(label)
 }
 
+/// The window a menu choice is for: the focused one, else the main one, else any.
+pub fn target(app: &AppHandle) -> Option<tauri::WebviewWindow> {
+    let windows = app.webview_windows();
+    windows
+        .values()
+        .find(|w| w.is_focused().unwrap_or(false))
+        .or_else(|| windows.get(MAIN))
+        .or_else(|| windows.values().next())
+        .cloned()
+}
+
+/// Brings `window` forward.
+pub fn focus_window(window: &tauri::WebviewWindow) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 /// Brings LocalBooks forward: the main window, or another one if the main window was closed.
 pub fn focus(app: &AppHandle) {
     let windows = app.webview_windows();
     if let Some(window) = windows.get(MAIN).or_else(|| windows.values().next()) {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+        focus_window(window);
     }
 }
 
@@ -87,14 +101,14 @@ pub fn close_extra(app: &AppHandle) {
     }
 }
 
-/// macOS: New Window (Cmd+Shift+N) at the top of the menu bar's Window menu. (Windows and Linux
-/// use the in-app button and Ctrl+Shift+N, which the page handles.)
-#[cfg(target_os = "macos")]
+/// New Window at the top of the menu bar's Window menu. Its shortcut is the menu's (Cmd+Shift+N) on
+/// macOS; on Windows and Linux the page handles Ctrl+Shift+N, so the item carries none.
 pub fn add_new_window_item(app: &AppHandle, menu: &tauri::menu::Menu<tauri::Wry>) -> tauri::Result<()> {
     use tauri::menu::{MenuItem, PredefinedMenuItem, WINDOW_SUBMENU_ID};
 
     if let Some(window_menu) = menu.get(WINDOW_SUBMENU_ID).and_then(|item| item.as_submenu().cloned()) {
-        window_menu.insert(&MenuItem::with_id(app, MENU_NEW_WINDOW, "New Window", true, Some("CmdOrCtrl+Shift+N"))?, 0)?;
+        let accel = cfg!(target_os = "macos").then_some("CmdOrCtrl+Shift+N");
+        window_menu.insert(&MenuItem::with_id(app, MENU_NEW_WINDOW, "New Window", true, accel)?, 0)?;
         window_menu.insert(&PredefinedMenuItem::separator(app)?, 1)?;
     }
     Ok(())
@@ -102,7 +116,6 @@ pub fn add_new_window_item(app: &AppHandle, menu: &tauri::menu::Menu<tauri::Wry>
 
 /// Window › New Window: the focused window opens a copy of the page it shows; with no LocalBooks
 /// window focused, a new window opens on the Dashboard.
-#[cfg(target_os = "macos")]
 pub fn on_menu_event(app: &AppHandle, id: &str) {
     if id != MENU_NEW_WINDOW {
         return;

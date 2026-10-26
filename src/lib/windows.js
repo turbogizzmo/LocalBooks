@@ -1,8 +1,12 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 
-/** Sent by Window › New Window (macOS menu) to the focused window, which opens the page it shows. */
+/** Sent by Window › New Window to the focused window, which opens the page it shows. */
 export const NEW_WINDOW_REQUESTED = 'new-window-requested';
+/** Sent by a menu bar item to the focused window with the page to open: `{ view, action, data }`. */
+export const MENU_NAVIGATE = 'menu-navigate';
+/** Sent by a menu bar item that acts on the page: 'find', 'help' or 'sidebar'. */
+export const MENU_COMMAND = 'menu-command';
 
 /** The window LocalBooks opens at launch; extra windows leave its remembered page alone. */
 export function isMainWindow() {
