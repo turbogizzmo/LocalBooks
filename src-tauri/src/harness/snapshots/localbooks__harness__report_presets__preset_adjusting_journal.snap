@@ -1,0 +1,14 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Adjusting Journal Entries, 2025-01-01 to 2025-12-31
+
+                               Date          Num                       Name                      Memo                      Account                           Debit        Credit
+Journal Entry 172 · 2025
+                               2025-12-31    172                                                 Equipment contributed by  Equipment                      1,500.00
+                               2025-12-31    172                                                 Equipment contributed by  Owner's Investment                           1,500.00
+Total Journal Entry 172                                                                                                                                   1,500.00      1,500.00
+TOTAL                                                                                                                                                     1,500.00      1,500.00
+
+2 lines

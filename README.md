@@ -240,6 +240,7 @@ under [`docs/guide/`](docs/guide/README.md).
 
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
+| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders | [guide](docs/guide/reports.md#accountant--taxes-reports) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |

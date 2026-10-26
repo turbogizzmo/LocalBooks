@@ -71,8 +71,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
     for a in &ledger.accounts {
         sqlx::query(
             "INSERT INTO ledger_import_accounts
-                (batch_id, source_id, name, full_name, account_type, parent_source_id, is_active, stored_balance_cents)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                (batch_id, source_id, name, full_name, account_type, parent_source_id, is_active, stored_balance_cents, tax_line)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(batch_id)
         .bind(a.id)
@@ -82,6 +82,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
         .bind(a.parent_id)
         .bind(a.active as i64)
         .bind(a.stored_balance_cents)
+        .bind(&a.tax_line)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -1102,9 +1103,27 @@ pub(crate) fn describe(kind: &str, doc_num: Option<&str>, name: Option<&str>, me
 /// inside a single transaction. Refuses while a used account is unmapped, and when the same books
 /// are already posted from another import. A batch with no transactions adds its lists instead
 /// (see `add_lists`).
+/// Gives each mapped account the tax line the file assigns it, unless it already has one.
+async fn copy_tax_lines(pool: &SqlitePool, batch_id: i64) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE chart_of_accounts
+         SET tax_line = (SELECT a.tax_line FROM ledger_import_accounts a
+                         WHERE a.batch_id = ?1 AND a.account_id = chart_of_accounts.id AND a.tax_line IS NOT NULL
+                         ORDER BY a.source_id LIMIT 1)
+         WHERE tax_line IS NULL
+           AND id IN (SELECT account_id FROM ledger_import_accounts WHERE batch_id = ?1 AND account_id IS NOT NULL AND tax_line IS NOT NULL)",
+    )
+    .bind(batch_id)
+    .execute(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(())
+}
+
 pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<PostLedgerResult, String> {
     let batch_id = input.batch_id;
     require_batch(pool, batch_id).await?;
+    copy_tax_lines(pool, batch_id).await?;
     if is_lists_only(pool, batch_id).await? {
         return add_lists(pool, batch_id).await;
     }

@@ -1,0 +1,44 @@
+---
+source: src/harness/accountant_reports.rs
+expression: out
+---
+Income Tax Summary, 2025-01-01 to 2025-12-31
+
+Tax line                              Amount
+Income
+  1 · Gross receipts or sa        140,560.50
+Total Income                      140,560.50
+Deductions
+  8 · Advertising                   1,800.00
+  16b · Interest: other               780.00
+  18 · Office expense                 829.90
+  20b · Rent or lease: oth         28,800.00
+  23 · Taxes and licenses           5,794.85
+  25 · Utilities                    2,367.00
+  26 · Wages                       75,750.00
+  27a · Other expenses              1,728.00
+Total Deductions                  117,849.75
+Other tax lines (another
+  QuickBooks tax line 1462          5,700.00
+Unassigned (income and e
+  Exchange Gain or Loss               -52.50
+
+11 lines
+Note: Schedule C (Form 1040) · 2025-01-01 through 2025-12-31
+Note: 1 income or expense account with activity has no tax line; assign one under Tax lines.
+Note: Amounts are from the books on the accrual basis; adjust for your return as your tax preparer advises.
+
+Income Tax Detail, line 8, 2025-01-01 to 2025-12-31
+
+Type                           Date          Num                       Name                      Memo                      Account                          Amount
+Deductions
+  8 · Advertising
+    Bill                       2025-09-05    PC-4410                   Pinecrest Office Supply   Bill #PC-4410 - Pinecres  Advertising & Marketing          300.00
+    Bill                       2025-12-01    LM-88                     Lumen Media               Bill #LM-88 - Lumen Medi  Advertising & Marketing        1,500.00
+  Total 8 · Advertising                                                                                                                                   1,800.00
+Total Deductions                                                                                                                                          1,800.00
+
+2 lines
+Note: Schedule C (Form 1040) · 2025-01-01 through 2025-12-31
+Note: 1 income or expense account with activity has no tax line; assign one under Tax lines.
+Note: Amounts are from the books on the accrual basis; adjust for your return as your tax preparer advises.

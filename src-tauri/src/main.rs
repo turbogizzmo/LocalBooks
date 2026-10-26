@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod accountant_reports;
 mod accounts;
 mod ach;
 mod audit_chain;

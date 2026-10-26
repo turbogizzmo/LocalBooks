@@ -35,7 +35,7 @@ fn presets_are_named_once_and_runnable_settings() {
         let round: ReportSettings = serde_json::from_value(serde_json::to_value(&p.settings).unwrap()).unwrap();
         assert_eq!(round, p.settings, "{}", p.id);
     }
-    assert_eq!(presets.len(), 24);
+    assert_eq!(presets.len(), 25);
 }
 
 #[test]

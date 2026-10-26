@@ -7,5 +7,5 @@ export default {
   getJournalEntryLines: (journalEntryId) => invoke('get_journal_entry_lines', { journalEntryId }),
   listAuditLog: () => invoke('list_audit_log', { limit: 1000 }),
   verifyLedgerIntegrity: () => invoke('verify_ledger_integrity'),
-  postJournalEntry: (entry) => invoke('post_journal_entry', { entry }),
+  postJournalEntry: (entry, adjusting = false) => invoke('post_journal_entry', { entry, adjusting }),
 };

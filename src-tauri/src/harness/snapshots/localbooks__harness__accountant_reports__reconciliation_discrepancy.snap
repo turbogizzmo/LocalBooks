@@ -1,0 +1,16 @@
+---
+source: src/harness/accountant_reports.rs
+expression: "text(\"Reconciliation Discrepancy\", &report)"
+---
+Reconciliation Discrepancy, all dates to 2025-12-31
+
+Type                           Date          Entry                     Memo                      Change                    Reconciled Amount Current Amount Effect on Reconciled Balance
+Checking · statement end
+  Check                        2025-04-01    41                        Check #1006 - Riverbend   Voided                        -2,400.00          0.00      2,400.00
+  Journal Entry                2025-04-15    37                        Payroll tax deposit       Amount changed                -1,779.00     -1,879.00       -100.00
+  Bill Payment                 2025-04-28    44                        Bill Payment - Northwind  Deleted                         -129.00          0.00        129.00
+Total Checking · 2025-04                                                                                                                                    2,429.00
+TOTAL                                                                                                                                                       2,429.00
+
+3 lines
+Note: 3 completed reconciliations checked; 3 changes found.

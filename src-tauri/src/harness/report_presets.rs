@@ -4,7 +4,7 @@
 //!
 //! Harbor Lane has no products, classes or reps, so `company()` adds a little of each in 2025:
 //! product sales with a class and a rep, a credit memo and a vendor credit (part used), and a bill
-//! for products.
+//! for products, and a year-end adjusting entry.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -113,6 +113,15 @@ async fn company() -> SqlitePool {
     .expect("vendor credit")
     .id;
     crate::credits::apply_vendor_credit(p, ApplyCreditInput { credit_id: credit, document_id: bill, amount_cents: 2_500, applied_date: d(2025, 11, 26) }).await.expect("apply vendor credit");
+    // A year-end adjusting entry, between balance sheet accounts so the other presets are unchanged.
+    let entry = crate::ledger::JournalEntry {
+        id: None,
+        date: d(2025, 12, 31),
+        description: "Equipment contributed by the owner".into(),
+        lines: vec![crate::ledger::JournalLine::debit(account(p, "1500").await, 150_000), crate::ledger::JournalLine::credit(account(p, "3100").await, 150_000)],
+        currency: None,
+    };
+    crate::ledger::post_journal_entry_flagged(p, entry, true).await.expect("adjusting entry");
     pool
 }
 
@@ -306,7 +315,7 @@ async fn customer_balances_agree_with_receivables() {
 // Golden snapshots of every preset
 // ------------------------------------------------------------------------------------------------
 
-fn render_cell(kind: ColumnKind, v: &Value) -> String {
+pub(super) fn render_cell(kind: ColumnKind, v: &Value) -> String {
     match (kind, v) {
         (_, Value::Null) => String::new(),
         (ColumnKind::Money, v) => crate::ledger::format_money(cents(v), ""),
@@ -320,7 +329,7 @@ fn render_cell(kind: ColumnKind, v: &Value) -> String {
     }
 }
 
-fn render(title: &str, report: &CustomReport) -> String {
+pub(super) fn render(title: &str, report: &CustomReport) -> String {
     let mut out = format!("{title}, {} to {}\n\n", report.start_date.map_or("all dates".into(), |s| s.to_string()), report.end_date);
     let widths: Vec<usize> = report.columns.iter().enumerate().map(|(i, c)| if i == 0 { 30 } else if matches!(c.kind, ColumnKind::Text) { 25 } else { 13 }).collect();
     let pad = |s: &str, w: usize, right: bool| if right { format!("{s:>w$} ") } else { format!("{s:<w$} ") };

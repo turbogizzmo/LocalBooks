@@ -32,8 +32,8 @@ pub async fn replace_expense(app: AppHandle, db: State<'_, Db>, id: i64, input: 
 }
 
 #[tauri::command]
-pub async fn replace_journal_entry(app: AppHandle, db: State<'_, Db>, id: i64, entry: JournalEntry) -> Result<i64, String> {
-    let new_id = edits::replace_journal_entry(&db.pool().await, id, entry).await?;
+pub async fn replace_journal_entry(app: AppHandle, db: State<'_, Db>, id: i64, entry: JournalEntry, adjusting: Option<bool>) -> Result<i64, String> {
+    let new_id = edits::replace_journal_entry_flagged(&db.pool().await, id, entry, adjusting).await?;
     notify(&app);
     Ok(new_id)
 }

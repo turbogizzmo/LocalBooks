@@ -5,7 +5,10 @@
 //!   invariants after every step.
 //! - `golden`: a deterministic fixture company (`fixture`) whose reports are snapshotted as text,
 //!   so any change to a reported number shows up as a reviewable diff (`cargo insta review`).
+//! - `report_presets` and `accountant_reports`: the same for the custom report presets and the
+//!   Accountant & Taxes reports.
 
+mod accountant_reports;
 mod fixture;
 mod golden;
 mod job_costing;

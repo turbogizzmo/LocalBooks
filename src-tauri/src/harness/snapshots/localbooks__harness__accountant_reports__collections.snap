@@ -1,0 +1,14 @@
+---
+source: src/harness/accountant_reports.rs
+expression: "text(\"Collections Report\",\n&ar::collections(&pool, d(2025, 12, 31)).await.unwrap())"
+---
+Collections Report, all dates to 2025-12-31
+
+Type                           Date          Num                       Due Date              Aging  Open Balance
+Bonn Studio GmbH
+  Invoice                      2025-09-15    1013                      2025-10-15               77      1,953.00
+Total Bonn Studio GmbH                                                                                  1,953.00
+TOTAL                                                                                                   1,953.00
+
+1 lines
+Note: 1 overdue invoice from 1 customer as of 2025-12-31; Aging is days past the due date.

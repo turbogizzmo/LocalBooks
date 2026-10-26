@@ -1,0 +1,100 @@
+---
+source: src/harness/accountant_reports.rs
+expression: out
+---
+Reconciliation Detail, April, all dates to 2025-04-30
+
+Type                           Date          Num                       Name                      Memo                      Status                           Amount       Balance
+Beginning Balance                                                                                                                                                      30,484.72
+Cleared Transactions
+  Checks and Payments - 8
+    Check                      2025-04-01    1006                      Riverbend Properties      Check #1006 - Riverbend   Cleared                       -2,400.00     28,084.72
+    Journal Entry              2025-04-15    37                                                  Payroll tax deposit       Cleared                       -1,779.00     26,305.72
+    Check                      2025-04-18    1007                      Jordan Reyes              Check #1007 - Jordan Rey  Cleared                         -950.00     25,355.72
+    Journal Entry              2025-04-20    54                                                  Sales tax payment - Stat  Cleared                         -153.89     25,201.83
+    Journal Entry              2025-04-25    50                                                  Loan payment              Cleared                       -2,090.00     23,111.83
+    Transfer                   2025-04-26                                                        Transfer: Card payment    Cleared                         -180.00     22,931.83
+    Bill Payment               2025-04-28                              Northwind Software        Bill Payment - Northwind  Cleared                         -129.00     22,802.83
+    Journal Entry              2025-04-30    48                                                  Payroll 04/2025           Cleared                       -4,875.00     17,927.83
+  Total Checks and Payment                                                                                                                              -12,556.89     17,927.83
+  Deposits and Credits - 1
+    Deposit                    2025-04-30                                                        Deposit                   Cleared                       10,797.67     28,725.50
+  Total Deposits and Credi                                                                                                                               10,797.67     28,725.50
+Total Cleared Transactio                                                                                                                                 -1,759.22     28,725.50
+Cleared Balance                                                                                                                                                        28,725.50
+Uncleared Transactions a
+  Checks and Payments - 1
+    Expense                    2025-04-30                              First Harbor Bank         Expense - First Harbor B  Cleared 2025-05-31               -15.00     28,710.50
+  Total Checks and Payment                                                                                                                                  -15.00     28,710.50
+Total Uncleared Transact                                                                                                                                    -15.00     28,710.50
+Register Balance as of 2                                                                                                                                               28,710.50
+
+10 lines
+Note: Checking · statement ending 2025-04-30
+
+Reconciliation Summary, April, all dates to 2025-04-30
+
+                                       Items        Amount
+Beginning Balance                                30,484.72
+Cleared Transactions
+  Checks and Payments                      8    -12,556.89
+  Deposits and Credits                     1     10,797.67
+Total Cleared Transactio                   9     -1,759.22
+Cleared Balance                                  28,725.50
+Statement Ending Balance                         28,725.50
+Uncleared Transactions a
+  Checks and Payments                      1        -15.00
+  Deposits and Credits                     0          0.00
+Total Uncleared Transact                   1        -15.00
+Register Balance as of 2                         28,710.50
+
+10 lines
+Note: Checking · statement ending 2025-04-30
+
+Reconciliation Detail, May, all dates to 2025-05-31
+
+Type                           Date          Num                       Name                      Memo                      Status                           Amount       Balance
+Beginning Balance                                                                                                                                                      28,725.50
+Cleared Transactions
+  Checks and Payments - 7
+    Expense                    2025-04-30                              First Harbor Bank         Expense - First Harbor B  Cleared                          -15.00     28,710.50
+    Check                      2025-05-01    1008                      Riverbend Properties      Check #1008 - Riverbend   Cleared                       -2,400.00     26,310.50
+    Journal Entry              2025-05-15    49                                                  Payroll tax deposit       Cleared                       -1,853.12     24,457.38
+    Journal Entry              2025-05-25    65                                                  Loan payment              Cleared                       -2,080.00     22,377.38
+    Transfer                   2025-05-26                                                        Transfer: Card payment    Cleared                         -191.50     22,185.88
+    Bill Payment               2025-05-28                              Northwind Software        Bill Payment - Northwind  Cleared                         -129.00     22,056.88
+    Journal Entry              2025-05-31    63                                                  Payroll 05/2025           Cleared                       -4,875.00     17,181.88
+  Total Checks and Payment                                                                                                                              -11,543.62     17,181.88
+  Deposits and Credits - 1
+    Deposit                    2025-05-31                                                        Deposit                   Cleared                       11,306.04     28,487.92
+  Total Deposits and Credi                                                                                                                               11,306.04     28,487.92
+Total Cleared Transactio                                                                                                                                   -237.58     28,487.92
+Cleared Balance                                                                                                                                                        28,487.92
+Uncleared Transactions a
+  Checks and Payments - 1
+    Expense                    2025-05-31                              First Harbor Bank         Expense - First Harbor B  Outstanding                      -15.00     28,472.92
+  Total Checks and Payment                                                                                                                                  -15.00     28,472.92
+Total Uncleared Transact                                                                                                                                    -15.00     28,472.92
+Register Balance as of 2                                                                                                                                               28,472.92
+
+9 lines
+Note: Checking · statement ending 2025-05-31
+
+Reconciliation Summary, May, all dates to 2025-05-31
+
+                                       Items        Amount
+Beginning Balance                                28,725.50
+Cleared Transactions
+  Checks and Payments                      7    -11,543.62
+  Deposits and Credits                     1     11,306.04
+Total Cleared Transactio                   8       -237.58
+Cleared Balance                                  28,487.92
+Statement Ending Balance                         28,487.92
+Uncleared Transactions a
+  Checks and Payments                      1        -15.00
+  Deposits and Credits                     0          0.00
+Total Uncleared Transact                   1        -15.00
+Register Balance as of 2                         28,472.92
+
+9 lines
+Note: Checking · statement ending 2025-05-31

@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, Trial Balance and General Ledger. Click an account to open its register; export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an account to open its register; export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -56,9 +56,41 @@ export const topics = [
   {
     id: 'accountant-reports', area: 'reports', views: ['reports'],
     title: 'Trial Balance, General Ledger and Cash Flows',
-    body: 'Under For my accountant, the Trial Balance shows every account’s debit or credit balance as of a date and the General Ledger every transaction by account with running balances; the Statement of Cash Flows explains the change in your bank balances by operating, investing and financing activity.',
+    body: 'Under Accountant & Taxes, the Trial Balance shows every account’s debit or credit balance as of a date and the General Ledger every transaction by account with running balances; the Statement of Cash Flows explains the change in your bank balances by operating, investing and financing activity.',
     keywords: 'trial balance general ledger gl cash flow statement of cash flows accountant tax',
     go: { label: 'Go to Reports', view: 'reports' },
+  },
+  {
+    id: 'adjusting-entries', area: 'reports', views: ['reports', 'accounting/journal'],
+    title: 'Mark and list adjusting journal entries',
+    body: 'Tick Adjusting entry when you post a journal entry for a period-end adjustment such as depreciation or an accrual; the Journal Entries list tags it Adjusting and can show only those. Reports › Accountant & Taxes › Adjusting Journal Entries lists them with their lines, including the entry that voids one.',
+    keywords: 'adjusting journal entries aje adjustment accountant year end depreciation accrual flag mark',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'previous-reconciliation', area: 'reports', views: ['reports', 'banking/reconcile'],
+    title: 'Reprint a past reconciliation, or find changes made after it',
+    body: 'Reports › Accountant & Taxes › Previous Reconciliation reprints any completed reconciliation as a Detail (each cleared transaction, and those outstanding or cleared on a later statement) or a Summary. Reconciliation Discrepancy lists cleared transactions changed, voided or deleted afterwards; reconciliations finished with an earlier version are checked by their totals only.',
+    keywords: 'previous reconciliation report reconciliation detail summary discrepancy reprint cleared outstanding uncleared bank statement changed after reconciled',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reconciling',
+  },
+  {
+    id: 'income-tax-reports', area: 'reports', views: ['reports'],
+    title: 'Total your books by income tax line',
+    body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines.',
+    keywords: 'income tax summary detail tax line mapping schedule c 1065 1120s 1120 s corporation partnership return preparer taxline',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'collections-report', area: 'reports', views: ['reports', 'sales/invoices'],
+    title: 'Follow up on overdue invoices',
+    body: 'Reports › Accountant & Taxes › Collections Report lists every invoice past due on a date, by customer, with the customer’s company name, phone and email and how many days late each one is. Open Purchase Orders, in the same group, lists the purchase orders not yet billed or closed, by vendor.',
+    keywords: 'collections report overdue past due late invoices phone email contact open purchase orders po',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
   },
   {
     id: 'balance-sheet', area: 'reports', views: ['reports', 'dashboard'],
