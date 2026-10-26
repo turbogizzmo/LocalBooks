@@ -24,7 +24,7 @@ point-of-sale and payroll tools, or your accountant. QuickBooks itself exports o
 (**File › Utilities › Export › Lists to IIF Files**), not transactions. To move QuickBooks Desktop
 books, choose the `.qbw` company file or a `.qbb` backup instead.
 
-**From Quicken:** use **File › Export › QIF File**. Choose **All accounts**, and include
+**From Quicken:** use **File › File Export › QIF File**. Choose **All accounts**, and include
 **Transactions**, **Account list** and **Category list**.
 
 Then choose the file in the wizard, as for a company file below. LocalBooks reads it like this:
