@@ -16,7 +16,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 const RANGES = [{ id: 'all', label: 'All dates' }, ...PERIODS.filter((p) => p.id !== 'custom'), { id: 'custom', label: 'Custom' }];
 const AMOUNT_MODES = [['any', 'Any amount'], ['equal', 'Equal to'], ['atLeast', 'At least'], ['atMost', 'At most'], ['between', 'Between']];
 const COLUMNS = [
-  ['date', 'Date', 'w-[92px]'], ['type', 'Type', 'w-[120px]'], ['num', 'Num', 'w-[80px]'], ['name', 'Name', 'w-[180px]'],
+  ['date', 'Date', 'w-[92px]'], ['type', 'Type', 'w-[150px]'], ['num', 'Num', 'w-[80px]'], ['name', 'Name', 'w-[180px]'],
   ['memo', 'Memo', ''], ['account', 'Account', 'w-[200px]'], ['amount', 'Amount', 'w-[120px]'],
 ];
 const SORT_VALUE = {
@@ -65,7 +65,10 @@ export default function FindTransactions({ intent, navigate }) {
 
   // ⌘K's Advanced search… while Find is already open.
   useEffect(() => {
-    if (intent?.action === 'find') setF({ ...BLANK, text: intent.data?.text ?? '' });
+    if (intent?.action !== 'find') return;
+    setF({ ...BLANK, text: intent.data?.text ?? '' });
+    setPeriod('all');
+    setRange([null, todayIso()]);
   }, [intent?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choosePeriod = (id) => {
