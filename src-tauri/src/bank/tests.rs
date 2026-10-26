@@ -402,7 +402,7 @@ async fn pdf_statement_is_checked_against_its_balances_and_imported_once() {
     assert_eq!(again.mapping_source, Some("SAVED"));
     assert_eq!(import_file(&pool, &path, checking, None).await.unwrap(), ImportSummary { imported: 0, duplicates: 7, skipped_zero: 0 });
 
-    let pending = list_pending(&pool).await.unwrap();
+    let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
     assert_eq!(pending.iter().map(|t| t.amount_cents).sum::<i64>(), 101_940);
     assert!(pending.iter().any(|t| t.description == "POS PURCHASE GREENLEAF GROCERY SPRINGFIELD CARD 4321"));
 
@@ -435,7 +435,7 @@ async fn card_statement_charges_import_as_money_out() {
     assert_eq!(seen.preview.iter().map(|r| r.amount_cents).collect::<Vec<_>>(), [-1_250, 50_000, -21_965, -40_000]);
 
     import_file(&pool, &path, card, seen.mapping.clone()).await.unwrap();
-    let pending = list_pending(&pool).await.unwrap();
+    let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
     let cafe = pending.iter().find(|t| t.description == "CORNER CAFE").unwrap();
     assert_eq!((cafe.amount_cents, cafe.date.as_str()), (-1_250, "2025-12-18"));
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
