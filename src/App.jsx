@@ -37,7 +37,7 @@ import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
 import FindTransactions from './components/FindTransactions.jsx';
-import { useCompanyFileActions } from './components/CompanyFiles.jsx';
+import { hasPendingMigration, useCompanyFileActions } from './components/CompanyFiles.jsx';
 import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
 import Notice from './components/Notice.jsx';
@@ -56,6 +56,8 @@ const IS_MAC = /Mac/.test(navigator.userAgent);
 
 function initialView() {
   if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
+  // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
+  if (hasPendingMigration()) return 'accounting/qbw-import';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && findNav(saved) && !findNav(saved).item.children) return saved;
@@ -306,7 +308,7 @@ export default function App() {
             (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} />}
+          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} />}
         </div>
       </main>
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}
