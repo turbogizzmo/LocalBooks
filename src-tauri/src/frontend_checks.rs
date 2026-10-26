@@ -38,3 +38,30 @@ fn screens_never_use_the_browsers_own_dialogs() {
     }
     assert!(found.is_empty(), "use askConfirm/askText from lib/dialogs.jsx instead of: {}", found.join(", "));
 }
+
+/// `lib/api.js` merges the files under `lib/api/` into one object, so a name defined in two files
+/// would silently keep only one of them.
+#[test]
+fn backend_wrappers_are_named_once() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/lib/api");
+    let mut files: Vec<_> = std::fs::read_dir(&dir).expect("read lib/api").map(|e| e.expect("read a folder entry").path()).collect();
+    files.sort();
+    assert!(files.len() > 20, "found the wrappers in {}", dir.display());
+    let mut seen = std::collections::BTreeMap::new();
+    let mut twice = Vec::new();
+    for file in &files {
+        let name = file.file_name().unwrap().to_string_lossy().into_owned();
+        for line in std::fs::read_to_string(file).expect("read a wrapper file").lines() {
+            let Some(rest) = line.strip_prefix("  ") else { continue };
+            let Some((key, _)) = rest.split_once(':') else { continue };
+            if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                continue;
+            }
+            if let Some(first) = seen.insert(key.to_string(), name.clone()) {
+                twice.push(format!("{key} ({first}, {name})"));
+            }
+        }
+    }
+    assert!(seen.len() > 200, "found the wrappers");
+    assert!(twice.is_empty(), "defined in two files: {}", twice.join(", "));
+}
