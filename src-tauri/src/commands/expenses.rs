@@ -10,6 +10,7 @@ handlers![
     pay_vendor_bill,
     pay_vendor_bills,
     list_bill_payments,
+    next_check_number,
     post_expense,
     list_expenses,
 ];
@@ -64,6 +65,11 @@ pub async fn pay_vendor_bills(app: AppHandle, db: State<'_, Db>, inputs: Vec<Bil
 #[tauri::command]
 pub async fn list_bill_payments(db: State<'_, Db>, bill_id: i64) -> Result<Vec<BillPaymentView>, String> {
     expenses::list_bill_payments(&db.pool().await, bill_id).await
+}
+
+#[tauri::command]
+pub async fn next_check_number(db: State<'_, Db>, account_id: i64) -> Result<String, String> {
+    expenses::next_check_number(&db.pool().await, account_id).await
 }
 
 #[tauri::command]

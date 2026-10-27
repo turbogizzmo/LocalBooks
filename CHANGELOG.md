@@ -4,6 +4,22 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.10.2]
+
+- **Early payments.** A customer payment can be dated before its invoice (a customer who paid
+  early, or a deposit taken before you billed the work), and a bill can be paid before its date,
+  as QuickBooks allows.
+- **Check numbers and printing in Pay Bills.** Paying bills from a bank account writes one check
+  per vendor, numbered from the account's next check number, and can print them. Write Checks
+  continues the same numbering, so a number is never used twice.
+- **Attach the vendor's invoice to a bill.** Attach files to a new bill, expense or check before
+  you post it, or to any posted bill, expense, invoice, sale or deposit from its row menu. A 📎
+  marks rows with files, and attached files now stay with a transaction when you edit it.
+- **Click a report to see the details (QuickZoom).** Click an amount on the Profit and Loss or
+  Balance Sheet to open the account's transactions for that column's dates. Click a name on an
+  aging summary to list its open invoices or bills, or a line on Sales by Customer, Sales by
+  Product/Service or Expenses by Vendor Summary to open its detail report.
+
 ## [0.10.1]
 
 - **Mileage tracking.** **Employees › Mileage**: add vehicles and the mileage rates you use (with

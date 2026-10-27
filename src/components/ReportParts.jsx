@@ -223,7 +223,11 @@ export const formatColumnAmount = (column, cents) => (column?.kind === 'percent'
 
 export const longDate = (iso) => LONG_DATE.format(new Date(`${iso}T00:00:00Z`));
 
-/** One statement line: name left (indented by depth), amounts right, rules by line kind. */
+/**
+ * One statement line: name left (indented by depth), amounts right, rules by line kind. With
+ * `onAccount`, clicking the line opens the account's transactions (QuickZoom); clicking an amount
+ * passes its column index too, so a period column opens that period.
+ */
 export function StatementLine({ line, columns, onAccount }) {
   const indent = { paddingLeft: `${8 + line.depth * 16}px` };
   const strong = line.kind !== 'account';
@@ -245,9 +249,21 @@ export function StatementLine({ line, columns, onAccount }) {
         {line.label}
       </td>
       {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
-        <td key={c} className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'bg-qb-canvas' : ''}`}>
+        <td
+          key={c}
+          className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'bg-qb-canvas' : ''}`}
+          onClick={
+            drills
+              ? (e) => {
+                  e.stopPropagation();
+                  onAccount(line, columns ? c : null);
+                }
+              : undefined
+          }
+          title={drills ? 'Show the transactions behind this amount' : undefined}
+        >
           {cents !== null && cents !== undefined && (
-            <div className={`num ${strong || columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''}`}>
+            <div className={`num ${strong || columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''} ${drills ? 'hover:text-qb-info hover:underline' : ''}`}>
               {formatColumnAmount(columns?.[c], cents)}
             </div>
           )}

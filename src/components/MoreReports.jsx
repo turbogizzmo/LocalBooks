@@ -279,8 +279,46 @@ export function AgingReport({ payable, initial = null }) {
   }, [asOf, reload]);
   const title = `${payable ? 'A/P' : 'A/R'} Aging Summary`;
   const labels = data?.bucketLabels ?? ['Current', '1 - 30', '31 - 60', '61 - 90', '91 and over'];
+  // QuickZoom: clicking a name lists its open documents under it, each in its aging column.
+  const [opened, setOpened] = useState(() => new Set());
+  const toggle = (name) =>
+    setOpened((s) => {
+      const next = new Set(s);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
+  const itemRows = (name) =>
+    data.items
+      .filter((it) => it.partyName === name)
+      .map((it) => ({
+        cells: [
+          <span key="doc" className="pl-4 text-qb-ink-muted">
+            {it.kind}
+            {it.number ? ` #${it.number}` : ''} · {formatDate(it.date)}
+            {it.daysPastDue > 0 ? ` · ${it.daysPastDue} day${it.daysPastDue === 1 ? '' : 's'} past due` : ''}
+          </span>,
+          ...[0, 1, 2, 3, 4].map((b) => (agingBucket(it.daysPastDue) === b ? formatCents(it.openCents) : '')),
+          formatCents(it.openCents),
+        ],
+      }));
   const rows = data
-    ? [...data.rows.map((r) => ({ cells: [r.partyName, ...r.bucketsCents.map(money), formatCents(r.totalCents)] })), { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] }]
+    ? [
+        ...data.rows.flatMap((r) => [
+          {
+            cells: [
+              <span key="name" title={opened.has(r.partyName) ? 'Hide the open documents' : 'Show the open documents'}>
+                <span aria-hidden="true" className="inline-block w-3 text-2xs text-qb-ink-muted">{opened.has(r.partyName) ? '▾' : '▸'}</span>
+                {r.partyName}
+              </span>,
+              ...r.bucketsCents.map(money),
+              formatCents(r.totalCents),
+            ],
+            onClick: () => toggle(r.partyName),
+          },
+          ...(opened.has(r.partyName) ? itemRows(r.partyName) : []),
+        ]),
+        { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] },
+      ]
     : [];
   return (
     <TableReport
@@ -290,32 +328,43 @@ export function AgingReport({ payable, initial = null }) {
       rows={rows}
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-      footer={`Days past due · balances as of the report date · credit not yet used is negative`}
+      footer={`Days past due · balances as of the report date · credit not yet used is negative · click a name for its open documents`}
       onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
     />
   );
 }
 
+/** The aging column for an item this many days past due, as `report_center::aging_bucket` sorts them. */
+const agingBucket = (days) => (days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 : days <= 90 ? 3 : 4);
+
+// `zoom`: the detail report a row opens, and how to find what the row is (by name, from a list).
 const SUMMARY = {
-  customer: { title: 'Sales by Customer Summary', column: 'Customer' },
-  product: { title: 'Sales by Product/Service Summary', column: 'Product/Service' },
+  customer: { title: 'Sales by Customer Summary', column: 'Customer', zoom: { preset: 'income-customer-detail', title: 'Income by Customer Detail', list: () => api.listCustomers(), filter: (id) => ({ names: [{ kind: 'customer', id }] }) } },
+  product: { title: 'Sales by Product/Service Summary', column: 'Product/Service', zoom: { preset: 'sales-product-detail', title: 'Sales by Product/Service Detail', list: () => api.listProducts(), filter: (id) => ({ itemIds: [id] }) } },
   rep: { title: 'Sales by Rep Summary', column: 'Rep' },
-  vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor' },
+  vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor', zoom: { preset: 'expenses-vendor-detail', title: 'Expenses by Vendor Detail', list: () => api.listVendors(), filter: (id) => ({ names: [{ kind: 'vendor', id }] }) } },
 };
 
-export function SummaryReport({ by, initial = null }) {
+export function SummaryReport({ by, initial = null, onZoom = null }) {
   const p = usePeriod('fiscalYearToDate', initial?.startDate ? [initial.startDate, initial.endDate] : null);
   const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getSummaryReport(by, p.start, p.end) : Promise.resolve(null)));
   useEffect(() => {
     reload();
   }, [p.start, p.end, reload]);
   const cfg = SUMMARY[by];
+  const zooms = onZoom && cfg.zoom;
+  const { data: named } = useLedgerQuery(() => (zooms ? cfg.zoom.list() : Promise.resolve([])));
+  const zoomTo = (label) => {
+    const match = (named ?? []).find((n) => n.name === label);
+    return match ? () => onZoom(cfg.zoom.preset, { title: `${cfg.zoom.title}: ${label}`, filters: cfg.zoom.filter(match.id), startDate: data.startDate, endDate: data.endDate }) : undefined;
+  };
   const withQty = by === 'product';
   const columns = [{ label: cfg.column }, ...(withQty ? [{ label: 'Quantity', align: 'right' }, { label: 'Avg price', align: 'right' }] : []), { label: 'Amount', align: 'right' }, { label: '% of total', align: 'right' }];
   const pct = (cents) => (data?.totalCents ? `${((cents / data.totalCents) * 100).toFixed(1)}%` : '');
   const rows = data
     ? [
         ...data.rows.map((r) => ({
+          onClick: zooms ? zoomTo(r.label) : undefined,
           cells: [
             r.label,
             ...(withQty ? [formatQuantity(r.quantityE4), r.quantityE4 ? formatCents(Math.round((r.amountCents * 10_000) / r.quantityE4)) : ''] : []),
@@ -335,11 +384,11 @@ export function SummaryReport({ by, initial = null }) {
       error={error}
       toolbar={p.controls}
       footer={
-        by === 'product'
+        (by === 'product'
           ? 'Invoices and sales receipts less credit memos, by document date'
           : by === 'rep'
             ? 'Invoices and sales receipts by the rep on each form, by document date (credit memos carry no rep)'
-            : 'Accrual basis · posted transactions only'
+            : 'Accrual basis · posted transactions only') + (zooms ? ' · click a line for its transactions' : '')
       }
       onCsvRows={() => [...data.rows.map((r) => [r.label, ...(withQty ? [((r.quantityE4 ?? 0) / 10_000).toString(), ''] : []), plainAmount(r.amountCents), '']), ['TOTAL', ...(withQty ? ['', ''] : []), plainAmount(data.totalCents), '']]}
     />

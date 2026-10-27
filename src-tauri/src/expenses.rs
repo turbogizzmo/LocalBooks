@@ -341,6 +341,22 @@ pub async fn list_bill_payments(pool: &SqlitePool, bill_id: i64) -> Result<Vec<B
     .map_err(db_err)
 }
 
+/// The next check number for a bank account: one more than the highest number used by its checks
+/// or check bill payments (voided ones too, so a number is never used twice), or 1001 for the first.
+pub async fn next_check_number(pool: &SqlitePool, account_id: i64) -> Result<String, String> {
+    let used: Vec<String> = sqlx::query_scalar(
+        "SELECT check_number FROM expenses WHERE payment_account_id = ?1 AND check_number IS NOT NULL
+         UNION ALL
+         SELECT reference FROM bill_payments WHERE payment_account_id = ?1 AND kind = 'STANDARD' AND reference IS NOT NULL",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let highest = used.iter().filter_map(|n| n.trim().parse::<u64>().ok()).max();
+    Ok(highest.map_or_else(|| "1001".into(), |n| (n + 1).to_string()))
+}
+
 /// Records one bill payment of `kind` (`STANDARD`, or `ACH` from an ACH file) and posts it. Returns its id.
 pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: &BillPaymentInput, kind: &str) -> Result<i64, String> {
     if input.amount_cents <= 0 {
@@ -354,7 +370,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (vendor, total, paid, status, bill_date, voided) =
+    let (vendor, total, paid, status, _bill_date, voided) =
         bill.ok_or_else(|| format!("BILL_NOT_FOUND: bill {} does not exist", input.bill_id))?;
     if voided {
         return Err(format!("BILL_NOT_OPEN: this bill from {vendor} is voided"));
@@ -370,9 +386,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
             format_cents(open_balance)
         ));
     }
-    if input.payment_date.format("%Y-%m-%d").to_string() < bill_date {
-        return Err("BILL_PAYMENT_BEFORE_BILL: payment date is earlier than the bill date".into());
-    }
+    // A bill may be paid before its date (paying a vendor ahead of the bill), as QuickBooks allows.
     let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
         .bind(input.payment_account_id)
         .fetch_optional(&mut **tx)
