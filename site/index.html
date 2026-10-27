@@ -263,6 +263,7 @@
           <tbody>
             <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
             <tr><td><strong>QuickBooks Desktop for Mac</strong></td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let LocalBooks export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. LocalBooks asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
             <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › File Export › QIF File</strong> with <strong>All accounts</strong> (or one account at a time), and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
             <tr><td><strong>GnuCash</strong></td><td>Choose your <code>.gnucash</code> book (either the XML or SQLite kind). <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-gnucash">Steps</a></td></tr>
@@ -403,13 +404,25 @@
         'Also export the <strong>Account Listing</strong>, <strong>Customer Contact List</strong>, <strong>Vendor Contact List</strong> and <strong>Item List</strong>. Only the Journal is required; the lists add types, addresses and balances to check against.',
         wizard + '<strong>all the files together</strong> (hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd>, or drag them in).'
       ];
+      // QuickBooks itself exports, through Intuit's interfaces (Preview).
+      const exportStep = 'In LocalBooks, go to <strong>Accounting › Desktop Migration Wizard</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
+      const installedType = (product, steps) => ({
+        name: 'QuickBooks still installed: let LocalBooks export it', sub: 'Preview · QuickBooks runs on this computer',
+        heading: 'Let LocalBooks ask ' + product + ' for your data', steps,
+        note: 'Preview: built from Intuit’s documentation and not yet tried against a running QuickBooks. LocalBooks sends read-only requests only. If it fails, export the reports yourself.',
+        guide: 'desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it' });
       const DATA = [
         { name: 'QuickBooks Desktop for Windows', sub: 'Pro, Premier or Enterprise', types: [
           { name: 'A company file or backup', sub: '.qbw or .qbb', heading: 'Import it directly', direct: true, steps: [
               'Copy your <code>.qbw</code> company file, or a <code>.qbb</code> backup, to this computer.',
               wizard + 'the file.'],
             note: 'LocalBooks reads Windows company files and backups itself, so this works even if your QuickBooks no longer opens. A few encrypted fields, such as stored tax IDs, don’t come through.',
-            guide: 'desktop-migration.md' }
+            guide: 'desktop-migration.md' },
+          installedType('QuickBooks for Windows', [
+              'Install Intuit’s free <strong>QuickBooks Desktop SDK</strong> (the guide links to it).',
+              'Open your company file in QuickBooks, signed in as the Admin the first time.',
+              exportStep,
+              'QuickBooks asks whether to let LocalBooks read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
         ]},
         { name: 'QuickBooks Desktop for Mac', sub: 'Any year, 2016 to 2024', types: [
           { name: 'QuickBooks still opens', sub: '.qb2024, .qb2021 or a .qbmb backup', heading: 'Export a Windows copy, then import it', steps: [
@@ -418,6 +431,11 @@
               wizard + 'that <code>.qbb</code>.'],
             note: 'Mac company files are in a Mac-only, encrypted format, so QuickBooks itself has to do this conversion. LocalBooks can’t open a password-protected backup.',
             guide: 'desktop-migration.md#from-quickbooks-desktop-for-mac' },
+          installedType('QuickBooks for Mac', [
+              'Open your company file in QuickBooks for Mac.',
+              'Choose <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and leave the report as the front window.',
+              exportStep,
+              'macOS asks whether LocalBooks may control QuickBooks: click <strong>OK</strong>. That lets LocalBooks ask QuickBooks for your data; it changes nothing there.']),
           { name: 'QuickBooks won’t open any more', sub: 'Expired subscription or no license', heading: 'Export your reports instead', steps: reportSteps(
               'Open the company in QuickBooks for Mac. An expired copy still opens it in <strong>view-only mode</strong> for about a year; if it won’t open at all, install Intuit’s 30-day trial. Go to <strong>Reports › Accountant &amp; Taxes › Journal</strong>, set the dates to <strong>All</strong>, and export it to Excel or CSV.'),
             note: 'View-only mode can still run and export reports. The guide lists the exact columns to include.',

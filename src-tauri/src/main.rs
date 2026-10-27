@@ -31,6 +31,7 @@ mod docs_checks;
 #[cfg(test)]
 mod frontend_checks;
 mod iif_import;
+mod installed_qb;
 mod export_engine;
 mod file_dentist;
 mod file_menu;
