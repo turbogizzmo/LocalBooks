@@ -122,6 +122,7 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     let storage = storage::classify(dir);
     let lock = if storage.is_shared() { Some(FileLock::acquire(path)?) } else { None };
+    remove_stale_replaced(path);
     let pool = open_for(path, &storage, backups).await?;
     Ok(Live { path: path.to_path_buf(), pool, storage, lock, opened_from_file: false, session: SessionSlot::default(), remembered_tried: Default::default() })
 }
@@ -226,7 +227,7 @@ impl Db {
         {
             let mut live = self.live.write().await;
             if let Some(current) = live.take() {
-                current.pool.close().await;
+                close_pool(&current.pool).await;
             }
             *live = Some(next);
         }
@@ -258,7 +259,7 @@ impl Db {
         }
         .await;
         if let Err(err) = prepared {
-            next.pool.close().await;
+            close_pool(&next.pool).await;
             drop(next);
             remove_with_sidecars(&path);
             return Err(err);
@@ -275,7 +276,7 @@ impl Db {
         *self.startup_warning.lock().expect("warning mutex") = None;
         match closed {
             Some(live) => {
-                live.pool.close().await;
+                close_pool(&live.pool).await;
                 let path = live.path.clone();
                 drop(live); // releases the shared-location lock, if any
                 checkpoint_closed(&path).await;
@@ -467,33 +468,39 @@ impl Db {
                 return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
             }
         }
-        // Fold the journal into the file while it is still open, then close every connection: Windows
-        // cannot remove or replace a file that any handle still has open.
+        // Windows cannot move or remove a file that any handle still has open, so every connection
+        // is closed (and confirmed closed) before the files are touched.
         let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&live.pool).await;
-        live.pool.close().await;
+        close_pool(&live.pool).await;
         let path = live.path.clone();
         let storage = live.storage.clone();
-        checkpoint_closed(&path).await;
-        let swapped = match remove_sidecars(&path).await {
-            Ok(()) => while_in_use(|| std::fs::rename(staged, &path)).await.map_err(|e| format!("cannot replace the company file: {e}")),
-            Err(e) => Err(e),
+        let aside = match put_in_place(staged, &path).await {
+            Ok(aside) => aside,
+            Err(e) => {
+                // Nothing was moved: reopen the books as they were.
+                live.pool = open_for(&path, &storage, None).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
+                return Err(format!("RESTORE_SWAP: {e}; your current books were left in place"));
+            }
         };
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
                 // The restored file has its own users; whoever was signed in signs in again.
                 live.session = SessionSlot::default();
-                if swapped.is_ok() {
-                    // The replacement's audit trail may be behind this computer's record of the old one.
-                    // The swap has happened either way, so a failure here must not report it as failed.
-                    if let Err(err) = crate::audit_chain::reanchor(&live.pool).await {
-                        eprintln!("LocalBooks: could not record the restored file's audit trail: {err}");
-                    }
+                remove_replaced(&aside).await;
+                // The replacement's audit trail may be behind this computer's record of the old one.
+                // The swap has happened either way, so a failure here must not report it as failed.
+                if let Err(err) = crate::audit_chain::reanchor(&live.pool).await {
+                    eprintln!("LocalBooks: could not record the restored file's audit trail: {err}");
                 }
-                swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
+                Ok(())
             }
             Err(open_err) => {
-                while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
+                // Put the previous books back: the file moved aside, or else the snapshot.
+                remove_with_sidecars(&path);
+                if while_in_use(|| std::fs::rename(&aside, &path)).await.is_err() {
+                    while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
+                }
                 remove_sidecars(&path).await?;
                 live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
@@ -537,7 +544,7 @@ impl Db {
     pub async fn shutdown(&self) {
         let mut live = self.live.write().await;
         if let Some(live) = live.as_mut() {
-            live.pool.close().await;
+            close_pool(&live.pool).await;
             live.lock = None;
         }
     }
@@ -562,15 +569,137 @@ async fn remove_sidecars(path: &Path) -> Result<(), String> {
 
 /// Runs a file operation, retrying for up to two seconds while Windows reports the file in use
 /// (a just-closed connection's handle can take a moment to be released). Other errors return at once.
+/// Closes `pool` and waits until every one of its connections has closed.
+///
+/// `Pool::close` in sqlx 0.8 can return with a connection still open: after a query, a connection
+/// goes back to the pool in a spawned task that pings it first, and if `close` starts during that
+/// ping, its last wait ends when the connection reaches the idle queue, which it does not look at
+/// again. That connection (and the file, its `-wal` and `-shm`) then stays open for as long as any
+/// clone of the pool lives. macOS and Linux don't mind; Windows refuses to move or remove the file.
+/// Closing again closes it.
+pub(crate) async fn close_pool(pool: &SqlitePool) {
+    for _ in 0..400 {
+        pool.close().await;
+        if pool.size() == 0 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+/// Folds a closed company file's write-ahead log into it and switches it to a rollback journal,
+/// which makes SQLite remove its `-wal` and `-shm` files. SQLite changes the journal mode only for
+/// a connection that has the file to itself, so this also proves nothing else has it open. The
+/// next [`open_for`] switches a local file back to WAL.
+async fn leave_wal(path: &Path) -> Result<(), String> {
+    let options = SqliteConnectOptions::new().filename(path).create_if_missing(false).busy_timeout(Duration::from_secs(5));
+    let mut conn = sqlx::SqliteConnection::connect_with(&options).await.map_err(|e| format!("cannot open {}: {e}", path.display()))?;
+    let mode: Result<String, _> = sqlx::query_scalar("PRAGMA journal_mode = DELETE").fetch_one(&mut conn).await;
+    let _ = conn.close().await;
+    match mode {
+        Ok(mode) if mode.eq_ignore_ascii_case("delete") => clear_sidecars(path).await,
+        Ok(mode) => Err(format!("{} is still open elsewhere (its journal stayed in {mode} mode)", path.display())),
+        Err(e) => Err(format!("{} is still open elsewhere ({e})", path.display())),
+    }
+}
+
+/// Removes the journal files of a closed company file in rollback mode, before the file is moved.
+/// On Windows a virus scanner can hold a just-closed `-wal` or `-shm` for longer than it takes to
+/// retry. Those two are harmless to leave as long as the log is empty: SQLite reads no pages from an
+/// empty log, and the first connection to open a file rebuilds its `-shm`. A log that still has
+/// content, or a rollback `-journal`, would be applied to the replacement, so those must go.
+async fn clear_sidecars(path: &Path) -> Result<(), String> {
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
+        if !sidecar.exists() {
+            continue;
+        }
+        let removed = while_in_use(|| match std::fs::remove_file(&sidecar) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            other => other,
+        })
+        .await;
+        let Err(e) = removed else { continue };
+        let empty = || std::fs::metadata(&sidecar).map(|m| m.len() == 0).unwrap_or(true);
+        let harmless = match suffix {
+            "-shm" => true,
+            "-wal" => empty() || (std::fs::OpenOptions::new().write(true).open(&sidecar).and_then(|f| f.set_len(0)).is_ok() && empty()),
+            _ => false,
+        };
+        if !harmless {
+            return Err(format!("cannot remove {}: {e}", sidecar.display()));
+        }
+        eprintln!("LocalBooks: left {} in place ({e}); it holds nothing", sidecar.display());
+    }
+    Ok(())
+}
+
+/// Marks a company file that was replaced and is waiting to be removed: `<file>.replaced-<pid>-<n>`.
+const REPLACED_INFIX: &str = ".replaced-";
+
+/// Where the file being replaced is moved while its replacement goes in.
+fn replaced_path(path: &Path) -> PathBuf {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or_default();
+    PathBuf::from(format!("{}{REPLACED_INFIX}{}-{nanos}", path.display(), std::process::id()))
+}
+
+/// Puts the closed file `staged` in place of the closed company file `path`. The company file is
+/// renamed aside first and the replacement renamed in, rather than one renamed over the other, so a
+/// failure at any step can put the original back unchanged. Returns where the original now is; the
+/// caller removes it once the replacement opens. On an error the company file is unchanged.
+async fn put_in_place(staged: &Path, path: &Path) -> Result<PathBuf, String> {
+    leave_wal(staged).await.map_err(|e| format!("the replacement file is not ready: {e}"))?;
+    leave_wal(path).await.map_err(|e| format!("cannot close the company file: {e}"))?;
+    let aside = replaced_path(path);
+    while_in_use(|| std::fs::rename(path, &aside)).await.map_err(|e| format!("cannot move {} aside: {e}", path.display()))?;
+    if let Err(e) = while_in_use(|| std::fs::rename(staged, path)).await {
+        return match while_in_use(|| std::fs::rename(&aside, path)).await {
+            Ok(()) => Err(format!("cannot put the replacement in place: {e}")),
+            Err(back) => Err(format!("cannot put the replacement in place ({e}), nor move the company file back from {} ({back})", aside.display())),
+        };
+    }
+    Ok(aside)
+}
+
+/// Removes a company file that was replaced. If something (a virus scanner, say) still has it open,
+/// it is left for [`remove_stale_replaced`] to remove the next time the company file opens.
+async fn remove_replaced(aside: &Path) {
+    let _ = while_in_use(|| match std::fs::remove_file(aside) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    })
+    .await;
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", aside.display()));
+    }
+}
+
+/// Removes replaced copies of `path` that an earlier swap could not remove (see [`put_in_place`]).
+fn remove_stale_replaced(path: &Path) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else { return };
+    let prefix = format!("{}{REPLACED_INFIX}", name.to_string_lossy());
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 async fn while_in_use(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::Result<()> {
     // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
     const IN_USE: [i32; 3] = [5, 32, 33];
-    for _ in 0..40 {
+    for waited in 0..200 {
         match op() {
             Err(e) if cfg!(windows) && e.raw_os_error().is_some_and(|code| IN_USE.contains(&code)) => {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
-            other => return other,
+            other => {
+                if waited > 0 {
+                    eprintln!("LocalBooks: a file was in use for about {} ms", waited * 50);
+                }
+                return other;
+            }
         }
     }
     op()
@@ -673,15 +802,11 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         .await
         .map_err(|e| format!("cannot open company file {}: {e}", path.display()))?;
 
-    refuse_newer_file(&pool, path).await?;
-    if let Some(dir) = backups {
-        if let Some(version) = pending_upgrade_from(&pool).await? {
-            crate::backup::pre_upgrade_snapshot(&pool, path, dir, version).await.map_err(|e| {
-                format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
-            })?;
-        }
+    if let Err(e) = prepare(&pool, path, backups).await {
+        // Closed before returning, so a caller can move or remove the file straight away.
+        close_pool(&pool).await;
+        return Err(e);
     }
-    migrate(&pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))?;
     // Seal anything written outside a write transaction (the migration records) into the audit chain.
     // Best effort: the books must still open (and be verifiable) if sealing fails; the next write
     // transaction seals them instead.
@@ -694,6 +819,19 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
     }
 
     Ok(pool)
+}
+
+/// Checks and upgrades a newly opened company file (see [`open_for`]).
+async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Result<(), String> {
+    refuse_newer_file(pool, path).await?;
+    if let Some(dir) = backups {
+        if let Some(version) = pending_upgrade_from(pool).await? {
+            crate::backup::pre_upgrade_snapshot(pool, path, dir, version).await.map_err(|e| {
+                format!("{e} (LocalBooks did not upgrade {} because it could not save a copy first)", path.display())
+            })?;
+        }
+    }
+    migrate(pool).await.map_err(|e| format!("cannot migrate company file {}: {e}", path.display()))
 }
 
 /// Folds a closed company file's write-ahead log back into the file and removes it. The pool's

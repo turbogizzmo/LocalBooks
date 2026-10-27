@@ -77,7 +77,7 @@ async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
             .execute(&pool)
             .await
             .unwrap();
-        pool.close().await;
+        crate::db::close_pool(&pool).await;
     }
     let config = db::test_config(&tmp.0);
     let db = Db::open_at(live.clone(), config.clone()).await.unwrap();
@@ -93,7 +93,7 @@ async fn opening_an_older_company_file_saves_a_copy_before_upgrading_it() {
     let version: i64 = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations").fetch_one(&copy).await.unwrap();
     assert_eq!(version, previous_version);
     assert_eq!(total_posted(&copy).await, 12_345);
-    copy.close().await;
+    crate::db::close_pool(&copy).await;
 
     // An up-to-date file is opened without another copy.
     db.shutdown().await;
@@ -154,7 +154,7 @@ async fn restore_rejects_foreign_newer_tampered_and_unbalanced_files() {
             .await
             .unwrap();
         sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY)").execute(&pool).await.unwrap();
-        pool.close().await;
+        crate::db::close_pool(&pool).await;
     }
     assert!(reject(other).await.starts_with("RESTORE_NOT_LOCALBOOKS"));
 
@@ -169,7 +169,7 @@ async fn restore_rejects_foreign_newer_tampered_and_unbalanced_files() {
             for stmt in sql.split(';').filter(|s| !s.trim().is_empty()) {
                 sqlx::query(stmt).execute(&pool).await.unwrap();
             }
-            pool.close().await;
+            crate::db::close_pool(&pool).await;
             path
         }
     };
@@ -206,4 +206,44 @@ async fn auto_backup_runs_daily_and_prunes() {
         std::fs::remove_file(f.path).unwrap();
     }
     assert!(auto_backup(&db).await.unwrap().is_none());
+}
+
+/// Windows refuses to move or remove a file that is still open, so a handle left open at swap time
+/// shows up there as an intermittent RESTORE_SWAP failure. Twenty restores in a row, each just after
+/// queries on the live file, must all succeed and leave nothing behind.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[cfg_attr(not(windows), ignore = "Windows stress test; run with --ignored elsewhere")]
+async fn twenty_restores_in_a_row_all_swap_cleanly() {
+    let tmp = TempDir::new("stress");
+    let live = tmp.0.join("Company.localbooks");
+    let db = Db::open_at(live.clone(), db::test_config(&tmp.0)).await.unwrap();
+    post_sale(&db.pool().await, 10_000).await;
+    let exported = tmp.0.join("exports").join("books.db");
+    snapshot(&db.pool().await, &live, &exported).await.unwrap();
+
+    let started = std::time::Instant::now();
+    let mut failures = Vec::new();
+    for round in 1..=20 {
+        post_sale(&db.pool().await, 1).await;
+        // Queries that finish just before the swap: their connections are still on their way back.
+        let pool = db.pool().await;
+        let reads: Vec<_> = (0..4).map(|_| tokio::spawn({ let pool = pool.clone(); async move { total_posted(&pool).await } })).collect();
+        for read in reads {
+            read.await.unwrap();
+        }
+        match restore(&db, &exported).await {
+            Ok(_) => assert_eq!(total_posted(&db.pool().await).await, 10_000, "round {round}"),
+            Err(e) => failures.push(format!("round {round}: {e}")),
+        }
+    }
+    eprintln!("20 restores took {:?}", started.elapsed());
+    assert!(failures.is_empty(), "{} of 20 restores failed: {failures:#?}", failures.len());
+    let left: Vec<String> = [tmp.0.clone(), db.backups_dir().to_path_buf()]
+        .iter()
+        .flat_map(|dir| std::fs::read_dir(dir).unwrap().flatten())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".replaced-") || n.contains("staging"))
+        .collect();
+    assert!(left.is_empty(), "left behind: {left:?}");
+    db.shutdown().await;
 }
