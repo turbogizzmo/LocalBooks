@@ -9,6 +9,7 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
+import { useAttachmentRows } from './Attachments.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
@@ -397,6 +398,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   // The Rep column shows once any invoice has a rep.
   const withRep = (data ?? []).some((inv) => inv.salesRep);
   const COLS = withRep ? 10 : 9;
+  const attachments = useAttachmentRows();
   const [printPortal, forms] = useFormPrinter(onNotice);
   const emailed = useEmailStatuses('INVOICE');
   const [unsentOnly, setUnsentOnly] = useState(false);
@@ -485,6 +487,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                       {inv.invoiceNumber}
                       {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
+                      {attachments.clip(inv.journalEntryId)}
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
                     {withRep && <td className="qb-grid-cell">{inv.salesRep ?? ''}</td>}
@@ -505,6 +508,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                         label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
+                          attachments.menuItem(inv.journalEntryId),
                           {
                             label: 'Edit…',
                             disabled: inv.isVoided || inv.amountPaidCents > 0,
@@ -521,6 +525,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                       />
                     </td>
                   </tr>
+                  {attachments.row(inv.journalEntryId, COLS)}
                   {isActive && (
                     <PaymentRow
                       invoice={{ ...inv, homeCurrency }}
