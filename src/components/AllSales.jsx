@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -167,6 +168,7 @@ export default function AllSales({ accounts, intent }) {
   const [printPortal, forms] = useFormPrinter(setNotice);
   const emailed = useEmailStatuses('INVOICE');
   const receiptsEmailed = useEmailStatuses('SALES_RECEIPT');
+  const attachments = useAttachmentRows();
   const voidRow = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Transaction voided: a reversing journal entry now offsets it.' });
@@ -182,7 +184,7 @@ export default function AllSales({ accounts, intent }) {
     balance: (r) => (r.kind === 'INVOICE' ? r.balanceCents : null),
     total: (r) => r.homeTotalCents ?? r.totalCents,
     status: (r) => (r.isVoided ? 'VOIDED' : r.kind === 'INVOICE' ? r.status : r.kind === 'PAYMENT' ? 'Closed' : 'Paid'),
-  });
+  }, { storageKey: 'all-sales' });
   const visible = sorter.sorted;
 
   return (
@@ -262,13 +264,15 @@ export default function AllSales({ accounts, intent }) {
                 const isOverdue = !r.isVoided && r.kind === 'INVOICE' && r.balanceCents > 0 && r.dueDate < today;
                 const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatMoney(r.totalCents, r.currencyCode)}).`;
                 return (
-                  <tr key={`${r.kind}-${r.id}`} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                  <Fragment key={`${r.kind}-${r.id}`}>
+                  <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
                     <td className="qb-grid-cell">{formatDate(r.date)}</td>
                     <td className="qb-grid-cell">{KIND_LABEL[r.kind]}</td>
                     <td className="qb-grid-cell">
                       {r.number}
                       {r.kind === 'INVOICE' && <EmailMarks status={emailed.get(r.id)} />}
                       {r.kind === 'SALES_RECEIPT' && <EmailMarks status={receiptsEmailed.get(r.id)} />}
+                      {attachments.clip(r.journalEntryId)}
                     </td>
                     <td className="qb-grid-cell" title={r.customerName}>{r.customerName || <span className="text-qb-ink-faint">—</span>}</td>
                     <td className={`qb-grid-cell ${isOverdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(r.dueDate)}</td>
@@ -288,11 +292,14 @@ export default function AllSales({ accounts, intent }) {
                         items={[
                           ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms, emailed.get(r.id)) : []),
                           ...(r.kind === 'SALES_RECEIPT' ? formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id)) : []),
+                          attachments.menuItem(r.journalEntryId),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}
                       />
                     </td>
                   </tr>
+                  {attachments.row(r.journalEntryId, 9)}
+                  </Fragment>
                 );
               })}
             </tbody>

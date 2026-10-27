@@ -74,6 +74,9 @@ Click a column heading in a list (invoices, bills, estimates, checks, customers,
 journal and others) to sort by it; click it again to reverse the order. An arrow shows which column
 is sorted.
 
+Lists of transactions start with the newest at the top. LocalBooks remembers the order you choose
+for each list on this computer; click the sorted heading a third time to go back to newest first.
+
 ## Work in more than one window
 
 Like classic desktop accounting software, LocalBooks can show the same company in several windows,

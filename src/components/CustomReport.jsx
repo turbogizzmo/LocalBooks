@@ -62,16 +62,21 @@ function datesFor(period, fiscal, saved) {
   return resolvePeriod(period, fiscal);
 }
 
-export default function CustomReport({ report, custom, navigate, onOpen }) {
+/** `zoom` ({ title, filters, startDate, endDate }) opens a preset narrowed to what was clicked in another report. */
+export default function CustomReport({ report, custom, navigate, onOpen, zoom = null }) {
   const source = useMemo(() => {
     if (report.startsWith('preset:')) {
       const p = custom.presets.find((x) => x.id === report.slice('preset:'.length));
+      if (p && zoom) {
+        const settings = { ...p.settings, filters: { ...p.settings.filters, ...zoom.filters }, startDate: zoom.startDate, endDate: zoom.endDate };
+        return { preset: p, title: zoom.title, dateMode: p.dateMode, period: 'custom', settings };
+      }
       return p && { preset: p, title: p.title, dateMode: p.dateMode, period: p.period, settings: p.settings };
     }
     const s = custom.saved.find((x) => `saved:${x.id}` === report);
     const preset = s && custom.presets.find((x) => x.id === s.preset);
     return s && { saved: s, preset, title: s.settings.title ?? s.name, dateMode: s.settings.dateMode ?? 'range', period: s.settings.period ?? 'custom', settings: s.settings };
-  }, [report, custom.presets, custom.saved]);
+  }, [report, custom.presets, custom.saved, zoom]);
   if (!source) return <div className="qb-panel p-2 text-sm text-qb-ink-muted">Loading report…</div>;
   return <Builder source={source} custom={custom} navigate={navigate} onOpen={onOpen} />;
 }
