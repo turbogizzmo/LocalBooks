@@ -12,10 +12,16 @@ If macOS says the app is damaged, run this once in Terminal, then open it normal
 LocalBooks shows this instead of starting when the company file can't be opened. Nothing in the
 file was changed.
 
-1. Read the reason shown. A file from a newer version of LocalBooks needs the newer app.
-2. **Copy details** copies the message for support. It is also saved in `startup-error.log` next to
-   the company file.
-3. To go back to a backup, look in the `backups` folder next to the company file.
+The screen says what usually causes the problem and what to do:
+
+1. **Try again** restarts LocalBooks and opens the file again. Use it when another program had the
+   file open: a backup, sync (OneDrive, Dropbox, iCloud) or antivirus program, or another copy of
+   LocalBooks. Wait a minute or close that program first.
+2. **Check for updates** looks for a newer LocalBooks and installs it without opening the books
+   first. A file saved by a newer version needs the newer app.
+3. **Copy details** copies the message for support. **Technical details** shows it, and it is also
+   saved in `startup-error.log` next to the company file.
+4. To go back to a backup, look in the `backups` folder next to the company file.
 
 ## The books are in use on another computer
 
