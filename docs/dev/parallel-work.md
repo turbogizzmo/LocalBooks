@@ -25,6 +25,17 @@ Lists that are still shared: the role lists in `src-tauri/src/permissions.rs`. A
 of them is a write, so only a command that opens files, reads without a `get_`, `list_`,
 `inspect_` or `preview_` prefix, or needs an Admin is added there. Add it in the list's own order.
 
+## Test builds and secrets
+
+Debug builds (`tauri dev`, `tauri build --debug`) keep their company file and settings under
+`dev-builds/` (`data_dirs` in `src-tauri/src/main.rs`), and **never use the system Keychain or
+Credential Manager**. Neither does a release build under any bundle identifier other than
+`com.localbooks.desktop`. Their secrets (SMTP password, SimpleFIN access, remembered sign-ins, audit
+trail record) are owner-only JSON files in that build's config folder, so a test launch never
+prompts for the Keychain password and never reads or overwrites the installed app's secrets. The
+choice is `store_kind` in `src-tauri/src/secrets.rs`; anything new that stores a secret goes through
+`SecretStore::for_this_computer`, never `keyring` directly.
+
 ## Migrations
 
 - **Claim a migration number before you start**, in the PR description or the tracking issue, so
