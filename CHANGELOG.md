@@ -4,6 +4,34 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.10.0]
+
+- **Clean Up Books.** **Accounting › Clean Up Books** gathers QuickBooks Accountant's cleanup tools:
+  apply leftover credit memos and vendor credits to open invoices and bills, clear payments stuck in
+  Undeposited Funds, write off old invoices in a batch, review list changes for a date range, and
+  compare inventory with the Balance Sheet. Every fix shows its totals and asks before posting.
+- **Graphs.** **Reports › Graphs**: Income and Expense, Net Worth, Accounts Receivable, Accounts
+  Payable, Sales, and Budget vs. Actual. Each uses the same numbers as its report; click a bar or
+  slice to open the detail.
+- **Reminders and To Do.** A **Reminders** panel on the Dashboard (and **Company › Reminders**) shows
+  overdue invoices, bills coming due, to-dos, recurring transactions due, emails waiting to send,
+  upcoming tax dates and an overdue backup. Choose what it shows in Settings. Add to-dos from
+  **+ New › To Do** or from a customer or vendor.
+- **Price levels.** Give customers their own prices: a fixed percentage up or down on everything,
+  or set prices per item. Set a customer's default level, and sales forms fill in the right rate
+  (a rate you type always wins). The **Item Price List** report shows every level. Price levels
+  come in from QuickBooks and IIF imports.
+- **Condense Data.** **File › Utilities › Condense Data…** keeps your company file lean: it saves
+  a verified **archive** with the full history, then replaces closed years with monthly summary
+  entries, keeping anything still open (unpaid invoices and bills, uncleared bank lines). Your
+  balances, aging and inventory are checked to match before the condensed file is used, and the
+  archive opens read-only any time. Admins only; a closing date is required.
+- **QuickBooks for Mac 2010–2012 files** import directly in the Desktop Migration Wizard.
+- **Export from an installed QuickBooks (preview).** If QuickBooks Desktop still runs on your
+  computer, the Desktop Migration Wizard can ask it for your company's data (AppleScript on a Mac,
+  Intuit's QuickBooks SDK on Windows). LocalBooks only reads; it never changes anything in
+  QuickBooks. This hasn't been tried against every QuickBooks version yet, so tell us how it goes.
+
 ## [0.9.0]
 
 - **QuickBooks-style menu bar.** New **Lists, Company, Customers, Vendors, Employees, Banking** and
