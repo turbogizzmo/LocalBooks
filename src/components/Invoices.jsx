@@ -586,7 +586,7 @@ export default function Invoices({ accounts, intent }) {
       setReceiving(true);
     } else if (intent?.action === 'edit' && intent.data?.invoiceId) {
       // Opened in a window of its own from the list, or reopened with the desktop.
-      loadForEdit({ id: intent.data.invoiceId });
+      loadForEdit({ id: intent.data.invoiceId }, false);
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
@@ -630,7 +630,9 @@ export default function Invoices({ accounts, intent }) {
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
-  const loadForEdit = (inv) => {
+  // `focusCustomer` is off for an invoice opened in its own window, which should not open the
+  // customer suggestions before anyone has touched it.
+  const loadForEdit = (inv, focusCustomer = true) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details }) => {
         setReceiving(false);
@@ -660,7 +662,7 @@ export default function Invoices({ accounts, intent }) {
         tax.set(invoice.taxRateId ?? null);
         setLines(loaded);
         setNotice(null);
-        customerRef.current?.focus();
+        if (focusCustomer) customerRef.current?.focus();
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );

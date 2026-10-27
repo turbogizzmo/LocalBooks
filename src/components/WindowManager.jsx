@@ -16,6 +16,9 @@ import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND } from '../li
  * Ctrl+F4 closes the active one (⌘W on a Mac).
  */
 
+/** The row the minimized windows take along the bottom of the work area. */
+const DOCK_HEIGHT = 34;
+
 /** The work area's size before it is measured: the LocalBooks window less the sidebar and toolbar. */
 const guessArea = () => ({ x: 0, y: 0, width: Math.max(window.innerWidth - 220, 480), height: Math.max(window.innerHeight - 48, 320) });
 
@@ -72,7 +75,10 @@ export function useChildWindows(windowMode, initial) {
     async (kind) => {
       if (kind === 'arrange-icons') return setState((s) => cw.arrangeIcons(s));
       const count = stateRef.current.windows.filter((w) => !w.minimized).length;
-      const layout = await api.arrangeWindows(kind, count, area()).catch(() => null);
+      // Arranged above the minimized windows, as Windows leaves their row free.
+      const a = area();
+      const docked = stateRef.current.windows.some((w) => w.minimized) ? DOCK_HEIGHT : 0;
+      const layout = await api.arrangeWindows(kind, count, { ...a, height: Math.max(a.height - docked, cw.MIN_HEIGHT) }).catch(() => null);
       if (layout) setState((s) => cw.arrange(s, layout));
     },
     [area],

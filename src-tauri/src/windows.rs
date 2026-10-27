@@ -519,8 +519,13 @@ pub struct WindowPreferences {
 /// The menu items whose state follows the windows and the preferences.
 struct WindowMenus {
     window_menu: Submenu<Wry>,
-    /// The Window menu's numbered list of the windows inside LocalBooks.
+    /// The Window menu's numbered list of the windows inside LocalBooks, and where it starts: above
+    /// Minimize, before any item macOS adds by itself. Menu items are removed by position, and the
+    /// items macOS adds (Minimize All, Fill, Center, its own window list) would shift those below.
     list: Mutex<Vec<MenuItemKind<Wry>>>,
+    list_at: usize,
+    /// What the list shows now, so an unchanged list is left as it is.
+    listed: Mutex<Vec<(String, String, bool)>>,
     open_window_list: CheckMenuItem<Wry>,
     one_window: CheckMenuItem<Wry>,
     multiple_windows: CheckMenuItem<Wry>,
@@ -552,12 +557,14 @@ pub fn add_menus(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     top.push(MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?));
     let refs: Vec<&dyn IsMenuItem<Wry>> = top.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
     window_menu.insert_items(&refs, 0)?;
+    let mut list_at = top.len();
     let workspace = if cfg!(target_os = "macos") {
         let autosave = CheckMenuItem::with_id(app, MENU_WORKSPACE_AUTOSAVE, "AutoSave", true, true, None::<&str>)?;
         let manual = CheckMenuItem::with_id(app, MENU_WORKSPACE_MANUAL, "Manual", true, false, None::<&str>)?;
         let save = MenuItem::with_id(app, MENU_WORKSPACE_SAVE, "Save Workspace", true, None::<&str>)?;
         let sub = Submenu::with_items(app, "Workspace", true, &[&autosave, &manual, &PredefinedMenuItem::separator(app)?, &save])?;
         window_menu.insert_items(&[&sub, &PredefinedMenuItem::separator(app)?], top.len())?;
+        list_at += 2;
         Some((autosave, manual))
     } else {
         None
@@ -576,7 +583,7 @@ pub fn add_menus(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
         let take = if at == len { 5 } else { 6 };
         view_menu.insert_items(&items[..take], at)?;
     }
-    app.manage(WindowMenus { window_menu, list: Mutex::new(Vec::new()), open_window_list, one_window, multiple_windows, workspace });
+    app.manage(WindowMenus { window_menu, list: Mutex::new(Vec::new()), list_at, listed: Mutex::new(Vec::new()), open_window_list, one_window, multiple_windows, workspace });
     Ok(())
 }
 
@@ -616,6 +623,14 @@ fn refresh_window_list(app: &AppHandle) {
         let reg = registry(app);
         reg.menu_target().map(|(_, e)| (e.children.clone(), e.active.clone())).unwrap_or_default()
     };
+    let now: Vec<(String, String, bool)> = children.iter().map(|c| (c.id.clone(), c.name.clone(), active.as_deref() == Some(c.id.as_str()))).collect();
+    {
+        let mut listed = menus.listed.lock().unwrap_or_else(|e| e.into_inner());
+        if *listed == now {
+            return;
+        }
+        *listed = now;
+    }
     let mut list = menus.list.lock().unwrap_or_else(|e| e.into_inner());
     for item in list.drain(..) {
         let _ = menus.window_menu.remove(&item);
@@ -626,8 +641,15 @@ fn refresh_window_list(app: &AppHandle) {
         let label = if n < 9 { format!("&{} {name}", n + 1) } else { name };
         let checked = active.as_deref() == Some(child.id.as_str());
         if let Ok(item) = CheckMenuItem::with_id(app, format!("{MENU_FOCUS_PREFIX}{}", child.id), label, true, checked, None::<&str>) {
-            if menus.window_menu.append(&item).is_ok() {
+            if menus.window_menu.insert(&item, menus.list_at + list.len()).is_ok() {
                 list.push(MenuItemKind::Check(item));
+            }
+        }
+    }
+    if !list.is_empty() {
+        if let Ok(separator) = PredefinedMenuItem::separator(app) {
+            if menus.window_menu.insert(&separator, menus.list_at + list.len()).is_ok() {
+                list.push(MenuItemKind::Predefined(separator));
             }
         }
     }
@@ -700,7 +722,9 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
             } else if let Some(child) = id.strip_prefix(MENU_FOCUS_PREFIX) {
                 send_command(app, &format!("focus:{child}"));
                 // The item ticks itself when chosen; the page's next report sets the ticks right.
-                refresh_window_list(app);
+                if let Some(menus) = app.try_state::<WindowMenus>() {
+                    menus.listed.lock().unwrap_or_else(|e| e.into_inner()).clear();
+                }
             }
         }
     }
