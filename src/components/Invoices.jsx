@@ -413,6 +413,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
       balance: (inv) => (inv.isVoided ? null : inv.homeBalanceCents ?? inv.balanceCents),
       status: (inv) => (inv.isVoided ? 'VOIDED' : inv.status),
     },
+    { storageKey: 'invoices' },
   );
   const shown = sorter.sorted;
   const voidInvoice = async (journalEntryId) => {

@@ -162,7 +162,7 @@ export const topics = [
   {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
-    body: 'Click a column heading in a list such as invoices, bills, customers or the journal to sort by it, and click it again to reverse the order. An arrow marks the sorted column.',
+    body: 'Click a column heading in a list such as invoices, bills, customers or the journal to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first, and each list remembers the order you choose.',
     keywords: 'sort order column heading header ascending descending arrange',
     go: null,
     guide: 'getting-started',

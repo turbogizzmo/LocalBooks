@@ -262,7 +262,7 @@ export default function DepositsTransfers({ accounts, intent }) {
     from: (r) => (r.kind === 'TRANSFER' ? accountLabel(accounts, r.accountId) : r.lineCount),
     memo: (r) => (r.isVoided ? 'Voided' : r.memo),
     amount: (r) => r.amountCents,
-  });
+  }, { storageKey: 'deposits' });
   const posted = (text) => setNotice({ kind: 'success', text });
 
   return (

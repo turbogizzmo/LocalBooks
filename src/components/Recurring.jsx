@@ -129,7 +129,7 @@ export default function Recurring() {
     end: (t) => t.endDate,
     last: (t) => t.lastRunDate,
     amount: (t) => t.amountCents,
-  });
+  }, { storageKey: 'recurring' });
   const due = list.filter((t) => t.isActive && t.nextDate <= asOf && (!t.endDate || t.nextDate <= t.endDate));
 
   const act = async (work, success) => {

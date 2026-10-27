@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -11,13 +11,36 @@ function compareValues(a, b) {
   return collator.compare(String(a), String(b));
 }
 
+const STORE = 'localbooks.sort.';
+function remembered(storageKey, columns, fallback) {
+  if (!storageKey) return fallback;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE + storageKey) ?? 'null');
+    if (saved === 'none') return null;
+    return saved && columns[saved.key] && (saved.dir === 'asc' || saved.dir === 'desc') ? saved : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Click-to-sort for a list grid. `columns` maps a column key to a function returning that row's sort value
  * (numbers compare numerically, strings naturally, so "INV-9" sorts before "INV-10"; blanks always go last).
- * Clicking a header sorts ascending, again descending, and a third time restores the list's own order.
+ * Clicking a header sorts ascending, again descending, and a third time goes back to `initial` (the
+ * list's own order when there is none). Lists with a `date` column start newest first, as QuickBooks
+ * lists do. With `storageKey`, the order chosen is remembered for that list on this computer.
+ * Options: `{ initial, storageKey }`.
  */
-export function useSort(rows, columns, initial = null) {
-  const [sort, setSort] = useState(initial);
+export function useSort(rows, columns, { initial = columns.date ? { key: 'date', dir: 'desc' } : null, storageKey = null } = {}) {
+  const [sort, setSort] = useState(() => remembered(storageKey, columns, initial));
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(STORE + storageKey, JSON.stringify(sort ?? 'none'));
+    } catch {
+      // Not remembered (private window or storage blocked); the list still sorts.
+    }
+  }, [storageKey, sort]);
   const sorted = useMemo(() => {
     const list = rows ?? [];
     const value = sort && columns[sort.key];
@@ -36,7 +59,12 @@ export function useSort(rows, columns, initial = null) {
     // `columns` is usually an inline object literal whose accessors never change, so it isn't a dependency.
   }, [rows, sort]);
   const toggle = (key) =>
-    setSort((s) => (s?.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : initial));
+    setSort((s) => {
+      if (s?.key !== key) return { key, dir: 'asc' };
+      if (s.dir === 'asc') return { key, dir: 'desc' };
+      // Back to the starting order, unless that is this column: then it just flips.
+      return initial?.key === key ? { key, dir: 'asc' } : initial;
+    });
   return { sorted, sort, toggle };
 }
 
