@@ -9,6 +9,7 @@ import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
 import FileDentist from './FileDentist.jsx';
+import CondenseData, { openArchive } from './CondenseData.jsx';
 import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 
@@ -750,6 +751,8 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     PRE_UPGRADE: 'Before upgrade',
     PRE_IMPORT: 'Before import',
     PRE_REBUILD: 'Before rebuild',
+    PRE_CONDENSE: 'Before condense',
+    ARCHIVE: 'Archive (read-only)',
     EXPORT: 'Exported',
   };
 
@@ -787,6 +790,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
         {creatingCompany && <NewCompanyDialog onClose={() => setCreatingCompany(false)} />}
       </Group>
       <FileDentist onRebuilt={backups.reload} />
+      <CondenseData isAdmin={isAdmin} onDone={backups.reload} />
       <CompanyFileLocation />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel flex min-h-0 flex-col">
@@ -827,9 +831,20 @@ function FileAndData({ companyName, isAdmin, navigate }) {
                 <td className="qb-grid-cell font-mono text-xs" title={b.path}>{b.fileName}</td>
                 <td className="qb-grid-cell num">{formatBytes(b.sizeBytes)}</td>
                 <td className="qb-grid-cell cell-tight">
-                  <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full" onClick={() => prepareRestore(b.path)} disabled={busy}>
-                    Restore
-                  </button>
+                  {b.kind === 'ARCHIVE' ? (
+                    <button
+                      type="button"
+                      className="qb-btn qb-btn-secondary h-[20px] w-full"
+                      onClick={() => openArchive(b.path).catch((err) => setNotice({ kind: 'error', text: `The archive can't be opened: ${errorText(err)}` }))}
+                      disabled={busy}
+                    >
+                      Open
+                    </button>
+                  ) : (
+                    <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full" onClick={() => prepareRestore(b.path)} disabled={busy}>
+                      Restore
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

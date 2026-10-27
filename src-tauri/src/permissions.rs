@@ -84,6 +84,7 @@ const ADMIN: &[&str] = &[
     "export_company_file",
     "import_company_file",
     "file_dentist_rebuild",
+    "condense_company_file",
     "apply_forensic_correction",
     // Bank connections (their access tokens).
     "simplefin_connect",

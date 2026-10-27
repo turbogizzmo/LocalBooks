@@ -29,7 +29,8 @@ const AUTO_BACKUP_INTERVAL: Duration = Duration::from_secs(20 * 60 * 60);
 pub struct BackupFile {
     pub path: String,
     pub file_name: String,
-    /// `AUTO`, `MANUAL`, `PRE_RESTORE`, `PRE_UPGRADE`, `PRE_IMPORT`, `PRE_REBUILD` or `EXPORT`
+    /// `AUTO`, `MANUAL`, `PRE_RESTORE`, `PRE_UPGRADE`, `PRE_IMPORT`, `PRE_REBUILD`, `PRE_CONDENSE`,
+    /// `ARCHIVE` (the read-only full history a condense leaves) or `EXPORT`
     pub kind: String,
     pub size_bytes: u64,
     pub modified: String,
@@ -271,6 +272,10 @@ fn kind_of(file_name: &str) -> &'static str {
         "PRE_IMPORT"
     } else if file_name.starts_with("pre-rebuild-") {
         "PRE_REBUILD"
+    } else if file_name.starts_with("pre-condense-") {
+        "PRE_CONDENSE"
+    } else if file_name.starts_with("archive-") {
+        "ARCHIVE"
     } else {
         "MANUAL"
     }
@@ -374,6 +379,10 @@ pub async fn auto_backup(db: &Db) -> Result<Option<BackupFile>, String> {
 
 pub fn describe_export(path: &Path) -> Result<BackupFile, String> {
     describe(path, "EXPORT")
+}
+
+pub fn describe_kind(path: &Path, kind: &str) -> Result<BackupFile, String> {
+    describe(path, kind)
 }
 
 #[cfg(test)]
