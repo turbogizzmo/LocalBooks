@@ -6,6 +6,8 @@
 //! embedded, and embeds the company logo as an image. Text is sanitized to what WinAnsi can show
 //! before it is laid out, so the on-screen preview and the PDF print the same characters.
 
+#![allow(clippy::float_arithmetic, reason = "page layout in points; no amounts are computed here")]
+
 use std::fmt::Write as _;
 use std::io::Write as _;
 

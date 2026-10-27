@@ -85,3 +85,25 @@ fn rows_walk_with_null_bitmap_and_shorter_old_rows() {
     let values = walk_row(&old, &wide).unwrap();
     assert!(!values.contains_key("ninth"));
 }
+
+#[test]
+fn quantities_scale_to_ten_thousandths_rounding_half_away_from_zero() {
+    let num = |coefficient, exponent, negative| Value::Numeric(Numeric { coefficient, exponent, negative });
+    // 1.5 (150 × 100⁻¹) is exact.
+    assert_eq!(num(150, -1, false).as_quantity_e4(), Some(15_000));
+    // 0.123456 rounds to 0.1235; the exact half 0.12345 rounds away from zero on both signs.
+    assert_eq!(num(123_456, -3, false).as_quantity_e4(), Some(1_235));
+    assert_eq!(num(123_450, -3, false).as_quantity_e4(), Some(1_235));
+    assert_eq!(num(123_450, -3, true).as_quantity_e4(), Some(-1_235));
+    assert_eq!(num(123_449, -3, false).as_quantity_e4(), Some(1_234));
+    // Amounts still need whole cents: the same rounding never applies to `as_cents`.
+    assert_eq!(num(123_456, -3, false).as_cents(), None);
+    assert_eq!(num(1_234, -1, false).as_cents(), Some(1_234));
+    assert_eq!(Value::Int(3).as_quantity_e4(), Some(30_000));
+    assert_eq!(Value::Int(i64::MAX).as_quantity_e4(), None);
+    assert_eq!(Value::Float(2.5).as_quantity_e4(), Some(25_000));
+    assert_eq!(Value::Float(-0.33333).as_quantity_e4(), Some(-3_333));
+    assert_eq!(Value::Float(f64::NAN).as_quantity_e4(), None);
+    assert_eq!(Value::Float(1e300).as_quantity_e4(), None);
+    assert_eq!(Value::Null.as_quantity_e4(), None);
+}

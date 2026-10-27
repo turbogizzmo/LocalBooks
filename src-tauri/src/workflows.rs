@@ -295,7 +295,7 @@ fn dated(kind: &str, payload: &str, date: NaiveDate) -> Result<Dated, String> {
 fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
     let today = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap();
     match dated(kind, payload, today) {
-        Ok(Dated::Journal(e)) => (e.lines.iter().map(|l| l.debit).sum(), None),
+        Ok(Dated::Journal(e)) => (e.lines.iter().map(|l| l.debit.get()).sum(), None),
         Ok(Dated::Expense(e)) => (e.lines.iter().map(|l| l.amount_cents).sum(), e.payee_name),
         Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (

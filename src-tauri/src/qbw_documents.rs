@@ -152,11 +152,10 @@ pub fn payment_method(name: Option<&str>) -> &'static str {
 /// missing), the line becomes quantity 1 at the line amount.
 fn quantity_and_rate(row: &Row, amount_cents: i64) -> (i64, i64) {
     let amount = amount_cents.abs();
-    let quantity = row.get("quantity_qnty").as_f64().map(f64::abs).filter(|q| *q > 0.0);
+    let quantity = row.get("quantity_qnty").as_quantity_e4().map(i64::abs).filter(|q| *q > 0);
     let rate = row.get("unit_price_amt").as_cents().map(i64::abs).filter(|r| *r > 0);
-    if let (Some(q), Some(r)) = (quantity, rate) {
-        let q_e4 = (q * 10_000.0).round() as i64;
-        if q_e4 > 0 && (q_e4 as i128 * r as i128 + 5_000) / 10_000 == amount as i128 {
+    if let (Some(q_e4), Some(r)) = (quantity, rate) {
+        if (q_e4 as i128 * r as i128 + 5_000) / 10_000 == amount as i128 {
             return (q_e4, r);
         }
     }

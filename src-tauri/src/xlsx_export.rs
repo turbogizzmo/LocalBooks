@@ -10,6 +10,8 @@
 //! Screens describe a report as a [`Sheet`]; the financial statements the CSV export renders on the
 //! Rust side ([`crate::export_engine::render`]) are converted here by [`render_report`].
 
+#![allow(clippy::float_arithmetic, reason = "spreadsheet cells are doubles; cents are divided only on the way out")]
+
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use rust_xlsxwriter::{Color, ExcelDateTime, Format, FormatAlign, FormatBorder, Workbook, Worksheet};
 use serde::Deserialize;

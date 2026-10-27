@@ -183,10 +183,10 @@ fn finds_company_files_in_ordinary_folders_only() {
         names.sort();
         names
     };
-    assert_eq!(names(find_company_files(&[root.clone()], 3, 100, far)), ["Acme.localbooks", "Beta Ltd.LOCALBOOKS", "localbooks.db"]);
-    assert_eq!(names(find_company_files(&[root.clone()], 4, 100, far)).len(), 4, "deeper search finds a/b/c/d");
-    assert_eq!(find_company_files(&[root.clone()], 4, 2, far).len(), 2, "stops at the limit");
-    assert!(find_company_files(&[root.clone()], 4, 100, std::time::Instant::now()).is_empty(), "stops at the deadline");
+    assert_eq!(names(find_company_files(std::slice::from_ref(&root), 3, 100, far)), ["Acme.localbooks", "Beta Ltd.LOCALBOOKS", "localbooks.db"]);
+    assert_eq!(names(find_company_files(std::slice::from_ref(&root), 4, 100, far)).len(), 4, "deeper search finds a/b/c/d");
+    assert_eq!(find_company_files(std::slice::from_ref(&root), 4, 2, far).len(), 2, "stops at the limit");
+    assert!(find_company_files(std::slice::from_ref(&root), 4, 100, std::time::Instant::now()).is_empty(), "stops at the deadline");
     // The same folder searched twice lists each file once.
     assert_eq!(find_company_files(&[root.clone(), root.join("Documents")], 3, 100, far).len(), 3);
     std::fs::remove_dir_all(&root).unwrap();

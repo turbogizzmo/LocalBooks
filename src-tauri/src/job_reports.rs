@@ -144,6 +144,7 @@ fn row(kind: RowKind, depth: u32, cells: Vec<Value>) -> JobRow {
 }
 
 /// `part` as a percentage of `whole`, to one decimal place; null when `whole` is zero.
+#[allow(clippy::float_arithmetic, reason = "a display percentage, not an amount")]
 fn percent(part: i64, whole: i64) -> Value {
     if whole == 0 {
         return Value::Null;

@@ -56,22 +56,26 @@ pub struct Numeric {
 impl Numeric {
     /// Exact value in cents, or `None` when it has finer precision or does not fit.
     pub fn to_cents(self) -> Option<i64> {
+        self.scaled(1).filter(|&(_, exact)| exact).map(|(cents, _)| cents)
+    }
+
+    /// Value × 100^`pow100` as an integer, rounded half away from zero, and whether it was exact;
+    /// `None` when it does not fit. Pure integer arithmetic, so no value passes through a float.
+    fn scaled(self, pow100: i32) -> Option<(i64, bool)> {
         if self.coefficient == 0 {
-            return Some(0);
+            return Some((0, true));
         }
-        // cents = coefficient * 100^(exponent + 1)
-        let shift = self.exponent + 1;
-        let magnitude = if shift >= 0 {
-            self.coefficient.checked_mul(100u128.checked_pow(shift as u32)?)?
+        // scaled = coefficient * 100^(exponent + pow100)
+        let shift = self.exponent.checked_add(pow100)?;
+        let (magnitude, exact) = if shift >= 0 {
+            (self.coefficient.checked_mul(100u128.checked_pow(shift as u32)?)?, true)
         } else {
             let div = 100u128.checked_pow((-shift) as u32)?;
-            if self.coefficient % div != 0 {
-                return None;
-            }
-            self.coefficient / div
+            let (whole, rest) = (self.coefficient / div, self.coefficient % div);
+            (if rest * 2 >= div { whole + 1 } else { whole }, rest == 0)
         };
-        let cents = i64::try_from(magnitude).ok()?;
-        Some(if self.negative { -cents } else { cents })
+        let value = i64::try_from(magnitude).ok()?;
+        Some((if self.negative { -value } else { value }, exact))
     }
 
 }
@@ -105,11 +109,16 @@ impl Value {
         }
     }
 
-    pub fn as_f64(&self) -> Option<f64> {
+    /// A quantity scaled by 10,000 (`ledger::QUANTITY_SCALE`), rounded half away from zero.
+    #[allow(clippy::float_arithmetic, reason = "some tables store quantities as doubles")]
+    pub fn as_quantity_e4(&self) -> Option<i64> {
         match self {
-            Value::Numeric(n) => Some(n.coefficient as f64 * 100f64.powi(n.exponent) * if n.negative { -1.0 } else { 1.0 }),
-            Value::Float(f) => Some(*f),
-            Value::Int(v) => Some(*v as f64),
+            Value::Numeric(n) => n.scaled(2).map(|(q, _)| q),
+            Value::Int(v) => v.checked_mul(10_000),
+            Value::Float(f) => {
+                let q = (f * 10_000.0).round();
+                (q.is_finite() && q.abs() < 9e15).then_some(q as i64)
+            }
             _ => None,
         }
     }
@@ -122,6 +131,7 @@ impl Value {
         }
     }
 
+    #[allow(clippy::float_arithmetic, reason = "some tables store amounts as doubles; only whole cents are accepted")]
     pub fn as_cents(&self) -> Option<i64> {
         match self {
             Value::Numeric(n) => n.to_cents(),

@@ -554,7 +554,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let home_total = match &input.currency {
         Some(currency) => {
             currency.validate()?;
-            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.0 + l.1)
+            convert_lines(&lines, currency.exchange_rate_e6)?.last().map(|l| l.0.get() + l.1.get())
         }
         None => None,
     };

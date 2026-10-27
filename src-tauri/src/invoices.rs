@@ -280,7 +280,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
     }
     // The ledger converts foreign lines deterministically; the A/R debit it will post is the home total.
     let home_total = match &input.currency {
-        Some(currency) => Some(convert_lines(&lines, currency.exchange_rate_e6)?[0].0),
+        Some(currency) => Some(convert_lines(&lines, currency.exchange_rate_e6)?[0].0.get()),
         None => None,
     };
 

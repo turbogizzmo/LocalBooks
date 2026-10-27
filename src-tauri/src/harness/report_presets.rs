@@ -6,6 +6,8 @@
 //! product sales with a class and a rep, a credit memo and a vendor credit (part used), and a bill
 //! for products, and a year-end adjusting entry.
 
+#![allow(clippy::float_arithmetic, reason = "test harness output; quantities are shown as decimals")]
+
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
