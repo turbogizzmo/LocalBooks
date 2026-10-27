@@ -1,6 +1,6 @@
 [package]
 name = "localbooks"
-version = "0.10.0"
+version = "0.10.1"
 description = "LocalBooks: local-first double-entry accounting"
 edition = "2021"
 license = "MIT"

@@ -4,6 +4,19 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.10.1]
+
+- **Mileage tracking.** **Employees › Mileage**: add vehicles and the mileage rates you use (with
+  the dates they start), then record trips by odometer or total miles. Bill trips to a customer or
+  job on an invoice, and see Mileage by Vehicle and Mileage by Job reports with the deductible
+  amount.
+- **Settings in the sidebar.** **Settings** now opens like the other groups, with each section
+  listed. The Desktop Migration Wizard moved to **Settings › Import & Migration**, and **File ›
+  Utilities › Import / Convert…** opens it too.
+- **Fixed:** on Windows, **Condense Data** and **Restore from Backup** could stop with "cannot
+  remove … being used by another process" and leave your books as they were. They now work
+  reliably.
+
 ## [0.10.0]
 
 - **Clean Up Books.** **Accounting › Clean Up Books** gathers QuickBooks Accountant's cleanup tools:
