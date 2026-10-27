@@ -104,7 +104,7 @@ async fn harbor_lane(tmp: &TempDir) -> Db {
     let pool = crate::db::open(&tmp.company()).await.unwrap();
     let pool = crate::harness::fixture::harbor_lane_in(pool).await;
     close_books(&pool, d(2025, 3, 31), None).await;
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
     tmp.open().await
 }
 
@@ -255,7 +255,7 @@ async fn condensing_edge_cases_keeps_users_keys_and_open_documents() {
     for number in ["1010", "1020", "2100"] {
         reconcile(&pool, account(&pool, number).await, d(2024, 12, 31)).await;
     }
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
     let db = tmp.open().await;
     let pool = db.pool().await;
     let cutoff = d(2024, 12, 31);
@@ -321,7 +321,7 @@ async fn inventory_is_carried_at_quantity_and_cost() {
     sell(&pool, "2025-03-01", 6).await;
     reconcile(&pool, checking, d(2024, 12, 31)).await;
     close_books(&pool, d(2024, 12, 31), None).await;
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
 
     let db = tmp.open().await;
     let pool = db.pool().await;
@@ -357,7 +357,7 @@ async fn five_years_condenses_its_first_three_years() {
         reconcile(&pool, account(&pool, number).await, cutoff).await;
     }
     close_books(&pool, cutoff, None).await;
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
     let db = tmp.open().await;
     let pool = db.pool().await;
     let before = books_picture(&pool, cutoff).await;
@@ -484,5 +484,5 @@ async fn seed_condense_demo() {
     let pool = crate::harness::fixture::harbor_lane_in(crate::db::open(&path).await.unwrap()).await;
     close_books(&pool, d(2025, 3, 31), None).await;
     crate::db::compact(&pool).await.unwrap();
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
 }

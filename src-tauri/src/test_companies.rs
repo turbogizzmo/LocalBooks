@@ -233,7 +233,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     closing::set_closing_date(&pool, &ClosingInput { lock_date: Some(d(2025, 12, 31)), current_passcode: None, new_passcode: Some(CLOSING_PASSCODE.into()) }).await.expect("close 2025");
 
     crate::db::compact(&pool).await.expect("compact");
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
     recovery.as_str().to_string()
 }
 
@@ -246,7 +246,7 @@ async fn no_users(path: &Path) {
     let sale = invoices::create_and_post_invoice(&pool, invoice("First Customer", d(2025, 4, 2), vec![line("Setup", 10_000, 120_000, services, false)])).await.expect("invoice");
     pay(&pool, sale.id, checking, d(2025, 4, 20), 120_000, "CHECK").await;
     crate::db::compact(&pool).await.expect("compact");
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
 }
 
 pub(crate) async fn five_years(path: &Path) {
@@ -281,7 +281,7 @@ pub(crate) async fn five_years(path: &Path) {
         }
     }
     crate::db::compact(&pool).await.expect("compact");
-    pool.close().await;
+    crate::db::close_pool(&pool).await;
 }
 
 /// Writes the test companies into `LOCALBOOKS_SEED_DIR`.

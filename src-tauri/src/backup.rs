@@ -109,7 +109,7 @@ async fn write_verified_snapshot(pool: &SqlitePool, tmp: &Path, destination: &Pa
     sqlx::query("VACUUM INTO ?1").bind(tmp_name).execute(pool).await.map_err(|e| format!("BACKUP_FAILED: {e}"))?;
     let check = open_read_only(tmp).await?;
     let verified = quick_check(&check).await;
-    check.close().await;
+    db::close_pool(&check).await;
     verified.map_err(|e| format!("BACKUP_VERIFY: the snapshot failed verification ({e})"))?;
     std::fs::rename(tmp, destination).map_err(|e| format!("BACKUP_WRITE: cannot write {}: {e}", destination.display()))?;
     std::fs::metadata(destination).map(|m| m.len()).map_err(|e| e.to_string())
@@ -129,7 +129,7 @@ pub async fn inspect(path: &Path) -> Result<CompanyFileInfo, String> {
 
     let pool = open_read_only(path).await?;
     let result = inspect_pool(&pool, path).await;
-    pool.close().await;
+    db::close_pool(&pool).await;
     result
 }
 
@@ -244,11 +244,11 @@ pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
     let _ = std::fs::remove_file(&staged);
     let source_pool = open_read_only(source).await?;
     let copied = sqlx::query("VACUUM INTO ?1").bind(staged.to_string_lossy().into_owned()).execute(&source_pool).await;
-    source_pool.close().await;
+    db::close_pool(&source_pool).await;
     copied.map_err(|e| format!("RESTORE_COPY: {e}"))?;
     let upgraded = db::open(&staged).await;
     match upgraded {
-        Ok(pool) => pool.close().await,
+        Ok(pool) => db::close_pool(&pool).await,
         Err(e) => {
             let _ = std::fs::remove_file(&staged);
             return Err(format!("RESTORE_UPGRADE: the backup could not be upgraded to this version ({e})"));

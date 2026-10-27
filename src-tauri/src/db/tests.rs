@@ -280,3 +280,58 @@ async fn startup_falls_back_when_the_configured_folder_is_missing() {
     assert!(status.startup_warning.unwrap().contains("is not available"));
     assert!(!tmp.0.join("unplugged-nas").exists(), "never creates an empty company file on a missing drive");
 }
+
+/// `Pool::close` alone can return with a connection still open (see `close_pool`), which on Windows
+/// keeps the file from being moved or removed. Queries finishing just before the close make it likely.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn close_pool_closes_every_connection() {
+    let tmp = TempDir::new("close-pool");
+    let path = tmp.0.join("Close.localbooks");
+    for round in 0..30 {
+        let pool = open(&path).await.unwrap();
+        let reads: Vec<_> = (0..4)
+            .map(|_| tokio::spawn({ let pool = pool.clone(); async move { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() } }))
+            .collect();
+        for read in reads {
+            read.await.unwrap();
+        }
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
+        close_pool(&pool).await;
+        assert_eq!(pool.size(), 0, "round {round}: a connection was left open");
+        // Nothing else has the file, so it can leave WAL mode (which removes its -wal and -shm).
+        leave_wal(&path).await.unwrap_or_else(|e| panic!("round {round}: {e}"));
+        assert!(!PathBuf::from(format!("{}-wal", path.display())).exists());
+    }
+}
+
+/// A swap that cannot happen leaves the books exactly as they were, and open.
+#[tokio::test]
+async fn a_failed_swap_leaves_the_books_in_place() {
+    let tmp = TempDir::new("swap-fail");
+    let db = Db::open_at(tmp.0.join("Company.localbooks"), test_config(&tmp.0)).await.unwrap();
+    post_one(&db).await;
+    let missing = tmp.0.join("no-such-file.db");
+    let err = db.swap_in(&missing, &missing).await.unwrap_err();
+    assert!(err.starts_with("RESTORE_SWAP") && err.contains("left in place"), "{err}");
+    assert_eq!(entries(&db).await, 1);
+    post_one(&db).await;
+    assert_eq!(entries(&db).await, 2);
+    let names: Vec<String> = std::fs::read_dir(&tmp.0).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    assert!(!names.iter().any(|n| n.contains(".replaced-")), "{names:?}");
+}
+
+/// A replaced file that could not be removed at the time (a scanner had it open) goes the next time
+/// the company file opens.
+#[tokio::test]
+async fn replaced_copies_left_behind_are_removed_at_the_next_open() {
+    let tmp = TempDir::new("replaced");
+    let path = tmp.0.join("Company.localbooks");
+    let stale = PathBuf::from(format!("{}{REPLACED_INFIX}1-2", path.display()));
+    let unrelated = tmp.0.join("Other.localbooks.replaced-1-2");
+    std::fs::write(&stale, b"old").unwrap();
+    std::fs::write(&unrelated, b"keep").unwrap();
+    let db = Db::open_at(path, test_config(&tmp.0)).await.unwrap();
+    assert!(!stale.exists());
+    assert!(unrelated.exists());
+    db.shutdown().await;
+}
