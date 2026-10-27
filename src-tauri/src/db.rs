@@ -467,20 +467,17 @@ impl Db {
                 return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
             }
         }
+        // Fold the journal into the file while it is still open, then close every connection: Windows
+        // cannot remove or replace a file that any handle still has open.
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&live.pool).await;
         live.pool.close().await;
         let path = live.path.clone();
         let storage = live.storage.clone();
-        let remove_sidecars = |path: &Path| {
-            for suffix in ["-wal", "-shm", "-journal"] {
-                let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
-                if sidecar.exists() {
-                    std::fs::remove_file(&sidecar).map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
-                }
-            }
-            Ok::<(), String>(())
+        checkpoint_closed(&path).await;
+        let swapped = match remove_sidecars(&path).await {
+            Ok(()) => while_in_use(|| std::fs::rename(staged, &path)).await.map_err(|e| format!("cannot replace the company file: {e}")),
+            Err(e) => Err(e),
         };
-        let swapped = remove_sidecars(&path)
-            .and_then(|()| std::fs::rename(staged, &path).map_err(|e| format!("cannot replace the company file: {e}")));
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
@@ -496,8 +493,8 @@ impl Db {
                 swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
             }
             Err(open_err) => {
-                std::fs::copy(fallback, &path).map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
-                remove_sidecars(&path)?;
+                while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
+                remove_sidecars(&path).await?;
                 live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
             }
@@ -544,6 +541,39 @@ impl Db {
             live.lock = None;
         }
     }
+}
+
+/// Removes SQLite's journal files next to a closed company file, so a replacement file never meets
+/// another file's log.
+async fn remove_sidecars(path: &Path) -> Result<(), String> {
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
+        if sidecar.exists() {
+            while_in_use(|| match std::fs::remove_file(&sidecar) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                other => other,
+            })
+            .await
+            .map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Runs a file operation, retrying for up to two seconds while Windows reports the file in use
+/// (a just-closed connection's handle can take a moment to be released). Other errors return at once.
+async fn while_in_use(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::Result<()> {
+    // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
+    const IN_USE: [i32; 3] = [5, 32, 33];
+    for _ in 0..40 {
+        match op() {
+            Err(e) if cfg!(windows) && e.raw_os_error().is_some_and(|code| IN_USE.contains(&code)) => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            other => return other,
+        }
+    }
+    op()
 }
 
 /// Removes a company file that was never used, with SQLite's journal files.

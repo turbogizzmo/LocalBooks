@@ -313,7 +313,7 @@ export default function App() {
         )}
         {condensed.data?.isArchive && (
           <div className="no-print">
-            <Notice kind="info" text={`Archive of books condensed through ${condensed.data.archiveThrough}: read-only, for reports and look-ups. Open your current company file to make changes.`} />
+            <Notice kind="info" text={`Archive of books condensed through ${formatDate(condensed.data.archiveThrough)}: read-only, for reports and look-ups. Open your current company file to make changes.`} />
           </div>
         )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
