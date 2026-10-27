@@ -26,6 +26,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 ## Employees
 
 - [Track time](time-tracking.md)
+- [Track vehicle mileage](mileage.md)
 
 ## Banking
 

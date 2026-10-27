@@ -267,6 +267,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
 | Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
 | Menu bar | Menu bar | Classic desktop menus (Lists, Company, Customers, Vendors, Employees, Banking, Reports) that open each form and report, with Ctrl+I, Ctrl+W, Ctrl+R, Ctrl+J, Ctrl+T and Ctrl+F | [guide](docs/guide/getting-started.md#find-things-in-the-menu-bar) |
+| Mileage | Employees › Mileage; + New › Mileage Trip | Vehicles, dated mileage rates you enter, trips by odometer or miles, billing trips on an invoice, mileage by vehicle and by job | [guide](docs/guide/mileage.md) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
@@ -287,7 +288,7 @@ its entry form with focus in the first field.
 |---|---|---|---|
 | Invoice | Expense | Single Time Activity | Journal Entry |
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
-| Estimate | Bill | | Transfer |
+| Estimate | Bill | Mileage Trip | Transfer |
 | Sales Receipt | Pay Bills | | |
 | | Credit Card Credit | | |
 
@@ -566,6 +567,8 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
   have no cost column, so estimates vs. actuals compare revenue, and an estimate becomes a single
   invoice (no partial progress invoices).
+- **Mileage billing** makes a new invoice for the trips you choose; trips can't be added to an
+  invoice you're already writing. Mileage rates aren't built in: enter the official rate yourself.
 - **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
   returns.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales

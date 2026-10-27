@@ -127,10 +127,13 @@ const VENDORS: &[Entry] = &[
     ITEM_LIST,
 ];
 
-const EMPLOYEES: &[Entry] = &[Entry::Sub(
-    "Enter Time",
-    &[form("Use Weekly Timesheet", "employees/time", "weekly-timesheet"), form("Time / Enter Single Activity", "employees/time", "time-activity")],
-)];
+const EMPLOYEES: &[Entry] = &[
+    Entry::Sub(
+        "Enter Time",
+        &[form("Use Weekly Timesheet", "employees/time", "weekly-timesheet"), form("Time / Enter Single Activity", "employees/time", "time-activity")],
+    ),
+    form("Enter Vehicle Mileage", "employees/mileage", "mileage-trip"),
+];
 
 const BANKING: &[Entry] = &[
     // Ctrl+W, as in the classic software; on macOS Cmd+W closes the window.
@@ -176,6 +179,11 @@ const REPORTS: &[Entry] = &[
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
+            Entry::Sep,
+            report("Mileage by Vehicle Summary", "mileage-vehicle"),
+            report("Mileage by Vehicle Detail", "mileage-vehicle-detail"),
+            report("Mileage by Job Summary", "mileage-job"),
+            report("Mileage by Job Detail", "mileage-job-detail"),
         ],
     ),
     Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
@@ -324,7 +332,7 @@ mod tests {
     fn items_open_pages_and_reports_that_exist() {
         let read = |path: &str| std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/components/").to_string() + path).unwrap();
         let pages = read("Sidebar.jsx");
-        let reports = ["Reports.jsx", "JobReports.jsx", "AccountantReports.jsx"].map(read).concat();
+        let reports = ["Reports.jsx", "JobReports.jsx", "MileageReports.jsx", "AccountantReports.jsx"].map(read).concat();
         fn walk(entries: &[Entry], out: &mut Vec<(&'static str, Option<&'static str>)>) {
             for entry in entries {
                 match entry {
