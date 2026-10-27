@@ -221,7 +221,7 @@ async fn reports_total_miles_and_deductible_by_vehicle_and_job() {
     assert_eq!(rates, vec![json!(7_000), json!(7_250)]);
     let subtotal = detail.rows.iter().find(|r| r.kind == RowKind::Subtotal).unwrap();
     assert_eq!((subtotal.cells[0].clone(), subtotal.cells[6].clone(), subtotal.cells[8].clone()), (json!("Total Truck"), json!(miles(200)), json!(14_250)));
-    assert_eq!(detail.rows.iter().filter(|r| r.kind == RowKind::Detail).next().unwrap().cells[3], json!("Unbilled"));
+    assert_eq!(detail.rows.iter().find(|r| r.kind == RowKind::Detail).unwrap().cells[3], json!("Unbilled"));
 
     // By job: customers alphabetically, jobs under their own name, no customer/job last.
     let jobs = mileage_report(&pool, MileageReportKind::JobSummary, &all, today).await.unwrap();

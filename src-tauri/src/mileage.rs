@@ -172,7 +172,9 @@ pub async fn delete_mileage_rate(pool: &SqlitePool, id: i64) -> Result<(), Strin
     Ok(())
 }
 
-/// The rate in effect on `date`: the one with the latest effective date on or before it.
+/// The rate in effect on `date`: the one with the latest effective date on or before it. Trips and
+/// reports look it up in their own queries the same way; this checks that rule on its own.
+#[cfg(test)]
 pub async fn rate_on(pool: &SqlitePool, date: NaiveDate) -> Result<Option<i64>, String> {
     sqlx::query_scalar("SELECT rate_e4 FROM mileage_rates WHERE effective_date <= ?1 ORDER BY effective_date DESC LIMIT 1")
         .bind(date)
