@@ -81,3 +81,54 @@ fn the_version_has_its_changelog_and_whats_new() {
         "site/index.html's What's new should be for {minor}: update it in the release PR"
     );
 }
+
+/// A heading's anchor as GitHub makes it (and as `headingId` in GuideView.jsx does in the app).
+fn heading_anchor(heading: &str) -> String {
+    heading
+        .replace("**", "")
+        .replace('`', "")
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-')
+        .collect::<String>()
+        .trim()
+        .chars()
+        .map(|c| if c.is_whitespace() { '-' } else { c })
+        .collect()
+}
+
+#[test]
+fn guide_links_point_at_guides_and_headings_that_exist() {
+    let link = regex::Regex::new(r"\]\(([\w-]+)\.md(?:#([\w-]+))?\)").unwrap();
+    let mut names = guides();
+    names.push("README".into());
+    let anchors = |name: &str| -> Vec<String> {
+        read(&repo().join(format!("docs/guide/{name}.md")))
+            .lines()
+            .filter_map(|l| l.strip_prefix("## ").or_else(|| l.strip_prefix("### ")))
+            .map(heading_anchor)
+            .collect()
+    };
+    let mut broken = Vec::new();
+    for from in &names {
+        let text = read(&repo().join(format!("docs/guide/{from}.md")));
+        for c in link.captures_iter(&text) {
+            let to = &c[1];
+            if !names.iter().any(|n| n == to) {
+                broken.push(format!("{from}.md links to {to}.md, which doesn't exist"));
+            } else if let Some(section) = c.get(2) {
+                if !anchors(to).iter().any(|a| a == section.as_str()) {
+                    broken.push(format!("{from}.md links to {to}.md#{}, which has no such heading", section.as_str()));
+                }
+            }
+        }
+    }
+    assert!(broken.is_empty(), "broken guide links:\n{}", broken.join("\n"));
+}
+
+#[test]
+fn heading_anchors_match_github() {
+    assert_eq!(heading_anchor("Accountant & Taxes reports"), "accountant--taxes-reports");
+    assert_eq!(heading_anchor("\"LocalBooks couldn't open your company file\""), "localbooks-couldnt-open-your-company-file");
+    assert_eq!(heading_anchor("See the transactions behind a number (QuickZoom)"), "see-the-transactions-behind-a-number-quickzoom");
+}

@@ -5,10 +5,12 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 
 ## Getting started
 
+- [What's new](whats-new.md)
 - [Set up your company](getting-started.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
 - [Users, passwords and sensitive data](users-and-passwords.md)
 - [Reminders and the To Do list](reminders-and-todos.md)
+- [Attach receipts and documents](attachments.md)
 
 ## Sales and customers
 

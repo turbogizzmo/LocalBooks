@@ -64,6 +64,14 @@ export const topics = [
     guide: 'customer-payments',
   },
   {
+    id: 'early-payment', area: 'sales', views: ['sales/invoices', 'expenses/bills'],
+    title: 'Record a payment made early',
+    body: 'A customer payment can be dated before its invoice, for a customer who paid ahead or a deposit taken before you billed the work: enter the date it was actually received. Pay bills works the same way, so a bill can be paid on a date before the bill date.',
+    keywords: 'early payment prepayment deposit advance before invoice date paid ahead prepaid',
+    go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
+    guide: 'customer-payments',
+  },
+  {
     id: 'foreign-currency', area: 'sales', views: ['sales/invoices', 'expenses/expenses'],
     title: 'Invoice or pay in another currency',
     body: 'Choose a currency and exchange rate on an invoice, expense or check; your books record the home-currency amount and keep the original alongside. A payment received at a different rate posts the difference to Exchange Gain or Loss automatically.',
@@ -205,8 +213,8 @@ export const topics = [
     id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
     body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy. Files stay with a transaction when you edit it.',
-    guide: 'bills',
-    keywords: 'attachment attach receipt document file scan photo pdf',
+    guide: 'attachments',
+    keywords: 'attachment attach receipt document file scan photo pdf paperclip',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {

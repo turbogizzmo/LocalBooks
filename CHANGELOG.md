@@ -4,6 +4,15 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [Unreleased]
+
+- **What's new guide.** **Help › What's new** lists the newest features release by release, in
+  plain words, each with a link to its steps.
+- **Attachments guide.** A step-by-step guide to attaching receipts and vendor invoices, saving a
+  copy and removing files, and what happens to files when a transaction is edited or voided.
+- **Links inside the in-app guides open the right section.** A link to part of another guide now
+  opens that guide at the section, instead of showing as plain text.
+
 ## [0.10.2]
 
 - **Early payments.** A customer payment can be dated before its invoice (a customer who paid

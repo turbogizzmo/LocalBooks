@@ -89,13 +89,17 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
   const [openAreas, setOpenAreas] = useState(() => new Set());
   // The guide being read, with the trail of guides opened from it (for Back).
   const [reading, setReading] = useState([]);
-  const guideId = reading[reading.length - 1] ?? null;
+  // An entry is a guide id, or `id#section` for a link to one of its headings.
+  const entry = reading[reading.length - 1] ?? null;
+  const [guideId, section] = entry ? entry.split('#') : [null];
   const openGuide = (id) => setReading((r) => [...r, id]);
   const body = useRef(null);
   // Braces matter: newer engines return a Promise from scrollTo, which React would call as cleanup.
   useEffect(() => {
-    body.current?.scrollTo?.(0, 0);
-  }, [guideId]);
+    const heading = section && body.current?.querySelector?.(`#guide-${section}`);
+    if (heading) heading.scrollIntoView?.({ block: 'start' });
+    else body.current?.scrollTo?.(0, 0);
+  }, [entry, reading.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const search = useRef(null);
   const screen = findNav(view);
   const screenTitle = screen?.item.label ?? 'This screen';
@@ -155,7 +159,7 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
             className="inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
           >
             <Icon name="Back" />
-            {reading.length > 1 ? GUIDES[reading[reading.length - 2]]?.title : 'Back to help'}
+            {reading.length > 1 ? GUIDES[reading[reading.length - 2].split('#')[0]]?.title : 'Back to help'}
           </button>
           <span className="ml-auto text-2xs text-qb-ink-faint">Also in docs/guide on GitHub</span>
         </div>

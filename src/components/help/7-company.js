@@ -160,6 +160,14 @@ export const topics = [
     guide: 'troubleshooting',
   },
   {
+    id: 'whats-new', area: 'company', views: [],
+    title: 'What’s new in LocalBooks',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently checks from Pay Bills, attachments, clicking a report to see its transactions, early payments and newest-first lists.',
+    keywords: 'new whats new what’s new release notes changes changelog latest version update features',
+    go: null,
+    guide: 'whats-new',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers or the journal to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first, and each list remembers the order you choose.',
