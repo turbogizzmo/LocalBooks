@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import AccountSelect from './AccountSelect.jsx';
+import InstalledQuickBooks from './InstalledQuickBooks.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
@@ -24,12 +25,13 @@ const FORMAT_NAMES = {
   QIF: 'QIF export',
   REPORT: 'QuickBooks report export',
   GNUCASH: 'GnuCash book',
+  QBXML: 'export from your installed QuickBooks',
 };
 /** A file chosen inside a QuickBooks for Mac bundle (`Company.qb2016/…`) counts as that company file. */
 const extensionOf = (path) => (/\.(qb\d{4})(?:[\\/]|$)/i.exec(path)?.[1] ?? path.split('.').pop())?.toLowerCase();
-const STAGES = ['Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
+const STAGES = ['Asking QuickBooks', 'Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
-const OPTIONAL_STAGES = ['Unpacking backup', 'Decoding the full ledger'];
+const OPTIONAL_STAGES = ['Asking QuickBooks', 'Unpacking backup', 'Decoding the full ledger'];
 const STAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
 function formatBytes(n) {
@@ -153,6 +155,7 @@ function sourceLabel(fileName) {
   const ext = extensionOf(fileName);
   if (REPORT_EXTENSIONS.includes(ext)) return 'Report export';
   if (ext === 'iif' || ext === 'qif') return `${ext.toUpperCase()} export`;
+  if (ext === 'qbxml') return 'From QuickBooks';
   return 'Company file';
 }
 
@@ -822,13 +825,13 @@ function LedgerReview({ summary, accounts, busy, run }) {
 let reading = null;
 let lastOpened = null;
 
-/** Starts reading a file, collecting its progress whether or not the screen is showing. */
-function startReading(paths, ext) {
-  const first = ext === 'qbb' ? 'Unpacking backup' : 'Reading file';
+/** Starts reading a file (or asking QuickBooks, with `run`), collecting its progress whether or not the screen is showing. */
+function startReading(paths, ext, run) {
+  const first = { qbb: 'Unpacking backup', qbxml: 'Asking QuickBooks' }[ext] ?? 'Reading file';
   const subscribers = new Set();
   const r = {
     progress: { stage: first, done: 0, total: 1 },
-    seen: ext === 'qbb' ? [first] : [],
+    seen: OPTIONAL_STAGES.includes(first) ? [first] : [],
     subscribe: (fn) => {
       subscribers.add(fn);
       return () => subscribers.delete(fn);
@@ -843,7 +846,7 @@ function startReading(paths, ext) {
   })
     .then((fn) => (unlisten = fn))
     .catch(() => {});
-  const ingest = REPORT_EXTENSIONS.includes(ext) ? () => api.ingestReportExports(paths) : () => api.ingestRawQbw(paths[0]);
+  const ingest = run ?? (REPORT_EXTENSIONS.includes(ext) ? () => api.ingestReportExports(paths) : () => api.ingestRawQbw(paths[0]));
   r.promise = listening.then(ingest).finally(() => unlisten?.());
   return r;
 }
@@ -978,6 +981,11 @@ export default function QbwImporter({ accounts }) {
     },
     [follow],
   );
+
+  const exportInstalled = useCallback(() => {
+    reading = startReading([], 'qbxml', () => api.exportFromInstalledQuickbooks());
+    follow(reading);
+  }, [follow]);
 
   // Open or Restore Company was given a QuickBooks file: read it as soon as the wizard opens.
   useEffect(() => {
@@ -1164,7 +1172,16 @@ export default function QbwImporter({ accounts }) {
           )
         }
       >
-        {progress ? <ProgressTrack progress={progress} seen={seenStages} /> : !summary && <ChooseFile busy={busy} onFile={ingest} />}
+        {progress ? (
+          <ProgressTrack progress={progress} seen={seenStages} />
+        ) : (
+          !summary && (
+            <>
+              <ChooseFile busy={busy} onFile={ingest} />
+              <InstalledQuickBooks busy={busy} onExport={exportInstalled} />
+            </>
+          )
+        )}
         {summary && !progress && (
           <div className="px-3 py-1.5 text-sm">
             <span className="font-semibold">{summary.fileName}</span>

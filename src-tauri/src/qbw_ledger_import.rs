@@ -1087,6 +1087,7 @@ fn source_format(path: &str) -> &'static str {
         Some("qif") => "QIF",
         Some("csv" | "xlsx" | "xls") => "REPORT",
         Some("gnucash" | "gnc") => "GNUCASH",
+        Some("qbxml") => "QBXML",
         _ if crate::qbmac_import::is_mac_path(std::path::Path::new(path)) => "QBMAC",
         _ => "QBW",
     }

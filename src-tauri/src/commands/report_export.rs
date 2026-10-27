@@ -1,4 +1,4 @@
-//! Report export (CSV, Excel, save, print).
+//! Report export (CSV, Excel, PNG, save, print).
 
 use super::prelude::*;
 
@@ -7,6 +7,7 @@ handlers![
     save_report_to_disk,
     save_xlsx,
     save_report_xlsx,
+    save_png,
     print_report,
     finish_printing,
 ];
@@ -73,6 +74,20 @@ pub async fn save_report_xlsx(
     filename: String,
 ) -> Result<Option<String>, String> {
     let bytes = xlsx_export::render_report(&db.pool().await, &report, start_date, end_date, as_of, class_filter.as_ref()).await?;
+    let Some(path) = choose_export_path(app, filename).await? else { return Ok(None) };
+    export_engine::write_atomically(&path, &bytes)?;
+    Ok(Some(path.display().to_string()))
+}
+
+/// Saves a picture of a graph (`png_base64`, the PNG's bytes in base64) through the native Save
+/// dialog. Returns the saved path, or `None` if the user cancelled.
+#[tauri::command]
+pub async fn save_png(app: AppHandle, png_base64: String, filename: String) -> Result<Option<String>, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(png_base64.trim()).map_err(|e| format!("EXPORT_BAD_IMAGE: {e}"))?;
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("EXPORT_BAD_IMAGE: not a PNG image".into());
+    }
     let Some(path) = choose_export_path(app, filename).await? else { return Ok(None) };
     export_engine::write_atomically(&path, &bytes)?;
     Ok(Some(path.display().to_string()))

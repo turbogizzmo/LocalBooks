@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Email a form: script Mail or Outlook to open a message with the PDF attached. -->
+	<!-- Email a form: script Mail or Outlook to open a message with the PDF attached. Export from an
+	     installed QuickBooks: ask QuickBooks for Mac for the company's data (executeqbxml, reportAsText). -->
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 </dict>

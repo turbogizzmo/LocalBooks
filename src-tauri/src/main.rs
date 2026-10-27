@@ -10,6 +10,7 @@ mod bank;
 mod bank_pdf;
 mod banking;
 mod classes;
+mod cleanup;
 mod closing;
 mod commands;
 mod company_setup;
@@ -26,11 +27,13 @@ mod forensic;
 mod forms;
 mod fx_rates;
 mod gnucash_import;
+mod graphs;
 #[cfg(test)]
 mod docs_checks;
 #[cfg(test)]
 mod frontend_checks;
 mod iif_import;
+mod installed_qb;
 mod export_engine;
 mod file_dentist;
 mod file_menu;

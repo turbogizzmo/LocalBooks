@@ -15,6 +15,10 @@ export const screens = {
   'accounting/reclassify': {
     help: 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   },
+  'accounting/clean-up': {
+    help: 'Client Data Review tools in one place: apply credits left on credit memos and vendor credits, clear payments stuck in Undeposited Funds, write off old invoices, review list changes, and compare the Balance Sheet with the inventory valuation. Every fix shows its totals and asks first.',
+    guide: 'cleaning-up-books',
+  },
   'accounting/journal': {
     help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
     guide: 'journal-entries-and-voids',
@@ -78,6 +82,14 @@ export const topics = [
     go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
   },
   {
+    id: 'clean-up-books', area: 'accounting', views: ['accounting/clean-up', 'banking/transfers', 'sales/credits', 'expenses/credits', 'accounting/audit'],
+    title: 'Clean up the books before closing a year',
+    body: 'Accounting › Clean Up Books has five tools. Unapplied credits applies credit left on credit memos and vendor credits to open invoices and bills, oldest first. Undeposited Funds matches a payment stuck there to the deposit that already banked it, which removes the income counted twice. Write off invoices credits old balances to a bad debt or discount account. List changes shows accounts, items, customers and vendors added, renamed, edited or made inactive in a date range. Inventory compares the inventory asset accounts with the Inventory Valuation and lists the transactions that cause any difference.',
+    keywords: 'client data review cleanup clean up unapplied credits undeposited funds double deposit write off bad debt list changes inventory valuation balance sheet accountant year end',
+    go: { label: 'Go to Clean Up Books', view: 'accounting/clean-up' },
+    guide: 'cleaning-up-books',
+  },
+  {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
     title: 'Post a manual journal entry',
     body: 'Choose New journal entry and enter at least two lines whose debits equal credits; LocalBooks will not post an entry that does not balance. Use it for adjustments such as depreciation or opening balances.',
@@ -130,6 +142,14 @@ export const topics = [
     title: 'Import a QuickBooks for Mac 2012 (or earlier) company file',
     body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: LocalBooks reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
     keywords: 'quickbooks mac qb2012 qb2011 qb2010 macintosh company file import migrate encrypted qbmac',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
+    id: 'qb-installed-export', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Export from my installed QuickBooks (Preview)',
+    body: 'If QuickBooks Desktop still runs on this computer, open your company file in it, then open "QuickBooks still installed? Export from my installed QuickBooks" under step 1 and click Export from QuickBooks. LocalBooks asks QuickBooks for the chart of accounts, customers, vendors, items and Journal through Intuit\'s own interfaces, sending read-only requests only, and stages them like report exports. On a Mac, first open Reports › Accountant & Taxes › Journal with the dates set to All and leave it in front; the first time, macOS asks whether LocalBooks may control QuickBooks: click OK (or turn it on later in System Settings › Privacy & Security › Automation). On Windows, install Intuit\'s free QuickBooks Desktop SDK, open the file as Admin, and when QuickBooks asks about LocalBooks choose "Yes, whenever this QuickBooks company file is open". Preview: not yet tried against a running QuickBooks; if it fails, export the reports yourself.',
+    keywords: 'quickbooks installed running export qbxml sdk applescript automation permission certificate mac windows migrate preview',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
     guide: 'desktop-migration',
   },
