@@ -12,6 +12,8 @@ import FileDentist from './FileDentist.jsx';
 import CondenseData, { openArchive } from './CondenseData.jsx';
 import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
+import QbwImporter from './QbwImporter.jsx';
+import { canOpen, findNav } from './Sidebar.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -773,7 +775,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
             New Company…
           </button>
           {isAdmin && navigate && (
-            <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => navigate('accounting/qbw-import')} disabled={busy}>
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={() => navigate('settings/import')} disabled={busy}>
               Desktop Migration Wizard…
             </button>
           )}
@@ -981,34 +983,20 @@ function LocalAiAccess() {
   );
 }
 
-const SETTINGS_TABS = { preferences: 'preferences', closing: 'preferences', 'finance-charges': 'preferences', forms: 'forms', email: 'email', data: 'data', ai: 'ai', users: 'users', updates: 'updates' };
+/** Settings' tabs as `[id, label]`, from its sidebar pages (`settings/<id>`) the user may open. */
+const tabsFor = (isAdmin) =>
+  findNav('settings').item.children.filter((page) => canOpen(page.id, isAdmin)).map((page) => [page.id.slice('settings/'.length), page.label]);
 
-const ALL_TABS = [
-  ['preferences', 'Preferences Console'],
-  ['forms', 'Custom Forms'],
-  ['email', 'Email'],
-  ['data', 'File & Data Controls'],
-  ['ai', 'AI Access (MCP)'],
-  ['users', 'Users & Passwords'],
-  ['updates', 'Updates'],
-];
-// Company-wide settings are an Admin's; everyone manages their own sign-in.
-const NON_ADMIN_TABS = new Set(['users', 'updates']);
+/**
+ * Settings, on the tab its page names (`tab`, from `settings/<tab>`). Each tab is its own page in the
+ * sidebar; the tabs here go to those pages.
+ */
+export default function Settings({ accounts, companyName, intent, isAdmin = true, navigate, tab }) {
+  const tabs = tabsFor(isAdmin);
 
-export default function Settings({ companyName, intent, isAdmin = true, navigate }) {
-  const tabs = isAdmin ? ALL_TABS : ALL_TABS.filter(([id]) => NON_ADMIN_TABS.has(id));
-  const allowed = (id) => tabs.some(([t]) => t === id);
-  // The tab asked for (null: the first one). Which tabs are allowed can change after the first
-  // render, when the signed-in user's role arrives, so a tab no longer allowed is never shown.
-  const [chosen, setTab] = useState(() => SETTINGS_TABS[intent?.action] ?? null);
-  const tab = chosen && allowed(chosen) ? chosen : tabs[0][0];
-
-  // Help shortcuts open a specific tab (and, for the closing date, scroll to it).
+  // Help shortcuts to a section of Preferences scroll to it.
   useEffect(() => {
-    const target = SETTINGS_TABS[intent?.action];
-    if (!target || !allowed(target)) return;
-    setTab(target);
-    const anchor = { closing: 'closing-date', 'finance-charges': 'finance-charges' }[intent.action];
+    const anchor = { closing: 'closing-date', 'finance-charges': 'finance-charges' }[intent?.action];
     if (anchor) {
       const timer = setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
       return () => clearTimeout(timer);
@@ -1023,7 +1011,7 @@ export default function Settings({ companyName, intent, isAdmin = true, navigate
             type="button"
             role="tab"
             aria-selected={tab === id}
-            onClick={() => setTab(id)}
+            onClick={() => navigate(`settings/${id}`)}
             className={`px-3 py-0.5 font-semibold ${tab === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
           >
             {label}
@@ -1035,6 +1023,7 @@ export default function Settings({ companyName, intent, isAdmin = true, navigate
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}
       {tab === 'data' && <FileAndData companyName={companyName} isAdmin={isAdmin} navigate={navigate} />}
+      {tab === 'import' && <QbwImporter accounts={accounts} />}
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
