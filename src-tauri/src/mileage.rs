@@ -579,7 +579,9 @@ pub struct MileageReport {
     pub end_date: NaiveDate,
     pub columns: Vec<ColumnHead>,
     pub rows: Vec<MileageRow>,
-    pub trip_count: usize,
+    /// Trips the report is built from (named like the other engine reports, so the shared report
+    /// table shows the count and its empty state).
+    pub line_count: usize,
     /// Trips dated before the first mileage rate; they have no deductible amount.
     pub trips_without_rate: usize,
 }
@@ -745,7 +747,7 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
         end_date: end,
         columns,
         rows,
-        trip_count: trips.len(),
+        line_count: trips.len(),
         trips_without_rate: trips.iter().filter(|t| t.rate_e4.is_none()).count(),
     })
 }

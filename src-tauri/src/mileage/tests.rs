@@ -233,15 +233,32 @@ async fn reports_total_miles_and_deductible_by_vehicle_and_job() {
     // A customer filter takes in its jobs; the date range narrows the trips.
     let acme_only = MileageReportParams { customer_id: Some(acme), ..Default::default() };
     let acme_detail = mileage_report(&pool, MileageReportKind::JobDetail, &acme_only, today).await.unwrap();
-    assert_eq!(acme_detail.trip_count, 2);
+    assert_eq!(acme_detail.line_count, 2);
     let july = MileageReportParams { start_date: Some(d(7, 1)), end_date: Some(d(7, 2)), ..Default::default() };
-    assert_eq!(mileage_report(&pool, MileageReportKind::JobSummary, &july, today).await.unwrap().trip_count, 2);
+    assert_eq!(mileage_report(&pool, MileageReportKind::JobSummary, &july, today).await.unwrap().line_count, 2);
     let none = MileageReportParams { no_job: true, ..Default::default() };
-    assert_eq!(mileage_report(&pool, MileageReportKind::JobDetail, &none, today).await.unwrap().trip_count, 1);
+    assert_eq!(mileage_report(&pool, MileageReportKind::JobDetail, &none, today).await.unwrap().line_count, 1);
 
     // Trips before the first rate have no deductible amount, and the report says how many.
     create_trip(&pool, trip(truck, NaiveDate::from_ymd_opt(2025, 12, 1).unwrap(), miles(10), None, false)).await.unwrap();
     let early = mileage_report(&pool, MileageReportKind::VehicleDetail, &all, today).await.unwrap();
     assert_eq!(early.trips_without_rate, 1);
     assert_eq!(early.rows[1].cells[8], Value::Null);
+}
+
+#[tokio::test]
+async fn reports_send_the_line_count_the_report_table_reads() {
+    let pool = test_pool().await;
+    let today = d(12, 31);
+    let empty = mileage_report(&pool, MileageReportKind::VehicleDetail, &MileageReportParams::default(), today).await.unwrap();
+    let json = serde_json::to_value(&empty).unwrap();
+    assert_eq!(json["lineCount"], json!(0), "the empty state shows for a report with no trips");
+
+    let car = vehicle(&pool, "Truck").await;
+    create_trip(&pool, trip(car, d(3, 2), miles(5), None, false)).await.unwrap();
+    create_trip(&pool, trip(car, d(3, 3), miles(7), None, false)).await.unwrap();
+    for kind in [MileageReportKind::VehicleSummary, MileageReportKind::VehicleDetail, MileageReportKind::JobSummary, MileageReportKind::JobDetail] {
+        let report = serde_json::to_value(mileage_report(&pool, kind, &MileageReportParams::default(), today).await.unwrap()).unwrap();
+        assert_eq!(report["lineCount"], json!(2), "{kind:?}");
+    }
 }
