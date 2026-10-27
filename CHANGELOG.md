@@ -4,6 +4,12 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.10.2]
+
+- **Early payments.** A customer payment can be dated before its invoice (a customer who paid
+  early, or a deposit taken before you billed the work), and a bill can be paid before its date,
+  as QuickBooks allows.
+
 ## [0.10.1]
 
 - **Mileage tracking.** **Employees › Mileage**: add vehicles and the mileage rates you use (with
