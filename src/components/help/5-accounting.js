@@ -126,6 +126,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'qbmac-import', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Import a QuickBooks for Mac 2012 (or earlier) company file',
+    body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: LocalBooks reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
+    keywords: 'quickbooks mac qb2012 qb2011 qb2010 macintosh company file import migrate encrypted qbmac',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'qbw-undo', area: 'accounting', views: ['accounting/qbw-import'],
     title: 'Undo or delete a desktop migration import',
     body: 'Reverse posted entries voids everything an import posted and deactivates the accounts it created, returning your balances to where they were. Delete import removes only the staged lines and never touches your books.',
