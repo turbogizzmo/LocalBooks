@@ -131,6 +131,10 @@ const READ: &[&str] = &[
     "save_form_pdf",
     "save_attachment",
     "backup_now",
+    // Personal: the signed-in user's own reminder settings, and ticking off to-dos (a View-only user
+    // only their own, which `reminders::set_done` checks).
+    "save_reminder_settings",
+    "set_todo_done",
 ];
 
 pub fn need(command: &str) -> Need {

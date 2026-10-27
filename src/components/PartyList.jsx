@@ -318,7 +318,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
 }
 
 /** Customer or vendor list with an inline "add" row at the top of the grid. */
-export default function PartyList({ kind }) {
+export default function PartyList({ kind, navigate }) {
   const cfg = CONFIG[kind];
   const { data, error } = useLedgerQuery(cfg.list);
   const [name, setName] = useState('');
@@ -481,6 +481,7 @@ export default function PartyList({ kind }) {
                         items={[
                           { label: 'Edit…', onSelect: () => setEditing(p.id) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
+                          ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
                         ]}
                       />

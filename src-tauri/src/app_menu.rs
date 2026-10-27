@@ -85,6 +85,8 @@ const LISTS: &[Entry] = &[
 
 const COMPANY: &[Entry] = &[
     page("Home Page", "dashboard"),
+    page("To Do List", "accounting/todos"),
+    page("Reminders", "dashboard"),
     Entry::Sep,
     form("Set Up Users and Passwords…", "settings", "users"),
     form("Set Closing Date…", "settings", "closing"),
