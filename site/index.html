@@ -262,7 +262,8 @@
           <thead><tr><th style="width:30%">Your books are in</th><th>What to do</th></tr></thead>
           <tbody>
             <tr><td><strong>QuickBooks Desktop for Windows</strong></td><td>Choose your company file (<code>.qbw</code>) or a backup (<code>.qbb</code>) in the wizard.</td></tr>
-            <tr><td><strong>QuickBooks Desktop for Mac</strong></td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks for Mac 2012</strong> or earlier</td><td>Choose your company file (<code>.qb2012</code>, <code>.qb2011</code> or <code>.qb2010</code>) in the wizard. QuickBooks doesn’t need to be installed. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier">Steps</a></td></tr>
+            <tr><td><strong>QuickBooks Desktop for Mac</strong> 2016 and later</td><td>In QuickBooks, choose <strong>File › Export › To QuickBooks for Windows</strong>, click <strong>Verify</strong>, and leave the password <strong>blank</strong>. Then choose the <code>.qbb</code> it saves. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#from-quickbooks-desktop-for-mac">Steps</a></td></tr>
             <tr><td><strong>QuickBooks still installed</strong> (Windows or Mac)</td><td><em>Preview.</em> Let LocalBooks export it: open your company file in QuickBooks (on a Mac, also open <strong>Reports › Accountant &amp; Taxes › Journal</strong> for all dates), then click <strong>Export from QuickBooks</strong> in the wizard. LocalBooks asks QuickBooks for the data through Intuit’s own interfaces, read-only. Windows needs Intuit’s free QuickBooks SDK. Not yet tried against a running QuickBooks. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it">Steps</a></td></tr>
             <tr><td><strong>QuickBooks Online</strong>, or a QuickBooks you <strong>no longer have a license</strong> for</td><td>Export the <strong>Journal</strong> report (dates: <strong>All</strong>), plus the account, customer, vendor and item lists, to Excel or CSV, and choose them all together. An expired QuickBooks still opens in view-only mode, which can run reports. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-quickbooks-reports">Steps for each version</a></td></tr>
             <tr><td><strong>Quicken</strong></td><td>In Quicken, choose <strong>File › File Export › QIF File</strong> with <strong>All accounts</strong> (or one account at a time), and include transactions, the account list and the category list. Then choose the <code>.qif</code>. <a href="https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/desktop-migration.md#import-an-iif-or-qif-export">Steps</a></td></tr>
@@ -424,6 +425,13 @@
               'Open your company file in QuickBooks, signed in as the Admin the first time.',
               exportStep,
               'QuickBooks asks whether to let LocalBooks read the file: choose <strong>Yes, whenever this QuickBooks company file is open</strong>.'])
+        ]},
+        { name: 'QuickBooks for Mac 2012', sub: 'Or 2011 and 2010', types: [
+          { name: 'A company file', sub: '.qb2012, .qb2011 or .qb2010', heading: 'Import it directly', direct: true, steps: [
+              'Close the company in QuickBooks, or copy the file to this computer.',
+              wizard + 'the <code>.qb2012</code> file (or the folder, if your company is one).'],
+            note: 'These older Mac files aren’t encrypted, so LocalBooks reads them itself, even without QuickBooks. Each account’s total is checked against the balance QuickBooks stored.',
+            guide: 'desktop-migration.md#from-quickbooks-for-mac-2012-and-earlier' }
         ]},
         { name: 'QuickBooks Desktop for Mac', sub: 'Any year, 2016 to 2024', types: [
           { name: 'QuickBooks still opens', sub: '.qb2024, .qb2021 or a .qbmb backup', heading: 'Export a Windows copy, then import it', steps: [

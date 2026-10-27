@@ -194,7 +194,8 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    releases its invoice so it can be posted again.
 
 The wizard also reads the full ledger (accounts, customers, vendors and every transaction) from
-newer company files, QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
+newer company files, **QuickBooks for Mac 2012 and earlier** company files (`.qb2012`, read
+directly by `qbmac_import.rs`), QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
 (`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
 and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
 
@@ -270,7 +271,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
 | Export from installed QuickBooks (Preview) | Accounting › Desktop Migration Wizard › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
