@@ -1,17 +1,52 @@
 //! Credentials kept on this computer, outside the company file and its backups: the operating
 //! system's credential store (the macOS Keychain or Windows Credential Manager), or a JSON file
 //! readable by its owner only elsewhere (and in tests).
+//!
+//! Only the installed app uses the system store. Debug builds and builds under any other bundle
+//! identifier (the test builds parallel work launches) keep their secrets in files in their own
+//! config folder, so a test launch never prompts for the Keychain password and never reads or
+//! overwrites the installed app's secrets. `store_kind` makes that choice.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// The bundle identifier of the installed app (`identifier` in `tauri.conf.json`).
+pub const PRODUCTION_IDENTIFIER: &str = "com.localbooks.desktop";
+
+/// Where a build keeps its secrets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreKind {
+    /// The macOS Keychain or Windows Credential Manager (where available).
+    System,
+    /// Owner-only JSON files in the build's own config folder.
+    File,
+}
+
+/// The production app (a release build under the production identifier) uses the system store;
+/// every other build uses files.
+pub fn store_kind(identifier: &str, debug_build: bool) -> StoreKind {
+    if !debug_build && identifier == PRODUCTION_IDENTIFIER {
+        StoreKind::System
+    } else {
+        StoreKind::File
+    }
+}
+
+static THIS_BUILD: OnceLock<StoreKind> = OnceLock::new();
+
+/// Records which store this build uses, from the running app's bundle identifier. Called first at
+/// startup; until then (tests, the command-line tools) `for_this_computer` uses files.
+pub fn install_for_this_build(identifier: &str) -> StoreKind {
+    *THIS_BUILD.get_or_init(|| store_kind(identifier, cfg!(debug_assertions)))
+}
 
 #[derive(Debug, Clone)]
 enum Backend {
     /// The macOS Keychain or Windows Credential Manager.
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     System,
-    /// A JSON file readable by its owner only (Linux, and tests).
-    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
+    /// A JSON file readable by its owner only (Linux, development builds and tests).
     File(PathBuf),
 }
 
@@ -25,20 +60,20 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
-    /// The system store under `service`; on Linux, `file_name` in the config folder.
+    /// The system store under `service` in the production app on macOS and Windows; otherwise
+    /// `file_name` in the config folder.
     pub fn for_this_computer(config_dir: &Path, service: &'static str, file_name: &str, what: &'static str) -> Self {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            let _ = (config_dir, file_name);
-            SecretStore { backend: Backend::System, service, what }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            SecretStore::in_file(config_dir.join(file_name), service, what)
+        Self::for_kind(THIS_BUILD.get().copied().unwrap_or(StoreKind::File), config_dir, service, file_name, what)
+    }
+
+    fn for_kind(kind: StoreKind, config_dir: &Path, service: &'static str, file_name: &str, what: &'static str) -> Self {
+        match kind {
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            StoreKind::System => SecretStore { backend: Backend::System, service, what },
+            _ => SecretStore::in_file(config_dir.join(file_name), service, what),
         }
     }
 
-    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     pub fn in_file(path: PathBuf, service: &'static str, what: &'static str) -> Self {
         SecretStore { backend: Backend::File(path), service, what }
     }
@@ -117,5 +152,42 @@ impl SecretStore {
     pub async fn delete(&self, key: &str) -> Result<(), String> {
         let (store, key) = (self.clone(), key.to_string());
         tokio::task::spawn_blocking(move || store.delete_blocking(&key)).await.map_err(|e| format!("SECRETS_KEYCHAIN: {e}"))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_production_app_uses_the_system_store() {
+        assert_eq!(store_kind(PRODUCTION_IDENTIFIER, false), StoreKind::System);
+        assert_eq!(store_kind(PRODUCTION_IDENTIFIER, true), StoreKind::File);
+        assert_eq!(store_kind("com.localbooks.mileage", false), StoreKind::File);
+        assert_eq!(store_kind("com.localbooks.mileage", true), StoreKind::File);
+        assert_eq!(store_kind("", false), StoreKind::File);
+    }
+
+    #[test]
+    fn the_production_identifier_matches_tauri_conf() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["identifier"], PRODUCTION_IDENTIFIER);
+    }
+
+    #[test]
+    fn a_file_store_lives_in_the_builds_config_folder() {
+        let dir = std::env::temp_dir().join(format!("localbooks-secrets-{}", std::process::id()));
+        let store = SecretStore::for_kind(StoreKind::File, &dir, "LocalBooks SMTP", "smtp-secrets.json", "the email password");
+        assert!(matches!(&store.backend, Backend::File(path) if *path == dir.join("smtp-secrets.json")));
+        // Before the build is installed (tests, command-line tools), nothing reaches the system store.
+        let store = SecretStore::for_this_computer(&dir, "LocalBooks SMTP", "smtp-secrets.json", "the email password");
+        assert!(matches!(&store.backend, Backend::File(_)));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn the_production_kind_uses_the_system_store() {
+        let store = SecretStore::for_kind(StoreKind::System, Path::new("unused"), "LocalBooks SMTP", "smtp-secrets.json", "the email password");
+        assert!(matches!(store.backend, Backend::System));
     }
 }
