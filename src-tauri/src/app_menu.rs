@@ -182,7 +182,7 @@ const REPORTS: &[Entry] = &[
             report("Estimates by Job", "est-by-job"),
         ],
     ),
-    Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), report("Accounts Payable Graph", "graph-ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
+    Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), Entry::Sep, report("Accounts Payable Graph", "graph-ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
     Entry::Sub("Purchases", &[report("Open Purchase Orders", "open-pos")]),
     Entry::Sub(
         "Inventory",
