@@ -237,3 +237,18 @@ fn sales_lists_keep_one_rep_per_set_of_initials() {
     assert_eq!(lists.reps, [("js:Jane Smith".to_string(), true)]);
     assert_eq!(lists.ship_methods, [("UPS".to_string(), true)]);
 }
+
+#[test]
+fn price_levels_read_as_the_file_stores_them() {
+    use crate::price_levels::{ItemBasis, LevelItem, LevelKind};
+    // Fixed %: value_pct −10.5 (hundredths −1050) → −10,500 thousandths.
+    let fixed = price_level_of("Wholesale".into(), false, Some(1), Some(-1_050), &[]);
+    assert_eq!((fixed.kind, fixed.percent_milli, fixed.active, fixed.items.len()), (LevelKind::FixedPercent, -10_500, true, 0));
+    // Per item: the computed prices (stored negative like item prices) become fixed prices; an
+    // item with no amount is left off.
+    let per = price_level_of("Contract".into(), true, Some(2), None, &[(7, Some(-1_250)), (8, None)]);
+    assert_eq!((per.kind, per.active), (LevelKind::PerItem, false));
+    assert_eq!(per.items, [LevelItem { product_id: 7, basis: ItemBasis::Fixed, price_cents: Some(1_250), percent_milli: None }]);
+    // An unknown type that lists items is per item.
+    assert_eq!(price_level_of("X".into(), false, Some(0), None, &[(7, Some(100))]).kind, LevelKind::PerItem);
+}

@@ -6,6 +6,7 @@ import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
+import { CustomerPriceLevelField } from './PriceLevels.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
@@ -202,6 +203,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         taxExemption: form.taxExemption,
         formStyleId: form.formStyleId ?? null,
         salesRepId: form.salesRepId ?? null,
+        priceLevelId: form.priceLevelId ?? null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
       if (kind === 'vendor' && bank.draft !== undefined) {
@@ -300,6 +302,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
                 </select>
               </label>
             )}
+            {kind === 'customer' && <CustomerPriceLevelField form={form} setForm={setForm} />}
             <CustomFieldInputs fields={fields} onChange={setFields} />
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>

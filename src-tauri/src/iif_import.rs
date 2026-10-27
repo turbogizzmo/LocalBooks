@@ -329,6 +329,9 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
                 p.sales_rep = row.get("REP").and_then(rep_of);
+                if let Some(level) = row.text("PRICELEVEL") {
+                    sales_lists.customer_price_levels.push((id, level));
+                }
                 if let Some(rep) = &p.sales_rep {
                     sales_lists.add_rep(rep, true);
                 }
@@ -350,6 +353,20 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                 p.active = !row.yes("HIDDEN");
                 p.notes = row.text("NOTEPAD").or_else(|| row.text("NOTE"));
                 party_fields.push((false, id, custom_values(&row, 15)));
+            }
+            // Fixed % price levels. QuickBooks writes the percentage as "-10.0%"; per-item prices
+            // aren't in IIF, so a per-item level comes in with no items (standard prices).
+            "PRICELEVEL" => {
+                let Some(name) = row.text("NAME") else { continue };
+                let percent = ["FIXEDPERCENTAGE", "PERCENTAGE", "PERCENT", "PRICELEVELPERCENT"].iter().find_map(|c| row.get(c)).and_then(crate::price_levels::parse_percent_milli);
+                let per_item = row.get("PRICELEVELTYPE").is_some_and(|t| t.to_ascii_uppercase().contains("ITEM"));
+                sales_lists.price_levels.push(crate::qbw_company::SourcePriceLevel {
+                    name,
+                    active: !row.yes("HIDDEN"),
+                    kind: if per_item { crate::price_levels::LevelKind::PerItem } else { crate::price_levels::LevelKind::FixedPercent },
+                    percent_milli: if per_item { 0 } else { percent.unwrap_or(0) },
+                    items: Vec::new(),
+                });
             }
             "SHIPMETH" => {
                 if let Some(name) = row.get("NAME") {

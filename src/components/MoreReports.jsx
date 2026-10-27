@@ -64,7 +64,7 @@ const rangeText = (start, end) => (start === end ? longDate(start) : `${longDate
  * CSV. `columns` are { label, align }; `rows` are { cells, kind } where kind is `section`, `total`
  * or `grand` for styling.
  */
-function TableReport({ title, subtitle, columns, rows, footer, toolbar, onCsvRows, error }) {
+export function TableReport({ title, subtitle, columns, rows, footer, toolbar, onCsvRows, error }) {
   const company = useCompany();
   const [notice, setNotice] = useState(null);
   const filename = `${title.replace(/[^A-Za-z0-9]+/g, '-')}.csv`;

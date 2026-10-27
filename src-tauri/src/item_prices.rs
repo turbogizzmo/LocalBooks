@@ -250,7 +250,10 @@ pub struct PriceChangeRecord {
 
 pub async fn history(pool: &SqlitePool, limit: i64) -> Result<Vec<PriceChangeRecord>, String> {
     let rows: Vec<(i64, String, Option<String>, String)> = sqlx::query_as(
-        "SELECT id, timestamp, actor, payload_snapshot FROM ledger_audit_log WHERE action_type = 'PRICE_CHANGE' ORDER BY id DESC LIMIT ?1",
+        // Price level changes are PRICE_CHANGE events too (`price_levels.rs`); they have their own history.
+        "SELECT id, timestamp, actor, payload_snapshot FROM ledger_audit_log
+         WHERE action_type = 'PRICE_CHANGE' AND COALESCE(json_extract(payload_snapshot, '$.event'), '') NOT LIKE 'PRICE_LEVEL_%'
+         ORDER BY id DESC LIMIT ?1",
     )
     .bind(limit)
     .fetch_all(pool)

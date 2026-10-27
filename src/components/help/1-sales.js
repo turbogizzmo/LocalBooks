@@ -121,6 +121,14 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'price-levels', area: 'sales', views: ['sales/products', 'sales/customers', 'sales/invoices', 'sales/all', 'sales/estimates', 'reports'],
+    title: 'Give customers their own prices with price levels',
+    body: 'On Sales › Products & Services, click Price levels… to make a level: Fixed % raises or lowers every standard price by a percentage; Per item gives chosen items a fixed price or a percentage of their standard price or cost. Both round as you choose. Set a customer’s Price level on their record, and their new invoices, sales receipts and estimates fill in its prices; each line’s Price level can be changed, and a rate you type always wins. Reports › Item Price List shows every item at every level. Changes are recorded in the audit trail.',
+    keywords: 'price level pricing wholesale discount customer price list special prices per item markup cost percent item price list',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'inventory', area: 'sales', views: ['sales/products', 'expenses/bills', 'sales/invoices'],
     title: 'Track inventory and cost of goods sold',
     body: 'Choose Track stock on a product, record opening stock with Adjust stock, and buy more on bills by picking it as the Stock item. Selling it on an invoice or sales receipt records its moving average cost in Cost of Goods Sold; you can sell before the bill arrives, and the cost is trued up when it does.',

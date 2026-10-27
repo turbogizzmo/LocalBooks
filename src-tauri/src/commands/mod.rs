@@ -78,6 +78,7 @@ features![
     mcp,
     migration,
     preferences,
+    price_levels,
     purchase_orders,
     reconcile,
     recurring,
