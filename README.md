@@ -119,6 +119,8 @@ rejected. No code path can skip it.
 | `MIGRATION` | `db::migrate`, once per schema migration | Version, description, checksum, install time |
 | `ACCOUNT_CHANGE` | trigger, on rename, renumber, retype, move, or (de)activation | Before and after values |
 | `FORENSIC_HEAL` | a reviewed correction, when approved | The altered entry, the correcting entry, and its lines |
+| `LIST_CHANGE` | trigger, on an edit to a customer, vendor or product/service | Name and active flag before and after, and which other fields changed (names only) |
+| `CLEANUP` | Accounting › Clean Up Books, once per fix | Every credit applied, invoice written off or payment matched, with amounts |
 
 Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
 the original by its `VOID` record. Changing an account's type once it has posted activity is also
@@ -192,7 +194,8 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    releases its invoice so it can be posted again.
 
 The wizard also reads the full ledger (accounts, customers, vendors and every transaction) from
-newer company files, QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
+newer company files, **QuickBooks for Mac 2012 and earlier** company files (`.qb2012`, read
+directly by `qbmac_import.rs`), QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
 (`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
 and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
 
@@ -203,6 +206,15 @@ finds each report by its column headings, skips title, total and footer rows, an
 transactions to the same resolver as the IIF reader. An expired QuickBooks Desktop for Mac can
 still run these reports in view-only mode. See
 [docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#import-quickbooks-reports).
+
+**Export from an installed QuickBooks (Preview).** When QuickBooks Desktop still runs on the same
+computer, the wizard can ask it for the data through Intuit's public interfaces instead
+(`installed_qb.rs`): AppleScript's `executeqbxml` and `reportAsText` on a Mac, the QuickBooks
+SDK's `QBXMLRP2.RequestProcessor` over COM on Windows. Only read-only qbXML queries are ever sent;
+an allowlist refuses anything else before it leaves LocalBooks. The answers become the same tables
+as a report export and go through `report_import.rs`. Neither platform has been tried against a
+live QuickBooks yet. See
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it).
 
 ---
 
@@ -249,6 +261,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once | [guide](docs/guide/bills.md) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
+| Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
@@ -258,11 +271,13 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Export from installed QuickBooks (Preview) | Accounting › Desktop Migration Wizard › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
 | Find Transactions | Accounting › Find Transactions; Edit › Find… | Search by text, dates, number, amount, type, name and account | [guide](docs/guide/journal-entries-and-voids.md#find-a-transaction) |
+| Graphs | Reports › Graphs | Income and expense, net worth, receivables, payables, sales and budget vs. actual charts that open the report behind each bar; table view, PNG, print, Excel and CSV | [guide](docs/guide/reports.md#graphs) |
 | Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
 | Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
 | Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
@@ -315,6 +330,8 @@ its entry form with focus in the first field.
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
+| Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |
+| Undeposited Funds match (Clean Up Books) | The account the deposit line used (usually income) | Undeposited Funds |
 | Void | Exact reversal of the original entry, same date | |
 | Estimate / time activity | *Non-posting* (an estimate becomes an invoice only when that invoice posts) | |
 
@@ -594,6 +611,10 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   lines are grouped by date, type and number until they balance. A General Ledger's lines are
   paired back into transactions through its Split column; lines that can't be paired are listed,
   not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
+- **Export from an installed QuickBooks** is a Preview: it has not been tried against a running
+  QuickBooks on either platform. On a Mac it needs the Journal report open in front, and older
+  QuickBooks for Mac versions may lack the AppleScript commands; on Windows it needs Intuit's free
+  QuickBooks SDK. Classes are counted, not imported, and the limits of report imports apply.
 - **GnuCash imports.** Stock and mutual fund accounts are skipped. Amounts that aren't whole cents,
   and foreign-currency transactions with no home-currency amount, are listed for manual entry
   rather than rounded or converted. Scheduled transactions, budgets and prices aren't imported.

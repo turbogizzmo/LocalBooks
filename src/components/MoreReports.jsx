@@ -7,11 +7,14 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
-/** Report period controls (preset, from, to), following the fiscal year like the statements do. */
-function usePeriod(initial = 'fiscalYearToDate') {
+/**
+ * Report period controls (preset, from, to), following the fiscal year like the statements do.
+ * `range` ([start, end], from a graph's drill-down) starts on those dates instead of a preset.
+ */
+export function usePeriod(initial = 'fiscalYearToDate', range = null) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
-  const [period, setPeriod] = useState(initial);
-  const [[start, end], setRange] = useState(() => resolvePeriod(initial, null));
+  const [period, setPeriod] = useState(range ? 'custom' : initial);
+  const [[start, end], setRange] = useState(() => range ?? resolvePeriod(initial, null));
   useEffect(() => {
     if (fiscal && period !== 'custom') setRange(resolvePeriod(period, fiscal));
   }, [fiscal]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -268,8 +271,8 @@ export function GeneralLedgerReport({ navigate }) {
 }
 
 /** A/R or A/P aging by name. The detail lists (Open Invoices, Unpaid Bills, the aging details) are custom report presets. */
-export function AgingReport({ payable }) {
-  const [asOf, setAsOf] = useState(todayIso());
+export function AgingReport({ payable, initial = null }) {
+  const [asOf, setAsOf] = useState(initial?.asOf ?? todayIso());
   const { data, error, reload } = useLedgerQuery(() => (asOf ? api.getAging(payable, asOf) : Promise.resolve(null)));
   useEffect(() => {
     reload();
@@ -300,8 +303,8 @@ const SUMMARY = {
   vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor' },
 };
 
-export function SummaryReport({ by }) {
-  const p = usePeriod();
+export function SummaryReport({ by, initial = null }) {
+  const p = usePeriod('fiscalYearToDate', initial?.startDate ? [initial.startDate, initial.endDate] : null);
   const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getSummaryReport(by, p.start, p.end) : Promise.resolve(null)));
   useEffect(() => {
     reload();
@@ -433,10 +436,10 @@ export function fiscalMonthLabel(start, period) {
   return `${MONTH_NAMES[m].slice(0, 3)} ${y}`;
 }
 
-export function BudgetVsActualReport({ navigate }) {
+export function BudgetVsActualReport({ navigate, initial = null }) {
   const budgets = useLedgerQuery(api.listBudgets);
-  const [budgetId, setBudgetId] = useState(null);
-  const [[from, to], setPeriods] = useState([1, 12]);
+  const [budgetId, setBudgetId] = useState(initial?.budgetId ?? null);
+  const [[from, to], setPeriods] = useState(initial?.fromPeriod ? [initial.fromPeriod, initial.toPeriod] : [1, 12]);
   const list = budgets.data ?? [];
   const budget = list.find((b) => b.id === budgetId) ?? list[0];
   const { data, error, reload } = useLedgerQuery(() => (budget ? api.getBudgetVsActual(budget.id, from, to) : Promise.resolve(null)));

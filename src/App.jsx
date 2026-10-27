@@ -19,6 +19,7 @@ import AuditLog from './components/AuditLog.jsx';
 import ChartOfAccounts from './components/ChartOfAccounts.jsx';
 import Classes from './components/Classes.jsx';
 import Reclassify from './components/Reclassify.jsx';
+import CleanUpBooks from './components/CleanUpBooks.jsx';
 import Register from './components/Register.jsx';
 import CreditMemos from './components/CreditMemos.jsx';
 import VendorCredits from './components/VendorCredits.jsx';
@@ -336,6 +337,7 @@ export default function App() {
           {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} navigate={select} />}
           {view === 'accounting/classes' && <Classes />}
           {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
+          {view === 'accounting/clean-up' && <CleanUpBooks accounts={list} />}
           {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/find' && <FindTransactions {...props} />}

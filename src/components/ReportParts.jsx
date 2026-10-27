@@ -26,10 +26,10 @@ export function resolvePeriod(id, fiscal) {
 
 /**
  * "Export" dropdown: Excel or CSV through the native save dialog, or the system print dialog (Save
- * as PDF). The Excel choice shows when the report passes `onXlsx`; screens with nothing to print
- * (registers, lists) pass `printable={false}`.
+ * as PDF). The Excel choice shows when the report passes `onXlsx`, and a PNG picture when it passes
+ * `onPng` (graphs); screens with nothing to print (registers, lists) pass `printable={false}`.
  */
-export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true }) {
+export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -67,6 +67,11 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true }) {
           {onXlsx && (
             <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onXlsx)}>
               Export to Excel
+            </button>
+          )}
+          {onPng && (
+            <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onPng)}>
+              Save as picture (PNG)
             </button>
           )}
           {printable && (
