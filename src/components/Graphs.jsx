@@ -628,7 +628,7 @@ function AgingGraph({ payable, onOpenReport }) {
           <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
       }
-      footer={`The same balances as the ${reportName} · days past due · credit not yet used counts against the Current column`}
+      footer={`The same balances as the ${reportName} · days past due · credit not yet used is subtracted in the column for its age`}
       tables={
         data && [
           {
