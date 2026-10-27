@@ -1004,7 +1004,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
   }, [intent]);
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      <div className="flex flex-none gap-px self-start overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist">
+      <div className="flex max-w-full flex-none gap-px self-start overflow-x-auto rounded-xs border border-qb-border-strong text-sm scrollbar-thin" role="tablist">
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -1012,7 +1012,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
             role="tab"
             aria-selected={tab === id}
             onClick={() => navigate(`settings/${id}`)}
-            className={`px-3 py-0.5 font-semibold ${tab === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
+            className={`flex-none whitespace-nowrap px-3 py-0.5 font-semibold ${tab === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
           >
             {label}
           </button>
