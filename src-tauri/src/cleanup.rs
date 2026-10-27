@@ -878,17 +878,25 @@ pub async fn compare_inventory(pool: &SqlitePool, as_of: NaiveDate) -> Result<In
         })
         .collect();
 
-    let mut differences = Vec::new();
-    for (&(entry, account), &(l, s)) in pairs.iter().filter(|(_, (l, s))| l != s) {
-        let header: (i64, String, String, Option<String>, Option<String>) = sqlx::query_as(
-            "SELECT e.entry_number, e.entry_date, e.source_type, e.memo, p.party_name
-             FROM journal_entries e LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id WHERE e.id = ?1",
+    let differing: Vec<(i64, i64, i64, i64)> = pairs.iter().filter(|(_, (l, s))| l != s).map(|(&(e, a), &(l, s))| (e, a, l, s)).collect();
+    // Every differing entry's header in one query.
+    let ids = serde_json::to_string(&differing.iter().map(|d| d.0).collect::<Vec<_>>()).map_err(|e| e.to_string())?;
+    let headers: HashMap<i64, (i64, String, String, Option<String>, Option<String>)> =
+        sqlx::query_as::<_, (i64, i64, String, String, Option<String>, Option<String>)>(
+            "SELECT e.id, e.entry_number, e.entry_date, e.source_type, e.memo, p.party_name
+             FROM journal_entries e LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id
+             WHERE e.id IN (SELECT value FROM json_each(?1))",
         )
-        .bind(entry)
-        .fetch_one(pool)
+        .bind(ids)
+        .fetch_all(pool)
         .await
-        .map_err(db_err)?;
-        let (entry_number, entry_date, source_type, memo, party_name) = header;
+        .map_err(db_err)?
+        .into_iter()
+        .map(|(id, number, date, source, memo, party)| (id, (number, date, source, memo, party)))
+        .collect();
+    let mut differences = Vec::with_capacity(differing.len());
+    for (entry, account, l, s) in differing {
+        let (entry_number, entry_date, source_type, memo, party_name) = headers.get(&entry).cloned().ok_or_else(|| format!("CLEANUP_NO_ENTRY: entry {entry} is missing"))?;
         differences.push(InventoryDifference {
             journal_entry_id: entry,
             entry_number,
