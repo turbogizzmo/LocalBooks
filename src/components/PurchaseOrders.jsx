@@ -185,7 +185,7 @@ export default function PurchaseOrders({ accounts, intent }) {
     memo: (o) => o.memo,
     status: (o) => STATUS[o.status] ?? o.status,
     total: (o) => o.totalCents,
-  });
+  }, { storageKey: 'purchase-orders' });
   const list = sorter.sorted;
 
   const print = async (order) => {

@@ -184,7 +184,7 @@ export default function AllSales({ accounts, intent }) {
     balance: (r) => (r.kind === 'INVOICE' ? r.balanceCents : null),
     total: (r) => r.homeTotalCents ?? r.totalCents,
     status: (r) => (r.isVoided ? 'VOIDED' : r.kind === 'INVOICE' ? r.status : r.kind === 'PAYMENT' ? 'Closed' : 'Paid'),
-  });
+  }, { storageKey: 'all-sales' });
   const visible = sorter.sorted;
 
   return (

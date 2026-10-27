@@ -202,7 +202,7 @@ export default function Todos({ intent, navigate }) {
     due: (t) => t.dueDate,
     about: (t) => about(t),
     assigned: (t) => t.assignedName,
-  });
+  }, { storageKey: 'todos' });
   const assignees = useLedgerQuery(api.listTodoAssignees).data ?? [];
 
   const toggle = async (t) => {

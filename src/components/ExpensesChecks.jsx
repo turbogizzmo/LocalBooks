@@ -270,7 +270,7 @@ export default function ExpensesChecks({ accounts, intent }) {
     category: (x) => (x.categoryAccountId !== null ? accountLabel(accounts, x.categoryAccountId) : null),
     from: (x) => accountLabel(accounts, x.paymentAccountId),
     total: (x) => x.homeTotalCents ?? x.totalCents,
-  });
+  }, { storageKey: 'expenses' });
   const rows = data ?? [];
 
   return (

@@ -172,7 +172,7 @@ function TripsTab({ vehicles, customers, intent, onNotice }) {
     billable: (t) => (t.invoiceNumber ? 2 : t.billable ? 1 : 0),
     miles: (t) => t.milesE4,
     deductible: (t) => t.deductibleCents,
-  });
+  }, { storageKey: 'mileage' });
   const totals = useMemo(() => {
     const list = trips ?? [];
     return { miles: list.reduce((s, t) => s + t.milesE4, 0), deductible: list.reduce((s, t) => s + (t.deductibleCents ?? 0), 0), noRate: list.filter((t) => t.rateE4 === null).length };

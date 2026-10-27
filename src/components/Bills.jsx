@@ -528,7 +528,7 @@ export default function Bills({ accounts, intent }) {
     amount: (b) => b.totalCents,
     balance: (b) => (b.isVoided ? null : b.balanceCents),
     status: (b) => (b.isVoided ? 'VOIDED' : b.status),
-  });
+  }, { storageKey: 'bills' });
 
   // Payments feed the per-row void menu; refreshed whenever the bills change.
   useEffect(() => {
