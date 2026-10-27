@@ -63,7 +63,7 @@ Before you start:
   in a completed reconciliation are kept as they are.
 - Only an Admin can condense.
 
-1. In **Condense data**, choose the cut-off date (it starts at your closing date) and click
+1. Open **File › Utilities › Condense Data…** (or Settings › File & Data Controls). In **Condense data**, choose the cut-off date (it starts at your closing date) and click
    **Preview**. It reads only, and shows how many transactions would be summarized, how many monthly
    entries replace them, and how many are kept, and why.
 2. Click **Condense…**, then **Condense**. LocalBooks then:
