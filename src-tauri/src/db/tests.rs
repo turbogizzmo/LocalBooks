@@ -335,29 +335,3 @@ async fn replaced_copies_left_behind_are_removed_at_the_next_open() {
     assert!(unrelated.exists());
     db.shutdown().await;
 }
-
-/// TEMPORARY diagnostic (removed before merge): how often sqlx's own `Pool::close` returns with a
-/// connection still open, under the same load as `close_pool_closes_every_connection`.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "diagnostic"]
-async fn diag_plain_close_leaves_connections_open() {
-    let tmp = TempDir::new("diag-close");
-    let path = tmp.0.join("Diag.localbooks");
-    let mut leaked = 0;
-    for _ in 0..200 {
-        let pool = open(&path).await.unwrap();
-        let reads: Vec<_> = (0..4)
-            .map(|_| tokio::spawn({ let pool = pool.clone(); async move { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() } }))
-            .collect();
-        for read in reads {
-            read.await.unwrap();
-        }
-        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
-        pool.close().await;
-        if pool.size() > 0 {
-            leaked += 1;
-        }
-        close_pool(&pool).await;
-    }
-    eprintln!("DIAG: plain Pool::close left a connection open in {leaked} of 200 closes");
-}
