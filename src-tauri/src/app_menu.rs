@@ -162,10 +162,13 @@ const REPORTS: &[Entry] = &[
             report("Statement of Cash Flows", "cf"),
             Entry::Sep,
             report("Expenses by Vendor Summary", "expenses-vendor"),
+            Entry::Sep,
+            report("Income & Expense Graph", "graph-ie"),
+            report("Net Worth Graph", "graph-nw"),
         ],
     ),
-    Entry::Sub("Customers & Receivables", &[report("A/R Aging Summary", "ar"), report("Collections Report", "collections")]),
-    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep")]),
+    Entry::Sub("Customers & Receivables", &[report("A/R Aging Summary", "ar"), report("Collections Report", "collections"), Entry::Sep, report("Accounts Receivable Graph", "graph-ar")]),
+    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), Entry::Sep, report("Sales Graph", "graph-sales")]),
     Entry::Sub(
         "Jobs, Time & Mileage",
         &[
@@ -179,7 +182,7 @@ const REPORTS: &[Entry] = &[
             report("Estimates by Job", "est-by-job"),
         ],
     ),
-    Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
+    Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), report("Accounts Payable Graph", "graph-ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
     Entry::Sub("Purchases", &[report("Open Purchase Orders", "open-pos")]),
     Entry::Sub(
         "Inventory",
@@ -201,7 +204,7 @@ const REPORTS: &[Entry] = &[
             page("Audit Trail", "accounting/audit"),
         ],
     ),
-    Entry::Sub("Budgets & Forecasts", &[report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva")]),
+    Entry::Sub("Budgets & Forecasts", &[report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
 ];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
@@ -325,7 +328,7 @@ mod tests {
     fn items_open_pages_and_reports_that_exist() {
         let read = |path: &str| std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/components/").to_string() + path).unwrap();
         let pages = read("Sidebar.jsx");
-        let reports = ["Reports.jsx", "JobReports.jsx", "AccountantReports.jsx"].map(read).concat();
+        let reports = ["Reports.jsx", "JobReports.jsx", "AccountantReports.jsx", "Graphs.jsx"].map(read).concat();
         fn walk(entries: &[Entry], out: &mut Vec<(&'static str, Option<&'static str>)>) {
             for entry in entries {
                 match entry {

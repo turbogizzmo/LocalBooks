@@ -11,6 +11,7 @@
 mod accountant_reports;
 mod fixture;
 mod golden;
+mod graphs;
 mod job_costing;
 mod ledger_props;
 mod report_presets;
