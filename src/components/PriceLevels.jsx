@@ -28,7 +28,7 @@ function parseSignedPercent(text) {
 
 const milliInput = (milli) => (milli == null ? '' : String(milli / 1000));
 
-/** One-line description of a level ("−10% of standard, to the nearest $1.00", "3 items"). */
+/** One-line description of a level ("−10% on every item", "Per item · 3 items"). */
 export function levelSummary(level) {
   if (level.kind === 'FIXED_PERCENT') return `${percentText(level.percentMilli)} on every item`;
   const n = level.items?.length ?? 0;

@@ -194,6 +194,19 @@ async fn changes_are_recorded_in_the_audit_trail() {
 }
 
 #[tokio::test]
+async fn saving_per_item_prices_in_another_order_records_nothing() {
+    let b = books().await;
+    // Widget sorts after Consulting by name but was created with a larger id: list it first.
+    let items = vec![row(b.widget, ItemBasis::Fixed, Some(2_000), None), row(b.consulting, ItemBasis::Fixed, Some(12_000), None)];
+    let input = PriceLevelInput { kind: LevelKind::PerItem, items, ..wholesale() };
+    let level = save(&b.pool, None, input.clone()).await.unwrap();
+    let reversed = PriceLevelInput { items: input.items.iter().rev().cloned().collect(), ..input.clone() };
+    save(&b.pool, Some(level.id), input).await.unwrap();
+    save(&b.pool, Some(level.id), reversed).await.unwrap();
+    assert_eq!(history(&b.pool, 10).await.unwrap().len(), 1, "only the creation is recorded");
+}
+
+#[tokio::test]
 async fn bad_saves_change_nothing() {
     let b = books().await;
     save(&b.pool, None, wholesale()).await.unwrap();

@@ -367,7 +367,12 @@ pub async fn create_in(conn: &mut SqliteConnection, input: &PriceLevelInput, eve
 async fn update_in(conn: &mut SqliteConnection, id: i64, input: &PriceLevelInput) -> Result<(), String> {
     validate(input)?;
     let before = one(conn, id).await?;
-    if before.input() == (PriceLevelInput { name: input.name.trim().to_string(), ..input.clone() }) {
+    // Unchanged (items in any order): nothing to write or record.
+    let by_product = |mut level: PriceLevelInput| {
+        level.items.sort_by_key(|i| i.product_id);
+        level
+    };
+    if by_product(before.input()) == by_product(PriceLevelInput { name: input.name.trim().to_string(), ..input.clone() }) {
         return Ok(());
     }
     let name = input.name.trim();
