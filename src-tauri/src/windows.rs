@@ -30,6 +30,9 @@ const EXTRA_PREFIX: &str = "window-";
 const NEW_WINDOW_REQUESTED: &str = "new-window-requested";
 /// Sent to every LocalBooks window with the window preferences ([`WindowPreferences`]) when they change.
 const WINDOW_PREFERENCES_CHANGED: &str = "window-preferences-changed";
+/// Sent to every LocalBooks window with the whole [`DesktopView`] when a menu or the preferences
+/// change it, so an open Desktop View panel shows the same choice as the menus.
+const DESKTOP_VIEW_CHANGED: &str = "desktop-view-changed";
 /// Sent to a LocalBooks window with a Window menu command for the windows inside it: "close-all",
 /// "close" (the active one), "cascade", "tile-vertically", "tile-horizontally", "arrange-icons",
 /// or "focus:<id>".
@@ -478,10 +481,12 @@ pub async fn set_desktop_mode(app: &AppHandle, choice: &str) -> Result<DesktopVi
         "save-current" => desktop::save_current(file, &key, now),
         "save-when-closing" => desktop::set_mode(file, &key, SaveMode::SaveWhenClosing),
         "dont-save" => desktop::set_mode(file, &key, SaveMode::DontSave),
-        // "Keep previously saved desktop" changes nothing.
-        _ => {}
+        // "Keep previously saved desktop" (Workspace › Manual on the Mac): the windows saved last
+        // stay as they are, and closing the company no longer replaces them.
+        _ => desktop::set_mode(file, &key, SaveMode::KeepSaved),
     })?;
     let view = desktop_view(app).await;
+    let _ = app.emit(DESKTOP_VIEW_CHANGED, &view);
     refresh_preference_menus(app, &view);
     Ok(view)
 }
@@ -500,6 +505,7 @@ pub async fn set_window_preferences(app: &AppHandle, window_mode: Option<WindowM
     })?;
     let view = desktop_view(app).await;
     let _ = app.emit(WINDOW_PREFERENCES_CHANGED, WindowPreferences { window_mode: view.window_mode, show_open_window_list: view.show_open_window_list });
+    let _ = app.emit(DESKTOP_VIEW_CHANGED, &view);
     refresh_preference_menus(app, &view);
     Ok(view)
 }

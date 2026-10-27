@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 
@@ -13,7 +14,20 @@ export default function DesktopViewPreferences() {
   const [view, setView] = useState(null);
   const [notice, setNotice] = useState(null);
   useEffect(() => {
-    api.getDesktopView().then(setView, (err) => setNotice({ kind: 'error', text: errorText(err) }));
+    let cancelled = false;
+    let unlisten;
+    api.getDesktopView().then(
+      (next) => !cancelled && setView(next),
+      (err) => !cancelled && setNotice({ kind: 'error', text: errorText(err) }),
+    );
+    // The View and Window › Workspace menus change the same choices.
+    listen('desktop-view-changed', ({ payload }) => setView(payload))
+      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
   if (!view) return null;
 
@@ -64,7 +78,7 @@ export default function DesktopViewPreferences() {
             radio('desktop', true, () => {}, 'Keep previously saved desktop', `${view.savedWindows} saved window${view.savedWindows === 1 ? '' : 's'} reopen every time.`)}
           <p className="px-2 pt-1 text-2xs text-qb-ink-faint">
             For you, on this company file and this computer. To open the company once without its windows, choose File › Open Company Without Restoring Windows…
-            {IS_MAC ? ' (also Window › Workspace).' : ''}
+            {IS_MAC ? ' Window › Workspace sets the same choice: AutoSave is Save when closing company, Manual keeps the saved desktop, and Save Workspace saves the windows open now.' : ''}
           </p>
         </fieldset>
       </div>
