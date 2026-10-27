@@ -693,9 +693,10 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
         }
         MileageReportKind::VehicleDetail | MileageReportKind::JobDetail => {
             let job = kind == MileageReportKind::JobDetail;
+            // The first column is text: it also holds the subtotal and total labels.
             let columns = vec![
-                col("Trip date", ColumnKind::Date),
                 col(if job { "Vehicle" } else { "Customer:Job" }, ColumnKind::Text),
+                col("Trip date", ColumnKind::Date),
                 col("Notes", ColumnKind::Text),
                 col("Billing status", ColumnKind::Text),
                 col("Odometer start", ColumnKind::Quantity),
@@ -722,8 +723,8 @@ pub async fn mileage_report(pool: &SqlitePool, kind: MileageReportKind, params: 
                         kind: RowKind::Detail,
                         depth: 1,
                         cells: vec![
-                            json!(trip.trip_date),
                             json!(other),
+                            json!(trip.trip_date),
                             json!(trip.notes),
                             json!(billing_status(trip)),
                             json!(trip.odometer_start_e4),

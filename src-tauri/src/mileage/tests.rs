@@ -262,3 +262,13 @@ async fn reports_send_the_line_count_the_report_table_reads() {
         assert_eq!(report["lineCount"], json!(2), "{kind:?}");
     }
 }
+
+#[tokio::test]
+async fn every_report_starts_with_a_text_column_for_its_labels() {
+    let pool = test_pool().await;
+    for kind in [MileageReportKind::VehicleSummary, MileageReportKind::VehicleDetail, MileageReportKind::JobSummary, MileageReportKind::JobDetail] {
+        let report = mileage_report(&pool, kind, &MileageReportParams::default(), d(12, 31)).await.unwrap();
+        // The report table formats a cell by its column's kind, so "Total Truck" in a date column would show as a bad date.
+        assert_eq!(report.columns[0].kind, ColumnKind::Text, "{kind:?}");
+    }
+}
