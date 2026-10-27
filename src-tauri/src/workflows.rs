@@ -724,6 +724,15 @@ pub async fn add_attachment(pool: &SqlitePool, journal_entry_id: i64, file_name:
     list_attachments(pool, journal_entry_id).await?.into_iter().find(|a| a.id == id).ok_or_else(|| "ATTACH_NOT_SAVED: the file was not saved".into())
 }
 
+/// How many files each transaction has attached, by journal entry, for the registers' paperclip marks.
+pub async fn attachment_counts(pool: &SqlitePool) -> Result<std::collections::HashMap<i64, i64>, String> {
+    let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT journal_entry_id, COUNT(*) FROM attachments GROUP BY journal_entry_id")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    Ok(rows.into_iter().collect())
+}
+
 pub async fn list_attachments(pool: &SqlitePool, journal_entry_id: i64) -> Result<Vec<AttachmentView>, String> {
     sqlx::query_as::<_, AttachmentView>(
         "SELECT id, journal_entry_id, file_name, media_type, size_bytes, created_at FROM attachments WHERE journal_entry_id = ?1 ORDER BY id",

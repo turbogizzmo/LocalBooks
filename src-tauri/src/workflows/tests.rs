@@ -87,8 +87,10 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let file = add_attachment(&pool, entry, "/tmp/receipt.pdf", b"%PDF-1.4 receipt").await.unwrap();
     assert_eq!((file.file_name.as_str(), file.media_type.as_str(), file.size_bytes), ("receipt.pdf", "application/pdf", 16));
     assert_eq!(attachment_content(&pool, file.id).await.unwrap().1, b"%PDF-1.4 receipt");
+    add_attachment(&pool, entry, "invoice.png", b"png").await.unwrap();
+    assert_eq!(attachment_counts(&pool).await.unwrap(), std::collections::HashMap::from([(entry, 2)]));
     delete_attachment(&pool, file.id).await.unwrap();
-    assert!(list_attachments(&pool, entry).await.unwrap().is_empty());
+    assert_eq!(list_attachments(&pool, entry).await.unwrap().len(), 1);
 
     // Budget vs. Actual for the first quarter (calendar fiscal year).
     let budget = crate::statements::create_budget(&pool, "2026 plan", d(6, 1)).await.unwrap();

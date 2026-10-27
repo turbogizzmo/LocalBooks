@@ -202,9 +202,10 @@ export const topics = [
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {
-    id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register'],
+    id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
-    body: 'Open a transaction’s lines in the journal or an account register and choose Attach file… to keep a copy of a receipt or contract in the company file (up to 25 MB each). Click a file name to save a copy.',
+    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy. Files stay with a transaction when you edit it.',
+    guide: 'bills',
     keywords: 'attachment attach receipt document file scan photo pdf',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },

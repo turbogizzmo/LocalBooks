@@ -18,6 +18,21 @@ pay it.
 
 The **Bills tracker** lists every bill with its due date, open balance and status.
 
+## Attach the vendor's invoice
+
+Keep the vendor's invoice (a PDF, a scan or a photo, up to 25 MB) with the bill:
+
+- **On a new bill:** click **Attach the vendor's invoice…** under the lines before you post. The
+  file is attached when the bill posts.
+- **On a posted bill:** open the row's **Actions** menu (▾) and choose **Attach file…**.
+
+A 📎 next to the bill number marks a bill with files. Click it, or choose **Attachments…** in the
+row's menu, to see them: click a file name to save a copy, or × to remove it. The files are kept in
+the company file, so they're in your backups, and they stay with the bill if you edit it.
+
+Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
+way.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is

@@ -12,6 +12,9 @@ people using LocalBooks.
 - **Check numbers and printing in Pay Bills.** Paying bills from a bank account writes one check
   per vendor, numbered from the account's next check number, and can print them. Write Checks
   continues the same numbering, so a number is never used twice.
+- **Attach the vendor's invoice to a bill.** Attach files to a new bill, expense or check before
+  you post it, or to any posted bill, expense, invoice, sale or deposit from its row menu. A 📎
+  marks rows with files, and attached files now stay with a transaction when you edit it.
 
 ## [0.10.1]
 

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -250,6 +251,7 @@ export default function DepositsTransfers({ accounts, intent }) {
     if (intent?.action === 'transfer') setMode('transfer');
   }, [intent]);
 
+  const attachments = useAttachmentRows();
   const voidEntry = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
@@ -312,9 +314,13 @@ export default function DepositsTransfers({ accounts, intent }) {
                 </tr>
               )}
               {sorter.sorted.map((r) => (
-                <tr key={`${r.kind}-${r.id}`} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <Fragment key={`${r.kind}-${r.id}`}>
+                <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(r.date)}</td>
-                  <td className="qb-grid-cell">{r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'}</td>
+                  <td className="qb-grid-cell">
+                    {r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'}
+                    {attachments.clip(r.journalEntryId)}
+                  </td>
                   <td className="qb-grid-cell">{r.kind === 'TRANSFER' ? accountLabel(accounts, r.otherAccountId) : accountLabel(accounts, r.accountId)}</td>
                   <td className="qb-grid-cell text-qb-ink-muted">
                     {r.kind === 'TRANSFER' ? `from ${accountLabel(accounts, r.accountId)}` : `${r.lineCount} line${r.lineCount === 1 ? '' : 's'}`}
@@ -324,6 +330,7 @@ export default function DepositsTransfers({ accounts, intent }) {
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
                       items={[
+                        attachments.menuItem(r.journalEntryId),
                         voidItem({
                           journalEntryId: r.journalEntryId,
                           voided: r.isVoided,
@@ -337,6 +344,8 @@ export default function DepositsTransfers({ accounts, intent }) {
                     />
                   </td>
                 </tr>
+                {attachments.row(r.journalEntryId, 7)}
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -42,6 +42,13 @@ async fn record(tx: &mut Transaction<'_, Sqlite>, old_entry: i64, new_entry: i64
         .bind(new_entry)
         .execute(&mut **tx)
         .await
+        .map_err(db_err)?;
+    // Attached files (a vendor's invoice, a receipt) belong to the transaction, so they follow the edit.
+    sqlx::query("UPDATE attachments SET journal_entry_id = ?2 WHERE journal_entry_id = ?1")
+        .bind(old_entry)
+        .bind(new_entry)
+        .execute(&mut **tx)
+        .await
         .map(|_| ())
         .map_err(db_err)
 }
