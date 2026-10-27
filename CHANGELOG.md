@@ -22,6 +22,12 @@ people using LocalBooks.
 - **Choose the left pane and where you start.** In **Desktop View**, the left pane can show the
   full menu, only the open windows, or nothing. **Start on** opens a company on your last windows,
   the Home page, a screen you choose (say, Invoices), or no windows at all.
+- **What's new guide.** **Help › What's new** lists the newest features release by release, in
+  plain words, each with a link to its steps.
+- **Attachments guide.** A step-by-step guide to attaching receipts and vendor invoices, saving a
+  copy and removing files, and what happens to files when a transaction is edited or voided.
+- **Links inside the in-app guides open the right section.** A link to part of another guide now
+  opens that guide at the section, instead of showing as plain text.
 
 ## [0.10.2]
 
