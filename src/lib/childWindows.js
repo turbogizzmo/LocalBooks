@@ -32,6 +32,8 @@ export function pageKey({ view, action, data }) {
   if (action === 'edit') return `${view}|edit|${JSON.stringify(data ?? null)}`;
   if (view === 'reports' && data?.report) return `reports|${data.report}`;
   if (view === 'accounting/register' && data?.accountId != null) return `register|${data.accountId}`;
+  // Settings is one window, as QuickBooks' Preferences is one dialog: its tabs switch inside it.
+  if (view.startsWith('settings/')) return 'settings';
   return view;
 }
 
@@ -77,8 +79,10 @@ export function open(state, { view, action = null, data = null }, { area, maximi
   const intent = action ? { action, data, nonce: Date.now() + Math.random() } : null;
   if (existing) {
     const focused = focus(state, existing.id);
-    if (!intent) return focused;
-    return { ...focused, windows: focused.windows.map((w) => (w.id === existing.id ? { ...w, intent } : w)) };
+    // The same window on another of its pages (another Settings tab) shows that page.
+    const moved = existing.view !== view;
+    if (!intent && !moved) return focused;
+    return { ...focused, windows: focused.windows.map((w) => (w.id === existing.id ? { ...w, view, content: moved ? null : w.content, intent: intent ?? w.intent } : w)) };
   }
   const id = `w${state.next}`;
   const win = { id, view, intent, content: null, bounds: nextBounds(state, area), minimized: false, maximized, minimizedAt: 0 };
