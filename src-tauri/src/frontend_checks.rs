@@ -65,3 +65,30 @@ fn backend_wrappers_are_named_once() {
     assert!(seen.len() > 200, "found the wrappers");
     assert!(twice.is_empty(), "defined in two files: {}", twice.join(", "));
 }
+
+/// Multiple Windows: a list that opens a transaction in a window of its own sends an `edit` request
+/// with the transaction's id (`openFromList('expenses/bills', 'edit', { billId: … })`). That window,
+/// and the saved desktop that reopens it, show the screen in the same file, which must read the same
+/// id back (`useEditIntent(intent, 'billId', …)` or `intent.data?.billId`), or the window would open
+/// on an empty form.
+#[test]
+fn every_transaction_opened_in_its_own_window_is_read_back() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src");
+    let mut files = Vec::new();
+    script_files(&src, &mut files);
+    let mut sent = 0;
+    let mut unread = Vec::new();
+    for file in &files {
+        let text = std::fs::read_to_string(file).expect("read a source file");
+        for call in text.split("openFromList(").skip(1) {
+            let Some(rest) = call.split_once("'edit', { ").map(|(_, r)| r) else { continue };
+            let Some((key, _)) = rest.split_once(':') else { continue };
+            sent += 1;
+            if !text.contains(&format!("useEditIntent(intent, '{key}'")) && !text.contains(&format!("intent.data?.{key}")) {
+                unread.push(format!("{} ({key})", file.strip_prefix(&src).unwrap().display()));
+            }
+        }
+    }
+    assert!(sent >= 3, "found the lists that open transactions in their own window");
+    assert!(unread.is_empty(), "these screens open a transaction in its own window but never read its id back: {}", unread.join(", "));
+}

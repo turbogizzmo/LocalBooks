@@ -75,8 +75,10 @@ is sorted.
 
 ## Work in more than one window
 
-Like classic desktop accounting software, LocalBooks can show the same company in several windows,
-for example a report on one screen while you enter transactions on another.
+LocalBooks handles windows the way QuickBooks Desktop does, with the same menu names, so you can
+keep a report on one screen while you enter transactions on another.
+
+### Open a window
 
 - Choose **New window** at the top of any screen to open that screen in another window.
   **Window › New Window** does the same, or press **Ctrl+Shift+N** (⇧⌘N on a Mac).
@@ -84,7 +86,59 @@ for example a report on one screen while you enter transactions on another.
   its dates) or report open on its own.
 
 Every window shows the same books: when you save a change in one, the others update straight away.
-Closing a window leaves the others open; LocalBooks quits when you close the last one.
+Closing a window leaves the others open; LocalBooks quits when you close the last one. If a window
+has a form with entries you haven't saved, LocalBooks asks before it closes.
+
+### One Window or Multiple Windows
+
+As in QuickBooks, choose **View › One Window** or **View › Multiple Windows** (also in **Edit ›
+Preferences › Desktop View**, under **View**). The choice is for this computer.
+
+- **Multiple Windows** (the default, as in QuickBooks): choosing an invoice, bill, check or expense
+  in its list (**Edit…** in the row's menu), or a report in the Reports list, opens it in a window of
+  its own, so you can keep several side by side. If that report is already open in a window, the
+  window comes forward instead.
+- **One Window**: the list opens the transaction or report in the window you're in.
+
+### The Window menu and the Open Window List
+
+- **Window** lists every open LocalBooks window, the active one ticked. On Windows and Linux the
+  list is numbered; on a Mac, macOS shows the list itself at the bottom of the menu.
+- **Window › Close All** closes every window but one and takes that one to the Home page.
+  **Cascade**, **Tile Vertically** and **Tile Horizontally** arrange the open windows on the screen
+  you're working on.
+- **View › Open Window List** shows a panel beside the sidebar with every open window, the active
+  one highlighted. Click a window to bring it forward. Choose the menu item again (or **✕** on the
+  panel) to hide it.
+
+Each window's title names what's in it, such as "Invoice 1001 · Acme — Acme Ltd" or "Checking
+Register — Acme Ltd", so these lists are easy to read.
+
+### Reopen your windows with the company (saved desktop)
+
+When you open a company, LocalBooks reopens the windows you had: their screens, forms, registers
+and reports, where they were on screen. Choose how in **Edit › Preferences › Desktop View**, under
+**Desktop**, the same choices as QuickBooks:
+
+| Choice | What reopens |
+|---|---|
+| **Save when closing company** (the default) | The windows open when you close the company, quit, or open another company |
+| **Save current desktop** | Saves the windows open now; they reopen every time, whatever is open when you close |
+| **Don't save the desktop** | Nothing: the company opens on the Home page |
+| **Keep previously saved desktop** | Shown after you save a desktop: keeps it as it is |
+
+On a Mac, **Window › Workspace** has the same choices in QuickBooks for Mac's words: **AutoSave**
+(save when closing), **Manual** (keep the saved workspace) and **Save Workspace**.
+
+The desktop is kept for each company file and, when the file has users, for each user, on this
+computer. If a saved screen no longer exists, or a transaction in it was deleted, that window is
+left out and the rest still open. A window saved on a screen that's no longer connected opens on
+the screen you have.
+
+To open a company once without its windows, hold **Alt** (**Option** on a Mac) while you click
+**Open**, or choose **File › Open Company Without Restoring Windows…**. The company opens on a
+plain home page; your saved desktop is kept for next time unless you then close the company with
+**Save when closing company** chosen.
 
 ## Find things in the menu bar
 
@@ -95,7 +149,7 @@ them. Each one opens the screen, and often the form, in the window you're workin
 |---|---|
 | **File** | New, open, close and back up company files; import QuickBooks files; print and send forms |
 | **Edit** | Undo, cut, copy and paste; Use Register; **Find…** (Find Transactions); Preferences |
-| **View** | Show or hide the left icon bar |
+| **View** | Show or hide the left icon bar; Open Window List; One Window or Multiple Windows |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |
 | **Company** | Home Page, users and passwords, closing date, bank feeds, budgets, general journal entries, reclassify, currency adjustment |
 | **Customers** | Customer Center, estimates, invoices, sales receipts, statements, finance charges, receive payments, credit memos and refunds, Change Item Prices |

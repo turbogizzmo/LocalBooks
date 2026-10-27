@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Sidebar, { findNav } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -40,6 +40,7 @@ import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
 import FindTransactions from './components/FindTransactions.jsx';
+import OpenWindowList from './components/OpenWindowList.jsx';
 import { hasPendingMigration, takeWindowlessOpen, useCompanyFileActions, WINDOWLESS_KEY_NAME } from './components/CompanyFiles.jsx';
 import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
@@ -49,11 +50,9 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
 import { setCurrencySymbol } from './lib/money.js';
-import { isMainWindow, MENU_COMMAND, MENU_NAVIGATE, NEW_WINDOW_REQUESTED, openWindow, startPage } from './lib/windows.js';
+import { guardWindowClose, isMainWindow, MENU_COMMAND, MENU_NAVIGATE, NEW_WINDOW_REQUESTED, openWindow, startPage, useWindowPreferences, WindowContentContext } from './lib/windows.js';
 
 const STORAGE_KEY = 'localbooks.view';
-// A window opened on a page (Window › New Window, or a register or report in its own window).
-const START = startPage();
 const MAIN_WINDOW = isMainWindow();
 const IS_MAC = /Mac/.test(navigator.userAgent);
 // The company was just opened without restoring windows: start on a plain home page, not the page
@@ -69,6 +68,8 @@ if (WINDOWLESS && MAIN_WINDOW) {
 
 function initialView() {
   if (WINDOWLESS) return 'dashboard';
+  // The saved desktop's page, or the page this window was opened on (see lib/windows.js).
+  const START = startPage();
   if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
   // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
   if (hasPendingMigration()) return 'accounting/qbw-import';
@@ -84,7 +85,10 @@ function initialView() {
 export default function App() {
   const [view, setView] = useState(initialView);
   // An intent asks the destination view to open a specific entry form ({ action, nonce }).
-  const [intent, setIntent] = useState(() => (START?.action && !WINDOWLESS ? { action: START.action, data: START.data, nonce: Date.now() } : null));
+  const [intent, setIntent] = useState(() => {
+    const start = startPage();
+    return start?.action && !WINDOWLESS && start.view === initialView() ? { action: start.action, data: start.data, nonce: Date.now() } : null;
+  });
   // Opened without restoring windows: the plain home page shows until a page is chosen.
   const [windowless, setWindowless] = useState(WINDOWLESS);
   const [creating, setCreating] = useState(false);
@@ -143,6 +147,19 @@ export default function App() {
       unlisten?.();
     };
   }, []);
+
+  // What the window shows ("Invoice 1001 · Acme"), named by the screen (useWindowContent): it titles
+  // the window, lists it in the Window menu and the Open Window List, and is saved with the desktop.
+  const [content, setContent] = useState(null);
+  const windowPrefs = useWindowPreferences();
+  const windowContext = useMemo(() => ({ setContent, windowMode: windowPrefs.windowMode }), [windowPrefs.windowMode]);
+  useEffect(() => {
+    const page = windowless ? { view: 'dashboard', action: null, data: null } : content?.action ? { view, action: content.action, data: content.data ?? null } : { view, action: intent?.action ?? null, data: intent?.data ?? null };
+    const name = windowless ? 'Home' : (content?.name ?? findNav(view)?.item.label ?? null);
+    api.reportWindowPage(page.view, page.action, page.data, name).catch(() => {});
+  }, [view, intent, content, windowless]);
+  // Closing a window with unsaved entries in a form asks first.
+  useEffect(() => guardWindowClose(), []);
 
   // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
   const companyFiles = useCompanyFileActions();
@@ -217,8 +234,10 @@ export default function App() {
 
   return (
     <CompanyContext.Provider value={company}>
+    <WindowContentContext.Provider value={windowContext}>
     <div className="flex h-full">
       {!sidebarHidden && <Sidebar current={windowless ? null : view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
+      {windowPrefs.showOpenWindowList && <OpenWindowList />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
@@ -246,7 +265,7 @@ export default function App() {
           )}
           {storage.data && (
             <span
-              className="flex min-w-0 max-w-[480px] items-center gap-1.5 text-xs text-qb-ink-muted"
+              className="flex min-w-0 max-w-[480px] items-center gap-1.5 overflow-hidden text-xs text-qb-ink-muted"
               title={storage.data.path}
               aria-label={`Company: ${openCompany ?? 'unnamed'}, file ${storage.data.fileName}`}
             >
@@ -381,6 +400,7 @@ export default function App() {
         />
       )}
     </div>
+    </WindowContentContext.Provider>
     </CompanyContext.Provider>
   );
 }

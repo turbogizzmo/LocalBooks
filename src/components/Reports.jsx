@@ -26,7 +26,7 @@ import { ItemPriceListReport } from './PriceLevels.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
-import { openWindow } from '../lib/windows.js';
+import { openWindow, useOpenFromList, useWindowContent } from '../lib/windows.js';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -446,11 +446,19 @@ export default function Reports({ navigate, intent }) {
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]);
+  const groups = withCustomReports(REPORT_GROUPS, custom);
+  const reportName = groups.flatMap((g) => g.reports).find(([id]) => id === report)?.[1] ?? null;
+  // The window is named after its report, and reopens on it with the desktop.
+  useWindowContent(reportName ? { name: reportName, action: 'open', data: { report } } : null);
+  // Multiple Windows: a report chosen in the list opens in a window of its own (or brings forward
+  // the window that already shows it).
+  const openFromList = useOpenFromList();
+  const chooseReport = (id) => (id === report ? undefined : openFromList('reports', 'open', { report: id }, () => setReport(id)));
   const drill = initial ? `-${initial.at}` : '';
   return (
     <div className="flex h-full gap-2 p-2">
       <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
-        {withCustomReports(REPORT_GROUPS, custom).map((group) => (
+        {groups.map((group) => (
           <div key={group.title} className="mb-1">
             <div className="px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">{group.title}</div>
             {group.reports.map(([id, label]) => (
@@ -458,7 +466,7 @@ export default function Reports({ navigate, intent }) {
                 key={id}
                 type="button"
                 aria-current={report === id ? 'page' : undefined}
-                onClick={() => setReport(id)}
+                onClick={() => chooseReport(id)}
                 className={`block w-full px-3 py-0.5 text-left text-sm ${report === id ? 'bg-qb-green-tint font-semibold text-qb-green-active' : 'hover:bg-qb-row-hover'}`}
               >
                 {label}

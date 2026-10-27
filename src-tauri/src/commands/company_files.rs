@@ -85,11 +85,11 @@ pub const COMPANY_FILE_CHANGED: &str = "company-file-changed";
 
 /// After a different company file becomes the live one (or none does): retitles every window,
 /// remembers the file at the top of the recent list (and whether the company was left closed, for
-/// the next launch), and refreshes File › Open Previous Company.
+/// the next launch), and refreshes File › Open Previous Company and the Window and View menus.
 pub async fn company_changed(app: &AppHandle) {
-    refresh_window_title(app).await;
     let Some(db) = app.try_state::<Db>() else { return };
     let status = db.status().await;
+    windows::set_company(app, status.is_some(), status.as_ref().and_then(|s| s.company_name.clone()));
     let updated = storage::update_config(db.config_dir(), |config| {
         config.start_with_no_company = status.is_none();
         if let Some(status) = &status {
@@ -100,52 +100,41 @@ pub async fn company_changed(app: &AppHandle) {
         eprintln!("cannot update the recent company list: {err}");
     }
     crate::file_menu::refresh(app, &recent_companies(&db), status.is_some());
+    windows::refresh_menus(app).await;
 }
 
 fn recent_companies(db: &Db) -> Vec<RecentCompanyView> {
     storage::describe_recent(&storage::read_config(db.config_dir()).recent_companies)
 }
 
-/// Titles every LocalBooks window after the open company ("Acme Ltd — LocalBooks"), or plain
-/// "LocalBooks" for the usual company file before it is named.
-async fn refresh_window_title(app: &AppHandle) {
-    let title = window_title(app).await;
-    for window in app.webview_windows().values() {
-        let _ = window.set_title(&title);
-    }
-}
-
-/// The title every LocalBooks window shows for the open company.
-pub async fn window_title(app: &AppHandle) -> String {
-    let Some(db) = app.try_state::<Db>() else { return "LocalBooks".to_string() };
-    match db.status().await {
-        None => "No Company Open — LocalBooks".to_string(),
-        Some(StorageStatus { company_name: Some(name), .. }) => format!("{name} — LocalBooks"),
-        Some(_) => "LocalBooks".to_string(),
-    }
-}
-
-/// Window › New Window, or a register or report opened in its own window: another window on the
-/// open company, starting on `view` (a navigation id) with the given request, if any.
+/// Window › New Window, or a form, register or report opened in its own window: another window on
+/// the open company, starting on `view` (a navigation id) with the given request, if any. With
+/// `reuse`, a window already showing that page is brought forward instead.
 #[tauri::command]
-pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<String>, data: Option<serde_json::Value>) -> Result<String, String> {
+pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<String>, data: Option<serde_json::Value>, reuse: Option<bool>) -> Result<String, String> {
     if !app.state::<Db>().is_open().await {
         return Err(NO_COMPANY_OPEN.into());
     }
-    let title = window_title(&app).await;
-    windows::open(&app, &title, view.as_deref(), action.as_deref(), data.as_ref())
+    let page = view.map(|view| crate::desktop::Page { view, action, data: data.filter(|d| !d.is_null()) });
+    if let Some(window) = page.as_ref().filter(|_| reuse == Some(true)).and_then(|p| windows::showing(&app, p)) {
+        windows::focus_window(&window);
+        return Ok(window.label().to_string());
+    }
+    windows::open(&app, page.as_ref(), None)
 }
 
 /// Makes `path` the live company file for this session and tells the window to reload.
 ///
-/// `windowless` opens it without restoring windows, as QuickBooks does when Alt is held: once the
-/// file is open, every window but one closes, so a page that fails to load does not come back.
-/// (The page that asked lands on a plain home page; see `CompanyFiles.jsx`.)
+/// The company open until now closes first, so its desktop is saved (Desktop View preferences).
+/// Once the file is open, every window but one closes, and the first window to load reopens the new
+/// company's saved desktop. `windowless` opens it without restoring windows, as QuickBooks does when
+/// Alt is held, so a page that fails to load does not come back (the page that asked lands on a
+/// plain home page; see `CompanyFiles.jsx`).
 pub async fn mount_company_file(app: &AppHandle, path: &Path, windowless: bool) -> Result<StorageStatus, String> {
+    windows::save_on_close(app).await;
     let status = app.state::<Db>().mount(path).await?;
-    if windowless {
-        windows::close_extra(app);
-    }
+    windows::close_extra(app);
+    windows::restore_on_next_load(app, !windowless);
     company_changed(app).await;
     let _ = app.emit(COMPANY_FILE_CHANGED, ());
     notify(app);
@@ -271,10 +260,12 @@ pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_
     }
 }
 
-/// File › Close Company: closes the other windows on the company, then the company file itself
-/// (releasing its lock), and shows the No Company Open screen.
+/// File › Close Company: saves the desktop (Desktop View preferences), closes the other windows on
+/// the company, then the company file itself (releasing its lock), and shows the No Company Open
+/// screen.
 pub async fn close_company(app: &AppHandle) -> Result<(), String> {
     let db = app.try_state::<Db>().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+    windows::save_on_close(app).await;
     windows::close_extra(app);
     db.close().await;
     company_changed(app).await;

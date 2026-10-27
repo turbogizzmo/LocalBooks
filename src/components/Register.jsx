@@ -8,7 +8,7 @@ import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
-import { openWindow } from '../lib/windows.js';
+import { openWindow, useWindowContent } from '../lib/windows.js';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -55,6 +55,10 @@ export default function Register({ accounts, intent }) {
   }, [accountId, start, end, subaccounts, reload]);
 
   const account = accounts.find((a) => a.id === accountId);
+  // The window is named after its register ("Checking Register") and reopens on it with the desktop.
+  useWindowContent(
+    account ? { name: `${account.name} Register`, action: 'open', data: { accountId, startDate: start, endDate: end, includeSubaccounts: subaccounts } } : null,
+  );
   const hasChildren = accounts.some((a) => a.parentId === accountId);
   // In a register, the "increase" column is the account's normal side.
   const [increaseHead, decreaseHead] = amountHeads(account?.accountTypeName);

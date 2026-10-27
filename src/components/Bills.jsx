@@ -12,6 +12,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -32,6 +33,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const formClass = useFormClass(accounts);
+  // Closing the window asks first while the bill has entries not yet saved.
+  useDirtySince('bill', { vendor, billNumber, billDate, dueDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -434,6 +437,11 @@ export default function Bills({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   const today = todayIso();
+  // Multiple Windows: a bill chosen in the list opens in a window of its own.
+  const openFromList = useOpenFromList();
+  const openBill = (bill) => openFromList('expenses/bills', 'edit', { billId: bill.id }, () => startEdit(bill));
+  useEditIntent(intent, 'billId', data, startEdit, () => setNotice({ kind: 'error', text: 'That bill is no longer in the books.' }));
+  useWindowContent(editing ? { name: `Bill ${editing.bill.billNumber || ''} · ${editing.bill.vendorName}`.replace('Bill  ·', 'Bill ·'), action: 'edit', data: { billId: editing.bill.id } } : null);
 
   useEffect(() => {
     if (intent?.action === 'pay-bills') setPaying(true);
@@ -570,7 +578,7 @@ export default function Bills({ accounts, intent }) {
                     label: 'Edit…',
                     disabled: b.isVoided || b.amountPaidCents > 0,
                     hint: b.amountPaidCents > 0 ? 'Void its payments and remove its credits first' : undefined,
-                    onSelect: () => startEdit(b),
+                    onSelect: () => openBill(b),
                   },
                   voidItem({
                     journalEntryId: b.journalEntryId,

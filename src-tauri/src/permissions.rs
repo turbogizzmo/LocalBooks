@@ -50,6 +50,11 @@ const OPEN: &[&str] = &[
     "find_company_files",
     "restore_backup_as",
     "open_window",
+    "report_window_page",
+    "focus_open_window",
+    "take_desktop",
+    "set_desktop_view",
+    "set_window_preferences",
 ];
 
 const ADMIN: &[&str] = &[

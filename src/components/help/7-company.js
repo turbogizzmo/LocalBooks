@@ -142,9 +142,17 @@ export const topics = [
   {
     id: 'windows', area: 'company', views: [],
     title: 'Work in more than one window',
-    body: 'Choose New window at the top of any screen (or Window › New Window, Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away.',
-    keywords: 'window windows multiple new window side by side second monitor register report open',
+    body: 'Choose New window at the top of any screen (or Window › New Window, Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away. View › Multiple Windows (the default) opens each invoice, bill, check or report you choose in a list in a window of its own; View › One Window opens it in place. The Window menu lists the open windows and has Close All, Cascade and Tile; View › Open Window List shows them beside the sidebar.',
+    keywords: 'window windows multiple windows one window new window side by side second monitor register report open window list close all cascade tile',
     go: null,
+    guide: 'getting-started',
+  },
+  {
+    id: 'desktop-view', area: 'company', views: ['settings'],
+    title: 'Reopen your windows with the company (Desktop View)',
+    body: 'When a company opens, LocalBooks reopens the windows you had, as QuickBooks does. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). A saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
+    keywords: 'desktop view saved desktop save when closing company save current desktop dont save keep previously saved workspace autosave restore windows reopen preferences',
+    go: { label: 'Go to Desktop View', view: 'settings', action: 'preferences' },
     guide: 'getting-started',
   },
 ];
