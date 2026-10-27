@@ -8,5 +8,6 @@ export default {
   saveReportXlsx: (report, { startDate = null, endDate = null, asOf = null, classFilter = null } = {}, filename) =>
     invoke('save_report_xlsx', { report, startDate, endDate, asOf, classFilter, filename }),
   saveXlsx: (sheet, filename) => invoke('save_xlsx', { sheet, filename }),
-  printReport: () => invoke('print_report'),
+  printReport: (title = null) => invoke('print_report', { title }),
+  finishPrinting: () => invoke('finish_printing'),
 };

@@ -42,6 +42,10 @@ Loss** for you. See [Record customer payments](customer-payments.md).
 2. Choose **Print…** to print it, **Save as PDF…** to save a PDF file, or **Email…** to open a
    new message in your mail app with the PDF attached.
 
+Saved and attached PDFs are named after the form and the customer, for example
+`Invoice 1001 · Acme.pdf`. Estimates and sales receipts are named the same way, and **Save as PDF**
+in the print dialog suggests that name too.
+
 To email several invoices together, tick **Email later** when you post them, then send them from
 **Sales › Send Forms**.
 

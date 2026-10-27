@@ -12,10 +12,22 @@ export const COMPANY_FILE_CHANGED = 'company-file-changed';
  */
 export const api = Object.assign({}, ...Object.values(import.meta.glob('./api/*.js', { eager: true, import: 'default' })));
 
-/** Opens the system print dialog (Print / Save as PDF), falling back to the browser's. */
-export async function printDocument() {
+/**
+ * Opens the system print dialog (Print / Save as PDF), falling back to the browser's. `title`
+ * ("Invoice 1001 · Acme") is the name the dialog suggests for a saved PDF, until printing ends.
+ */
+export async function printDocument(title = null) {
+  if (title) {
+    const previous = document.title;
+    document.title = title;
+    const restore = () => {
+      document.title = previous;
+      api.finishPrinting().catch(() => {});
+    };
+    window.addEventListener('afterprint', restore, { once: true });
+  }
   try {
-    await api.printReport();
+    await api.printReport(title);
   } catch {
     window.print();
   }

@@ -139,7 +139,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     assert_eq!(get_template(&pool, None, FormKind::Estimate).await.unwrap().title, "Estimate");
 
     let rendered = render(&pool, FormKind::Invoice, Some(invoice.id), None, None, false).await.unwrap();
-    assert_eq!(rendered.form.title, format!("Statement of Work {}", invoice.invoice_number));
+    assert_eq!(rendered.form.title, format!("Statement of Work {} · Initech", invoice.invoice_number));
     assert_eq!(rendered.form.customer_email.as_deref(), Some("ap@initech.test"));
     let all = texts(&rendered.form.pages);
     for expected in ["Initech", "9 Elm St", "Austin, TX", "ap@initech.test", "1.5", "$100.00", "$150.00", "Net 30"] {
@@ -147,7 +147,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     }
 
     let (name, bytes) = pdf_file_for(&pool, FormKind::Invoice, invoice.id, None).await.unwrap();
-    assert_eq!(name, format!("Statement of Work {}.pdf", invoice.invoice_number));
+    assert_eq!(name, format!("Statement of Work {} · Initech.pdf", invoice.invoice_number));
     assert!(bytes.starts_with(b"%PDF-1.4"));
 
     let draft = email_draft(&pool, FormKind::Invoice, invoice.id, None).await.unwrap();
@@ -155,7 +155,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     assert_eq!(draft.subject, format!("Invoice {} from {}", invoice.invoice_number, load_company(&pool).await.unwrap().name));
     assert!(draft.body.starts_with("Dear Initech,\n\nPlease find attached invoice"), "{}", draft.body);
     assert!(draft.body.contains("$150.00, due 10/31/2026"));
-    assert_eq!(draft.file_name, format!("Statement of Work {}.pdf", invoice.invoice_number));
+    assert_eq!(draft.file_name, format!("Statement of Work {} · Initech.pdf", invoice.invoice_number));
 
     assert_eq!(reset_template(&pool, None, FormKind::Invoice).await.unwrap().title, "Invoice");
     assert_eq!(get_template(&pool, None, FormKind::Invoice).await.unwrap().title, "Invoice");
@@ -233,18 +233,18 @@ async fn styles_hold_their_own_templates_and_follow_the_customer() {
     sqlx::query("UPDATE customers SET form_style_id = ?1 WHERE name = 'Initech'").bind(modern.id).execute(&pool).await.unwrap();
     let pool_ref = &pool;
     let title = |id| async move { render(pool_ref, FormKind::Invoice, Some(id), None, None, false).await.unwrap().form.title };
-    assert_eq!(title(styled.id).await, format!("Bill {}", styled.invoice_number));
-    assert_eq!(title(plain.id).await, format!("Tax Invoice {}", plain.invoice_number));
-    assert_eq!(email_draft(&pool, FormKind::Invoice, styled.id, None).await.unwrap().file_name, format!("Bill {}.pdf", styled.invoice_number));
+    assert_eq!(title(styled.id).await, format!("Bill {} · Initech", styled.invoice_number));
+    assert_eq!(title(plain.id).await, format!("Tax Invoice {} · Globex", plain.invoice_number));
+    assert_eq!(email_draft(&pool, FormKind::Invoice, styled.id, None).await.unwrap().file_name, format!("Bill {} · Initech.pdf", styled.invoice_number));
 
     assert!(delete_style(&pool, standard).await.unwrap_err().starts_with("FORM_STYLE_DEFAULT"));
     set_default_style(&pool, modern.id).await.unwrap();
-    assert_eq!(title(plain.id).await, format!("Bill {}", plain.invoice_number));
+    assert_eq!(title(plain.id).await, format!("Bill {} · Globex", plain.invoice_number));
     set_default_style(&pool, standard).await.unwrap();
     assert_eq!(list_styles(&pool).await.unwrap().iter().find(|s| s.id == modern.id).unwrap().customer_count, 1);
     delete_style(&pool, modern.id).await.unwrap();
     // Its customers fall back to the default style.
-    assert_eq!(title(styled.id).await, format!("Tax Invoice {}", styled.invoice_number));
+    assert_eq!(title(styled.id).await, format!("Tax Invoice {} · Initech", styled.invoice_number));
     assert_eq!(list_styles(&pool).await.unwrap().len(), 1);
 }
 
@@ -266,7 +266,7 @@ async fn sales_receipts_and_statements_render_from_the_books() {
     .await
     .unwrap();
     let rendered = render(&pool, FormKind::SalesReceipt, Some(receipt.id), None, None, false).await.unwrap();
-    assert_eq!(rendered.form.title, format!("Sales Receipt {}", receipt.receipt_number));
+    assert_eq!(rendered.form.title, format!("Sales Receipt {} · Initech", receipt.receipt_number));
     let all = texts(&rendered.form.pages);
     for expected in ["SOLD TO", "Initech", "Check #2045", "Workshop", "2", "$150.00", "Thanks!"] {
         assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
@@ -286,7 +286,7 @@ async fn sales_receipts_and_statements_render_from_the_books() {
     }
     sqlx::query("UPDATE customers SET email = 'ap@initech.test' WHERE id = ?1").bind(customer).execute(&pool).await.unwrap();
     let receipt_mail = email_draft(&pool, FormKind::SalesReceipt, receipt.id, None).await.unwrap();
-    assert_eq!((receipt_mail.to.as_str(), receipt_mail.file_name.clone()), ("ap@initech.test", format!("Sales Receipt {}.pdf", receipt.receipt_number)));
+    assert_eq!((receipt_mail.to.as_str(), receipt_mail.file_name.clone()), ("ap@initech.test", format!("Sales Receipt {} · Initech.pdf", receipt.receipt_number)));
     let statement_mail = email_draft(&pool, FormKind::Statement, customer, Some(period)).await.unwrap();
     assert!(statement_mail.body.contains("The amount due is $400.00"), "{}", statement_mail.body);
     assert_eq!(statement_mail.file_name, "Statement 2026-10-31 · Initech.pdf");

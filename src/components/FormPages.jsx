@@ -232,7 +232,8 @@ export function useFormPrinter(onNotice) {
     const clear = () => setForms(null);
     window.addEventListener('afterprint', clear);
     // Let React commit the pages (and the logo image decode) before the dialog snapshots the page.
-    const timer = setTimeout(printDocument, 80);
+    const title = forms.length > 1 ? `${forms[0].title} and ${forms.length - 1} more` : forms[0].title;
+    const timer = setTimeout(() => printDocument(title), 80);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('afterprint', clear);

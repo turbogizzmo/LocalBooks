@@ -9,6 +9,7 @@ import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const isCategory = (a) =>
   !a.isSystem && (a.classification === 'EXPENSE' || ['FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_ASSET'].includes(a.accountType));
@@ -217,6 +218,14 @@ function ApplyToBills({ credit, onClose, onDone }) {
 
 export default function VendorCredits({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listVendorCredits);
+  const sorter = useSort(data, {
+    date: (c) => c.creditDate,
+    vendor: (c) => c.vendorName,
+    reference: (c) => c.reference,
+    total: (c) => c.totalCents,
+    left: (c) => (c.isVoided ? null : c.remainingCents),
+    status: (c) => (c.isVoided ? 'Voided' : c.remainingCents === 0 ? 'Used' : c.remainingCents < c.totalCents ? 'Partly used' : 'Open'),
+  });
   const [composing, setComposing] = useState(intent?.action === 'vendor-credit');
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -272,12 +281,12 @@ export default function VendorCredits({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Vendor</th>
-                <th className="qb-grid-head">Ref no.</th>
-                <th className="qb-grid-head text-right">Total</th>
-                <th className="qb-grid-head text-right">Credit left</th>
-                <th className="qb-grid-head">Status</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="vendor">Vendor</SortTh>
+                <SortTh sorter={sorter} col="reference">Ref no.</SortTh>
+                <SortTh sorter={sorter} col="total" className="text-right">Total</SortTh>
+                <SortTh sorter={sorter} col="left" className="text-right">Credit left</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -287,7 +296,7 @@ export default function VendorCredits({ accounts, intent }) {
                   <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No vendor credits yet.</td>
                 </tr>
               )}
-              {(data ?? []).map((c) => (
+              {sorter.sorted.map((c) => (
                 <tr key={c.id} className={`qb-grid-row ${c.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(c.creditDate)}</td>
                   <td className="qb-grid-cell font-semibold">{c.vendorName}</td>

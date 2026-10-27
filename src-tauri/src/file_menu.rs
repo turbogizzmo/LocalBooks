@@ -1,27 +1,29 @@
 //! The company items at the top of the menu bar's File menu, as in classic desktop accounting
-//! software: New Company…, Open or Restore Company…, Open Previous Company ▸ (the recent list), and
-//! Close Company.
+//! software: New Company…, Open or Restore Company…, Open Company Without Restoring Windows…, Open
+//! Previous Company ▸ (the recent list), and Close Company.
 //!
 //! Opening a recent file and closing the company happen here; New Company and Open or Restore need
 //! the page (a name prompt, the file dialogs), so those are sent to the focused window as
-//! `file-menu-requested` with the action ("new" or "open").
+//! `file-menu-requested` with the action ("new", "open" or "open-windowless").
 
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::storage::RecentCompanyView;
 
-/// Sent to the focused window for File › New Company… ("new") and Open or Restore Company… ("open").
+/// Sent to the focused window for File › New Company… ("new"), Open or Restore Company… ("open")
+/// and Open Company Without Restoring Windows… ("open-windowless").
 const FILE_MENU_REQUESTED: &str = "file-menu-requested";
 const NEW_COMPANY: &str = "file-new-company";
 const OPEN_COMPANY: &str = "file-open-company";
+const OPEN_WINDOWLESS: &str = "file-open-windowless";
 const CLOSE_COMPANY: &str = "file-close-company";
 const NO_RECENT: &str = "file-no-recent";
 /// A recent company's menu id is this prefix followed by its path.
 const RECENT_PREFIX: &str = "file-recent:";
 
 /// How many items `add_company_items` puts at the top of File.
-pub const COMPANY_ITEM_COUNT: usize = 6;
+pub const COMPANY_ITEM_COUNT: usize = 7;
 
 /// The items whose contents follow the open company.
 struct CompanyItems {
@@ -47,6 +49,7 @@ pub fn add_company_items(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()>
     let items: [&dyn IsMenuItem<Wry>; COMPANY_ITEM_COUNT] = [
         &MenuItem::with_id(app, NEW_COMPANY, "New Company…", true, None::<&str>)?,
         &MenuItem::with_id(app, OPEN_COMPANY, "Open or Restore Company…", true, Some("CmdOrCtrl+O"))?,
+        &MenuItem::with_id(app, OPEN_WINDOWLESS, "Open Company Without Restoring Windows…", true, Some("CmdOrCtrl+Alt+O"))?,
         &recent,
         &PredefinedMenuItem::separator(app)?,
         &close,
@@ -90,6 +93,7 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
     match id {
         NEW_COMPANY => ask_page(app, "new"),
         OPEN_COMPANY => ask_page(app, "open"),
+        OPEN_WINDOWLESS => ask_page(app, "open-windowless"),
         CLOSE_COMPANY => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {

@@ -11,6 +11,7 @@ import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -443,6 +444,17 @@ export default function Bills({ accounts, intent }) {
   }, [intent]);
 
   const bills = data ?? [];
+  const sorter = useSort(bills, {
+    vendor: (b) => b.vendorName,
+    number: (b) => b.billNumber,
+    date: (b) => b.billDate,
+    due: (b) => b.dueDate,
+    category: (b) => (b.categoryAccountId !== null ? accountLabel(accounts, b.categoryAccountId) : null),
+    description: (b) => b.firstDescription,
+    amount: (b) => b.totalCents,
+    balance: (b) => (b.isVoided ? null : b.balanceCents),
+    status: (b) => (b.isVoided ? 'VOIDED' : b.status),
+  });
 
   // Payments feed the per-row void menu; refreshed whenever the bills change.
   useEffect(() => {
@@ -532,15 +544,15 @@ export default function Bills({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Vendor</th>
-                <th className="qb-grid-head">Bill no.</th>
-                <th className="qb-grid-head">Bill date</th>
-                <th className="qb-grid-head">Due date</th>
-                <th className="qb-grid-head">Category</th>
-                <th className="qb-grid-head">Description</th>
-                <th className="qb-grid-head text-right">Amount</th>
-                <th className="qb-grid-head text-right">Open balance</th>
-                <th className="qb-grid-head">Status</th>
+                <SortTh sorter={sorter} col="vendor">Vendor</SortTh>
+                <SortTh sorter={sorter} col="number">Bill no.</SortTh>
+                <SortTh sorter={sorter} col="date">Bill date</SortTh>
+                <SortTh sorter={sorter} col="due">Due date</SortTh>
+                <SortTh sorter={sorter} col="category">Category</SortTh>
+                <SortTh sorter={sorter} col="description">Description</SortTh>
+                <SortTh sorter={sorter} col="amount" className="text-right">Amount</SortTh>
+                <SortTh sorter={sorter} col="balance" className="text-right">Open balance</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -550,7 +562,7 @@ export default function Bills({ accounts, intent }) {
                   <td colSpan={COLS} className="qb-grid-cell text-qb-ink-muted">No bills yet.</td>
                 </tr>
               )}
-              {bills.map((b) => {
+              {sorter.sorted.map((b) => {
                 const isOverdue = isOpen(b) && b.dueDate < today;
                 const livePayments = (payments[b.id] ?? []).filter((p) => !p.isVoided);
                 const items = [

@@ -12,6 +12,7 @@ import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './F
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
@@ -172,7 +173,17 @@ export default function AllSales({ accounts, intent }) {
   };
   // Documents can be in different currencies, so the money bar totals home-currency equivalents.
   const sum = (list, key) => list.reduce((s, r) => s + r[key], 0);
-  const visible = filter === 'ALL' ? rows : rows.filter((r) => r.kind === filter);
+  const sorter = useSort(filter === 'ALL' ? rows : rows.filter((r) => r.kind === filter), {
+    date: (r) => r.date,
+    type: (r) => KIND_LABEL[r.kind],
+    number: (r) => r.number,
+    customer: (r) => r.customerName,
+    due: (r) => r.dueDate,
+    balance: (r) => (r.kind === 'INVOICE' ? r.balanceCents : null),
+    total: (r) => r.homeTotalCents ?? r.totalCents,
+    status: (r) => (r.isVoided ? 'VOIDED' : r.kind === 'INVOICE' ? r.status : r.kind === 'PAYMENT' ? 'Closed' : 'Paid'),
+  });
+  const visible = sorter.sorted;
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -230,14 +241,14 @@ export default function AllSales({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Type</th>
-                <th className="qb-grid-head">No.</th>
-                <th className="qb-grid-head">Customer</th>
-                <th className="qb-grid-head">Due date</th>
-                <th className="qb-grid-head text-right">Balance</th>
-                <th className="qb-grid-head text-right">Total</th>
-                <th className="qb-grid-head">Status</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="type">Type</SortTh>
+                <SortTh sorter={sorter} col="number">No.</SortTh>
+                <SortTh sorter={sorter} col="customer">Customer</SortTh>
+                <SortTh sorter={sorter} col="due">Due date</SortTh>
+                <SortTh sorter={sorter} col="balance" className="text-right">Balance</SortTh>
+                <SortTh sorter={sorter} col="total" className="text-right">Total</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>

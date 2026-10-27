@@ -4,6 +4,7 @@ import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
+import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
@@ -399,7 +400,21 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
   const [printPortal, forms] = useFormPrinter(onNotice);
   const emailed = useEmailStatuses('INVOICE');
   const [unsentOnly, setUnsentOnly] = useState(false);
-  const shown = (data ?? []).filter((inv) => !unsentOnly || emailed.get(inv.id)?.queued);
+  const sorter = useSort(
+    (data ?? []).filter((inv) => !unsentOnly || emailed.get(inv.id)?.queued),
+    {
+      number: (inv) => inv.invoiceNumber,
+      customer: (inv) => inv.customerName,
+      rep: (inv) => inv.salesRep,
+      date: (inv) => inv.issueDate,
+      due: (inv) => inv.dueDate,
+      total: (inv) => inv.homeTotalCents ?? inv.totalCents,
+      paid: (inv) => inv.amountPaidCents,
+      balance: (inv) => (inv.isVoided ? null : inv.homeBalanceCents ?? inv.balanceCents),
+      status: (inv) => (inv.isVoided ? 'VOIDED' : inv.status),
+    },
+  );
+  const shown = sorter.sorted;
   const voidInvoice = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     onNotice({ kind: 'success', text: 'Invoice voided: a reversing entry now offsets it.' });
@@ -433,15 +448,15 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
           </colgroup>
           <thead>
             <tr>
-              <th className="qb-grid-head">No.</th>
-              <th className="qb-grid-head">Customer</th>
-              {withRep && <th className="qb-grid-head">Rep</th>}
-              <th className="qb-grid-head">Date</th>
-              <th className="qb-grid-head">Due</th>
-              <th className="qb-grid-head text-right">Total</th>
-              <th className="qb-grid-head text-right">Paid</th>
-              <th className="qb-grid-head text-right">Open balance</th>
-              <th className="qb-grid-head">Status</th>
+              <SortTh sorter={sorter} col="number">No.</SortTh>
+              <SortTh sorter={sorter} col="customer">Customer</SortTh>
+              {withRep && <SortTh sorter={sorter} col="rep">Rep</SortTh>}
+              <SortTh sorter={sorter} col="date">Date</SortTh>
+              <SortTh sorter={sorter} col="due">Due</SortTh>
+              <SortTh sorter={sorter} col="total" className="text-right">Total</SortTh>
+              <SortTh sorter={sorter} col="paid" className="text-right">Paid</SortTh>
+              <SortTh sorter={sorter} col="balance" className="text-right">Open balance</SortTh>
+              <SortTh sorter={sorter} col="status">Status</SortTh>
               <th className="qb-grid-head" aria-label="Actions" />
             </tr>
           </thead>
