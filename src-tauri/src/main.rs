@@ -54,6 +54,7 @@ mod parties;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod mileage;
 mod nacha;
 mod preferences;
 mod price_levels;

@@ -60,6 +60,7 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         let new_id = crate::invoices::write_invoice_carrying(tx, &input, &carried).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
         record(tx, old, new_entry).await?;
+        crate::mileage::follow_replaced_invoice(tx, invoice_id, new_id).await?;
         Ok(new_id)
     })
     .await
