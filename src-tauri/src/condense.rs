@@ -132,6 +132,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_import_price_levels",
     "ledger_import_sales_lists",
     "ledger_import_unreadable",
+    "mileage_rates",
+    "mileage_trips",
     "price_level_items",
     "price_levels",
     "products_services",
@@ -154,6 +156,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "todos",
     "user_reset_in_progress",
     "users",
+    "vehicles",
     "vendor_bank_accounts",
     "vendors",
 ];

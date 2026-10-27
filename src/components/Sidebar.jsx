@@ -39,7 +39,10 @@ export const NAV = [
     id: 'employees',
     label: 'Employees',
     icon: <Icon name="Employees" />,
-    children: [{ id: 'employees/time', label: 'Time Tracking' }],
+    children: [
+      { id: 'employees/time', label: 'Time Tracking' },
+      { id: 'employees/mileage', label: 'Mileage' },
+    ],
   },
   {
     id: 'banking',

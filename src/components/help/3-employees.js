@@ -7,6 +7,10 @@ export const screens = {
     help: 'Hours worked by employees, entered one activity at a time or as a weekly timesheet. Time does not post to your books; billable hours can be invoiced.',
     guide: 'time-tracking',
   },
+  'employees/mileage': {
+    help: 'Trips driven in each vehicle, the mileage rates you enter, and billing billable trips to customers. Trips do not post to your books; a billed trip posts through its invoice.',
+    guide: 'mileage',
+  },
 };
 
 /**
@@ -22,5 +26,13 @@ export const topics = [
     keywords: 'hours timesheet employee billable weekly activity',
     go: { label: 'Weekly timesheet', view: 'employees/time', action: 'weekly-timesheet' },
     guide: 'time-tracking',
+  },
+  {
+    id: 'mileage', area: 'employees', views: ['employees/mileage', 'reports'],
+    title: 'Track vehicle mileage',
+    body: 'Record trips by vehicle with odometer readings or total miles, a customer or job and notes; the deductible amount is miles × the mileage rate you entered for the trip date (find the official rate at irs.gov). Bill billable trips on an invoice at your own sales rate, and see Mileage by Vehicle and Mileage by Job under Reports › Jobs.',
+    keywords: 'mileage miles vehicle car truck trip odometer irs standard mileage rate deduction billable reimbursement',
+    go: { label: 'Enter a trip', view: 'employees/mileage', action: 'mileage-trip' },
+    guide: 'mileage',
   },
 ];

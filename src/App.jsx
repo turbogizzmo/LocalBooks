@@ -11,6 +11,7 @@ import SalesLists from './components/SalesLists.jsx';
 import ExpensesChecks from './components/ExpensesChecks.jsx';
 import Bills from './components/Bills.jsx';
 import TimeTracking from './components/TimeTracking.jsx';
+import MileageTracking from './components/MileageTracking.jsx';
 import BankFeed from './components/BankFeed.jsx';
 import DepositsTransfers from './components/DepositsTransfers.jsx';
 import Reconcile from './components/Reconcile.jsx';
@@ -340,6 +341,7 @@ export default function App() {
           {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
           {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={select} />}
           {view === 'employees/time' && <TimeTracking {...props} />}
+          {view === 'employees/mileage' && <MileageTracking {...props} />}
           {view === 'banking/feeds' && <BankFeed accounts={list} />}
           {view === 'banking/transfers' && <DepositsTransfers {...props} />}
           {view === 'banking/reconcile' && <Reconcile accounts={list} />}

@@ -35,6 +35,7 @@ export const QUICK_CREATE = [
     items: [
       { id: 'time-activity', label: 'Single Time Activity', view: 'employees/time' },
       { id: 'weekly-timesheet', label: 'Weekly Timesheet', view: 'employees/time' },
+      { id: 'mileage-trip', label: 'Mileage Trip', view: 'employees/mileage' },
     ],
   },
   {
