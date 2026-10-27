@@ -54,6 +54,7 @@ features![
     bank_feeds,
     budgets,
     classes,
+    cleanup,
     company_files,
     credits,
     custom_fields,

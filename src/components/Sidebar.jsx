@@ -60,6 +60,7 @@ export const NAV = [
       { id: 'accounting/register', label: 'Account Registers' },
       { id: 'accounting/classes', label: 'Classes' },
       { id: 'accounting/reclassify', label: 'Reclassify Transactions' },
+      { id: 'accounting/clean-up', label: 'Clean Up Books' },
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/find', label: 'Find Transactions' },
       { id: 'accounting/recurring', label: 'Recurring Transactions' },
