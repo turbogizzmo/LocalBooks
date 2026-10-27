@@ -15,6 +15,8 @@
 //! Scanned statements are images with no text; they are refused with a clear message, since
 //! LocalBooks does not do OCR.
 
+#![allow(clippy::float_arithmetic, reason = "text positions on a statement page; amounts are parsed to cents as text")]
+
 use chrono::{Datelike, NaiveDate};
 use pdf_extract::{MediaBox, OutputDev, OutputError, Transform};
 

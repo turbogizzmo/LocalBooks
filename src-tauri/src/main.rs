@@ -1,4 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Money is integer cents (see `money` and AGENTS.md). Modules that need floats for geometry,
+// scoring or foreign file formats allow this lint locally and say why.
+#![deny(clippy::float_arithmetic)]
 
 mod accountant_reports;
 mod accounts;
@@ -45,6 +48,7 @@ mod invoices;
 mod item_prices;
 mod job_reports;
 mod ledger;
+mod money;
 mod mail_app;
 mod parties;
 mod permissions;

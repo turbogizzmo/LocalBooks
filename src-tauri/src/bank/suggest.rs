@@ -16,6 +16,8 @@
 //! nothing is approved without the user. The model lives in memory, is rebuilt from the company file
 //! when that changes, and grows by one example on each approval. Nothing leaves the computer.
 
+#![allow(clippy::float_arithmetic, reason = "similarity scores for suggestions; no amounts are computed")]
+
 use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, NaiveDate};
