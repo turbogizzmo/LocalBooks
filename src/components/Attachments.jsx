@@ -113,6 +113,8 @@ export function useAttachmentRows() {
         <button
           type="button"
           className="ml-1 text-2xs text-qb-ink-muted hover:text-qb-link"
+          // Rows such as invoices act on mousedown, so stop that too, not just the click.
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             toggle(entryId);
