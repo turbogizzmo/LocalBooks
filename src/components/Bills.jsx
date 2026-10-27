@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
@@ -32,6 +33,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Files to attach once the bill posts, such as the vendor's invoice.
+  const [files, setFiles] = useState([]);
   const formClass = useFormClass(accounts);
 
   useEffect(() => {
@@ -77,12 +80,16 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
       const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
+      const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
       onPosted(
         editing
           ? `Bill from ${input.vendorName} replaced: the original is voided and the edited bill is posted.`
-          : `Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.`,
+          : `Bill from ${bill.vendorName} posted: Cr Accounts Payable ${formatCents(bill.totalCents)} / Dr ${lines.length} split${lines.length === 1 ? '' : 's'}.` +
+              (files.length && !attachError ? ` ${files.length} file${files.length === 1 ? '' : 's'} attached.` : ''),
       );
+      if (attachError) setError(attachError);
       if (editing) return onCancelEdit();
+      setFiles([]);
       setVendor('');
       setBillNumber('');
       setTotal('');
@@ -161,6 +168,11 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs stockItems={stockItems.data ?? []} />
+      {!editing && (
+        <div className="border-t border-qb-border px-2 py-1">
+          <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : "Attach the vendor's invoice…"} />
+        </div>
+      )}
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
       {memorizing && (
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
@@ -483,6 +495,7 @@ export default function Bills({ accounts, intent }) {
   const [payments, setPayments] = useState({});
   const [editing, setEditing] = useState(null); // { bill, lines }
   const [achFiles, setAchFiles] = useState(false);
+  const attachments = useAttachmentRows();
   const [printing, setPrinting] = useState([]);
   const company = useCompany();
   const vendorRef = useRef(null);
@@ -639,6 +652,7 @@ export default function Bills({ accounts, intent }) {
                 const isOverdue = isOpen(b) && b.dueDate < today;
                 const livePayments = (payments[b.id] ?? []).filter((p) => !p.isVoided);
                 const items = [
+                  attachments.menuItem(b.journalEntryId),
                   {
                     label: 'Edit…',
                     disabled: b.isVoided || b.amountPaidCents > 0,
@@ -665,7 +679,10 @@ export default function Bills({ accounts, intent }) {
                   <Fragment key={b.id}>
                     <tr className={`qb-grid-row ${b.isVoided ? 'text-qb-ink-faint' : ''}`}>
                       <td className="qb-grid-cell font-semibold" title={b.vendorName}>{b.vendorName}</td>
-                      <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
+                      <td className="qb-grid-cell">
+                        {b.billNumber ?? ''}
+                        {attachments.clip(b.journalEntryId)}
+                      </td>
                       <td className="qb-grid-cell">{formatDate(b.billDate)}</td>
                       <td className={`qb-grid-cell ${isOverdue ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
                       <td className="qb-grid-cell" title={accountLabel(accounts, b.categoryAccountId)}>
@@ -681,6 +698,7 @@ export default function Bills({ accounts, intent }) {
                         <RowMenu items={items} />
                       </td>
                     </tr>
+                    {attachments.row(b.journalEntryId, COLS)}
                   </Fragment>
                 );
               })}

@@ -25,6 +25,10 @@ choose a customer or job to count that line as the job's cost in the
    if you need to.
 3. Add the category lines and click **Save & Post Check**.
 
+To keep the receipt with an expense or check, click **Attach a receipt…** before you post, or
+choose **Attach file…** in a posted row's **Actions** menu. See
+[Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
+
 ## Record a credit card credit
 
 Use a card credit when a vendor gives money back onto a credit card: a refund for a return, a
