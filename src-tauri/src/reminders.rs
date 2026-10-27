@@ -231,8 +231,28 @@ pub async fn get_todo(pool: &SqlitePool, id: i64) -> Result<TodoView, String> {
         .ok_or_else(|| "TODO_NOT_FOUND: that to-do no longer exists".to_string())
 }
 
-async fn exists(pool: &SqlitePool, sql: &str, id: i64) -> Result<bool, String> {
-    sqlx::query_scalar(sql).bind(id).fetch_one(pool).await.map_err(db_err)
+/// A list a to-do can point into; only row ids are ever looked up.
+#[derive(Clone, Copy)]
+enum Record {
+    Customer,
+    Vendor,
+    Employee,
+    Invoice,
+    Bill,
+    ActiveUser,
+}
+
+/// Whether the row `row_id` exists in `record`'s table.
+async fn record_exists(pool: &SqlitePool, record: Record, row_id: i64) -> Result<bool, String> {
+    let sql = match record {
+        Record::Customer => "SELECT EXISTS (SELECT 1 FROM customers WHERE id = ?1)",
+        Record::Vendor => "SELECT EXISTS (SELECT 1 FROM vendors WHERE id = ?1)",
+        Record::Employee => "SELECT EXISTS (SELECT 1 FROM employees WHERE id = ?1)",
+        Record::Invoice => "SELECT EXISTS (SELECT 1 FROM invoices WHERE id = ?1)",
+        Record::Bill => "SELECT EXISTS (SELECT 1 FROM bills WHERE id = ?1)",
+        Record::ActiveUser => "SELECT EXISTS (SELECT 1 FROM users WHERE id = ?1 AND is_active = 1)",
+    };
+    sqlx::query_scalar(sql).bind(row_id).fetch_one(pool).await.map_err(db_err)
 }
 
 async fn validate_todo(pool: &SqlitePool, input: &TodoInput) -> Result<(), String> {
@@ -250,34 +270,37 @@ async fn validate_todo(pool: &SqlitePool, input: &TodoInput) -> Result<(), Strin
     if parties > 1 {
         return Err("TODO_ONE_NAME: a to-do is about one customer, vendor or employee".into());
     }
-    let checks = [
-        (input.customer_id, "SELECT EXISTS (SELECT 1 FROM customers WHERE id = ?1)", "customer"),
-        (input.vendor_id, "SELECT EXISTS (SELECT 1 FROM vendors WHERE id = ?1)", "vendor"),
-        (input.employee_id, "SELECT EXISTS (SELECT 1 FROM employees WHERE id = ?1)", "employee"),
-    ];
-    for (id, sql, noun) in checks {
-        if let Some(id) = id {
-            if !exists(pool, sql, id).await? {
-                return Err(format!("TODO_BAD_NAME: that {noun} no longer exists"));
-            }
+    if let Some(customer_id) = input.customer_id {
+        if !record_exists(pool, Record::Customer, customer_id).await? {
+            return Err("TODO_BAD_NAME: that customer no longer exists".into());
         }
     }
-    match (input.link_kind.as_deref(), input.link_id) {
-        (None, None) => {}
-        (Some("INVOICE"), Some(id)) => {
-            if !exists(pool, "SELECT EXISTS (SELECT 1 FROM invoices WHERE id = ?1)", id).await? {
-                return Err("TODO_BAD_LINK: that invoice no longer exists".into());
-            }
+    if let Some(vendor_id) = input.vendor_id {
+        if !record_exists(pool, Record::Vendor, vendor_id).await? {
+            return Err("TODO_BAD_NAME: that vendor no longer exists".into());
         }
-        (Some("BILL"), Some(id)) => {
-            if !exists(pool, "SELECT EXISTS (SELECT 1 FROM bills WHERE id = ?1)", id).await? {
-                return Err("TODO_BAD_LINK: that bill no longer exists".into());
-            }
+    }
+    if let Some(employee_id) = input.employee_id {
+        if !record_exists(pool, Record::Employee, employee_id).await? {
+            return Err("TODO_BAD_NAME: that employee no longer exists".into());
         }
+    }
+    let link = match input.link_kind.as_deref() {
+        None if input.link_id.is_none() => None,
+        Some("INVOICE") => Some((Record::Invoice, "invoice")),
+        Some("BILL") => Some((Record::Bill, "bill")),
         _ => return Err("TODO_BAD_LINK: a to-do links to one invoice or bill".into()),
+    };
+    if let Some((record, noun)) = link {
+        let Some(document_id) = input.link_id else {
+            return Err("TODO_BAD_LINK: a to-do links to one invoice or bill".into());
+        };
+        if !record_exists(pool, record, document_id).await? {
+            return Err(format!("TODO_BAD_LINK: that {noun} no longer exists"));
+        }
     }
-    if let Some(user) = input.assigned_user_id {
-        if !exists(pool, "SELECT EXISTS (SELECT 1 FROM users WHERE id = ?1 AND is_active = 1)", user).await? {
+    if let Some(user_id) = input.assigned_user_id {
+        if !record_exists(pool, Record::ActiveUser, user_id).await? {
             return Err("TODO_BAD_ASSIGNEE: assign the to-do to an active user".into());
         }
     }
