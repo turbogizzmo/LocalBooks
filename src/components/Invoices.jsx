@@ -627,7 +627,7 @@ export default function Invoices({ accounts, intent }) {
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
   useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
-  // Multiple Windows: an invoice chosen in the list opens in a window of its own.
+  // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
   const loadForEdit = (inv) => {
@@ -902,7 +902,7 @@ export default function Invoices({ accounts, intent }) {
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       </section>
 
-      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id }, () => loadForEdit(inv))} />
+      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })} />
     </div>
   );
 }

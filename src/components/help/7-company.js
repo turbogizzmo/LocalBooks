@@ -142,15 +142,15 @@ export const topics = [
   {
     id: 'windows', area: 'company', views: [],
     title: 'Work in more than one window',
-    body: 'Choose New window at the top of any screen (or Window › New Window, Ctrl+Shift+N / ⇧⌘N) to open that screen in another window on the same company; registers and reports also have Open in new window. Every window shows the same books, and a change saved in one appears in the others straight away. View › Multiple Windows (the default) opens each invoice, bill, check or report you choose in a list in a window of its own; View › One Window opens it in place. The Window menu lists the open windows and has Close All, Cascade and Tile; View › Open Window List shows them beside the sidebar.',
-    keywords: 'window windows multiple windows one window new window side by side second monitor register report open window list close all cascade tile',
+    body: 'As in QuickBooks Desktop, forms, registers and reports open as windows inside the LocalBooks window: drag a title bar to move one, drag an edge to resize it, and use Minimize, Maximize and Close on its title bar (a maximized window\'s buttons sit at the end of the toolbar; minimized ones wait along the bottom). Edit… on an invoice, bill or check, or a report chosen in the Reports list, opens it in a window of its own. View › One Window shows one at a time; View › Multiple Windows (the default) lets them sit side by side. The Window menu has Close All, Cascade, Tile Vertically, Tile Horizontally, Arrange Icons and the list of open windows; View › Open Window List shows them beside the sidebar. Ctrl+F6 or Ctrl+Tab goes to the next window; Esc or Ctrl+F4 closes the active one (⌘W on a Mac). Window › New Window opens a second LocalBooks window, for another screen.',
+    keywords: 'window windows multiple windows one window maximize minimize restore close all cascade tile arrange icons open window list ctrl+f6 ctrl+tab esc ctrl+f4 side by side second monitor new window',
     go: null,
     guide: 'getting-started',
   },
   {
     id: 'desktop-view', area: 'company', views: ['settings'],
     title: 'Reopen your windows with the company (Desktop View)',
-    body: 'When a company opens, LocalBooks reopens the windows you had, as QuickBooks does. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). A saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
+    body: 'When a company opens, LocalBooks reopens the windows you had, as QuickBooks does. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). Where each window sat, and whether it was minimized or maximized, comes back too; a saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
     keywords: 'desktop view saved desktop save when closing company save current desktop dont save keep previously saved workspace autosave restore windows reopen preferences',
     go: { label: 'Go to Desktop View', view: 'settings', action: 'preferences' },
     guide: 'getting-started',

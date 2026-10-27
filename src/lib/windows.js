@@ -6,18 +6,18 @@ import { NAV } from '../components/Sidebar.jsx';
 import { askConfirm } from './dialogs.jsx';
 import desktop from './api/desktop.js';
 
-/** Sent by Window › New Window to the focused window, which opens the page it shows. */
+/** Sent by Window › New Window to the focused LocalBooks window, which opens the page active in it. */
 export const NEW_WINDOW_REQUESTED = 'new-window-requested';
-/** Sent by a menu bar item to the focused window with the page to open: `{ view, action, data }`. */
+/** Sent by a menu bar item to the focused LocalBooks window with the page to open: `{ view, action, data }`. */
 export const MENU_NAVIGATE = 'menu-navigate';
 /** Sent by a menu bar item that acts on the page: 'find', 'help' or 'sidebar'. */
 export const MENU_COMMAND = 'menu-command';
-/** Sent to every window with the open windows whenever they change (see `windows.rs`). */
-const OPEN_WINDOWS_CHANGED = 'open-windows-changed';
-/** Sent to every window when View › One Window / Multiple Windows or Open Window List changes. */
+/** Sent by the Window menu: 'close-all', 'close', 'cascade', 'tile-vertically', 'tile-horizontally', 'arrange-icons' or 'focus:<id>'. */
+export const WINDOW_COMMAND = 'window-command';
+/** Sent to every LocalBooks window when View › One Window / Multiple Windows or Open Window List changes. */
 const WINDOW_PREFERENCES_CHANGED = 'window-preferences-changed';
 
-/** The window LocalBooks opens at launch; extra windows leave its remembered page alone. */
+/** The window LocalBooks opens at launch. */
 export function isMainWindow() {
   try {
     return getCurrentWebviewWindow().label === 'main';
@@ -29,8 +29,8 @@ export function isMainWindow() {
 /** The pages the app has (the sidebar's), which a saved desktop may reopen. */
 export const KNOWN_VIEWS = NAV.flatMap((item) => (item.children ? item.children.map((c) => c.id) : [item.id]));
 
-/** The page from the window's URL fragment (`#view=…&action=…&data=…`, see `windows.rs`), or null. */
-function fragmentPage() {
+/** The page from the LocalBooks window's URL fragment (`#view=…&action=…&data=…`, see `windows.rs`), or null. */
+export function startPage() {
   const params = new URLSearchParams(window.location.hash.slice(1));
   const view = params.get('view');
   if (!view) return null;
@@ -44,37 +44,35 @@ function fragmentPage() {
 }
 
 let restored = null;
+let preferences = { windowMode: 'multiple', showOpenWindowList: false };
 
 /**
- * Asked once, before the app starts in this window: if the company has just opened, its saved
- * desktop (Edit › Preferences › Desktop View) reopens, this window on the first saved page and the
- * others beside it. Never in the way of opening: any failure means no desktop.
+ * Asked once, before the app starts in this LocalBooks window: if the company has just opened, its
+ * saved desktop (Edit › Preferences › Desktop View) and the View mode. Never in the way of opening:
+ * any failure means no desktop.
  */
 export async function loadStartPage() {
-  restored = await desktop.takeDesktop(KNOWN_VIEWS).catch(() => null);
+  const [taken, view] = await Promise.all([desktop.takeDesktop(KNOWN_VIEWS).catch(() => null), desktop.getDesktopView().catch(() => null)]);
+  restored = taken;
+  if (view) preferences = { windowMode: view.windowMode, showOpenWindowList: view.showOpenWindowList };
+}
+
+/** The saved desktop to reopen (`{ windows, homeOnly }`), or null. */
+export function restoredDesktop() {
+  return restored;
 }
 
 /**
- * The page this window starts on: the saved desktop's when the company just reopened it, else the
- * one it was opened on (Window › New Window, or a form, register or report in its own window), else
- * null for the page last shown.
+ * Window › New Window: another LocalBooks window on the open company at `view`, with the request it
+ * should open. Every LocalBooks window shares the company file and refreshes when any changes it.
  */
-export function startPage() {
-  return restored ?? fragmentPage();
+export function openWindow(view, action = null, data = null) {
+  return invoke('open_window', { view, action, data });
 }
 
-/**
- * Opens another window on the open company at `view`, with the request it should open (as the app's
- * own navigation passes it). Every window shares the company file and refreshes when any changes it.
- * With `reuse`, a window already showing that page comes forward instead.
- */
-export function openWindow(view, action = null, data = null, { reuse = false } = {}) {
-  return invoke('open_window', { view, action, data, reuse });
-}
-
-/** View › One Window / Multiple Windows and View › Open Window List, kept current in every window. */
+/** View › One Window / Multiple Windows and View › Open Window List, kept current in every LocalBooks window. */
 export function useWindowPreferences() {
-  const [prefs, setPrefs] = useState({ windowMode: 'multiple', showOpenWindowList: false });
+  const [prefs, setPrefs] = useState(preferences);
   useEffect(() => {
     let cancelled = false;
     let unlisten;
@@ -93,56 +91,36 @@ export function useWindowPreferences() {
   return prefs;
 }
 
-/** The open windows (`{ label, name, active }`), kept current. */
-export function useOpenWindows() {
-  const [windows, setWindows] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten;
-    desktop.listOpenWindows().then((list) => !cancelled && setWindows(list), () => {});
-    listen(OPEN_WINDOWS_CHANGED, ({ payload }) => setWindows(payload))
-      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-  return windows;
-}
-
 /**
- * What a screen shows, for the window's title, the window lists and the saved desktop. App provides
- * it; see `useWindowContent`.
+ * The windows inside this LocalBooks window (`components/WindowManager.jsx`): `windows`, `activeId`,
+ * `open(view, action, data, { forceNew })`, `focus(id)`, `close(id)`, `windowMode`.
  */
-export const WindowContentContext = createContext({ setContent: () => {}, windowMode: 'multiple' });
+export const WindowManagerContext = createContext({ windows: [], activeId: null, open: () => {}, focus: () => {}, close: () => {}, windowMode: 'multiple' });
+
+/** The window inside LocalBooks a screen is showing in: `{ id, setContent }`. */
+export const ChildContext = createContext({ id: 'page', setContent: () => {} });
 
 /**
  * A screen names what it shows while it shows it: `{ name, action, data }`, as in
- * `{ name: 'Invoice 1001 · Acme', action: 'edit', data: { invoiceId: 7 } }`. `name` titles the
+ * `{ name: 'Invoice 1001 · Acme', action: 'edit', data: { invoiceId: 7 } }`. `name` titles its
  * window; `action` and `data`, when given, are what the window reopens with. Pass null for nothing
  * in particular (the window is then named after the page).
  */
 export function useWindowContent(content) {
-  const { setContent } = useContext(WindowContentContext);
+  const { id, setContent } = useContext(ChildContext);
   const key = content ? JSON.stringify(content) : null;
   useEffect(() => {
-    setContent(key ? JSON.parse(key) : null);
-    return () => setContent(null);
-  }, [key, setContent]);
+    setContent(id, key ? JSON.parse(key) : null);
+  }, [id, key, setContent]);
 }
 
 /**
- * Multiple Windows (View menu): a list opens a transaction or report in a window of its own, as
- * QuickBooks keeps forms side by side; One Window opens it in place. Returns a function that takes
- * the page (`view`, `action`, `data`) and the in-place fallback, and runs one or the other.
+ * A list opens a transaction or report in a window of its own, as QuickBooks keeps forms in their
+ * own windows (or brings forward the window that already shows it). Returns `(view, action, data)`.
  */
 export function useOpenFromList() {
-  const { windowMode } = useContext(WindowContentContext);
-  return (view, action, data, inPlace) => {
-    if (windowMode !== 'multiple') return inPlace();
-    return openWindow(view, action, data, { reuse: true }).catch(() => inPlace());
-  };
+  const { open } = useContext(WindowManagerContext);
+  return (view, action, data) => open(view, action, data);
 }
 
 /**
@@ -166,18 +144,33 @@ export function useEditIntent(intent, idKey, rows, open, onMissing) {
   }, [pending, rows]);
 }
 
-const unsaved = new Set();
+/** Unsaved form entries, by the window they are in: window id → the forms' own ids. */
+const unsaved = new Map();
+
+/** Whether the window `windowId` (or, without one, any window) has a form with entries not saved. */
+export function hasUnsaved(windowId = null) {
+  if (windowId === null) return [...unsaved.values()].some((forms) => forms.size > 0);
+  return (unsaved.get(windowId)?.size ?? 0) > 0;
+}
+
+/** Forgets the unsaved entries of a window being closed. */
+export function forgetUnsaved(windowId) {
+  unsaved.delete(windowId);
+}
 
 /**
  * Marks a form as holding entries that are not saved yet: closing its window asks first. Each
  * form passes its own `id` and whether it has unsaved entries now.
  */
 export function useUnsavedChanges(id, dirty) {
+  const { id: windowId } = useContext(ChildContext);
   useEffect(() => {
-    if (dirty) unsaved.add(id);
-    else unsaved.delete(id);
-    return () => unsaved.delete(id);
-  }, [id, dirty]);
+    const forms = unsaved.get(windowId) ?? new Set();
+    if (dirty) forms.add(id);
+    else forms.delete(id);
+    unsaved.set(windowId, forms);
+    return () => unsaved.get(windowId)?.delete(id);
+  }, [windowId, id, dirty]);
 }
 
 /**
@@ -190,9 +183,15 @@ export function useDirtySince(id, values) {
   useUnsavedChanges(id, now !== baseline);
 }
 
+/** Asks before a window with unsaved form entries closes; resolves whether to close it. */
+export async function confirmClose(windowId, name) {
+  if (!hasUnsaved(windowId)) return true;
+  return askConfirm(`${name} has entries that are not saved. Close it and lose them?`, { confirmLabel: 'Close without saving', danger: true });
+}
+
 /**
- * Asks before the window closes while a form in it has unsaved entries (the window's close button,
- * Window › Close All). Returns the function that stops listening.
+ * Asks before this LocalBooks window closes while a form in any window inside it has unsaved
+ * entries. Returns the function that stops listening.
  */
 export function guardWindowClose() {
   let unlisten;
@@ -201,9 +200,9 @@ export function guardWindowClose() {
     const win = getCurrentWebviewWindow();
     win
       .onCloseRequested(async (event) => {
-        if (unsaved.size === 0) return;
+        if (!hasUnsaved()) return;
         event.preventDefault();
-        if (await askConfirm('This window has entries that are not saved. Close it and lose them?', { confirmLabel: 'Close without saving', danger: true })) {
+        if (await askConfirm('A window in LocalBooks has entries that are not saved. Close LocalBooks and lose them?', { confirmLabel: 'Close without saving', danger: true })) {
           unsaved.clear();
           await win.destroy();
         }

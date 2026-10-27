@@ -45,15 +45,15 @@ export default function DesktopViewPreferences() {
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 py-1">
         <fieldset>
           <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">View</legend>
-          {radio('window-mode', view.windowMode === 'one', () => run(api.setWindowPreferences({ windowMode: 'one' })), 'One Window', 'Lists open a transaction or report in the window you are in.')}
+          {radio('window-mode', view.windowMode === 'one', () => run(api.setWindowPreferences({ windowMode: 'one' })), 'One Window', 'One window shows at a time, filling the work area; switch with the Window menu or the Open Window List.')}
           {radio(
             'window-mode',
             view.windowMode === 'multiple',
             () => run(api.setWindowPreferences({ windowMode: 'multiple' })),
             'Multiple Windows',
-            'Lists open each invoice, bill, check or report in a window of its own, so you can keep several side by side.',
+            'Windows float inside LocalBooks, so you can keep an invoice, a register and a report side by side, move and resize them, or minimize them to the bottom.',
           )}
-          <p className="px-2 pt-1 text-2xs text-qb-ink-faint">Also in the View menu, with Open Window List. This choice is for this computer.</p>
+          <p className="px-2 pt-1 text-2xs text-qb-ink-faint">Also in the View menu, with Open Window List. Kept with this company, and used for companies with no choice of their own.</p>
         </fieldset>
         <fieldset>
           <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Desktop</legend>

@@ -243,9 +243,9 @@ export default function ExpensesChecks({ accounts, intent }) {
   useEffect(() => {
     if (INTENT_KINDS[intent?.action]) setKind(INTENT_KINDS[intent.action]);
   }, [intent]);
-  // Multiple Windows: a check or expense chosen in the list opens in a window of its own.
+  // A check or expense chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
-  const openExpense = (expense) => openFromList('expenses/expenses', 'edit', { expenseId: expense.id }, () => startEdit(expense));
+  const openExpense = (expense) => openFromList('expenses/expenses', 'edit', { expenseId: expense.id });
   useEditIntent(intent, 'expenseId', data, startEdit, () => setNotice({ kind: 'error', text: 'That entry is no longer in the books.' }));
   const kindName = (k) => (k === 'CHECK' ? 'Check' : k === 'CARD_CREDIT' ? 'Card credit' : 'Expense');
   useWindowContent(

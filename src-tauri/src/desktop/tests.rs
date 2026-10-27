@@ -2,11 +2,15 @@ use super::*;
 use serde_json::json;
 
 fn window(view: &str) -> SavedWindow {
-    SavedWindow { page: Page { view: view.into(), action: None, data: None }, bounds: None, maximized: false }
+    SavedWindow { page: Page { view: view.into(), action: None, data: None }, bounds: None, maximized: false, minimized: false }
 }
 
 fn report(id: &str) -> SavedWindow {
-    SavedWindow { page: Page { view: "reports".into(), action: Some("open".into()), data: Some(json!({ "report": id })) }, bounds: None, maximized: false }
+    SavedWindow { page: Page { view: "reports".into(), action: Some("open".into()), data: Some(json!({ "report": id })) }, bounds: None, maximized: false, minimized: false }
+}
+
+fn snap(windows: Vec<SavedWindow>) -> Snapshot {
+    Snapshot { windows, frame: None }
 }
 
 /// A fresh folder for one test.
@@ -24,46 +28,46 @@ const KNOWN: fn(&str) -> bool = |view| ["dashboard", "reports", "sales/invoices"
 fn save_when_closing_company_is_the_default_and_keeps_the_open_windows() {
     let mut file = DesktopFile::default();
     assert_eq!(file.window_mode, WindowMode::Multiple);
-    assert!(company_closing(&mut file, KEY, vec![window("dashboard"), report("pl"), window("sales/invoices")]));
+    assert!(company_closing(&mut file, KEY, snap(vec![window("dashboard"), report("pl"), window("sales/invoices")])));
     assert_eq!(file.companies[KEY].mode, SaveMode::SaveWhenClosing);
     let restored = to_restore(&file, KEY, KNOWN);
     assert_eq!(restored, vec![window("dashboard"), report("pl"), window("sales/invoices")]);
     // The next close replaces them with what is open then.
-    assert!(company_closing(&mut file, KEY, vec![window("accounting/register")]));
+    assert!(company_closing(&mut file, KEY, snap(vec![window("accounting/register")])));
     assert_eq!(to_restore(&file, KEY, KNOWN), vec![window("accounting/register")]);
-    assert!(!company_closing(&mut file, KEY, vec![window("accounting/register")]), "nothing changed");
+    assert!(!company_closing(&mut file, KEY, snap(vec![window("accounting/register")])), "nothing changed");
 }
 
 #[test]
 fn save_current_desktop_reopens_the_same_windows_whatever_is_open_at_close() {
     let mut file = DesktopFile::default();
-    save_current(&mut file, KEY, vec![window("dashboard"), report("ar")]);
+    save_current(&mut file, KEY, snap(vec![window("dashboard"), report("ar")]));
     assert_eq!(file.companies[KEY].mode, SaveMode::KeepSaved);
-    assert!(!company_closing(&mut file, KEY, vec![window("sales/invoices")]));
+    assert!(!company_closing(&mut file, KEY, snap(vec![window("sales/invoices")])));
     assert_eq!(to_restore(&file, KEY, KNOWN), vec![window("dashboard"), report("ar")]);
     // "Keep previously saved desktop" changes nothing; going back to saving at close does at the next close.
     set_mode(&mut file, KEY, SaveMode::KeepSaved);
     assert_eq!(to_restore(&file, KEY, KNOWN).len(), 2);
     set_mode(&mut file, KEY, SaveMode::SaveWhenClosing);
     assert_eq!(to_restore(&file, KEY, KNOWN).len(), 2);
-    company_closing(&mut file, KEY, vec![window("sales/invoices")]);
+    company_closing(&mut file, KEY, snap(vec![window("sales/invoices")]));
     assert_eq!(to_restore(&file, KEY, KNOWN), vec![window("sales/invoices")]);
 }
 
 #[test]
 fn dont_save_the_desktop_forgets_the_windows_and_restores_none() {
     let mut file = DesktopFile::default();
-    company_closing(&mut file, KEY, vec![window("dashboard"), report("pl")]);
+    company_closing(&mut file, KEY, snap(vec![window("dashboard"), report("pl")]));
     set_mode(&mut file, KEY, SaveMode::DontSave);
     assert!(file.companies[KEY].windows.is_empty());
-    assert!(!company_closing(&mut file, KEY, vec![report("bs")]));
+    assert!(!company_closing(&mut file, KEY, snap(vec![report("bs")])));
     assert!(to_restore(&file, KEY, KNOWN).is_empty());
 }
 
 #[test]
 fn a_screen_that_no_longer_exists_is_skipped_and_the_rest_restore() {
     let mut file = DesktopFile::default();
-    company_closing(&mut file, KEY, vec![window("dashboard"), window("accounting/retired-screen"), report("pl"), window("")]);
+    company_closing(&mut file, KEY, snap(vec![window("dashboard"), window("accounting/retired-screen"), report("pl"), window("")]));
     let restored = to_restore(&file, KEY, KNOWN);
     assert_eq!(restored, vec![window("dashboard"), report("pl")]);
     assert!(to_restore(&file, "/books/Other.localbooks", KNOWN).is_empty(), "another company has its own desktop");
@@ -75,7 +79,7 @@ fn desktops_keep_a_bounded_number_of_small_windows() {
     let mut big = window("reports");
     big.page.data = Some(json!({ "blob": "x".repeat(5000) }));
     let many: Vec<_> = std::iter::once(big).chain((0..30).map(|_| window("dashboard"))).collect();
-    company_closing(&mut file, KEY, many);
+    company_closing(&mut file, KEY, snap(many));
     let saved = &file.companies[KEY].windows;
     assert_eq!(saved.len(), MAX_WINDOWS);
     assert_eq!(saved[0].page.data, None, "an oversized request is dropped, the window kept");
@@ -100,7 +104,7 @@ fn desktops_round_trip_through_their_file_and_a_damaged_file_means_none() {
     update(&dir, |file| {
         file.window_mode = WindowMode::One;
         file.show_open_window_list = true;
-        company_closing(file, KEY, vec![window("dashboard"), saved.clone()]);
+        company_closing(file, KEY, snap(vec![window("dashboard"), saved.clone()]));
     })
     .unwrap();
     let file = read(&dir);
@@ -150,4 +154,24 @@ fn tiling_and_cascading_fill_the_screen() {
         assert!(b.x + b.width <= area.x + area.width && b.y + b.height <= area.y + area.height, "{b:?} fits");
     }
     assert!(arrange(Arrangement::Cascade, 0, area).is_empty());
+}
+
+#[test]
+fn the_view_mode_and_the_localbooks_window_are_kept_with_each_company() {
+    let mut file = DesktopFile::default();
+    assert_eq!(window_mode(&file, Some(KEY)), WindowMode::Multiple, "Multiple Windows by default, as in QuickBooks");
+    set_window_mode(&mut file, Some(KEY), WindowMode::One);
+    assert_eq!(window_mode(&file, Some(KEY)), WindowMode::One);
+    assert_eq!(window_mode(&file, Some("/books/New.localbooks")), WindowMode::One, "the last choice for a company with none yet");
+    set_window_mode(&mut file, Some("/books/Other.localbooks"), WindowMode::Multiple);
+    assert_eq!(window_mode(&file, Some(KEY)), WindowMode::One, "each company keeps its own");
+    let frame = Bounds { x: 10.0, y: 20.0, width: 1300.0, height: 850.0 };
+    let mut minimized = report("ar");
+    minimized.minimized = true;
+    company_closing(&mut file, KEY, Snapshot { windows: vec![window("dashboard"), minimized.clone()], frame: Some(frame) });
+    assert_eq!(file.companies[KEY].frame, Some(frame));
+    assert_eq!(to_restore(&file, KEY, KNOWN), vec![window("dashboard"), minimized]);
+    // Quitting with no window to measure keeps the place saved before.
+    company_closing(&mut file, KEY, snap(vec![window("dashboard")]));
+    assert_eq!(file.companies[KEY].frame, Some(frame));
 }

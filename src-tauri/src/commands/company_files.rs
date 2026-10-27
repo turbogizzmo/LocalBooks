@@ -107,20 +107,15 @@ fn recent_companies(db: &Db) -> Vec<RecentCompanyView> {
     storage::describe_recent(&storage::read_config(db.config_dir()).recent_companies)
 }
 
-/// Window › New Window, or a form, register or report opened in its own window: another window on
-/// the open company, starting on `view` (a navigation id) with the given request, if any. With
-/// `reuse`, a window already showing that page is brought forward instead.
+/// Window › New Window: another LocalBooks window on the open company, starting on `view` (a
+/// navigation id) with the given request, if any.
 #[tauri::command]
-pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<String>, data: Option<serde_json::Value>, reuse: Option<bool>) -> Result<String, String> {
+pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<String>, data: Option<serde_json::Value>) -> Result<String, String> {
     if !app.state::<Db>().is_open().await {
         return Err(NO_COMPANY_OPEN.into());
     }
     let page = view.map(|view| crate::desktop::Page { view, action, data: data.filter(|d| !d.is_null()) });
-    if let Some(window) = page.as_ref().filter(|_| reuse == Some(true)).and_then(|p| windows::showing(&app, p)) {
-        windows::focus_window(&window);
-        return Ok(window.label().to_string());
-    }
-    windows::open(&app, page.as_ref(), None)
+    windows::open(&app, page.as_ref())
 }
 
 /// Makes `path` the live company file for this session and tells the window to reload.

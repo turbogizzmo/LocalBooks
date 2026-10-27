@@ -1,10 +1,9 @@
-// Windows and the saved desktop: what each window shows, the Open Window List, Desktop View preferences.
+// Windows inside LocalBooks and the saved desktop: what each LocalBooks window has open, Cascade and Tile, Desktop View preferences.
 import { invoke } from '@tauri-apps/api/core';
 
 export default {
-  reportWindowPage: (view, action = null, data = null, content = null) => invoke('report_window_page', { view, action, data, content }),
-  listOpenWindows: () => invoke('list_open_windows'),
-  focusOpenWindow: (label) => invoke('focus_open_window', { label }),
+  reportChildWindows: (children, active) => invoke('report_child_windows', { children, active }),
+  arrangeWindows: (arrangement, count, area) => invoke('arrange_windows', { arrangement, count, area }),
   takeDesktop: (knownViews) => invoke('take_desktop', { knownViews }),
   getDesktopView: () => invoke('get_desktop_view'),
   setDesktopView: (choice) => invoke('set_desktop_view', { choice }),

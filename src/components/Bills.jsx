@@ -437,9 +437,9 @@ export default function Bills({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   const today = todayIso();
-  // Multiple Windows: a bill chosen in the list opens in a window of its own.
+  // A bill chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
-  const openBill = (bill) => openFromList('expenses/bills', 'edit', { billId: bill.id }, () => startEdit(bill));
+  const openBill = (bill) => openFromList('expenses/bills', 'edit', { billId: bill.id });
   useEditIntent(intent, 'billId', data, startEdit, () => setNotice({ kind: 'error', text: 'That bill is no longer in the books.' }));
   useWindowContent(editing ? { name: `Bill ${editing.bill.billNumber || ''} · ${editing.bill.vendorName}`.replace('Bill  ·', 'Bill ·'), action: 'edit', data: { billId: editing.bill.id } } : null);
 

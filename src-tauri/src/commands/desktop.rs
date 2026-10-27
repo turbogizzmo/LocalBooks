@@ -1,46 +1,46 @@
-//! Windows and the saved desktop: what each window shows, the Open Window List, Desktop View
-//! preferences, and reopening the desktop when a company opens (see `windows.rs` and `desktop.rs`).
-//! None of these touch the books.
+//! Windows inside LocalBooks and the saved desktop: what each LocalBooks window has open, Window ›
+//! Cascade and Tile, Desktop View preferences, and reopening the desktop when a company opens (see
+//! `windows.rs` and `desktop.rs`). None of these touch the books.
 
 use super::prelude::*;
-use crate::desktop::{Page, WindowMode};
-use crate::windows::{DesktopView, OpenWindowView};
+use crate::desktop::{Arrangement, Bounds, WindowMode};
+use crate::windows::{ChildWindow, DesktopView, Restored};
 
 handlers![
-    report_window_page,
-    list_open_windows,
-    focus_open_window,
+    report_child_windows,
+    arrange_windows,
     take_desktop,
     get_desktop_view,
     set_desktop_view,
     set_window_preferences,
 ];
 
-/// The calling window shows `view` (with the request it opened with) and `content`, what is in it
-/// ("Invoice 1001 · Acme"): it is retitled and listed, and saved with the desktop.
+/// The calling LocalBooks window reports the windows open inside it and the active one: it is
+/// retitled, the Window menu lists them, and they are what the desktop saves.
 #[tauri::command]
-pub async fn report_window_page(app: AppHandle, window: tauri::WebviewWindow, view: String, action: Option<String>, data: Option<serde_json::Value>, content: Option<String>) -> Result<(), String> {
-    windows::report_page(&app, &window, Page { view, action, data }, content);
+pub async fn report_child_windows(app: AppHandle, window: tauri::WebviewWindow, children: Vec<ChildWindow>, active: Option<String>) -> Result<(), String> {
+    windows::report_children(&app, &window, children, active);
     Ok(())
 }
 
-/// View › Open Window List: every open window, the active one marked.
+/// Window › Cascade ("cascade"), Tile Vertically ("tile-vertically") or Tile Horizontally
+/// ("tile-horizontally"): where `count` windows go in the work area `area`.
 #[tauri::command]
-pub async fn list_open_windows(app: AppHandle) -> Result<Vec<OpenWindowView>, String> {
-    Ok(windows::list(&app))
+pub async fn arrange_windows(arrangement: String, count: usize, area: Bounds) -> Result<Vec<Bounds>, String> {
+    let arrangement = match arrangement.as_str() {
+        "cascade" => Arrangement::Cascade,
+        "tile-vertically" => Arrangement::TileVertically,
+        "tile-horizontally" => Arrangement::TileHorizontally,
+        other => return Err(format!("WINDOW_ARRANGE: unknown arrangement {other}")),
+    };
+    Ok(crate::desktop::arrange(arrangement, count.min(crate::desktop::MAX_WINDOWS * 4), area))
 }
 
-/// Brings an open window forward.
+/// Asked by a LocalBooks window as it loads the open company: the windows to reopen inside it if
+/// the company has just opened with a saved desktop, else `None`. `known_views` are the pages the
+/// app has; saved windows on any other are skipped.
 #[tauri::command]
-pub async fn focus_open_window(app: AppHandle, label: String) -> Result<(), String> {
-    windows::bring_forward(&app, &label)
-}
-
-/// Asked by a window as it loads the open company: the page to show if the company has just opened
-/// and its saved desktop reopens (the other saved windows open beside it), else `None`.
-/// `known_views` are the pages the app has; saved windows on any other are skipped.
-#[tauri::command]
-pub async fn take_desktop(app: AppHandle, window: tauri::WebviewWindow, known_views: Vec<String>) -> Result<Option<Page>, String> {
+pub async fn take_desktop(app: AppHandle, window: tauri::WebviewWindow, known_views: Vec<String>) -> Result<Option<Restored>, String> {
     Ok(windows::take_restore(&app, &window, &known_views).await)
 }
 

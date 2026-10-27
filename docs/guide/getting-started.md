@@ -75,50 +75,65 @@ is sorted.
 
 ## Work in more than one window
 
-LocalBooks handles windows the way QuickBooks Desktop does, with the same menu names, so you can
-keep a report on one screen while you enter transactions on another.
+LocalBooks handles windows the way QuickBooks Desktop for Windows does. Forms, registers and reports
+open as windows *inside* the LocalBooks window, so you can keep a report beside the invoice you're
+entering, all in one program window. The menus use QuickBooks' names.
 
-### Open a window
+### Windows inside LocalBooks
 
-- Choose **New window** at the top of any screen to open that screen in another window.
-  **Window › New Window** does the same, or press **Ctrl+Shift+N** (⇧⌘N on a Mac).
-- In an account register or in Reports, choose **Open in new window** to keep that register (with
-  its dates) or report open on its own.
+- Choosing a page in the sidebar or the menu bar opens it in a window, or brings forward the window
+  that already shows it. **Edit…** on an invoice, bill, check or expense, or a report chosen in the
+  Reports list, opens it in a window of its own. Opening the same one again brings its window forward.
+- Each window has a title bar with **Minimize**, **Maximize** (or **Restore Down**) and **Close**.
+  Drag the title bar to move it; drag an edge or corner to resize it; double-click the title bar to
+  maximize or restore it.
+- A **maximized** window fills the work area. Its buttons move up to the right end of the toolbar,
+  where QuickBooks puts them on the menu bar, and a new window opens maximized too.
+- **Minimized** windows wait as small title bars along the bottom of the work area. Click one to bring
+  it back.
+- Every window shows the same books: when you save a change in one, the others update straight away.
+  If a window has a form with entries you haven't saved, LocalBooks asks before it closes.
 
-Every window shows the same books: when you save a change in one, the others update straight away.
-Closing a window leaves the others open; LocalBooks quits when you close the last one. If a window
-has a form with entries you haven't saved, LocalBooks asks before it closes.
+| Keys | What they do |
+|---|---|
+| **Ctrl+F6** or **Ctrl+Tab** | Go to the next window (add **Shift** for the one before) |
+| **Esc** or **Ctrl+F4** | Close the active window (⌘W on a Mac) |
 
 ### One Window or Multiple Windows
 
 As in QuickBooks, choose **View › One Window** or **View › Multiple Windows** (also in **Edit ›
-Preferences › Desktop View**, under **View**). The choice is for this computer.
+Preferences › Desktop View**, under **View**):
 
-- **Multiple Windows** (the default, as in QuickBooks): choosing an invoice, bill, check or expense
-  in its list (**Edit…** in the row's menu), or a report in the Reports list, opens it in a window of
-  its own, so you can keep several side by side. If that report is already open in a window, the
-  window comes forward instead.
-- **One Window**: the list opens the transaction or report in the window you're in.
+- **Multiple Windows** (the default, as in QuickBooks): windows float in the work area, side by side
+  or overlapping.
+- **One Window**: one window shows at a time, filling the work area; the others wait behind it.
+  Switch with the **Window** menu or the **Open Window List**.
+
+The choice is kept with each company.
 
 ### The Window menu and the Open Window List
 
-- **Window** lists every open LocalBooks window, the active one ticked. On Windows and Linux the
-  list is numbered; on a Mac, macOS shows the list itself at the bottom of the menu.
-- **Window › Close All** closes every window but one and takes that one to the Home page.
-  **Cascade**, **Tile Vertically** and **Tile Horizontally** arrange the open windows on the screen
-  you're working on.
-- **View › Open Window List** shows a panel beside the sidebar with every open window, the active
-  one highlighted. Click a window to bring it forward. Choose the menu item again (or **✕** on the
-  panel) to hide it.
+- **Window › Close All** closes every window (each asks first if it has unsaved entries).
+  **Cascade**, **Tile Vertically** and **Tile Horizontally** arrange the open windows in the work area;
+  **Arrange Icons** lines the minimized ones up along the bottom.
+- Below those, the **Window** menu lists the open windows, numbered, the active one ticked. Choose one
+  to bring it forward.
+- **View › Open Window List** shows the open windows in a pane beside the sidebar, the active one
+  highlighted (minimized ones in italics). Click a window to bring it forward. Choose the menu item
+  again (or **✕** on the pane) to hide it.
 
-Each window's title names what's in it, such as "Invoice 1001 · Acme — Acme Ltd" or "Checking
-Register — Acme Ltd", so these lists are easy to read.
+### A second LocalBooks window
+
+**Window › New Window** (**Ctrl+Shift+N**, ⇧⌘N on a Mac) opens a second LocalBooks window on the same
+company, for example on a second screen. It starts on the page you're looking at and has windows of
+its own inside it.
 
 ### Reopen your windows with the company (saved desktop)
 
-When you open a company, LocalBooks reopens the windows you had: their screens, forms, registers
-and reports, where they were on screen. Choose how in **Edit › Preferences › Desktop View**, under
-**Desktop**, the same choices as QuickBooks:
+When you open a company, LocalBooks reopens the windows you had inside it: their screens, forms,
+registers and reports, where they were, which were minimized or maximized, and where the LocalBooks
+window itself was. Choose how in **Edit › Preferences › Desktop View**, under **Desktop**, the same
+choices as QuickBooks:
 
 | Choice | What reopens |
 |---|---|
@@ -132,18 +147,17 @@ On a Mac, **Window › Workspace** has the same choices in QuickBooks for Mac's 
 
 The desktop is kept for each company file and, when the file has users, for each user, on this
 computer. If a saved screen no longer exists, or a transaction in it was deleted, that window is
-left out and the rest still open. A window saved on a screen that's no longer connected opens on
-the screen you have.
+left out and the rest still open.
 
 To open a company once without its windows, hold **Alt** (**Option** on a Mac) while you click
-**Open**, or choose **File › Open Company Without Restoring Windows…**. The company opens on a
-plain home page; your saved desktop is kept for next time unless you then close the company with
-**Save when closing company** chosen.
+**Open**, or choose **File › Open Company Without Restoring Windows…**. The company opens with no
+windows; your saved desktop is kept for next time unless you then close the company with **Save when
+closing company** chosen.
 
 ## Find things in the menu bar
 
 The menu bar is laid out like QuickBooks Desktop's, so the commands you know are where you expect
-them. Each one opens the screen, and often the form, in the window you're working in:
+them. Each one opens the screen, and often the form, in a window inside LocalBooks (or brings forward the window that already shows it):
 
 | Menu | What's in it |
 |---|---|

@@ -1,46 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Sidebar, { findNav } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
-import Dashboard from './components/Dashboard.jsx';
-import AllSales from './components/AllSales.jsx';
-import Invoices from './components/Invoices.jsx';
-import Estimates from './components/Estimates.jsx';
-import PartyList from './components/PartyList.jsx';
-import Products from './components/Products.jsx';
-import SalesLists from './components/SalesLists.jsx';
-import ExpensesChecks from './components/ExpensesChecks.jsx';
-import Bills from './components/Bills.jsx';
-import TimeTracking from './components/TimeTracking.jsx';
-import BankFeed from './components/BankFeed.jsx';
-import DepositsTransfers from './components/DepositsTransfers.jsx';
-import Reconcile from './components/Reconcile.jsx';
-import JournalEntries from './components/JournalEntries.jsx';
-import AuditLog from './components/AuditLog.jsx';
-import ChartOfAccounts from './components/ChartOfAccounts.jsx';
-import Classes from './components/Classes.jsx';
-import Reclassify from './components/Reclassify.jsx';
-import CleanUpBooks from './components/CleanUpBooks.jsx';
-import Register from './components/Register.jsx';
-import CreditMemos from './components/CreditMemos.jsx';
-import VendorCredits from './components/VendorCredits.jsx';
-import SalesTax from './components/SalesTax.jsx';
-import Reports from './components/Reports.jsx';
-import Settings from './components/Settings.jsx';
-import QbwImporter from './components/QbwImporter.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
-import FxRevaluation from './components/FxRevaluation.jsx';
-import Statements from './components/Statements.jsx';
-import FinanceCharges from './components/FinanceCharges.jsx';
-import SendForms from './components/SendForms.jsx';
-import Recurring, { useDueRecurring } from './components/Recurring.jsx';
-import Todos from './components/Todos.jsx';
+import { useDueRecurring } from './components/Recurring.jsx';
 import { StartupReminders } from './components/Reminders.jsx';
-import PurchaseOrders from './components/PurchaseOrders.jsx';
-import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
-import FindTransactions from './components/FindTransactions.jsx';
 import OpenWindowList from './components/OpenWindowList.jsx';
+import Screen from './components/Screen.jsx';
+import WindowManager, { useChildWindows, windowName, WindowButtons } from './components/WindowManager.jsx';
 import { hasPendingMigration, takeWindowlessOpen, useCompanyFileActions, WINDOWLESS_KEY_NAME } from './components/CompanyFiles.jsx';
 import { useIdleLock } from './components/Users.jsx';
 import { Icon } from './lib/icons.js';
@@ -49,48 +17,44 @@ import { CompanyContext } from './components/PrintDocuments.jsx';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
+import { formatDate } from './lib/dates.js';
 import { setCurrencySymbol } from './lib/money.js';
-import { guardWindowClose, isMainWindow, MENU_COMMAND, MENU_NAVIGATE, NEW_WINDOW_REQUESTED, openWindow, startPage, useWindowPreferences, WindowContentContext } from './lib/windows.js';
+import * as cw from './lib/childWindows.js';
+import {
+  guardWindowClose,
+  isMainWindow,
+  MENU_COMMAND,
+  MENU_NAVIGATE,
+  NEW_WINDOW_REQUESTED,
+  openWindow,
+  restoredDesktop,
+  startPage,
+  useWindowPreferences,
+  WindowManagerContext,
+} from './lib/windows.js';
 
-const STORAGE_KEY = 'localbooks.view';
 const MAIN_WINDOW = isMainWindow();
 const IS_MAC = /Mac/.test(navigator.userAgent);
-// The company was just opened without restoring windows: start on a plain home page, not the page
-// last shown (or this window's own page), and forget that page so it does not come back next time.
+// The company was just opened without restoring windows: it starts on an empty desktop.
 const WINDOWLESS = takeWindowlessOpen();
-if (WINDOWLESS && MAIN_WINDOW) {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage unavailable: nothing is remembered to forget.
-  }
-}
+const leaf = (view) => view && findNav(view) && !findNav(view).item.children;
 
-function initialView() {
-  if (WINDOWLESS) return 'dashboard';
-  // The saved desktop's page, or the page this window was opened on (see lib/windows.js).
-  const START = startPage();
-  if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
+/**
+ * The windows this LocalBooks window starts with: the company's saved desktop (Edit › Preferences ›
+ * Desktop View), else the page it was opened on (Window › New Window), else the Home page. A company
+ * opened without restoring windows starts with none.
+ */
+function initialWindows(area) {
+  if (WINDOWLESS) return cw.EMPTY;
+  const saved = restoredDesktop();
+  if (saved?.windows?.length) return cw.fromSaved(saved.windows, area);
   // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
-  if (hasPendingMigration()) return 'accounting/qbw-import';
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && findNav(saved) && !findNav(saved).item.children) return saved;
-  } catch {
-    // Storage unavailable: fall through to the default view.
-  }
-  return 'dashboard';
+  const start = hasPendingMigration() ? { view: 'accounting/qbw-import' } : (startPage() ?? { view: 'dashboard' });
+  const page = leaf(start.view) ? start : { view: 'dashboard' };
+  return cw.open(cw.EMPTY, page, { area, maximized: true });
 }
 
 export default function App() {
-  const [view, setView] = useState(initialView);
-  // An intent asks the destination view to open a specific entry form ({ action, nonce }).
-  const [intent, setIntent] = useState(() => {
-    const start = startPage();
-    return start?.action && !WINDOWLESS && start.view === initialView() ? { action: start.action, data: start.data, nonce: Date.now() } : null;
-  });
-  // Opened without restoring windows: the plain home page shows until a page is chosen.
-  const [windowless, setWindowless] = useState(WINDOWLESS);
   const [creating, setCreating] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const accounts = useLedgerQuery(api.listAccounts);
@@ -104,7 +68,7 @@ export default function App() {
   // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
   // nobody counts as an Admin, so a View-only or Standard user never sees Admin screens first.
   const isAdmin = signIn.data ? !signIn.data.usersEnabled || signedIn?.role === 'ADMIN' : false;
-  const list = accounts.data ?? [];
+  const list = useMemo(() => accounts.data ?? [], [accounts.data]);
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
@@ -122,20 +86,24 @@ export default function App() {
     fxLookup: prefs.data?.exchange_rate_lookup === 'true',
   };
 
-  // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
-  const select = useCallback((id, action = null, data = null) => {
-    setWindowless(false);
-    setView(id);
-    setIntent(action ? { action, data, nonce: Date.now() } : null);
-    if (!MAIN_WINDOW) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      // Remembering the view is a convenience only.
-    }
-  }, []);
+  // Forms, registers and reports open in windows inside this one, as in QuickBooks Desktop.
+  const windowPrefs = useWindowPreferences();
+  const windowMode = windowPrefs.windowMode;
+  const manager = useChildWindows(windowMode, initialWindows);
+  const { state, open: openChild, focus: focusChild, close: closeChild } = manager;
+  const active = state.windows.find((w) => w.id === state.activeId) ?? null;
+  const activeView = active?.view ?? null;
+  const activeMaximized = !!active && !active.minimized && (windowMode === 'one' || active.maximized);
 
-  // Another company file was opened: every view's state belongs to the old books, so start fresh.
+  // Opening a page brings forward the window that shows it, or opens one. `data` carries what the
+  // destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
+  const select = useCallback((id, action = null, data = null) => leaf(id) && openChild(id, action, data), [openChild]);
+  const managerContext = useMemo(
+    () => ({ windows: state.windows, activeId: state.activeId, open: openChild, focus: focusChild, close: closeChild, windowMode }),
+    [state.windows, state.activeId, openChild, focusChild, closeChild, windowMode],
+  );
+
+  // Another company file was opened: every window's state belongs to the old books, so start fresh.
   useEffect(() => {
     let unlisten;
     let cancelled = false;
@@ -148,27 +116,19 @@ export default function App() {
     };
   }, []);
 
-  // What the window shows ("Invoice 1001 · Acme"), named by the screen (useWindowContent): it titles
-  // the window, lists it in the Window menu and the Open Window List, and is saved with the desktop.
-  const [content, setContent] = useState(null);
-  const windowPrefs = useWindowPreferences();
-  const windowContext = useMemo(() => ({ setContent, windowMode: windowPrefs.windowMode }), [windowPrefs.windowMode]);
-  useEffect(() => {
-    const page = windowless ? { view: 'dashboard', action: null, data: null } : content?.action ? { view, action: content.action, data: content.data ?? null } : { view, action: intent?.action ?? null, data: intent?.data ?? null };
-    const name = windowless ? 'Home' : (content?.name ?? findNav(view)?.item.label ?? null);
-    api.reportWindowPage(page.view, page.action, page.data, name).catch(() => {});
-  }, [view, intent, content, windowless]);
-  // Closing a window with unsaved entries in a form asks first.
+  // Closing LocalBooks with unsaved entries in a form asks first.
   useEffect(() => guardWindowClose(), []);
 
   // File › New Company… and Open or Restore Company… (the window reloads on the company opened).
   const companyFiles = useCompanyFileActions();
 
+  // Window › New Window: another LocalBooks window, for a second screen, on the active window's page.
   const [windowError, setWindowError] = useState(null);
-  const openNewWindow = useCallback((id) => {
+  const openNewWindow = useCallback(() => {
     setWindowError(null);
-    openWindow(id).catch((err) => setWindowError(String(err)));
-  }, []);
+    const page = active ? cw.currentPage(active) : { view: 'dashboard' };
+    openWindow(page.view, page.action, page.data).catch((err) => setWindowError(String(err)));
+  }, [active]);
 
   // The menu bar's Lists, Company, Customers, … items open a page (often with its entry form), and a
   // few act on the page itself (see app_menu.rs).
@@ -178,40 +138,25 @@ export default function App() {
     let cancelled = false;
     const win = getCurrentWebviewWindow();
     const keep = (p) => p.then((fn) => (cancelled ? fn() : unlistens.push(fn))).catch(() => {});
-    keep(win.listen(MENU_NAVIGATE, ({ payload }) => {
-      if (findNav(payload.view)) select(payload.view, payload.action, payload.data);
-    }));
+    keep(win.listen(MENU_NAVIGATE, ({ payload }) => select(payload.view, payload.action, payload.data)));
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
       if (payload === 'sidebar') setSidebarHidden((h) => !h);
     }));
+    keep(win.listen(NEW_WINDOW_REQUESTED, () => openNewWindow()));
     return () => {
       cancelled = true;
       unlistens.forEach((fn) => fn());
     };
-  }, [select]);
-
-  // Window › New Window asks the focused window to open the page it shows.
-  useEffect(() => {
-    let unlisten;
-    let cancelled = false;
-    getCurrentWebviewWindow()
-      .listen(NEW_WINDOW_REQUESTED, () => openNewWindow(view))
-      .then((fn) => (cancelled ? fn() : (unlisten = fn)))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [view, openNewWindow]);
+  }, [select, openNewWindow]);
 
   // Ctrl/Cmd+Alt+N opens the + New matrix from anywhere; F1 toggles Help; Ctrl+Shift+N opens a new
-  // window (on macOS the Window menu's Cmd+Shift+N does).
+  // LocalBooks window (on macOS the Window menu's Cmd+Shift+N does).
   useEffect(() => {
     const onKey = (e) => {
       if (!IS_MAC && e.ctrlKey && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        openNewWindow(view);
+        openNewWindow();
         return;
       }
       if (e.key === 'F1') {
@@ -226,24 +171,28 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [view, openNewWindow]);
+  }, [openNewWindow]);
 
   const dueRecurring = useDueRecurring();
-  const { item, parent } = windowless ? { item: { label: 'Home' }, parent: null } : findNav(view);
-  const props = { accounts: list, intent, navigate: select };
+  const nav = activeView ? findNav(activeView) : null;
+  const parent = active && !active.content?.name ? nav?.parent : null;
+  const renderScreen = useCallback(
+    (w) => <Screen view={w.view} intent={w.intent} navigate={select} accounts={list} isAdmin={isAdmin} companyName={companyName} />,
+    [select, list, isAdmin, companyName],
+  );
 
   return (
     <CompanyContext.Provider value={company}>
-    <WindowContentContext.Provider value={windowContext}>
+    <WindowManagerContext.Provider value={managerContext}>
     <div className="flex h-full">
-      {!sidebarHidden && <Sidebar current={windowless ? null : view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
+      {!sidebarHidden && <Sidebar current={activeView} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
       {windowPrefs.showOpenWindowList && <OpenWindowList />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
-          <h1 className="text-lg font-semibold">{item.label}</h1>
+          <h1 className="min-w-0 truncate text-lg font-semibold">{active ? windowName(active) : (openCompany ?? companyName)}</h1>
           <div className="ml-auto flex min-w-0 items-center gap-3">
-          {dueRecurring > 0 && view !== 'accounting/recurring' && (
+          {dueRecurring > 0 && activeView !== 'accounting/recurring' && (
             <button
               type="button"
               className="flex-none rounded-sm bg-qb-green-tint px-2 py-0.5 text-xs font-semibold text-qb-green-active hover:underline"
@@ -292,18 +241,6 @@ export default function App() {
           )}
             <button
               type="button"
-              onClick={() => openNewWindow(view)}
-              title={`Open this page in a new window (${IS_MAC ? '⇧⌘N' : 'Ctrl+Shift+N'})`}
-              aria-label="Open this page in a new window"
-              className="flex flex-none items-center gap-1 rounded-xs px-2 py-0.5 text-sm font-semibold text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
-            >
-              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                <path d="M5.5 1.5h9v9h-9zM10.5 13v1.5h-9v-9H3" />
-              </svg>
-              New window
-            </button>
-            <button
-              type="button"
               onClick={() => setHelpOpen((o) => !o)}
               aria-pressed={helpOpen}
               title="Help (F1)"
@@ -314,6 +251,16 @@ export default function App() {
               <Icon name="HelpCenter" />
               Help
             </button>
+            {/* A maximized window's buttons sit at the end of the toolbar, as they move to the menu bar in QuickBooks. */}
+            {activeMaximized && (
+              <WindowButtons
+                name={windowName(active)}
+                maximized
+                onMinimize={windowMode === 'one' ? null : () => manager.minimize(active.id)}
+                onMaximize={windowMode === 'one' ? null : () => manager.toggleMaximize(active.id)}
+                onClose={() => closeChild(active.id)}
+              />
+            )}
           </div>
         </header>
         {/* Updates are checked and offered in the main window only. */}
@@ -336,51 +283,17 @@ export default function App() {
           </div>
         )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
-        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
-          {windowless && <WindowlessHome companyName={openCompany ?? companyName} onDashboard={() => select('dashboard')} />}
-          {view === 'dashboard' && !windowless && <Dashboard navigate={select} />}
-          {view === 'sales/all' && <AllSales {...props} />}
-          {view === 'sales/invoices' && <Invoices {...props} />}
-          {view === 'sales/estimates' && <Estimates {...props} />}
-          {view === 'sales/credits' && <CreditMemos {...props} />}
-          {view === 'sales/customers' && <PartyList kind="customer" navigate={select} />}
-          {view === 'sales/products' && <Products accounts={list} intent={intent} />}
-          {view === 'sales/lists' && <SalesLists />}
-          {view === 'sales/tax' && <SalesTax accounts={list} />}
-          {view === 'sales/statements' && <Statements />}
-          {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={select} />}
-          {view === 'sales/send-forms' && <SendForms />}
-          {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
-          {view === 'expenses/bills' && <Bills {...props} />}
-          {view === 'expenses/credits' && <VendorCredits {...props} />}
-          {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
-          {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={select} />}
-          {view === 'employees/time' && <TimeTracking {...props} />}
-          {view === 'banking/feeds' && <BankFeed accounts={list} />}
-          {view === 'banking/transfers' && <DepositsTransfers {...props} />}
-          {view === 'banking/reconcile' && <Reconcile accounts={list} />}
-          {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} navigate={select} />}
-          {view === 'accounting/classes' && <Classes />}
-          {view === 'accounting/reclassify' && <Reclassify accounts={list} />}
-          {view === 'accounting/clean-up' && <CleanUpBooks accounts={list} />}
-          {view === 'accounting/register' && <Register accounts={list} intent={intent} />}
-          {view === 'accounting/journal' && <JournalEntries {...props} />}
-          {view === 'accounting/find' && <FindTransactions {...props} />}
-          {view === 'accounting/recurring' && <Recurring />}
-          {view === 'accounting/todos' && <Todos {...props} />}
-          {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
-          {view === 'accounting/audit' && <AuditLog />}
-          {view === 'accounting/qbw-import' &&
-            (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
-          {view === 'accounting/fx-revaluation' && <FxRevaluation />}
-          {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} />}
-        </div>
+        <WindowManager
+          manager={manager}
+          windowMode={windowMode}
+          renderScreen={renderScreen}
+          background={<EmptyDesktop companyName={openCompany ?? companyName} windowless={WINDOWLESS} onHome={() => select('dashboard')} />}
+        />
       </main>
-      {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}
+      {/* Beside the work area, not over it: the open windows stay mounted, so unsaved form entries survive. */}
       {helpOpen && (
         <HelpCenter
-          view={view}
+          view={activeView}
           onClose={() => setHelpOpen(false)}
           onNavigate={(viewId, action) => select(viewId, action)}
         />
@@ -400,26 +313,31 @@ export default function App() {
         />
       )}
     </div>
-    </WindowContentContext.Provider>
+    </WindowManagerContext.Provider>
     </CompanyContext.Provider>
   );
 }
 
-/** The page a company opens on without restoring windows: nothing on it reads the books. */
-function WindowlessHome({ companyName, onDashboard }) {
+/** The work area with no window open: after Close All, or a company opened without restoring windows. */
+function EmptyDesktop({ companyName, windowless, onHome }) {
   return (
     <div className="p-3">
       <section className="qb-panel max-w-[560px] p-3">
         <h2 className="mb-1 text-md font-semibold">{companyName} is open</h2>
-        <p className="mb-2 text-sm text-qb-ink-muted">
-          It was opened without restoring windows, so the page you last had open was not reopened and any other windows were closed. Choose a page from the sidebar to
-          carry on.
-        </p>
-        <p className="mb-3 text-sm text-qb-ink-muted">
-          To open a company this way, hold {WINDOWLESS_KEY_NAME} while clicking Open, or choose File › Open Company Without Restoring Windows…
-        </p>
-        <button type="button" className="qb-btn qb-btn-primary" onClick={onDashboard}>
-          Go to the Dashboard
+        {windowless ? (
+          <>
+            <p className="mb-2 text-sm text-qb-ink-muted">
+              It was opened without restoring windows, so the windows you had open were not reopened. Choose a page from the sidebar to carry on.
+            </p>
+            <p className="mb-3 text-sm text-qb-ink-muted">
+              To open a company this way, hold {WINDOWLESS_KEY_NAME} while clicking Open, or choose File › Open Company Without Restoring Windows…
+            </p>
+          </>
+        ) : (
+          <p className="mb-3 text-sm text-qb-ink-muted">No windows are open. Choose a page from the sidebar or the menu bar to open one.</p>
+        )}
+        <button type="button" className="qb-btn qb-btn-primary" onClick={onHome}>
+          Open the Home page
         </button>
       </section>
     </div>

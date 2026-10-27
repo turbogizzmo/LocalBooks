@@ -1,14 +1,16 @@
-//! More than one window on the open company, as in QuickBooks Desktop: Window › New Window
-//! (Cmd/Ctrl+Shift+N), forms, registers and reports opened in windows of their own, the Window menu
-//! (Close All, Cascade, Tile, and on Windows and Linux the list of open windows; macOS lists them
-//! itself), View › Open Window List, View › One Window / Multiple Windows, and the saved desktop
-//! that reopens with the company (see [`crate::desktop`]).
+//! Windows, as in QuickBooks Desktop for Windows: forms, registers and reports open as windows
+//! *inside* the one LocalBooks window (the page's window manager, `src/components/WindowManager.jsx`),
+//! with the Window menu (Close All, Cascade, Tile Vertically, Tile Horizontally, Arrange Icons and
+//! the numbered list of open windows), View › Open Window List, View › One Window / Multiple
+//! Windows, and the saved desktop that reopens with the company (see [`crate::desktop`]).
 //!
-//! Every window is the same app on the same backend state, so they all read and write the one open
-//! company file. A write in any window emits `ledger-changed` to all of them, so each refreshes what
-//! it shows. The page a new window starts on is carried in its URL fragment
-//! (`#view=…&action=…&data=…`), which the app reads at startup; each window then reports the page
-//! it shows ([`report_page`]), which titles it, lists it, and is what the desktop saves.
+//! Window › New Window still opens a second LocalBooks window on the same company, for a second
+//! screen. Every LocalBooks window is the same app on the same backend state, so they all read and
+//! write the one open company file; a write in any of them emits `ledger-changed` to all. The page a
+//! new LocalBooks window starts on is carried in its URL fragment (`#view=…&action=…&data=…`).
+//!
+//! Each LocalBooks window reports the windows open inside it ([`report_children`]): that titles it,
+//! fills the Window menu, and is what the desktop saves.
 
 #![allow(clippy::float_arithmetic, reason = "window positions and sizes on screen, in points; no amounts are computed here")]
 
@@ -18,27 +20,26 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, Prede
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, Wry};
 
 use crate::db::Db;
-use crate::desktop::{self, Arrangement, Bounds, Page, SaveMode, SavedWindow, WindowMode};
+use crate::desktop::{self, Bounds, Page, SaveMode, SavedWindow, Snapshot, WindowMode};
 
 /// The window LocalBooks opens at launch.
 pub const MAIN: &str = "main";
-/// Labels of the extra windows; `capabilities/default.json` grants them the main window's access.
+/// Labels of the extra LocalBooks windows; `capabilities/default.json` grants them the main one's access.
 const EXTRA_PREFIX: &str = "window-";
-/// Sent to the focused window when Window › New Window is chosen, so it opens the page it shows.
+/// Sent to the focused LocalBooks window when Window › New Window is chosen, so it opens the page it shows.
 const NEW_WINDOW_REQUESTED: &str = "new-window-requested";
-/// Sent to every window with the open windows ([`OpenWindowView`]) whenever they change.
-const OPEN_WINDOWS_CHANGED: &str = "open-windows-changed";
-/// Sent to every window with the window preferences ([`WindowPreferences`]) when they change.
+/// Sent to every LocalBooks window with the window preferences ([`WindowPreferences`]) when they change.
 const WINDOW_PREFERENCES_CHANGED: &str = "window-preferences-changed";
-/// Sent to a window to show a page, as the menu bar does (see `app_menu.rs`).
-const MENU_NAVIGATE: &str = "menu-navigate";
+/// Sent to a LocalBooks window with a Window menu command for the windows inside it: "close-all",
+/// "close" (the active one), "cascade", "tile-vertically", "tile-horizontally", "arrange-icons",
+/// or "focus:<id>".
+const WINDOW_COMMAND: &str = "window-command";
 
 const MENU_NEW_WINDOW: &str = "new-window";
-const MENU_CLOSE_ALL: &str = "window-close-all";
-const MENU_CASCADE: &str = "window-cascade";
-const MENU_TILE_VERTICALLY: &str = "window-tile-vertically";
-const MENU_TILE_HORIZONTALLY: &str = "window-tile-horizontally";
-/// A window in the Window menu's list: this prefix, then its label.
+const MENU_CLOSE_WINDOW: &str = "window-close";
+/// A Window menu command for the page: this prefix, then the command.
+const MENU_COMMAND_PREFIX: &str = "window-cmd:";
+/// A window in the Window menu's list: this prefix, then its id.
 const MENU_FOCUS_PREFIX: &str = "window-focus:";
 const MENU_OPEN_WINDOW_LIST: &str = "view-open-window-list";
 const MENU_ONE_WINDOW: &str = "view-one-window";
@@ -47,11 +48,32 @@ const MENU_WORKSPACE_AUTOSAVE: &str = "workspace-autosave";
 const MENU_WORKSPACE_MANUAL: &str = "workspace-manual";
 const MENU_WORKSPACE_SAVE: &str = "workspace-save";
 
-/// The smallest a window can be made, so two fit side by side on a laptop screen.
+/// The Window menu's arrangement commands, in QuickBooks' order.
+const ARRANGEMENTS: [(&str, &str); 5] =
+    [("close-all", "Close All"), ("cascade", "Cascade"), ("tile-vertically", "Tile Vertically"), ("tile-horizontally", "Tile Horizontally"), ("arrange-icons", "Arrange Icons")];
+
+/// The smallest a LocalBooks window can be made.
 const MIN_SIZE: (f64, f64) = (760.0, 520.0);
 const DEFAULT_SIZE: (f64, f64) = (1280.0, 820.0);
 
-/// What LocalBooks knows about each open window, in the order they opened.
+/// A window inside a LocalBooks window, as the page reports it.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChildWindow {
+    pub id: String,
+    /// What it shows, for its title and the window lists: "Invoice 1001 · Acme".
+    pub name: String,
+    pub page: Page,
+    /// Its place in the work area.
+    #[serde(default)]
+    pub bounds: Option<Bounds>,
+    #[serde(default)]
+    pub minimized: bool,
+    #[serde(default)]
+    pub maximized: bool,
+}
+
+/// What LocalBooks knows about each LocalBooks window, in the order they opened.
 #[derive(Default)]
 pub struct OpenWindows(Mutex<Registry>);
 
@@ -62,73 +84,52 @@ struct Registry {
     /// The open company's name, for titles; `None` while the company is unnamed.
     company: Option<String>,
     company_open: bool,
-    /// The company was just opened: the first window to ask gets its desktop back.
+    /// The company was just opened: the first LocalBooks window to ask gets its desktop back.
     restore_pending: bool,
     next_label: usize,
 }
 
 #[derive(Clone, Default)]
 struct Entry {
-    page: Option<Page>,
-    /// What the window shows, for its title and the window lists: "Invoice 1001 · Acme".
-    content: Option<String>,
-    bounds: Option<Bounds>,
-    maximized: bool,
+    /// The windows inside it, in order of opening.
+    children: Vec<ChildWindow>,
+    active: Option<String>,
+    /// Where it is on screen.
+    frame: Option<Bounds>,
 }
 
-/// An open window as the Open Window List shows it.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenWindowView {
-    pub label: String,
-    pub name: String,
-    pub active: bool,
-}
-
-/// View › One Window / Multiple Windows and View › Open Window List, as the page reads them.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WindowPreferences {
-    pub window_mode: WindowMode,
-    pub show_open_window_list: bool,
-}
-
-/// The menu items whose state follows the windows and the preferences.
-struct WindowMenus {
-    window_menu: Submenu<Wry>,
-    /// The Window menu's list of open windows (not on macOS, which lists them itself).
-    list: Mutex<Vec<MenuItemKind<Wry>>>,
-    open_window_list: CheckMenuItem<Wry>,
-    one_window: CheckMenuItem<Wry>,
-    multiple_windows: CheckMenuItem<Wry>,
-    workspace: Option<(CheckMenuItem<Wry>, CheckMenuItem<Wry>)>,
+impl Entry {
+    fn active_child(&self) -> Option<&ChildWindow> {
+        self.active.as_ref().and_then(|id| self.children.iter().find(|c| &c.id == id))
+    }
 }
 
 impl Registry {
-    /// A window reports what it shows; a window new to the list joins it (the main window first,
-    /// so a desktop reopens in it).
-    fn report(&mut self, label: &str, page: Page, content: Option<String>, live: Option<(Bounds, bool)>, focused: bool) {
-        let entry = match self.windows.iter().position(|(l, _)| l == label) {
-            Some(i) => &mut self.windows[i].1,
+    fn entry(&mut self, label: &str) -> &mut Entry {
+        let at = match self.windows.iter().position(|(l, _)| l == label) {
+            Some(i) => i,
             None => {
+                // The main window heads the list: its windows are the desktop.
                 let at = if label == MAIN { 0 } else { self.windows.len() };
                 self.windows.insert(at, (label.to_string(), Entry::default()));
-                &mut self.windows[at].1
+                at
             }
         };
-        entry.page = Some(page);
-        entry.content = content;
-        if let Some((bounds, maximized)) = live {
-            entry.bounds = Some(bounds);
-            entry.maximized = maximized;
-        }
-        if focused {
-            self.focused = Some(label.to_string());
+        &mut self.windows[at].1
+    }
+
+    /// A LocalBooks window reports the windows inside it and which is active.
+    fn report(&mut self, label: &str, children: Vec<ChildWindow>, active: Option<String>, frame: Option<Bounds>) {
+        let entry = self.entry(label);
+        entry.children = children;
+        entry.active = active;
+        if frame.is_some() {
+            entry.frame = frame;
         }
     }
 
-    /// A window closed. The last one stays listed, so quitting by closing it still saves it as
-    /// the desktop.
+    /// A LocalBooks window closed. The last one stays listed, so quitting by closing it still
+    /// saves its windows as the desktop.
     fn closed(&mut self, label: &str) {
         if self.windows.len() > 1 || self.windows.first().is_some_and(|(l, _)| l != label) {
             self.windows.retain(|(l, _)| l != label);
@@ -143,22 +144,35 @@ impl Registry {
     fn take_restore(&mut self) -> bool {
         std::mem::take(&mut self.restore_pending)
     }
+
+    /// The LocalBooks window the menus are about: the focused one, else the main one.
+    fn menu_target(&self) -> Option<&(String, Entry)> {
+        self.focused.as_ref().and_then(|f| self.windows.iter().find(|(l, _)| l == f)).or_else(|| self.windows.first())
+    }
+
+    /// What the desktop saves: the windows inside the main LocalBooks window (the active one last,
+    /// so it reopens on top) and where that window was.
+    fn snapshot(&self) -> Snapshot {
+        let Some((_, entry)) = self.windows.first() else { return Snapshot::default() };
+        let mut children = entry.children.clone();
+        if let Some(i) = entry.active.as_ref().and_then(|id| children.iter().position(|c| &c.id == id)) {
+            let active = children.remove(i);
+            children.push(active);
+        }
+        Snapshot {
+            windows: children.into_iter().map(|c| SavedWindow { page: c.page, bounds: c.bounds, maximized: c.maximized, minimized: c.minimized }).collect(),
+            frame: entry.frame,
+        }
+    }
 }
 
 fn registry(app: &AppHandle) -> std::sync::MutexGuard<'_, Registry> {
     app.state::<OpenWindows>().inner().0.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// The app page for a new window: `view` is a navigation id ("reports"), `action` and `data` the
-/// request that view should open with (as from the app's own navigation).
+/// The app page for a new LocalBooks window: `view` is a navigation id ("reports"), `action` and
+/// `data` the request that view should open with (as from the app's own navigation).
 fn start_url(view: Option<&str>, action: Option<&str>, data: Option<&serde_json::Value>) -> String {
-    match fragment(view, action, data) {
-        Some(fragment) => format!("index.html#{fragment}"),
-        None => "index.html".to_string(),
-    }
-}
-
-fn fragment(view: Option<&str>, action: Option<&str>, data: Option<&serde_json::Value>) -> Option<String> {
     let mut pairs = Url::parse("localbooks://window/").expect("static url");
     {
         let mut query = pairs.query_pairs_mut();
@@ -172,10 +186,13 @@ fn fragment(view: Option<&str>, action: Option<&str>, data: Option<&serde_json::
             query.append_pair("data", &data.to_string());
         }
     }
-    pairs.query().filter(|q| !q.is_empty()).map(str::to_string)
+    match pairs.query().filter(|q| !q.is_empty()) {
+        Some(fragment) => format!("index.html#{fragment}"),
+        None => "index.html".to_string(),
+    }
 }
 
-/// The title a window has while it shows `content`.
+/// The title a LocalBooks window has while `content` is the window active inside it.
 fn title(registry: &Registry, content: Option<&str>) -> String {
     if registry.company_open {
         desktop::window_title(content, registry.company.as_deref())
@@ -184,9 +201,8 @@ fn title(registry: &Registry, content: Option<&str>) -> String {
     }
 }
 
-/// Opens another window on the open company at `page` (or on the Dashboard), titled like the
-/// others, where `saved` says when it is on a screen.
-pub fn open(app: &AppHandle, page: Option<&Page>, saved: Option<&SavedWindow>) -> Result<String, String> {
+/// Window › New Window: another LocalBooks window on the open company at `page` (or the Home page).
+pub fn open(app: &AppHandle, page: Option<&Page>) -> Result<String, String> {
     let (label, window_title) = {
         let mut reg = registry(app);
         let label = loop {
@@ -199,25 +215,13 @@ pub fn open(app: &AppHandle, page: Option<&Page>, saved: Option<&SavedWindow>) -
         (label, title(&reg, None))
     };
     let url = start_url(page.map(|p| p.view.as_str()), page.and_then(|p| p.action.as_deref()), page.and_then(|p| p.data.as_ref()));
-    let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
+    WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
         .title(window_title)
         .inner_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1)
-        .min_inner_size(MIN_SIZE.0, MIN_SIZE.1);
-    if let Some(saved) = saved {
-        if let Some(bounds) = saved.bounds.and_then(|b| desktop::fit(b, &screens(app))) {
-            builder = builder.position(bounds.x, bounds.y).inner_size(bounds.width, bounds.height);
-        }
-        builder = builder.maximized(saved.maximized);
-    }
-    builder.build().map_err(|e| format!("WINDOW_OPEN: cannot open another window: {e}"))?;
+        .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
+        .build()
+        .map_err(|e| format!("WINDOW_OPEN: cannot open another window: {e}"))?;
     Ok(label)
-}
-
-/// The window showing `page` already, if any: a list opening a report that is open brings its
-/// window forward instead of opening another.
-pub fn showing(app: &AppHandle, page: &Page) -> Option<WebviewWindow> {
-    let label = registry(app).windows.iter().find(|(_, e)| e.page.as_ref() == Some(page)).map(|(l, _)| l.clone())?;
-    app.get_webview_window(&label)
 }
 
 /// The screens there are, in points.
@@ -233,15 +237,19 @@ fn screens(app: &AppHandle) -> Vec<Bounds> {
         .collect()
 }
 
-/// Where `window` is, in points, and whether it is maximized.
-fn bounds_of(window: &WebviewWindow) -> Option<(Bounds, bool)> {
+/// Where `window` is on screen, in points; `None` while it is minimized or maximized (it then
+/// keeps the place it had).
+fn frame_of(window: &WebviewWindow) -> Option<Bounds> {
+    if window.is_minimized().unwrap_or(false) || window.is_maximized().unwrap_or(false) {
+        return None;
+    }
     let scale = window.scale_factor().ok()?;
     let pos = window.outer_position().ok()?.to_logical::<f64>(scale);
     let size = window.inner_size().ok()?.to_logical::<f64>(scale);
-    Some((Bounds { x: pos.x, y: pos.y, width: size.width, height: size.height }, window.is_maximized().unwrap_or(false)))
+    Some(Bounds { x: pos.x, y: pos.y, width: size.width, height: size.height })
 }
 
-/// The window a menu choice is for: the focused one, else the main one, else any.
+/// The LocalBooks window a menu choice is for: the focused one, else the main one, else any.
 pub fn target(app: &AppHandle) -> Option<WebviewWindow> {
     let windows = app.webview_windows();
     windows
@@ -267,95 +275,51 @@ pub fn focus(app: &AppHandle) {
     }
 }
 
-/// The window kept when the others close: the main window, or the focused one (else any) if the
-/// main window was closed.
-fn keeper(app: &AppHandle) -> Option<String> {
+/// File › Close Company, or another company opening: closes every LocalBooks window but one (the
+/// main window, or the focused one, else any, if the main window was closed).
+pub fn close_extra(app: &AppHandle) {
     let windows = app.webview_windows();
-    if windows.contains_key(MAIN) {
+    let keep = if windows.contains_key(MAIN) {
         Some(MAIN.to_string())
     } else {
         windows.values().find(|w| w.is_focused().unwrap_or(false)).or_else(|| windows.values().next()).map(|w| w.label().to_string())
-    }
-}
-
-/// File › Close Company, or another company opening: closes every window but one (see [`keeper`]).
-pub fn close_extra(app: &AppHandle) {
-    let keep = keeper(app);
-    for (label, window) in app.webview_windows() {
-        if Some(&label) != keep.as_ref() {
+    };
+    for (label, window) in &windows {
+        if Some(label) != keep.as_ref() {
             let _ = window.destroy();
         }
     }
 }
 
-/// Window › Close All: asks every window but one to close (each can stop to ask about unsaved
-/// changes), and sends the one left to the Home page.
-fn close_all(app: &AppHandle) {
-    let keep = keeper(app);
-    for (label, window) in app.webview_windows() {
-        if Some(&label) == keep.as_ref() {
-            let _ = window.emit_to(&label, MENU_NAVIGATE, serde_json::json!({ "view": "dashboard", "action": null, "data": null }));
-            focus_window(&window);
-        } else {
-            let _ = window.close();
-        }
-    }
-}
-
-/// Window › Cascade / Tile Vertically / Tile Horizontally: lays out the open windows over the
-/// screen the focused one is on.
-fn arrange(app: &AppHandle, arrangement: Arrangement) {
-    let Some(anchor) = target(app) else { return };
-    let Some(monitor) = anchor.current_monitor().ok().flatten() else { return };
-    let scale = monitor.scale_factor();
-    let work = monitor.work_area();
-    let (pos, size) = (work.position.to_logical::<f64>(scale), work.size.to_logical::<f64>(scale));
-    let area = Bounds { x: pos.x, y: pos.y, width: size.width, height: size.height };
-    let order: Vec<String> = registry(app).windows.iter().map(|(l, _)| l.clone()).collect();
-    let windows: Vec<WebviewWindow> =
-        order.iter().filter_map(|l| app.get_webview_window(l)).filter(|w| !w.is_minimized().unwrap_or(false) && w.is_visible().unwrap_or(true)).collect();
-    for (window, b) in windows.iter().zip(desktop::arrange(arrangement, windows.len(), area)) {
-        let _ = window.unmaximize();
-        // The layout is for whole windows; the title bar and frame come out of the size.
-        let frame = window.outer_size().ok().zip(window.inner_size().ok()).map(|(o, i)| {
-            let (o, i) = (o.to_logical::<f64>(scale), i.to_logical::<f64>(scale));
-            ((o.width - i.width).max(0.0), (o.height - i.height).max(0.0))
-        });
-        let (fw, fh) = frame.unwrap_or((0.0, 0.0));
-        let _ = window.set_position(LogicalPosition::new(b.x, b.y));
-        let _ = window.set_size(LogicalSize::new((b.width - fw).max(MIN_SIZE.0), (b.height - fh).max(MIN_SIZE.1)));
-    }
-    if let Some(window) = windows.last() {
-        focus_window(window);
-    }
-}
-
 // ------------------------------------------------------------------------------------------------
-// What each window shows
+// What each LocalBooks window shows
 // ------------------------------------------------------------------------------------------------
 
-/// A window reports the page it shows and what is in it: retitles it, and updates the window lists
-/// and what the desktop would save.
-pub fn report_page(app: &AppHandle, window: &WebviewWindow, page: Page, content: Option<String>) {
+/// A LocalBooks window reports the windows open inside it and the active one: it is retitled after
+/// the active one, and the Window menu and what the desktop would save follow.
+pub fn report_children(app: &AppHandle, window: &WebviewWindow, children: Vec<ChildWindow>, active: Option<String>) {
     // Window getters wait for the main thread, so they are read before the registry is locked.
-    let live = bounds_of(window);
+    let frame = frame_of(window);
     let focused = window.is_focused().unwrap_or(false);
     let label = window.label().to_string();
     let window_title = {
         let mut reg = registry(app);
-        let window_title = title(&reg, content.as_deref());
-        reg.report(&label, page, content, live, focused);
-        window_title
+        reg.report(&label, children, active, frame);
+        if focused {
+            reg.focused = Some(label.clone());
+        }
+        let content = reg.entry(&label).active_child().map(|c| c.name.clone());
+        title(&reg, content.as_deref())
     };
     let _ = window.set_title(&window_title);
-    windows_changed(app);
+    refresh_window_list(app);
 }
 
 /// Gives `label` back the title for what it shows (after printing, say).
 pub fn retitle(app: &AppHandle, label: &str) {
     let window_title = {
-        let reg = registry(app);
-        let content = reg.windows.iter().find(|(l, _)| l == label).and_then(|(_, e)| e.content.clone());
+        let mut reg = registry(app);
+        let content = reg.entry(label).active_child().map(|c| c.name.clone());
         title(&reg, content.as_deref())
     };
     if let Some(window) = app.get_webview_window(label) {
@@ -363,88 +327,42 @@ pub fn retitle(app: &AppHandle, label: &str) {
     }
 }
 
-/// Another company file became the live one (or none did): every window is retitled for it.
+/// Another company file became the live one (or none did): every LocalBooks window is retitled.
 pub fn set_company(app: &AppHandle, open: bool, name: Option<String>) {
-    let titles: Vec<(String, String)> = {
+    {
         let mut reg = registry(app);
         reg.company_open = open;
         reg.company = name;
-        let labels: Vec<String> = app.webview_windows().into_keys().collect();
-        labels
-            .into_iter()
-            .map(|label| {
-                let content = reg.windows.iter().find(|(l, _)| *l == label).and_then(|(_, e)| e.content.clone());
-                let t = title(&reg, content.as_deref());
-                (label, t)
-            })
-            .collect()
-    };
-    for (label, t) in titles {
-        if let Some(window) = app.get_webview_window(&label) {
-            let _ = window.set_title(&t);
-        }
+    }
+    for label in app.webview_windows().into_keys() {
+        retitle(app, &label);
     }
 }
 
-/// The open windows, in the order they opened, with the active (focused) one marked.
-pub fn list(app: &AppHandle) -> Vec<OpenWindowView> {
-    let reg = registry(app);
-    list_of(&reg)
-}
-
-fn list_of(reg: &Registry) -> Vec<OpenWindowView> {
-    reg.windows
-        .iter()
-        .map(|(label, e)| OpenWindowView {
-            label: label.clone(),
-            name: e.content.clone().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| "LocalBooks".to_string()),
-            active: reg.focused.as_deref() == Some(label),
-        })
-        .collect()
-}
-
-/// Brings the window `label` forward (the Open Window List, the Window menu).
-pub fn bring_forward(app: &AppHandle, label: &str) -> Result<(), String> {
-    let window = app.get_webview_window(label).ok_or_else(|| "WINDOW_GONE: that window has been closed".to_string())?;
-    focus_window(&window);
-    Ok(())
-}
-
-/// Window events: focus marks the active window, moves and resizes are remembered for the desktop,
-/// and a closed window leaves the lists. The last window to close stays on them, so quitting by
-/// closing it still saves it as the desktop.
+/// LocalBooks window events: focus picks which window's list the Window menu shows, moves and
+/// resizes are remembered for the desktop, and a closed window leaves the list (the last one stays,
+/// so quitting by closing it still saves it).
 pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
     let app = window.app_handle();
     let label = window.label().to_string();
     match event {
         WindowEvent::Focused(true) => {
             registry(app).focused = Some(label);
-            windows_changed(app);
+            refresh_window_list(app);
         }
         WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
-            let Some(webview) = app.get_webview_window(&label) else { return };
-            let Some((bounds, maximized)) = bounds_of(&webview) else { return };
-            if let Some((_, e)) = registry(app).windows.iter_mut().find(|(l, _)| *l == label) {
-                // A minimized window keeps the place it had.
-                if !webview.is_minimized().unwrap_or(false) {
-                    e.bounds = Some(bounds);
-                    e.maximized = maximized;
-                }
+            let Some(frame) = app.get_webview_window(&label).and_then(|w| frame_of(&w)) else { return };
+            let mut reg = registry(app);
+            if let Some((_, e)) = reg.windows.iter_mut().find(|(l, _)| *l == label) {
+                e.frame = Some(frame);
             }
         }
         WindowEvent::Destroyed => {
             registry(app).closed(&label);
-            windows_changed(app);
+            refresh_window_list(app);
         }
         _ => {}
     }
-}
-
-/// After any change to the open windows: every page and the Window menu are told.
-fn windows_changed(app: &AppHandle) {
-    let views = list(app);
-    let _ = app.emit(OPEN_WINDOWS_CHANGED, &views);
-    refresh_window_list(app, &views);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -464,78 +382,64 @@ async fn desktop_key(app: &AppHandle) -> Option<(std::path::PathBuf, String)> {
     Some((db.config_dir().to_path_buf(), desktop::key(&path, user)))
 }
 
-/// The windows open now, in order, as a desktop keeps them.
-fn snapshot(app: &AppHandle) -> Vec<SavedWindow> {
-    let entries: Vec<(String, Entry)> = registry(app).windows.clone();
-    entries
-        .into_iter()
-        .filter_map(|(label, e)| {
-            let page = e.page?;
-            let live = app.get_webview_window(&label).filter(|w| !w.is_minimized().unwrap_or(false)).and_then(|w| bounds_of(&w));
-            let (bounds, maximized) = match live {
-                Some((b, m)) => (Some(b), m),
-                None => (e.bounds, e.maximized),
-            };
-            Some(SavedWindow { page, bounds, maximized })
-        })
-        .collect()
+fn config_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.try_state::<Db>().map(|db| db.config_dir().to_path_buf())
 }
 
 /// The company is closing (File › Close Company, another company opening, quitting): under "Save
-/// when closing company" its open windows become its desktop.
+/// when closing company" the windows open inside LocalBooks become its desktop.
 pub async fn save_on_close(app: &AppHandle) {
     let Some((dir, key)) = desktop_key(app).await else { return };
-    let windows = snapshot(app);
-    if windows.is_empty() {
+    let now = registry(app).snapshot();
+    if now.windows.is_empty() && now.frame.is_none() {
         return;
     }
     if let Err(err) = desktop::update(&dir, |file| {
-        desktop::company_closing(file, &key, windows);
+        desktop::company_closing(file, &key, now);
     }) {
         eprintln!("cannot save the desktop: {err}");
     }
 }
 
-/// The next window to load the open company reopens its saved desktop (`true`), or none does (the
-/// company was opened without restoring windows).
+/// The next LocalBooks window to load the open company reopens its saved desktop (`true`), or none
+/// does (the company was opened without restoring windows).
 pub fn restore_on_next_load(app: &AppHandle, restore: bool) {
     registry(app).restore_pending = restore;
 }
 
-/// The first window to load after the company opened asks for its desktop: it is given the first
-/// saved window's page (and place), and the rest open beside it. `known_views` are the pages the
+/// The desktop a LocalBooks window starts with.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Restored {
+    /// The windows to open inside it, in order (the last is active); empty for an empty desktop.
+    pub windows: Vec<SavedWindow>,
+    /// "Don't save the desktop": the company opens on the Home page.
+    pub home_only: bool,
+}
+
+/// The first LocalBooks window to load after the company opened asks for its desktop: it is moved
+/// back where it was and given the windows to reopen inside it. `known_views` are the pages the
 /// app has; a saved window on any other is skipped. `None` when there is nothing to restore (the
-/// window then shows the page it would anyway).
-pub async fn take_restore(app: &AppHandle, caller: &WebviewWindow, known_views: &[String]) -> Option<Page> {
+/// window then opens as it would anyway).
+pub async fn take_restore(app: &AppHandle, caller: &WebviewWindow, known_views: &[String]) -> Option<Restored> {
     if !registry(app).take_restore() {
         return None;
     }
     let (dir, key) = desktop_key(app).await?;
     let file = desktop::read(&dir);
-    let dont_save = file.companies.get(&key).is_some_and(|d| d.mode == SaveMode::DontSave);
-    let mut saved = desktop::to_restore(&file, &key, |view| known_views.iter().any(|k| k == view)).into_iter();
-    let Some(first) = saved.next() else {
-        // "Don't save the desktop": the company opens on the Home page.
-        return dont_save.then(|| Page { view: "dashboard".into(), action: None, data: None });
-    };
-    if let Some(bounds) = first.bounds.and_then(|b| desktop::fit(b, &screens(app))) {
-        let _ = caller.unmaximize();
-        let _ = caller.set_position(LogicalPosition::new(bounds.x, bounds.y));
-        let _ = caller.set_size(LogicalSize::new(bounds.width, bounds.height));
+    let saved = file.companies.get(&key)?;
+    if saved.mode == SaveMode::DontSave {
+        return Some(Restored { windows: Vec::new(), home_only: true });
     }
-    if first.maximized {
-        let _ = caller.maximize();
+    if let Some(frame) = saved.frame.and_then(|b| desktop::fit(b, &screens(app))) {
+        let _ = caller.set_position(LogicalPosition::new(frame.x, frame.y));
+        let _ = caller.set_size(LogicalSize::new(frame.width.max(MIN_SIZE.0), frame.height.max(MIN_SIZE.1)));
     }
-    // One window that fails to open never stops the others.
-    for window in saved {
-        if let Err(err) = open(app, Some(&window.page), Some(&window)) {
-            eprintln!("cannot reopen a window of the saved desktop: {err}");
-        }
-    }
-    Some(first.page)
+    let windows = desktop::to_restore(&file, &key, |view| known_views.iter().any(|k| k == view));
+    (!windows.is_empty()).then_some(Restored { windows, home_only: false })
 }
 
-/// Desktop View › Desktop as the Preferences screen shows it.
+/// Desktop View as the Preferences screen and the menus show it.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopView {
@@ -549,14 +453,14 @@ pub struct DesktopView {
 }
 
 pub async fn desktop_view(app: &AppHandle) -> DesktopView {
-    let config_dir = app.try_state::<Db>().map(|db| db.config_dir().to_path_buf());
-    let file = config_dir.as_deref().map(desktop::read).unwrap_or_default();
+    let file = config_dir(app).as_deref().map(desktop::read).unwrap_or_default();
     let key = desktop_key(app).await;
-    let company = key.as_ref().and_then(|(_, k)| file.companies.get(k));
+    let key = key.as_ref().map(|(_, k)| k.as_str());
+    let company = key.and_then(|k| file.companies.get(k));
     DesktopView {
         mode: company.map(|c| c.mode).unwrap_or_default(),
         saved_windows: company.map_or(0, |c| c.windows.len()),
-        window_mode: file.window_mode,
+        window_mode: desktop::window_mode(&file, key),
         show_open_window_list: file.show_open_window_list,
         available: key.is_some(),
     }
@@ -569,9 +473,9 @@ pub async fn set_desktop_mode(app: &AppHandle, choice: &str) -> Result<DesktopVi
         return Err(format!("DESKTOP_MODE: unknown desktop choice {choice}"));
     }
     let (dir, key) = desktop_key(app).await.ok_or_else(|| "DESKTOP_UNAVAILABLE: sign in to save your desktop".to_string())?;
-    let windows = snapshot(app);
+    let now = registry(app).snapshot();
     desktop::update(&dir, |file| match choice {
-        "save-current" => desktop::save_current(file, &key, windows),
+        "save-current" => desktop::save_current(file, &key, now),
         "save-when-closing" => desktop::set_mode(file, &key, SaveMode::SaveWhenClosing),
         "dont-save" => desktop::set_mode(file, &key, SaveMode::DontSave),
         // "Keep previously saved desktop" changes nothing.
@@ -582,12 +486,13 @@ pub async fn set_desktop_mode(app: &AppHandle, choice: &str) -> Result<DesktopVi
     Ok(view)
 }
 
-/// View › One Window / Multiple Windows and View › Open Window List, for this computer.
+/// View › One Window / Multiple Windows (kept with the open company) and View › Open Window List.
 pub async fn set_window_preferences(app: &AppHandle, window_mode: Option<WindowMode>, show_open_window_list: Option<bool>) -> Result<DesktopView, String> {
-    let dir = app.try_state::<Db>().map(|db| db.config_dir().to_path_buf()).ok_or_else(|| "DESKTOP_UNAVAILABLE: LocalBooks has not started".to_string())?;
+    let dir = config_dir(app).ok_or_else(|| "DESKTOP_UNAVAILABLE: LocalBooks has not started".to_string())?;
+    let key = desktop_key(app).await.map(|(_, k)| k);
     desktop::update(&dir, |file| {
         if let Some(mode) = window_mode {
-            file.window_mode = mode;
+            desktop::set_window_mode(file, key.as_deref(), mode);
         }
         if let Some(show) = show_open_window_list {
             file.show_open_window_list = show;
@@ -599,29 +504,52 @@ pub async fn set_window_preferences(app: &AppHandle, window_mode: Option<WindowM
     Ok(view)
 }
 
+/// View › One Window / Multiple Windows and View › Open Window List, as the page reads them.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowPreferences {
+    pub window_mode: WindowMode,
+    pub show_open_window_list: bool,
+}
+
 // ------------------------------------------------------------------------------------------------
 // The Window and View menus
 // ------------------------------------------------------------------------------------------------
 
-/// Window: New Window, Close All, Cascade, Tile Vertically, Tile Horizontally, and (on macOS)
-/// Workspace › AutoSave / Manual / Save Workspace, as QuickBooks for Mac has; on Windows and Linux
-/// the list of open windows follows. View: Open Window List, One Window, Multiple Windows.
+/// The menu items whose state follows the windows and the preferences.
+struct WindowMenus {
+    window_menu: Submenu<Wry>,
+    /// The Window menu's numbered list of the windows inside LocalBooks.
+    list: Mutex<Vec<MenuItemKind<Wry>>>,
+    open_window_list: CheckMenuItem<Wry>,
+    one_window: CheckMenuItem<Wry>,
+    multiple_windows: CheckMenuItem<Wry>,
+    workspace: Option<(CheckMenuItem<Wry>, CheckMenuItem<Wry>)>,
+}
+
+/// Window: New Window, Close All, Cascade, Tile Vertically, Tile Horizontally, Arrange Icons, and
+/// (on macOS) Workspace › AutoSave / Manual / Save Workspace as QuickBooks for Mac has; then the
+/// numbered list of the windows inside LocalBooks. View: Open Window List, One Window, Multiple
+/// Windows. On macOS, ⌘W (File › Close Window) closes the window active inside LocalBooks, as it
+/// closes a form in QuickBooks for Mac, rather than LocalBooks itself.
 ///
 /// New Window's shortcut is the menu's (Cmd+Shift+N) on macOS; on Windows and Linux the page
 /// handles Ctrl+Shift+N, so the item carries none. Runs after `app_menu::install`, which makes the
 /// View menu where the platform has none.
 pub fn add_menus(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     let Some(window_menu) = menu.get(WINDOW_SUBMENU_ID).and_then(|item| item.as_submenu().cloned()) else { return Ok(()) };
+    if cfg!(target_os = "macos") {
+        replace_close_window(app, menu, &window_menu)?;
+    }
     let accel = cfg!(target_os = "macos").then_some("CmdOrCtrl+Shift+N");
-    let top: Vec<MenuItemKind<Wry>> = vec![
+    let mut top: Vec<MenuItemKind<Wry>> = vec![
         MenuItemKind::MenuItem(MenuItem::with_id(app, MENU_NEW_WINDOW, "New Window", true, accel)?),
         MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?),
-        MenuItemKind::MenuItem(MenuItem::with_id(app, MENU_CLOSE_ALL, "Close All", true, None::<&str>)?),
-        MenuItemKind::MenuItem(MenuItem::with_id(app, MENU_CASCADE, "Cascade", true, None::<&str>)?),
-        MenuItemKind::MenuItem(MenuItem::with_id(app, MENU_TILE_VERTICALLY, "Tile Vertically", true, None::<&str>)?),
-        MenuItemKind::MenuItem(MenuItem::with_id(app, MENU_TILE_HORIZONTALLY, "Tile Horizontally", true, None::<&str>)?),
-        MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?),
     ];
+    for (command, label) in ARRANGEMENTS {
+        top.push(MenuItemKind::MenuItem(MenuItem::with_id(app, format!("{MENU_COMMAND_PREFIX}{command}"), label, true, None::<&str>)?));
+    }
+    top.push(MenuItemKind::Predefined(PredefinedMenuItem::separator(app)?));
     let refs: Vec<&dyn IsMenuItem<Wry>> = top.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
     window_menu.insert_items(&refs, 0)?;
     let workspace = if cfg!(target_os = "macos") {
@@ -641,37 +569,63 @@ pub fn add_menus(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     let view_menu = menu.items()?.into_iter().filter_map(|i| i.as_submenu().cloned()).find(|s| s.text().is_ok_and(|t| t.replace('&', "") == "View"));
     if let Some(view_menu) = view_menu {
         // After Show or Hide Left Icon Bar (and before macOS's Enter Full Screen), as in QuickBooks.
-        let at = view_menu.items()?.iter().position(|i| matches!(i, MenuItemKind::Predefined(_))).unwrap_or(view_menu.items()?.len());
+        let len = view_menu.items()?.len();
+        let at = view_menu.items()?.iter().position(|i| matches!(i, MenuItemKind::Predefined(_))).unwrap_or(len);
         let items: [&dyn IsMenuItem<Wry>; 6] =
             [&PredefinedMenuItem::separator(app)?, &open_window_list, &PredefinedMenuItem::separator(app)?, &one_window, &multiple_windows, &PredefinedMenuItem::separator(app)?];
-        let take = if at == view_menu.items()?.len() { 5 } else { 6 };
+        let take = if at == len { 5 } else { 6 };
         view_menu.insert_items(&items[..take], at)?;
     }
     app.manage(WindowMenus { window_menu, list: Mutex::new(Vec::new()), open_window_list, one_window, multiple_windows, workspace });
     Ok(())
 }
 
-/// The Window menu's list of open windows, the active one checked. macOS adds its own list.
-fn refresh_window_list(app: &AppHandle, views: &[OpenWindowView]) {
-    if cfg!(target_os = "macos") {
-        return;
+/// macOS: the system's Close Window (⌘W) would close LocalBooks itself; ours closes the window
+/// active inside it (and LocalBooks only when none is open).
+fn replace_close_window(app: &AppHandle, menu: &Menu<Wry>, window_menu: &Submenu<Wry>) -> tauri::Result<()> {
+    let is_close = |item: &MenuItemKind<Wry>| matches!(item, MenuItemKind::Predefined(p) if p.text().is_ok_and(|t| t == "Close Window"));
+    let mut file_at = None;
+    for sub in menu.items()?.into_iter().filter_map(|i| i.as_submenu().cloned()) {
+        let is_file = sub.text().is_ok_and(|t| t == "File");
+        for (i, item) in sub.items()?.into_iter().enumerate() {
+            if is_close(&item) {
+                sub.remove(&item)?;
+                if is_file {
+                    file_at = Some((sub.clone(), i));
+                }
+            }
+        }
     }
+    // The separator the system's item leaves at the end of the Window menu goes too.
+    if let Some(last) = window_menu.items()?.last().filter(|i| matches!(i, MenuItemKind::Predefined(p) if p.text().map_or(true, |t| t.is_empty()))) {
+        window_menu.remove(last)?;
+    }
+    let close = MenuItem::with_id(app, MENU_CLOSE_WINDOW, "Close Window", true, Some("CmdOrCtrl+W"))?;
+    match file_at {
+        Some((file, at)) => file.insert(&close, at)?,
+        None => window_menu.append(&close)?,
+    }
+    Ok(())
+}
+
+/// The Window menu's numbered list of the windows inside the LocalBooks window the menus are
+/// about, the active one ticked.
+fn refresh_window_list(app: &AppHandle) {
     let Some(menus) = app.try_state::<WindowMenus>() else { return };
+    let (children, active) = {
+        let reg = registry(app);
+        reg.menu_target().map(|(_, e)| (e.children.clone(), e.active.clone())).unwrap_or_default()
+    };
     let mut list = menus.list.lock().unwrap_or_else(|e| e.into_inner());
     for item in list.drain(..) {
         let _ = menus.window_menu.remove(&item);
     }
-    if !views.is_empty() {
-        if let Ok(separator) = PredefinedMenuItem::separator(app) {
-            if menus.window_menu.append(&separator).is_ok() {
-                list.push(MenuItemKind::Predefined(separator));
-            }
-        }
-    }
-    for (n, view) in views.iter().enumerate() {
-        // The first nine are numbered, as Windows programs number their open windows.
-        let label = if n < 9 { format!("&{} {}", n + 1, view.name.replace('&', "&&")) } else { view.name.replace('&', "&&") };
-        if let Ok(item) = CheckMenuItem::with_id(app, format!("{MENU_FOCUS_PREFIX}{}", view.label), label, true, view.active, None::<&str>) {
+    for (n, child) in children.iter().enumerate() {
+        let name = child.name.replace('&', "&&");
+        // The first nine are numbered, as QuickBooks numbers its open windows.
+        let label = if n < 9 { format!("&{} {name}", n + 1) } else { name };
+        let checked = active.as_deref() == Some(child.id.as_str());
+        if let Ok(item) = CheckMenuItem::with_id(app, format!("{MENU_FOCUS_PREFIX}{}", child.id), label, true, checked, None::<&str>) {
             if menus.window_menu.append(&item).is_ok() {
                 list.push(MenuItemKind::Check(item));
             }
@@ -695,17 +649,22 @@ fn refresh_preference_menus(app: &AppHandle, view: &DesktopView) {
 pub async fn refresh_menus(app: &AppHandle) {
     let view = desktop_view(app).await;
     refresh_preference_menus(app, &view);
-    windows_changed(app);
+    refresh_window_list(app);
+}
+
+/// Sends a Window menu command to the LocalBooks window it is for.
+fn send_command(app: &AppHandle, command: &str) {
+    if let Some(window) = target(app) {
+        let _ = window.emit_to(window.label(), WINDOW_COMMAND, command);
+        focus_window(&window);
+    }
 }
 
 /// Window and View menu choices; other menu ids are ignored.
 pub fn on_menu_event(app: &AppHandle, id: &str) {
     match id {
         MENU_NEW_WINDOW => new_window(app),
-        MENU_CLOSE_ALL => close_all(app),
-        MENU_CASCADE => arrange(app, Arrangement::Cascade),
-        MENU_TILE_VERTICALLY => arrange(app, Arrangement::TileVertically),
-        MENU_TILE_HORIZONTALLY => arrange(app, Arrangement::TileHorizontally),
+        MENU_CLOSE_WINDOW => send_command(app, "close"),
         MENU_OPEN_WINDOW_LIST | MENU_ONE_WINDOW | MENU_MULTIPLE_WINDOWS => {
             let (app, id) = (app.clone(), id.to_string());
             tauri::async_runtime::spawn(async move {
@@ -730,23 +689,25 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
                 };
                 if let Err(err) = set_desktop_mode(&app, choice).await {
                     eprintln!("{err}");
-                    // A check item ticks itself when chosen; put it back.
-                    refresh_preference_menus(&app, &desktop_view(&app).await);
                 }
+                // A check item ticks itself when chosen; set the ticks from what was saved.
+                refresh_preference_menus(&app, &desktop_view(&app).await);
             });
         }
         _ => {
-            if let Some(label) = id.strip_prefix(MENU_FOCUS_PREFIX) {
-                let _ = bring_forward(app, label);
-                // The item ticks itself when chosen; the focus change sets the ticks right.
-                windows_changed(app);
+            if let Some(command) = id.strip_prefix(MENU_COMMAND_PREFIX) {
+                send_command(app, command);
+            } else if let Some(child) = id.strip_prefix(MENU_FOCUS_PREFIX) {
+                send_command(app, &format!("focus:{child}"));
+                // The item ticks itself when chosen; the page's next report sets the ticks right.
+                refresh_window_list(app);
             }
         }
     }
 }
 
-/// Window › New Window: the focused window opens a copy of the page it shows; with no LocalBooks
-/// window focused, a new window opens on the Dashboard.
+/// Window › New Window: the focused LocalBooks window opens a copy of the page active in it; with
+/// none focused, a new one opens on the Home page.
 fn new_window(app: &AppHandle) {
     let focused = app.webview_windows().into_values().find(|w| w.is_focused().unwrap_or(false));
     match focused {
@@ -754,7 +715,7 @@ fn new_window(app: &AppHandle) {
             let _ = window.emit_to(window.label(), NEW_WINDOW_REQUESTED, ());
         }
         None => {
-            if let Err(err) = open(app, None, None) {
+            if let Err(err) = open(app, None) {
                 eprintln!("{err}");
             }
         }

@@ -3,10 +3,13 @@
 //! (Save when closing company, Save current desktop, Don't save the desktop, Keep previously saved
 //! desktop).
 //!
-//! A desktop is the set of windows open on a company: each window's page (a navigation id with the
-//! request it opened with) and where it was on screen. It is kept per company file and per signed-in
-//! user, on this computer, in `desktops.json` beside `config.json`, so reopening the company brings
-//! the same windows back. Nothing here touches the books.
+//! As in QuickBooks Desktop for Windows, forms, registers and reports open as windows inside the one
+//! LocalBooks window (see `src/components/WindowManager.jsx`). A desktop is the set of those windows
+//! open on a company: each one's page (a navigation id with the request it opened with), where it
+//! sat in the work area, whether it was minimized or maximized, plus where the LocalBooks window
+//! itself was on screen and the View mode. It is kept per company file and per signed-in user, on
+//! this computer, in `desktops.json` beside `config.json`, so reopening the company brings the same
+//! windows back. Nothing here touches the books.
 
 #![allow(clippy::float_arithmetic, reason = "window positions and sizes on screen, in points; no amounts are computed here")]
 
@@ -40,9 +43,9 @@ pub enum SaveMode {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WindowMode {
-    /// Lists open a transaction or report in place, in the window that shows the list.
+    /// One window shows at a time, filling the work area; the others wait behind it.
     One,
-    /// Lists open each transaction or report in a window of its own (QuickBooks' default).
+    /// Windows float in the work area, side by side or overlapping (QuickBooks' default).
     #[default]
     Multiple,
 }
@@ -58,7 +61,8 @@ pub struct Page {
     pub data: Option<serde_json::Value>,
 }
 
-/// Where a window is on screen, in points (logical pixels): its outer position and inner size.
+/// Where a window is, in points (logical pixels): for the LocalBooks window, its outer position on
+/// screen and inner size; for a window inside it, its place in the work area.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Bounds {
     pub x: f64,
@@ -76,21 +80,39 @@ pub struct SavedWindow {
     pub bounds: Option<Bounds>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub maximized: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub minimized: bool,
 }
 
-/// A company's desktop for one user. The first window is the one the company opens in.
+/// What is saved when the company closes: the windows inside LocalBooks, in order (the last is the
+/// active one), and where the LocalBooks window was.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Snapshot {
+    pub windows: Vec<SavedWindow>,
+    pub frame: Option<Bounds>,
+}
+
+/// A company's desktop for one user.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CompanyDesktop {
     #[serde(default)]
     pub mode: SaveMode,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub windows: Vec<SavedWindow>,
+    /// Where the LocalBooks window was on screen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame: Option<Bounds>,
+    /// One Window or Multiple Windows, as last chosen with this company open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_mode: Option<WindowMode>,
 }
 
 /// `desktops.json`: the window preferences and every company's saved desktop.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopFile {
+    /// The View mode last chosen, for a company that has none of its own yet.
     #[serde(default)]
     pub window_mode: WindowMode,
     /// View › Open Window List: the list of open windows beside the sidebar.
@@ -148,25 +170,41 @@ fn keepable(windows: Vec<SavedWindow>) -> Vec<SavedWindow> {
         .collect()
 }
 
-/// The company closes with `windows` open: under "Save when closing company" they become its
-/// desktop. Whether anything changed.
-pub fn company_closing(file: &mut DesktopFile, key: &str, windows: Vec<SavedWindow>) -> bool {
+/// The company closes with `now` open: under "Save when closing company" it becomes its desktop.
+/// Whether anything changed.
+pub fn company_closing(file: &mut DesktopFile, key: &str, now: Snapshot) -> bool {
     let desktop = file.companies.entry(key.to_string()).or_default();
     if desktop.mode != SaveMode::SaveWhenClosing {
         return false;
     }
-    let windows = keepable(windows);
-    let changed = desktop.windows != windows;
+    let windows = keepable(now.windows);
+    let changed = desktop.windows != windows || (now.frame.is_some() && desktop.frame != now.frame);
     desktop.windows = windows;
+    desktop.frame = now.frame.or(desktop.frame);
     changed
 }
 
-/// "Save current desktop" (and Window › Workspace › Save Workspace on the Mac): `windows` become the
+/// "Save current desktop" (and Window › Workspace › Save Workspace on the Mac): `now` becomes the
 /// desktop that reopens every time, until the setting is changed.
-pub fn save_current(file: &mut DesktopFile, key: &str, windows: Vec<SavedWindow>) {
+pub fn save_current(file: &mut DesktopFile, key: &str, now: Snapshot) {
     let desktop = file.companies.entry(key.to_string()).or_default();
     desktop.mode = SaveMode::KeepSaved;
-    desktop.windows = keepable(windows);
+    desktop.windows = keepable(now.windows);
+    desktop.frame = now.frame.or(desktop.frame);
+}
+
+/// View › One Window / Multiple Windows: kept with the open company's desktop (`key`), and as the
+/// choice for companies that have none yet.
+pub fn set_window_mode(file: &mut DesktopFile, key: Option<&str>, mode: WindowMode) {
+    file.window_mode = mode;
+    if let Some(key) = key {
+        file.companies.entry(key.to_string()).or_default().window_mode = Some(mode);
+    }
+}
+
+/// The View mode a company opens in: its own, else the one last chosen.
+pub fn window_mode(file: &DesktopFile, key: Option<&str>) -> WindowMode {
+    key.and_then(|k| file.companies.get(k)).and_then(|d| d.window_mode).unwrap_or(file.window_mode)
 }
 
 /// Chooses what happens at close. "Don't save the desktop" forgets the saved windows; "Keep
