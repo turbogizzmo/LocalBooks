@@ -339,10 +339,10 @@ const agingBucket = (days) => (days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 :
 
 // `zoom`: the detail report a row opens, and how to find what the row is (by name, from a list).
 const SUMMARY = {
-  customer: { title: 'Sales by Customer Summary', column: 'Customer', zoom: { preset: 'income-customer-detail', list: () => api.listCustomers(), filter: (id) => ({ names: [{ kind: 'customer', id }] }) } },
-  product: { title: 'Sales by Product/Service Summary', column: 'Product/Service', zoom: { preset: 'sales-product-detail', list: () => api.listProducts(), filter: (id) => ({ itemIds: [id] }) } },
+  customer: { title: 'Sales by Customer Summary', column: 'Customer', zoom: { preset: 'income-customer-detail', title: 'Income by Customer Detail', list: () => api.listCustomers(), filter: (id) => ({ names: [{ kind: 'customer', id }] }) } },
+  product: { title: 'Sales by Product/Service Summary', column: 'Product/Service', zoom: { preset: 'sales-product-detail', title: 'Sales by Product/Service Detail', list: () => api.listProducts(), filter: (id) => ({ itemIds: [id] }) } },
   rep: { title: 'Sales by Rep Summary', column: 'Rep' },
-  vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor', zoom: { preset: 'expenses-vendor-detail', list: () => api.listVendors(), filter: (id) => ({ names: [{ kind: 'vendor', id }] }) } },
+  vendor: { title: 'Expenses by Vendor Summary', column: 'Vendor', zoom: { preset: 'expenses-vendor-detail', title: 'Expenses by Vendor Detail', list: () => api.listVendors(), filter: (id) => ({ names: [{ kind: 'vendor', id }] }) } },
 };
 
 export function SummaryReport({ by, initial = null, onZoom = null }) {
@@ -356,7 +356,7 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
   const { data: named } = useLedgerQuery(() => (zooms ? cfg.zoom.list() : Promise.resolve([])));
   const zoomTo = (label) => {
     const match = (named ?? []).find((n) => n.name === label);
-    return match ? () => onZoom(cfg.zoom.preset, { title: `${cfg.title.replace(' Summary', ' Detail')}: ${label}`, filters: cfg.zoom.filter(match.id), startDate: data.startDate, endDate: data.endDate }) : undefined;
+    return match ? () => onZoom(cfg.zoom.preset, { title: `${cfg.zoom.title}: ${label}`, filters: cfg.zoom.filter(match.id), startDate: data.startDate, endDate: data.endDate }) : undefined;
   };
   const withQty = by === 'product';
   const columns = [{ label: cfg.column }, ...(withQty ? [{ label: 'Quantity', align: 'right' }, { label: 'Avg price', align: 'right' }] : []), { label: 'Amount', align: 'right' }, { label: '% of total', align: 'right' }];
