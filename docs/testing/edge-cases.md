@@ -31,6 +31,7 @@ Before starting, note the items in Keychain Access whose name starts with `Local
 | K2 | Settings › Email: enter an SMTP server and a password, Save; quit and reopen | No prompt; the password is still saved; `~/Library/Application Support/com.localbooks.keychaincheck/dev-builds/` holds `smtp-secrets.json`, `remembered-sign-ins.json` and `audit-anchors.json` |
 | K3 | After K1–K2: Keychain Access | No new or changed `LocalBooks …` items |
 
+## Sign-in and users (Edge Cases)
 
 | ID | Steps | Expected |
 |---|---|---|
