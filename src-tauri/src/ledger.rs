@@ -895,9 +895,10 @@ pub struct LedgerVerification {
 
 /// Rebuilds every posted entry from the live tables and compares it with the snapshot written when
 /// it was posted. The ledger is intact when every posted entry has an identical snapshot, balances,
-/// every void links to its reversal, and no snapshotted entry has disappeared.
+/// every void links to its reversal, and no snapshotted entry has disappeared (except entries a
+/// condense replaced, whose snapshots must add up to the summary that replaced them).
 pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification, String> {
-    let checks: [(&str, &str); 6] = [
+    let checks: [(&str, &str); 7] = [
         (
             "Posted without a posting snapshot",
             "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
@@ -931,9 +932,41 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
         ),
         (
             "Snapshotted at posting but no longer in the ledger (deleted)",
-            "SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
+            // Condensing (see `condense`) removes entries only with a later CONDENSE record listing them.
+            "WITH condensed AS MATERIALIZED (
+                 SELECT r.value AS entry_id, c.id AS record_id
+                 FROM ledger_audit_log c, json_each(c.payload_snapshot, '$.removed.journalEntries') r
+                 WHERE c.action_type = 'CONDENSE')
+             SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
              FROM ledger_audit_log a
-             WHERE a.action_type = 'POST' AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.id = a.target_entity_id)",
+             WHERE a.action_type = 'POST' AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.id = a.target_entity_id)
+               AND NOT EXISTS (SELECT 1 FROM condensed k WHERE k.entry_id = a.target_entity_id AND k.record_id > a.id)",
+        ),
+        (
+            "Condensed into a summary entry that does not add up to the entries it replaced",
+            // Per summary, account and class: the summarized entries' posting snapshots less the
+            // summary's own snapshot nets to zero.
+            "WITH s AS MATERIALIZED (
+                 SELECT c.id AS record_id, x.key AS n, json_extract(x.value, '$.entryId') AS summary_id, x.value AS summary
+                 FROM ledger_audit_log c, json_each(c.payload_snapshot, '$.summaries') x
+                 WHERE c.action_type = 'CONDENSE'),
+             parts AS (
+                 SELECT s.record_id, s.n, s.summary_id,
+                        json_extract(l.value, '$.accountId') AS account_id, json_extract(l.value, '$.classId') AS class_id,
+                        json_extract(l.value, '$.debitCents') - json_extract(l.value, '$.creditCents') AS net
+                 FROM s, json_each(s.summary, '$.summarizes') r
+                 JOIN ledger_audit_log p ON p.action_type = 'POST' AND p.target_entity_id = r.value AND p.id < s.record_id,
+                 json_each(p.payload_snapshot, '$.lines') l
+                 UNION ALL
+                 SELECT s.record_id, s.n, s.summary_id,
+                        json_extract(l.value, '$.accountId'), json_extract(l.value, '$.classId'),
+                        json_extract(l.value, '$.creditCents') - json_extract(l.value, '$.debitCents')
+                 FROM s
+                 JOIN ledger_audit_log p ON p.action_type = 'POST' AND p.target_entity_id = s.summary_id AND p.id < s.record_id,
+                 json_each(p.payload_snapshot, '$.lines') l)
+             SELECT DISTINCT entry_id, NULL AS entry_number FROM (
+                 SELECT COALESCE(summary_id, 0) AS entry_id FROM parts
+                 GROUP BY record_id, n, account_id, class_id HAVING SUM(net) <> 0)",
         ),
     ];
 

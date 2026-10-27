@@ -289,7 +289,9 @@ release checklist item to re-read it and the README's Known limitations.
 
 ## 6. Data lifecycle
 
-### 6.1 Condense or archive old years — **Missing**, size L
+### 6.1 Condense or archive old years — **Done** (Condense Data)
+
+- Done: see [Condense data](guide/backups-and-company-files.md#condense-data-archive-closed-years). The notes below are the original gap.
 
 - Nothing condenses. Attachments make the file grow fastest. QuickBooks' Condense replaces old
   detail with summary journal entries after a backup. With posted history immutable and the forensic

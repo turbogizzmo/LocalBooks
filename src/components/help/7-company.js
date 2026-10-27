@@ -92,6 +92,14 @@ export const topics = [
     guide: 'backups-and-company-files',
   },
   {
+    id: 'condense', area: 'company', views: ['settings'],
+    title: 'Condense data: archive closed years',
+    body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',
+    keywords: 'condense archive shrink smaller file old years history summary summarize clean up purge size',
+    go: { label: 'Go to File & Data Controls', view: 'settings', action: 'data' },
+    guide: 'backups-and-company-files',
+  },
+  {
     id: 'file-location', area: 'company', views: ['settings'],
     title: 'Keep the company file on a network or synced drive',
     body: 'Change Company File Location moves your books to another folder, including a network drive or a synced folder such as Dropbox. Only one person can have the books open at a time, and LocalBooks tells a second computer they are in use.',

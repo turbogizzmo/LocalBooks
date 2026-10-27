@@ -121,6 +121,7 @@ rejected. No code path can skip it.
 | `FORENSIC_HEAL` | a reviewed correction, when approved | The altered entry, the correcting entry, and its lines |
 | `LIST_CHANGE` | trigger, on an edit to a customer, vendor or product/service | Name and active flag before and after, and which other fields changed (names only) |
 | `CLEANUP` | Accounting › Clean Up Books, once per fix | Every credit applied, invoice written off or payment matched, with amounts |
+| `CONDENSE` | Condense Data, once per condense | The archive it was made from (audit-trail head, content hash), the entries summarized, and which summary entry replaced each month |
 
 Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
 the original by its `VOID` record. Changing an account's type once it has posted activity is also
@@ -262,6 +263,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
 | Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
+| Condense Data | Settings › File & Data Controls | Replace closed years with monthly summary entries, keeping open items, with a verified read-only archive of the full history | [guide](docs/guide/backups-and-company-files.md#condense-data-archive-closed-years) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |

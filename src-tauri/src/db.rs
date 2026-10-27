@@ -66,6 +66,8 @@ pub struct Db {
     idle: std::sync::Mutex<Idle>,
     /// One refresh at a time, so a slower one can never write an older picture over a newer one.
     refreshing: tokio::sync::Mutex<()>,
+    /// The open file is an archive left by condensing (see `condense`): it opens read-only.
+    archive: std::sync::atomic::AtomicBool,
 }
 
 /// Returned by operations that need an open company file while none is.
@@ -137,6 +139,7 @@ impl Db {
             gate: std::sync::RwLock::new(crate::permissions::Gate::Unchecked),
             idle: std::sync::Mutex::new(Idle { last: std::time::SystemTime::now(), limit: None }),
             refreshing: tokio::sync::Mutex::new(()),
+            archive: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -310,9 +313,11 @@ impl Db {
         use crate::permissions::{Gate, SignedIn};
         let _one_at_a_time = self.refreshing.lock().await;
         let mut limit = None;
+        let mut archive = false;
         let (gate, actor) = match self.live.read().await.as_ref() {
             None => (Gate::NoCompany, None),
             Some(live) => {
+                archive = crate::condense::pool_is_archive(&live.pool).await;
                 // An unreadable users table asks for a sign-in rather than opening the books.
                 if crate::users::users_enabled(&live.pool).await.unwrap_or(true) {
                     let minutes = crate::users::auto_lock_minutes(&live.pool).await;
@@ -329,6 +334,7 @@ impl Db {
             }
         };
         crate::audit_chain::set_signed_in(actor);
+        self.archive.store(archive, std::sync::atomic::Ordering::SeqCst);
         *self.idle.lock().expect("idle lock") = Idle { last: std::time::SystemTime::now(), limit };
         *self.gate.write().expect("gate lock") = gate;
     }
@@ -359,7 +365,11 @@ impl Db {
                 idle.last = std::time::SystemTime::now();
             }
         }
-        crate::permissions::check(&gate, need)
+        crate::permissions::check(&gate, need)?;
+        if matches!(need, Need::Write | Need::Admin) && self.archive.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(crate::condense::ARCHIVE_READ_ONLY.into());
+        }
+        Ok(())
     }
 
     /// Whether someone is signed in and has been idle past the limit.
@@ -436,28 +446,38 @@ impl Db {
     /// Replaces the live database file with `staged` (a migrated, closed SQLite file) and reopens it.
     /// If the replacement cannot be opened, `fallback` (a snapshot of the previous file) is put back.
     pub async fn swap_in(&self, staged: &Path, fallback: &Path) -> Result<(), String> {
-        let swapped = self.swap_in_file(staged, fallback).await;
+        let swapped = self.swap_in_file(staged, fallback, None).await;
         self.refresh_gate().await;
         swapped
     }
 
-    async fn swap_in_file(&self, staged: &Path, fallback: &Path) -> Result<(), String> {
+    /// [`Db::swap_in`], only if the live books still have `content_digest` (see
+    /// `condense::content_digest`), checked under the write lock so nothing changes them in between.
+    pub async fn swap_in_unchanged(&self, staged: &Path, fallback: &Path, content_digest: &str) -> Result<(), String> {
+        let swapped = self.swap_in_file(staged, fallback, Some(content_digest)).await;
+        self.refresh_gate().await;
+        swapped
+    }
+
+    async fn swap_in_file(&self, staged: &Path, fallback: &Path, unchanged: Option<&str>) -> Result<(), String> {
         let mut guard = self.live.write().await;
         let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+        if let Some(expected) = unchanged {
+            if crate::condense::content_digest(&live.pool).await? != expected {
+                return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
+            }
+        }
+        // Fold the journal into the file while it is still open, then close every connection: Windows
+        // cannot remove or replace a file that any handle still has open.
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&live.pool).await;
         live.pool.close().await;
         let path = live.path.clone();
         let storage = live.storage.clone();
-        let remove_sidecars = |path: &Path| {
-            for suffix in ["-wal", "-shm", "-journal"] {
-                let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
-                if sidecar.exists() {
-                    std::fs::remove_file(&sidecar).map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
-                }
-            }
-            Ok::<(), String>(())
+        checkpoint_closed(&path).await;
+        let swapped = match remove_sidecars(&path).await {
+            Ok(()) => while_in_use(|| std::fs::rename(staged, &path)).await.map_err(|e| format!("cannot replace the company file: {e}")),
+            Err(e) => Err(e),
         };
-        let swapped = remove_sidecars(&path)
-            .and_then(|()| std::fs::rename(staged, &path).map_err(|e| format!("cannot replace the company file: {e}")));
         match open_for(&path, &storage, None).await {
             Ok(pool) => {
                 live.pool = pool;
@@ -473,8 +493,8 @@ impl Db {
                 swapped.map_err(|e| format!("RESTORE_SWAP: {e}; your current books were left in place"))
             }
             Err(open_err) => {
-                std::fs::copy(fallback, &path).map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
-                remove_sidecars(&path)?;
+                while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
+                remove_sidecars(&path).await?;
                 live.pool = open_for(&path, &storage, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
             }
@@ -521,6 +541,39 @@ impl Db {
             live.lock = None;
         }
     }
+}
+
+/// Removes SQLite's journal files next to a closed company file, so a replacement file never meets
+/// another file's log.
+async fn remove_sidecars(path: &Path) -> Result<(), String> {
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let sidecar = PathBuf::from(format!("{}{suffix}", path.display()));
+        if sidecar.exists() {
+            while_in_use(|| match std::fs::remove_file(&sidecar) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                other => other,
+            })
+            .await
+            .map_err(|e| format!("cannot remove {}: {e}", sidecar.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Runs a file operation, retrying for up to two seconds while Windows reports the file in use
+/// (a just-closed connection's handle can take a moment to be released). Other errors return at once.
+async fn while_in_use(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::Result<()> {
+    // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
+    const IN_USE: [i32; 3] = [5, 32, 33];
+    for _ in 0..40 {
+        match op() {
+            Err(e) if cfg!(windows) && e.raw_os_error().is_some_and(|code| IN_USE.contains(&code)) => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            other => return other,
+        }
+    }
+    op()
 }
 
 /// Removes a company file that was never used, with SQLite's journal files.

@@ -13,6 +13,9 @@ posted or voided from any screen, so filed numbers can't change by accident.
 
 The box shows **Closed through** the date, and the change is added to the history below it.
 
+To shrink a file with years of closed history, see
+[Condense data](backups-and-company-files.md#condense-data-archive-closed-years).
+
 ## Reopen or move the date
 
 1. Enter the new **Closing date**, or click **Reopen all periods** to remove the lock.
