@@ -1,6 +1,7 @@
 import ArAgingWidget from './ArAgingWidget.jsx';
 import AssetLiabilityChart from './AssetLiabilityChart.jsx';
 import Notice from './Notice.jsx';
+import RemindersPanel from './Reminders.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 
@@ -76,7 +77,7 @@ function TrialBalance({ tb }) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ navigate }) {
   const { data, error } = useLedgerQuery(api.getDashboard);
 
   if (error) return <Notice kind="error" text={`Could not load dashboard: ${error}`} />;
@@ -90,9 +91,10 @@ export default function Dashboard() {
         <StatTile label="Assets less liabilities" cents={data.totalAssetsCents - data.totalLiabilitiesCents} emphasis />
         <ArAgingWidget />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)] gap-2">
         <AssetLiabilityChart series={data.series} />
         <TrialBalance tb={data.trialBalance} />
+        <RemindersPanel navigate={navigate} />
       </div>
     </div>
   );
