@@ -277,8 +277,9 @@ pub struct Book {
 /// anything before 1900) means no date.
 pub fn core_data_date(raw: &str) -> Option<NaiveDate> {
     let secs: f64 = raw.trim().parse().ok().filter(|s: &f64| s.is_finite())?;
-    let days = ((secs + 43_200.0) / 86_400.0).floor();
-    let date = NaiveDate::from_ymd_opt(2001, 1, 1)?.checked_add_signed(Duration::days(days as i64))?;
+    // Whole seconds are enough: flooring them first lands on the same day.
+    let days = (secs.floor() as i64).checked_add(43_200)?.div_euclid(86_400);
+    let date = NaiveDate::from_ymd_opt(2001, 1, 1)?.checked_add_signed(Duration::try_days(days)?)?;
     (date.year() >= 1900).then_some(date)
 }
 
@@ -630,6 +631,7 @@ fn items(book: &Book, known: &HashSet<i64>) -> Vec<SourceItem> {
 }
 
 /// Quantity (×10,000) and rate of a form line when they give its amount, else one at the amount.
+#[allow(clippy::float_arithmetic, reason = "scales a quantity read from the file; the amount it must reproduce is checked in integers")]
 fn quantity_and_rate(t: &Targ, amount: i64) -> (i64, i64) {
     let quantity = t.quantity.as_deref().and_then(|q| q.trim_end_matches('#').trim().parse::<f64>().ok()).map(f64::abs).filter(|q| q.is_finite() && *q > 0.0);
     let rate = t.unit_price.as_deref().filter(|p| !p.ends_with('%')).and_then(|p| scaled(p, 2).ok().flatten()).map(i64::abs).filter(|r| *r > 0);
