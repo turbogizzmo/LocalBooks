@@ -10,6 +10,7 @@ mod bank;
 mod bank_pdf;
 mod banking;
 mod classes;
+mod cleanup;
 mod closing;
 mod commands;
 mod company_setup;

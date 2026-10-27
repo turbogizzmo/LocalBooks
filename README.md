@@ -119,6 +119,8 @@ rejected. No code path can skip it.
 | `MIGRATION` | `db::migrate`, once per schema migration | Version, description, checksum, install time |
 | `ACCOUNT_CHANGE` | trigger, on rename, renumber, retype, move, or (de)activation | Before and after values |
 | `FORENSIC_HEAL` | a reviewed correction, when approved | The altered entry, the correcting entry, and its lines |
+| `LIST_CHANGE` | trigger, on an edit to a customer, vendor or product/service | Name and active flag before and after, and which other fields changed (names only) |
+| `CLEANUP` | Accounting › Clean Up Books, once per fix | Every credit applied, invoice written off or payment matched, with amounts |
 
 Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
 the original by its `VOID` record. Changing an account's type once it has posted activity is also
@@ -258,6 +260,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once | [guide](docs/guide/bills.md) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
+| Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
@@ -324,6 +327,8 @@ its entry form with focus in the first field.
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
+| Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |
+| Undeposited Funds match (Clean Up Books) | The account the deposit line used (usually income) | Undeposited Funds |
 | Void | Exact reversal of the original entry, same date | |
 | Estimate / time activity | *Non-posting* (an estimate becomes an invoice only when that invoice posts) | |
 

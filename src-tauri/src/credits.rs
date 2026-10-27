@@ -110,11 +110,13 @@ async fn credit_memo(pool: &SqlitePool, id: i64) -> Result<CreditMemoSummary, St
 }
 
 pub async fn create_credit_memo(pool: &SqlitePool, input: CreditMemoInput) -> Result<CreditMemoSummary, String> {
-    let id = run(pool, async |tx| write_credit_memo(tx, &input).await).await?;
+    let id = run(pool, async |tx| write_credit_memo(tx, &input, false).await).await?;
     credit_memo(pool, id).await
 }
 
-async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoInput) -> Result<i64, String> {
+/// Writes and posts a credit memo inside the caller's transaction. `write_off` also accepts expense
+/// accounts on the lines (bad debt), as Clean Up Books uses to write off invoices.
+pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoInput, write_off: bool) -> Result<i64, String> {
     if input.lines.is_empty() {
         return Err("CM_NO_ITEMS: add at least one line".into());
     }
@@ -164,8 +166,9 @@ async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &CreditMemoI
         .await
         .map_err(db_err)?;
         match row {
-            Some((class, true)) if class == "INCOME" => {}
+            Some((class, true)) if class == "INCOME" || (write_off && class == "EXPENSE") => {}
             Some((_, false)) => return Err(format!("CM_INACTIVE_ACCOUNT: line {n} uses an inactive account")),
+            _ if write_off => return Err(format!("CM_BAD_WRITE_OFF_ACCOUNT: line {n} must use an Income or Expense account")),
             _ => return Err(format!("CM_NOT_INCOME_ACCOUNT: line {n} must use an Income account")),
         }
         if let Some(product) = line.product_service_id {
@@ -246,55 +249,57 @@ pub struct CreditApplicationView {
 
 /// Uses `amount_cents` of a credit memo against one of the same customer's open invoices.
 pub async fn apply_customer_credit(pool: &SqlitePool, input: ApplyCreditInput) -> Result<CreditMemoSummary, String> {
-    run(pool, async |tx| {
-        let memo: Option<(i64, i64, bool, Option<i64>)> = sqlx::query_as(
-            "SELECT m.customer_id, b.remaining_cents, m.is_voided, m.refund_account_id
-             FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id WHERE m.id = ?1",
-        )
-        .bind(input.credit_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
-        let (customer, remaining, voided, refund) = memo.ok_or("CM_NOT_FOUND: that credit memo does not exist")?;
-        if voided || refund.is_some() {
-            return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
-        }
-        let invoice: Option<(Option<i64>, i64, i64, bool, String, Option<String>)> = sqlx::query_as(
-            "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
-        )
-        .bind(input.document_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
-        let (inv_customer, total, paid, inv_voided, status, currency) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
-        if inv_customer != Some(customer) {
-            return Err("CM_OTHER_CUSTOMER: a credit can only be applied to the same customer's invoices".into());
-        }
-        if inv_voided || !(status == "UNPAID" || status == "PARTIAL") {
-            return Err("CM_INVOICE_NOT_OPEN: that invoice has nothing left to pay".into());
-        }
-        if currency.is_some() {
-            return Err("CM_FOREIGN_INVOICE: credits apply to home-currency invoices only".into());
-        }
-        if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
-            return Err(format!(
-                "CM_BAD_AMOUNT: apply between {} and {} (the smaller of the credit left and the invoice balance)",
-                format_cents(1),
-                format_cents(remaining.min(total - paid))
-            ));
-        }
-        sqlx::query("INSERT INTO credit_applications (credit_memo_id, invoice_id, applied_date, amount_cents) VALUES (?1, ?2, ?3, ?4)")
-            .bind(input.credit_id)
-            .bind(input.document_id)
-            .bind(input.applied_date)
-            .bind(input.amount_cents)
-            .execute(&mut **tx)
-            .await
-            .map_err(db_err)?;
-        recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", input.document_id).await
-    })
-    .await?;
+    run(pool, async |tx| apply_customer_credit_in_tx(tx, &input).await).await?;
     credit_memo(pool, input.credit_id).await
+}
+
+/// [`apply_customer_credit`] inside the caller's transaction.
+pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>, input: &ApplyCreditInput) -> Result<(), String> {
+    let memo: Option<(i64, i64, bool, Option<i64>)> = sqlx::query_as(
+        "SELECT m.customer_id, b.remaining_cents, m.is_voided, m.refund_account_id
+         FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id WHERE m.id = ?1",
+    )
+    .bind(input.credit_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (customer, remaining, voided, refund) = memo.ok_or("CM_NOT_FOUND: that credit memo does not exist")?;
+    if voided || refund.is_some() {
+        return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
+    }
+    let invoice: Option<(Option<i64>, i64, i64, bool, String, Option<String>)> = sqlx::query_as(
+        "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
+    )
+    .bind(input.document_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (inv_customer, total, paid, inv_voided, status, currency) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
+    if inv_customer != Some(customer) {
+        return Err("CM_OTHER_CUSTOMER: a credit can only be applied to the same customer's invoices".into());
+    }
+    if inv_voided || !(status == "UNPAID" || status == "PARTIAL") {
+        return Err("CM_INVOICE_NOT_OPEN: that invoice has nothing left to pay".into());
+    }
+    if currency.is_some() {
+        return Err("CM_FOREIGN_INVOICE: credits apply to home-currency invoices only".into());
+    }
+    if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
+        return Err(format!(
+            "CM_BAD_AMOUNT: apply between {} and {} (the smaller of the credit left and the invoice balance)",
+            format_cents(1),
+            format_cents(remaining.min(total - paid))
+        ));
+    }
+    sqlx::query("INSERT INTO credit_applications (credit_memo_id, invoice_id, applied_date, amount_cents) VALUES (?1, ?2, ?3, ?4)")
+        .bind(input.credit_id)
+        .bind(input.document_id)
+        .bind(input.applied_date)
+        .bind(input.amount_cents)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", input.document_id).await
 }
 
 pub async fn list_customer_credit_applications(pool: &SqlitePool, credit_memo_id: i64) -> Result<Vec<CreditApplicationView>, String> {
@@ -525,46 +530,48 @@ async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCre
 
 /// Uses `amount_cents` of a vendor credit against one of the same vendor's open bills.
 pub async fn apply_vendor_credit(pool: &SqlitePool, input: ApplyCreditInput) -> Result<VendorCreditSummary, String> {
-    run(pool, async |tx| {
-        let credit: Option<(i64, i64, bool)> = sqlx::query_as(
-            "SELECT c.vendor_id, b.remaining_cents, c.is_voided FROM vendor_credits c JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id WHERE c.id = ?1",
-        )
-        .bind(input.credit_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
-        let (vendor, remaining, voided) = credit.ok_or("VC_NOT_FOUND: that vendor credit does not exist")?;
-        if voided {
-            return Err("VC_NOT_AVAILABLE: that vendor credit is voided".into());
-        }
-        let bill: Option<(i64, i64, i64, bool, String)> =
-            sqlx::query_as("SELECT vendor_id, total_cents, amount_paid_cents, is_voided, status FROM bills WHERE id = ?1")
-                .bind(input.document_id)
-                .fetch_optional(&mut **tx)
-                .await
-                .map_err(db_err)?;
-        let (bill_vendor, total, paid, bill_voided, status) = bill.ok_or("VC_BILL_NOT_FOUND: that bill does not exist")?;
-        if bill_vendor != vendor {
-            return Err("VC_OTHER_VENDOR: a vendor credit can only be applied to the same vendor's bills".into());
-        }
-        if bill_voided || !(status == "UNPAID" || status == "PARTIAL") {
-            return Err("VC_BILL_NOT_OPEN: that bill has nothing left to pay".into());
-        }
-        if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
-            return Err(format!("VC_BAD_AMOUNT: apply up to {} (the smaller of the credit left and the bill balance)", format_cents(remaining.min(total - paid))));
-        }
-        sqlx::query("INSERT INTO vendor_credit_applications (vendor_credit_id, bill_id, applied_date, amount_cents) VALUES (?1, ?2, ?3, ?4)")
-            .bind(input.credit_id)
+    run(pool, async |tx| apply_vendor_credit_in_tx(tx, &input).await).await?;
+    vendor_credit(pool, input.credit_id).await
+}
+
+/// [`apply_vendor_credit`] inside the caller's transaction.
+pub(crate) async fn apply_vendor_credit_in_tx(tx: &mut Transaction<'_, Sqlite>, input: &ApplyCreditInput) -> Result<(), String> {
+    let credit: Option<(i64, i64, bool)> = sqlx::query_as(
+        "SELECT c.vendor_id, b.remaining_cents, c.is_voided FROM vendor_credits c JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id WHERE c.id = ?1",
+    )
+    .bind(input.credit_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (vendor, remaining, voided) = credit.ok_or("VC_NOT_FOUND: that vendor credit does not exist")?;
+    if voided {
+        return Err("VC_NOT_AVAILABLE: that vendor credit is voided".into());
+    }
+    let bill: Option<(i64, i64, i64, bool, String)> =
+        sqlx::query_as("SELECT vendor_id, total_cents, amount_paid_cents, is_voided, status FROM bills WHERE id = ?1")
             .bind(input.document_id)
-            .bind(input.applied_date)
-            .bind(input.amount_cents)
-            .execute(&mut **tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(db_err)?;
-        recompute_paid(tx, "bills", "bill_payments", "bill_id", input.document_id).await
-    })
-    .await?;
-    vendor_credit(pool, input.credit_id).await
+    let (bill_vendor, total, paid, bill_voided, status) = bill.ok_or("VC_BILL_NOT_FOUND: that bill does not exist")?;
+    if bill_vendor != vendor {
+        return Err("VC_OTHER_VENDOR: a vendor credit can only be applied to the same vendor's bills".into());
+    }
+    if bill_voided || !(status == "UNPAID" || status == "PARTIAL") {
+        return Err("VC_BILL_NOT_OPEN: that bill has nothing left to pay".into());
+    }
+    if input.amount_cents < 1 || input.amount_cents > remaining || input.amount_cents > total - paid {
+        return Err(format!("VC_BAD_AMOUNT: apply up to {} (the smaller of the credit left and the bill balance)", format_cents(remaining.min(total - paid))));
+    }
+    sqlx::query("INSERT INTO vendor_credit_applications (vendor_credit_id, bill_id, applied_date, amount_cents) VALUES (?1, ?2, ?3, ?4)")
+        .bind(input.credit_id)
+        .bind(input.document_id)
+        .bind(input.applied_date)
+        .bind(input.amount_cents)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    recompute_paid(tx, "bills", "bill_payments", "bill_id", input.document_id).await
 }
 
 pub async fn list_vendor_credit_applications(pool: &SqlitePool, vendor_credit_id: i64) -> Result<Vec<CreditApplicationView>, String> {

@@ -15,6 +15,10 @@ export const screens = {
   'accounting/reclassify': {
     help: 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   },
+  'accounting/clean-up': {
+    help: 'Client Data Review tools in one place: apply credits left on credit memos and vendor credits, clear payments stuck in Undeposited Funds, write off old invoices, review list changes, and compare the Balance Sheet with the inventory valuation. Every fix shows its totals and asks first.',
+    guide: 'cleaning-up-books',
+  },
   'accounting/journal': {
     help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
     guide: 'journal-entries-and-voids',
@@ -76,6 +80,14 @@ export const topics = [
     body: 'Accounting › Reclassify Transactions lists posted income and expense lines by date, account and current class; tick lines, choose the new class and choose Reclassify. Each move posts a reclassifying journal entry on the line’s own date, so reports are corrected for that period, and voiding that entry undoes it.',
     keywords: 'reclassify wrong class change class fix class move class',
     go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
+  },
+  {
+    id: 'clean-up-books', area: 'accounting', views: ['accounting/clean-up', 'banking/transfers', 'sales/credits', 'expenses/credits', 'accounting/audit'],
+    title: 'Clean up the books before closing a year',
+    body: 'Accounting › Clean Up Books has five tools. Unapplied credits applies credit left on credit memos and vendor credits to open invoices and bills, oldest first. Undeposited Funds matches a payment stuck there to the deposit that already banked it, which removes the income counted twice. Write off invoices credits old balances to a bad debt or discount account. List changes shows accounts, items, customers and vendors added, renamed, edited or made inactive in a date range. Inventory compares the inventory asset accounts with the Inventory Valuation and lists the transactions that cause any difference.',
+    keywords: 'client data review cleanup clean up unapplied credits undeposited funds double deposit write off bad debt list changes inventory valuation balance sheet accountant year end',
+    go: { label: 'Go to Clean Up Books', view: 'accounting/clean-up' },
+    guide: 'cleaning-up-books',
   },
   {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
