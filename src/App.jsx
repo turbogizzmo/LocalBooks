@@ -91,6 +91,7 @@ export default function App() {
   const logo = useLedgerQuery(api.getCompanyLogo);
   const storage = useLedgerQuery(api.getStorageStatus);
   const signIn = useLedgerQuery(api.getSignInState);
+  const condensed = useLedgerQuery(api.getCondenseStatus);
   const signedIn = signIn.data?.user ?? null;
   useIdleLock(signIn.data);
   // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
@@ -305,6 +306,11 @@ export default function App() {
         {signedIn?.role === 'VIEW_ONLY' && (
           <div className="no-print">
             <Notice kind="info" text={`Signed in as ${signedIn.displayName}, view only: you can look at the books and run reports, but not change anything.`} />
+          </div>
+        )}
+        {condensed.data?.isArchive && (
+          <div className="no-print">
+            <Notice kind="info" text={`Archive of books condensed through ${condensed.data.archiveThrough}: read-only, for reports and look-ups. Open your current company file to make changes.`} />
           </div>
         )}
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}

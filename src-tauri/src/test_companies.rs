@@ -137,7 +137,7 @@ async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Acce
     parties::update_party(pool, "vendor", id, input, access).await.expect("set the tax ID");
 }
 
-async fn edge_cases(path: &Path) -> String {
+pub(crate) async fn edge_cases(path: &Path) -> String {
     let pool = fresh(path, "Edge Cases Test Co").await;
     let (checking, savings, card) = (account(&pool, "1010").await, account(&pool, "1020").await, account(&pool, "2100").await);
     let (sales_acct, services) = (account(&pool, "4000").await, account(&pool, "4100").await);
@@ -248,7 +248,7 @@ async fn no_users(path: &Path) {
     pool.close().await;
 }
 
-async fn five_years(path: &Path) {
+pub(crate) async fn five_years(path: &Path) {
     let pool = fresh(path, "Five Years Test Co").await;
     let (checking, card) = (account(&pool, "1010").await, account(&pool, "2100").await);
     let (sales_acct, services) = (account(&pool, "4000").await, account(&pool, "4100").await);

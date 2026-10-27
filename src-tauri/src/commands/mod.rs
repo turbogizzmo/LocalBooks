@@ -55,6 +55,7 @@ features![
     budgets,
     classes,
     company_files,
+    condense,
     credits,
     custom_fields,
     custom_reports,

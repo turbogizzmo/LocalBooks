@@ -9,7 +9,7 @@
 //!   Accountant & Taxes reports.
 
 mod accountant_reports;
-mod fixture;
+pub(crate) mod fixture;
 mod golden;
 mod job_costing;
 mod ledger_props;

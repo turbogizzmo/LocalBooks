@@ -13,6 +13,7 @@ mod classes;
 mod closing;
 mod commands;
 mod company_setup;
+mod condense;
 mod credits;
 mod custom_fields;
 mod custom_reports;
