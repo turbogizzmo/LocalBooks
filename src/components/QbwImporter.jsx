@@ -15,8 +15,20 @@ import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 export const QBW_PROGRESS = 'qbw-import-progress';
 /** QuickBooks report exports: several can be read together (a report and its lists). */
 const REPORT_EXTENSIONS = ['csv', 'xlsx', 'xls'];
-const EXTENSIONS = ['qbw', 'qbb', 'qbm', 'iif', 'qif', 'gnucash', 'gnc', ...REPORT_EXTENSIONS];
-const FORMAT_NAMES = { QBW: 'company file', IIF: 'IIF export', QIF: 'QIF export', REPORT: 'QuickBooks report export', GNUCASH: 'GnuCash book', QBXML: 'export from your installed QuickBooks' };
+/** QuickBooks for Mac company files: `.qb` and the year. 2010–2012 are read; later ones are encrypted and refused with the steps to export. */
+const MAC_EXTENSIONS = Array.from({ length: 2024 - 2005 + 1 }, (_, i) => `qb${2005 + i}`);
+const EXTENSIONS = ['qbw', 'qbb', 'qbm', ...MAC_EXTENSIONS, 'iif', 'qif', 'gnucash', 'gnc', ...REPORT_EXTENSIONS];
+const FORMAT_NAMES = {
+  QBW: 'company file',
+  QBMAC: 'QuickBooks for Mac company file',
+  IIF: 'IIF export',
+  QIF: 'QIF export',
+  REPORT: 'QuickBooks report export',
+  GNUCASH: 'GnuCash book',
+  QBXML: 'export from your installed QuickBooks',
+};
+/** A file chosen inside a QuickBooks for Mac bundle (`Company.qb2016/…`) counts as that company file. */
+const extensionOf = (path) => (/\.(qb\d{4})(?:[\\/]|$)/i.exec(path)?.[1] ?? path.split('.').pop())?.toLowerCase();
 const STAGES = ['Asking QuickBooks', 'Unpacking backup', 'Reading file', 'Decoding pages', 'Reading table catalog', 'Extracting line items', 'Decoding the full ledger', 'Staging rows'];
 /** Stages that only some files go through: shown once they start. */
 const OPTIONAL_STAGES = ['Asking QuickBooks', 'Unpacking backup', 'Decoding the full ledger'];
@@ -112,7 +124,7 @@ function ChooseFile({ busy, onFile }) {
     const picked = await open({
       multiple: true,
       directory: false,
-      filters: [{ name: 'Company file, backup, export or book (.qbw, .qbb, .iif, .qif, .gnucash, .csv, .xlsx)', extensions: EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]) }],
+      filters: [{ name: 'Company file, backup, export or book (.qbw, .qbb, .qb2012, .iif, .qif, .gnucash, .csv, .xlsx)', extensions: EXTENSIONS.flatMap((ext) => [ext, ext.toUpperCase()]) }],
     });
     const paths = typeof picked === 'string' ? [picked] : picked;
     if (paths?.length) onFile(paths);
@@ -129,7 +141,7 @@ function ChooseFile({ busy, onFile }) {
           Choose a file…
         </button>
         <div className="text-xs text-qb-ink-muted">
-          A QuickBooks .qbw company file or .qbb backup, a QuickBooks .iif export, a Quicken .qif export, a GnuCash .gnucash book, or QuickBooks reports exported to .csv or
+          A QuickBooks .qbw company file or .qbb backup, a QuickBooks for Mac 2012 or earlier company file (.qb2012), a QuickBooks .iif export, a Quicken .qif export, a GnuCash .gnucash book, or QuickBooks reports exported to .csv or
           .xlsx: a Journal or General Ledger, with the Account Listing, contact lists and Item List if you have them (choose them together). You can
           also drag files here. They are only read, never changed, and nothing is added to your books yet.
         </div>
@@ -140,7 +152,7 @@ function ChooseFile({ busy, onFile }) {
 
 /** What an import was read from, by its file's extension. */
 function sourceLabel(fileName) {
-  const ext = fileName.split('.').pop()?.toLowerCase();
+  const ext = extensionOf(fileName);
   if (REPORT_EXTENSIONS.includes(ext)) return 'Report export';
   if (ext === 'iif' || ext === 'qif') return `${ext.toUpperCase()} export`;
   if (ext === 'qbxml') return 'From QuickBooks';
@@ -685,7 +697,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
             : `Read from the ${FORMAT_NAMES[summary.sourceFormat]}`}
           {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
           {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}
-          {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}.
+          {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}
+          {summary.sourceFormat === 'QBMAC' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (amounts that are not whole cents, or no date; their lines are listed below with the reason)`}.
         </p>
         {summary.unreadable.length > 0 && (
           <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
@@ -947,10 +960,13 @@ export default function QbwImporter({ accounts }) {
 
   const ingest = useCallback(
     async (paths) => {
-      const exts = paths.map((p) => p.split('.').pop()?.toLowerCase());
+      const exts = paths.map(extensionOf);
       const ext = exts[0];
       if (!exts.every((e) => EXTENSIONS.includes(e))) {
-        setNotice({ kind: 'error', text: 'Choose a .qbw company file, a .qbb backup, an .iif or .qif export, a .gnucash book, or QuickBooks reports exported to .csv or .xlsx.' });
+        setNotice({
+          kind: 'error',
+          text: 'Choose a .qbw company file, a .qbb backup, a QuickBooks for Mac company file (.qb2012), an .iif or .qif export, a .gnucash book, or QuickBooks reports exported to .csv or .xlsx.',
+        });
         return;
       }
       if (paths.length > 1 && !exts.every((e) => REPORT_EXTENSIONS.includes(e))) {
@@ -1109,7 +1125,7 @@ export default function QbwImporter({ accounts }) {
           <span className="ml-auto text-xs text-qb-ink-muted">Direct .QBW data extractor · built on the open-source OpenQBW work</span>
         </div>
         <p className="border-t border-qb-border px-3 py-1.5 text-xs text-qb-ink-muted">
-          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks .iif exports, Quicken .qif exports, GnuCash books (.gnucash) and QuickBooks report exports (a Journal or
+          Reads desktop company files (.qbw) and backups (.qbb), QuickBooks for Mac 2012 and earlier company files (.qb2012), QuickBooks .iif exports, Quicken .qif exports, GnuCash books (.gnucash) and QuickBooks report exports (a Journal or
           General Ledger as .csv or .xlsx, from QuickBooks Desktop for Windows or Mac, or QuickBooks Online). Newer company files, GnuCash books and the exports
           come in as the <strong>full ledger</strong>: the chart of accounts and every transaction, each posted as a balanced entry or, in a full import,
           as LocalBooks invoices, bills, checks, deposits and transfers. Older company files the newer reader does not cover bring in{' '}

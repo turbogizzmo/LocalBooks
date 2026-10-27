@@ -35,8 +35,9 @@ pub enum IngestResult {
     Ledger { batch: LedgerBatchSummary, sources: Vec<String> },
 }
 
-/// Reads a .qbw company file, the company file inside a .qbb backup, an .iif (QuickBooks) or
-/// .qif (Quicken) export, or a GnuCash book (.gnucash, XML or SQLite) into a new staging batch,
+/// Reads a .qbw company file, the company file inside a .qbb backup, a QuickBooks for Mac company
+/// file (.qb2012 and earlier), an .iif (QuickBooks) or .qif (Quicken) export, or a GnuCash book
+/// (.gnucash, XML or SQLite) into a new staging batch,
 /// reporting progress as `qbw-import-progress` events. Nothing is posted to the ledger.
 ///
 /// The invoice-line reader runs first, so files it supports import as before; when it finds
@@ -45,18 +46,22 @@ pub enum IngestResult {
 pub async fn ingest_raw_qbw(app: AppHandle, db: State<'_, Db>, file_path: String) -> Result<IngestResult, String> {
     let path = PathBuf::from(&file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
-        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, an .iif or .qif export, a .gnucash book, or QuickBooks report exports (.csv, .xlsx)".into());
+    let mac = crate::qbmac_import::is_mac_path(&path);
+    if !mac && !qbw_import::ACCEPTED_EXTENSIONS.contains(&ext.as_str()) && !matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
+        return Err("QBW_BAD_EXTENSION: choose a .qbw company file, a .qbb backup, a QuickBooks for Mac company file (.qb2012), an .iif or .qif export, a .gnucash book, or QuickBooks report exports (.csv, .xlsx)".into());
     }
     let file_size = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
     let progress = |stage: &'static str, done: u64, total: u64| {
         let _ = app.emit(QBW_PROGRESS, qbw_import::Progress { stage, done, total });
     };
 
-    // IIF and QIF exports and GnuCash books read straight into a ledger, staged like a company file.
-    if matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
+    // IIF and QIF exports, GnuCash books and QuickBooks for Mac company files read straight into a
+    // ledger, staged like a company file.
+    if mac || matches!(ext.as_str(), "iif" | "qif" | "gnucash" | "gnc") {
         progress("Reading file", 0, 1);
-        let ledger = if matches!(ext.as_str(), "gnucash" | "gnc") {
+        let ledger = if mac {
+            crate::qbmac_import::read(&path).await?
+        } else if matches!(ext.as_str(), "gnucash" | "gnc") {
             gnucash_import::read(&path).await?
         } else {
             let bytes = std::fs::read(&path).map_err(|e| format!("QBW_UNREADABLE: {}: {e}", path.display()))?;

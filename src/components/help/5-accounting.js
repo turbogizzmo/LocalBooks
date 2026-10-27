@@ -138,6 +138,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'qbmac-import', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Import a QuickBooks for Mac 2012 (or earlier) company file',
+    body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: LocalBooks reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
+    keywords: 'quickbooks mac qb2012 qb2011 qb2010 macintosh company file import migrate encrypted qbmac',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'qb-installed-export', area: 'accounting', views: ['accounting/qbw-import'],
     title: 'Export from my installed QuickBooks (Preview)',
     body: 'If QuickBooks Desktop still runs on this computer, open your company file in it, then open "QuickBooks still installed? Export from my installed QuickBooks" under step 1 and click Export from QuickBooks. LocalBooks asks QuickBooks for the chart of accounts, customers, vendors, items and Journal through Intuit\'s own interfaces, sending read-only requests only, and stages them like report exports. On a Mac, first open Reports › Accountant & Taxes › Journal with the dates set to All and leave it in front; the first time, macOS asks whether LocalBooks may control QuickBooks: click OK (or turn it on later in System Settings › Privacy & Security › Automation). On Windows, install Intuit\'s free QuickBooks Desktop SDK, open the file as Admin, and when QuickBooks asks about LocalBooks choose "Yes, whenever this QuickBooks company file is open". Preview: not yet tried against a running QuickBooks; if it fails, export the reports yourself.',

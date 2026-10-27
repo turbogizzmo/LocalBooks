@@ -3,7 +3,9 @@
 The wizard brings in books from:
 
 - a QuickBooks Desktop company file (`.qbw`) or backup (`.qbb`)
-- QuickBooks Desktop for Mac, through a backup saved for QuickBooks for Windows (see **From
+- a QuickBooks for Mac **2012 or earlier** company file (`.qb2012`, `.qb2011`, `.qb2010`), read
+  directly (see **From QuickBooks for Mac 2012 and earlier** below)
+- later QuickBooks Desktop for Mac, through a backup saved for QuickBooks for Windows (see **From
   QuickBooks Desktop for Mac** below)
 - a QuickBooks Desktop that is **still installed and running** on this computer, which LocalBooks
   asks for the data itself (Preview: see
@@ -15,7 +17,7 @@ The wizard brings in books from:
   Item List
 - a **GnuCash book** (`.gnucash`), saved as XML or SQLite (see **From GnuCash** below)
 
-> **Read this first:** newer company files, IIF and QIF exports, report exports and GnuCash books come in as the full ledger:
+> **Read this first:** newer company files, QuickBooks for Mac 2012 files, IIF and QIF exports, report exports and GnuCash books come in as the full ledger:
 > accounts, customers, vendors, items and every transaction. Some older `.qbw` files can only be
 > read for invoice line amounts, which post as income against an offset account you choose.
 > Always compare the result with a trial balance from the original program before posting.
@@ -59,10 +61,46 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   nothing. **Reverse added lists…** deactivates what it created; **Start over…** puts back the
   books from just before the lists were added.
 
+## From QuickBooks for Mac 2012 and earlier
+
+QuickBooks for Mac 2010, 2011 and 2012 keep the company in one unencrypted file (`.qb2012`,
+`.qb2011` or `.qb2010`), which LocalBooks reads directly. QuickBooks doesn't need to be installed.
+
+1. Close the company in QuickBooks, or copy the file.
+2. Choose the file in the wizard, as for a company file below. If your company is a folder (a
+   bundle), choose the folder or any file inside it.
+
+LocalBooks reads the file like this:
+
+- **Accounts** keep their names, types and subaccounts (account numbers aren't brought over). A
+  subaccount of a different type than its parent moves to the top level. Hidden accounts come in inactive.
+  QuickBooks' non-posting Estimates, Purchase Orders and Sales Orders accounts are left out.
+- **Customers and jobs, vendors and items.** Jobs become sub-customers (`Customer:Job`).
+  Customers and vendors keep their company name, address, phone, email, notes and payment terms;
+  vendors keep their tax ID and 1099 flag. Service, inventory, non-inventory and other charge
+  items come in with their price and income account. Employees and other names appear on their
+  transactions but aren't added to a list, and classes aren't imported.
+- **Transactions** come in by type: invoices, sales receipts, credit memos, payments, deposits,
+  bills, vendor credits, bill payments, checks, card charges, transfers, journal entries,
+  estimates and purchase orders. A full import makes them LocalBooks documents, with each payment
+  applied to the invoices it paid, each bill payment to its bills, and each deposit linked to the
+  payments it swept, as QuickBooks recorded them. Paychecks, payroll liability and sales tax
+  payments, item receipts and inventory adjustments post as journal entries. Sales orders aren't
+  imported. An inventory item's cost of goods sold posts with its invoice.
+- **Amounts** come over exactly. An amount that isn't a whole number of cents isn't rounded: its
+  transaction is listed under **lines not read in full** for you to enter by hand. So is a
+  transaction with no date.
+- **Check the totals:** step 2 compares every account's total with the balance QuickBooks stored.
+  On Intuit's two 2012 sample companies, every transaction balances and every account matches.
+
+QuickBooks for Mac 2013 and later files may be encrypted. If LocalBooks says the file is
+encrypted, use the steps below.
+
 ## From QuickBooks Desktop for Mac
 
-LocalBooks can't open a QuickBooks for Mac company file (`.qb2024`, `.qb2023` and so on) or a Mac
-backup (`.qbmb`) directly, because QuickBooks encrypts them. Save a copy for QuickBooks for Windows
+LocalBooks can't open a later QuickBooks for Mac company file (`.qb2024`, `.qb2023` and so on) or a
+Mac backup (`.qbmb`) directly, because QuickBooks encrypts them. LocalBooks never tries to decrypt
+them. Save a copy for QuickBooks for Windows
 instead, and import that:
 
 1. In QuickBooks for Mac, open the company file.

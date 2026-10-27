@@ -51,6 +51,7 @@ mod pdf;
 mod mcp_server;
 mod nacha;
 mod preferences;
+mod qbmac_import;
 mod qbw_backup;
 mod qbw_company;
 mod qbw_documents;
