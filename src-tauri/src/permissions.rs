@@ -131,6 +131,7 @@ const READ: &[&str] = &[
     "render_form",
     "save_form_pdf",
     "save_attachment",
+    "attachment_counts",
     "backup_now",
     // Personal: the signed-in user's own reminder settings, and ticking off to-dos (a View-only user
     // only their own, which `reminders::set_done` checks).

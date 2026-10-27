@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
@@ -9,6 +9,7 @@ import { api, errorText, PAYMENT_METHODS, printDocument, useLedgerQuery } from '
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
+import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
@@ -51,6 +52,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const rateE6 = currency ? parseRateE6(rate) : null;
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
   const [busy, setBusy] = useState(false);
+  // Files to attach once it posts, such as the receipt.
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
   const formClass = useFormClass(accounts);
@@ -106,16 +109,19 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         return onCancel();
       }
       const posted = await api.postExpense(input);
+      const attachError = files.length > 0 ? await attachPicked(posted.journalEntryId, files) : null;
       const splits = `${lines.length} split${lines.length === 1 ? '' : 's'}`;
       onPosted(
         `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : EXPENSE_KINDS[kind]} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
-          (isCredit ? `Dr ${accountLabel(accounts, accountId)} / Cr ${splits}.` : `Cr ${accountLabel(accounts, accountId)} / Dr ${splits}.`),
+          (isCredit ? `Dr ${accountLabel(accounts, accountId)} / Cr ${splits}.` : `Cr ${accountLabel(accounts, accountId)} / Dr ${splits}.`) +
+          (files.length && !attachError ? ` ${files.length} file${files.length === 1 ? '' : 's'} attached.` : ''),
       );
+      setFiles([]);
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
       formClass.reset();
-      setError(null);
+      setError(attachError);
       payeeRef.current?.focus();
     } catch (err) {
       setError(errorText(err));
@@ -189,6 +195,11 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} withClasses withJobs currency={currency || null} />
+      {!editing && (
+        <div className="border-t border-qb-border px-2 py-1">
+          <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : 'Attach a receipt…'} />
+        </div>
+      )}
       <div className="flex items-center gap-2 px-2 py-1">
         <input className="qb-input w-[320px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" />
         {error && <span className="text-sm text-qb-negative">{error}</span>}
@@ -223,6 +234,7 @@ export default function ExpensesChecks({ accounts, intent }) {
   const [editing, setEditing] = useState(null); // { expense, lines }
   const [printing, setPrinting] = useState(null);
   const company = useCompany();
+  const attachments = useAttachmentRows();
   const startEdit = (expense) =>
     api.getDocumentLines('expense', expense.id).then(
       (lines) => {
@@ -328,10 +340,14 @@ export default function ExpensesChecks({ accounts, intent }) {
                 </tr>
               )}
               {sorter.sorted.map((x) => (
-                <tr key={x.id} className={`qb-grid-row ${x.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <Fragment key={x.id}>
+                <tr className={`qb-grid-row ${x.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>
                   <td className="qb-grid-cell">{EXPENSE_KINDS[x.kind] ?? x.kind}</td>
-                  <td className="qb-grid-cell">{x.checkNumber ?? ''}</td>
+                  <td className="qb-grid-cell">
+                    {x.checkNumber ?? ''}
+                    {attachments.clip(x.journalEntryId)}
+                  </td>
                   <td className="qb-grid-cell font-semibold" title={x.payeeName ?? ''}>{x.payeeName ?? <span className="font-normal text-qb-ink-faint">—</span>}</td>
                   <td className="qb-grid-cell">
                     {x.categoryAccountId !== null ? accountLabel(accounts, x.categoryAccountId) : <span className="text-qb-ink-muted">Split ({x.lineCount} lines)</span>}
@@ -350,6 +366,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
                       items={[
+                        attachments.menuItem(x.journalEntryId),
                         { label: 'Edit…', disabled: x.isVoided, onSelect: () => startEdit(x) },
                         ...(x.kind === 'CHECK' ? [{ label: 'Print check', disabled: x.isVoided, onSelect: () => printCheck(x) }] : []),
                         voidItem({
@@ -362,6 +379,8 @@ export default function ExpensesChecks({ accounts, intent }) {
                     />
                   </td>
                 </tr>
+                {attachments.row(x.journalEntryId, 8)}
+                </Fragment>
               ))}
             </tbody>
           </table>
