@@ -21,6 +21,9 @@ people using LocalBooks.
   Product/Service or Expenses by Vendor Summary to open its detail report.
 - **Newest first.** Lists of transactions start with the newest at the top, and each list
   remembers the order you choose.
+- **Clearer help when the books won't open.** If LocalBooks can't open your company file at
+  launch, it now says in plain words what usually causes it and what to do, with **Try again** and
+  **Check for updates** buttons.
 
 ## [0.10.1]
 
