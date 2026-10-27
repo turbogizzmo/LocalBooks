@@ -1170,7 +1170,7 @@ async fn build(
             .await
             .map_err(db_err)?,
     );
-    archive_pool.close().await;
+    crate::db::close_pool(&archive_pool).await;
     if !archive_audit.intact {
         return Err("CONDENSE_ARCHIVE: the archive copy's audit trail did not verify; nothing was changed".into());
     }
@@ -1206,8 +1206,8 @@ async fn build(
 
     // 4. Check it against the archive.
     let verification = verify(&archive_pool, &staging, size(staging_path), cutoff, today).await;
-    staging.close().await;
-    archive_pool.close().await;
+    crate::db::close_pool(&staging).await;
+    crate::db::close_pool(&archive_pool).await;
     Ok((digest, verification?))
 }
 
