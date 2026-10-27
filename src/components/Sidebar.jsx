@@ -67,6 +67,7 @@ export const NAV = [
       { id: 'accounting/journal', label: 'Journal Entries' },
       { id: 'accounting/find', label: 'Find Transactions' },
       { id: 'accounting/recurring', label: 'Recurring Transactions' },
+      { id: 'accounting/todos', label: 'To Do List' },
       { id: 'accounting/budgets', label: 'Budgets' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },

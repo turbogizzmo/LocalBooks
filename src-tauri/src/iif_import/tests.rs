@@ -328,3 +328,90 @@ async fn a_full_import_brings_in_reps_shipping_and_custom_fields() {
         (Some("RW"), Some("FedEx"), Some("2024-07-18"))
     );
 }
+
+/// Price levels as a QuickBooks list export gives them: `!PRICELEVEL` rows with a fixed percentage,
+/// and each customer's `PRICELEVEL`.
+const PRICE_LEVELS: &str = "!ACCNT\tNAME\tACCNTTYPE\r
+ACCNT\tAccounts Receivable\tAR\r
+ACCNT\tSales\tINC\r
+!PRICELEVEL\tNAME\tREFNUM\tHIDDEN\tPRICELEVELTYPE\tFIXEDPERCENTAGE\r
+PRICELEVEL\tWholesale\t1\tN\tFixedPercentage\t-10.0%\r
+PRICELEVEL\tPremium\t2\tY\tFixedPercentage\t12.5%\r
+PRICELEVEL\tContract\t3\tN\tPerItem\t\r
+!CUST\tNAME\tPRICELEVEL\r
+CUST\tAcme\tWholesale\r
+CUST\tGlobex\t\r
+!INVITEM\tNAME\tINVITEMTYPE\tACCNT\tPRICE\r
+INVITEM\tWidget\tPART\tSales\t19.99\r
+INVITEM\tGadget\tPART\tSales\t5\r
+!TRNS\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\r
+!SPL\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tQNTY\tPRICE\tINVITEM\r
+!ENDTRNS\r
+TRNS\tINVOICE\t7/16/2024\tAccounts Receivable\tAcme\t18\t71\r
+SPL\tINVOICE\t7/16/2024\tSales\t\t-18\t-1\t18\tWidget\r
+ENDTRNS\r";
+
+#[test]
+fn reads_price_levels_and_customer_defaults() {
+    use crate::price_levels::LevelKind;
+    let ledger = read(PRICE_LEVELS.as_bytes()).unwrap();
+    let levels: Vec<(&str, bool, LevelKind, i64)> = ledger.sales_lists.price_levels.iter().map(|l| (l.name.as_str(), l.active, l.kind, l.percent_milli)).collect();
+    assert_eq!(levels, [("Wholesale", true, LevelKind::FixedPercent, -10_000), ("Premium", false, LevelKind::FixedPercent, 12_500), ("Contract", true, LevelKind::PerItem, 0)]);
+    let acme = ledger.customers.iter().find(|c| c.name == "Acme").unwrap().id;
+    assert_eq!(ledger.sales_lists.customer_price_levels, [(acme, "Wholesale".to_string())]);
+}
+
+#[tokio::test]
+async fn an_import_brings_in_price_levels_and_sets_customer_defaults() {
+    use crate::price_levels::{price_list, ItemBasis, LevelItem, LevelKind};
+    use crate::qbw_company::SourcePriceLevel;
+    use crate::qbw_ledger_import::{auto_map_accounts, post_batch, stage, ImportMode, PostLedgerInput};
+    let pool = crate::db::test_pool().await;
+    let mut ledger = read(PRICE_LEVELS.as_bytes()).unwrap();
+    // A per-item level as a company file gives it: items named by the file's item ids.
+    let widget_source = ledger.items.iter().find(|i| i.name == "Widget").unwrap().id;
+    ledger.sales_lists.price_levels.push(SourcePriceLevel {
+        name: "Distributor".into(),
+        active: true,
+        kind: LevelKind::PerItem,
+        percent_milli: 0,
+        items: vec![LevelItem { product_id: widget_source, basis: ItemBasis::Fixed, price_cents: Some(1_500), percent_milli: None }, LevelItem {
+            product_id: 9_999,
+            basis: ItemBasis::Fixed,
+            price_cents: Some(1),
+            percent_milli: None,
+        }],
+    });
+    // One level already in the books is matched by name and left alone.
+    crate::price_levels::save(&pool, None, crate::price_levels::PriceLevelInput {
+        name: "premium".into(),
+        kind: LevelKind::FixedPercent,
+        percent_milli: 5_000,
+        rounding: crate::item_prices::Rounding::None,
+        items: vec![],
+        is_active: true,
+    })
+    .await
+    .unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Lists.iif"), PRICE_LEVELS.len() as i64, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+
+    let list = price_list(&pool).await.unwrap();
+    let names: Vec<(&str, bool)> = list.levels.iter().map(|l| (l.name.as_str(), l.is_active)).collect();
+    assert_eq!(names, [("Contract", true), ("Distributor", true), ("premium", true), ("Wholesale", true)]);
+    let widget = list.items.iter().find(|i| i.item.name == "Widget").unwrap();
+    // Contract (no items): 19.99; Distributor: 15.00; premium (kept as it was, +5%): 20.99; Wholesale −10%: 17.99.
+    assert_eq!(widget.prices.iter().map(|p| p.price_cents).collect::<Vec<_>>(), [1_999, 1_500, 2_099, 1_799]);
+
+    let acme_level: Option<String> = sqlx::query_scalar("SELECT l.name FROM customers c JOIN price_levels l ON l.id = c.price_level_id WHERE c.name = 'Acme'")
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+    assert_eq!(acme_level.as_deref(), Some("Wholesale"));
+    let globex: Option<i64> = sqlx::query_scalar("SELECT price_level_id FROM customers WHERE name = 'Globex'").fetch_one(&pool).await.unwrap();
+    assert_eq!(globex, None);
+    // Each created level is in the audit trail.
+    let imported = crate::price_levels::history(&pool, 10).await.unwrap().iter().filter(|h| h.details["event"] == "PRICE_LEVEL_IMPORTED").count();
+    assert_eq!(imported, 3);
+}

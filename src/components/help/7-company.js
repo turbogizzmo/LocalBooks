@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   dashboard: {
-    help: 'Your books at a glance: assets and liabilities over the last 12 months, open receivables by age, and a live trial balance that always shows whether debits equal credits.',
+    help: 'Your books at a glance: assets and liabilities over the last 12 months, open receivables by age, a live trial balance that always shows whether debits equal credits, and Reminders of what needs attention today.',
     guide: 'getting-started',
   },
   settings: {
@@ -88,6 +88,14 @@ export const topics = [
     title: 'Back up, restore or open a company file',
     body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept. Choosing a QuickBooks .qbw, .qbb or .qbm file instead starts a new company and opens the Desktop Migration Wizard on it. Hold Option or Alt while clicking Open (or choose File › Open Company Without Restoring Windows…) to open on a plain Home page with other windows closed.',
     keywords: 'backup restore export file save localbooks open copy qbw qbb qbm quickbooks without restoring windows alt option',
+    go: { label: 'Go to File & Data Controls', view: 'settings', action: 'data' },
+    guide: 'backups-and-company-files',
+  },
+  {
+    id: 'condense', area: 'company', views: ['settings'],
+    title: 'Condense data: archive closed years',
+    body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',
+    keywords: 'condense archive shrink smaller file old years history summary summarize clean up purge size',
     go: { label: 'Go to File & Data Controls', view: 'settings', action: 'data' },
     guide: 'backups-and-company-files',
   },

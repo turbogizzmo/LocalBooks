@@ -173,7 +173,7 @@ pub fn terms_days(terms: &str) -> Option<i64> {
     if lower.contains("receipt") {
         return Some(0);
     }
-    lower.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).last()?.parse().ok()
+    lower.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).next_back()?.parse().ok()
 }
 
 #[cfg(test)]

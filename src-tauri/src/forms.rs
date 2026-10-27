@@ -9,6 +9,8 @@
 //! Styles are stored in the company file; a style without a template for a form type uses the
 //! defaults.
 
+#![allow(clippy::float_arithmetic, reason = "form layout and colours; amounts arrive already formatted from cents")]
+
 use base64::Engine;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};

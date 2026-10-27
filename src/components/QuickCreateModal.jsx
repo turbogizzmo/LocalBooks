@@ -46,6 +46,7 @@ export const QUICK_CREATE = [
       { id: 'bank-deposit', label: 'Bank Deposit', view: 'banking/transfers' },
       { id: 'transfer', label: 'Transfer', view: 'banking/transfers' },
       { id: 'new-account', label: 'Account', view: 'accounting/chart-of-accounts' },
+      { id: 'todo', label: 'To Do', view: 'accounting/todos' },
     ],
   },
 ];

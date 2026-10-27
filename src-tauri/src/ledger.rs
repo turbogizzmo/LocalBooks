@@ -1,7 +1,7 @@
 //! Double-entry posting engine.
 //!
-//! All money is `i64` cents. An entry is validated in memory first (balance, one-sided lines,
-//! overflow), then written inside a single SQLite transaction: header inserted as DRAFT, lines
+//! All money is integer cents; journal lines carry it as [`Cents`], whose arithmetic is checked.
+//! An entry is validated in memory first (balance, one-sided lines, overflow), then written inside a single SQLite transaction: header inserted as DRAFT, lines
 //! attached, header flipped to POSTED. The schema's triggers re-check the balance at the flip, so
 //! a bug here cannot persist an unbalanced entry. Any failure rolls the whole transaction back.
 //!
@@ -13,6 +13,8 @@ use std::collections::HashSet;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
+
+pub use crate::money::Cents;
 
 /// Per-line ceiling ($1 trillion), mirrored by the `journal_lines` CHECK constraints.
 pub const MAX_LINE_CENTS: i64 = 100_000_000_000_000;
@@ -67,34 +69,32 @@ impl ForeignCurrency {
 /// any rounding difference between the two sides (a few cents at most) is absorbed by the largest
 /// line on the short side, so the home-currency entry balances exactly. Deterministic, so callers
 /// can predict the posted amounts.
-pub fn convert_lines(lines: &[JournalLine], rate_e6: i64) -> Result<Vec<(i64, i64)>, String> {
+pub fn convert_lines(lines: &[JournalLine], rate_e6: i64) -> Result<Vec<(Cents, Cents)>, String> {
     let overflow = || "FX_OVERFLOW: converted amount is out of range".to_string();
-    let mut home: Vec<(i64, i64)> = Vec::with_capacity(lines.len());
+    let mut home: Vec<(Cents, Cents)> = Vec::with_capacity(lines.len());
     for line in lines {
-        let d = to_home_cents(line.debit, rate_e6).ok_or_else(overflow)?;
-        let c = to_home_cents(line.credit, rate_e6).ok_or_else(overflow)?;
-        if (line.debit > 0 && d == 0) || (line.credit > 0 && c == 0) {
+        let d = Cents(to_home_cents(line.debit.get(), rate_e6).ok_or_else(overflow)?);
+        let c = Cents(to_home_cents(line.credit.get(), rate_e6).ok_or_else(overflow)?);
+        if (line.debit.is_positive() && d.is_zero()) || (line.credit.is_positive() && c.is_zero()) {
             return Err("FX_ROUNDS_TO_ZERO: a line converts to 0.00 in the home currency".into());
         }
         home.push((d, c));
     }
-    let debits: i64 = home.iter().map(|l| l.0).sum();
-    let credits: i64 = home.iter().map(|l| l.1).sum();
-    let diff = debits - credits;
-    if diff != 0 {
-        let (side_is_credit, delta) = if diff > 0 { (true, diff) } else { (false, -diff) };
+    let debits = Cents::checked_sum(home.iter().map(|l| l.0)).ok_or_else(overflow)?;
+    let credits = Cents::checked_sum(home.iter().map(|l| l.1)).ok_or_else(overflow)?;
+    let diff = debits.checked_sub(credits).ok_or_else(overflow)?;
+    if !diff.is_zero() {
+        let side_is_credit = diff.is_positive();
+        let delta = if side_is_credit { diff } else { Cents::ZERO.checked_sub(diff).ok_or_else(overflow)? };
         let idx = home
             .iter()
             .enumerate()
-            .filter(|(_, l)| if side_is_credit { l.1 > 0 } else { l.0 > 0 })
+            .filter(|(_, l)| if side_is_credit { l.1.is_positive() } else { l.0.is_positive() })
             .max_by_key(|(i, l)| (if side_is_credit { l.1 } else { l.0 }, std::cmp::Reverse(*i)))
             .map(|(i, _)| i)
             .ok_or_else(|| "FX_UNBALANCED: cannot balance the converted entry".to_string())?;
-        if side_is_credit {
-            home[idx].1 += delta;
-        } else {
-            home[idx].0 += delta;
-        }
+        let side = if side_is_credit { &mut home[idx].1 } else { &mut home[idx].0 };
+        *side = side.checked_add(delta).ok_or_else(overflow)?;
     }
     Ok(home)
 }
@@ -102,8 +102,8 @@ pub fn convert_lines(lines: &[JournalLine], rate_e6: i64) -> Result<Vec<(i64, i6
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JournalLine {
     pub account_id: i64,
-    pub debit: i64,
-    pub credit: i64,
+    pub debit: Cents,
+    pub credit: Cents,
     #[serde(default)]
     pub memo: Option<String>,
     /// Optional class (see `classes`), reported in Profit & Loss by Class.
@@ -113,11 +113,11 @@ pub struct JournalLine {
 
 impl JournalLine {
     pub fn debit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: cents, credit: 0, memo: None, class_id: None }
+        Self { account_id, debit: Cents(cents), credit: Cents::ZERO, memo: None, class_id: None }
     }
 
     pub fn credit(account_id: i64, cents: i64) -> Self {
-        Self { account_id, debit: 0, credit: cents, memo: None, class_id: None }
+        Self { account_id, debit: Cents::ZERO, credit: Cents(cents), memo: None, class_id: None }
     }
 
     pub fn with_class(mut self, class_id: Option<i64>) -> Self {
@@ -214,8 +214,8 @@ impl EntrySource {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryTotals {
-    pub debits: i64,
-    pub credits: i64,
+    pub debits: Cents,
+    pub credits: Cents,
 }
 
 /// Renders cents as `$1,234.56` / `-$1,234.56` for error messages.
@@ -247,27 +247,26 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
         ));
     }
 
-    let mut debits: i64 = 0;
-    let mut credits: i64 = 0;
+    let mut debits = Cents::ZERO;
+    let mut credits = Cents::ZERO;
 
     for (idx, line) in entry.lines.iter().enumerate() {
         let n = idx + 1;
-        if line.debit < 0 || line.credit < 0 {
+        if line.debit.is_negative() || line.credit.is_negative() {
             return Err(format!(
                 "JE_NEGATIVE_AMOUNT: line {n} has a negative amount; enter it on the opposite side instead"
             ));
         }
-        if line.debit != 0 && line.credit != 0 {
+        if !line.debit.is_zero() && !line.credit.is_zero() {
             return Err(format!(
                 "JE_LINE_BOTH_SIDES: line {n} has both a debit ({}) and a credit ({}); one must be zero",
-                format_cents(line.debit),
-                format_cents(line.credit)
+                line.debit, line.credit
             ));
         }
-        if line.debit == 0 && line.credit == 0 {
+        if line.debit.is_zero() && line.credit.is_zero() {
             return Err(format!("JE_LINE_EMPTY: line {n} has neither a debit nor a credit"));
         }
-        if line.debit > MAX_LINE_CENTS || line.credit > MAX_LINE_CENTS {
+        if line.debit.get() > MAX_LINE_CENTS || line.credit.get() > MAX_LINE_CENTS {
             return Err(format!(
                 "JE_AMOUNT_TOO_LARGE: line {n} exceeds the per-line maximum of {}",
                 format_cents(MAX_LINE_CENTS)
@@ -283,10 +282,9 @@ pub fn validate_entry(entry: &JournalEntry) -> Result<EntryTotals, String> {
 
     if debits != credits {
         return Err(format!(
-            "JE_UNBALANCED: total debits {} do not equal total credits {} (out of balance by {})",
-            format_cents(debits),
-            format_cents(credits),
-            format_cents(debits - credits)
+            "JE_UNBALANCED: total debits {debits} do not equal total credits {credits} (out of balance by {})",
+            // Both totals are non-negative, so the difference cannot overflow.
+            format_cents(debits.get() - credits.get())
         ));
     }
 
@@ -400,7 +398,7 @@ async fn write_entry(
 
     // Callers open the transaction with `begin_write`, so the write lock is already held here.
     // Journal lines always hold home-currency amounts; foreign amounts are kept alongside.
-    let home_amounts: Vec<(i64, i64)> = match &entry.currency {
+    let home_amounts: Vec<(Cents, Cents)> = match &entry.currency {
         Some(currency) => convert_lines(&entry.lines, currency.exchange_rate_e6)?,
         None => entry.lines.iter().map(|l| (l.debit, l.credit)).collect(),
     };
@@ -676,7 +674,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         return Err(format!("VOID_RECLASS_ORDER: entry #{later_number} reclassifies the same lines again; void it first"));
     }
 
-    let lines: Vec<(i64, i64, i64, Option<String>, Option<i64>)> = sqlx::query_as(
+    let lines: Vec<(i64, Cents, Cents, Option<String>, Option<i64>)> = sqlx::query_as(
         "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
     )
     .bind(journal_entry_id)
@@ -897,9 +895,10 @@ pub struct LedgerVerification {
 
 /// Rebuilds every posted entry from the live tables and compares it with the snapshot written when
 /// it was posted. The ledger is intact when every posted entry has an identical snapshot, balances,
-/// every void links to its reversal, and no snapshotted entry has disappeared.
+/// every void links to its reversal, and no snapshotted entry has disappeared (except entries a
+/// condense replaced, whose snapshots must add up to the summary that replaced them).
 pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification, String> {
-    let checks: [(&str, &str); 6] = [
+    let checks: [(&str, &str); 7] = [
         (
             "Posted without a posting snapshot",
             "SELECT e.id AS entry_id, e.entry_number FROM journal_entries e
@@ -933,9 +932,41 @@ pub async fn verify_ledger_audit(pool: &SqlitePool) -> Result<LedgerVerification
         ),
         (
             "Snapshotted at posting but no longer in the ledger (deleted)",
-            "SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
+            // Condensing (see `condense`) removes entries only with a later CONDENSE record listing them.
+            "WITH condensed AS MATERIALIZED (
+                 SELECT r.value AS entry_id, c.id AS record_id
+                 FROM ledger_audit_log c, json_each(c.payload_snapshot, '$.removed.journalEntries') r
+                 WHERE c.action_type = 'CONDENSE')
+             SELECT a.target_entity_id AS entry_id, json_extract(a.payload_snapshot, '$.entryNumber') AS entry_number
              FROM ledger_audit_log a
-             WHERE a.action_type = 'POST' AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.id = a.target_entity_id)",
+             WHERE a.action_type = 'POST' AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.id = a.target_entity_id)
+               AND NOT EXISTS (SELECT 1 FROM condensed k WHERE k.entry_id = a.target_entity_id AND k.record_id > a.id)",
+        ),
+        (
+            "Condensed into a summary entry that does not add up to the entries it replaced",
+            // Per summary, account and class: the summarized entries' posting snapshots less the
+            // summary's own snapshot nets to zero.
+            "WITH s AS MATERIALIZED (
+                 SELECT c.id AS record_id, x.key AS n, json_extract(x.value, '$.entryId') AS summary_id, x.value AS summary
+                 FROM ledger_audit_log c, json_each(c.payload_snapshot, '$.summaries') x
+                 WHERE c.action_type = 'CONDENSE'),
+             parts AS (
+                 SELECT s.record_id, s.n, s.summary_id,
+                        json_extract(l.value, '$.accountId') AS account_id, json_extract(l.value, '$.classId') AS class_id,
+                        json_extract(l.value, '$.debitCents') - json_extract(l.value, '$.creditCents') AS net
+                 FROM s, json_each(s.summary, '$.summarizes') r
+                 JOIN ledger_audit_log p ON p.action_type = 'POST' AND p.target_entity_id = r.value AND p.id < s.record_id,
+                 json_each(p.payload_snapshot, '$.lines') l
+                 UNION ALL
+                 SELECT s.record_id, s.n, s.summary_id,
+                        json_extract(l.value, '$.accountId'), json_extract(l.value, '$.classId'),
+                        json_extract(l.value, '$.creditCents') - json_extract(l.value, '$.debitCents')
+                 FROM s
+                 JOIN ledger_audit_log p ON p.action_type = 'POST' AND p.target_entity_id = s.summary_id AND p.id < s.record_id,
+                 json_each(p.payload_snapshot, '$.lines') l)
+             SELECT DISTINCT entry_id, NULL AS entry_number FROM (
+                 SELECT COALESCE(summary_id, 0) AS entry_id FROM parts
+                 GROUP BY record_id, n, account_id, class_id HAVING SUM(net) <> 0)",
         ),
     ];
 

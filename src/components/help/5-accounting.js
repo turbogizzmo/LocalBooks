@@ -30,6 +30,10 @@ export const screens = {
   'accounting/recurring': {
     help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
   },
+  'accounting/todos': {
+    help: 'Your own tasks, with due dates, about a customer, vendor or employee and optionally one of their invoices or bills. Tick Done to complete one; due ones also show in Reminders on the Dashboard.',
+    guide: 'reminders-and-todos',
+  },
   'accounting/budgets': {
     help: 'Expected income and expenses for each account, month by month for a fiscal year. Compare a budget with your books in Reports › Budget vs. Actuals.',
   },
@@ -53,6 +57,22 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'reminders', area: 'company', views: ['dashboard', 'accounting/todos'],
+    title: 'See what needs attention: Reminders',
+    body: 'The Reminders panel on the Dashboard counts overdue invoices, bills due soon, to-dos due, recurring transactions to enter, forms to email, upcoming tax dates and an overdue backup; click a line to see its items. Customize chooses which show, how many days each looks ahead, and whether Reminders open with the company; the choices are each user’s own.',
+    keywords: 'reminders alerts due overdue bills to pay invoices past due to do tax dates backup startup customize look ahead',
+    go: { label: 'Go to the Dashboard', view: 'dashboard' },
+    guide: 'reminders-and-todos',
+  },
+  {
+    id: 'todos', area: 'company', views: ['accounting/todos', 'sales/customers', 'expenses/vendors'],
+    title: 'Keep a To Do list',
+    body: 'Add a to-do from + New › To Do, the To Do List, or New to-do… on a customer or vendor, with a due date, a note, who or which invoice or bill it is about, and who it is assigned to when users are on. Filter the list by status, due date and assignee, and tick Done to complete one; a View-only user can complete only their own.',
+    keywords: 'to do todo task list follow up call assign due date note done complete',
+    go: { label: 'Go to the To Do List', view: 'accounting/todos', action: 'todo' },
+    guide: 'reminders-and-todos',
+  },
   {
     id: 'register', area: 'accounting', views: ['accounting/register', 'accounting/chart-of-accounts', 'reports'],
     title: 'Open an account register',

@@ -51,7 +51,7 @@ const CHART_OF_ACCOUNTS: Entry = page("Chart of Accounts", "accounting/chart-of-
 /// Added to File below the company items.
 const FILE: &[Entry] = &[
     Entry::Sub("Back Up Company", &[form("Create Local Backup…", "settings", "data")]),
-    Entry::Sub("Utilities", &[Entry::Sub("Import", &[page("QuickBooks Desktop Files…", "accounting/qbw-import")])]),
+    Entry::Sub("Utilities", &[Entry::Sub("Import", &[page("QuickBooks Desktop Files…", "accounting/qbw-import")]), form("Condense Data…", "settings", "data")]),
     Entry::Sep,
     Entry::Sub("Print Forms", &[page("Statements…", "sales/statements")]),
     page("Send Forms…", "sales/send-forms"),
@@ -78,6 +78,7 @@ const LISTS: &[Entry] = &[
     page("Customer List", "sales/customers"),
     page("Vendor List", "expenses/vendors"),
     Entry::Sub("Customer & Vendor Profile Lists", &[page("Sales Rep List", "sales/lists"), page("Ship Via List", "sales/lists")]),
+    form("Price Level List", "sales/products", "price-levels"),
     Entry::Sep,
     form("Templates", "settings", "forms"),
     keyed("Memorized Transaction List", "accounting/recurring", None, "CmdOrCtrl+T"),
@@ -85,6 +86,8 @@ const LISTS: &[Entry] = &[
 
 const COMPANY: &[Entry] = &[
     page("Home Page", "dashboard"),
+    page("To Do List", "accounting/todos"),
+    page("Reminders", "dashboard"),
     Entry::Sep,
     form("Set Up Users and Passwords…", "settings", "users"),
     form("Set Closing Date…", "settings", "closing"),
@@ -171,7 +174,7 @@ const REPORTS: &[Entry] = &[
         ],
     ),
     Entry::Sub("Customers & Receivables", &[report("A/R Aging Summary", "ar"), report("Collections Report", "collections"), Entry::Sep, report("Accounts Receivable Graph", "graph-ar")]),
-    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), Entry::Sep, report("Sales Graph", "graph-sales")]),
+    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), report("Item Price List", "item-price-list"), Entry::Sep, report("Sales Graph", "graph-sales")]),
     Entry::Sub(
         "Jobs, Time & Mileage",
         &[

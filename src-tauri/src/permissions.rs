@@ -84,6 +84,7 @@ const ADMIN: &[&str] = &[
     "export_company_file",
     "import_company_file",
     "file_dentist_rebuild",
+    "condense_company_file",
     "apply_forensic_correction",
     // Bank connections (their access tokens).
     "simplefin_connect",
@@ -131,6 +132,10 @@ const READ: &[&str] = &[
     "save_form_pdf",
     "save_attachment",
     "backup_now",
+    // Personal: the signed-in user's own reminder settings, and ticking off to-dos (a View-only user
+    // only their own, which `reminders::set_done` checks).
+    "save_reminder_settings",
+    "set_todo_done",
 ];
 
 pub fn need(command: &str) -> Need {

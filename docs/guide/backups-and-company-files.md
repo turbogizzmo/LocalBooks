@@ -49,6 +49,62 @@ with a reviewed correction on the Audit Log (see [Verify and correct the ledger]
 or restore a backup taken before it happened. If the file structure is damaged, Rebuild is turned
 off: restore the most recent backup that passes the check-up.
 
+## Condense data (archive closed years)
+
+When a company file has years of history, **Condense data** in File & Data Controls replaces the
+closed years' detail with one summary journal entry per month, the way QuickBooks' Condense Data
+does. Your full history isn't lost: it stays in an **archive** you can open read-only at any time.
+
+Before you start:
+
+- Set a closing date (see [Close a period](closing-the-books.md)). Only closed periods can be
+  condensed, so the cut-off must be on or before the closing date.
+- Reconcile your bank and credit card accounts through the cut-off. Lines that haven't been cleared
+  in a completed reconciliation are kept as they are.
+- Only an Admin can condense.
+
+1. Open **File › Utilities › Condense Data…** (or Settings › File & Data Controls). In **Condense data**, choose the cut-off date (it starts at your closing date) and click
+   **Preview**. It reads only, and shows how many transactions would be summarized, how many monthly
+   entries replace them, and how many are kept, and why.
+2. Click **Condense…**, then **Condense**. LocalBooks then:
+   - saves a verified **archive** of the books as they are (Archive (read-only) in the snapshot
+     list) and a plain **Before condense** backup;
+   - builds the condensed file off to the side;
+   - checks the condensed file against the archive: File Dentist's check-up, both audit trails, the
+     trial balance at the cut-off, balances by account, class and month, A/R and A/P aging and
+     inventory valuation at the cut-off and today, cleared balances and uncleared lines, and every
+     list;
+   - switches to it only if every check passes. Otherwise your books are left as they were, and the
+     message says which check failed.
+3. The result lists each check with a ✓. Your company file keeps its name and location.
+
+**What's kept as it was.** Anything still open is kept whole, at its original date: unpaid or partly
+paid invoices and bills, credits not used up, payments not yet deposited, bank and card lines not
+cleared, drafts, foreign-currency transactions, and anything linked to a transaction dated after the
+cut-off (an invoice paid after it, say). All lists, settings, users, passwords, reconciliation history,
+budgets and memorized reports are copied unchanged, and every transaction after the cut-off stays as
+it was.
+
+**What's summarized.** Everything else on or before the cut-off: paid invoices with their payments
+and deposits, paid bills, cleared checks and expenses, transfers, journal entries. Each month gets
+one entry ("Condensed: …") with a line per account and class, so monthly reports, the Balance Sheet
+and Profit & Loss (by class too) show the same totals as before. Tracked stock bought and sold
+before the cut-off becomes one movement per item, with the same quantity and cost.
+
+**What you look up in the archive.** Reports that need the individual transactions of the condensed
+months: sales by customer or item, transaction detail, job costing, 1099s, sales tax by period, and
+aging or statements as of a date before the cut-off. Click **Open archive (read-only)** in Condense
+data, or **Open** next to the archive in the snapshot list. The archive opens like any company file,
+with a banner saying it's read-only: you can run and export reports, but not change anything. Use
+**File › Open Previous Company** to go back to your current books.
+
+**Undo.** Restore the **Before condense** backup (see [Restore a backup](#restore-a-backup)).
+
+The audit trail stays verifiable. The condensed file keeps every audit record, including the posting
+snapshot of each summarized transaction, plus one record that names the archive and lists what each
+monthly entry replaced. **Verify ledger integrity** checks that the summarized transactions add up
+to their summaries. You can condense again later with a later cut-off.
+
 ## Open another company file
 
 - Double-click a `.localbooks` file, or click **Open Company File…** and choose one.
