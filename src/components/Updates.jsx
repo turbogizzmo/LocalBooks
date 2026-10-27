@@ -44,7 +44,7 @@ async function install(update, onProgress) {
   await relaunch();
 }
 
-function ReleaseNotes({ update }) {
+export function ReleaseNotes({ update }) {
   if (!update.body) return null;
   return (
     <details className="mt-1 text-xs">
@@ -54,7 +54,7 @@ function ReleaseNotes({ update }) {
   );
 }
 
-function InstallButton({ update, onError }) {
+export function InstallButton({ update, onError }) {
   const [progress, setProgress] = useState(undefined);
   const busy = progress !== undefined;
   const run = async () => {
