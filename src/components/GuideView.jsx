@@ -17,7 +17,16 @@ export const GUIDES = Object.fromEntries(
 /** Guide ids in the order of the guide index (docs/guide/README.md). */
 export const GUIDE_ORDER = [...(GUIDES.README?.text ?? '').matchAll(/\]\(([\w-]+)\.md\)/g)].map((m) => m[1]).filter((id) => GUIDES[id]);
 
-/** Inline Markdown: **bold**, `code`, and [links](other-guide.md). */
+/** A heading's anchor, as GitHub makes it, so `guide.md#section` links work in the app too. */
+export const headingId = (text) =>
+  text
+    .toLowerCase()
+    .replace(/\*\*|`/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .trim()
+    .replace(/\s/g, '-');
+
+/** Inline Markdown: **bold**, `code`, and [links](other-guide.md) or (other-guide.md#section). */
 function Inline({ text, onOpenGuide }) {
   const parts = [];
   const pattern = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)/g;
@@ -28,10 +37,10 @@ function Inline({ text, onOpenGuide }) {
     if (m[1] !== undefined) parts.push(<strong key={m.index} className="font-semibold text-qb-ink">{m[1]}</strong>);
     else if (m[2] !== undefined) parts.push(<code key={m.index} className="rounded-xs bg-qb-canvas px-1 font-mono text-[11px]">{m[2]}</code>);
     else {
-      const guide = m[4].match(/^([\w-]+)\.md$/)?.[1];
+      const [, guide, section] = m[4].match(/^([\w-]+)\.md(?:#([\w-]+))?$/) ?? [];
       parts.push(
         guide && GUIDES[guide] ? (
-          <button key={m.index} type="button" onClick={() => onOpenGuide(guide)} className="font-semibold text-qb-green-active hover:underline">
+          <button key={m.index} type="button" onClick={() => onOpenGuide(section ? `${guide}#${section}` : guide)} className="font-semibold text-qb-green-active hover:underline">
             {m[3]}
           </button>
         ) : (
@@ -105,7 +114,7 @@ export default function GuideView({ id, onOpenGuide }) {
       {parseGuide(guide.text).map((b, n) => {
         if (b.type === 'heading') {
           if (b.level === 1) return <h3 key={n} className="text-lg font-semibold leading-tight">{b.text}</h3>;
-          return <h4 key={n} className={`${b.level === 2 ? 'mt-2 text-md' : 'mt-1 text-sm'} font-semibold`}>{inline(b.text)}</h4>;
+          return <h4 key={n} id={`guide-${headingId(b.text)}`} className={`${b.level === 2 ? 'mt-2 text-md' : 'mt-1 text-sm'} font-semibold`}>{inline(b.text)}</h4>;
         }
         if (b.type === 'tip') {
           return (
