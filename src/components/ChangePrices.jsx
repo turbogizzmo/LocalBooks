@@ -10,17 +10,17 @@ const TYPES = [
   ['OTHER', 'Services and non-inventory'],
 ];
 
-const ROUNDING = [
+export const ROUNDING = [
   ['NONE', 'No rounding (to the cent)'],
   ['NEAREST', 'To the nearest'],
   ['UP', 'Up to the next'],
   ['DOWN', 'Down to the'],
   ['END_IN99', 'Up to a price ending in .99'],
 ];
-const STEPS = [5, 10, 25, 50, 100, 500, 1000];
+export const STEPS = [5, 10, 25, 50, 100, 500, 1000];
 
 /** "12.5" → 12500 thousandths of a percent; null when not a valid percentage (up to 3 decimals). */
-function parsePercentMilli(text) {
+export function parsePercentMilli(text) {
   const m = /^(\d{0,4})(?:\.(\d{0,3}))?$/.exec(String(text).trim().replace(/%$/, ''));
   if (!m || (m[1] === '' && (m[2] ?? '') === '')) return null;
   return Number(m[1] || 0) * 1000 + Number((m[2] ?? '').padEnd(3, '0'));

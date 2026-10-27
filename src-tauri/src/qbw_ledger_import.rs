@@ -182,6 +182,29 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
                 .map_err(db_err)?;
         }
     }
+    for level in &ledger.sales_lists.price_levels {
+        sqlx::query(
+            "INSERT OR IGNORE INTO ledger_import_price_levels (batch_id, name, kind, percent_milli, is_active, items) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        )
+        .bind(batch_id)
+        .bind(level.name.trim())
+        .bind(serde_json::to_value(level.kind).expect("kinds serialize").as_str().unwrap_or_default().to_string())
+        .bind(level.percent_milli)
+        .bind(level.active as i64)
+        .bind(serde_json::to_string(&level.items).expect("items serialize"))
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    }
+    for (customer, level) in &ledger.sales_lists.customer_price_levels {
+        sqlx::query("UPDATE ledger_import_parties SET price_level = ?3 WHERE batch_id = ?1 AND kind = 'CUSTOMER' AND source_id = ?2")
+            .bind(batch_id)
+            .bind(customer)
+            .bind(level.trim())
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    }
     for (n, u) in ledger.unreadable.iter().enumerate() {
         sqlx::query(
             "INSERT INTO ledger_import_unreadable
@@ -271,7 +294,8 @@ pub struct StartOverPoint {
 pub struct LedgerBatchSummary {
     pub id: i64,
     pub file_name: String,
-    /// `QBW` (a company file or backup), `IIF`, `QIF` or `GNUCASH`, from the file's extension.
+    /// `QBW` (a company file or backup), `QBMAC` (a QuickBooks for Mac company file), `IIF`, `QIF` or
+    /// `GNUCASH`, from the file's extension.
     pub source_format: String,
     pub source_path: String,
     pub file_size_bytes: i64,
@@ -452,7 +476,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         posted_as,
         fallbacks,
         id: batch_id,
-        source_format: source_format(&head.file_name).into(),
+        source_format: source_format(&head.source_path).into(),
         file_name: head.file_name,
         source_path: head.source_path,
         file_size_bytes: head.file_size_bytes,
@@ -754,6 +778,9 @@ pub struct ImportListsResult {
     pub items_on_fallback_account: i64,
     /// Custom field values left out because their list already had 15 fields.
     pub custom_values_without_room: i64,
+    /// Price levels: created, or matched by name to one already in LocalBooks (left as it is).
+    pub price_levels_created: i64,
+    pub price_levels_matched: i64,
 }
 
 /// Custom field values as staged: a JSON array of [label, value] pairs, or nothing.
@@ -1042,8 +1069,82 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
             return Err(ledger::rollback(tx, db_err(e)).await);
         }
     }
+    // Price levels last, so per-item levels can name the items just added; then the customers this
+    // import created get their default level.
+    if let Err(e) = import_price_levels(&mut tx, batch_id, &mut result).await {
+        return Err(ledger::rollback(tx, e).await);
+    }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
+}
+
+/// Creates the staged price levels that aren't in LocalBooks yet (matched by name), recording each
+/// in the audit trail, and sets the default level of the customers the import created.
+async fn import_price_levels(tx: &mut sqlx::SqliteConnection, batch_id: i64, result: &mut ImportListsResult) -> Result<(), String> {
+    use crate::price_levels::{create_in, LevelItem, LevelKind, PriceLevelInput};
+    let staged: Vec<(String, String, i64, i64, String)> = sqlx::query_as(
+        "SELECT name, kind, percent_milli, is_active, items FROM ledger_import_price_levels WHERE batch_id = ?1 AND price_level_id IS NULL ORDER BY name",
+    )
+    .bind(batch_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    for (name, kind, percent_milli, active, items) in staged {
+        let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM price_levels WHERE name = ?1 COLLATE NOCASE").bind(&name).fetch_optional(&mut *tx).await.map_err(db_err)?;
+        let (id, created) = match existing {
+            Some(id) => {
+                result.price_levels_matched += 1;
+                (id, false)
+            }
+            None => {
+                let mut level_items = Vec::new();
+                for item in serde_json::from_str::<Vec<LevelItem>>(&items).unwrap_or_default() {
+                    let product: Option<i64> = sqlx::query_scalar("SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND source_id = ?2")
+                        .bind(batch_id)
+                        .bind(item.product_id)
+                        .fetch_optional(&mut *tx)
+                        .await
+                        .map_err(db_err)?
+                        .flatten();
+                    if let Some(product_id) = product.filter(|p| !level_items.iter().any(|i: &LevelItem| i.product_id == *p)) {
+                        level_items.push(LevelItem { product_id, ..item });
+                    }
+                }
+                let input = PriceLevelInput {
+                    name: name.clone(),
+                    kind: if kind == "PER_ITEM" { LevelKind::PerItem } else { LevelKind::FixedPercent },
+                    percent_milli: percent_milli.clamp(crate::price_levels::MIN_PERCENT_MILLI, crate::price_levels::MAX_PERCENT_MILLI),
+                    rounding: crate::item_prices::Rounding::None,
+                    items: level_items,
+                    is_active: active == 1,
+                };
+                let id = create_in(tx, &input, "PRICE_LEVEL_IMPORTED").await.map_err(|e| format!("{e} (price level {name})"))?;
+                result.price_levels_created += 1;
+                (id, true)
+            }
+        };
+        sqlx::query("UPDATE ledger_import_price_levels SET price_level_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND name = ?2")
+            .bind(batch_id)
+            .bind(&name)
+            .bind(id)
+            .bind(created as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+    }
+    sqlx::query(
+        "UPDATE customers SET price_level_id = (
+             SELECT l.price_level_id FROM ledger_import_parties p JOIN ledger_import_price_levels l ON l.batch_id = p.batch_id AND l.name = p.price_level COLLATE NOCASE
+             WHERE p.batch_id = ?1 AND p.kind = 'CUSTOMER' AND p.party_id = customers.id)
+         WHERE price_level_id IS NULL AND id IN (
+             SELECT p.party_id FROM ledger_import_parties p JOIN ledger_import_price_levels l ON l.batch_id = p.batch_id AND l.name = p.price_level COLLATE NOCASE
+             WHERE p.batch_id = ?1 AND p.kind = 'CUSTOMER' AND p.created_by_import = 1 AND l.price_level_id IS NOT NULL)",
+    )
+    .bind(batch_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -1078,14 +1179,16 @@ pub struct PostLedgerInput {
     pub mode: ImportMode,
 }
 
-/// The kind of file a batch was read from, by its extension.
-fn source_format(file_name: &str) -> &'static str {
-    match std::path::Path::new(file_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
+/// The kind of file a batch was read from, by its path's extension (or, for a file inside a
+/// QuickBooks for Mac bundle, the bundle's).
+fn source_format(path: &str) -> &'static str {
+    match std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
         Some("iif") => "IIF",
         Some("qif") => "QIF",
         Some("csv" | "xlsx" | "xls") => "REPORT",
         Some("gnucash" | "gnc") => "GNUCASH",
         Some("qbxml") => "QBXML",
+        _ if crate::qbmac_import::is_mac_path(std::path::Path::new(path)) => "QBMAC",
         _ => "QBW",
     }
 }
@@ -1458,6 +1561,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
         "DELETE FROM ledger_import_parties WHERE batch_id = ?1",
         "DELETE FROM ledger_import_items WHERE batch_id = ?1",
         "DELETE FROM ledger_import_sales_lists WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_price_levels WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",

@@ -8,6 +8,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Set up your company](getting-started.md)
 - [Back up, restore and open company files](backups-and-company-files.md)
 - [Users, passwords and sensitive data](users-and-passwords.md)
+- [Reminders and the To Do list](reminders-and-todos.md)
 
 ## Sales and customers
 
@@ -38,6 +39,7 @@ press **F1** (or click **Help** at the top right), open a topic and choose **Ste
 - [Journal entries and voiding](journal-entries-and-voids.md)
 - [Verify and correct the ledger](ledger-integrity.md)
 - [Close a period](closing-the-books.md)
+- [Clean up the books (Client Data Review)](cleaning-up-books.md)
 - [Desktop Migration Wizard (.qbw, IIF, QIF and QuickBooks report imports)](desktop-migration.md)
 - [Revalue foreign-currency invoices](currency-revaluation.md)
 

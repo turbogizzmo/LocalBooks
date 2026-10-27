@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
+import { usePriceLevels } from './PriceLevels.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
@@ -50,8 +51,13 @@ const incomeOnly = (a) => a.classification === 'INCOME';
 /**
  * Inline-editable line items. Clicking any cell turns that row into inputs immediately, focused on
  * the clicked column; Enter moves to the next row (adding one at the end), Escape leaves edit mode.
+ *
+ * With `customer` (the name typed on the form) and `customers`, a picked product's rate comes from
+ * the customer's price level, and each line's Price level picker can change it. A line follows the
+ * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
+ * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null }) {
   const money = (cents) => formatMoney(cents, currency);
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
@@ -60,6 +66,34 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = showsClassColumn(tracking, lines);
+  const pricing = usePriceLevels();
+  const withLevels = withProducts && (pricing.levels.length > 0 || lines.some((l) => l.levelId != null));
+  const customerRow = (customers ?? []).find((c) => c.name.toLowerCase() === String(customer ?? '').trim().toLowerCase());
+  const customerLevel = pricing.levelOf(customerRow);
+  /** The rate text for `productId` at `levelId` (null = the standard price), or null to keep the line's. */
+  const rateAt = (productId, levelId) => {
+    const product = products?.find((p) => p.id === productId);
+    if (!product) return null;
+    const cents = pricing.priceOf(levelId, productId) ?? product.rateCents;
+    return cents > 0 ? centsToInput(cents) : null;
+  };
+
+  // A different customer (or a changed level): lines still following the customer's level re-price,
+  // unless their rate was typed.
+  useEffect(() => {
+    setLines((ls) => {
+      let changed = false;
+      const next = ls.map((l) => {
+        if (!l.levelAuto || l.rateTyped || l.productId == null) return l;
+        const rate = rateAt(l.productId, customerLevel) ?? l.rate;
+        if (l.levelId === customerLevel && l.rate === rate) return l;
+        changed = true;
+        return { ...l, levelId: customerLevel, rate };
+      });
+      return changed ? next : ls;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerLevel, pricing]);
 
   useEffect(() => {
     if (active === null) return;
@@ -94,10 +128,18 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       description: product.description ?? product.name,
       accountId: product.incomeAccountId,
       isTaxable: Boolean(product.isTaxable),
-      rate: product.rateCents > 0 ? centsToInput(product.rateCents) : line.rate,
+      rate: rateAt(productId, customerLevel) ?? line.rate,
       qty: line.qty.trim() === '' ? '1' : line.qty,
+      levelId: customerLevel,
+      levelAuto: true,
+      rateTyped: false,
     });
   };
+  const pickLevel = (index, levelId) => {
+    const line = lines[index];
+    update(index, { levelId, levelAuto: false, rateTyped: false, rate: (line.productId != null && rateAt(line.productId, levelId)) || line.rate });
+  };
+  const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
 
   return (
     <table ref={tableRef} className="qb-grid">
@@ -108,6 +150,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <col className="w-[220px]" />
         {withClasses && <col className="w-[150px]" />}
         <col className="w-[64px]" />
+        {withLevels && <col className="w-[120px]" />}
         <col className="w-[100px]" />
         <col className="w-[108px]" />
         {withTax && <col className="w-[40px]" />}
@@ -121,6 +164,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           <th className="qb-grid-head">Income account</th>
           {withClasses && <th className="qb-grid-head">Class</th>}
           <th className="qb-grid-head text-right">Qty</th>
+          {withLevels && <th className="qb-grid-head" title="Fills in the rate; a typed rate always wins">Price level</th>}
           <th className="qb-grid-head text-right">Rate</th>
           <th className="qb-grid-head text-right">Amount</th>
           {withTax && <th className="qb-grid-head text-center" title="Taxable">Tax</th>}
@@ -211,13 +255,29 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       aria-invalid={bad('qty')}
                     />
                   </td>
+                  {withLevels && (
+                    <td className="qb-grid-cell-edit">
+                      <select
+                        data-col="level"
+                        value={line.levelId ?? ''}
+                        onChange={(e) => pickLevel(i, e.target.value === '' ? null : Number(e.target.value))}
+                        onKeyDown={(e) => onKeyDown(e, i)}
+                        aria-label={`Price level ${i + 1}`}
+                      >
+                        <option value="">Standard</option>
+                        {pricing.levels.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   <td className="qb-grid-cell-edit">
                     <input
                       data-col="rate"
                       inputMode="decimal"
                       className="num"
                       value={line.rate}
-                      onChange={(e) => update(i, { rate: e.target.value })}
+                      onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
                       onKeyDown={(e) => onKeyDown(e, i)}
                       aria-invalid={bad('rate')}
                     />
@@ -244,6 +304,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                   <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
                     {line.qty}
                   </td>
+                  {withLevels && (
+                    <td className="qb-grid-cell" {...cellProps('level')}>
+                      {line.levelId != null ? levelName(line.levelId) : ''}
+                    </td>
+                  )}
                   <td className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
                     {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
                   </td>
