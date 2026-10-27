@@ -354,7 +354,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (vendor, total, paid, status, bill_date, voided) =
+    let (vendor, total, paid, status, _bill_date, voided) =
         bill.ok_or_else(|| format!("BILL_NOT_FOUND: bill {} does not exist", input.bill_id))?;
     if voided {
         return Err(format!("BILL_NOT_OPEN: this bill from {vendor} is voided"));
@@ -370,9 +370,7 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
             format_cents(open_balance)
         ));
     }
-    if input.payment_date.format("%Y-%m-%d").to_string() < bill_date {
-        return Err("BILL_PAYMENT_BEFORE_BILL: payment date is earlier than the bill date".into());
-    }
+    // A bill may be paid before its date (paying a vendor ahead of the bill), as QuickBooks allows.
     let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
         .bind(input.payment_account_id)
         .fetch_optional(&mut **tx)

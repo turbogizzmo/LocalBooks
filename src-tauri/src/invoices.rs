@@ -413,7 +413,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let (number, customer, total, paid, status, issue_date, voided, currency_code, invoice_rate, home_total, relieved_before) =
+    let (number, customer, total, paid, status, _issue_date, voided, currency_code, invoice_rate, home_total, relieved_before) =
         invoice.ok_or_else(|| format!("INV_NOT_FOUND: invoice {} does not exist", input.invoice_id))?;
     if voided {
         return Err(format!("INV_NOT_OPEN: invoice #{number} is voided"));
@@ -429,9 +429,8 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
             format_cents(open_balance)
         ));
     }
-    if input.payment_date.format("%Y-%m-%d").to_string() < issue_date {
-        return Err(format!("INV_PAYMENT_BEFORE_ISSUE: payment date is earlier than invoice #{number}'s date"));
-    }
+    // A payment may be dated before the invoice (a customer paying early, or a deposit before the
+    // work is billed), as QuickBooks allows; aging counts it from its own date.
 
     let deposit_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
         .bind(input.deposit_account_id)

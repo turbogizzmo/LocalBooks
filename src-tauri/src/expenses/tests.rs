@@ -72,6 +72,20 @@ async fn bill_accrues_payable_and_payments_relieve_it() {
 }
 
 #[tokio::test]
+async fn a_bill_can_be_paid_before_its_date() {
+    // Paying a vendor ahead of the bill's date is recorded on the day it was paid, as QuickBooks allows.
+    let pool = test_pool().await;
+    let (ap, checking, rent) = (account_id(&pool, "2000").await, account_id(&pool, "1010").await, account_id(&pool, "6300").await);
+    let later = BillInput { bill_date: d(15), ..bill("Landlord LLC", vec![(rent, 90_000)]) };
+    let posted = post_vendor_bill(&pool, later).await.expect("bill posts");
+
+    let paid = pay_vendor_bill(&pool, pay(posted.id, checking, 90_000)).await.expect("a payment dated the 10th pays a bill dated the 15th");
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!(balance(&pool, ap).await, 0);
+    assert_eq!(balance(&pool, checking).await, -90_000);
+}
+
+#[tokio::test]
 async fn bill_rejects_bad_categories_and_rolls_back() {
     let pool = test_pool().await;
     let (rent, sales, ar) = (account_id(&pool, "6300").await, account_id(&pool, "4000").await, account_id(&pool, "1200").await);

@@ -24,7 +24,8 @@ The **Bills tracker** lists every bill with its due date, open balance and statu
    listed.
 2. Tick the bills to pay. Each ticked bill fills in its open balance; change the **Payment** amount
    to pay part of a bill.
-3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**.
+3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**. It can
+   be earlier than a bill's date if you paid the vendor ahead of the bill.
 4. Check **Total payment**, then click **Pay bills**.
 
 Each payment reduces Accounts Payable and the account it was paid from. A partly paid bill stays in

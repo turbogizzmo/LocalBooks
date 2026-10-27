@@ -235,7 +235,6 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
     if (bad.length > 0) return setError('Each payment must be above zero and no more than the open balance.');
-    if (picked.some((b) => date < b.billDate)) return setError('The payment date is earlier than one of the bill dates.');
     if (ach) return payByAch();
     setBusy(true);
     try {

@@ -12,6 +12,9 @@ a bank account, or in **Undeposited Funds** until you deposit it.
    later together with other payments.
 4. Click **Record payment**. The invoice becomes **◐ Partial** or **● Paid**.
 
+The payment date can be earlier than the invoice date, for a customer who paid early or a deposit
+taken before you billed the work.
+
 ## Apply one payment to several invoices
 
 1. On **Sales › Invoices**, click **Receive payment** (or use **+ New › Receive Payment**).
