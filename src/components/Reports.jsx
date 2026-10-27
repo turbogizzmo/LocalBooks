@@ -5,6 +5,7 @@ import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, s
 import { useCompany } from './PrintDocuments.jsx';
 import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
+import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReports.jsx';
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
@@ -392,7 +393,7 @@ const REPORT_GROUPS = [
       ['item-price-list', 'Item Price List'],
     ],
   },
-  { title: 'Jobs', reports: JOB_REPORTS },
+  { title: 'Jobs', reports: [...JOB_REPORTS, ...MILEAGE_REPORTS] },
   {
     title: 'What you owe',
     reports: [
@@ -502,6 +503,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
+        {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
         {isCustomReport(report) && <CustomReport key={report} report={report} custom={custom} navigate={navigate} onOpen={setReport} />}
