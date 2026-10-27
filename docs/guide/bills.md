@@ -39,11 +39,20 @@ way.
    listed.
 2. Tick the bills to pay. Each ticked bill fills in its open balance; change the **Payment** amount
    to pay part of a bill.
-3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**.
-4. Check **Total payment**, then click **Pay bills**.
+3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**. It can
+   be earlier than a bill's date if you paid the vendor ahead of the bill.
+4. Paying from a bank account writes checks: **Check no.** is filled in with the next number for
+   that account. Change it if you need to, or clear it for payments made without a check. Leave
+   **Print checks** ticked to print them when you pay.
+5. Check **Total payment**, then click **Pay bills**.
 
 Each payment reduces Accounts Payable and the account it was paid from. A partly paid bill stays in
 the list with its remaining balance.
+
+Each vendor gets one check for all their ticked bills, as QuickBooks writes them. With several
+vendors, the checks are numbered in turn from the first number, and the memo lists the bill
+numbers each one pays. The check numbers show in the **Num** column of reports and in the
+**Missing Checks** report, alongside checks you write yourself.
 
 > **Tip:** A bill with payments can't be voided until those payments are voided. Void a payment
 > from its **Actions** menu.
