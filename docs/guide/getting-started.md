@@ -28,7 +28,8 @@ later in the Chart of Accounts.
 
 ## Enter your company details
 
-1. Click **Settings** in the left sidebar. The **Preferences Console** tab opens.
+1. In the left sidebar, open **Settings › Preferences Console**. (Click **Settings** to show or
+   hide its pages: one for each Settings tab.)
 2. Under **Company**, fill in **Company name**, **Legal name**, **Address**, **Email**, **Phone**
    and **EIN**. Each field saves as soon as you click away from it; a green **✓ Saved** confirms it.
 3. Click **Upload logo…** to add your logo. It prints on invoices, estimates and reports.
@@ -93,7 +94,7 @@ them. Each one opens the screen, and often the form, in the window you're workin
 
 | Menu | What's in it |
 |---|---|
-| **File** | New, open, close and back up company files; import QuickBooks files; print and send forms |
+| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
 | **Edit** | Undo, cut, copy and paste; Use Register; **Find…** (Find Transactions); Preferences |
 | **View** | Show or hide the left icon bar |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |

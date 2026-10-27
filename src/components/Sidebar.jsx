@@ -71,12 +71,49 @@ export const NAV = [
       { id: 'accounting/budgets', label: 'Budgets' },
       { id: 'accounting/audit', label: 'Audit Log' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
-      { id: 'accounting/qbw-import', label: 'Desktop Migration Wizard' },
     ],
   },
   { id: 'reports', label: 'Reports', icon: <Icon name="Reports" /> },
-  { id: 'settings', label: 'Settings', icon: <Icon name="Settings" /> },
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: <Icon name="Settings" />,
+    // One page per Settings tab. Company-wide ones are an Admin's (`adminOnly`); everyone manages
+    // their own sign-in and updates.
+    children: [
+      { id: 'settings/preferences', label: 'Preferences Console', adminOnly: true },
+      { id: 'settings/forms', label: 'Custom Forms', adminOnly: true },
+      { id: 'settings/email', label: 'Email', adminOnly: true },
+      { id: 'settings/data', label: 'File & Data Controls', adminOnly: true },
+      { id: 'settings/import', label: 'Import & Migration', adminOnly: true },
+      { id: 'settings/ai', label: 'AI Access (MCP)', adminOnly: true },
+      { id: 'settings/users', label: 'Users & Passwords' },
+      { id: 'settings/updates', label: 'Updates' },
+    ],
+  },
 ];
+
+/** Pages that moved, so remembered pages, other windows and older links still open them. */
+const MOVED = { 'accounting/qbw-import': 'settings/import' };
+
+/** Actions that open a Settings tab other than the one they name (a section of Preferences). */
+const SETTINGS_SECTIONS = { closing: 'preferences', 'finance-charges': 'preferences' };
+
+/**
+ * The page a view id opens: a moved page's new id, and for plain `settings` the tab its action
+ * names (`settings` + `data` is File & Data Controls), else the first one.
+ */
+export function resolveView(id, action = null) {
+  if (MOVED[id]) return MOVED[id];
+  if (id !== 'settings') return id;
+  const tab = `settings/${SETTINGS_SECTIONS[action] ?? action}`;
+  return findNav(tab) ? tab : 'settings/preferences';
+}
+
+/** Whether the user may open a page: Admin-only Settings tabs are hidden from everyone else. */
+export function canOpen(id, isAdmin) {
+  return isAdmin || !findNav(id)?.item.adminOnly;
+}
 
 export function findNav(id) {
   for (const item of NAV) {
@@ -87,7 +124,7 @@ export function findNav(id) {
   return null;
 }
 
-export default function Sidebar({ current, onSelect, onNew, companyName, storage }) {
+export default function Sidebar({ current, onSelect, onNew, companyName, storage, isAdmin = true }) {
   const [open, setOpen] = useState(() => new Set(NAV.filter((n) => n.children).map((n) => n.id)));
   const toggle = (id) =>
     setOpen((s) => {
@@ -132,7 +169,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
               </button>
               {open.has(item.id) && (
                 <ul>
-                  {item.children.map((child) => (
+                  {item.children.filter((child) => canOpen(child.id, isAdmin)).map((child) => (
                     <li key={child.id}>
                       <button
                         type="button"

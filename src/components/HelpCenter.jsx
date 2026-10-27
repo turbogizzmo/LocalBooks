@@ -99,6 +99,8 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
   const search = useRef(null);
   const screen = findNav(view);
   const screenTitle = screen?.item.label ?? 'This screen';
+  // A Settings tab without help of its own shows Settings' help.
+  const screenHelp = SCREENS[view] ?? SCREENS[screen?.parent?.id];
   const here = useMemo(() => HELP_ARTICLES.filter((a) => a.views.includes(view)), [view]);
   const results = useMemo(() => (query.trim() ? HELP_ARTICLES.filter((a) => matchesQuery(a, query)) : []), [query]);
   const guideResults = useMemo(
@@ -209,15 +211,15 @@ export default function HelpCenter({ view, onClose, onNavigate }) {
               <div className="bg-qb-green-tint px-3 py-2">
                 <div className="text-2xs font-semibold uppercase tracking-wide text-qb-green-active">On this screen</div>
                 <h3 className="text-md font-semibold">{screenTitle}</h3>
-                {SCREENS[view]?.help && <p className="mt-0.5 leading-snug text-qb-ink">{SCREENS[view].help}</p>}
-                {GUIDES[SCREENS[view]?.guide] && (
+                {screenHelp?.help && <p className="mt-0.5 leading-snug text-qb-ink">{screenHelp.help}</p>}
+                {GUIDES[screenHelp?.guide] && (
                   <button
                     type="button"
-                    onClick={() => openGuide(SCREENS[view]?.guide)}
+                    onClick={() => openGuide(screenHelp.guide)}
                     className="mt-1.5 inline-flex items-center gap-1 font-semibold text-qb-green-active hover:underline"
                   >
                     <Icon name="Guide" />
-                    Step-by-step: {GUIDES[SCREENS[view]?.guide].title}
+                    Step-by-step: {GUIDES[screenHelp.guide].title}
                   </button>
                 )}
               </div>
