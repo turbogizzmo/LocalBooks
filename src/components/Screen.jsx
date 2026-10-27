@@ -18,11 +18,9 @@ import FindTransactions from './FindTransactions.jsx';
 import FxRevaluation from './FxRevaluation.jsx';
 import Invoices from './Invoices.jsx';
 import JournalEntries from './JournalEntries.jsx';
-import Notice from './Notice.jsx';
 import PartyList from './PartyList.jsx';
 import Products from './Products.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
-import QbwImporter from './QbwImporter.jsx';
 import Reclassify from './Reclassify.jsx';
 import Reconcile from './Reconcile.jsx';
 import Recurring from './Recurring.jsx';
@@ -32,12 +30,16 @@ import SalesLists from './SalesLists.jsx';
 import SalesTax from './SalesTax.jsx';
 import SendForms from './SendForms.jsx';
 import Settings from './Settings.jsx';
+import { canOpen, findNav } from './Sidebar.jsx';
 import Statements from './Statements.jsx';
 import TimeTracking from './TimeTracking.jsx';
+import MileageTracking from './MileageTracking.jsx';
 import Todos from './Todos.jsx';
 import VendorCredits from './VendorCredits.jsx';
 
-export default function Screen({ view, intent, navigate, accounts, isAdmin, companyName }) {
+export default function Screen({ view: chosenView, intent, navigate, accounts, isAdmin, companyName }) {
+  // An Admin-only Settings tab (left open, or restored with the desktop) shows anyone else their first tab instead.
+  const view = canOpen(chosenView, isAdmin) ? chosenView : findNav('settings').item.children.find((page) => canOpen(page.id, false)).id;
   const list = accounts;
   const props = { accounts: list, intent, navigate };
   return (
@@ -60,6 +62,7 @@ export default function Screen({ view, intent, navigate, accounts, isAdmin, comp
       {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
       {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={navigate} />}
       {view === 'employees/time' && <TimeTracking {...props} />}
+      {view === 'employees/mileage' && <MileageTracking {...props} />}
       {view === 'banking/feeds' && <BankFeed accounts={list} />}
       {view === 'banking/transfers' && <DepositsTransfers {...props} />}
       {view === 'banking/reconcile' && <Reconcile accounts={list} />}
@@ -74,11 +77,11 @@ export default function Screen({ view, intent, navigate, accounts, isAdmin, comp
       {view === 'accounting/todos' && <Todos {...props} />}
       {view === 'accounting/budgets' && <Budgets accounts={list} navigate={navigate} />}
       {view === 'accounting/audit' && <AuditLog />}
-      {view === 'accounting/qbw-import' &&
-      (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
       {view === 'accounting/fx-revaluation' && <FxRevaluation />}
       {view === 'reports' && <Reports navigate={navigate} intent={intent} />}
-      {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={navigate} />}
+      {view.startsWith('settings/') && (
+        <Settings accounts={list} companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={navigate} tab={view.slice('settings/'.length)} />
+      )}
     </>
   );
 }

@@ -103,6 +103,8 @@ fn every_page_has_a_screen_for_its_window() {
     assert!(pages.len() > 20, "found the sidebar's pages");
     // Groups (Sales, Expenses, …) only fold their pages away; the pages are what open.
     let groups: Vec<&str> = pages.iter().copied().filter(|id| pages.iter().any(|p| p.starts_with(&format!("{id}/")))).collect();
-    let missing: Vec<&str> = pages.into_iter().filter(|id| !groups.contains(id) && !screen.contains(&format!("view === '{id}'"))).collect();
+    // A group's pages may share one screen (`view.startsWith('settings/')` shows each Settings tab).
+    let shown = |id: &str| screen.contains(&format!("view === '{id}'")) || id.split_once('/').is_some_and(|(group, _)| screen.contains(&format!("view.startsWith('{group}/')")));
+    let missing: Vec<&str> = pages.into_iter().filter(|id| !groups.contains(id) && !shown(id)).collect();
     assert!(missing.is_empty(), "these pages have no screen in Screen.jsx: {}", missing.join(", "));
 }

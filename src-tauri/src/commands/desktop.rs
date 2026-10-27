@@ -3,7 +3,7 @@
 //! `windows.rs` and `desktop.rs`). None of these touch the books.
 
 use super::prelude::*;
-use crate::desktop::{Arrangement, Bounds, WindowMode};
+use crate::desktop::{Arrangement, Bounds, PreferenceChange};
 use crate::windows::{ChildWindow, DesktopView, Restored};
 
 handlers![
@@ -57,8 +57,9 @@ pub async fn set_desktop_view(app: AppHandle, choice: String) -> Result<DesktopV
     windows::set_desktop_mode(&app, &choice).await
 }
 
-/// View › One Window / Multiple Windows and View › Open Window List.
+/// View › One Window / Multiple Windows, View › Open Window List, and Desktop View's left pane and
+/// what a company opens on: only the fields of `change` given change.
 #[tauri::command]
-pub async fn set_window_preferences(app: AppHandle, window_mode: Option<WindowMode>, show_open_window_list: Option<bool>) -> Result<DesktopView, String> {
-    windows::set_window_preferences(&app, window_mode, show_open_window_list).await
+pub async fn set_window_preferences(app: AppHandle, change: PreferenceChange) -> Result<DesktopView, String> {
+    windows::set_window_preferences(&app, change).await
 }

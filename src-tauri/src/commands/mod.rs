@@ -79,6 +79,7 @@ features![
     lists,
     mcp,
     migration,
+    mileage,
     preferences,
     price_levels,
     purchase_orders,

@@ -132,6 +132,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_import_price_levels",
     "ledger_import_sales_lists",
     "ledger_import_unreadable",
+    "mileage_rates",
+    "mileage_trips",
     "price_level_items",
     "price_levels",
     "products_services",
@@ -154,6 +156,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "todos",
     "user_reset_in_progress",
     "users",
+    "vehicles",
     "vendor_bank_accounts",
     "vendors",
 ];
@@ -1167,7 +1170,7 @@ async fn build(
             .await
             .map_err(db_err)?,
     );
-    archive_pool.close().await;
+    crate::db::close_pool(&archive_pool).await;
     if !archive_audit.intact {
         return Err("CONDENSE_ARCHIVE: the archive copy's audit trail did not verify; nothing was changed".into());
     }
@@ -1203,8 +1206,8 @@ async fn build(
 
     // 4. Check it against the archive.
     let verification = verify(&archive_pool, &staging, size(staging_path), cutoff, today).await;
-    staging.close().await;
-    archive_pool.close().await;
+    crate::db::close_pool(&staging).await;
+    crate::db::close_pool(&archive_pool).await;
     Ok((digest, verification?))
 }
 

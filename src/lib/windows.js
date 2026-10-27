@@ -14,7 +14,7 @@ export const MENU_NAVIGATE = 'menu-navigate';
 export const MENU_COMMAND = 'menu-command';
 /** Sent by the Window menu: 'close-all', 'close', 'cascade', 'tile-vertically', 'tile-horizontally', 'arrange-icons' or 'focus:<id>'. */
 export const WINDOW_COMMAND = 'window-command';
-/** Sent to every LocalBooks window when View › One Window / Multiple Windows or Open Window List changes. */
+/** Sent to every LocalBooks window when View › One Window / Multiple Windows, Open Window List or the left pane changes. */
 const WINDOW_PREFERENCES_CHANGED = 'window-preferences-changed';
 
 /** The window LocalBooks opens at launch. */
@@ -44,7 +44,8 @@ export function startPage() {
 }
 
 let restored = null;
-let preferences = { windowMode: 'multiple', showOpenWindowList: false };
+let preferences = { windowMode: 'multiple', showOpenWindowList: false, sidebar: 'menu' };
+let startOn = { startOn: 'last-windows', startScreen: null };
 
 /**
  * Asked once, before the app starts in this LocalBooks window: if the company has just opened, its
@@ -54,7 +55,18 @@ let preferences = { windowMode: 'multiple', showOpenWindowList: false };
 export async function loadStartPage() {
   const [taken, view] = await Promise.all([desktop.takeDesktop(KNOWN_VIEWS).catch(() => null), desktop.getDesktopView().catch(() => null)]);
   restored = taken;
-  if (view) preferences = { windowMode: view.windowMode, showOpenWindowList: view.showOpenWindowList };
+  if (view) {
+    preferences = { windowMode: view.windowMode, showOpenWindowList: view.showOpenWindowList, sidebar: view.sidebar };
+    startOn = { startOn: view.startOn, startScreen: view.startScreen };
+  }
+}
+
+/**
+ * Edit › Preferences › Desktop View › Start on, as it was when this LocalBooks window loaded:
+ * `startOn` is 'last-windows', 'home', 'screen' (`startScreen`) or 'no-windows'.
+ */
+export function startOnPreference() {
+  return startOn;
 }
 
 /** The saved desktop to reopen (`{ windows, homeOnly }`), or null. */
@@ -77,7 +89,7 @@ export function useWindowPreferences() {
     let cancelled = false;
     let unlisten;
     desktop.getDesktopView().then(
-      (view) => !cancelled && setPrefs({ windowMode: view.windowMode, showOpenWindowList: view.showOpenWindowList }),
+      (view) => !cancelled && setPrefs({ windowMode: view.windowMode, showOpenWindowList: view.showOpenWindowList, sidebar: view.sidebar }),
       () => {},
     );
     listen(WINDOW_PREFERENCES_CHANGED, ({ payload }) => setPrefs(payload))

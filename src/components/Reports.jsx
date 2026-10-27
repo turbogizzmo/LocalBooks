@@ -5,6 +5,7 @@ import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, s
 import { useCompany } from './PrintDocuments.jsx';
 import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
+import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReports.jsx';
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
@@ -237,9 +238,16 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
           subtitle={subtitle}
           lines={data.lines}
           columns={byClass || multi ? data.columns : null}
-          onAccount={(line) =>
-            navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate, includeSubaccounts: line.kind === 'subtotal' })
-          }
+          onAccount={(line, c) => {
+            // A month, quarter or comparison column opens its own dates; Total and class columns the whole range.
+            const column = multi && c !== null && data.columns[c]?.kind === 'period' ? periodColumns()[c] : null;
+            navigate?.('accounting/register', 'open', {
+              accountId: line.accountId,
+              startDate: column?.startDate ?? data.startDate,
+              endDate: column?.endDate ?? data.endDate,
+              includeSubaccounts: line.kind === 'subtotal',
+            });
+          }}
           footer={
             byClass
               ? 'Accrual basis · posted transactions only · lines without a class are in Unclassified'
@@ -392,7 +400,7 @@ const REPORT_GROUPS = [
       ['item-price-list', 'Item Price List'],
     ],
   },
-  { title: 'Jobs', reports: JOB_REPORTS },
+  { title: 'Jobs', reports: [...JOB_REPORTS, ...MILEAGE_REPORTS] },
   {
     title: 'What you owe',
     reports: [
@@ -442,6 +450,8 @@ export default function Reports({ navigate, intent }) {
     setReportId(id);
     setInitial({ ...params, at: Date.now() });
   };
+  // QuickZoom from a summary row: a detail report filtered to that name or item, for the same dates.
+  const zoom = (presetId, z) => openReport(`preset:${presetId}`, { zoom: z });
   const custom = useCustomReports();
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
@@ -493,10 +503,10 @@ export default function Reports({ navigate, intent }) {
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
         {report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
         {report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
-        {report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} />}
-        {report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} />}
+        {report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
+        {report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
         {report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
-        {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
+        {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" onZoom={zoom} />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
@@ -511,9 +521,10 @@ export default function Reports({ navigate, intent }) {
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
+        {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
-        {isCustomReport(report) && <CustomReport key={report} report={report} custom={custom} navigate={navigate} onOpen={setReport} />}
+        {isCustomReport(report) && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>
   );

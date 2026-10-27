@@ -72,6 +72,39 @@ async fn bill_accrues_payable_and_payments_relieve_it() {
 }
 
 #[tokio::test]
+async fn a_bill_can_be_paid_before_its_date() {
+    // Paying a vendor ahead of the bill's date is recorded on the day it was paid, as QuickBooks allows.
+    let pool = test_pool().await;
+    let (ap, checking, rent) = (account_id(&pool, "2000").await, account_id(&pool, "1010").await, account_id(&pool, "6300").await);
+    let later = BillInput { bill_date: d(15), ..bill("Landlord LLC", vec![(rent, 90_000)]) };
+    let posted = post_vendor_bill(&pool, later).await.expect("bill posts");
+
+    let paid = pay_vendor_bill(&pool, pay(posted.id, checking, 90_000)).await.expect("a payment dated the 10th pays a bill dated the 15th");
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!(balance(&pool, ap).await, 0);
+    assert_eq!(balance(&pool, checking).await, -90_000);
+}
+
+#[tokio::test]
+async fn next_check_number_follows_checks_and_bill_payments_per_account() {
+    let pool = test_pool().await;
+    let (checking, card, rent) = (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await);
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1001");
+
+    let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 90_000)])).await.unwrap();
+    pay_vendor_bill(&pool, pay(posted.id, checking, 40_000)).await.unwrap();
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1002", "a bill payment's check number counts");
+
+    sqlx::query("INSERT INTO expenses (kind, payment_account_id, expense_date, check_number, total_cents) VALUES ('CHECK', ?1, '2026-10-12', ' 1010 ', 500)")
+        .bind(checking)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1011", "a written check's number counts");
+    assert_eq!(next_check_number(&pool, card).await.unwrap(), "1001", "each account has its own numbers");
+}
+
+#[tokio::test]
 async fn bill_rejects_bad_categories_and_rolls_back() {
     let pool = test_pool().await;
     let (rent, sales, ar) = (account_id(&pool, "6300").await, account_id(&pool, "4000").await, account_id(&pool, "1200").await);

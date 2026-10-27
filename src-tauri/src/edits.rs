@@ -42,6 +42,13 @@ async fn record(tx: &mut Transaction<'_, Sqlite>, old_entry: i64, new_entry: i64
         .bind(new_entry)
         .execute(&mut **tx)
         .await
+        .map_err(db_err)?;
+    // Attached files (a vendor's invoice, a receipt) belong to the transaction, so they follow the edit.
+    sqlx::query("UPDATE attachments SET journal_entry_id = ?2 WHERE journal_entry_id = ?1")
+        .bind(old_entry)
+        .bind(new_entry)
+        .execute(&mut **tx)
+        .await
         .map(|_| ())
         .map_err(db_err)
 }
@@ -60,6 +67,7 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         let new_id = crate::invoices::write_invoice_carrying(tx, &input, &carried).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
         record(tx, old, new_entry).await?;
+        crate::mileage::follow_replaced_invoice(tx, invoice_id, new_id).await?;
         Ok(new_id)
     })
     .await

@@ -18,17 +18,41 @@ pay it.
 
 The **Bills tracker** lists every bill with its due date, open balance and status.
 
+## Attach the vendor's invoice
+
+Keep the vendor's invoice (a PDF, a scan or a photo, up to 25 MB) with the bill:
+
+- **On a new bill:** click **Attach the vendor's invoice…** under the lines before you post. The
+  file is attached when the bill posts.
+- **On a posted bill:** open the row's **Actions** menu (▾) and choose **Attach file…**.
+
+A 📎 next to the bill number marks a bill with files. Click it, or choose **Attachments…** in the
+row's menu, to see them: click a file name to save a copy, or × to remove it. The files are kept in
+the company file, so they're in your backups, and they stay with the bill if you edit it.
+
+Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
+way.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is
    listed.
 2. Tick the bills to pay. Each ticked bill fills in its open balance; change the **Payment** amount
    to pay part of a bill.
-3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**.
-4. Check **Total payment**, then click **Pay bills**.
+3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**. It can
+   be earlier than a bill's date if you paid the vendor ahead of the bill.
+4. Paying from a bank account writes checks: **Check no.** is filled in with the next number for
+   that account. Change it if you need to, or clear it for payments made without a check. Leave
+   **Print checks** ticked to print them when you pay.
+5. Check **Total payment**, then click **Pay bills**.
 
 Each payment reduces Accounts Payable and the account it was paid from. A partly paid bill stays in
 the list with its remaining balance.
+
+Each vendor gets one check for all their ticked bills, as QuickBooks writes them. With several
+vendors, the checks are numbered in turn from the first number, and the memo lists the bill
+numbers each one pays. The check numbers show in the **Num** column of reports and in the
+**Missing Checks** report, alongside checks you write yourself.
 
 > **Tip:** A bill with payments can't be voided until those payments are voided. Void a payment
 > from its **Actions** menu.

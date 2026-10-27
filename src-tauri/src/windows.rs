@@ -20,7 +20,7 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, MenuItemKind, Prede
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, Wry};
 
 use crate::db::Db;
-use crate::desktop::{self, Bounds, Page, SaveMode, SavedWindow, Snapshot, WindowMode};
+use crate::desktop::{self, Bounds, Page, PreferenceChange, SaveMode, SavedWindow, SidebarMode, Snapshot, StartOn, WindowMode};
 
 /// The window LocalBooks opens at launch.
 pub const MAIN: &str = "main";
@@ -451,6 +451,9 @@ pub struct DesktopView {
     pub saved_windows: usize,
     pub window_mode: WindowMode,
     pub show_open_window_list: bool,
+    pub sidebar: SidebarMode,
+    pub start_on: StartOn,
+    pub start_screen: Option<String>,
     /// Whether the desktop can be saved now (not while the file has users and nobody is signed in).
     pub available: bool,
 }
@@ -465,6 +468,9 @@ pub async fn desktop_view(app: &AppHandle) -> DesktopView {
         saved_windows: company.map_or(0, |c| c.windows.len()),
         window_mode: desktop::window_mode(&file, key),
         show_open_window_list: file.show_open_window_list,
+        sidebar: file.sidebar,
+        start_on: file.start_on,
+        start_screen: file.start_screen.clone(),
         available: key.is_some(),
     }
 }
@@ -492,19 +498,23 @@ pub async fn set_desktop_mode(app: &AppHandle, choice: &str) -> Result<DesktopVi
 }
 
 /// View › One Window / Multiple Windows (kept with the open company) and View › Open Window List.
-pub async fn set_window_preferences(app: &AppHandle, window_mode: Option<WindowMode>, show_open_window_list: Option<bool>) -> Result<DesktopView, String> {
+pub async fn set_window_preferences(app: &AppHandle, change: PreferenceChange) -> Result<DesktopView, String> {
     let dir = config_dir(app).ok_or_else(|| "DESKTOP_UNAVAILABLE: LocalBooks has not started".to_string())?;
     let key = desktop_key(app).await.map(|(_, k)| k);
+    let mut refused = None;
     desktop::update(&dir, |file| {
-        if let Some(mode) = window_mode {
-            desktop::set_window_mode(file, key.as_deref(), mode);
-        }
-        if let Some(show) = show_open_window_list {
-            file.show_open_window_list = show;
+        if let Err(err) = desktop::set_preferences(file, key.as_deref(), change) {
+            refused = Some(err);
         }
     })?;
+    if let Some(err) = refused {
+        return Err(err);
+    }
     let view = desktop_view(app).await;
-    let _ = app.emit(WINDOW_PREFERENCES_CHANGED, WindowPreferences { window_mode: view.window_mode, show_open_window_list: view.show_open_window_list });
+    let _ = app.emit(
+        WINDOW_PREFERENCES_CHANGED,
+        WindowPreferences { window_mode: view.window_mode, show_open_window_list: view.show_open_window_list, sidebar: view.sidebar },
+    );
     let _ = app.emit(DESKTOP_VIEW_CHANGED, &view);
     refresh_preference_menus(app, &view);
     Ok(view)
@@ -516,6 +526,7 @@ pub async fn set_window_preferences(app: &AppHandle, window_mode: Option<WindowM
 pub struct WindowPreferences {
     pub window_mode: WindowMode,
     pub show_open_window_list: bool,
+    pub sidebar: SidebarMode,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -698,9 +709,9 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
             tauri::async_runtime::spawn(async move {
                 let current = desktop_view(&app).await;
                 let result = match id.as_str() {
-                    MENU_OPEN_WINDOW_LIST => set_window_preferences(&app, None, Some(!current.show_open_window_list)).await,
-                    MENU_ONE_WINDOW => set_window_preferences(&app, Some(WindowMode::One), None).await,
-                    _ => set_window_preferences(&app, Some(WindowMode::Multiple), None).await,
+                    MENU_OPEN_WINDOW_LIST => set_window_preferences(&app, PreferenceChange { show_open_window_list: Some(!current.show_open_window_list), ..Default::default() }).await,
+                    MENU_ONE_WINDOW => set_window_preferences(&app, PreferenceChange { window_mode: Some(WindowMode::One), ..Default::default() }).await,
+                    _ => set_window_preferences(&app, PreferenceChange { window_mode: Some(WindowMode::Multiple), ..Default::default() }).await,
                 };
                 if let Err(err) = result {
                     eprintln!("{err}");

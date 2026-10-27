@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Sidebar, { findNav } from './components/Sidebar.jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Sidebar, { findNav, resolveView } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
@@ -28,6 +28,7 @@ import {
   NEW_WINDOW_REQUESTED,
   openWindow,
   restoredDesktop,
+  startOnPreference,
   startPage,
   useWindowPreferences,
   WindowManagerContext,
@@ -37,20 +38,28 @@ const MAIN_WINDOW = isMainWindow();
 const IS_MAC = /Mac/.test(navigator.userAgent);
 // The company was just opened without restoring windows: it starts on an empty desktop.
 const WINDOWLESS = takeWindowlessOpen();
-const leaf = (view) => view && findNav(view) && !findNav(view).item.children;
+const leaf = (view) => !!view && !!findNav(view) && !findNav(view).item.children;
 
 /**
- * The windows this LocalBooks window starts with: the company's saved desktop (Edit › Preferences ›
- * Desktop View), else the page it was opened on (Window › New Window), else the Home page. A company
- * opened without restoring windows starts with none.
+ * The windows this LocalBooks window starts with. The page it was opened on (Window › New Window) or
+ * the Import wizard for a QuickBooks file being migrated comes first. Otherwise Edit › Preferences ›
+ * Desktop View › Start on decides: the company's saved desktop (else the Home page), the Home page,
+ * one chosen screen, or no windows. A company opened without restoring windows starts with none.
  */
 function initialWindows(area) {
   if (WINDOWLESS) return cw.EMPTY;
+  const { startOn, startScreen } = startOnPreference();
+  const opened = startPage();
   const saved = restoredDesktop();
-  if (saved?.windows?.length) return cw.fromSaved(saved.windows, area);
+  if (!opened && !hasPendingMigration()) {
+    if (startOn === 'no-windows') return cw.EMPTY;
+    if ((startOn ?? 'last-windows') === 'last-windows' && saved?.windows?.length) return cw.fromSaved(saved.windows, area);
+  }
+  const chosen = startOn === 'screen' && startScreen ? { view: startScreen } : { view: 'dashboard' };
   // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
-  const start = hasPendingMigration() ? { view: 'accounting/qbw-import' } : (startPage() ?? { view: 'dashboard' });
-  const page = leaf(start.view) ? start : { view: 'dashboard' };
+  const start = hasPendingMigration() ? { view: 'settings/import' } : (opened ?? chosen);
+  const view = resolveView(start.view, start.action);
+  const page = leaf(view) ? { ...start, view } : { view: 'dashboard' };
   return cw.open(cw.EMPTY, page, { area, maximized: true });
 }
 
@@ -89,6 +98,10 @@ export default function App() {
   // Forms, registers and reports open in windows inside this one, as in QuickBooks Desktop.
   const windowPrefs = useWindowPreferences();
   const windowMode = windowPrefs.windowMode;
+  // Edit › Preferences › Desktop View › Left pane: the full menu, the open windows only, or nothing.
+  const sidebar = windowPrefs.sidebar ?? 'menu';
+  const sidebarRef = useRef(sidebar);
+  sidebarRef.current = sidebar;
   const manager = useChildWindows(windowMode, initialWindows);
   const { state, open: openChild, focus: focusChild, close: closeChild } = manager;
   const active = state.windows.find((w) => w.id === state.activeId) ?? null;
@@ -97,7 +110,14 @@ export default function App() {
 
   // Opening a page brings forward the window that shows it, or opens one. `data` carries what the
   // destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
-  const select = useCallback((id, action = null, data = null) => leaf(id) && openChild(id, action, data), [openChild]);
+  // `settings` with an action opens that Settings tab; a moved page opens where it is now.
+  const select = useCallback(
+    (requested, action = null, data = null) => {
+      const id = resolveView(requested, action);
+      return leaf(id) && openChild(id, action, data);
+    },
+    [openChild],
+  );
   const managerContext = useMemo(
     () => ({ windows: state.windows, activeId: state.activeId, open: openChild, focus: focusChild, close: closeChild, windowMode }),
     [state.windows, state.activeId, openChild, focusChild, closeChild, windowMode],
@@ -132,7 +152,6 @@ export default function App() {
 
   // The menu bar's Lists, Company, Customers, … items open a page (often with its entry form), and a
   // few act on the page itself (see app_menu.rs).
-  const [sidebarHidden, setSidebarHidden] = useState(false);
   useEffect(() => {
     const unlistens = [];
     let cancelled = false;
@@ -141,7 +160,8 @@ export default function App() {
     keep(win.listen(MENU_NAVIGATE, ({ payload }) => select(payload.view, payload.action, payload.data)));
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
-      if (payload === 'sidebar') setSidebarHidden((h) => !h);
+      // View › Show or Hide Left Icon Bar: hides the left pane, or brings back the full menu; kept for next time.
+      if (payload === 'sidebar') api.setWindowPreferences({ sidebar: sidebarRef.current === 'hidden' ? 'menu' : 'hidden' }).catch(() => {});
     }));
     keep(win.listen(NEW_WINDOW_REQUESTED, () => openNewWindow()));
     return () => {
@@ -185,8 +205,9 @@ export default function App() {
     <CompanyContext.Provider value={company}>
     <WindowManagerContext.Provider value={managerContext}>
     <div className="flex h-full">
-      {!sidebarHidden && <Sidebar current={activeView} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
-      {windowPrefs.showOpenWindowList && <OpenWindowList />}
+      {sidebar === 'menu' && <Sidebar current={activeView} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} isAdmin={isAdmin} />}
+      {/* The left pane as the Open Window List alone, or the list beside the menu (View › Open Window List). */}
+      {(sidebar === 'open-windows' || windowPrefs.showOpenWindowList) && <OpenWindowList asSidebar={sidebar === 'open-windows'} companyName={openCompany ?? 'LocalBooks'} />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}

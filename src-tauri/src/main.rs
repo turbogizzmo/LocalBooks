@@ -55,6 +55,7 @@ mod parties;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod mileage;
 mod nacha;
 mod preferences;
 mod price_levels;
@@ -102,7 +103,7 @@ use tauri::Manager;
 /// Where the company file, backups and settings live. Development builds (`tauri dev`, debug)
 /// keep their own under a `dev-builds` folder, so a build from an older branch can never open,
 /// upgrade or lock the books the installed app uses.
-fn data_dirs(app: &tauri::App) -> tauri::Result<(std::path::PathBuf, std::path::PathBuf)> {
+pub(crate) fn data_dirs<R: tauri::Runtime>(app: &impl Manager<R>) -> tauri::Result<(std::path::PathBuf, std::path::PathBuf)> {
     let (data, config) = (app.path().app_data_dir()?, app.path().app_config_dir()?);
     if cfg!(debug_assertions) {
         Ok((data.join("dev-builds"), config.join("dev-builds")))
@@ -142,6 +143,9 @@ fn main() {
             app_menu::on_menu_event(app, event.id().as_ref());
         })
         .setup(|app| {
+            // Before any secret is read: only the installed app uses the system Keychain or
+            // Credential Manager; development and test builds keep files in `config_dir`.
+            secrets::install_for_this_build(&app.config().identifier);
             let (data_dir, config_dir) = data_dirs(app)?;
             audit_chain::install_anchor_store(&config_dir);
             let config = db::DbConfig {

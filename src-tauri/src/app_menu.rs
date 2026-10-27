@@ -51,7 +51,8 @@ const CHART_OF_ACCOUNTS: Entry = page("Chart of Accounts", "accounting/chart-of-
 /// Added to File below the company items.
 const FILE: &[Entry] = &[
     Entry::Sub("Back Up Company", &[form("Create Local Backup…", "settings", "data")]),
-    Entry::Sub("Utilities", &[Entry::Sub("Import", &[page("QuickBooks Desktop Files…", "accounting/qbw-import")]), form("Condense Data…", "settings", "data")]),
+    // Import / Convert… opens the Desktop Migration Wizard (Settings › Import & Migration).
+    Entry::Sub("Utilities", &[page("Import / Convert…", "settings/import"), form("Condense Data…", "settings", "data")]),
     Entry::Sep,
     Entry::Sub("Print Forms", &[page("Statements…", "sales/statements")]),
     page("Send Forms…", "sales/send-forms"),
@@ -131,10 +132,13 @@ const VENDORS: &[Entry] = &[
     ITEM_LIST,
 ];
 
-const EMPLOYEES: &[Entry] = &[Entry::Sub(
-    "Enter Time",
-    &[form("Use Weekly Timesheet", "employees/time", "weekly-timesheet"), form("Time / Enter Single Activity", "employees/time", "time-activity")],
-)];
+const EMPLOYEES: &[Entry] = &[
+    Entry::Sub(
+        "Enter Time",
+        &[form("Use Weekly Timesheet", "employees/time", "weekly-timesheet"), form("Time / Enter Single Activity", "employees/time", "time-activity")],
+    ),
+    form("Enter Vehicle Mileage", "employees/mileage", "mileage-trip"),
+];
 
 const BANKING: &[Entry] = &[
     // Ctrl+W, as in the classic software; on macOS Cmd+W closes the window.
@@ -183,6 +187,11 @@ const REPORTS: &[Entry] = &[
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
+            Entry::Sep,
+            report("Mileage by Vehicle Summary", "mileage-vehicle"),
+            report("Mileage by Vehicle Detail", "mileage-vehicle-detail"),
+            report("Mileage by Job Summary", "mileage-job"),
+            report("Mileage by Job Detail", "mileage-job-detail"),
         ],
     ),
     Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), Entry::Sep, report("Accounts Payable Graph", "graph-ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
@@ -331,7 +340,7 @@ mod tests {
     fn items_open_pages_and_reports_that_exist() {
         let read = |path: &str| std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/components/").to_string() + path).unwrap();
         let pages = read("Sidebar.jsx");
-        let reports = ["Reports.jsx", "JobReports.jsx", "AccountantReports.jsx", "Graphs.jsx"].map(read).concat();
+        let reports = ["Reports.jsx", "JobReports.jsx", "MileageReports.jsx", "AccountantReports.jsx", "Graphs.jsx"].map(read).concat();
         fn walk(entries: &[Entry], out: &mut Vec<(&'static str, Option<&'static str>)>) {
             for entry in entries {
                 match entry {

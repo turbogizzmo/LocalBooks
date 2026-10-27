@@ -28,7 +28,8 @@ later in the Chart of Accounts.
 
 ## Enter your company details
 
-1. Click **Settings** in the left sidebar. The **Preferences Console** tab opens.
+1. In the left sidebar, open **Settings › Preferences Console**. (Click **Settings** to show or
+   hide its pages: one for each Settings tab.)
 2. Under **Company**, fill in **Company name**, **Legal name**, **Address**, **Email**, **Phone**
    and **EIN**. Each field saves as soon as you click away from it; a green **✓ Saved** confirms it.
 3. Click **Upload logo…** to add your logo. It prints on invoices, estimates and reports.
@@ -72,6 +73,9 @@ Asset, are added the first time you use that feature.
 Click a column heading in a list (invoices, bills, estimates, checks, customers, products, the
 journal and others) to sort by it; click it again to reverse the order. An arrow shows which column
 is sorted.
+
+Lists of transactions start with the newest at the top. LocalBooks remembers the order you choose
+for each list on this computer; click the sorted heading a third time to go back to newest first.
 
 ## Work in more than one window
 
@@ -154,6 +158,18 @@ To open a company once without its windows, hold **Alt** (**Option** on a Mac) w
 windows; your saved desktop is kept for next time unless you then close the company with **Save when
 closing company** chosen.
 
+### Choose the left pane and where you start
+
+Also in **Edit › Preferences › Desktop View**, for this computer:
+
+| Setting | Choices |
+|---|---|
+| **Left pane** | **Full menu** (the default): every page, grouped as Sales, Expenses, Banking and so on. **Open windows only**: just the windows open now, like QuickBooks' Open Window List in the left icon bar; open pages from the menu bar or the search box, and click **Menu** at the top of the pane to bring the full menu back. **Hidden**: no left pane, for the most room. **View › Show or Hide Left Icon Bar** switches between the full menu and hidden. |
+| **Start on** | **Last open windows** (the default): the desktop chosen under **Desktop**, or the Home page when none is saved. **Home page**: the Home page alone. **This screen**: one screen you pick, such as Invoices or a register. **No windows**: an empty desktop; choose a page to begin. |
+
+**Start on** takes effect the next time a company opens. Holding **Alt** (**Option** on a Mac) while
+clicking **Open** still opens with no windows, whatever you chose.
+
 ## Find things in the menu bar
 
 The menu bar is laid out like QuickBooks Desktop's, so the commands you know are where you expect
@@ -161,9 +177,9 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 
 | Menu | What's in it |
 |---|---|
-| **File** | New, open, close and back up company files; import QuickBooks files; print and send forms |
+| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
 | **Edit** | Undo, cut, copy and paste; Use Register; **Find…** (Find Transactions); Preferences |
-| **View** | Show or hide the left icon bar; Open Window List; One Window or Multiple Windows |
+| **View** | Show or hide the left icon bar (the left pane); Open Window List; One Window or Multiple Windows |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |
 | **Company** | Home Page, users and passwords, closing date, bank feeds, budgets, general journal entries, reclassify, currency adjustment |
 | **Customers** | Customer Center, estimates, invoices, sales receipts, statements, finance charges, receive payments, credit memos and refunds, Change Item Prices |

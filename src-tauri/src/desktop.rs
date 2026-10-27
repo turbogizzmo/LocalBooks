@@ -50,6 +50,38 @@ pub enum WindowMode {
     Multiple,
 }
 
+/// The left pane, as QuickBooks' left icon bar can show its menu or the Open Window List, or be
+/// hidden (View › Show or Hide Left Icon Bar).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SidebarMode {
+    /// The full menu of pages.
+    #[default]
+    Menu,
+    /// Only the windows open inside LocalBooks (the Open Window List), in the sidebar's place.
+    OpenWindows,
+    /// No left pane: pages open from the menu bar and search.
+    Hidden,
+}
+
+/// What a company opens on, before any window is chosen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StartOn {
+    /// The saved desktop (Desktop View › Desktop), or the Home page when nothing is saved.
+    #[default]
+    LastWindows,
+    /// The Home page alone.
+    Home,
+    /// One chosen screen ([`DesktopFile::start_screen`]).
+    Screen,
+    /// An empty desktop: nothing opens until a page is chosen.
+    NoWindows,
+}
+
+/// A navigation id kept as the screen to start on is no longer than this.
+const MAX_SCREEN_ID: usize = 80;
+
 /// A window's page: a navigation id ("sales/invoices") and the request it opens with, as the app's
 /// own navigation passes them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -118,9 +150,68 @@ pub struct DesktopFile {
     /// View › Open Window List: the list of open windows beside the sidebar.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub show_open_window_list: bool,
+    /// What the left pane shows.
+    #[serde(default)]
+    pub sidebar: SidebarMode,
+    /// What a company opens on.
+    #[serde(default)]
+    pub start_on: StartOn,
+    /// The screen a company opens on under [`StartOn::Screen`]: a navigation id ("sales/invoices").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_screen: Option<String>,
     /// By [`key`].
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub companies: BTreeMap<String, CompanyDesktop>,
+}
+
+/// A change to the window preferences, as View and Edit › Preferences › Desktop View make it: only
+/// the fields given change.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreferenceChange {
+    #[serde(default)]
+    pub window_mode: Option<WindowMode>,
+    #[serde(default)]
+    pub show_open_window_list: Option<bool>,
+    #[serde(default)]
+    pub sidebar: Option<SidebarMode>,
+    #[serde(default)]
+    pub start_on: Option<StartOn>,
+    #[serde(default)]
+    pub start_screen: Option<String>,
+}
+
+/// Applies `change` (the View mode is also kept with the company `key`). Nothing changes when it
+/// is refused: a screen to start on that is not a navigation id, or [`StartOn::Screen`] with no screen.
+pub fn set_preferences(file: &mut DesktopFile, key: Option<&str>, change: PreferenceChange) -> Result<(), String> {
+    let screen = match change.start_screen {
+        Some(id) => {
+            let id = id.trim().to_string();
+            let valid = !id.is_empty() && id.len() <= MAX_SCREEN_ID && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '/' || c == '-');
+            if !valid {
+                return Err(format!("DESKTOP_START: {id:?} is not a screen LocalBooks can open on"));
+            }
+            Some(id)
+        }
+        None => file.start_screen.clone(),
+    };
+    if change.start_on == Some(StartOn::Screen) && screen.is_none() {
+        return Err("DESKTOP_START: choose the screen to open on".to_string());
+    }
+    if let Some(mode) = change.window_mode {
+        set_window_mode(file, key, mode);
+    }
+    if let Some(show) = change.show_open_window_list {
+        file.show_open_window_list = show;
+    }
+    if let Some(sidebar) = change.sidebar {
+        file.sidebar = sidebar;
+    }
+    if let Some(start_on) = change.start_on {
+        file.start_on = start_on;
+    }
+    file.start_screen = screen;
+    Ok(())
 }
 
 pub fn file_path(config_dir: &Path) -> PathBuf {

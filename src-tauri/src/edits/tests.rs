@@ -37,10 +37,16 @@ async fn edits_void_and_repost_and_respect_payments() {
         "checkNumber": "101", "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 90_000, "memo": "May" }] })).unwrap();
     let (expense_id, _) = { let mut tx = crate::ledger::begin_write(&pool).await.unwrap(); let r = crate::expenses::write_expense(&mut tx, &expense).await.unwrap(); crate::ledger::commit_write(tx).await.unwrap(); r };
     assert_eq!(document_lines(&pool, "expense", expense_id).await.unwrap()[0].memo.as_deref(), Some("May"));
+    let old_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE id = ?1").bind(expense_id).fetch_one(&pool).await.unwrap();
+    crate::workflows::add_attachment(&pool, old_entry, "receipt.pdf", b"%PDF-1.4").await.unwrap();
     let mut fixed = expense.clone();
     fixed.lines[0].amount_cents = 95_000;
-    replace_expense(&pool, expense_id, fixed).await.unwrap();
+    let new_expense = replace_expense(&pool, expense_id, fixed).await.unwrap();
     assert_eq!(balance(&pool, rent).await, 95_000);
+    let new_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM expenses WHERE id = ?1").bind(new_expense).fetch_one(&pool).await.unwrap();
+    let moved = crate::workflows::list_attachments(&pool, new_entry).await.unwrap();
+    assert_eq!(moved.iter().map(|a| a.file_name.as_str()).collect::<Vec<_>>(), ["receipt.pdf"], "attachments follow the edit");
+    assert!(crate::workflows::list_attachments(&pool, old_entry).await.unwrap().is_empty());
 
     let je = crate::ledger::post_journal_entry(&pool, JournalEntry { id: None, date: NaiveDate::from_ymd_opt(2026, 5, 3).unwrap(), description: "Accrual".into(),
         lines: vec![crate::ledger::JournalLine::debit(rent, 500), crate::ledger::JournalLine::credit(checking, 500)], currency: None }).await.unwrap();

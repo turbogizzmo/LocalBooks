@@ -5,6 +5,7 @@ use super::prelude::*;
 handlers![
     add_attachment,
     list_attachments,
+    attachment_counts,
     save_attachment,
     delete_attachment,
 ];
@@ -25,6 +26,11 @@ pub async fn add_attachment(app: AppHandle, db: State<'_, Db>, journal_entry_id:
 #[tauri::command]
 pub async fn list_attachments(db: State<'_, Db>, journal_entry_id: i64) -> Result<Vec<AttachmentView>, String> {
     workflows::list_attachments(&db.pool().await, journal_entry_id).await
+}
+
+#[tauri::command]
+pub async fn attachment_counts(db: State<'_, Db>) -> Result<std::collections::HashMap<i64, i64>, String> {
+    workflows::attachment_counts(&db.pool().await).await
 }
 
 /// Saves a copy of an attachment where the user chooses.

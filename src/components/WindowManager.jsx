@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Copy, Minus, Square, X } from 'lucide-react';
-import { findNav } from './Sidebar.jsx';
+import { findNav, resolveView } from './Sidebar.jsx';
 import { api } from '../lib/api.js';
 import * as cw from '../lib/childWindows.js';
 import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND } from '../lib/windows.js';
@@ -47,7 +47,8 @@ export function useChildWindows(windowMode, initial) {
       setState((s) => {
         // As in Windows programs: while the active window is maximized, a new one opens maximized too.
         const active = s.windows.find((w) => w.id === s.activeId);
-        return cw.open(s, { view, action, data }, { area: area(), maximized: s.windows.length === 0 || !!active?.maximized, forceNew });
+        // `settings` with an action is that Settings tab; a moved page opens where it is now.
+        return cw.open(s, { view: resolveView(view, action), action, data }, { area: area(), maximized: s.windows.length === 0 || !!active?.maximized, forceNew });
       }),
     [area],
   );

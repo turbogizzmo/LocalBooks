@@ -21,8 +21,13 @@ choose a customer or job to count that line as the job's cost in the
 
 1. On the same screen click **Write check** (or **+ New › Check**).
 2. Enter the **Payee**, choose the **Bank account** and **Check date**. **Check no.** is filled in
-   with the next number for that account; change it if you need to.
+   with the next number for that account, after its checks and any bill payment checks; change it
+   if you need to.
 3. Add the category lines and click **Save & Post Check**.
+
+To keep the receipt with an expense or check, click **Attach a receipt…** before you post, or
+choose **Attach file…** in a posted row's **Actions** menu. See
+[Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
 
 ## Record a credit card credit
 

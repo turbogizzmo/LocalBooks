@@ -4,6 +4,59 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [Unreleased]
+
+- **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers, reports and
+  every other screen open as windows inside the one LocalBooks window. Move, resize, minimize and
+  maximize them, or line them up with **Window › Cascade**, **Tile Vertically** and **Tile
+  Horizontally**. **Window › Close All** closes them, asking first about anything not saved.
+  **Ctrl+F6** moves to the next window and **Esc** closes the one in front.
+- **One Window or Multiple Windows.** **View › One Window** shows one screen at a time, filling
+  the space; **View › Multiple Windows** lets them float side by side. **View › Open Window List**
+  lists the open windows beside the menu, and the Window menu lists them too.
+- **Your windows come back.** The windows open when you close a company reopen with it, where they
+  were. Choose what is saved in **Edit › Preferences › Desktop View** (Save when closing company,
+  Save current desktop, Don't save the desktop), or on a Mac in **Window › Workspace**. To open a
+  company once without them, hold Option (Alt on Windows) while clicking **Open**, or choose
+  **File › Open Company Without Restoring Windows…**.
+- **Choose the left pane and where you start.** In **Desktop View**, the left pane can show the
+  full menu, only the open windows, or nothing. **Start on** opens a company on your last windows,
+  the Home page, a screen you choose (say, Invoices), or no windows at all.
+
+## [0.10.2]
+
+- **Early payments.** A customer payment can be dated before its invoice (a customer who paid
+  early, or a deposit taken before you billed the work), and a bill can be paid before its date,
+  as QuickBooks allows.
+- **Check numbers and printing in Pay Bills.** Paying bills from a bank account writes one check
+  per vendor, numbered from the account's next check number, and can print them. Write Checks
+  continues the same numbering, so a number is never used twice.
+- **Attach the vendor's invoice to a bill.** Attach files to a new bill, expense or check before
+  you post it, or to any posted bill, expense, invoice, sale or deposit from its row menu. A 📎
+  marks rows with files, and attached files now stay with a transaction when you edit it.
+- **Click a report to see the details (QuickZoom).** Click an amount on the Profit and Loss or
+  Balance Sheet to open the account's transactions for that column's dates. Click a name on an
+  aging summary to list its open invoices or bills, or a line on Sales by Customer, Sales by
+  Product/Service or Expenses by Vendor Summary to open its detail report.
+- **Newest first.** Lists of transactions start with the newest at the top, and each list
+  remembers the order you choose.
+- **Clearer help when the books won't open.** If LocalBooks can't open your company file at
+  launch, it now says in plain words what usually causes it and what to do, with **Try again** and
+  **Check for updates** buttons.
+
+## [0.10.1]
+
+- **Mileage tracking.** **Employees › Mileage**: add vehicles and the mileage rates you use (with
+  the dates they start), then record trips by odometer or total miles. Bill trips to a customer or
+  job on an invoice, and see Mileage by Vehicle and Mileage by Job reports with the deductible
+  amount.
+- **Settings in the sidebar.** **Settings** now opens like the other groups, with each section
+  listed. The Desktop Migration Wizard moved to **Settings › Import & Migration**, and **File ›
+  Utilities › Import / Convert…** opens it too.
+- **Fixed:** on Windows, **Condense Data** and **Restore from Backup** could stop with "cannot
+  remove … being used by another process" and leave your books as they were. They now work
+  reliably.
+
 ## [0.10.0]
 
 - **Clean Up Books.** **Accounting › Clean Up Books** gathers QuickBooks Accountant's cleanup tools:

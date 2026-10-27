@@ -175,3 +175,43 @@ fn the_view_mode_and_the_localbooks_window_are_kept_with_each_company() {
     company_closing(&mut file, KEY, snap(vec![window("dashboard")]));
     assert_eq!(file.companies[KEY].frame, Some(frame));
 }
+
+#[test]
+fn the_left_pane_and_what_a_company_opens_on_round_trip_through_their_file() {
+    let dir = scratch("start");
+    assert_eq!(read(&dir).sidebar, SidebarMode::Menu, "the full menu by default");
+    assert_eq!(read(&dir).start_on, StartOn::LastWindows, "the saved desktop by default");
+    let mut refused = None;
+    update(&dir, |file| {
+        set_preferences(file, Some(KEY), PreferenceChange { sidebar: Some(SidebarMode::OpenWindows), start_on: Some(StartOn::Screen), start_screen: Some("sales/invoices".into()), ..Default::default() }).unwrap();
+        // Refused changes leave everything as it was.
+        refused = Some(set_preferences(file, None, PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_screen: Some("../etc".into()), ..Default::default() }));
+    })
+    .unwrap();
+    assert!(refused.unwrap().unwrap_err().starts_with("DESKTOP_START"));
+    let file = read(&dir);
+    assert_eq!((file.sidebar, file.start_on, file.start_screen.as_deref()), (SidebarMode::OpenWindows, StartOn::Screen, Some("sales/invoices")));
+    let text = std::fs::read_to_string(file_path(&dir)).unwrap();
+    assert!(text.contains("\"sidebar\": \"open-windows\"") && text.contains("\"startOn\": \"screen\""), "{text}");
+
+    // Other choices keep the screen chosen, for when Screen is picked again; the View mode is kept too.
+    let mut file = read(&dir);
+    set_preferences(&mut file, Some(KEY), PreferenceChange { sidebar: Some(SidebarMode::Hidden), start_on: Some(StartOn::NoWindows), window_mode: Some(WindowMode::One), ..Default::default() }).unwrap();
+    assert_eq!((file.sidebar, file.start_on, file.start_screen.as_deref()), (SidebarMode::Hidden, StartOn::NoWindows, Some("sales/invoices")));
+    assert_eq!(window_mode(&file, Some(KEY)), WindowMode::One);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn opening_on_a_screen_needs_a_screen() {
+    let mut file = DesktopFile::default();
+    let err = set_preferences(&mut file, None, PreferenceChange { start_on: Some(StartOn::Screen), ..Default::default() }).unwrap_err();
+    assert!(err.starts_with("DESKTOP_START"), "{err}");
+    assert_eq!(file, DesktopFile::default());
+    for bad in ["", "   ", "Sales/Invoices", "a b", &"x".repeat(200)] {
+        assert!(set_preferences(&mut file, None, PreferenceChange { start_screen: Some(bad.to_string()), ..Default::default() }).is_err(), "{bad:?}");
+    }
+    // A file written before these preferences reads as the defaults.
+    let old: DesktopFile = serde_json::from_str(r#"{"windowMode":"one"}"#).unwrap();
+    assert_eq!((old.sidebar, old.start_on, old.start_screen), (SidebarMode::Menu, StartOn::LastWindows, None));
+}

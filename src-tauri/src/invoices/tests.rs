@@ -98,6 +98,20 @@ async fn invoice_posts_to_ar_and_income_then_payment_clears_ar() {
 }
 
 #[tokio::test]
+async fn a_payment_can_be_dated_before_its_invoice() {
+    // A customer who pays early (or a deposit taken before the work is billed) is recorded on the
+    // day it arrived, as QuickBooks allows.
+    let pool = test_pool().await;
+    let (ar, checking) = (account_id(&pool, "1200").await, account_id(&pool, "1010").await);
+    let invoice = simple_invoice(&pool, "Initech", d(10), d(31), 50_000).await;
+
+    let paid = record_payment(&pool, payment(invoice.id, checking, 3, 50_000)).await.expect("an early payment posts");
+    assert_eq!((paid.status.as_str(), paid.balance_cents), ("PAID", 0));
+    assert_eq!(balance(&pool, ar).await, 0);
+    assert_eq!(balance(&pool, checking).await, 50_000);
+}
+
+#[tokio::test]
 async fn partial_payments_track_remaining_balance() {
     let pool = test_pool().await;
     let (ar, checking) = (account_id(&pool, "1200").await, account_id(&pool, "1010").await);

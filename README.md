@@ -180,7 +180,7 @@ are frozen and their entries can no longer be voided, so a reconciled balance ca
 
 ### Desktop Migration Wizard: .qbw import through a staging sandbox
 
-**Accounting › Desktop Migration Wizard** reads a desktop accounting company file (`.qbw`) directly using the
+**Settings › Import & Migration** (the Desktop Migration Wizard; also **File › Utilities › Import / Convert…**) reads a desktop accounting company file (`.qbw`) directly using the
 open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file is opened read-only.
 
 1. **Extract.** Invoice line items (source invoice ID, date, signed cents, source table) go into
@@ -273,8 +273,8 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
-| Export from installed QuickBooks (Preview) | Accounting › Desktop Migration Wizard › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
+| Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
@@ -284,6 +284,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
 | Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
 | Menu bar | Menu bar | Classic desktop menus (Lists, Company, Customers, Vendors, Employees, Banking, Reports) that open each form and report, with Ctrl+I, Ctrl+W, Ctrl+R, Ctrl+J, Ctrl+T and Ctrl+F | [guide](docs/guide/getting-started.md#find-things-in-the-menu-bar) |
+| Mileage | Employees › Mileage; + New › Mileage Trip | Vehicles, dated mileage rates you enter, trips by odometer or miles, billing trips on an invoice, mileage by vehicle and by job | [guide](docs/guide/mileage.md) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
@@ -307,7 +308,7 @@ its entry form with focus in the first field.
 |---|---|---|---|
 | Invoice | Expense | Single Time Activity | Journal Entry |
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
-| Estimate | Bill | | Transfer |
+| Estimate | Bill | Mileage Trip | Transfer |
 | Sales Receipt | Pay Bills | | To Do |
 | | Credit Card Credit | | |
 
@@ -588,6 +589,8 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
   have no cost column, so estimates vs. actuals compare revenue, and an estimate becomes a single
   invoice (no partial progress invoices).
+- **Mileage billing** makes a new invoice for the trips you choose; trips can't be added to an
+  invoice you're already writing. Mileage rates aren't built in: enter the official rate yourself.
 - **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
   returns.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
