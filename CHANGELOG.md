@@ -4,6 +4,31 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [0.9.0]
+
+- **QuickBooks-style menu bar.** New **Lists, Company, Customers, Vendors, Employees, Banking** and
+  **Reports** menus (plus **View**, and more items under **File** and **Edit**) open each screen and
+  entry form, and **Reports** lists every report by group, as in QuickBooks Desktop. The classic
+  shortcuts work: **Ctrl+I** invoice, **Ctrl+W** write checks (Windows and Linux), **Ctrl+R**
+  register, **Ctrl+J** Customer Center, **Ctrl+T** memorized transactions and **Ctrl+F** Find
+  (⌘ on a Mac). On Windows, **Alt** reaches the menus from the keyboard. **Window › New Window** is
+  now on every platform.
+- **New Company setup assistant.** **File › New Company…** asks for your company details and tax
+  form, then suggests a chart of accounts for your industry from the same 33 industries QuickBooks
+  offers, numbered QuickBooks-style, with equity accounts that follow your tax form and optional
+  sales tax and inventory accounts.
+- **Find Transactions.** **Accounting › Find Transactions** (or **Edit › Find…**, or **Advanced
+  search…** under the search box) filters by text, dates, number, amount, transaction type, customer
+  or vendor, and account.
+- **Sort any list** by clicking a column heading; click again to reverse it.
+- **Saved and emailed forms are named after the customer**, for example `Invoice 1001 · Acme.pdf`,
+  and **Save as PDF** in the print dialog suggests the same name.
+- **Open a company without restoring windows**: hold **Option** or **Alt** while clicking **Open**,
+  or choose **File › Open Company Without Restoring Windows…**. The company opens on a plain Home
+  page with other windows closed, which helps when a page won't load.
+- Includes 0.8.1: open a QuickBooks `.qbw`, `.qbb` or `.qbm` file directly from **File › Open or
+  Restore Company…**.
+
 ## [0.8.1]
 
 - **Open QuickBooks files directly.** **File › Open or Restore Company…**, **Open Company File…**
