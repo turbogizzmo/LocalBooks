@@ -567,8 +567,6 @@ async fn remove_sidecars(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Runs a file operation, retrying for up to two seconds while Windows reports the file in use
-/// (a just-closed connection's handle can take a moment to be released). Other errors return at once.
 /// Closes `pool` and waits until every one of its connections has closed.
 ///
 /// `Pool::close` in sqlx 0.8 can return with a connection still open: after a query, a connection
@@ -686,6 +684,8 @@ fn remove_stale_replaced(path: &Path) {
     }
 }
 
+/// Runs a file operation, retrying for up to ten seconds while Windows reports the file in use
+/// (a virus scanner or indexer can hold a just-written file for a moment). Other errors return at once.
 async fn while_in_use(mut op: impl FnMut() -> std::io::Result<()>) -> std::io::Result<()> {
     // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
     const IN_USE: [i32; 3] = [5, 32, 33];
