@@ -60,6 +60,7 @@ mod qif_import;
 mod report_import;
 mod reconcile;
 mod registers;
+mod reminders;
 mod report_center;
 mod release_check;
 mod reports;

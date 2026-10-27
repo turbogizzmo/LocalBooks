@@ -33,6 +33,8 @@ import Statements from './components/Statements.jsx';
 import FinanceCharges from './components/FinanceCharges.jsx';
 import SendForms from './components/SendForms.jsx';
 import Recurring, { useDueRecurring } from './components/Recurring.jsx';
+import Todos from './components/Todos.jsx';
+import { StartupReminders } from './components/Reminders.jsx';
 import PurchaseOrders from './components/PurchaseOrders.jsx';
 import Budgets from './components/Budgets.jsx';
 import GlobalSearch from './components/GlobalSearch.jsx';
@@ -310,12 +312,12 @@ export default function App() {
         {accounts.error && <Notice kind="error" text={`Could not load accounts: ${accounts.error}`} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           {windowless && <WindowlessHome companyName={openCompany ?? companyName} onDashboard={() => select('dashboard')} />}
-          {view === 'dashboard' && !windowless && <Dashboard />}
+          {view === 'dashboard' && !windowless && <Dashboard navigate={select} />}
           {view === 'sales/all' && <AllSales {...props} />}
           {view === 'sales/invoices' && <Invoices {...props} />}
           {view === 'sales/estimates' && <Estimates {...props} />}
           {view === 'sales/credits' && <CreditMemos {...props} />}
-          {view === 'sales/customers' && <PartyList kind="customer" />}
+          {view === 'sales/customers' && <PartyList kind="customer" navigate={select} />}
           {view === 'sales/products' && <Products accounts={list} intent={intent} />}
           {view === 'sales/lists' && <SalesLists />}
           {view === 'sales/tax' && <SalesTax accounts={list} />}
@@ -326,7 +328,7 @@ export default function App() {
           {view === 'expenses/bills' && <Bills {...props} />}
           {view === 'expenses/credits' && <VendorCredits {...props} />}
           {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
-          {view === 'expenses/vendors' && <PartyList kind="vendor" />}
+          {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={select} />}
           {view === 'employees/time' && <TimeTracking {...props} />}
           {view === 'banking/feeds' && <BankFeed accounts={list} />}
           {view === 'banking/transfers' && <DepositsTransfers {...props} />}
@@ -338,6 +340,7 @@ export default function App() {
           {view === 'accounting/journal' && <JournalEntries {...props} />}
           {view === 'accounting/find' && <FindTransactions {...props} />}
           {view === 'accounting/recurring' && <Recurring />}
+          {view === 'accounting/todos' && <Todos {...props} />}
           {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}
           {view === 'accounting/qbw-import' &&
@@ -356,6 +359,10 @@ export default function App() {
         />
       )}
       {companyFiles.dialog}
+      {/* Reminders at startup, when the user chose them (and not when opened without restoring windows). */}
+      {MAIN_WINDOW && !WINDOWLESS && signIn.data && (!signIn.data.usersEnabled || signedIn) && (
+        <StartupReminders fileKey={storage.data?.path} userKey={signedIn?.id} navigate={select} />
+      )}
       {creating && (
         <QuickCreateModal
           onClose={() => setCreating(false)}

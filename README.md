@@ -271,6 +271,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
+| Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
@@ -288,7 +289,7 @@ its entry form with focus in the first field.
 | Invoice | Expense | Single Time Activity | Journal Entry |
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
 | Estimate | Bill | | Transfer |
-| Sales Receipt | Pay Bills | | |
+| Sales Receipt | Pay Bills | | To Do |
 | | Credit Card Credit | | |
 
 ---

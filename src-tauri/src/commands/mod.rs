@@ -78,6 +78,7 @@ features![
     purchase_orders,
     reconcile,
     recurring,
+    reminders,
     repair,
     report_export,
     revaluation,
