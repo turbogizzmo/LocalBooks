@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   dashboard: {
-    help: 'Your books at a glance: assets and liabilities over the last 12 months, open receivables by age, and a live trial balance that always shows whether debits equal credits.',
+    help: 'Your books at a glance: assets and liabilities over the last 12 months, open receivables by age, a live trial balance that always shows whether debits equal credits, and Reminders of what needs attention today.',
     guide: 'getting-started',
   },
   settings: {

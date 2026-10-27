@@ -92,6 +92,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("stock_ledger_entries", &["movement_date"]),
     ("transaction_edits", &[]),
     ("transfers", &["transfer_date"]),
+    ("undeposited_fund_matches", &[]),
     ("vendor_credit_applications", &["applied_date"]),
     ("vendor_credit_lines", &[]),
     ("vendor_credit_refunds", &["refund_date"]),
@@ -128,13 +129,17 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_import_items",
     "ledger_import_lines",
     "ledger_import_parties",
+    "ledger_import_price_levels",
     "ledger_import_sales_lists",
     "ledger_import_unreadable",
+    "price_level_items",
+    "price_levels",
     "products_services",
     "reconciliation_snapshot_lines",
     "reconciliation_snapshots",
     "reconciliations",
     "recurring_templates",
+    "reminder_settings",
     "sales_reps",
     "saved_reports",
     "ship_methods",
@@ -146,17 +151,20 @@ pub const KEPT_TABLES: &[&str] = &[
     "system_preferences",
     "tax_rates",
     "time_activities",
+    "todos",
     "user_reset_in_progress",
     "users",
     "vendor_bank_accounts",
     "vendors",
 ];
 
-/// Links to a sales form stored without a foreign key: (table, kind column, id column).
+/// Links to a form stored without a foreign key: (table, kind column, id column). A link from a
+/// kept table (a to-do) keeps the form's group, like a foreign key from a list.
 const FORM_LINKS: &[(&str, &str, &str)] = &[
     ("sales_document_fields", "document_kind", "document_id"),
     ("form_email_log", "form_type", "document_id"),
     ("form_email_queue", "form_type", "document_id"),
+    ("todos", "link_kind", "link_id"),
 ];
 
 /// The table a form kind in [`FORM_LINKS`] names; other kinds (statements) name no transaction.
@@ -165,6 +173,7 @@ fn form_table(kind: &str) -> Option<&'static str> {
         "INVOICE" => Some("invoices"),
         "SALES_RECEIPT" => Some("sales_receipts"),
         "ESTIMATE" => Some("estimates"),
+        "BILL" => Some("bills"),
         _ => None,
     }
 }
@@ -399,15 +408,16 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
     }
     for (table, kind_column, id_column) in FORM_LINKS {
         let links: Vec<(i64, String, i64)> =
-            sqlx::query_as(&format!("SELECT rowid, {}, {} FROM {}", quote_ident(kind_column), quote_ident(id_column), quote_ident(table)))
+            sqlx::query_as(&format!("SELECT rowid, {0}, {1} FROM {2} WHERE {0} IS NOT NULL AND {1} IS NOT NULL", quote_ident(kind_column), quote_ident(id_column), quote_ident(table)))
                 .fetch_all(&mut *conn)
                 .await
                 .map_err(db_err)?;
-        let from = nodes.table(table).expect("form link tables are transaction tables");
+        let from = nodes.table(table);
         for (rowid, kind, id) in links {
-            let target = form_table(&kind).and_then(|t| nodes.table(t)).and_then(|t| nodes.node(t, id));
-            if let (Some(a), Some(b)) = (nodes.node(from, rowid), target) {
-                groups.union(a, b);
+            let Some(target) = form_table(&kind).and_then(|t| nodes.table(t)).and_then(|t| nodes.node(t, id)) else { continue };
+            match from.and_then(|t| nodes.node(t, rowid)) {
+                Some(a) => groups.union(a, target),
+                None => kept.push((target, KeepReason::Referenced)),
             }
         }
     }

@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an account to open its register; export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, graphs (income and expense, net worth, receivables, payables, sales, budget vs. actual), and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an account to open its register; export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -50,6 +50,14 @@ export const topics = [
     title: 'See what each job earns and costs',
     body: 'Reports › Jobs shows actual cost, revenue and profit for each customer and job, by product/service or account, estimates against actual revenue, Profit and Loss by Job, Estimates by Job and how much of each estimate has been invoiced; click a row to open what is behind it. Costs count for a job when you choose it in the Customer:Job column of a bill, expense, check or vendor credit line; time is not costed.',
     keywords: 'job costing job profitability summary detail estimates vs actuals item profitability profit and loss by job customer job progress invoices estimates by job billable cost',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'graphs', area: 'reports', views: ['reports'],
+    title: 'See your reports as graphs',
+    body: 'Reports › Graphs charts income and expenses by month with a pie by account, net worth at each month end, receivables and payables by days past due with the largest balances, sales by month with the top customers, products or reps, and budget against actual. Each uses the same numbers as its text report; click a bar or slice to open that report, choose Table to see the numbers, and Export to save a PNG, print, or export to Excel or CSV.',
+    keywords: 'graph graphs chart charts pie bar income expense net worth receivable payable aging sales budget vs actual picture png image visual qb graphs',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },

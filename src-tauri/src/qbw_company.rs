@@ -201,6 +201,21 @@ pub struct SourceSalesLists {
     /// Initials, or "initials:name".
     pub reps: Vec<(String, bool)>,
     pub ship_methods: Vec<(String, bool)>,
+    /// Price levels; a per-item level's items name the file's item ids (`SourceItem::id`).
+    pub price_levels: Vec<SourcePriceLevel>,
+    /// Customers' default price levels: (`SourceParty::id`, level name).
+    pub customer_price_levels: Vec<(i64, String)>,
+}
+
+/// A price level from the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourcePriceLevel {
+    pub name: String,
+    pub active: bool,
+    pub kind: crate::price_levels::LevelKind,
+    /// Fixed % levels: thousandths of a percent.
+    pub percent_milli: i64,
+    pub items: Vec<crate::price_levels::LevelItem>,
 }
 
 impl SourceSalesLists {
@@ -472,6 +487,61 @@ pub(crate) fn read_sales_lists(pages: &[LogicalPage], catalog: &Catalog) -> (Has
         .collect();
     let ships = rows_of(pages, catalog, "abmc_shipping").iter().filter_map(|r| Some((r.get("shipping_id").as_int()?, (text(r, "name")?, active(r))))).collect();
     (reps, ships)
+}
+
+/// One price level as the file stores it (`abmc_price_level` and its `abmc_price_level_item` rows).
+/// `price_level_type` 2 is per item (as qbXML's PriceLevelType numbers it; 1 is fixed %), and a
+/// level of another type that lists items is taken as per item too. `value_pct` is the fixed
+/// percentage (−10 = 10% off), here in hundredths of a percent. A per-item level's items keep the
+/// price QuickBooks worked out for them (`computed_price_amt`) as a fixed price; items priced only as
+/// a percentage are left off (they sell at standard price).
+pub(crate) fn price_level_of(name: String, hidden: bool, level_type: Option<i64>, value_hundredths: Option<i64>, items: &[(i64, Option<i64>)]) -> SourcePriceLevel {
+    use crate::price_levels::{ItemBasis, LevelItem, LevelKind};
+    let per_item = level_type == Some(2) || (level_type != Some(1) && !items.is_empty());
+    SourcePriceLevel {
+        name,
+        active: !hidden,
+        kind: if per_item { LevelKind::PerItem } else { LevelKind::FixedPercent },
+        percent_milli: if per_item { 0 } else { value_hundredths.unwrap_or(0).saturating_mul(10) },
+        items: if per_item {
+            items
+                .iter()
+                .filter_map(|(item, cents)| Some(LevelItem { product_id: *item, basis: ItemBasis::Fixed, price_cents: Some(cents.as_ref()?.abs()), percent_milli: None }))
+                .collect()
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+/// The file's price levels and each customer's default (`abmc_customer_user.price_level_id`).
+fn read_price_levels(pages: &[LogicalPage], catalog: &Catalog) -> (Vec<SourcePriceLevel>, Vec<(i64, String)>) {
+    let rows = rows_of(pages, catalog, "abmc_price_level");
+    if rows.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    let mut items: HashMap<i64, Vec<(i64, Option<i64>)>> = HashMap::new();
+    for r in rows_of(pages, catalog, "abmc_price_level_item") {
+        if let (Some(level), Some(item)) = (r.get("price_level_id").as_int(), r.get("item_id").as_int()) {
+            items.entry(level).or_default().push((item, r.get("computed_price_amt").as_cents()));
+        }
+    }
+    let mut names: HashMap<i64, String> = HashMap::new();
+    let mut levels = Vec::new();
+    for r in &rows {
+        let (Some(id), Some(name)) = (r.get("price_level_id").as_int(), text(r, "name")) else { continue };
+        if r.get("is_deleted_bool").as_int() == Some(1) {
+            continue;
+        }
+        let hidden = r.get("is_hidden_bool").as_int() == Some(1);
+        names.insert(id, name.clone());
+        levels.push(price_level_of(name, hidden, r.get("price_level_type").as_int(), r.get("value_pct").as_cents(), items.get(&id).map_or(&[][..], Vec::as_slice)));
+    }
+    let customers = rows_of(pages, catalog, "abmc_customer_user")
+        .iter()
+        .filter_map(|r| Some((r.get("customer_id").as_int()?, names.get(&r.get("price_level_id").as_int()?)?.clone())))
+        .collect();
+    (levels, customers)
 }
 
 fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<SourceParty> {
@@ -765,6 +835,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     }
     sales_lists.reps.sort();
     sales_lists.ship_methods.sort();
+    (sales_lists.price_levels, sales_lists.customer_price_levels) = read_price_levels(&pages, &catalog);
     Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists })
 }
 

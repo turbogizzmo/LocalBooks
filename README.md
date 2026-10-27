@@ -119,6 +119,8 @@ rejected. No code path can skip it.
 | `MIGRATION` | `db::migrate`, once per schema migration | Version, description, checksum, install time |
 | `ACCOUNT_CHANGE` | trigger, on rename, renumber, retype, move, or (de)activation | Before and after values |
 | `FORENSIC_HEAL` | a reviewed correction, when approved | The altered entry, the correcting entry, and its lines |
+| `LIST_CHANGE` | trigger, on an edit to a customer, vendor or product/service | Name and active flag before and after, and which other fields changed (names only) |
+| `CLEANUP` | Accounting › Clean Up Books, once per fix | Every credit applied, invoice written off or payment matched, with amounts |
 | `CONDENSE` | Condense Data, once per condense | The archive it was made from (audit-trail head, content hash), the entries summarized, and which summary entry replaced each month |
 
 Posted history can't be edited or deleted. A correction is always a new reversing entry, linked to
@@ -193,7 +195,8 @@ open-source [OpenQBW](https://github.com/Sigilweaver/OpenQBW) parser. The file i
    releases its invoice so it can be posted again.
 
 The wizard also reads the full ledger (accounts, customers, vendors and every transaction) from
-newer company files, QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
+newer company files, **QuickBooks for Mac 2012 and earlier** company files (`.qb2012`, read
+directly by `qbmac_import.rs`), QuickBooks `.iif` and Quicken `.qif` exports, and **GnuCash books**
 (`.gnucash`, either compressed XML or SQLite). A full import recreates invoices, bills, payments
 and the rest as LocalBooks documents. See [the migration guide](docs/guide/desktop-migration.md).
 
@@ -259,6 +262,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once | [guide](docs/guide/bills.md) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
+| Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
 | Condense Data | Settings › File & Data Controls | Replace closed years with monthly summary entries, keeping open items, with a verified read-only archive of the full history | [guide](docs/guide/backups-and-company-files.md#condense-data-archive-closed-years) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
@@ -269,20 +273,23 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; products fill in invoice lines | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
 | Export from installed QuickBooks (Preview) | Accounting › Desktop Migration Wizard › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
 | Find Transactions | Accounting › Find Transactions; Edit › Find… | Search by text, dates, number, amount, type, name and account | [guide](docs/guide/journal-entries-and-voids.md#find-a-transaction) |
+| Graphs | Reports › Graphs | Income and expense, net worth, receivables, payables, sales and budget vs. actual charts that open the report behind each bar; table view, PNG, print, Excel and CSV | [guide](docs/guide/reports.md#graphs) |
 | Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
 | Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments | [guide](docs/guide/invoices.md) |
 | Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
 | Menu bar | Menu bar | Classic desktop menus (Lists, Company, Customers, Vendors, Employees, Banking, Reports) that open each form and report, with Ctrl+I, Ctrl+W, Ctrl+R, Ctrl+J, Ctrl+T and Ctrl+F | [guide](docs/guide/getting-started.md#find-things-in-the-menu-bar) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
+| Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
+| Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
@@ -300,7 +307,7 @@ its entry form with focus in the first field.
 | Invoice | Expense | Single Time Activity | Journal Entry |
 | Receive Payment | Check | Weekly Timesheet | Bank Deposit |
 | Estimate | Bill | | Transfer |
-| Sales Receipt | Pay Bills | | |
+| Sales Receipt | Pay Bills | | To Do |
 | | Credit Card Credit | | |
 
 ---
@@ -326,6 +333,8 @@ its entry form with focus in the first field.
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
+| Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |
+| Undeposited Funds match (Clean Up Books) | The account the deposit line used (usually income) | Undeposited Funds |
 | Void | Exact reversal of the original entry, same date | |
 | Estimate / time activity | *Non-posting* (an estimate becomes an invoice only when that invoice posts) | |
 

@@ -198,6 +198,34 @@ async fn condensing_harbor_lane_keeps_every_balance_and_open_item() {
 }
 
 #[tokio::test]
+async fn a_to_do_keeps_the_invoice_it_is_about() {
+    let tmp = TempDir::new("todo");
+    let db = harbor_lane(&tmp).await;
+    let cutoff = d(2025, 3, 31);
+    let pool = db.pool().await;
+    let removed = |p: &CondensePreview| p.rows_removed.get("invoices").copied().unwrap_or(0);
+    let without = removed(&preview(&pool, cutoff).await.unwrap());
+    // A paid invoice from the condensed months that a to-do points at (link_kind has no foreign key).
+    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM invoices WHERE issue_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id").fetch_all(&pool).await.unwrap();
+    let mut linked = None;
+    for id in paid {
+        let todo: i64 = sqlx::query_scalar("INSERT INTO todos (title, link_kind, link_id) VALUES ('Send a thank-you', 'INVOICE', ?1) RETURNING id").bind(id).fetch_one(&pool).await.unwrap();
+        if removed(&preview(&pool, cutoff).await.unwrap()) == without - 1 {
+            linked = Some((id, todo));
+            break;
+        }
+        sqlx::query("DELETE FROM todos WHERE id = ?1").bind(todo).execute(&pool).await.unwrap();
+    }
+    let (invoice, todo) = linked.expect("a paid invoice that condensing would otherwise remove");
+
+    let result = condense_live_on(&db, cutoff, today()).await.unwrap();
+    assert!(result.verification.passed, "{:?}", result.verification);
+    let pool = db.pool().await;
+    assert_eq!(count(&pool, &format!("SELECT COUNT(*) FROM invoices WHERE id = {invoice}")).await, 1);
+    assert_eq!(count(&pool, &format!("SELECT COUNT(*) FROM todos WHERE id = {todo} AND link_id = {invoice}")).await, 1);
+}
+
+#[tokio::test]
 async fn condensing_twice_keeps_both_records_verifiable() {
     let tmp = TempDir::new("twice");
     let db = harbor_lane(&tmp).await;

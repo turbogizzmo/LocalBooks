@@ -15,6 +15,10 @@ export const screens = {
   'accounting/reclassify': {
     help: 'Move posted income and expense lines to another class. Each move posts a reclassifying journal entry on the line’s own date, which you can void to undo it.',
   },
+  'accounting/clean-up': {
+    help: 'Client Data Review tools in one place: apply credits left on credit memos and vendor credits, clear payments stuck in Undeposited Funds, write off old invoices, review list changes, and compare the Balance Sheet with the inventory valuation. Every fix shows its totals and asks first.',
+    guide: 'cleaning-up-books',
+  },
   'accounting/journal': {
     help: 'Every posted entry in date order, including voids and their reversals. Post a manual journal entry here for adjustments.',
     guide: 'journal-entries-and-voids',
@@ -25,6 +29,10 @@ export const screens = {
   },
   'accounting/recurring': {
     help: 'Memorized transactions that repeat on a schedule: rent, subscriptions, monthly invoices and accruals. Enter everything that is due in one step, or pause a schedule.',
+  },
+  'accounting/todos': {
+    help: 'Your own tasks, with due dates, about a customer, vendor or employee and optionally one of their invoices or bills. Tick Done to complete one; due ones also show in Reminders on the Dashboard.',
+    guide: 'reminders-and-todos',
   },
   'accounting/budgets': {
     help: 'Expected income and expenses for each account, month by month for a fiscal year. Compare a budget with your books in Reports › Budget vs. Actuals.',
@@ -49,6 +57,22 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'reminders', area: 'company', views: ['dashboard', 'accounting/todos'],
+    title: 'See what needs attention: Reminders',
+    body: 'The Reminders panel on the Dashboard counts overdue invoices, bills due soon, to-dos due, recurring transactions to enter, forms to email, upcoming tax dates and an overdue backup; click a line to see its items. Customize chooses which show, how many days each looks ahead, and whether Reminders open with the company; the choices are each user’s own.',
+    keywords: 'reminders alerts due overdue bills to pay invoices past due to do tax dates backup startup customize look ahead',
+    go: { label: 'Go to the Dashboard', view: 'dashboard' },
+    guide: 'reminders-and-todos',
+  },
+  {
+    id: 'todos', area: 'company', views: ['accounting/todos', 'sales/customers', 'expenses/vendors'],
+    title: 'Keep a To Do list',
+    body: 'Add a to-do from + New › To Do, the To Do List, or New to-do… on a customer or vendor, with a due date, a note, who or which invoice or bill it is about, and who it is assigned to when users are on. Filter the list by status, due date and assignee, and tick Done to complete one; a View-only user can complete only their own.',
+    keywords: 'to do todo task list follow up call assign due date note done complete',
+    go: { label: 'Go to the To Do List', view: 'accounting/todos', action: 'todo' },
+    guide: 'reminders-and-todos',
+  },
   {
     id: 'register', area: 'accounting', views: ['accounting/register', 'accounting/chart-of-accounts', 'reports'],
     title: 'Open an account register',
@@ -76,6 +100,14 @@ export const topics = [
     body: 'Accounting › Reclassify Transactions lists posted income and expense lines by date, account and current class; tick lines, choose the new class and choose Reclassify. Each move posts a reclassifying journal entry on the line’s own date, so reports are corrected for that period, and voiding that entry undoes it.',
     keywords: 'reclassify wrong class change class fix class move class',
     go: { label: 'Go to Reclassify Transactions', view: 'accounting/reclassify' },
+  },
+  {
+    id: 'clean-up-books', area: 'accounting', views: ['accounting/clean-up', 'banking/transfers', 'sales/credits', 'expenses/credits', 'accounting/audit'],
+    title: 'Clean up the books before closing a year',
+    body: 'Accounting › Clean Up Books has five tools. Unapplied credits applies credit left on credit memos and vendor credits to open invoices and bills, oldest first. Undeposited Funds matches a payment stuck there to the deposit that already banked it, which removes the income counted twice. Write off invoices credits old balances to a bad debt or discount account. List changes shows accounts, items, customers and vendors added, renamed, edited or made inactive in a date range. Inventory compares the inventory asset accounts with the Inventory Valuation and lists the transactions that cause any difference.',
+    keywords: 'client data review cleanup clean up unapplied credits undeposited funds double deposit write off bad debt list changes inventory valuation balance sheet accountant year end',
+    go: { label: 'Go to Clean Up Books', view: 'accounting/clean-up' },
+    guide: 'cleaning-up-books',
   },
   {
     id: 'journal-entry', area: 'accounting', views: ['accounting/journal'],
@@ -122,6 +154,14 @@ export const topics = [
     title: 'Import a desktop company file (.qbw)',
     body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from .qbw files yet. Map each line type to an income account, compare the total with the original program, then post.',
     keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
+    id: 'qbmac-import', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Import a QuickBooks for Mac 2012 (or earlier) company file',
+    body: 'Choose the .qb2012, .qb2011 or .qb2010 company file in the Desktop Migration Wizard: LocalBooks reads accounts, customers and jobs, vendors, items and every transaction, with the invoices and bills each payment paid. Files from QuickBooks for Mac 2016 and later are encrypted, so save those with File › Export › To QuickBooks for Windows and choose the .qbb file instead.',
+    keywords: 'quickbooks mac qb2012 qb2011 qb2010 macintosh company file import migrate encrypted qbmac',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
     guide: 'desktop-migration',
   },
