@@ -41,7 +41,9 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   So do the Ship Via list (`SHIPMETH`), each customer's rep (`REP`), and custom field values
   (`CUSTFLD1`…) on customers, vendors and items. Labels come from `CUSTNAMEDICT` and
   `CUSTITEMDICT`; a value without a label comes in as *Custom field N*. Invoices and sales
-  receipts keep their `REP`, `SHIPVIA` and `SHIPDATE`.
+  receipts keep their `REP`, `SHIPVIA` and `SHIPDATE`. Fixed % price levels (`PRICELEVEL`) come
+  in too, with each customer's `PRICELEVEL` as their default level; IIF has no per-item prices, so
+  a per-item level comes in with no items (standard prices) for you to fill in.
 - **IIF transactions:** a full import makes invoices, credit memos, sales receipts, payments,
   deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, card credits, transfers,
   estimates and purchase orders. Anything else posts as a journal entry. IIF doesn't record which
@@ -356,7 +358,9 @@ installed? Export from my installed QuickBooks** below the file box instead: see
    Or click **Match existing accounts and create the rest** to map by name and create what's missing.
    Every account must have a LocalBooks account before you can post.
 4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**.
-   It matches existing records by name and adds the rest.
+   It matches existing records by name and adds the rest. Price levels come in with them (a
+   level with the same name as one you already have is left as it is), and the customers it adds
+   get their default price level. Each level it creates is recorded in the audit trail.
 
 ## 3. Post to your books
 

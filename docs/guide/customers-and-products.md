@@ -64,6 +64,70 @@ they were written with; only new documents use the new prices. Each change is re
 ledger audit trail, with every item's old and new price and who made it, and the last few are listed
 under **Earlier price changes** on the same screen.
 
+## Price levels
+
+A **price level** is a named set of prices for some of your customers, such as *Wholesale* (10%
+off everything) or *Contractor* (special prices on a few items). Give a customer a level, and
+their new invoices, sales receipts and estimates fill in its prices.
+
+### Set up a price level
+
+1. Go to **Sales › Products & Services** and click **Price levels…** (or **Lists › Price Level
+   List** in the menu bar).
+2. Click **New price level**, give it a name and choose its **Type**:
+   - **Fixed % (every item):** raise or lower every item's standard price by one percentage. Enter
+     `-10` for 10% off or `15` for 15% more.
+   - **Per item:** tick the items that get their own price, and for each choose **Fixed price** (a
+     price you type), **Standard price ±%** or **Unit cost ±%** (for example `30` for cost plus
+     30%). Items you don't tick sell at their standard price.
+3. Choose how percentage prices are **rounded**: to the cent, to the nearest step (5¢, 10¢, 25¢,
+   50¢, $1, $5 or $10; halves go up), always up or down to a step, or up to a price ending in .99.
+4. Check the **Level price** column, then click **Create price level** (or **Save changes**).
+
+How a level's price is worked out, in whole cents (the same arithmetic as Change prices):
+
+- A percentage: the base (standard price or unit cost) plus base × percentage, with the change
+  rounded to the cent (half a cent rounds away from zero), then the rounding you chose. For
+  example, −10% of $19.99 is $19.99 − $2.00 = **$17.99**. Percentages run from −100% to +1,000%,
+  so a price is never below zero.
+- A fixed per-item price is used exactly as you typed it.
+- **Unit cost** is the item's average cost while you have stock on hand, otherwise what you last
+  paid. An item with no cost yet sells at its standard price on a cost-based level.
+
+**Make inactive** hides a level from sales forms and stops it filling in prices; customers keep it
+as their default, so making it active again brings their prices back. **Delete** removes it, and
+customers who had it go back to standard prices. Every change (created, changed, made inactive,
+deleted or imported) is recorded in the ledger audit trail with the level before and after, and the
+last few are listed under **Changes** on the same screen.
+
+### Give a customer a price level
+
+Open the customer (**Sales › Customers**, then **Edit** on their row) and choose a **Price level**.
+**Standard prices** means no level.
+
+### On invoices, sales receipts and estimates
+
+When a company has price levels, the line grid has a **Price level** column.
+
+- Picking a product fills in the **Rate** from the customer's price level (or the standard price).
+- Change a line's **Price level** to price that line at another level, or at **Standard**.
+- Changing the customer re-prices lines that are still following the customer's level.
+- **A rate you type always wins:** it is never replaced by a level's price.
+
+The level only fills in the rate. Documents keep the rate they were written with, so changing a
+level later never changes invoices or estimates you've already written.
+
+### Item Price List report
+
+**Reports › Item Price List** (or **Reports › Sales › Item Price List** in the menu bar) lists every
+item with its unit cost, its standard price and its price at each level. Tick **Show inactive
+items and levels** to include those. It exports to Excel, CSV and PDF like other reports.
+
+### Price levels from QuickBooks
+
+The Desktop Migration Wizard brings price levels in with customers, vendors and items, and gives
+the customers it adds their default level. See [the migration guide](desktop-migration.md).
+
 ## Sales reps, Ship Via and custom fields
 
 These three lists are optional. Until you add something to them, nothing about them shows on your
