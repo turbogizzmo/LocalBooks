@@ -396,7 +396,7 @@ export default function TimeTracking({ intent }) {
     billable: (a) => (a.billable ? 'Yes' : 'No'),
     rate: (a) => a.hourlyRateCents,
     time: (a) => a.minutes,
-  });
+  }, { storageKey: 'time' });
 
   useEffect(() => {
     if (intent?.action === 'weekly-timesheet') setMode('weekly');

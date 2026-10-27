@@ -316,7 +316,7 @@ export default function CreditMemos({ accounts, intent }) {
     total: (m) => m.totalCents,
     left: (m) => (m.refundAccountId !== null || m.isVoided ? null : m.remainingCents),
     status: (m) => (m.isVoided ? 'Voided' : m.refundAccountId !== null ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open'),
-  });
+  }, { storageKey: 'credit-memos' });
   const [composing, setComposing] = useState(intent?.action === 'credit-memo' ? 'credit' : intent?.action === 'refund-receipt' ? 'refund' : null);
   const [dialog, setDialog] = useState(null); // { mode: 'apply' | 'refund', memo }
   const [notice, setNotice] = useState(null);

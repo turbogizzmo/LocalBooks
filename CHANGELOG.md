@@ -19,6 +19,8 @@ people using LocalBooks.
   Balance Sheet to open the account's transactions for that column's dates. Click a name on an
   aging summary to list its open invoices or bills, or a line on Sales by Customer, Sales by
   Product/Service or Expenses by Vendor Summary to open its detail report.
+- **Newest first.** Lists of transactions start with the newest at the top, and each list
+  remembers the order you choose.
 
 ## [0.10.1]
 

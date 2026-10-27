@@ -175,7 +175,7 @@ export default function AuditLog() {
     entry: (a) => a.entryNumber,
     detail: (a) => a.detail,
     amount: (a) => a.amountCents,
-  });
+  }, { initial: { key: 'when', dir: 'desc' }, storageKey: 'audit-log' });
   const rows = sorter.sorted;
   const company = useCompany();
   const [exportNotice, setExportNotice] = useState(null);

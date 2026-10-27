@@ -380,7 +380,7 @@ export default function PartyList({ kind, navigate }) {
     name: (p) => p.name,
     email: (p) => p.email,
     balance: (p) => p.openBalanceCents || null,
-  });
+  }, { storageKey: `${kind}-list` });
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
   const company = useCompany();
   const exports = tableExports({

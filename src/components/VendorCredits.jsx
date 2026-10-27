@@ -225,7 +225,7 @@ export default function VendorCredits({ accounts, intent }) {
     total: (c) => c.totalCents,
     left: (c) => (c.isVoided ? null : c.remainingCents),
     status: (c) => (c.isVoided ? 'Voided' : c.remainingCents === 0 ? 'Used' : c.remainingCents < c.totalCents ? 'Partly used' : 'Open'),
-  });
+  }, { storageKey: 'vendor-credits' });
   const [composing, setComposing] = useState(intent?.action === 'vendor-credit');
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);

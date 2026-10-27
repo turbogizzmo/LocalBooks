@@ -179,6 +179,7 @@ export default function Estimates({ accounts, intent, navigate }) {
       amount: (e) => e.totalCents,
       status: (e) => STATUS[e.status].label,
     },
+    { storageKey: 'estimates' },
   );
   const shown = sorter.sorted;
 

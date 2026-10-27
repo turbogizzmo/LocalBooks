@@ -91,7 +91,7 @@ export default function Products({ accounts, intent }) {
     onHand: (p) => items.get(p.id)?.qtyOnHandE4,
     avgCost: (p) => items.get(p.id)?.averageCostCents,
     value: (p) => items.get(p.id)?.valueCents,
-  });
+  }, { storageKey: 'products' });
   // { mode: 'track', product }, { mode: 'adjust', item } or { mode: 'edit', product }
   const [dialog, setDialog] = useState(null);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && incomeOnly(a))?.id ?? null, [accounts]);

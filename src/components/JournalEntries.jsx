@@ -256,7 +256,7 @@ export default function JournalEntries({ accounts, intent }) {
     memo: (e) => e.memo,
     status: (e) => (e.isVoided ? 'Voided' : e.reversesEntryId !== null ? 'Reverses' : 'Posted'),
     amount: (e) => e.totalCents,
-  });
+  }, { storageKey: 'journal' });
   const rows = sorter.sorted;
 
   return (
