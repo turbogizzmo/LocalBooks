@@ -111,7 +111,7 @@ async fn rejects_line_with_both_debit_and_credit() {
         date: date(),
         description: "Two-sided line".into(),
         lines: vec![
-            JournalLine { account_id: fx.checking, debit: 10_000, credit: 10_000, memo: None, class_id: None },
+            JournalLine { account_id: fx.checking, debit: Cents(10_000), credit: Cents(10_000), memo: None, class_id: None },
             JournalLine::debit(fx.sales, 5_000),
             JournalLine::credit(fx.sales, 5_000),
         ],
@@ -269,11 +269,11 @@ fn conversion_balances_rounding_on_the_short_side() {
         JournalLine::credit(4, 9_999),
     ];
     let home = convert_lines(&lines, 1_085_000).unwrap();
-    let debits: i64 = home.iter().map(|l| l.0).sum();
-    let credits: i64 = home.iter().map(|l| l.1).sum();
+    let debits: i64 = home.iter().map(|l| l.0.get()).sum();
+    let credits: i64 = home.iter().map(|l| l.1.get()).sum();
     assert_eq!(debits, credits);
-    assert_eq!(home[3].1, 10_849);
-    assert_eq!(home.iter().map(|l| l.0).collect::<Vec<_>>(), vec![3_617, 3_616, 3_616, 0]);
+    assert_eq!(home[3].1, Cents(10_849));
+    assert_eq!(home.iter().map(|l| l.0.get()).collect::<Vec<_>>(), vec![3_617, 3_616, 3_616, 0]);
     assert!(convert_lines(&[JournalLine::debit(1, 1), JournalLine::credit(2, 1)], 100_000).unwrap_err().starts_with("FX_ROUNDS_TO_ZERO"));
 }
 
@@ -543,4 +543,41 @@ async fn classes_join_the_snapshot_without_changing_unclassified_ones() {
     sqlx::query("UPDATE journal_lines SET class_id = ?1 WHERE journal_entry_id = ?2 AND class_id IS NOT NULL").bind(west).bind(classed).execute(&fx.pool).await.unwrap();
     let verification = verify_ledger_audit(&fx.pool).await.unwrap();
     assert!(verification.findings.iter().any(|f| f.entry_id == classed && f.problem.starts_with("Differs from its posting snapshot")));
+}
+
+/// Journal rows are created, removed and changed only here, behind `validate_entry` and the audit
+/// chain. Reconciliation may mark lines cleared; nothing else outside this module may write to
+/// either table. Test code (`tests.rs`, `tests/`, `harness/`) is exempt: it tampers on purpose.
+#[test]
+fn only_the_ledger_writes_journal_rows() {
+    fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read the source folder") {
+            let path = entry.expect("read a folder entry").path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if path.is_dir() {
+                if name != "tests" && name != "harness" && !name.contains(' ') {
+                    sources(&path, out);
+                }
+            } else if name.ends_with(".rs") && name != "tests.rs" {
+                out.push(path);
+            }
+        }
+    }
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&src, &mut files);
+    assert!(files.len() > 50, "found the sources in {}", src.display());
+    let write = regex::Regex::new(r"(?i)\b(INSERT(\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|DELETE\s+FROM|UPDATE)\s+journal_(lines|entries)\b").unwrap();
+    let mut found = Vec::new();
+    for file in &files {
+        let rel = file.strip_prefix(&src).unwrap().to_string_lossy().replace('\\', "/");
+        let text = std::fs::read_to_string(file).expect("read a source file");
+        for m in write.find_iter(&text) {
+            let allowed = rel == "ledger.rs" || (rel == "reconcile.rs" && m.as_str().eq_ignore_ascii_case("UPDATE journal_lines"));
+            if !allowed {
+                found.push(format!("{rel}: {}", m.as_str()));
+            }
+        }
+    }
+    assert!(found.is_empty(), "post through ledger::post_entry_in_tx instead of writing journal rows: {}", found.join(", "));
 }

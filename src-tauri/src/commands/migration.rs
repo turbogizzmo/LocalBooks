@@ -29,6 +29,7 @@ pub const QBW_PROGRESS: &str = "qbw-import-progress";
 /// (newer files, read by the record-layer decoder).
 #[derive(Debug, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[allow(clippy::large_enum_variant, reason = "built once per import and sent straight to the screen")]
 pub enum IngestResult {
     Invoices { batch: BatchSummary },
     /// `sources` says what each report export was read as; it is empty for other files.
