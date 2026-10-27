@@ -122,7 +122,7 @@ pub async fn send_smtp_test_email(app: AppHandle, db: State<'_, Db>, settings: S
 }
 
 fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
-    Ok(smtp::secret_store(&app.path().app_config_dir().map_err(|e| format!("SMTP_CONFIG: {e}"))?))
+    Ok(smtp::secret_store(&crate::data_dirs(app).map_err(|e| format!("SMTP_CONFIG: {e}"))?.1))
 }
 
 #[tauri::command]

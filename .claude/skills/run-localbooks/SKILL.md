@@ -16,8 +16,12 @@ a **debug build on test company files**, never the user's real books.
   touched. Never launch a release build (`LocalBooks.app`) for testing.
 - Only open files under `dev-builds/test-companies/` (made by the seeder below) or new files
   created inside `dev-builds/`.
-- Do not change `HOME` to isolate the app: the macOS Keychain stops working, which breaks
-  "Remember me" and the audit trail record. `dev-builds` is already isolated.
+- Debug builds, and builds under any bundle identifier other than `com.localbooks.desktop`, never
+  use the macOS Keychain or Windows Credential Manager. The SMTP password, SimpleFIN access,
+  "Remember me" sign-ins and the audit trail record go to JSON files in `dev-builds/` (or the
+  build's own config folder), so **a Keychain password prompt during a test run is a bug**: stop
+  and report it. See `store_kind` in `src-tauri/src/secrets.rs`.
+- Do not change `HOME` to isolate the app: `dev-builds` is already isolated.
 - Quit only the app you started (match `target/debug/localbooks`), never another LocalBooks.
 
 ## 1. Prerequisites

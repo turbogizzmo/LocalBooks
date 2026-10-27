@@ -36,7 +36,7 @@ pub struct SignInState {
 /// Sign-ins remembered on this computer ("Remember me on this Mac"), one per company file, keyed by
 /// the file's data-key id: `{"username": …, "password": …}` in the operating system's credential store.
 fn remembered_sign_ins(app: &AppHandle) -> Result<SecretStore, String> {
-    let dir = app.path().app_config_dir().map_err(|e| format!("SIGN_IN_CONFIG: {e}"))?;
+    let (_, dir) = crate::data_dirs(app).map_err(|e| format!("SIGN_IN_CONFIG: {e}"))?;
     Ok(SecretStore::for_this_computer(&dir, "LocalBooks sign-in", "remembered-sign-ins.json", "the remembered sign-in"))
 }
 
