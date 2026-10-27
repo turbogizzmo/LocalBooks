@@ -10,6 +10,7 @@ import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
@@ -81,6 +82,15 @@ export default function Products({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listProducts);
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
+  const sorter = useSort(data, {
+    name: (p) => p.name,
+    description: (p) => p.description,
+    rate: (p) => p.rateCents || null,
+    income: (p) => accountLabel(accounts, p.incomeAccountId),
+    onHand: (p) => items.get(p.id)?.qtyOnHandE4,
+    avgCost: (p) => items.get(p.id)?.averageCostCents,
+    value: (p) => items.get(p.id)?.valueCents,
+  });
   // { mode: 'track', product }, { mode: 'adjust', item } or { mode: 'edit', product }
   const [dialog, setDialog] = useState(null);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && incomeOnly(a))?.id ?? null, [accounts]);
@@ -239,13 +249,13 @@ export default function Products({ accounts, intent }) {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="qb-grid-head">Name</th>
-                  <th className="qb-grid-head">Description</th>
-                  <th className="qb-grid-head text-right">Rate</th>
-                  <th className="qb-grid-head">Income account</th>
-                  <th className="qb-grid-head text-right">On hand</th>
-                  <th className="qb-grid-head text-right">Avg cost</th>
-                  <th className="qb-grid-head text-right">Stock value</th>
+                  <SortTh sorter={sorter} col="name">Name</SortTh>
+                  <SortTh sorter={sorter} col="description">Description</SortTh>
+                  <SortTh sorter={sorter} col="rate" className="text-right">Rate</SortTh>
+                  <SortTh sorter={sorter} col="income">Income account</SortTh>
+                  <SortTh sorter={sorter} col="onHand" className="text-right">On hand</SortTh>
+                  <SortTh sorter={sorter} col="avgCost" className="text-right">Avg cost</SortTh>
+                  <SortTh sorter={sorter} col="value" className="text-right">Stock value</SortTh>
                   <th className="qb-grid-head" aria-label="Stock" />
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
@@ -283,7 +293,7 @@ export default function Products({ accounts, intent }) {
                     <td colSpan={9} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
                   </tr>
                 )}
-                {(data ?? []).filter((p) => showInactive || p.isActive).map((p) => (
+                {sorter.sorted.filter((p) => showInactive || p.isActive).map((p) => (
                   <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ mode: 'edit', product: p })}>
                     <td className="qb-grid-cell font-semibold">
                       {p.name}

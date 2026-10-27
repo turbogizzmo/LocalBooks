@@ -8,6 +8,7 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 export const SOURCE_LABEL = {
   JOURNAL: 'Journal Entry', INVOICE: 'Invoice', RECEIVE_PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt',
@@ -247,7 +248,16 @@ export default function JournalEntries({ accounts, intent }) {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
   };
-  const rows = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
+  const filtered = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
+  const sorter = useSort(filtered, {
+    date: (e) => e.entryDate,
+    number: (e) => e.entryNumber,
+    source: (e) => (e.reversesEntryId !== null ? 'Void reversal' : (SOURCE_LABEL[e.sourceType] ?? e.sourceType)),
+    memo: (e) => e.memo,
+    status: (e) => (e.isVoided ? 'Voided' : e.reversesEntryId !== null ? 'Reverses' : 'Posted'),
+    amount: (e) => e.totalCents,
+  });
+  const rows = sorter.sorted;
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -294,12 +304,12 @@ export default function JournalEntries({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">No.</th>
-                <th className="qb-grid-head">Source</th>
-                <th className="qb-grid-head">Memo</th>
-                <th className="qb-grid-head">Status</th>
-                <th className="qb-grid-head text-right">Amount</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="number">No.</SortTh>
+                <SortTh sorter={sorter} col="source">Source</SortTh>
+                <SortTh sorter={sorter} col="memo">Memo</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
+                <SortTh sorter={sorter} col="amount" className="text-right">Amount</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>

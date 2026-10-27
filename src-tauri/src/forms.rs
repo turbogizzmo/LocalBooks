@@ -1470,7 +1470,7 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedForm {
-    /// "Invoice 1001": the suggested file name and the PDF's title.
+    /// "Invoice 1001 · Acme": the suggested file name and the PDF's title.
     pub title: String,
     pub pages: Vec<Page>,
     /// The logo the pages' image operations draw, as a data URL.
@@ -1513,11 +1513,12 @@ async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, p
     }
 }
 
-/// "Invoice 1001", or for a statement "Statement 2026-10-31 · Acme".
+/// "Invoice 1001 · Acme" (a statement's number is its end date): the PDF's title and, as
+/// "Invoice 1001 · Acme.pdf", the file name it is saved, printed and emailed under.
 fn form_title(tpl: &FormTemplate, doc: &FormDoc) -> String {
-    match doc.kind {
-        FormKind::Statement => format!("{} {} · {}", tpl.title, doc.number, doc.customer_name),
-        _ => format!("{} {}", tpl.title, doc.number),
+    match doc.customer_name.trim() {
+        "" => format!("{} {}", tpl.title, doc.number),
+        customer => format!("{} {} · {customer}", tpl.title, doc.number),
     }
 }
 
@@ -1578,7 +1579,7 @@ pub async fn email_draft(pool: &SqlitePool, kind: FormKind, document_id: i64, pe
     })
 }
 
-/// "Invoice 1001" → "Invoice 1001.pdf", without characters file systems refuse.
+/// "Invoice 1001 · Acme" → "Invoice 1001 · Acme.pdf", without characters file systems refuse.
 pub fn file_name(title: &str) -> String {
     let clean: String = title.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '-' } else { c }).collect();
     format!("{}.pdf", clean.trim().trim_matches('.'))

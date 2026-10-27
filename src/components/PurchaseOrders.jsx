@@ -9,6 +9,7 @@ import { accountLabel } from './AccountSelect.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
@@ -176,7 +177,16 @@ export default function PurchaseOrders({ accounts, intent }) {
   const [billing, setBilling] = useState(null);
   const [printing, setPrinting] = useState(null);
   const [filter, setFilter] = useState('OPEN');
-  const list = (data ?? []).filter((o) => filter === 'ALL' || o.status === filter);
+  const sorter = useSort((data ?? []).filter((o) => filter === 'ALL' || o.status === filter), {
+    number: (o) => o.poNumber,
+    date: (o) => o.poDate,
+    vendor: (o) => o.vendorName,
+    expected: (o) => o.expectedDate,
+    memo: (o) => o.memo,
+    status: (o) => STATUS[o.status] ?? o.status,
+    total: (o) => o.totalCents,
+  });
+  const list = sorter.sorted;
 
   const print = async (order) => {
     try {
@@ -249,13 +259,13 @@ export default function PurchaseOrders({ accounts, intent }) {
           <table className="qb-grid">
             <thead>
               <tr>
-                <th className="qb-grid-head">PO no.</th>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Vendor</th>
-                <th className="qb-grid-head">Expected</th>
-                <th className="qb-grid-head">Memo</th>
-                <th className="qb-grid-head">Status</th>
-                <th className="qb-grid-head num">Total</th>
+                <SortTh sorter={sorter} col="number">PO no.</SortTh>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="vendor">Vendor</SortTh>
+                <SortTh sorter={sorter} col="expected">Expected</SortTh>
+                <SortTh sorter={sorter} col="memo">Memo</SortTh>
+                <SortTh sorter={sorter} col="status">Status</SortTh>
+                <SortTh sorter={sorter} col="total" className="num">Total</SortTh>
                 <th className="qb-grid-head w-[36px]" />
               </tr>
             </thead>

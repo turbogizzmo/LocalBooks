@@ -137,8 +137,15 @@ pub async fn open_window(app: AppHandle, view: Option<String>, action: Option<St
 }
 
 /// Makes `path` the live company file for this session and tells the window to reload.
-pub async fn mount_company_file(app: &AppHandle, path: &Path) -> Result<StorageStatus, String> {
+///
+/// `windowless` opens it without restoring windows, as QuickBooks does when Alt is held: once the
+/// file is open, every window but one closes, so a page that fails to load does not come back.
+/// (The page that asked lands on a plain home page; see `CompanyFiles.jsx`.)
+pub async fn mount_company_file(app: &AppHandle, path: &Path, windowless: bool) -> Result<StorageStatus, String> {
     let status = app.state::<Db>().mount(path).await?;
+    if windowless {
+        windows::close_extra(app);
+    }
     company_changed(app).await;
     let _ = app.emit(COMPANY_FILE_CHANGED, ());
     notify(app);
@@ -152,7 +159,7 @@ pub async fn handle_hand_off(app: &AppHandle, request: crate::instance::HandOff)
         return; // no company file is open; the window is showing why
     }
     if let crate::instance::HandOff::Open { path } = request {
-        if let Err(err) = mount_company_file(app, &path).await {
+        if let Err(err) = mount_company_file(app, &path, false).await {
             app.state::<Db>().set_warning(format!("Could not open {}: {err}.", path.display()));
             let _ = app.emit(COMPANY_FILE_CHANGED, ());
         }
@@ -160,10 +167,11 @@ pub async fn handle_hand_off(app: &AppHandle, request: crate::instance::HandOff)
     windows::focus(app);
 }
 
-/// File › Open: opens a company file (a `.localbooks` file or a LocalBooks backup) in place.
+/// File › Open: opens a company file (a `.localbooks` file or a LocalBooks backup) in place;
+/// `windowless` opens it without restoring windows.
 #[tauri::command]
-pub async fn open_company_file(app: AppHandle, path: String) -> Result<StorageStatus, String> {
-    mount_company_file(&app, &storage::resolve_network_path(&PathBuf::from(path))).await
+pub async fn open_company_file(app: AppHandle, path: String, windowless: Option<bool>) -> Result<StorageStatus, String> {
+    mount_company_file(&app, &storage::resolve_network_path(&PathBuf::from(path)), windowless.unwrap_or(false)).await
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -243,9 +251,10 @@ pub async fn get_starter_chart(industry: String, entity_type: String) -> Result<
 }
 
 /// Open or Restore Company with a LocalBooks backup: copies the backup to `destination_path` (a new
-/// company file) and opens the copy, leaving the backup itself unchanged.
+/// company file) and opens the copy (`windowless`: without restoring windows), leaving the backup
+/// itself unchanged.
 #[tauri::command]
-pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_path: String) -> Result<StorageStatus, String> {
+pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_path: String, windowless: Option<bool>) -> Result<StorageStatus, String> {
     let source = PathBuf::from(source_path);
     let destination = with_company_extension(storage::resolve_network_path(&PathBuf::from(destination_path)));
     backup::inspect(&source).await?;
@@ -253,7 +262,7 @@ pub async fn restore_backup_as(app: AppHandle, source_path: String, destination_
         return Err(format!("NEW_COMPANY_EXISTS: {} already exists; choose another name or folder (LocalBooks never replaces a company file)", destination.display()));
     }
     std::fs::copy(&source, &destination).map_err(|e| format!("RESTORE_COPY: cannot copy the backup to {}: {e}", destination.display()))?;
-    match mount_company_file(&app, &destination).await {
+    match mount_company_file(&app, &destination, windowless.unwrap_or(false)).await {
         Ok(status) => Ok(status),
         Err(err) => {
             let _ = std::fs::remove_file(&destination);

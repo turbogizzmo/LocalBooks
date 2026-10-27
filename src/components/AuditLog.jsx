@@ -7,6 +7,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const ACTION_STYLE = {
   POST: { label: 'Posted', className: 'text-qb-ink' },
@@ -167,7 +168,15 @@ export default function AuditLog() {
       setVerifying(false);
     }
   };
-  const rows = (data ?? []).filter((a) => action === 'ALL' || a.action === action);
+  const sorter = useSort((data ?? []).filter((a) => action === 'ALL' || a.action === action), {
+    when: (a) => a.occurredAt,
+    event: (a) => ACTION_STYLE[a.action]?.label ?? a.action,
+    source: (a) => (a.sourceType ? (SOURCE_LABEL[a.sourceType] ?? a.sourceType) : null),
+    entry: (a) => a.entryNumber,
+    detail: (a) => a.detail,
+    amount: (a) => a.amountCents,
+  });
+  const rows = sorter.sorted;
   const company = useCompany();
   const [exportNotice, setExportNotice] = useState(null);
   const exports = tableExports({
@@ -230,12 +239,12 @@ export default function AuditLog() {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">When</th>
-                <th className="qb-grid-head">Event</th>
-                <th className="qb-grid-head">Source</th>
-                <th className="qb-grid-head">Entry</th>
-                <th className="qb-grid-head">Detail</th>
-                <th className="qb-grid-head text-right">Amount</th>
+                <SortTh sorter={sorter} col="when">When</SortTh>
+                <SortTh sorter={sorter} col="event">Event</SortTh>
+                <SortTh sorter={sorter} col="source">Source</SortTh>
+                <SortTh sorter={sorter} col="entry">Entry</SortTh>
+                <SortTh sorter={sorter} col="detail">Detail</SortTh>
+                <SortTh sorter={sorter} col="amount" className="text-right">Amount</SortTh>
               </tr>
             </thead>
             <tbody>

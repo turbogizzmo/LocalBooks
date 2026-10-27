@@ -8,6 +8,7 @@ handlers![
     save_xlsx,
     save_report_xlsx,
     print_report,
+    finish_printing,
 ];
 
 /// Renders a financial statement as CSV (`profit_and_loss` needs start/end, `balance_sheet` needs as_of).
@@ -77,8 +78,19 @@ pub async fn save_report_xlsx(
     Ok(Some(path.display().to_string()))
 }
 
-/// Opens the system print dialog for the current window (Print / Save as PDF).
+/// Opens the system print dialog for the current window (Print / Save as PDF). With `title` (a
+/// form's "Invoice 1001 · Acme") the window carries it until `finish_printing`, since the dialog
+/// names the job, and the PDF it saves, after the window.
 #[tauri::command]
-pub async fn print_report(window: tauri::WebviewWindow) -> Result<(), String> {
+pub async fn print_report(window: tauri::WebviewWindow, title: Option<String>) -> Result<(), String> {
+    if let Some(title) = title.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        let _ = window.set_title(title);
+    }
     window.print().map_err(|e| format!("PRINT_FAILED: {e}"))
+}
+
+/// Gives the window back its company title once the print dialog closes.
+#[tauri::command]
+pub async fn finish_printing(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    window.set_title(&super::company_files::window_title(&app).await).map_err(|e| format!("PRINT_FAILED: {e}"))
 }

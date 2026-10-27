@@ -7,6 +7,7 @@ import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const isBank = (a) => a.accountType === 'BANK';
 const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
@@ -254,6 +255,14 @@ export default function DepositsTransfers({ accounts, intent }) {
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
   };
   const rows = data ?? [];
+  const sorter = useSort(rows, {
+    date: (r) => r.date,
+    type: (r) => (r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'),
+    account: (r) => accountLabel(accounts, r.kind === 'TRANSFER' ? r.otherAccountId : r.accountId),
+    from: (r) => (r.kind === 'TRANSFER' ? accountLabel(accounts, r.accountId) : r.lineCount),
+    memo: (r) => (r.isVoided ? 'Voided' : r.memo),
+    amount: (r) => r.amountCents,
+  });
   const posted = (text) => setNotice({ kind: 'success', text });
 
   return (
@@ -287,12 +296,12 @@ export default function DepositsTransfers({ accounts, intent }) {
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Date</th>
-                <th className="qb-grid-head">Type</th>
-                <th className="qb-grid-head">Account</th>
-                <th className="qb-grid-head">From / lines</th>
-                <th className="qb-grid-head">Memo</th>
-                <th className="qb-grid-head text-right">Amount</th>
+                <SortTh sorter={sorter} col="date">Date</SortTh>
+                <SortTh sorter={sorter} col="type">Type</SortTh>
+                <SortTh sorter={sorter} col="account">Account</SortTh>
+                <SortTh sorter={sorter} col="from">From / lines</SortTh>
+                <SortTh sorter={sorter} col="memo">Memo</SortTh>
+                <SortTh sorter={sorter} col="amount" className="text-right">Amount</SortTh>
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -302,7 +311,7 @@ export default function DepositsTransfers({ accounts, intent }) {
                   <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No deposits or transfers yet.</td>
                 </tr>
               )}
-              {rows.map((r) => (
+              {sorter.sorted.map((r) => (
                 <tr key={`${r.kind}-${r.id}`} className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(r.date)}</td>
                   <td className="qb-grid-cell">{r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'}</td>

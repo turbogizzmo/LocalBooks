@@ -273,6 +273,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Sortable lists | Any list | Click a column heading to sort by it; click again to reverse | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
 | Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
 

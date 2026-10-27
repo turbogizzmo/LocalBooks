@@ -359,7 +359,7 @@ export default function SignIn({ companyName, user }) {
             </button>
           ) : (
             <>
-              <button type="button" className="text-qb-link hover:underline" onClick={actions.openOrRestore}>
+              <button type="button" className="text-qb-link hover:underline" onClick={(e) => actions.openOrRestore(e.altKey)}>
                 Open another company
               </button>
               <button type="button" className="text-qb-link hover:underline" onClick={() => run(api.closeCompanyFile)}>

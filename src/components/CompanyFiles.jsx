@@ -7,7 +7,10 @@ import Notice from './Notice.jsx';
 import { api, COMPANY_FILE_CHANGED, errorText } from '../lib/api.js';
 import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
 
-/** Sent by File › New Company… ("new") and File › Open or Restore Company… ("open"); see file_menu.rs. */
+/**
+ * Sent by File › New Company… ("new"), File › Open or Restore Company… ("open") and File › Open
+ * Company Without Restoring Windows… ("open-windowless"); see file_menu.rs.
+ */
 const FILE_MENU_REQUESTED = 'file-menu-requested';
 /** QuickBooks Desktop company files and backups: opening one starts a new company and migrates it. */
 export const QUICKBOOKS_EXTENSIONS = ['qbw', 'qbb', 'qbm'];
@@ -19,6 +22,45 @@ const COMPANY_FILTER = {
 };
 /** The QuickBooks file to read once the new company it is migrating into has opened (the window reloads in between). */
 const PENDING_MIGRATION_KEY = 'localbooks.pendingMigration';
+/**
+ * Set while a company opens without restoring windows. Kept in localStorage, which every window
+ * shares: the File menu may ask another window than the one left open once the file is open.
+ */
+const WINDOWLESS_KEY = 'localbooks.windowless';
+const IS_MAC = /Mac/.test(navigator.userAgent);
+/** The key held while clicking Open to open a company without restoring windows. */
+export const WINDOWLESS_KEY_NAME = IS_MAC ? 'Option' : 'Alt';
+
+/**
+ * Opens a company with `open` (a call that opens it, making the window reload), without restoring
+ * windows when `windowless`: the other windows close and this one starts on a plain home page
+ * instead of the page last shown, as QuickBooks does when Alt is held while a company opens.
+ */
+async function opening(windowless, open) {
+  if (!windowless) return open(false);
+  try {
+    localStorage.setItem(WINDOWLESS_KEY, '1');
+  } catch {
+    // Without storage the other windows still close; this one shows its usual page.
+  }
+  try {
+    return await open(true);
+  } catch (err) {
+    takeWindowlessOpen();
+    throw err;
+  }
+}
+
+/** Whether this window is showing a company just opened without restoring windows; asked once per load. */
+export function takeWindowlessOpen() {
+  try {
+    const set = !!localStorage.getItem(WINDOWLESS_KEY);
+    localStorage.removeItem(WINDOWLESS_KEY);
+    return set;
+  } catch {
+    return false;
+  }
+}
 
 export function isQuickBooksFile(path) {
   return QUICKBOOKS_EXTENSIONS.includes(path.split('.').pop()?.toLowerCase());
@@ -65,14 +107,20 @@ function safeFileName(name) {
  * place; any other `.db` is a LocalBooks backup, which is restored to a new company file so the
  * backup itself stays as it was. A QuickBooks `.qbw`/`.qbb`/`.qbm` file starts a new company file
  * and opens the Desktop Migration Wizard on it; the QuickBooks file is only read. Resolves once the
- * company is open (the window then reloads), or when the user cancels.
+ * company is open (the window then reloads), or when the user cancels. `windowless` opens it without
+ * restoring windows (a QuickBooks file always opens on the wizard).
  */
-export async function openOrRestoreCompany() {
-  const path = await open({ multiple: false, directory: false, title: 'Open or restore a company', filters: [COMPANY_FILTER] });
+export async function openOrRestoreCompany(windowless = false) {
+  const path = await open({
+    multiple: false,
+    directory: false,
+    title: windowless ? 'Open a company without restoring windows' : 'Open or restore a company',
+    filters: [COMPANY_FILTER],
+  });
   if (!path) return;
   const name = path.split(/[\\/]/).pop().toLowerCase();
   if (name.endsWith('.localbooks') || name === 'localbooks.db') {
-    await api.openCompanyFile(path);
+    await opening(windowless, (w) => api.openCompanyFile(path, w));
     return;
   }
   if (isQuickBooksFile(path)) {
@@ -84,7 +132,7 @@ export async function openOrRestoreCompany() {
     defaultPath: `${fileStem(path)}.localbooks`,
     filters: [{ name: 'LocalBooks company file', extensions: ['localbooks'] }],
   });
-  if (destination) await api.restoreBackupAs(path, destination);
+  if (destination) await opening(windowless, (w) => api.restoreBackupAs(path, destination, w));
 }
 
 /**
@@ -430,10 +478,10 @@ export function useCompanyFileActions() {
     setError(null);
     setCreating(true);
   }, []);
-  const openOrRestore = useCallback(async () => {
+  const openOrRestore = useCallback(async (windowless = false) => {
     setError(null);
     try {
-      await openOrRestoreCompany();
+      await openOrRestoreCompany(windowless === true);
     } catch (err) {
       setError(`This file can't be opened: ${errorText(err)}`);
     }
@@ -444,7 +492,7 @@ export function useCompanyFileActions() {
     let unlisten;
     let cancelled = false;
     getCurrentWebviewWindow()
-      .listen(FILE_MENU_REQUESTED, (event) => (event.payload === 'new' ? newCompany() : openOrRestore()))
+      .listen(FILE_MENU_REQUESTED, (event) => (event.payload === 'new' ? newCompany() : openOrRestore(event.payload === 'open-windowless')))
       .then((fn) => (cancelled ? fn() : (unlisten = fn)))
       .catch(() => {});
     return () => {
@@ -494,12 +542,13 @@ export default function NoCompanyOpen() {
   const recent = screen?.recent ?? [];
   const current = recent.find((r) => r.path === selected) ?? null;
 
-  const openRecent = async (row) => {
+  // Option/Alt-click opens it without restoring windows.
+  const openRecent = async (row, windowless = false) => {
     if (!row || row.missing || busy) return;
     setBusy(true);
     setOpenError(null);
     try {
-      await api.openCompanyFile(row.path);
+      await opening(windowless, (w) => api.openCompanyFile(row.path, w));
     } catch (err) {
       setOpenError(`Could not open ${row.companyName}: ${errorText(err)}`);
       setBusy(false);
@@ -560,7 +609,7 @@ export default function NoCompanyOpen() {
                       className={`qb-grid-row cursor-default ${row.path === selected ? 'bg-qb-green-tint' : ''} ${row.missing ? 'text-qb-ink-muted' : ''}`}
                       aria-selected={row.path === selected}
                       onClick={() => setSelected(row.path)}
-                      onDoubleClick={() => openRecent(row)}
+                      onDoubleClick={(e) => openRecent(row, e.altKey)}
                       title={row.path}
                     >
                       <td className="qb-grid-cell truncate">
@@ -597,9 +646,16 @@ export default function NoCompanyOpen() {
             )}
           </div>
           <div className="flex w-[120px] flex-none flex-col items-center gap-2">
-            <button type="button" className="qb-btn qb-btn-primary h-row-lg w-full" onClick={() => openRecent(current)} disabled={!current || current.missing || busy}>
+            <button
+              type="button"
+              className="qb-btn qb-btn-primary h-row-lg w-full"
+              onClick={(e) => openRecent(current, e.altKey)}
+              disabled={!current || current.missing || busy}
+              title={`${WINDOWLESS_KEY_NAME}-click to open without restoring windows`}
+            >
               {busy ? 'Opening…' : 'Open'}
             </button>
+            <span className="text-center text-2xs leading-tight text-qb-ink-muted">Hold {WINDOWLESS_KEY_NAME} to open without restoring windows</span>
             <button type="button" className="text-sm text-qb-link hover:underline disabled:opacity-50" onClick={() => setEditing((e) => !e)} disabled={recent.length === 0 && !editing}>
               {editing ? 'Done Editing' : 'Edit List'}
             </button>
@@ -610,7 +666,7 @@ export default function NoCompanyOpen() {
             <Plus className="h-6 w-6 text-qb-green-active" aria-hidden="true" />
             Create a new company
           </button>
-          <button type="button" className={tile} onClick={actions.openOrRestore} disabled={busy}>
+          <button type="button" className={tile} onClick={(e) => actions.openOrRestore(e.altKey)} disabled={busy}>
             <FolderOpen className="h-6 w-6 text-qb-green-active" aria-hidden="true" />
             Open or restore an existing company
           </button>
@@ -649,12 +705,12 @@ function FindCompanyDialog({ onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [busy, onClose]);
 
-  const openFile = async (path) => {
+  const openFile = async (path, windowless = false) => {
     if (!path || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await api.openCompanyFile(path);
+      await opening(windowless, (w) => api.openCompanyFile(path, w));
       // The window reloads on the company opened.
     } catch (err) {
       setError(`This file can't be opened: ${errorText(err)}`);
@@ -699,7 +755,7 @@ function FindCompanyDialog({ onClose }) {
                   className={`qb-grid-row cursor-default ${f.path === selected ? 'bg-qb-green-tint' : ''}`}
                   aria-selected={f.path === selected}
                   onClick={() => setSelected(f.path)}
-                  onDoubleClick={() => openFile(f.path)}
+                  onDoubleClick={(e) => openFile(f.path, e.altKey)}
                   title={f.path}
                 >
                   <td className="qb-grid-cell truncate">{f.fileName}</td>
@@ -715,7 +771,13 @@ function FindCompanyDialog({ onClose }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={() => openFile(selected)} disabled={!selected || busy}>
+          <button
+            type="button"
+            className="qb-btn qb-btn-primary"
+            onClick={(e) => openFile(selected, e.altKey)}
+            disabled={!selected || busy}
+            title={`${WINDOWLESS_KEY_NAME}-click to open without restoring windows`}
+          >
             {busy ? 'Opening…' : 'Open'}
           </button>
         </div>
