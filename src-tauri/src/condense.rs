@@ -382,14 +382,17 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
         for (parent, from, to) in keys {
             let Some(parent_table) = nodes.table(&parent) else { continue };
             let to = to.unwrap_or_else(|| "rowid".into());
-            if !targets.contains_key(&(parent.clone(), to.clone())) {
-                let pairs: Vec<(i64, i64)> = sqlx::query_as(&format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(&to), quote_ident(&parent)))
-                    .fetch_all(&mut *conn)
-                    .await
-                    .map_err(db_err)?;
-                targets.insert((parent.clone(), to.clone()), pairs.into_iter().collect());
-            }
-            let target = &targets[&(parent.clone(), to)];
+            let target = match targets.entry((parent.clone(), to)) {
+                std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
+                std::collections::hash_map::Entry::Vacant(slot) => {
+                    let (parent, to) = slot.key();
+                    let pairs: Vec<(i64, i64)> = sqlx::query_as(&format!("SELECT {}, rowid FROM {} WHERE {0} IS NOT NULL", quote_ident(to), quote_ident(parent)))
+                        .fetch_all(&mut *conn)
+                        .await
+                        .map_err(db_err)?;
+                    slot.insert(pairs.into_iter().collect())
+                }
+            };
             let links: Vec<(i64, i64)> = sqlx::query_as(&format!("SELECT rowid, {} FROM {} WHERE {0} IS NOT NULL", quote_ident(&from), quote_ident(&child)))
                 .fetch_all(&mut *conn)
                 .await
