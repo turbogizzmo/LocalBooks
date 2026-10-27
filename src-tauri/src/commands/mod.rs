@@ -67,6 +67,7 @@ features![
     expenses,
     finance_charges,
     forms,
+    installed_quickbooks,
     inventory,
     invoices,
     item_prices,

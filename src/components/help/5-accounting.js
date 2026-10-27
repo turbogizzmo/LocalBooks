@@ -138,6 +138,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'qb-installed-export', area: 'accounting', views: ['accounting/qbw-import'],
+    title: 'Export from my installed QuickBooks (Preview)',
+    body: 'If QuickBooks Desktop still runs on this computer, open your company file in it, then open "QuickBooks still installed? Export from my installed QuickBooks" under step 1 and click Export from QuickBooks. LocalBooks asks QuickBooks for the chart of accounts, customers, vendors, items and Journal through Intuit\'s own interfaces, sending read-only requests only, and stages them like report exports. On a Mac, first open Reports › Accountant & Taxes › Journal with the dates set to All and leave it in front; the first time, macOS asks whether LocalBooks may control QuickBooks: click OK (or turn it on later in System Settings › Privacy & Security › Automation). On Windows, install Intuit\'s free QuickBooks Desktop SDK, open the file as Admin, and when QuickBooks asks about LocalBooks choose "Yes, whenever this QuickBooks company file is open". Preview: not yet tried against a running QuickBooks; if it fails, export the reports yourself.',
+    keywords: 'quickbooks installed running export qbxml sdk applescript automation permission certificate mac windows migrate preview',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'accounting/qbw-import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'qbw-undo', area: 'accounting', views: ['accounting/qbw-import'],
     title: 'Undo or delete a desktop migration import',
     body: 'Reverse posted entries voids everything an import posted and deactivates the accounts it created, returning your balances to where they were. Delete import removes only the staged lines and never touches your books.',

@@ -206,6 +206,15 @@ transactions to the same resolver as the IIF reader. An expired QuickBooks Deskt
 still run these reports in view-only mode. See
 [docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#import-quickbooks-reports).
 
+**Export from an installed QuickBooks (Preview).** When QuickBooks Desktop still runs on the same
+computer, the wizard can ask it for the data through Intuit's public interfaces instead
+(`installed_qb.rs`): AppleScript's `executeqbxml` and `reportAsText` on a Mac, the QuickBooks
+SDK's `QBXMLRP2.RequestProcessor` over COM on Windows. Only read-only qbXML queries are ever sent;
+an allowlist refuses anything else before it leaves LocalBooks. The answers become the same tables
+as a report export and go through `report_import.rs`. Neither platform has been tried against a
+live QuickBooks yet. See
+[docs/guide/desktop-migration.md](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it).
+
 ---
 
 ## Architecture
@@ -262,6 +271,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts | [guide](docs/guide/deposits-and-transfers.md) |
 | Desktop Migration Wizard | Accounting › Desktop Migration Wizard | `.qbw`, IIF, QIF, QuickBooks report and GnuCash import through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Export from installed QuickBooks (Preview) | Accounting › Desktop Migration Wizard › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
 | Finance charges | Sales › Assess Finance Charges | Interest on overdue invoices (rate, minimum, grace days), in integer cents | [guide](docs/guide/customer-payments.md) |
@@ -598,6 +608,10 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   lines are grouped by date, type and number until they balance. A General Ledger's lines are
   paired back into transactions through its Split column; lines that can't be paired are listed,
   not posted. Item quantities, classes and sales tax codes on transaction lines are not read.
+- **Export from an installed QuickBooks** is a Preview: it has not been tried against a running
+  QuickBooks on either platform. On a Mac it needs the Journal report open in front, and older
+  QuickBooks for Mac versions may lack the AppleScript commands; on Windows it needs Intuit's free
+  QuickBooks SDK. Classes are counted, not imported, and the limits of report imports apply.
 - **GnuCash imports.** Stock and mutual fund accounts are skipped. Amounts that aren't whole cents,
   and foreign-currency transactions with no home-currency amount, are listed for manual entry
   rather than rounded or converted. Scheduled transactions, budgets and prices aren't imported.
