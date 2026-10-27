@@ -86,6 +86,25 @@ async fn a_bill_can_be_paid_before_its_date() {
 }
 
 #[tokio::test]
+async fn next_check_number_follows_checks_and_bill_payments_per_account() {
+    let pool = test_pool().await;
+    let (checking, card, rent) = (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await);
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1001");
+
+    let posted = post_vendor_bill(&pool, bill("Landlord LLC", vec![(rent, 90_000)])).await.unwrap();
+    pay_vendor_bill(&pool, pay(posted.id, checking, 40_000)).await.unwrap();
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1002", "a bill payment's check number counts");
+
+    sqlx::query("INSERT INTO expenses (kind, payment_account_id, expense_date, check_number, total_cents) VALUES ('CHECK', ?1, '2026-10-12', ' 1010 ', 500)")
+        .bind(checking)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(next_check_number(&pool, checking).await.unwrap(), "1011", "a written check's number counts");
+    assert_eq!(next_check_number(&pool, card).await.unwrap(), "1001", "each account has its own numbers");
+}
+
+#[tokio::test]
 async fn bill_rejects_bad_categories_and_rolls_back() {
     let pool = test_pool().await;
     let (rent, sales, ar) = (account_id(&pool, "6300").await, account_id(&pool, "4000").await, account_id(&pool, "1200").await);

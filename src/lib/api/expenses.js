@@ -9,6 +9,7 @@ export default {
   payVendorBill: (input) => invoke('pay_vendor_bill', { input }),
   payVendorBills: (inputs) => invoke('pay_vendor_bills', { inputs }),
   listBillPayments: (billId) => invoke('list_bill_payments', { billId }),
+  nextCheckNumber: (accountId) => invoke('next_check_number', { accountId }),
   postExpense: (input) => invoke('post_expense', { input }),
   listExpenses: () => invoke('list_expenses'),
 };

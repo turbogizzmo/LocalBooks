@@ -75,6 +75,14 @@
   #print-root .form-sheet:last-child {
     break-after: auto;
   }
+
+  /* Several checks print one per sheet. */
+  #print-root .check {
+    break-after: page;
+  }
+  #print-root .check:last-child {
+    break-after: auto;
+  }
 }
 
 /* -------------------------------------------------------------------------------------------- */

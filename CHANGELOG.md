@@ -9,6 +9,9 @@ people using LocalBooks.
 - **Early payments.** A customer payment can be dated before its invoice (a customer who paid
   early, or a deposit taken before you billed the work), and a bill can be paid before its date,
   as QuickBooks allows.
+- **Check numbers and printing in Pay Bills.** Paying bills from a bank account writes one check
+  per vendor, numbered from the account's next check number, and can print them. Write Checks
+  continues the same numbering, so a number is never used twice.
 
 ## [0.10.1]
 

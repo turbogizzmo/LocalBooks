@@ -8,7 +8,8 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { StatusBadge } from './Invoices.jsx';
-import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -190,6 +191,10 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const requestId = useRef(newRequestId());
   const ach = method === 'ACH';
   const account = accounts.find((a) => a.id === accountId);
+  // Paid from a bank account by check: one check per vendor, numbered in turn from the first.
+  const checks = !ach && account?.accountType === 'BANK';
+  const [checkNo, setCheckNo] = useState('');
+  const [printChecks, setPrintChecks] = useState(true);
 
   useEffect(() => firstRef.current?.focus(), []);
 
@@ -205,6 +210,18 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
       cancelled = true;
     };
   }, [ach, accountId]);
+
+  useEffect(() => {
+    if (!checks) return undefined;
+    let cancelled = false;
+    api.nextCheckNumber(accountId).then(
+      (n) => !cancelled && setCheckNo(n),
+      (err) => !cancelled && setError(errorText(err)),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [checks, accountId]);
 
   const vendorIds = useMemo(() => [...new Set(open.map((b) => b.vendorId))], [bills]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -230,18 +247,44 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
   const bad = picked.filter((b) => cents(b) === null || cents(b) <= 0 || cents(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
+  const payees = [...new Set(picked.map((b) => b.vendorId))];
+  const firstCheck = checkNo.trim();
+  const numbered = /^\d+$/.test(firstCheck);
+  const checkNumber = (vendorId) => {
+    if (!checks || !firstCheck) return null;
+    const i = payees.indexOf(vendorId);
+    return numbered ? String(BigInt(firstCheck) + BigInt(i)) : firstCheck;
+  };
+  const lastCheck = payees.length > 1 && numbered ? checkNumber(payees[payees.length - 1]) : null;
   const noBank = ach ? [...new Set(picked.filter((b) => banks[b.vendorId] === null).map((b) => b.vendorName))] : [];
 
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
     if (bad.length > 0) return setError('Each payment must be above zero and no more than the open balance.');
     if (ach) return payByAch();
+    if (checks && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
     try {
       const count = await api.payVendorBills(
-        picked.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: null })),
+        picked.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) })),
       );
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}.`);
+      const written = checks
+        ? payees.map((vendorId) => {
+            const theirs = picked.filter((b) => b.vendorId === vendorId);
+            const numbers = theirs.map((b) => b.billNumber).filter(Boolean);
+            return {
+              payeeName: theirs[0].vendorName,
+              expenseDate: date,
+              totalCents: theirs.reduce((s, b) => s + cents(b), 0),
+              currencyCode: null,
+              checkNumber: checkNumber(vendorId),
+              memo: numbers.length ? `Bill${numbers.length === 1 ? '' : 's'} ${numbers.join(', ')}` : null,
+              paymentAccountId: accountId,
+            };
+          })
+        : [];
+      const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${range}.`, 'success', printChecks ? written : []);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -305,6 +348,18 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <span className="qb-label">Payment date</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+        {checks && (
+          <label>
+            <span className="qb-label">{payees.length > 1 ? 'First check no.' : 'Check no.'}</span>
+            <input className="qb-input num w-[90px]" value={checkNo} onChange={(e) => setCheckNo(e.target.value)} aria-label="Check number" />
+          </label>
+        )}
+        {checks && (
+          <label className="flex h-row items-center gap-1 self-end text-sm">
+            <input type="checkbox" className="accent-qb-green" checked={printChecks} onChange={(e) => setPrintChecks(e.target.checked)} />
+            Print checks
+          </label>
+        )}
         {ach && (
           <label>
             <span className="qb-label">Vendors paid on</span>
@@ -378,6 +433,11 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })}
         </tbody>
       </table>
+      {checks && payees.length > 1 && (
+        <div className="px-2 py-1 text-xs text-qb-ink-muted">
+          One check per vendor{lastCheck ? `, numbered ${firstCheck} to ${lastCheck}` : ''}. Each vendor's bills are paid together on one check.
+        </div>
+      )}
       {ach && originator === null && (
         <div className="px-2 py-1 text-sm text-qb-ink-muted">
           To pay by ACH file, enter the details your bank gave you for sending ACH files from {account?.name ?? 'this account'}: choose Set up ACH.
@@ -423,6 +483,8 @@ export default function Bills({ accounts, intent }) {
   const [payments, setPayments] = useState({});
   const [editing, setEditing] = useState(null); // { bill, lines }
   const [achFiles, setAchFiles] = useState(false);
+  const [printing, setPrinting] = useState([]);
+  const company = useCompany();
   const vendorRef = useRef(null);
   const startEdit = (bill) =>
     api.getDocumentLines('bill', bill.id).then(
@@ -481,6 +543,13 @@ export default function Bills({ accounts, intent }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {printing.length > 0 && (
+        <PrintPortal>
+          {printing.map((check, i) => (
+            <CheckDocument key={i} company={company} check={check} bankName={accountLabel(accounts, check.paymentAccountId)} />
+          ))}
+        </PrintPortal>
+      )}
       <MoneyBar
         items={[
           { label: 'Open bills', icon: '○', color: '#0077c5', cents: sum(open, 'balanceCents'), count: open.length },
@@ -493,9 +562,14 @@ export default function Bills({ accounts, intent }) {
           bills={bills}
           accounts={accounts}
           onCancel={() => setPaying(false)}
-          onDone={(text, kind = 'success') => {
+          onDone={(text, kind = 'success', checks = []) => {
             setPaying(false);
             setNotice({ kind, text });
+            if (checks.length > 0) {
+              setPrinting(checks);
+              // Let React render the checks into the print root before the dialog opens.
+              setTimeout(() => printDocument(checks.length === 1 ? `Check ${checks[0].checkNumber ?? ''}`.trim() : 'Checks'), 80);
+            }
           }}
         />
       ) : (

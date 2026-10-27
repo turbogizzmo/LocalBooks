@@ -33,16 +33,12 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     [accounts, kind],
   );
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
-  const nextCheck = useMemo(() => {
-    const numbers = expenses.filter((e) => e.kind === 'CHECK' && /^\d+$/.test(e.checkNumber ?? '')).map((e) => Number(e.checkNumber));
-    return numbers.length ? String(Math.max(...numbers) + 1) : '1001';
-  }, [expenses]);
 
   const was = editing?.expense;
   const [payee, setPayee] = useState(was?.payeeName ?? '');
   const [accountId, setAccountId] = useState(was?.paymentAccountId ?? defaultPayFrom);
   const [date, setDate] = useState(was?.expenseDate ?? todayIso());
-  const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : nextCheck);
+  const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
   const [method, setMethod] = useState(was?.paymentMethod ?? 'CREDIT_CARD');
   const [memo, setMemo] = useState(was?.memo ?? '');
   const { homeCurrency } = useCompany();
@@ -56,9 +52,18 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const formClass = useFormClass(accounts);
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
+  // The next number for the bank account, after its checks and bill payment checks; again after each one is posted.
   useEffect(() => {
-    if (!editing) setCheckNumber(nextCheck);
-  }, [nextCheck, editing]);
+    if (editing || kind !== 'CHECK' || accountId === null) return undefined;
+    let cancelled = false;
+    api.nextCheckNumber(accountId).then(
+      (n) => !cancelled && setCheckNumber(n),
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [expenses, accountId, kind, editing]);
   useEffect(() => {
     if (accountId === null && defaultPayFrom !== null) setAccountId(defaultPayFrom);
   }, [defaultPayFrom, accountId]);
