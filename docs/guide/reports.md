@@ -288,6 +288,35 @@ filters, columns, grouping and report period (such as **This month**), not the n
 current figures each time. To change one, open it, customize it and **Save as…** the same name; to
 remove it, click **Delete…**. Memorized reports are saved in the company file.
 
+## Graphs
+
+**Reports › Graphs** draws six of your reports as charts. Each graph uses the same numbers as its
+text report for the same dates, so a bar or slice always matches what that report shows.
+
+| Graph | What it shows | Click a bar or slice to open |
+|---|---|---|
+| **Income and Expense Graph** | Income and expenses by month, and a pie of expenses (or income, under **Pie shows**) by account | The month's **Profit and Loss**; a slice opens the account's register for the period |
+| **Net Worth Graph** | Total assets and total liabilities at each month end, with net worth (assets less liabilities) as a line | The **Balance Sheet** as of that month end |
+| **Accounts Receivable Graph** | What customers owe by days past due, and the customers with the largest balances | The **A/R Aging Summary** as of the same date |
+| **Accounts Payable Graph** | The same for what you owe vendors | The **A/P Aging Summary** |
+| **Sales Graph** | Sales by month, and a pie of the top customers, products/services or reps (**By**) | The **Sales by Customer**, **Product/Service** or **Rep Summary** for that month or the period |
+| **Budget vs. Actual Graph** | Actual against budget by fiscal month, for net income, income or expenses (**Show**) | **Profit and Loss Budget vs. Actual** for that month |
+
+To use a graph:
+
+1. Choose it under **Reports › Graphs**, then the period (or **As of** date, or budget).
+2. Hover over a bar or slice to see its amounts. Click it (or Tab to it and press Enter) to open the
+   report behind it.
+3. Choose **Table** at the top right to see the same numbers as a table.
+
+Pies and rankings show the seven largest names or accounts and add the rest up as **Other**. Income
+and Expense counts cost of goods sold and other expenses as expenses, like the Profit and Loss. The
+graphs cover at most 36 months at a time.
+
+**Export ▾** on a graph has **Save as picture (PNG)** (in the Chart view), **Print / Save to PDF**
+(the charts and their tables on one page), and **Export to Excel** or **Export to CSV** for the
+numbers behind the chart.
+
 ## Export or print
 
 1. Click **Export ▾** on the report.
