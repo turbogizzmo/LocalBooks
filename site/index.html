@@ -246,7 +246,7 @@
     <section class="panel" id="move">
       <h2>Move your books to LocalBooks</h2>
       <div class="panel-body">
-        <p>Everything comes in through <strong>Accounting › Desktop Migration Wizard</strong>. The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
+        <p>Everything comes in through the Desktop Migration Wizard, in <strong>Settings › Import &amp; Migration</strong> (or <strong>File › Utilities › Import / Convert…</strong>). The wizard only reads your file: nothing changes in your old program, and nothing is added to LocalBooks until you post.</p>
         <div id="mig" hidden>
           <p class="mig-label">1. Which program are you leaving?</p>
           <div class="mig-choices" id="mig-sources" role="group" aria-label="Program you're leaving"></div>
@@ -276,7 +276,7 @@
         <p class="mig-label">Then, whichever program you came from</p>
         <ol class="steps">
           <li><strong>Run a trial balance</strong> in your old program first, so you have something to compare with.</li>
-          <li>In LocalBooks, open <strong>Accounting › Desktop Migration Wizard</strong> and choose your file or files.</li>
+          <li>In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose your file or files.</li>
           <li>Check <strong>Balances matching the file</strong>, then match each account to a LocalBooks account (or click <strong>Match existing accounts and create the rest</strong>).</li>
           <li>Choose <strong>Full import</strong> to bring in invoices, bills, payments and deposits as real documents, so open balances and aging carry over. Then post.</li>
           <li>Compare LocalBooks’ trial balance with your old program’s. Not right? <strong>Start over…</strong> under <em>Your imports</em> puts your books back exactly as they were.</li>
@@ -402,14 +402,14 @@
     // no-JavaScript fallback. Steps are this page's own HTML strings, not user input.
     (function () {
       const G = 'https://github.com/turbogizzmo/LocalBooks/blob/main/docs/guide/';
-      const wizard = 'In LocalBooks, open <strong>Accounting › Desktop Migration Wizard</strong> and choose ';
+      const wizard = 'In LocalBooks, open <strong>Settings › Import &amp; Migration</strong> and choose ';
       const reportSteps = (journal) => [
         journal,
         'Also export the <strong>Account Listing</strong>, <strong>Customer Contact List</strong>, <strong>Vendor Contact List</strong> and <strong>Item List</strong>. Only the Journal is required; the lists add types, addresses and balances to check against.',
         wizard + '<strong>all the files together</strong> (hold <kbd>⌘</kbd> or <kbd>Ctrl</kbd>, or drag them in).'
       ];
       // QuickBooks itself exports, through Intuit's interfaces (Preview).
-      const exportStep = 'In LocalBooks, go to <strong>Accounting › Desktop Migration Wizard</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
+      const exportStep = 'In LocalBooks, go to <strong>Settings › Import &amp; Migration</strong>, open <strong>QuickBooks still installed? Export from my installed QuickBooks</strong> under step 1, and click <strong>Export from QuickBooks</strong>.';
       const installedType = (product, steps) => ({
         name: 'QuickBooks still installed: let LocalBooks export it', sub: 'Preview · QuickBooks runs on this computer',
         heading: 'Let LocalBooks ask ' + product + ' for your data', steps,
