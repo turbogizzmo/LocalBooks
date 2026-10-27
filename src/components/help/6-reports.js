@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, graphs (income and expense, net worth, receivables, payables, sales, budget vs. actual), and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an account to open its register; export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, graphs (income and expense, net worth, receivables, payables, sales, budget vs. actual), and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an amount to see the transactions behind it (QuickZoom); export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -15,6 +15,13 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'quickzoom', area: 'reports', views: ['reports'],
+    title: 'See the transactions behind a number (QuickZoom)',
+    body: 'Click an account or amount on the Profit and Loss, Balance Sheet or another statement to open its register for that column’s dates. On an aging summary, click a name to list its open invoices or bills; on a sales or vendor summary, click a line to open its detail report.',
+    keywords: 'quickzoom quick zoom drill down details click amount transactions behind',
+    guide: 'reports',
+  },
   {
     id: 'profit-loss', area: 'reports', views: ['reports', 'dashboard'],
     title: 'Run a Profit and Loss',

@@ -17,6 +17,21 @@ It shows income, cost of goods sold, gross profit, expenses and net income. Fisc
 Assets, liabilities and equity are shown at that date. Profit from earlier fiscal years appears as
 Retained Earnings, and this year's as Net Income.
 
+## See the transactions behind a number (QuickZoom)
+
+Click an amount to see where it came from:
+
+- **Profit and Loss, Balance Sheet and the other statements:** click an account or one of its
+  amounts to open the account's register for the report's dates. In a report split by month or
+  quarter, or a comparison, clicking an amount opens that column's dates.
+- **A/R and A/P Aging Summary:** click a customer or vendor to list their open invoices, bills and
+  credits under the name, each in its aging column with how many days past due it is. Click again
+  to hide them.
+- **Sales by Customer, Sales by Product/Service and Expenses by Vendor Summary:** click a line to
+  open the matching detail report (Income by Customer Detail, Sales by Product/Service Detail or
+  Expenses by Vendor Detail) for that name or item and the same dates. Click a transaction there to
+  open it.
+
 ## Previous year comparisons
 
 - **Profit and Loss Prev Year Comparison** shows the period you choose beside the same dates one
