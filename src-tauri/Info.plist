@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>LocalBooks opens a new message in Mail or Outlook with the invoice or estimate PDF attached, for you to review and send.</string>
+	<string>LocalBooks opens a new message in Mail or Outlook with the invoice or estimate PDF attached, for you to review and send. When you choose Export from my installed QuickBooks, it asks QuickBooks for your company's lists and Journal report, read-only: nothing in QuickBooks is changed.</string>
 </dict>
 </plist>

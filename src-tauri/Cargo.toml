@@ -43,6 +43,8 @@ zeroize = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WNet", "Win32_System_LibraryLoader", "Win32_System_Mapi"] }
+# Export from an installed QuickBooks: the QuickBooks SDK's request processor is a COM object.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native"] }

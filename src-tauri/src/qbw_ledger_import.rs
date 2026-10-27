@@ -1085,6 +1085,7 @@ fn source_format(file_name: &str) -> &'static str {
         Some("qif") => "QIF",
         Some("csv" | "xlsx" | "xls") => "REPORT",
         Some("gnucash" | "gnc") => "GNUCASH",
+        Some("qbxml") => "QBXML",
         _ => "QBW",
     }
 }
