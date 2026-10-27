@@ -374,6 +374,10 @@ async fn a_full_import_creates_native_documents() {
     let batch = stage(&pool, Path::new("/books/Company.qb2012"), 1, &l).await.unwrap();
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert_eq!(summary.source_format, "QBMAC");
+    // A file chosen inside a bundle is labeled by the bundle.
+    let inner = stage(&pool, Path::new("/books/Company.qb2012/Contents/store"), 1, &l).await.unwrap();
+    assert_eq!(batch_summary(&pool, inner).await.unwrap().source_format, "QBMAC");
+    crate::qbw_ledger_import::discard_batch(&pool, inner).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
     let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
     let full = posted.full.unwrap();

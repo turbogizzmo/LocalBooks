@@ -453,7 +453,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         posted_as,
         fallbacks,
         id: batch_id,
-        source_format: source_format(&head.file_name).into(),
+        source_format: source_format(&head.source_path).into(),
         file_name: head.file_name,
         source_path: head.source_path,
         file_size_bytes: head.file_size_bytes,
@@ -1079,14 +1079,15 @@ pub struct PostLedgerInput {
     pub mode: ImportMode,
 }
 
-/// The kind of file a batch was read from, by its extension.
-fn source_format(file_name: &str) -> &'static str {
-    match std::path::Path::new(file_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
+/// The kind of file a batch was read from, by its path's extension (or, for a file inside a
+/// QuickBooks for Mac bundle, the bundle's).
+fn source_format(path: &str) -> &'static str {
+    match std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
         Some("iif") => "IIF",
         Some("qif") => "QIF",
         Some("csv" | "xlsx" | "xls") => "REPORT",
         Some("gnucash" | "gnc") => "GNUCASH",
-        _ if crate::qbmac_import::is_mac_path(std::path::Path::new(file_name)) => "QBMAC",
+        _ if crate::qbmac_import::is_mac_path(std::path::Path::new(path)) => "QBMAC",
         _ => "QBW",
     }
 }
