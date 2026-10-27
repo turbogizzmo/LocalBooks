@@ -13,14 +13,14 @@ const MARGIN = { top: 8, right: 8, bottom: 20, left: 52 };
 const BAR_GAP = 2;
 const GRID = '#e4e6ea';
 
-function niceStep(raw) {
+export function niceStep(raw) {
   const power = 10 ** Math.floor(Math.log10(raw));
   const m = raw / power;
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * power;
 }
 
 /** Column with a 4px rounded data end and a square baseline end; mirrors for negatives. */
-function barPath(x, width, y0, y1) {
+export function barPath(x, width, y0, y1) {
   const h = Math.abs(y1 - y0);
   if (h < 0.5) return null;
   const r = Math.min(4, width / 2, h);
@@ -30,7 +30,7 @@ function barPath(x, width, y0, y1) {
   return `M${x},${y0}V${y1 - r}Q${x},${y1} ${x + r},${y1}H${x + width - r}Q${x + width},${y1} ${x + width},${y1 - r}V${y0}Z`;
 }
 
-function useSize() {
+export function useSize() {
   const ref = useRef(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {

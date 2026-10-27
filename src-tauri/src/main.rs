@@ -27,6 +27,7 @@ mod forensic;
 mod forms;
 mod fx_rates;
 mod gnucash_import;
+mod graphs;
 #[cfg(test)]
 mod docs_checks;
 #[cfg(test)]
