@@ -22,6 +22,7 @@ import {
   TrialBalanceReport,
   Vendors1099Report,
 } from './MoreReports.jsx';
+import { ItemPriceListReport } from './PriceLevels.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -388,6 +389,7 @@ const REPORT_GROUPS = [
       ['sales-customer', 'Sales by Customer Summary'],
       ['sales-product', 'Sales by Product/Service Summary'],
       ['sales-rep', 'Sales by Rep Summary'],
+      ['item-price-list', 'Item Price List'],
     ],
   },
   { title: 'Jobs', reports: JOB_REPORTS },
@@ -496,6 +498,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'inv-val' && <InventoryValuationReport />}
         {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
         {report === 'stock-status' && <StockStatusReport />}
+        {report === 'item-price-list' && <ItemPriceListReport />}
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}

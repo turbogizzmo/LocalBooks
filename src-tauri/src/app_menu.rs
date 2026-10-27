@@ -78,6 +78,7 @@ const LISTS: &[Entry] = &[
     page("Customer List", "sales/customers"),
     page("Vendor List", "expenses/vendors"),
     Entry::Sub("Customer & Vendor Profile Lists", &[page("Sales Rep List", "sales/lists"), page("Ship Via List", "sales/lists")]),
+    form("Price Level List", "sales/products", "price-levels"),
     Entry::Sep,
     form("Templates", "settings", "forms"),
     keyed("Memorized Transaction List", "accounting/recurring", None, "CmdOrCtrl+T"),
@@ -170,7 +171,7 @@ const REPORTS: &[Entry] = &[
         ],
     ),
     Entry::Sub("Customers & Receivables", &[report("A/R Aging Summary", "ar"), report("Collections Report", "collections"), Entry::Sep, report("Accounts Receivable Graph", "graph-ar")]),
-    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), Entry::Sep, report("Sales Graph", "graph-sales")]),
+    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), report("Item Price List", "item-price-list"), Entry::Sep, report("Sales Graph", "graph-sales")]),
     Entry::Sub(
         "Jobs, Time & Mileage",
         &[
