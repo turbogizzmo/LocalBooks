@@ -51,7 +51,8 @@ const CHART_OF_ACCOUNTS: Entry = page("Chart of Accounts", "accounting/chart-of-
 /// Added to File below the company items.
 const FILE: &[Entry] = &[
     Entry::Sub("Back Up Company", &[form("Create Local Backup…", "settings", "data")]),
-    Entry::Sub("Utilities", &[Entry::Sub("Import", &[page("QuickBooks Desktop Files…", "accounting/qbw-import")]), form("Condense Data…", "settings", "data")]),
+    // Import / Convert… opens the Desktop Migration Wizard (Settings › Import & Migration).
+    Entry::Sub("Utilities", &[page("Import / Convert…", "settings/import"), form("Condense Data…", "settings", "data")]),
     Entry::Sep,
     Entry::Sub("Print Forms", &[page("Statements…", "sales/statements")]),
     page("Send Forms…", "sales/send-forms"),

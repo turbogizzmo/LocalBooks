@@ -61,7 +61,7 @@ export async function waitForSignIn(title) {
   await $(`//h1[@id="sign-in-title"][normalize-space()=${lit(title)}]`).waitForDisplayed();
 }
 
-/** Opens a page from the sidebar ("Invoices", "Vendors", "Settings", ...). */
+/** Opens a page from the sidebar ("Invoices", "Vendors", "Users & Passwords", ...). */
 export async function goTo(label) {
   await click($(`//nav[@aria-label="Main"]//button[normalize-space()=${lit(label)}]`));
   await waitForPage(label);
@@ -92,9 +92,22 @@ export async function tableRow(text) {
   return cells;
 }
 
+/** Expands Settings in the sidebar, if it's collapsed, to show its pages. */
+async function showSettingsPages() {
+  const settings = $('//nav[@aria-label="Main"]//button[normalize-space()="Settings"]');
+  if ((await settings.getAttribute('aria-expanded')) !== 'true') await click(settings);
+}
+
+/** The Settings pages in the sidebar, in order. */
+export async function settingsPages() {
+  await showSettingsPages();
+  return $$('//nav[@aria-label="Main"]//li[button[normalize-space()="Settings"]]/ul//button').map((page) => page.getText());
+}
+
+/** Opens a Settings tab from its page in the sidebar ("Users & Passwords", "Import & Migration", ...). */
 export async function openSettingsTab(label) {
-  await goTo('Settings');
-  await click($(`//*[@role="tablist"]//*[@role="tab"][normalize-space()=${lit(label)}]`));
+  await showSettingsPages();
+  await goTo(label);
 }
 
 /** Signs in from the sign-in screen. */

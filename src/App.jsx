@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import Sidebar, { findNav } from './components/Sidebar.jsx';
+import Sidebar, { canOpen, findNav, resolveView } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import AllSales from './components/AllSales.jsx';
@@ -27,7 +27,6 @@ import VendorCredits from './components/VendorCredits.jsx';
 import SalesTax from './components/SalesTax.jsx';
 import Reports from './components/Reports.jsx';
 import Settings from './components/Settings.jsx';
-import QbwImporter from './components/QbwImporter.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
 import FxRevaluation from './components/FxRevaluation.jsx';
@@ -70,12 +69,13 @@ if (WINDOWLESS && MAIN_WINDOW) {
 
 function initialView() {
   if (WINDOWLESS) return 'dashboard';
-  if (START && findNav(START.view) && !findNav(START.view).item.children) return START.view;
+  const page = (id) => id && findNav(resolveView(id)) && !findNav(resolveView(id)).item.children;
+  if (page(START?.view)) return resolveView(START.view, START.action);
   // A QuickBooks file picked in Open or Restore Company: the wizard reads it into this new company.
-  if (hasPendingMigration()) return 'accounting/qbw-import';
+  if (hasPendingMigration()) return 'settings/import';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && findNav(saved) && !findNav(saved).item.children) return saved;
+    if (page(saved)) return resolveView(saved);
   } catch {
     // Storage unavailable: fall through to the default view.
   }
@@ -83,7 +83,7 @@ function initialView() {
 }
 
 export default function App() {
-  const [view, setView] = useState(initialView);
+  const [chosenView, setView] = useState(initialView);
   // An intent asks the destination view to open a specific entry form ({ action, nonce }).
   const [intent, setIntent] = useState(() => (START?.action && !WINDOWLESS ? { action: START.action, data: START.data, nonce: Date.now() } : null));
   // Opened without restoring windows: the plain home page shows until a page is chosen.
@@ -101,6 +101,8 @@ export default function App() {
   // Without users, whoever opens the file can do everything. Until the sign-in state has loaded,
   // nobody counts as an Admin, so a View-only or Standard user never sees Admin screens first.
   const isAdmin = signIn.data ? !signIn.data.usersEnabled || signedIn?.role === 'ADMIN' : false;
+  // An Admin-only Settings tab (left open, or remembered) shows anyone else their first tab instead.
+  const view = canOpen(chosenView, isAdmin) ? chosenView : findNav('settings').item.children.find((page) => canOpen(page.id, false)).id;
   const list = accounts.data ?? [];
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
@@ -120,7 +122,8 @@ export default function App() {
   };
 
   // `data` carries what the destination needs, e.g. { estimateId } for an estimate loaded into the invoice form.
-  const select = useCallback((id, action = null, data = null) => {
+  const select = useCallback((requested, action = null, data = null) => {
+    const id = resolveView(requested, action);
     setWindowless(false);
     setView(id);
     setIntent(action ? { action, data, nonce: Date.now() } : null);
@@ -163,7 +166,7 @@ export default function App() {
     const win = getCurrentWebviewWindow();
     const keep = (p) => p.then((fn) => (cancelled ? fn() : unlistens.push(fn))).catch(() => {});
     keep(win.listen(MENU_NAVIGATE, ({ payload }) => {
-      if (findNav(payload.view)) select(payload.view, payload.action, payload.data);
+      if (findNav(resolveView(payload.view, payload.action))) select(payload.view, payload.action, payload.data);
     }));
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
@@ -219,7 +222,7 @@ export default function App() {
   return (
     <CompanyContext.Provider value={company}>
     <div className="flex h-full">
-      {!sidebarHidden && <Sidebar current={windowless ? null : view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} />}
+      {!sidebarHidden && <Sidebar current={windowless ? null : view} onSelect={(id) => select(id)} onNew={() => setCreating(true)} companyName={openCompany ?? 'LocalBooks'} storage={storage.data?.storage} isAdmin={isAdmin} />}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="qb-toolbar no-print flex-none">
           {parent && <span className="text-sm text-qb-ink-muted">{parent.label} ›</span>}
@@ -353,11 +356,11 @@ export default function App() {
           {view === 'accounting/todos' && <Todos {...props} />}
           {view === 'accounting/budgets' && <Budgets accounts={list} navigate={select} />}
           {view === 'accounting/audit' && <AuditLog />}
-          {view === 'accounting/qbw-import' &&
-            (isAdmin ? <QbwImporter accounts={list} /> : <div className="p-2"><Notice kind="info" text="Only an Admin can import another program's books." /></div>)}
           {view === 'accounting/fx-revaluation' && <FxRevaluation />}
           {view === 'reports' && <Reports navigate={select} intent={intent} />}
-          {view === 'settings' && <Settings companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} />}
+          {view.startsWith('settings/') && (
+            <Settings accounts={list} companyName={companyName} intent={intent} isAdmin={isAdmin} navigate={select} tab={view.slice('settings/'.length)} />
+          )}
         </div>
       </main>
       {/* Beside the workspace, not over it: the open view stays mounted, so unsaved form entries survive. */}

@@ -43,10 +43,10 @@ bug. A fixed bug gets an automated test wherever one can reach it.
 | R1 | As `viewer`: open an invoice, change a line, save | Refused with "can look at the books but not change them"; banner shows view only |
 | R2 | As `viewer`: run P&L, Balance Sheet, export CSV, print | All work |
 | R3 | As `clerk` (Standard): create and pay an invoice | Works |
-| R4 | As `clerk`: Settings | Only Users & Passwords and Updates tabs |
+| R4 | As `clerk`: Settings | Only Users & Passwords and Updates, in the sidebar and as tabs |
 | R7 | As `owner`, leave Settings open and sign out; sign in as `clerk` | Opens on Users & Passwords; no Admin settings (Close books, company fields) even for a moment |
-| R5 | As `clerk`: Accounting › import screen | "Only an Admin can import" |
-| R6 | As `owner`: every Settings tab | All present and working |
+| R5 | As `clerk`: File › Utilities › Import / Convert… | No Import & Migration page: opens Users & Passwords |
+| R6 | As `owner`: every Settings page in the sidebar, including Import & Migration | All present and working |
 
 ## Tax IDs (Edge Cases, then No Users)
 

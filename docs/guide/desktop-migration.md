@@ -133,8 +133,8 @@ sends **read-only requests only**: nothing in QuickBooks is added, changed or de
 1. Open QuickBooks and your company file.
 2. **On a Mac only:** choose **Reports › Accountant & Taxes › Journal**, set the dates to **All**,
    keep the Debit and Credit columns, and leave the report as the front window.
-3. In LocalBooks, go to **Accounting › Desktop Migration Wizard**, open **QuickBooks still
-   installed? Export from my installed QuickBooks** under step 1, and click **Export from
+3. In LocalBooks, go to **Settings › Import & Migration** (or **File › Utilities › Import /
+   Convert…**), open **QuickBooks still installed? Export from my installed QuickBooks** under step 1, and click **Export from
    QuickBooks**.
 4. Answer the permission prompt (below) the first time.
 5. Carry on from [2. Review what was read](#2-review-what-was-read-and-choose-accounts). The import
@@ -333,7 +333,8 @@ LocalBooks reads the book like this:
 
 ## 1. Choose a file
 
-1. Go to **Accounting › Desktop Migration Wizard**.
+1. Go to **Settings › Import & Migration** in the sidebar, or choose **File › Utilities ›
+   Import / Convert…**. Only an Admin sees it.
 2. Click **Choose a file…**, or drag the file onto the box. For report exports, choose the report
    and its lists together.
 3. Wait while the progress bar works through the file; large files take a few minutes. Keep

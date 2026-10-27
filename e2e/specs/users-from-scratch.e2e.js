@@ -14,6 +14,7 @@ import {
   recoverAdmin,
   reloading,
   replace,
+  settingsPages,
   settingsTabs,
   signIn,
   signOut,
@@ -103,7 +104,8 @@ describe('From no users to a View only user', () => {
   });
 
   it('shows only Users & Passwords and Updates in Settings', async () => {
-    await goTo('Settings');
+    await openSettingsTab('Users & Passwords');
+    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates']);
     expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
     await expect(notice('info', 'Company-wide settings are managed by an Admin.')).toBeDisplayed();
     // Their own sign-in, and no user list.

@@ -105,7 +105,7 @@ export const topics = [
   },
 
   {
-    id: 'finance-charges', area: 'sales', views: ['sales/finance-charges', 'sales/invoices', 'sales/statements', 'settings'],
+    id: 'finance-charges', area: 'sales', views: ['sales/finance-charges', 'sales/invoices', 'sales/statements', 'settings/preferences'],
     title: 'Charge interest on overdue invoices',
     body: 'Set an annual rate, minimum charge, grace days and income account under Settings › Finance charges, then open Sales › Assess Finance Charges. Each ticked customer gets a finance charge invoice for interest on their overdue balance, which appears in A/R aging and on statements.',
     keywords: 'finance charge late fee interest overdue past due assess penalty',

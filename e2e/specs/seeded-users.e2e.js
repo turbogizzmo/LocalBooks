@@ -9,6 +9,7 @@ import {
   notice,
   openParty,
   openSettingsTab,
+  settingsPages,
   settingsTabs,
   signIn,
   signOut,
@@ -55,12 +56,31 @@ describe('Tax IDs in a company with users', () => {
     await expect($('[data-testid="recovery-key"]')).toBeDisplayed();
   });
 
+  it('shows the Admin every Settings page, with the migration wizard under Import & Migration', async () => {
+    expect(await settingsPages()).toEqual([
+      'Preferences Console',
+      'Custom Forms',
+      'Email',
+      'File & Data Controls',
+      'Import & Migration',
+      'AI Access (MCP)',
+      'Users & Passwords',
+      'Updates',
+    ]);
+    await openSettingsTab('File & Data Controls');
+    await click(button('Desktop Migration Wizard…'));
+    await waitForPage('Import & Migration');
+    await expect($('//main//h2[normalize-space()="Desktop Migration Wizard"]')).toBeDisplayed();
+    await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Import & Migration');
+  });
+
   it('never shows a Standard user Admin settings, even on the page left open', async () => {
     // Signing out goes through Settings, so the app reopens on it for the next user.
     await signOut();
     await signIn('clerk', 'clerk temp pw');
     await chooseOwnPassword('clerk temp pw', 'clerk own password');
-    await waitForPage('Settings');
+    await waitForPage('Users & Passwords');
+    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates']);
     expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
     await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Users & Passwords');
     await expect(button('Close books')).not.toExist();
