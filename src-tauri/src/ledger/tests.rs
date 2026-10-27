@@ -546,8 +546,12 @@ async fn classes_join_the_snapshot_without_changing_unclassified_ones() {
 }
 
 /// Journal rows are created, removed and changed only here, behind `validate_entry` and the audit
-/// chain. Reconciliation may mark lines cleared; nothing else outside this module may write to
-/// either table. Test code (`tests.rs`, `tests/`, `harness/`) is exempt: it tampers on purpose.
+/// chain. Reconciliation may mark lines cleared. Condense Data (`condense.rs`) may write too: it
+/// rewrites closed years in a private copy of the file, never the open books, replacing them with
+/// monthly summary entries that carry reconciliation fields `post_entry_in_tx` does not take; it
+/// refuses an unbalanced summary and checks the copy against the archive before using it. Nothing
+/// else outside this module may write to either table. Test code (`tests.rs`, `tests/`, `harness/`) is exempt: it tampers on
+/// purpose.
 #[test]
 fn only_the_ledger_writes_journal_rows() {
     fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
@@ -573,7 +577,9 @@ fn only_the_ledger_writes_journal_rows() {
         let rel = file.strip_prefix(&src).unwrap().to_string_lossy().replace('\\', "/");
         let text = std::fs::read_to_string(file).expect("read a source file");
         for m in write.find_iter(&text) {
-            let allowed = rel == "ledger.rs" || (rel == "reconcile.rs" && m.as_str().eq_ignore_ascii_case("UPDATE journal_lines"));
+            let allowed = rel == "ledger.rs"
+                || rel == "condense.rs"
+                || (rel == "reconcile.rs" && m.as_str().eq_ignore_ascii_case("UPDATE journal_lines"));
             if !allowed {
                 found.push(format!("{rel}: {}", m.as_str()));
             }
