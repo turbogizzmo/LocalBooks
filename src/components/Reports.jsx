@@ -6,6 +6,7 @@ import { useCompany } from './PrintDocuments.jsx';
 import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
+import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
   AgingReport,
   BalanceSheetBudgetVsActualReport,
@@ -66,16 +67,16 @@ export function priorRange(start, end, mode) {
 const RANGE_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const shortRange = (from, to) => `${RANGE_LABEL.format(new Date(`${from}T00:00:00Z`))} – ${RANGE_LABEL.format(new Date(`${to}T00:00:00Z`))}`;
 
-function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null, navigate }) {
+function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null, navigate, initial = null }) {
   const { data: fiscal } = useLedgerQuery(api.getFiscalPeriods);
-  const [period, setPeriod] = useState('fiscalYearToDate');
-  const [[start, end], setRange] = useState(() => resolvePeriod('fiscalYearToDate', null));
+  const [period, setPeriod] = useState(initial?.startDate ? 'custom' : 'fiscalYearToDate');
+  const [[start, end], setRange] = useState(() => (initial?.startDate ? [initial.startDate, initial.endDate] : resolvePeriod('fiscalYearToDate', null)));
   const [notice, setNotice] = useState(null);
   const classes = useClasses();
   // '' = all lines, 'none' = lines without a class, otherwise a class id (with its subclasses).
   const [classChoice, setClassChoice] = useState('');
   const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
-  const [basis, setBasis] = useState('ACCRUAL');
+  const [basis, setBasis] = useState(initial?.basis ?? 'ACCRUAL');
   const [split, setSplit] = useState('total'); // total | months | quarters
   const [compare, setCompare] = useState(initialCompare); // none | period | year
   const periodColumns = () => {
@@ -249,8 +250,8 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   );
 }
 
-function BalanceSheet({ navigate }) {
-  const [asOf, setAsOf] = useState(todayIso());
+function BalanceSheet({ navigate, initial = null }) {
+  const [asOf, setAsOf] = useState(initial?.asOf ?? todayIso());
   const [notice, setNotice] = useState(null);
   const { data, error, reload } = useLedgerQuery(() => api.getBalanceSheet(asOf));
 
@@ -416,6 +417,7 @@ const REPORT_GROUPS = [
     title: 'Banking',
     reports: [['missing-checks', 'Missing Checks']],
   },
+  { title: 'Graphs', reports: GRAPH_REPORTS },
   {
     title: 'Accountant & Taxes',
     reports: [
@@ -427,11 +429,22 @@ const REPORT_GROUPS = [
 ];
 
 export default function Reports({ navigate, intent }) {
-  const [report, setReport] = useState(() => intent?.data?.report ?? 'pl');
+  const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
+  // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
+  const [initial, setInitial] = useState(null);
+  const setReport = (id) => {
+    setReportId(id);
+    setInitial(null);
+  };
+  const openReport = (id, params) => {
+    setReportId(id);
+    setInitial({ ...params, at: Date.now() });
+  };
   const custom = useCustomReports();
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]);
+  const drill = initial ? `-${initial.at}` : '';
   return (
     <div className="flex h-full gap-2 p-2">
       <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
@@ -463,22 +476,22 @@ export default function Reports({ navigate, intent }) {
         </div>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-auto scrollbar-thin">
-        {report === 'pl' && <ProfitAndLoss key="pl" navigate={navigate} />}
+        {report === 'pl' && <ProfitAndLoss key={`pl${drill}`} navigate={navigate} initial={initial} />}
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
-        {report === 'bs' && <BalanceSheet navigate={navigate} />}
+        {report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
-        {report === 'ar' && <AgingReport key="ar" payable={false} />}
-        {report === 'ap' && <AgingReport key="ap" payable />}
-        {report === 'sales-customer' && <SummaryReport key="sc" by="customer" />}
-        {report === 'sales-product' && <SummaryReport key="sp" by="product" />}
-        {report === 'sales-rep' && <SummaryReport key="sr" by="rep" />}
+        {report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
+        {report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
+        {report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} />}
+        {report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} />}
+        {report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
         {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}
         {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
         {report === 'pl-py' && <ProfitAndLoss key="pl-py" initialCompare="year" title="Profit and Loss Prev Year Comparison" navigate={navigate} />}
         {report === 'bs-py' && <BalanceSheetComparison navigate={navigate} />}
-        {report === 'bva' && <BudgetVsActualReport navigate={navigate} />}
+        {report === 'bva' && <BudgetVsActualReport key={`bva${drill}`} navigate={navigate} initial={initial} />}
         {report === 'bs-bva' && <BalanceSheetBudgetVsActualReport navigate={navigate} />}
         {report === 'inv-val' && <InventoryValuationReport />}
         {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
@@ -486,6 +499,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
+        {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
         {isCustomReport(report) && <CustomReport key={report} report={report} custom={custom} navigate={navigate} onOpen={setReport} />}
       </div>
