@@ -4,7 +4,7 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
-## [Unreleased]
+## [0.10.3]
 
 - **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers, reports and
   every other screen open as windows inside the one LocalBooks window. Move, resize, minimize and
@@ -18,7 +18,8 @@ people using LocalBooks.
   were. Choose what is saved in **Edit › Preferences › Desktop View** (Save when closing company,
   Save current desktop, Don't save the desktop), or on a Mac in **Window › Workspace**. To open a
   company once without them, hold Option (Alt on Windows) while clicking **Open**, or choose
-  **File › Open Company Without Restoring Windows…**.
+  **File › Open Company Without Restoring Windows…**. When the file has users, each person's
+  windows are their own: signing in reopens yours, not the last person's.
 - **Choose the left pane and where you start.** In **Desktop View**, the left pane can show the
   full menu, only the open windows, or nothing. **Start on** opens a company on your last windows,
   the Home page, a screen you choose (say, Invoices), or no windows at all.
