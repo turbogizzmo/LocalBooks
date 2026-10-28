@@ -4,6 +4,20 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.10.3
+
+- **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers and reports
+  open as windows you can move, resize, minimize and line up (**Window › Cascade**, **Tile
+  Vertically**). **View › One Window** shows one screen at a time instead, and **View › Open
+  Window List** lists what's open. [Work in more than one window](getting-started.md#work-in-more-than-one-window)
+- **Your windows come back.** The windows open when you close a company reopen with it. With
+  users on, each person's windows are their own.
+  [Reopen your windows with the company](getting-started.md#reopen-your-windows-with-the-company-saved-desktop)
+- **Choose the left pane and where you start.** Show the full menu, only the open windows, or no
+  left pane, and start on Home, your last windows or a screen you choose.
+  [Choose the left pane and where you start](getting-started.md#choose-the-left-pane-and-where-you-start)
+- **This page, and a guide to attachments.** [Attach receipts and documents](attachments.md)
+
 ## 0.10.2
 
 - **Pay Bills writes checks.** Paying bills from a bank account writes one numbered check per
