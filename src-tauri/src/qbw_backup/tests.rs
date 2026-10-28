@@ -55,3 +55,31 @@ fn unpacks_a_real_backup() {
     println!("unpacked {len} bytes ({} pages)", len / 4096);
     assert_eq!(len % 4096, 0);
 }
+
+/// 20,000 bytes that don't compress, so the company stream needs full-size sectors while the small
+/// compression header sits in the mini stream: both ways a compound file stores a stream.
+fn synthetic_company() -> Vec<u8> {
+    let mut x: u32 = 0x2545_f491;
+    (0..20_000)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            (x >> 24) as u8
+        })
+        .collect()
+}
+
+/// A backup written by cfb 0.14 (`fixtures/synthetic-backup.cfb`, from [`write_backup`] and
+/// [`synthetic_company`]). The tests above write and read with the same cfb version, so they would
+/// pass even if an upgrade stopped reading files written before it; this one would not.
+#[test]
+fn unpacks_a_backup_written_by_an_earlier_cfb() {
+    let dir = scratch("fixture");
+    let backup = dir.join("Synthetic.qbb");
+    std::fs::write(&backup, include_bytes!("fixtures/synthetic-backup.cfb")).unwrap();
+    let unpacked = unpack(&backup, &dir).unwrap();
+    assert_eq!(std::fs::read(&unpacked.path).unwrap(), synthetic_company());
+    drop(unpacked);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
