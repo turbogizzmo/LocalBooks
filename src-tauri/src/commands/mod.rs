@@ -62,6 +62,7 @@ features![
     custom_reports,
     customer_statements,
     deposits,
+    desktop,
     editing,
     email,
     estimates,
@@ -98,7 +99,7 @@ features![
     vendor_1099,
 ];
 
-pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, window_title, StartupFailure};
+pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
 pub use users::sign_out_after_idle;
 
 #[cfg(test)]

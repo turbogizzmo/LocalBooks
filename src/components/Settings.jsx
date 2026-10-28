@@ -14,6 +14,7 @@ import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestor
 import { UsersSettings } from './Users.jsx';
 import QbwImporter from './QbwImporter.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
+import DesktopViewPreferences from './DesktopViewPreferences.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -1019,6 +1020,8 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
         ))}
       </div>
       {!isAdmin && <Notice kind="info" text="Company-wide settings are managed by an Admin." />}
+      {/* My Preferences are everyone's own: without the Preferences Console, they sit with your sign-in. */}
+      {(tab === 'preferences' || (!isAdmin && tab === 'users')) && <DesktopViewPreferences />}
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}
       {tab === 'email' && <EmailSettings />}

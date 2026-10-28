@@ -65,3 +65,46 @@ fn backend_wrappers_are_named_once() {
     assert!(seen.len() > 200, "found the wrappers");
     assert!(twice.is_empty(), "defined in two files: {}", twice.join(", "));
 }
+
+/// Multiple Windows: a list that opens a transaction in a window of its own sends an `edit` request
+/// with the transaction's id (`openFromList('expenses/bills', 'edit', { billId: … })`). That window,
+/// and the saved desktop that reopens it, show the screen in the same file, which must read the same
+/// id back (`useEditIntent(intent, 'billId', …)` or `intent.data?.billId`), or the window would open
+/// on an empty form.
+#[test]
+fn every_transaction_opened_in_its_own_window_is_read_back() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src");
+    let mut files = Vec::new();
+    script_files(&src, &mut files);
+    let mut sent = 0;
+    let mut unread = Vec::new();
+    for file in &files {
+        let text = std::fs::read_to_string(file).expect("read a source file");
+        for call in text.split("openFromList(").skip(1) {
+            let Some(rest) = call.split_once("'edit', { ").map(|(_, r)| r) else { continue };
+            let Some((key, _)) = rest.split_once(':') else { continue };
+            sent += 1;
+            if !text.contains(&format!("useEditIntent(intent, '{key}'")) && !text.contains(&format!("intent.data?.{key}")) {
+                unread.push(format!("{} ({key})", file.strip_prefix(&src).unwrap().display()));
+            }
+        }
+    }
+    assert!(sent >= 3, "found the lists that open transactions in their own window");
+    assert!(unread.is_empty(), "these screens open a transaction in its own window but never read its id back: {}", unread.join(", "));
+}
+
+/// Every page the sidebar (and so the menu bar and a saved desktop) can open has a screen to show in
+/// its window inside LocalBooks (`components/Screen.jsx`); otherwise that window would open empty.
+#[test]
+fn every_page_has_a_screen_for_its_window() {
+    let read = |path: &str| std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/components").join(path)).expect("read a screen file");
+    let (sidebar, screen) = (read("Sidebar.jsx"), read("Screen.jsx"));
+    let pages: Vec<&str> = sidebar.split("id: '").skip(1).filter_map(|rest| rest.split_once('\'').map(|(id, _)| id)).collect();
+    assert!(pages.len() > 20, "found the sidebar's pages");
+    // Groups (Sales, Expenses, …) only fold their pages away; the pages are what open.
+    let groups: Vec<&str> = pages.iter().copied().filter(|id| pages.iter().any(|p| p.starts_with(&format!("{id}/")))).collect();
+    // A group's pages may share one screen (`view.startsWith('settings/')` shows each Settings tab).
+    let shown = |id: &str| screen.contains(&format!("view === '{id}'")) || id.split_once('/').is_some_and(|(group, _)| screen.contains(&format!("view.startsWith('{group}/')")));
+    let missing: Vec<&str> = pages.into_iter().filter(|id| !groups.contains(id) && !shown(id)).collect();
+    assert!(missing.is_empty(), "these pages have no screen in Screen.jsx: {}", missing.join(", "));
+}

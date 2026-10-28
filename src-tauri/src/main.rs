@@ -23,6 +23,7 @@ mod custom_fields;
 mod custom_reports;
 mod crypto;
 mod db;
+mod desktop;
 mod edits;
 mod email_log;
 mod estimates;
@@ -125,15 +126,17 @@ fn main() {
             if let Some(help) = menu.get(tauri::menu::HELP_SUBMENU_ID) {
                 menu.remove(&help)?;
             }
-            windows::add_new_window_item(handle, &menu)?;
             file_menu::add_company_items(handle, &menu)?;
             app_menu::install(handle, &menu)?;
+            windows::add_menus(handle, &menu)?;
             Ok(menu)
         })
         .plugin(tauri_plugin_dialog::init())
         // Signed updates from the GitHub releases (see plugins.updater in tauri.conf.json).
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(windows::OpenWindows::default())
+        .on_window_event(windows::on_window_event)
         .on_menu_event(|app, event| {
             windows::on_menu_event(app, event.id().as_ref());
             file_menu::on_menu_event(app, event.id().as_ref());
@@ -198,6 +201,8 @@ fn main() {
                 Err(err) => eprintln!("single-instance hand-off unavailable: {err}"),
             }
 
+            // The first window to load reopens the company's saved desktop (Desktop View preferences).
+            windows::restore_on_next_load(app.handle(), true);
             let title_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { commands::company_changed(&title_handle).await });
 
@@ -227,6 +232,8 @@ fn main() {
             }
             // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
             tauri::RunEvent::Exit => tauri::async_runtime::block_on(async {
+                // Quitting closes the company: its desktop is saved while the windows are still known.
+                windows::save_on_close(app).await;
                 if let Some(state) = app.try_state::<std::sync::Mutex<Option<instance::InstanceGuard>>>() {
                     drop(state.lock().ok().and_then(|mut guard| guard.take()));
                 }

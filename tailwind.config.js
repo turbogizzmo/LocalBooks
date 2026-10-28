@@ -10,6 +10,8 @@ const qb = {
   navActive: '#393f50',
   navText: '#babec5',
   canvas: '#f4f5f8',
+  // The work area behind windows open inside LocalBooks, as the grey behind QuickBooks' windows.
+  desktop: '#d9dde3',
   surface: '#ffffff',
   ink: '#393a3d',
   inkMuted: '#6b6c72',
@@ -44,6 +46,7 @@ export default {
             text: qb.navText,
           },
           canvas: qb.canvas,
+          desktop: qb.desktop,
           surface: qb.surface,
           ink: {
             DEFAULT: qb.ink,

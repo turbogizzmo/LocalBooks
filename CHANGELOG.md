@@ -6,6 +6,22 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers, reports and
+  every other screen open as windows inside the one LocalBooks window. Move, resize, minimize and
+  maximize them, or line them up with **Window › Cascade**, **Tile Vertically** and **Tile
+  Horizontally**. **Window › Close All** closes them, asking first about anything not saved.
+  **Ctrl+F6** moves to the next window and **Esc** closes the one in front.
+- **One Window or Multiple Windows.** **View › One Window** shows one screen at a time, filling
+  the space; **View › Multiple Windows** lets them float side by side. **View › Open Window List**
+  lists the open windows beside the menu, and the Window menu lists them too.
+- **Your windows come back.** The windows open when you close a company reopen with it, where they
+  were. Choose what is saved in **Edit › Preferences › Desktop View** (Save when closing company,
+  Save current desktop, Don't save the desktop), or on a Mac in **Window › Workspace**. To open a
+  company once without them, hold Option (Alt on Windows) while clicking **Open**, or choose
+  **File › Open Company Without Restoring Windows…**.
+- **Choose the left pane and where you start.** In **Desktop View**, the left pane can show the
+  full menu, only the open windows, or nothing. **Start on** opens a company on your last windows,
+  the Home page, a screen you choose (say, Invoices), or no windows at all.
 - **What's new guide.** **Help › What's new** lists the newest features release by release, in
   plain words, each with a link to its steps.
 - **Attachments guide.** A step-by-step guide to attaching receipts and vendor invoices, saving a

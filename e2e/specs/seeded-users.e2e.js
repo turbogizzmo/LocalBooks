@@ -13,6 +13,7 @@ import {
   settingsTabs,
   signIn,
   signOut,
+  type,
   waitForApp,
   waitForPage,
 } from '../lib/ui.js';
@@ -74,13 +75,21 @@ describe('Tax IDs in a company with users', () => {
     await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Import & Migration');
   });
 
-  it('never shows a Standard user Admin settings, even on the page left open', async () => {
-    // Signing out goes through Settings, so the app reopens on it for the next user.
+  it('never shows a Standard user Admin settings, even when a link leads there', async () => {
+    // Each user has their own desktop, as in QuickBooks: the Settings window the Admin left open
+    // stays with the Admin, and the clerk starts on the Home page.
     await signOut();
     await signIn('clerk', 'clerk temp pw');
     await chooseOwnPassword('clerk temp pw', 'clerk own password');
-    await waitForPage('Users & Passwords');
+    await waitForPage('Dashboard');
     expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates']);
+    // Help's "Go to Desktop View" leads to the Admin-only Preferences Console: the clerk lands on
+    // Users & Passwords instead, in a window titled for it.
+    await browser.keys('F1');
+    await type($('//input[@aria-label="Search help"]'), 'Desktop View');
+    await click($('//button[normalize-space()="Reopen your windows with the company (Desktop View)"]'));
+    await click(button('Go to Desktop View'));
+    await waitForPage('Users & Passwords');
     expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
     await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Users & Passwords');
     await expect(button('Close books')).not.toExist();

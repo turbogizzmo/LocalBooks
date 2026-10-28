@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useContext, useEffect, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -8,7 +8,7 @@ import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
-import { openWindow } from '../lib/windows.js';
+import { useWindowContent, WindowManagerContext } from '../lib/windows.js';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -37,6 +37,7 @@ export default function Register({ accounts, intent }) {
   const [subaccounts, setSubaccounts] = useState(intent?.data?.includeSubaccounts ?? false);
   const [expanded, setExpanded] = useState(null);
   const [notice, setNotice] = useState(null);
+  const { open: openChild } = useContext(WindowManagerContext);
 
   useEffect(() => {
     if (intent?.action !== 'open' || !intent.data) return;
@@ -55,6 +56,10 @@ export default function Register({ accounts, intent }) {
   }, [accountId, start, end, subaccounts, reload]);
 
   const account = accounts.find((a) => a.id === accountId);
+  // The window is named after its register ("Checking Register") and reopens on it with the desktop.
+  useWindowContent(
+    account ? { name: `${account.name} Register`, action: 'open', data: { accountId, startDate: start, endDate: end, includeSubaccounts: subaccounts } } : null,
+  );
   const hasChildren = accounts.some((a) => a.parentId === accountId);
   // In a register, the "increase" column is the account's normal side.
   const [increaseHead, decreaseHead] = amountHeads(account?.accountTypeName);
@@ -138,11 +143,7 @@ export default function Register({ accounts, intent }) {
             type="button"
             className="qb-btn qb-btn-secondary h-row-lg self-end px-2"
             title="Keep this register open in a window of its own"
-            onClick={() =>
-              openWindow('accounting/register', 'open', { accountId, startDate: start, endDate: end, includeSubaccounts: subaccounts }).catch((err) =>
-                setNotice({ kind: 'error', text: String(err) }),
-              )
-            }
+            onClick={() => openChild('accounting/register', 'open', { accountId, startDate: start, endDate: end, includeSubaccounts: subaccounts }, { forceNew: true })}
           >
             Open in new window
           </button>

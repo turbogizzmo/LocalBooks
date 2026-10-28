@@ -104,8 +104,9 @@ pub async fn print_report(window: tauri::WebviewWindow, title: Option<String>) -
     window.print().map_err(|e| format!("PRINT_FAILED: {e}"))
 }
 
-/// Gives the window back its company title once the print dialog closes.
+/// Gives the window back its title once the print dialog closes.
 #[tauri::command]
 pub async fn finish_printing(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
-    window.set_title(&super::company_files::window_title(&app).await).map_err(|e| format!("PRINT_FAILED: {e}"))
+    windows::retitle(&app, window.label());
+    Ok(())
 }
