@@ -10,7 +10,7 @@ repository = "https://github.com/turbogizzmo/LocalBooks"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc"] }
+aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "=0.6.0", default-features = false, features = ["alloc"] }
 base64 = "0.23"
 calamine = { version = "0.37", default-features = false }
