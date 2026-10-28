@@ -208,3 +208,29 @@ async fn measures_the_production_cost() {
     derive(Zeroizing::new(b"a password".to_vec()), [7; SALT_LEN], PRODUCTION_COST).await.unwrap();
     println!("one unlock: {:?}", started.elapsed());
 }
+
+// Known answers, recorded with argon2 0.5.3 and aes-gcm 0.10.3. Every other test here makes and
+// reads its own values, so it would still pass if an upgrade changed the output; these fail
+// instead, before an upgrade ships that can't sign anyone in or read a tax ID in existing files.
+
+#[tokio::test]
+async fn password_verifiers_from_earlier_versions_still_sign_in() {
+    for verifier in [
+        "argon2id$8$1$1$AAECAwQFBgcICQoLDA0ODw$Df5QnPsxnm9jlneZqtPE2c4G1+mr75903MRdMO2p1gw",
+        "argon2id$1024$2$2$AAECAwQFBgcICQoLDA0ODw$Ex1CPeKhFbmmYZjyd27Gp4Gz9iZ+nKEqGZUO4BSI/go",
+    ] {
+        assert!(verify_password("correct horse battery", verifier).await.unwrap(), "{verifier}");
+        assert!(!verify_password("correct horse battery!", verifier).await.unwrap(), "{verifier}");
+    }
+}
+
+#[test]
+fn fields_sealed_by_earlier_versions_still_open() {
+    let key = DataKey {
+        key: Zeroizing::new(core::array::from_fn(|i| (i as u8).wrapping_mul(7))),
+        key_id: "00112233445566778899aabbccddeeff".into(),
+    };
+    let stored = "lb1:iZn4UbliYLHCAIzWk4PwhpkmkA++eMVG1oubzHQZ0td/hbrAE7g=";
+    assert_eq!(key.decrypt_field("vendors", "tax_id", 42, stored).unwrap(), "12-3456789");
+    assert!(key.decrypt_field("vendors", "tax_id", 43, stored).is_err(), "bound to its row");
+}
