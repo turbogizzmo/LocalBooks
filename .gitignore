@@ -22,6 +22,24 @@ src-tauri/gen/
 *.QBW
 *.qbw
 
+# Intuit QuickBooks files (company data, logs, accountant copies, Mac company files and
+# backups) and Intuit installers: never commit them. Bank downloads (.qbo, .ofx, .iif) stay
+# allowed for test fixtures.
+*.[Qq][Bb][Mm]
+*.[Qq][Bb][Xx]
+*.[Qq][Bb][Aa]
+*.[Qq][Bb][Yy]
+*.[Tt][Ll][Gg]
+*.[Nn][Dd]
+*.qb20[0-9][0-9]
+*.QB20[0-9][0-9]
+*.qbmb
+*.QBMB
+*.DMG
+*.pkg
+research-samples/
+internal-utils/
+
 # Third-party installers and tools dropped in for reference; never commit them
 *.exe
 *.dmg
