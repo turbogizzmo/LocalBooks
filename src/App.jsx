@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Sidebar, { findNav, resolveView } from './components/Sidebar.jsx';
+import Sidebar, { canOpen, findNav, openableInstead, resolveView } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
 import HelpCenter from './components/HelpCenter.jsx';
@@ -118,6 +118,14 @@ export default function App() {
     },
     [openChild],
   );
+  // A window on an Admin-only page (from a desktop saved while an Admin, say) shows someone else
+  // their first allowed Settings tab, and is titled for it. Only once the sign-in state is known.
+  const signInKnown = !!signIn.data;
+  const { redirect } = manager;
+  useEffect(() => {
+    if (signInKnown) redirect((view) => canOpen(view, isAdmin), openableInstead);
+  }, [signInKnown, isAdmin, state.windows, redirect]);
+
   const managerContext = useMemo(
     () => ({ windows: state.windows, activeId: state.activeId, open: openChild, focus: focusChild, close: closeChild, windowMode }),
     [state.windows, state.activeId, openChild, focusChild, closeChild, windowMode],

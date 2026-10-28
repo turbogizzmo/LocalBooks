@@ -30,7 +30,7 @@ import SalesLists from './SalesLists.jsx';
 import SalesTax from './SalesTax.jsx';
 import SendForms from './SendForms.jsx';
 import Settings from './Settings.jsx';
-import { canOpen, findNav } from './Sidebar.jsx';
+import { canOpen, openableInstead } from './Sidebar.jsx';
 import Statements from './Statements.jsx';
 import TimeTracking from './TimeTracking.jsx';
 import MileageTracking from './MileageTracking.jsx';
@@ -38,8 +38,8 @@ import Todos from './Todos.jsx';
 import VendorCredits from './VendorCredits.jsx';
 
 export default function Screen({ view: chosenView, intent, navigate, accounts, isAdmin, companyName }) {
-  // An Admin-only Settings tab (left open, or restored with the desktop) shows anyone else their first tab instead.
-  const view = canOpen(chosenView, isAdmin) ? chosenView : findNav('settings').item.children.find((page) => canOpen(page.id, false)).id;
+  // An Admin-only Settings tab shows anyone else their first tab instead (App also moves the window there).
+  const view = canOpen(chosenView, isAdmin) ? chosenView : openableInstead(chosenView);
   const list = accounts;
   const props = { accounts: list, intent, navigate };
   return (

@@ -72,6 +72,7 @@ export function useChildWindows(windowMode, initial) {
   const setBounds = useCallback((id, bounds) => setState((s) => cw.setBounds(s, id, bounds, area())), [area]);
   const setContent = useCallback((id, content) => setState((s) => cw.setContent(s, id, content)), []);
   const cycle = useCallback((back = false) => setState((s) => cw.cycle(s, back)), []);
+  const redirect = useCallback((allowed, fallback) => setState((s) => cw.redirect(s, allowed, fallback)), []);
   const arrange = useCallback(
     async (kind) => {
       if (kind === 'arrange-icons') return setState((s) => cw.arrangeIcons(s));
@@ -178,7 +179,7 @@ export function useChildWindows(windowMode, initial) {
     return () => clearTimeout(timer);
   }, [state, windowMode]);
 
-  return { state, areaRef, area, open, focus, close, closeAll, minimize, toggleMaximize, setBounds, setContent, cycle, arrange };
+  return { state, areaRef, area, open, focus, close, closeAll, minimize, toggleMaximize, setBounds, setContent, cycle, arrange, redirect };
 }
 
 /**

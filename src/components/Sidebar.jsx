@@ -115,6 +115,11 @@ export function canOpen(id, isAdmin) {
   return isAdmin || !findNav(id)?.item.adminOnly;
 }
 
+/** The page shown instead of one the user may not open: the first Settings tab everyone may open. */
+export function openableInstead() {
+  return findNav('settings').item.children.find((page) => canOpen(page.id, false)).id;
+}
+
 export function findNav(id) {
   for (const item of NAV) {
     if (item.id === id) return { item, parent: null };

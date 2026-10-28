@@ -112,6 +112,15 @@ export function setBounds(state, id, bounds, area) {
   return { ...state, windows: state.windows.map((w) => (w.id === id ? { ...w, bounds: clamp(bounds, area), maximized: false } : w)) };
 }
 
+/**
+ * Windows on a page `allowed(view)` refuses show `fallback(view)` instead (an Admin-only Settings
+ * tab, for someone who is not an Admin), so their titles and the window lists name what they show.
+ */
+export function redirect(state, allowed, fallback) {
+  if (state.windows.every((w) => allowed(w.view))) return state;
+  return { ...state, windows: state.windows.map((w) => (allowed(w.view) ? w : { ...w, view: fallback(w.view), content: null })) };
+}
+
 /** A window's screen names what it shows (for its title, the window lists and the saved desktop). */
 export function setContent(state, id, content) {
   if (!state.windows.some((w) => w.id === id && JSON.stringify(w.content) !== JSON.stringify(content))) return state;
