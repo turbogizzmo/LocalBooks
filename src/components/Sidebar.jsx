@@ -129,6 +129,9 @@ export function findNav(id) {
   return null;
 }
 
+// Footer tag for where the company file lives; synced folders (Dropbox, iCloud, …) sit in the cloud.
+const STORAGE_TAG = { LOCAL: 'local', NETWORK: 'network', SYNCED: 'cloud' };
+
 export default function Sidebar({ current, onSelect, onNew, companyName, storage, isAdmin = true }) {
   const [open, setOpen] = useState(() => new Set(NAV.filter((n) => n.children).map((n) => n.id)));
   const toggle = (id) =>
@@ -205,7 +208,9 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
         )}
       </ul>
       <div className="truncate border-t border-white/10 px-3 py-1 text-2xs text-qb-nav-text" title={storage?.detail}>
-        {storage ? `${storage.kind === 'LOCAL' ? '●' : '▲'} ${storage.detail} · offline` : 'Company file · offline'}
+        {storage
+          ? `${storage.kind === 'LOCAL' ? '●' : '▲'} ${storage.detail} · ${STORAGE_TAG[storage.kind] ?? 'local'}`
+          : 'Company file'}
       </div>
     </nav>
   );
