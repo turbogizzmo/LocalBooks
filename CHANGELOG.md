@@ -4,6 +4,11 @@ What changed in each LocalBooks release. A release's section here becomes its re
 GitHub and in the app's update window (see `.github/workflows/release.yml`), so write it for the
 people using LocalBooks.
 
+## [Unreleased]
+
+- **The sidebar says where the company file is.** Its footer ends in **local**, **network** or
+  **cloud** (a Dropbox, iCloud or other synced folder), instead of always saying offline.
+
 ## [0.10.3]
 
 - **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers, reports and
