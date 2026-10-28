@@ -14,7 +14,7 @@ aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "a
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc"] }
 base64 = "0.23"
 calamine = { version = "0.37", default-features = false }
-cfb = "0.14"
+cfb = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
 flate2 = "1"
