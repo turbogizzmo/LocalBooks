@@ -17,6 +17,7 @@ import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 
 const TERMS = [
   { id: 'receipt', label: 'Due on receipt', days: 0 },
@@ -589,6 +590,9 @@ export default function Invoices({ accounts, intent }) {
       customerRef.current?.focus();
     } else if (intent?.action === 'receive-payment') {
       setReceiving(true);
+    } else if (intent?.action === 'edit' && intent.data?.invoiceId) {
+      // Opened in a window of its own from the list, or reopened with the desktop.
+      loadForEdit({ id: intent.data.invoiceId }, false);
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
@@ -627,23 +631,20 @@ export default function Invoices({ accounts, intent }) {
   const { filled, invalidCount, payload } = summarizeLines(lines);
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
+  useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
+  // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
+  const openFromList = useOpenFromList();
 
-  const loadForEdit = (inv) => {
+  // `focusCustomer` is off for an invoice opened in its own window, which should not open the
+  // customer suggestions before anyone has touched it.
+  const loadForEdit = (inv, focusCustomer = true) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details }) => {
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber });
-        setCustomer(invoice.customerName);
-        setIssueDate(invoice.issueDate);
-        setDueDate(invoice.dueDate);
-        setTerms('custom');
-        setCurrency(invoice.currencyCode ?? '');
-        setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
-        setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
-        tax.set(invoice.taxRateId ?? null);
-        setLines([
+        const loaded = [
           ...items.map((l) => ({
             ...blankLine(l.incomeAccountId),
             productId: l.productServiceId,
@@ -654,9 +655,20 @@ export default function Invoices({ accounts, intent }) {
             rate: centsToInput(l.rateCents),
           })),
           blankLine(defaultAccountId),
-        ]);
+        ];
+        // What was loaded, so closing the window asks only once something has changed.
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: JSON.stringify(summarizeLines(loaded).payload) });
+        setCustomer(invoice.customerName);
+        setIssueDate(invoice.issueDate);
+        setDueDate(invoice.dueDate);
+        setTerms('custom');
+        setCurrency(invoice.currencyCode ?? '');
+        setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
+        setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
+        tax.set(invoice.taxRateId ?? null);
+        setLines(loaded);
         setNotice(null);
-        customerRef.current?.focus();
+        if (focusCustomer) customerRef.current?.focus();
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
@@ -898,7 +910,7 @@ export default function Invoices({ accounts, intent }) {
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       </section>
 
-      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={loadForEdit} />
+      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })} />
     </div>
   );
 }

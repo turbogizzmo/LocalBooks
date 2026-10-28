@@ -14,6 +14,7 @@ import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -36,6 +37,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   // Files to attach once the bill posts, such as the vendor's invoice.
   const [files, setFiles] = useState([]);
   const formClass = useFormClass(accounts);
+  // Closing the window asks first while the bill has entries not yet saved.
+  useDirtySince('bill', { vendor, billNumber, billDate, dueDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -508,6 +511,11 @@ export default function Bills({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   const today = todayIso();
+  // A bill chosen in the list opens in a window of its own, as forms do in QuickBooks.
+  const openFromList = useOpenFromList();
+  const openBill = (bill) => openFromList('expenses/bills', 'edit', { billId: bill.id });
+  useEditIntent(intent, 'billId', data, startEdit, () => setNotice({ kind: 'error', text: 'That bill is no longer in the books.' }));
+  useWindowContent(editing ? { name: `Bill ${editing.bill.billNumber || ''} · ${editing.bill.vendorName}`.replace('Bill  ·', 'Bill ·'), action: 'edit', data: { billId: editing.bill.id } } : null);
 
   useEffect(() => {
     if (intent?.action === 'pay-bills') setPaying(true);
@@ -657,7 +665,7 @@ export default function Bills({ accounts, intent }) {
                     label: 'Edit…',
                     disabled: b.isVoided || b.amountPaidCents > 0,
                     hint: b.amountPaidCents > 0 ? 'Void its payments and remove its credits first' : undefined,
-                    onSelect: () => startEdit(b),
+                    onSelect: () => openBill(b),
                   },
                   voidItem({
                     journalEntryId: b.journalEntryId,

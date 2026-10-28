@@ -12,6 +12,7 @@ import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
 const isSplitAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
@@ -53,6 +54,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
   const formClass = useFormClass(accounts);
+  // Closing the window asks first while the entry has amounts or a payee not yet saved.
+  useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   // The next number for the bank account, after its checks and bill payment checks; again after each one is posted.
@@ -257,6 +260,18 @@ export default function ExpensesChecks({ accounts, intent }) {
   useEffect(() => {
     if (INTENT_KINDS[intent?.action]) setKind(INTENT_KINDS[intent.action]);
   }, [intent]);
+  // A check or expense chosen in the list opens in a window of its own, as forms do in QuickBooks.
+  const openFromList = useOpenFromList();
+  const openExpense = (expense) => openFromList('expenses/expenses', 'edit', { expenseId: expense.id });
+  useEditIntent(intent, 'expenseId', data, startEdit, () => setNotice({ kind: 'error', text: 'That entry is no longer in the books.' }));
+  const kindName = (k) => (k === 'CHECK' ? 'Check' : k === 'CARD_CREDIT' ? 'Card credit' : 'Expense');
+  useWindowContent(
+    editing
+      ? { name: `${kindName(editing.expense.kind)}${editing.expense.checkNumber ? ` ${editing.expense.checkNumber}` : ''} · ${editing.expense.payeeName}`, action: 'edit', data: { expenseId: editing.expense.id } }
+      : kind
+        ? { name: kind === 'CHECK' ? 'Write Checks' : kind === 'CARD_CREDIT' ? 'Enter Credit Card Credits' : 'Enter Credit Card Charges' }
+        : null,
+  );
 
   const voidEntry = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
@@ -372,7 +387,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                     <RowMenu
                       items={[
                         attachments.menuItem(x.journalEntryId),
-                        { label: 'Edit…', disabled: x.isVoided, onSelect: () => startEdit(x) },
+                        { label: 'Edit…', disabled: x.isVoided, onSelect: () => openExpense(x) },
                         ...(x.kind === 'CHECK' ? [{ label: 'Print check', disabled: x.isVoided, onSelect: () => printCheck(x) }] : []),
                         voidItem({
                           journalEntryId: x.journalEntryId,

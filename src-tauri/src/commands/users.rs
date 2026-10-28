@@ -127,6 +127,8 @@ pub async fn sign_out_if_idle(app: AppHandle, db: State<'_, Db>) -> Result<bool,
 pub async fn sign_out_after_idle(app: &AppHandle) {
     let Some(db) = app.try_state::<Db>() else { return };
     let Ok((_, slot)) = db.pool_and_session().await else { return };
+    // Their windows are their desktop, saved for when they sign in again.
+    windows::save_on_close(app).await;
     if slot.lock().await.take().is_none() {
         return; // another command got here first
     }
@@ -174,6 +176,8 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;
+    // As in QuickBooks, each user's desktop is their own: theirs reopens, not the last user's windows.
+    windows::restore_on_next_load(&app, true);
     signed_in_changed(&app);
     Ok(user)
 }
@@ -181,6 +185,8 @@ pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, passwo
 #[tauri::command]
 pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     let (_, slot) = db.pool_and_session().await?;
+    // Their windows are their desktop, saved for when they sign in again.
+    windows::save_on_close(&app).await;
     *slot.lock().await = None;
     // Signing out means someone else may sign in next: no automatic sign-in until the file reopens.
     db.forbid_remembered_sign_in().await;

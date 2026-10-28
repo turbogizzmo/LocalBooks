@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Every LocalBooks window (the main window and those opened with Window › New Window): core IPC, ledger-changed events, the native open/save file dialogs, and checking for and installing signed updates",
+  "description": "Every LocalBooks window (the main window and those opened with Window › New Window): core IPC, ledger-changed events, closing a window once its unsaved entries are confirmed, the native open/save file dialogs, and checking for and installing signed updates",
   "windows": [
     "main",
     "window-*"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-save",
     "updater:default",
