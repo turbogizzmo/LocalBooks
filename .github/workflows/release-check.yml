@@ -171,9 +171,9 @@ jobs:
       - name: Artifacts
         id: artifacts
         env:
-          # The script comes from the checkout, which a pull request controls. A pull request checks
-          # a published release, whose updater URLs download without a token, so it gets none.
-          GH_TOKEN: ${{ github.event_name != 'pull_request' && github.token || '' }}
+          # Authenticated so the release-asset API calls don't hit the shared unauthenticated rate
+          # limit. Pull requests from forks and Dependabot get a read-only token from GitHub.
+          GH_TOKEN: ${{ github.token }}
         run: >
           python -I .github/release-check/release_check.py artifacts
           --release-dir "$WORK/release" --platform ${{ matrix.platform }} --version "${{ needs.plan.outputs.version }}"
