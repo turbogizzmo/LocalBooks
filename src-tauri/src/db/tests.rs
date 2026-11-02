@@ -335,3 +335,12 @@ async fn replaced_copies_left_behind_are_removed_at_the_next_open() {
     assert!(unrelated.exists());
     db.shutdown().await;
 }
+
+/// A company file's own views and triggers are not trusted to call functions with side effects.
+#[tokio::test]
+async fn company_files_open_with_an_untrusted_schema() {
+    let tmp = TempDir::new("trusted-schema");
+    let db = Db::open_at(tmp.0.join("Company.localbooks"), test_config(&tmp.0)).await.unwrap();
+    let trusted: i64 = sqlx::query_scalar("PRAGMA trusted_schema").fetch_one(&db.pool().await).await.unwrap();
+    assert_eq!(trusted, 0);
+}

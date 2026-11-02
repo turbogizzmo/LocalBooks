@@ -179,6 +179,16 @@ fn settings_round_trip_through_mcp_json() {
     let config = McpConfig { enabled: true, token: Some(new_token()) };
     write_config(&dir, &config).unwrap();
     assert_eq!(read_config(&dir), config);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join(CONFIG_FILE);
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600, "only the owner can read the token");
+        // A file left world-readable by an older version is tightened when it is read.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(read_config(&dir), config);
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+    }
     std::fs::remove_dir_all(&dir).unwrap();
     assert!(tokens_match("abc", "abc") && !tokens_match("abc", "abd") && !tokens_match("abc", "abcd"));
 }
