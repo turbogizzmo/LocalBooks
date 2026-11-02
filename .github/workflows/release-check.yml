@@ -39,10 +39,11 @@ on:
       - .github/release-check/**
       - src-tauri/src/release_check.rs
 
-# Reading draft releases and their assets needs write access to contents; nothing here writes.
-# The token is given only to the steps that download, never to the steps that run the release.
+# Read-only by default. Reading draft releases and their assets needs write access to contents, so
+# the two jobs that do are granted it; nothing here writes. The token is given only to the steps that
+# download, never to the steps that run the release, and never to repository code on a pull request.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-check-${{ inputs.tag || github.event.release.tag_name || github.ref }}
@@ -61,6 +62,9 @@ jobs:
     # Published latest releases are past the gate; check test builds (pre-releases) and drafts.
     if: github.event_name != 'release' || github.event.release.prerelease || github.event.release.draft
     runs-on: ubuntu-latest
+    # Lists draft releases; runs no repository code.
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
       version: ${{ steps.plan.outputs.version }}
@@ -116,6 +120,9 @@ jobs:
             assets: -p latest.json -p '*.deb' -p '*.deb.sig' -p '*.rpm' -p '*.rpm.sig' -p '*.AppImage' -p '*.AppImage.sig'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
+    # Downloads draft releases.
+    permissions:
+      contents: write
     env:
       TAG: ${{ needs.plan.outputs.tag }}
       PREVIOUS: ${{ needs.plan.outputs.previous }}
@@ -129,7 +136,7 @@ jobs:
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
     steps:
       - name: Checkout (scripts)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -144,7 +151,7 @@ jobs:
           mkdir -p "$WORK"
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.13'
 
@@ -164,6 +171,8 @@ jobs:
       - name: Artifacts
         id: artifacts
         env:
+          # Authenticated so the release-asset API calls don't hit the shared unauthenticated rate
+          # limit. Pull requests from forks and Dependabot get a read-only token from GitHub.
           GH_TOKEN: ${{ github.token }}
         run: >
           python -I .github/release-check/release_check.py artifacts
@@ -193,7 +202,7 @@ jobs:
 
       - name: Checkout the previous release
         if: ${{ !cancelled() }}
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.plan.outputs.previous }}
           path: previous-release
@@ -201,11 +210,13 @@ jobs:
 
       - name: Set up Rust (stable)
         if: ${{ !cancelled() }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
         if: ${{ !cancelled() }}
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: previous-release/src-tauri -> target
           shared-key: release-check-${{ matrix.os }}
@@ -247,7 +258,7 @@ jobs:
 
       - name: Keep the company files and results (7 days)
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-check-${{ matrix.platform }}
           path: |

@@ -11,8 +11,10 @@
 #                  commit, then:  git tag v0.2.0 && git push origin v0.2.0
 #
 # Updates: the app's updater reads releases/latest/download/latest.json and installs a download only
-# if it is signed with the update key. The key is stored as the repository secrets
-# TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; installer builds fail without them.
+# if it is signed with the update key. The key is stored as the secrets TAURI_SIGNING_PRIVATE_KEY
+# and TAURI_SIGNING_PRIVATE_KEY_PASSWORD of the `release` environment (Settings › Environments),
+# which only the build job uses; installer builds fail without them. The frontend is built in its
+# own step without the key, and npm install scripts are skipped, so the build tools never see it.
 #
 # Code signing is not configured: macOS Gatekeeper and Windows SmartScreen will warn on the
 # resulting installers until Apple Developer ID / Windows signing secrets are added.
@@ -65,7 +67,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -74,10 +76,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends $LINUX_DEPS
 
       - name: Set up Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Cache Rust build
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: src-tauri -> target
           shared-key: test-${{ matrix.platform }}
@@ -90,6 +94,8 @@ jobs:
     name: Build (${{ matrix.name }})
     needs: test
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    # Holds the updater signing key; its deployment rules (tags only, required reviewer) gate this job.
+    environment: release
     permissions:
       contents: write
     strategy:
@@ -112,7 +118,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Verify tag matches app version
         if: github.ref_type == 'tag'
@@ -131,24 +137,27 @@ jobs:
           sudo apt-get install -y --no-install-recommends $LINUX_DEPS
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
 
       - name: Set up Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.rust-targets }}
 
       - name: Cache Rust build
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: src-tauri -> target
           shared-key: build-${{ matrix.platform }}
 
       - name: Install frontend dependencies
-        run: npm ci
+        # No install scripts: the only ones (esbuild, fsevents) are optional, and none should run in
+        # the job that holds the signing key.
+        run: npm ci --ignore-scripts
 
       - name: Build frontend
         run: npm run build
@@ -171,7 +180,7 @@ jobs:
 
       - name: Build and package with Tauri
         id: tauri
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signs the update bundles; the matching public key is in tauri.conf.json.
@@ -207,7 +216,9 @@ jobs:
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: false
           retryAttempts: 1
-          args: ${{ matrix.args }} --verbose
+          # The frontend was built above without secrets; skip beforeBuildCommand (npm run build) so
+          # Vite, PostCSS and Tailwind do not run again with the signing key in the environment.
+          args: ${{ matrix.args }} --verbose --config '{"build":{"beforeBuildCommand":""}}'
 
       - name: Collect installer paths
         if: github.ref_type != 'tag'
@@ -224,7 +235,7 @@ jobs:
 
       - name: Upload installers (7 days)
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: LocalBooks-${{ matrix.platform }}
           path: ${{ steps.installers.outputs.paths }}

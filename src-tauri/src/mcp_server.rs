@@ -40,6 +40,8 @@ const CONFIG_FILE: &str = "mcp.json";
 const MAX_HEAD_BYTES: usize = 16 * 1024;
 const MAX_BODY_BYTES: usize = 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// Open connections served at once; each is also bounded by REQUEST_TIMEOUT and the size limits.
+const MAX_CONNECTIONS: usize = 16;
 
 // ------------------------------------------------------------------------------------------------
 // Settings (stored next to config.json, outside any company file)
@@ -55,19 +57,45 @@ pub struct McpConfig {
 }
 
 pub fn read_config(config_dir: &Path) -> McpConfig {
-    std::fs::read(config_dir.join(CONFIG_FILE)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
+    let path = config_dir.join(CONFIG_FILE);
+    restrict_to_owner(&path);
+    std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
 }
 
+/// The file holds the access token, so it is readable by its owner only (as `instance.json`).
 pub fn write_config(config_dir: &Path, config: &McpConfig) -> Result<(), String> {
     std::fs::create_dir_all(config_dir).map_err(|e| format!("MCP_CONFIG: cannot create {}: {e}", config_dir.display()))?;
     let json = serde_json::to_vec_pretty(config).map_err(|e| format!("MCP_CONFIG: {e}"))?;
-    crate::export_engine::write_atomically(&config_dir.join(CONFIG_FILE), &json)
+    let path = config_dir.join(CONFIG_FILE);
+    crate::instance::write_private(&path, &json).map_err(|e| format!("MCP_CONFIG: cannot write {}: {e}", path.display()))
 }
 
-/// A 256-bit random token as 64 hex characters. Each 64-bit block is a SipHash output under keys
-/// that the standard library seeds from the operating system's random source, so the token cannot
-/// be predicted without those keys.
+/// Older versions wrote `mcp.json` with the default umask (often 0644): tighten it to 0600.
+fn restrict_to_owner(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.permissions().mode() & 0o077 != 0 {
+                let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
+/// A 256-bit random token as 64 hex characters, from the operating system's random source.
 pub fn new_token() -> String {
+    match crate::crypto::random::<32>() {
+        Ok(bytes) => bytes.iter().map(|b| format!("{b:02x}")).collect(),
+        Err(_) => fallback_token(),
+    }
+}
+
+/// Only if the system's random source fails: SipHash outputs under keys that the standard library
+/// seeds from the operating system, so the token still cannot be predicted without those keys.
+fn fallback_token() -> String {
     use std::hash::{BuildHasher, Hasher};
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     (0..4u64)
@@ -518,6 +546,7 @@ pub async fn start(port: u16, token: String, pools: PoolSource) -> Result<Server
     let addr = listener.local_addr().map_err(|e| format!("MCP_BIND: {e}"))?;
     let (shutdown, mut stopped) = tokio::sync::watch::channel(false);
     let token: Arc<str> = token.into();
+    let connections = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
     let task = tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -527,8 +556,13 @@ pub async fn start(port: u16, token: String, pools: PoolSource) -> Result<Server
                     if !peer.ip().is_loopback() {
                         continue; // unreachable while bound to 127.0.0.1; kept as a second guard
                     }
+                    // At most MAX_CONNECTIONS at once; further connections are closed straight away.
+                    let Ok(permit) = connections.clone().try_acquire_owned() else { continue };
                     let (token, pools) = (token.clone(), pools.clone());
-                    tokio::spawn(async move { serve_connection(stream, &token, addr.port(), &pools).await });
+                    tokio::spawn(async move {
+                        serve_connection(stream, &token, addr.port(), &pools).await;
+                        drop(permit);
+                    });
                 }
             }
         }

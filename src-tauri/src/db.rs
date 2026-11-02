@@ -789,6 +789,9 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         // Overwrite deleted and replaced content, so a value written in plain and then encrypted
         // (an import's tax IDs) does not linger in free space.
         .pragma("secure_delete", "ON")
+        // A company file can come from anyone: views and triggers stored in it may not call SQL
+        // functions with side effects or virtual tables that are not marked innocuous.
+        .pragma("trusted_schema", "OFF")
         .busy_timeout(Duration::from_secs(5));
     let (options, connections) = if storage.is_shared() {
         (base.journal_mode(SqliteJournalMode::Delete).locking_mode(SqliteLockingMode::Exclusive), 1)

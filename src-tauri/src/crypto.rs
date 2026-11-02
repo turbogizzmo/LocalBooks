@@ -178,7 +178,7 @@ fn encode_base32(bytes: &[u8]) -> String {
     out
 }
 
-fn random<const N: usize>() -> Result<[u8; N], String> {
+pub(crate) fn random<const N: usize>() -> Result<[u8; N], String> {
     let mut bytes = [0u8; N];
     getrandom::getrandom(&mut bytes).map_err(|e| format!("CRYPTO_RANDOM: the system's random number generator failed ({e})"))?;
     Ok(bytes)
