@@ -40,6 +40,9 @@ pub struct FoundTransaction {
     pub date: NaiveDate,
     /// As journal entries show it (`INVOICE`, `CHECK`, `CARD_CREDIT`, ...).
     pub source_type: String,
+    /// The id of the document that posted it, in its own table (see `source_type`); `None` for
+    /// manual journal entries.
+    pub source_id: Option<i64>,
     /// `Void` for the entry that voids another.
     pub type_label: String,
     pub num: Option<String>,
@@ -74,6 +77,7 @@ fn found(l: &Line) -> FoundTransaction {
         journal_entry_id: l.journal_entry_id,
         date: l.date,
         source_type: l.source_type.clone(),
+        source_id: l.source_id,
         type_label: l.type_text().to_string(),
         num: l.num.clone(),
         name: l.name.clone(),

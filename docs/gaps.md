@@ -39,6 +39,9 @@ re-check one against the code before you start it.
 | R19 | partial | M | Accessibility untested | Every screen is reachable and operable by keyboard; an automated a11y check runs in the e2e suite |
 | R20 | partial | S | US-only, and not stated anywhere | README and the tester page say it is US-only and what that means |
 | R21 | done | S | PCI DSS: out of scope while card numbers are never stored | Keep a check that no field accepts a card number |
+| T1 | in-progress | S | Windows tester round 3: no Add new vendor from forms, Enter doesn't move between fields, no vendor transaction list, registers and Reconcile don't sort, register rows don't open the transaction, recent companies show the modified date (branch `feedback/windows-tester-round3`) | Each item works by hand on Windows; `storage::tests::described_recent_list_is_most_recently_opened_first` and the Find `source_id` test pass |
+| T2 | open | S | The customer box on invoices, sales receipts, estimates and credit memos has no Add new customer, unlike the vendor box (`VendorField.jsx`) | Typing an unknown customer offers Add as a new customer and Add with details |
+| T3 | open | M | Preferences cover a few of QuickBooks Desktop's categories; the rest (General: beep, decimal point, warnings, recall last transaction; and the Company Preferences of Bills, Checking, Payments, Sales & Customers, Reports & Graphs, Items & Inventory, Jobs & Estimates, Time & Expenses, Reminders, Send Forms) are missing or scattered across screens | An inventory per category lists each option as built, deliberately left out (with the reason), or a row here |
 
 ## Engineering (from the 2026-10-26 audit)
 

@@ -6,6 +6,23 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
+  purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
+  list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
+  too.
+- **See all of a vendor's or customer's transactions.** Click a name in the Vendors or Customers
+  list and its bills, checks, invoices and payments show underneath, newest first, with a total.
+  Double-click one to open it.
+- **Open a transaction from a register.** Double-click a row in an account register to open the
+  bill, check, expense or invoice itself; other entries open in the journal.
+- **Sort registers and Reconcile.** Click a column heading in an account register or in Reconcile
+  to sort by date, number, payee, amount or cleared status.
+- **Pressing Enter moves between fields.** A new **General** section in **Settings › Preferences**
+  lets Enter move to the next field, as Tab does. It also has: open name lists as you type, show
+  clipped text in full on hover, and start new transactions on today's date or the last date you
+  entered. In Preferences, Enter now saves the box and moves to the next one.
+- **Recent companies in the order you opened them.** The No Company Open screen shows when you last
+  opened each company file, newest first, instead of when the file last changed.
 - **The sidebar says where the company file is.** Its footer ends in **local**, **network** or
   **cloud** (a Dropbox, iCloud or other synced folder), instead of always saying offline.
 

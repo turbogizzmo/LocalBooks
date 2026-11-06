@@ -51,6 +51,10 @@ async fn finds_transactions_by_the_core_filters() {
     let check = &all.rows[2];
     assert_eq!((check.type_label.as_str(), check.num.as_deref(), check.name.as_deref(), check.name_kind), ("Check", Some("502"), Some("Landlord"), Some(NameKind::Vendor)));
     assert_eq!(all.rows[0].name_kind, Some(NameKind::Customer));
+    // Each row names the document that posted it, so a screen can open it.
+    let check_id: i64 = sqlx::query_scalar("SELECT id FROM expenses WHERE journal_entry_id = ?1").bind(feb_rent).fetch_one(&pool).await.unwrap();
+    assert_eq!(check.source_id, Some(check_id));
+    assert_eq!(all.rows[0].source_id, Some(inv.id));
 
     // Dates.
     let feb = run(FindQuery { start_date: Some(d(2, 1)), end_date: Some(d(2, 28)), ..filters(Filters::default()) }).await;

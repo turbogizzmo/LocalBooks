@@ -68,14 +68,41 @@ Asset, are added the first time you use that feature.
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
+## Set how typing works (General preferences)
+
+**Settings › Preferences** starts with **General · My Preferences**. These choices are yours on this
+computer and take effect at once, in every LocalBooks window. **Default** puts them all back.
+
+- **Pressing Enter moves between fields.** Enter goes to the next box, as Tab does. Record the
+  transaction with its button (**Post**, **Save**). Off by default. In Preferences itself, Enter
+  always saves the box you typed in and moves to the next one.
+- **Open the list of matches as you type.** Name boxes such as **Vendor** show matching names while
+  you type, and offer to add a name that isn't on the list. Turn it off to open the list only when
+  you press ↓.
+- **Show the full text of clipped entries on hover.** Text cut off with "…" shows in full when you
+  point at it.
+- **Date for new transactions.** New bills, checks, invoices, sales receipts, deposits and journal
+  entries start on **Today's date**, or on **The last date you entered**, which helps when you
+  enter a stack of older paperwork.
+
 ## Sort a list
 
 Click a column heading in a list (invoices, bills, estimates, checks, customers, products, the
-journal and others) to sort by it; click it again to reverse the order. An arrow shows which column
-is sorted.
+journal, account registers, Reconcile and others) to sort by it; click it again to reverse the
+order. An arrow shows which column is sorted.
 
 Lists of transactions start with the newest at the top. LocalBooks remembers the order you choose
 for each list on this computer; click the sorted heading a third time to go back to newest first.
+Registers and Reconcile start, and go back to, date order (oldest first). While a register is
+sorted by anything else, its **Balance** column is dimmed, because it is still the running balance
+in date order.
+
+## Open a transaction from a register
+
+In an account register, click a row to see all of the transaction's lines underneath it.
+Double-click the row (or choose **Open** in its **Actions** menu) to open the transaction itself:
+bills, checks, expenses, credit card credits and invoices open in their own form, and anything else
+opens in the journal with the entry expanded.
 
 ## Work in more than one window
 

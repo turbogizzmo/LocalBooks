@@ -108,6 +108,9 @@ to their summaries. You can condense again later with a later cut-off.
 ## Open another company file
 
 - Double-click a `.localbooks` file, or click **Open Company File…** and choose one.
+- **File › Open Previous Company** and the **No Company Open** screen list the company files you
+  opened most recently first, with when you last opened each one. Select a file to see where it is
+  and when it last changed.
 - It opens in place for this session. The window title and the top bar show which file is open, and
   your usual company file is unchanged.
 - To open a company **without restoring windows**, hold **Option** (Mac) or **Alt** (Windows and
