@@ -17,6 +17,10 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+- **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
+  **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
+  and **Voided Transactions** are in the report list. Like the other detail reports, each can be
+  customized, saved, exported and printed, and a click on a line opens its transaction.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
