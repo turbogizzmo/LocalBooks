@@ -9,6 +9,8 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { useWindowContent, WindowManagerContext } from '../lib/windows.js';
+import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -112,6 +114,39 @@ export default function Register({ accounts, intent }) {
     onNotice: setNotice,
   });
 
+  // Click a heading to sort; the register starts (and a third click returns) in date order. The
+  // balance is always the running balance in date order, so it is dimmed while sorted otherwise.
+  const typeLabel = (r) => (r.isReversal ? 'Void' : (SOURCE_LABEL[r.sourceType] ?? r.sourceType));
+  const sorter = useSort(
+    data?.rows,
+    {
+      date: (r) => r.entryDate,
+      type: typeLabel,
+      number: (r) => r.entryNumber,
+      payee: (r) => r.partyName,
+      memo: (r) => r.memo,
+      account: (r) => r.split,
+      cleared: (r) => (r.reconciled ? 2 : r.cleared ? 1 : 0),
+      first: (r) => firstAmount(r) || null,
+      second: (r) => secondAmount(r) || null,
+    },
+    { initial: null, storageKey: 'register' },
+  );
+  const inDateOrder = !sorter.sort || (sorter.sort.key === 'date' && sorter.sort.dir === 'asc');
+  const sortTh = (col, label, className = '') => (
+    <SortTh sorter={sorter} col={col} className={className}>
+      {label}
+    </SortTh>
+  );
+
+  // Double-click (or the row menu) opens the transaction itself: the bill, check or invoice form
+  // where LocalBooks has one, otherwise the journal entry.
+  const openTransaction = (r) => {
+    const [view, action, data] = transactionTarget(r);
+    openChild(view, action, data);
+  };
+  const openLabel = (r) => (opensOwnForm(r) ? `Open ${(SOURCE_LABEL[r.sourceType] ?? 'transaction').toLowerCase()}` : 'Open in journal');
+
   const voidEntry = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
@@ -165,7 +200,14 @@ export default function Register({ accounts, intent }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">{data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''}` : 'Register'}</h2>
-          {data && <span className="text-xs text-qb-ink-muted">{data.accountTypeName} · click a row to see the whole transaction</span>}
+          {data && (
+            <span className="text-xs text-qb-ink-muted">
+              {data.accountTypeName} · click a row to see its lines, double-click to open it · click a heading to sort
+            </span>
+          )}
+          {data && !inDateOrder && (
+            <span className="ml-auto text-xs text-qb-ink-muted">Sorted: balances are still in date order</span>
+          )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           {accountId === null ? (
@@ -188,17 +230,19 @@ export default function Register({ accounts, intent }) {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="qb-grid-head">Date</th>
-                  <th className="qb-grid-head">Type</th>
-                  <th className="qb-grid-head">No.</th>
-                  <th className="qb-grid-head">Payee / name</th>
-                  <th className="qb-grid-head">Memo</th>
-                  <th className="qb-grid-head">Account</th>
+                  {sortTh('date', 'Date')}
+                  {sortTh('type', 'Type')}
+                  {sortTh('number', 'No.')}
+                  {sortTh('payee', 'Payee / name')}
+                  {sortTh('memo', 'Memo')}
+                  {sortTh('account', 'Account')}
                   <th className="qb-grid-head">Class</th>
-                  <th className="qb-grid-head text-center" title="Cleared (C) or reconciled (R)">✓</th>
-                  <th className="qb-grid-head text-right">{firstHead}</th>
-                  <th className="qb-grid-head text-right">{secondHead}</th>
-                  <th className="qb-grid-head text-right">Balance</th>
+                  <SortTh sorter={sorter} col="cleared" className="text-center" title="Cleared (C) or reconciled (R) · click to sort">
+                    ✓
+                  </SortTh>
+                  {sortTh('first', firstHead, 'text-right')}
+                  {sortTh('second', secondHead, 'text-right')}
+                  <th className="qb-grid-head text-right" title="Running balance in date order">Balance</th>
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
@@ -212,11 +256,13 @@ export default function Register({ accounts, intent }) {
                     <td />
                   </tr>
                 )}
-                {(data?.rows ?? []).map((r) => (
+                {sorter.sorted.map((r) => (
                   <Fragment key={r.lineId}>
                     <tr
                       className={`qb-grid-row cursor-pointer ${expanded === r.journalEntryId ? 'is-active' : ''} ${r.isVoided || r.isReversal ? 'text-qb-ink-faint' : ''}`}
                       onClick={() => setExpanded(expanded === r.journalEntryId ? null : r.journalEntryId)}
+                      onDoubleClick={() => openTransaction(r)}
+                      title={`Double-click: ${openLabel(r).toLowerCase()}`}
                     >
                       <td className="qb-grid-cell">{formatDate(r.entryDate)}</td>
                       <td className="qb-grid-cell">{r.isReversal ? 'Void' : (SOURCE_LABEL[r.sourceType] ?? r.sourceType)}</td>
@@ -234,11 +280,12 @@ export default function Register({ accounts, intent }) {
                       <td className="qb-grid-cell text-center font-semibold">{r.reconciled ? 'R' : r.cleared ? 'C' : ''}</td>
                       <td className="qb-grid-cell num">{firstAmount(r) ? formatCents(firstAmount(r)) : ''}</td>
                       <td className="qb-grid-cell num">{secondAmount(r) ? formatCents(secondAmount(r)) : ''}</td>
-                      <td className={`qb-grid-cell num font-semibold ${r.balanceCents < 0 ? 'text-qb-negative' : ''}`}>{formatCents(r.balanceCents)}</td>
+                      <td className={`qb-grid-cell num font-semibold ${r.balanceCents < 0 ? 'text-qb-negative' : ''} ${inDateOrder ? '' : 'opacity-50'}`}>{formatCents(r.balanceCents)}</td>
                       <td className="qb-grid-cell cell-tight text-center" onClick={(ev) => ev.stopPropagation()}>
                         {!r.isReversal && (
                           <RowMenu
                             items={[
+                              { label: `${openLabel(r)}…`, onSelect: () => openTransaction(r) },
                               voidItem({
                                 journalEntryId: r.journalEntryId,
                                 voided: r.isVoided,
@@ -254,6 +301,11 @@ export default function Register({ accounts, intent }) {
                       <tr className="bg-qb-canvas">
                         <td colSpan={12} className="border-b border-qb-border">
                           <EntryLines entryId={r.journalEntryId} />
+                          <div className="px-2 pb-1">
+                            <button type="button" className="text-sm text-qb-link hover:underline" onClick={() => openTransaction(r)}>
+                              {openLabel(r)} →
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}

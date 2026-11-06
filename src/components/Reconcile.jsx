@@ -4,6 +4,7 @@ import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import { SortTh, useSort } from './SortHead.jsx';
 
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
@@ -100,7 +101,27 @@ export default function Reconcile({ accounts }) {
 
   const eligible = rec ? lines.filter((l) => l.entryDate <= rec.statementEndDate) : [];
   const hiddenLater = rec ? lines.length - eligible.length : 0;
-  const shown = eligible.filter((l) => (filter === 'inc' ? l.amountCents > 0 : filter === 'dec' ? l.amountCents < 0 : true));
+  const filtered = useMemo(
+    () => eligible.filter((l) => (filter === 'inc' ? l.amountCents > 0 : filter === 'dec' ? l.amountCents < 0 : true)),
+    // `eligible` is rebuilt every render; what it depends on is listed instead.
+    [lines, rec?.statementEndDate, filter],
+  );
+  // Click a heading to sort: by date, number, amount or cleared. Ticking a line doesn't re-sort the
+  // list under the pointer; the cleared order is taken when its heading is clicked.
+  const sorter = useSort(
+    filtered,
+    {
+      date: (l) => l.entryDate,
+      type: (l) => SOURCE_LABEL[l.sourceType] ?? l.sourceType,
+      number: (l) => l.entryNumber,
+      memo: (l) => l.memo,
+      dec: (l) => (l.amountCents < 0 ? -l.amountCents : null),
+      inc: (l) => (l.amountCents > 0 ? l.amountCents : null),
+      cleared: (l) => cleared.has(l.lineId),
+    },
+    { initial: null, storageKey: 'reconcile' },
+  );
+  const shown = sorter.sorted;
 
   const clearedLines = eligible.filter((l) => cleared.has(l.lineId));
   const incSum = clearedLines.filter((l) => l.amountCents > 0).reduce((s, l) => s + l.amountCents, 0);
@@ -280,13 +301,22 @@ export default function Reconcile({ accounts }) {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className="qb-grid-head">Date</th>
-                    <th className="qb-grid-head">Type</th>
-                    <th className="qb-grid-head">Ref no.</th>
-                    <th className="qb-grid-head">Memo</th>
-                    <th className="qb-grid-head text-right">{labels.dec}</th>
-                    <th className="qb-grid-head text-right">{labels.inc}</th>
+                    <SortTh sorter={sorter} col="date">Date</SortTh>
+                    <SortTh sorter={sorter} col="type">Type</SortTh>
+                    <SortTh sorter={sorter} col="number">Ref no.</SortTh>
+                    <SortTh sorter={sorter} col="memo">Memo</SortTh>
+                    <SortTh sorter={sorter} col="dec" className="text-right">{labels.dec}</SortTh>
+                    <SortTh sorter={sorter} col="inc" className="text-right">{labels.inc}</SortTh>
                     <th className="qb-grid-head text-center">
+                      <button
+                        type="button"
+                        className="mr-0.5 align-middle text-[9px] text-qb-ink-muted hover:text-qb-ink"
+                        onClick={() => sorter.toggle('cleared')}
+                        title="Sort by cleared"
+                        aria-label="Sort by cleared"
+                      >
+                        {sorter.sort?.key === 'cleared' ? (sorter.sort.dir === 'desc' ? '▼' : '▲') : '⇅'}
+                      </button>
                       <input
                         type="checkbox"
                         className="accent-qb-green"
