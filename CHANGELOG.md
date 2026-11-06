@@ -25,7 +25,6 @@ people using LocalBooks.
   (Preferences › Accounting › My Preferences).
 - **Two-digit years and decimal hours.** Company Preferences › General can show dates as 10/13/26
   and hours as 1.50 instead of 1:30.
-
 - **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
   **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
   and **Voided Transactions** are in the report list. Like the other detail reports, each can be
