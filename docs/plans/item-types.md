@@ -41,28 +41,31 @@ before tax; inventory, price levels and classes work on the lines that are items
 - a subtotal: the subtotal's amount;
 - the last line of a group: the group's total (a group is one block);
 - a discount or a percent charge: not allowed (QuickBooks allows it and the result surprises
-  people; we refuse it with `ITEMS_DISCOUNT_NEEDS_BASE` and say to put a subtotal above).
+  people; we refuse it with `<doc>_DISCOUNT_NEEDS_BASE` or `<doc>_CHARGE_NEEDS_BASE` and say to put
+  a subtotal above). `<doc>` is the document's code: `INV`, `SR` or `EST`.
 
 A **subtotal** is the sum of every line since the previous subtotal (or the top of the form):
 items, charges and discounts. Discounts are negative, so a subtotal below a discount is net of it.
 
 A percent discount or charge is `mul_div_round(base, ppm, 1_000_000)` (half away from zero). The
-base must be above zero. A fixed discount may not exceed its base (`ITEMS_DISCOUNT_TOO_LARGE`), and
-a discount must leave a positive amount, so no line or block is taken below zero.
+base must be above zero. A fixed discount may not exceed its base (`<doc>_DISCOUNT_TOO_LARGE`), so
+no line or block is taken below zero. A form line between a group's heading and its last item is
+refused (`<doc>_INSIDE_GROUP`).
 
 ### Totals, in order
 
 1. *Lines* = item lines + charges − line discounts (subtotals add nothing).
 2. *Taxable* = taxable item lines + taxable charges − taxable line discounts. If a taxable discount
-   would take this below zero the form is refused (`ITEMS_TAXABLE_NEGATIVE`).
+   would take this below zero the form is refused (`<doc>_TAXABLE_NEGATIVE`).
 3. The **document discount** (the Discount field) comes off *Lines*, and off *Taxable* in
    proportion, exactly as now (`sales_tax::taxable_after_discount`).
 4. Tax = rate × taxable, rounded once for the document.
 5. Total = *Lines* − document discount + tax. It must be above zero.
 
 `documentTotals` in `src/components/SalesTax.jsx` does the same steps on the form, so the total the
-user sees is the total that posts. It takes the line layout (below) instead of a flat list of item
-amounts; the Rust and JavaScript versions share a table of cases in the tests.
+user sees is the total that posts. Both lay the lines out with the same rules
+(`item_types::lay_out` in Rust, `src/lib/itemTypes.js` on the form), and a Rust test runs the
+cases in `src-tauri/src/item_types/cases.json` through both (through Node.js where it is installed).
 
 ## Storage (migration `0067_item_types.sql`)
 
@@ -145,7 +148,8 @@ CREATE TABLE invoice_form_lines (
 
 The two tables share one line numbering: the form's first line is 1 whatever kind it is, so the
 document reads back in the order it was entered. Rust assigns the numbers in one place and a trigger
-refuses a number already used in the other table.
+refuses a number already used in the other table. Each kind may use only its own columns (`CHECK`s
+per kind).
 
 They get the same immutability triggers as their line tables: an invoice's form lines change only
 while it is a draft; a posted sales receipt's never; estimate lines as `0020` allows.
@@ -163,7 +167,9 @@ line discount twice.
 ## Input and posting (through `ledger.rs` only)
 
 The forms send their item lines in `lines` as now, plus `formLines`: the subtotals, discounts,
-percent charges and group headings, each with `afterLines` (how many item lines come before it).
+percent charges (`CHARGE`) and group headings, each with `afterLines` (how many item lines come
+before it). A percent charge is laid out like a discount but written to the item table; reading a
+document back, an item row with a `percent_ppm` is a percent charge again.
 `formLines` travels in the flattened `SalesDetails`, so every existing caller and test that builds
 an `InvoiceInput`, `SalesReceiptInput` or `EstimateInput` with `details: Default::default()` is
 unchanged and other branches don't conflict.
@@ -209,7 +215,7 @@ in either is relaxed.
   charge or a subtotal. `price_level_items` refuses discount items.
 - **Inventory.** Group members that are tracked parts relieve stock and post cost of goods sold
   through `inventory::cost_of_sale`, as if entered one by one. Discounts don't change cost.
-- **Classes.** A discount line has its own class (defaulting to the line above's); the form lines
+- **Classes.** A discount line has its own class, chosen on the line; the form lines
   tables are added to `classes::CLASS_USERS`.
 - **Printing.** Subtotal lines print in bold with the amount; discount lines print the item's
   description, "10%" or the amount in the rate column, and a negative amount; a percent charge
@@ -226,10 +232,10 @@ in either is relaxed.
 - **Import from QuickBooks files.** `qbw_documents.rs` reads an invoice's lines with their item and
   ledger amount. The full import (`qbw_full_import::form`) already turns lines that post the other
   way into the document discount, and posts the file's own journal lines, so imported books stay
-  exact. With this work, lines whose item is a known discount item become discount lines on that
-  account instead, and other-charge items (`item_type` 4, already decoded) come in as
-  `OTHER_CHARGE` items. The item-type codes for subtotal, discount and group items are not decoded
-  yet; until they are, imports keep today's behaviour. IIF and QIF imports are unchanged.
+  exact; this work leaves that as it is. Next (gaps row T11): lines whose item is a discount item
+  become discount lines on that account, and other-charge items (`item_type` 4, already decoded)
+  come in as `OTHER_CHARGE` items. The item-type codes for subtotal, discount and group items are
+  not decoded yet. IIF and QIF imports are unchanged.
 - **Recurring invoices, finance charges, statements.** Recurring templates store the input JSON,
   which now may hold `formLines`; finance charges and statements don't add form lines.
 - **Credit memos and purchase forms.** Not in this step. The item column offers the new kinds only on
@@ -246,11 +252,13 @@ in either is relaxed.
 - Expense accounts on other charges (reimbursable costs) and charges that are a percent of the
   whole form rather than the line above.
 - Groups inside groups, and discounts inside groups.
+- A group's quantity on the form (a group drops on at its own quantities; each item's quantity can
+  be changed on the form).
 - Decoding the subtotal, discount and group item types in company files.
 
 ## Building it
 
-One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
+Built in PR #151; the rest is gaps row T11. One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
 
 1. **Subtotal**: migration `0067` (all of the storage above, so the schema lands once), `item_types.rs`,
    form-lines tables written and read back, the grid's Subtotal entry, printing.

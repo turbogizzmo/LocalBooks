@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Subtotals, discounts, other charges and groups on sales forms.** On invoices, sales receipts
+  and estimates, choose **Subtotal** in the Product/Service list to add up the lines above it. A
+  new item type, **Discount**, takes an amount or a percentage off the line above (an item, a group
+  or a subtotal) and can lower the taxable amount. **Other charge** items add shipping, handling or
+  a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
+  print as a single line. They print in place, come back when you edit, and carry from an estimate
+  to its invoice; discount items show in Sales by Product/Service.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

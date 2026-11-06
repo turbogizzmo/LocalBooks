@@ -29,6 +29,26 @@ Receivable** (what customers owe you) and to the income account on each line.
 
 The invoice appears in the list below with status **○ Open**.
 
+## Subtotals, discounts, charges and groups
+
+The **Product/Service** list on invoices, sales receipts and estimates also offers:
+
+- **Subtotal**: adds up the lines above it, back to the previous subtotal. It posts nothing.
+- A **discount item**: takes its amount or percentage off the line right above it. Put a
+  **Subtotal** above the discount to take it off several lines at once. You can change the
+  amount or percentage (type `10%`) on the line. A discount must follow an item, a group or a
+  subtotal, and can't be more than that line.
+- An **other charge** with a percentage: works out its percentage of the line above (an amount
+  charge is an ordinary line).
+- **Group: …**: fills in a heading and a line for each of the group's items, at the customer's
+  prices. Change or remove the items as you need; tick **Print as one line** on the heading to print
+  the group as one line with its total. A discount right under a group comes off the whole group.
+
+The **Discount** box next to the total still works as before: it comes off everything, after the
+line discounts and before tax. A taxable discount line lowers the taxable amount; a non-taxable one
+doesn't. Subtotals, discounts, charges and group headings print in their places and come back when
+you edit the invoice or turn an estimate into an invoice.
+
 ## Invoice in another currency
 
 1. Before posting, pick a **Currency** on the form and enter the exchange rate
