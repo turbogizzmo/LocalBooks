@@ -1,0 +1,22 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Vendor Phone List, all dates to 2025-12-31
+
+Vendor                         Phone
+First Harbor Bank
+Harbor Power & Light
+Jordan Reyes
+Lakeside Ceramics
+Lumen Media
+Northwind Software
+Pacific Office Outfitter
+Pinecrest Office Supply
+Riverbend Properties
+Riverside Print Shop           555-0190
+State Department of Reve
+
+11 lines
+
+11 active vendors.

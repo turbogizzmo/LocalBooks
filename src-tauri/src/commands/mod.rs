@@ -76,6 +76,7 @@ features![
     item_prices,
     job_reports,
     journal,
+    list_reports,
     lists,
     mcp,
     migration,

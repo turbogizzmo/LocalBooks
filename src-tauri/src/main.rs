@@ -49,6 +49,7 @@ mod invoices;
 mod item_prices;
 mod job_reports;
 mod ledger;
+mod list_reports;
 mod money;
 mod mail_app;
 mod parties;

@@ -23,7 +23,7 @@ const GROUPS = [
   ['transaction', 'Transaction'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['aging', 'Aging period'],
 ];
 const CLASSIFICATIONS = [['ASSET', 'Assets'], ['LIABILITY', 'Liabilities'], ['EQUITY', 'Equity'], ['INCOME', 'Income'], ['EXPENSE', 'Expenses']];
-const RANGE_PERIODS = [
+export const RANGE_PERIODS = [
   ...PERIODS.filter((p) => p.id !== 'custom'),
   { id: 'lastYear', label: 'Last calendar year' },
   { id: 'all', label: 'All dates' },
@@ -34,7 +34,7 @@ const DRILL_COLUMNS = ['type', 'date', 'num', 'name', 'memo', 'account', 'amount
 /** Settings that belong to the screen, not the engine. */
 const SCREEN_FIELDS = ['title', 'dateMode', 'period', 'startDate', 'endDate'];
 
-const engineOnly = (settings) => Object.fromEntries(Object.entries(settings ?? {}).filter(([k]) => !SCREEN_FIELDS.includes(k)));
+export const engineOnly = (settings) => Object.fromEntries(Object.entries(settings ?? {}).filter(([k]) => !SCREEN_FIELDS.includes(k)));
 
 /** The presets and saved reports, for the Reports menu and the report screen. */
 export function useCustomReports() {
@@ -56,7 +56,8 @@ export function withCustomReports(groups, { presets, saved }) {
 /** Whether a Reports menu id is one of this screen's. */
 export const isCustomReport = (id) => id.startsWith('preset:') || id.startsWith('saved:');
 
-function datesFor(period, fiscal, saved) {
+/** The from and to dates of a report period; `saved` holds a memorized report's own dates. */
+export function datesFor(period, fiscal, saved) {
   if (period === 'custom') return [saved?.startDate ?? todayIso(), saved?.endDate ?? todayIso()];
   if (period === 'all') return [null, todayIso()];
   return resolvePeriod(period, fiscal);
@@ -281,7 +282,24 @@ function screenCell(kind, v) {
   return String(v);
 }
 
-/** CSV and Excel from the engine's typed cells: money as cents, quantities as numbers, dates as dates. */
+/** The Excel sheet of a report in the engine's shape: money as cents, quantities as numbers, dates as dates. */
+export function reportSheet({ company, title, subtitle, report }) {
+  return {
+    company,
+    title,
+    subtitle,
+    notes: [],
+    columns: report.columns.map((c) => ({ label: c.label, kind: c.kind === 'quantity' ? 'number' : c.kind })),
+    rows: report.rows.map((r) => ({
+      kind: r.kind,
+      depth: Math.min(r.depth, 15),
+      cells: r.cells.map((v, i) => (v !== null && report.columns[i].kind === 'quantity' ? v / 10_000 : v)),
+    })),
+    footer: report.notes?.length ? report.notes.join(' · ') : null,
+  };
+}
+
+/** CSV and Excel from the engine's typed cells. */
 export function reportExports({ company, title, subtitle, report, filename, onNotice }) {
   const csvCell = (kind, v) => {
     if (v === null || v === undefined) return '';
@@ -304,47 +322,82 @@ export function reportExports({ company, title, subtitle, report, filename, onNo
         `${filename}.csv`,
         onNotice,
       ),
-    onXlsx: () =>
-      saveXlsx(
-        {
-          company,
-          title,
-          subtitle,
-          notes: [],
-          columns: report.columns.map((c) => ({ label: c.label, kind: c.kind === 'quantity' ? 'number' : c.kind })),
-          rows: report.rows.map((r) => ({
-            kind: r.kind,
-            depth: Math.min(r.depth, 15),
-            cells: r.cells.map((v, i) => (v !== null && report.columns[i].kind === 'quantity' ? v / 10_000 : v)),
-          })),
-        },
-        `${filename}.xlsx`,
-        onNotice,
-      ),
+    onXlsx: () => saveXlsx(reportSheet({ company, title, subtitle, report }), `${filename}.xlsx`, onNotice),
   };
 }
 
-/** The report on screen and in print; also used by the job costing and Accountant & Taxes reports. */
-export function ReportTable({ company, title, subtitle, report, onRow, footer = 'click a line to open its transaction · Customize… changes the filters, columns and grouping', empty = 'No transactions match this report’s dates and filters.' }) {
+/** Index of the first row after heading `i` that is not inside it: its subtotal, or the next heading or total at its level. */
+export function sectionEnd(rows, i) {
+  const depth = rows[i].depth;
+  for (let j = i + 1; j < rows.length; j += 1) if (rows[j].kind !== 'detail' && rows[j].depth <= depth) return j;
+  return rows.length;
+}
+
+/** `[index, row]` of the rows shown with the headings at `collapsed` closed: a closed heading keeps itself and its subtotal. */
+export function visibleRows(rows, collapsed) {
+  const out = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    out.push([i, rows[i]]);
+    if (rows[i].kind === 'section' && collapsed.has(i)) i = sectionEnd(rows, i) - 1;
+  }
+  return out;
+}
+
+/**
+ * The report on screen and in print; also used by the job costing and Accountant & Taxes reports.
+ * Headings collapse to their subtotals (one at a time, or all at once), and print as shown.
+ */
+export function ReportTable({ company, title, subtitle, report, onRow, pageBreak = false, footer = 'click a line to open its transaction · Customize… changes the filters, columns and grouping', empty = 'No transactions match this report’s dates and filters.' }) {
   const { columns, rows } = report;
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  // Headings are remembered by position, so a report of another shape starts expanded.
+  useEffect(() => {
+    setCollapsed(new Set());
+  }, [title, rows.length]);
+  const headings = rows.flatMap((r, i) => (r.kind === 'section' ? [i] : []));
+  const shown = visibleRows(rows, collapsed);
+  const toggle = (i) =>
+    setCollapsed((c) => {
+      const next = new Set(c);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
   const rowClass = (kind) =>
     kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'subtotal' ? 'font-semibold border-t border-qb-ink' : kind === 'total' ? 'font-semibold border-t-2 border-double border-qb-ink' : '';
   const clickable = (r) => Boolean(r.journalEntryId || r.drill || r.estimateId || (r.kind === 'section' && r.accountId));
   const hint = (r) => (r.journalEntryId ? 'Open this transaction' : r.drill ? 'Show these transactions' : r.estimateId ? 'Open Estimates' : r.accountId ? 'Open the register for this account' : undefined);
-  const cells = (r, cellClass) =>
+  const cells = (r, cellClass, i = null) =>
     r.kind === 'section' ? (
-      <td colSpan={columns.length} className={cellClass(0)}>{r.cells[0]}</td>
+      <td colSpan={columns.length} className={cellClass(0)} style={r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}>
+        {i !== null && (
+          <button
+            type="button"
+            className="no-print mr-1 inline-block w-3 text-qb-ink-muted hover:text-qb-ink"
+            aria-expanded={!collapsed.has(i)}
+            aria-label={`${collapsed.has(i) ? 'Expand' : 'Collapse'} ${r.cells[0]}`}
+            title={collapsed.has(i) ? 'Show the lines under this heading' : 'Show only this heading’s total'}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggle(i);
+            }}
+          >
+            {collapsed.has(i) ? '▸' : '▾'}
+          </button>
+        )}
+        {r.cells[0]}
+      </td>
     ) : (
-      r.cells.map((v, i) => (
-        <td key={i} className={cellClass(i)} style={i === 0 && r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}>
-          {screenCell(columns[i].kind, v)}
+      r.cells.map((v, c) => (
+        <td key={c} className={cellClass(c)} style={c === 0 && r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}>
+          {screenCell(columns[c].kind, v)}
         </td>
       ))
     );
   return (
     <>
       <PrintPortal>
-        <article className="doc">
+        <article className={pageBreak ? 'doc doc-page-break' : 'doc'}>
           <DocHeader company={company} title={title} subtitle={subtitle} />
           <table className="doc-table">
             <thead>
@@ -355,7 +408,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, footer = 
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
+              {shown.map(([i, r]) => (
                 <tr key={i} className={r.kind === 'section' ? 'doc-line-section' : r.kind === 'detail' ? '' : 'doc-line-total'}>
                   {cells(r, (c) => (RIGHT.has(columns[c].kind) ? 'doc-num' : ''))}
                 </tr>
@@ -365,10 +418,22 @@ export function ReportTable({ company, title, subtitle, report, onRow, footer = 
         </article>
       </PrintPortal>
       <article className="mx-auto w-full max-w-[1400px] overflow-x-auto bg-white px-6 py-4 shadow-panel">
-        <header className="mb-3 border-b-[3px] border-double border-qb-ink pb-2">
-          <div className="text-xs uppercase tracking-wide text-qb-ink-muted">{company.name}</div>
-          <h2 className="text-xl font-semibold">{title}</h2>
-          <div className="text-sm text-qb-ink-muted">{subtitle}</div>
+        <header className="mb-3 flex items-end gap-2 border-b-[3px] border-double border-qb-ink pb-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs uppercase tracking-wide text-qb-ink-muted">{company.name}</div>
+            <h2 className="text-xl font-semibold">{title}</h2>
+            <div className="text-sm text-qb-ink-muted">{subtitle}</div>
+          </div>
+          {headings.length > 0 && (
+            <div className="no-print flex gap-1">
+              <button type="button" className="qb-btn qb-btn-secondary h-row text-xs" onClick={() => setCollapsed(new Set(headings))} disabled={collapsed.size === headings.length}>
+                Collapse all
+              </button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row text-xs" onClick={() => setCollapsed(new Set())} disabled={collapsed.size === 0}>
+                Expand all
+              </button>
+            </div>
+          )}
         </header>
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -384,9 +449,9 @@ export function ReportTable({ company, title, subtitle, report, onRow, footer = 
                 <td colSpan={columns.length} className="px-1.5 py-1 text-qb-ink-muted">{empty}</td>
               </tr>
             )}
-            {rows.map((r, i) => (
+            {shown.map(([i, r]) => (
               <tr key={i} className={`${rowClass(r.kind)} ${clickable(r) ? 'cursor-pointer hover:bg-qb-row-hover' : ''}`} onClick={clickable(r) ? () => onRow(r) : undefined} title={hint(r)}>
-                {cells(r, (c) => `px-1.5 py-0.5 ${RIGHT.has(columns[c].kind) ? 'num whitespace-nowrap text-right' : ''} ${c === 0 && r.kind !== 'detail' ? 'whitespace-nowrap' : ''}`)}
+                {cells(r, (c) => `px-1.5 py-0.5 ${RIGHT.has(columns[c].kind) ? 'num whitespace-nowrap text-right' : ''} ${c === 0 && r.kind !== 'detail' ? 'whitespace-nowrap' : ''}`, i)}
               </tr>
             ))}
           </tbody>

@@ -1,0 +1,21 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Time by Job Detail, 2025-11-01 to 2025-11-30
+
+                               Date          Name                      Service Item              Description               Billable                          Hours
+Brightwater Cafe
+                               2025-11-03    Dana Ortiz                Logo Package              Logo concepts             Yes                                 1.5
+Total Brightwater Cafe                                                                                                                                         1.5
+Brightwater Cafe:Patio M
+                               2025-11-04    Dana Ortiz                Logo Package              Menu layout               No                               2.3333
+Total Brightwater Cafe:P                                                                                                                                    2.3333
+No customer or job
+                               2025-11-05    Dana Ortiz                                          Studio admin              No                               0.8333
+Total No customer or job                                                                                                                                    0.8333
+TOTAL                                                                                                                                                       4.6667
+
+3 lines
+
+3 entries of time from 2025-11-01 to 2025-11-30.
