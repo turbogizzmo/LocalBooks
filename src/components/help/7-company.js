@@ -39,6 +39,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'form-keys', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders', 'banking/transfers', 'accounting/journal'],
+    title: 'Save & Close, Save & New, and the form and date keys',
+    body: 'Every transaction form ends in Save & Close (Alt+S), Save & New (Alt+N) and Clear; Ctrl+D voids, Ctrl+M memorizes, and Ctrl+Insert and Ctrl+Delete insert and delete a line, also from the Edit menu. In any date box, t is today, + and - move a day, w and k jump to the week’s first and last day, m and h the month’s, and y and r the year’s; in a check number box, + and - step the number.',
+    keywords: 'keyboard shortcuts save and close save and new clear alt+s alt+n ctrl+d ctrl+m ctrl+insert ctrl+delete insert line delete line void memorize date keys today tomorrow yesterday plus minus week month year check number next number',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'preferences', area: 'company', views: ['settings/preferences'],
     title: 'Set company details and preferences',
     body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices, estimates and reports; Settings › Custom Forms sets how invoices and estimates look.',

@@ -5,6 +5,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMinutes, parseHoursToMinutes, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -129,7 +130,7 @@ function SingleActivity({ employees, customers, products, onSaved }) {
         </label>
         <label>
           <span className="qb-label">Date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Customer</span>
@@ -257,7 +258,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
         </label>
         <label>
           <span className="qb-label">Week starting (Monday)</span>
-          <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
+          <DateBox className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
         </label>
         {tracking.enabled && (
           <label>
@@ -436,9 +437,9 @@ export default function TimeTracking({ intent }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Time activities</h2>
-          <input type="date" className="qb-input h-row w-[128px] text-sm" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} aria-label="From" />
+          <DateBox className="qb-input h-row w-[128px] text-sm" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} aria-label="From" />
           <span className="text-sm text-qb-ink-muted">to</span>
-          <input type="date" className="qb-input h-row w-[128px] text-sm" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} aria-label="To" />
+          <DateBox className="qb-input h-row w-[128px] text-sm" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} aria-label="To" />
           <span className="ml-auto text-sm text-qb-ink-muted">
             Total <span className="num font-semibold text-qb-ink">{formatMinutes(totals.all)}</span> · billable{' '}
             <span className="num font-semibold text-qb-ink">{formatMinutes(totals.billable)}</span>

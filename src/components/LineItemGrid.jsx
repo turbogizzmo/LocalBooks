@@ -1,3 +1,4 @@
+import { useLineCommands } from '../lib/formFlow.jsx';
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
@@ -99,7 +100,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     if (active === null) return;
     const el = tableRef.current?.querySelector(`[data-row="${active}"] [data-col="${focusCol.current}"]`);
     if (el && document.activeElement !== el) el.focus();
-  }, [active]);
+    // Also after Ctrl+Insert / Ctrl+Delete, when the line at the active position is another one.
+  }, [active, lines.length]);
 
   const update = (index, patch) => setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   const remove = (index) => {
@@ -110,6 +112,21 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     focusCol.current = col;
     setActive(index);
   };
+  // Ctrl+Insert adds a blank line above the one with focus (at the end from outside the lines);
+  // Ctrl+Delete deletes the line with focus. The line then at that position is opened for editing.
+  const firstCol = withProducts ? 'product' : 'description';
+  useLineCommands(tableRef, {
+    insert: (at) => {
+      setLines((ls) => [...ls.slice(0, at), blankLine(defaultAccountId), ...ls.slice(at)]);
+      activate(at, firstCol);
+      return 'focused';
+    },
+    remove: (at) => {
+      setLines((ls) => (ls.length > 1 ? ls.filter((_, i) => i !== at) : [blankLine(defaultAccountId)]));
+      activate(Math.max(0, Math.min(at, lines.length - 2)), firstCol);
+      return 'focused';
+    },
+  });
   const onKeyDown = (e, index) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -142,7 +159,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
 
   return (
-    <table ref={tableRef} className="qb-grid">
+    <table ref={tableRef} className="qb-grid" data-line-grid>
       <colgroup>
         <col className="w-[28px]" />
         {withProducts && <col className="w-[180px]" />}

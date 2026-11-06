@@ -5,6 +5,7 @@ import { ExportMenu, PERIODS, longDate, resolvePeriod } from './ReportParts.jsx'
 import { ReportTable, reportExports } from './CustomReport.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * The Accountant & Taxes reports that are not presets of the report builder
@@ -220,11 +221,11 @@ function IncomeTax({ initialDetail, navigate }) {
       </label>
       <label>
         <span className="qb-label">From</span>
-        <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
+        <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
       </label>
       <label>
         <span className="qb-label">To</span>
-        <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
+        <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
       </label>
       <label>
         <span className="qb-label">Tax form</span>
@@ -370,7 +371,7 @@ function AsOfReport({ title, fetch, empty, navigate }) {
       toolbar={
         <label>
           <span className="qb-label">As of</span>
-          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
       }
     />

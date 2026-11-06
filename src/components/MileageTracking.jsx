@@ -4,6 +4,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatQuantity, parseMoneyToCents, parseQuantityE4 } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 /**
  * Mileage (`mileage.rs`): trips by vehicle, the vehicle list, standard mileage rates, and billing
@@ -91,7 +92,7 @@ function TripForm({ vehicles, customers, editing, onDone }) {
       </label>
       <label>
         <span className="qb-label">Trip date</span>
-        <input type="date" className="qb-input w-[132px]" value={form.date} onChange={set('date')} />
+        <DateBox className="qb-input w-[132px]" value={form.date} onChange={set('date')} />
       </label>
       <label>
         <span className="qb-label">Odometer start</span>
@@ -214,9 +215,9 @@ function TripsTab({ vehicles, customers, intent, onNotice }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Trips</h2>
-          <input type="date" className="qb-input h-row w-[128px] text-sm" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} aria-label="From" />
+          <DateBox className="qb-input h-row w-[128px] text-sm" value={range[0]} onChange={(e) => setRange([e.target.value, range[1]])} aria-label="From" />
           <span className="text-sm text-qb-ink-muted">to</span>
-          <input type="date" className="qb-input h-row w-[128px] text-sm" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} aria-label="To" />
+          <DateBox className="qb-input h-row w-[128px] text-sm" value={range[1]} onChange={(e) => setRange([range[0], e.target.value])} aria-label="To" />
           <span className="ml-auto text-sm text-qb-ink-muted">
             Total <span className="num font-semibold text-qb-ink">{milesText(totals.miles)} mi</span> · deductible{' '}
             <span className="num font-semibold text-qb-ink">{formatCents(totals.deductible)}</span>
@@ -359,11 +360,11 @@ function BillTab({ products, onNotice, navigate }) {
         </label>
         <label>
           <span className="qb-label">Invoice date</span>
-          <input type="date" className="qb-input w-[132px]" value={issue} onChange={(e) => setIssue(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={issue} onChange={(e) => setIssue(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Due date</span>
-          <input type="date" className="qb-input w-[132px]" value={due} onChange={(e) => setDue(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={due} onChange={(e) => setDue(e.target.value)} />
         </label>
         <button type="button" className="qb-btn qb-btn-primary" onClick={bill} disabled={busy || chosen.length === 0}>
           Create invoice
@@ -560,7 +561,7 @@ function RatesTab({ onNotice }) {
       <div className="flex flex-none flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <label>
           <span className="qb-label">Effective from</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Rate ($ per mile)</span>

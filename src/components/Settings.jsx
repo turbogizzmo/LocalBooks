@@ -17,6 +17,7 @@ import { canOpen, findNav } from './Sidebar.jsx';
 import DesktopViewPreferences from './DesktopViewPreferences.jsx';
 import GeneralPreferences from './GeneralPreferences.jsx';
 import { focusNextField } from '../lib/myPreferences.js';
+import DateBox from './DateBox.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -133,7 +134,7 @@ function ClosingDate() {
         </div>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">Closing date</span>
-          <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {data.passcodeProtected && (
           <label className="flex flex-col gap-0.5 text-xs">

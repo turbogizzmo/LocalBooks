@@ -6,6 +6,7 @@ import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 const isPl = (a) => a.classification === 'INCOME' || a.classification === 'EXPENSE';
 
@@ -73,11 +74,11 @@ export default function Reclassify({ accounts }) {
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">From</span>
-          <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => setRange([e.target.value, end])} />
+          <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => setRange([e.target.value, end])} />
         </label>
         <label>
           <span className="qb-label">To</span>
-          <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => setRange([start, e.target.value])} aria-invalid={end < start} />
+          <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => setRange([start, e.target.value])} aria-invalid={end < start} />
         </label>
         <label>
           <span className="qb-label">Account</span>

@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useLineCommands } from '../lib/formFlow.jsx';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
@@ -85,9 +87,16 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const remove = (key) => setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.key !== key) : [blankSplit(defaultAccountId)]));
   const { total } = summarizeSplits(rows);
+  // Ctrl+Insert adds a blank row above the one with focus (at the end from outside the rows);
+  // Ctrl+Delete deletes the row with focus.
+  const tableRef = useRef(null);
+  useLineCommands(tableRef, {
+    insert: (at) => setRows((rs) => [...rs.slice(0, at), blankSplit(defaultAccountId), ...rs.slice(at)]),
+    remove: (at) => setRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== at) : [blankSplit(defaultAccountId)])),
+  });
 
   return (
-    <table className="qb-grid">
+    <table ref={tableRef} className="qb-grid" data-line-grid>
       <colgroup>
         <col className="w-[28px]" />
         {withStock && <col className="w-[150px]" />}
@@ -120,7 +129,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           const cents = evaluated.amount;
           const amountBad = evaluated.priced ? cents === null : row.amount.trim() !== '' && (cents === null || cents <= 0);
           return (
-            <tr key={row.key} className="qb-grid-row">
+            <tr key={row.key} data-row={i} className="qb-grid-row">
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
               {withStock && (
                 <td className="qb-grid-cell-edit">

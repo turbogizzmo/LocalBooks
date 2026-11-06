@@ -6,6 +6,7 @@ import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, periodRange, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 const TOOLS = [
   { id: 'credits', label: 'Unapplied credits' },
@@ -149,7 +150,7 @@ function UnappliedCredits({ setNotice }) {
         <section className="qb-panel flex flex-wrap items-center gap-3 px-3 py-2">
           <label className="flex items-center gap-2 text-xs">
             <span className="font-semibold text-qb-ink-muted">Apply on</span>
-            <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <span className="text-sm">
             {plural(applications.length, 'application')} · total <strong className="num">{formatCents(total)}</strong>
@@ -382,7 +383,7 @@ function WriteOff({ accounts, setNotice }) {
       <section className="qb-panel flex flex-wrap items-end gap-3 px-3 py-2">
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">Write-off date</span>
-          <input type="date" className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">At least days past due</span>
@@ -473,11 +474,11 @@ function ListChanges() {
       <section className="qb-panel flex flex-wrap items-end gap-3 px-3 py-2">
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">From</span>
-          <input type="date" className="qb-input" value={start} onChange={(e) => setRange([e.target.value, end])} />
+          <DateBox className="qb-input" value={start} onChange={(e) => setRange([e.target.value, end])} />
         </label>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">To</span>
-          <input type="date" className="qb-input" value={end} onChange={(e) => setRange([start, e.target.value])} />
+          <DateBox className="qb-input" value={end} onChange={(e) => setRange([start, e.target.value])} />
         </label>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">List</span>
@@ -548,7 +549,7 @@ function InventoryCompare() {
       <section className="qb-panel flex flex-wrap items-end gap-3 px-3 py-2">
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">As of</span>
-          <input type="date" className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
         <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setAsOf(addDays(todayIso().slice(0, 4) + '-01-01', -1))}>
           Last year end

@@ -11,6 +11,7 @@ import { takePendingMigration } from './CompanyFiles.jsx';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { ACCOUNT_TYPE_NAMES } from '../lib/accountTypes.js';
+import DateBox from './DateBox.jsx';
 
 export const QBW_PROGRESS = 'qbw-import-progress';
 /** QuickBooks report exports: several can be read together (a report and its lists). */
@@ -1259,7 +1260,7 @@ export default function QbwImporter({ accounts }) {
                       </label>
                       <label className="flex flex-col gap-0.5 text-xs">
                         <span className="font-semibold text-qb-ink-muted">Date for invoices without one ({invoiceSummary.undatedInvoiceCount.toLocaleString()})</span>
-                        <input type="date" className="qb-input" value={fallbackDate} onChange={(e) => setFallbackDate(e.target.value)} disabled={invoiceSummary.undatedInvoiceCount === 0} />
+                        <DateBox className="qb-input" value={fallbackDate} onChange={(e) => setFallbackDate(e.target.value)} disabled={invoiceSummary.undatedInvoiceCount === 0} />
                         <span className="text-2xs text-qb-ink-faint">Leave blank to skip them.</span>
                       </label>
                     </div>

@@ -5,6 +5,7 @@ import { api, errorText } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
@@ -29,7 +30,7 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
     >
       <label>
         <span className="qb-label">Statement ending date</span>
-        <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} aria-invalid={Boolean(dateBad)} />
+        <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} aria-invalid={Boolean(dateBad)} />
       </label>
       <label>
         <span className="qb-label">Ending balance</span>

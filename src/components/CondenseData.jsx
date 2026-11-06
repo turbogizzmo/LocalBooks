@@ -3,6 +3,7 @@ import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 function formatBytes(n) {
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
@@ -112,9 +113,8 @@ export default function CondenseData({ isAdmin, onDone }) {
       <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Condense data</h2>
       <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 text-sm">
         <label htmlFor="condense-cutoff">Condense transactions on or before</label>
-        <input
+        <DateBox
           id="condense-cutoff"
-          type="date"
           className="qb-input h-row w-[140px]"
           value={cutoff}
           max={closingDate ?? undefined}

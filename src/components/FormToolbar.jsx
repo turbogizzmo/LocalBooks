@@ -2,19 +2,23 @@ import { forwardRef, useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons.js';
 import { pickAttachments } from './Attachments.jsx';
 import { ConfirmDialog } from './RowMenu.jsx';
+import { FORM_KEYS } from '../lib/formFlow.jsx';
 
 /**
  * The strip of large icon-over-label buttons across the top of a transaction form: Find, Previous,
  * Next, New, Save, Void, Print ▾, Email ▾, Attach and so on, in groups split by a thin rule.
  *
  * `groups` is a list of groups, each a list of buttons:
- *   { id, label, icon, onClick, disabled?, hint?, hidden?, danger?,
+ *   { id, label, icon, onClick, disabled?, hint?, keys?, hidden?, danger?,
  *     confirm?: { title, body, confirmLabel },   // asks first, as the row menus do
  *     menu?: [{ label, onSelect, disabled?, hint? }] }   // a ▾ button that opens a menu
  * `icon` names an icon registered in src/lib/icons.js. Hidden buttons are left out, and a group
  * with nothing left in it is dropped with its rule, so a form only shows what it can do.
  *
  * Every button is a tab stop in reading order; Left and Right arrows also move along the strip.
+ * `keys` names the shortcut that presses it, shown in its tip (`save`, `void`, `delete` and
+ * `memorize` have theirs already). On a form using `useFormFlow` (lib/formFlow.jsx), Ctrl+D presses
+ * the button with id `void` (or `delete`) and Ctrl+M `memorize`.
  */
 export default function FormToolbar({ label, groups, children }) {
   const [pending, setPending] = useState(null);
@@ -63,15 +67,20 @@ const BUTTON =
   'hover:bg-qb-surface hover:shadow-panel focus-visible:bg-qb-surface focus-visible:shadow-focus focus-visible:outline-none ' +
   'disabled:cursor-not-allowed disabled:text-qb-ink-faint disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:shadow-none';
 
+/** The keys that press a button, by its id, unless the button names its own. */
+const BUTTON_KEYS = { save: FORM_KEYS['save-new'], void: FORM_KEYS.delete, delete: FORM_KEYS.delete, memorize: FORM_KEYS.memorize };
+
 const ToolButton = forwardRef(function ToolButton({ item, onClick, ...rest }, ref) {
+  const keys = item.keys ?? BUTTON_KEYS[item.id];
   return (
     <button
       ref={ref}
       type="button"
       data-toolbar-button
+      data-command={item.id}
       className={`${BUTTON} ${item.danger && !item.disabled ? 'text-qb-negative' : ''}`}
       disabled={item.disabled}
-      title={item.hint}
+      title={keys ? `${item.hint ?? item.label} (${keys})` : item.hint}
       onClick={onClick}
       {...rest}
     >
@@ -184,7 +193,7 @@ export function navButtons({ onFind, onPrevious, onNext, previousDisabled, nextD
 export function fileButtons({ onNew, onSave, saveLabel = 'Save', saveHint, saveDisabled = false, busy = false, onVoid, voidDisabled, voidHint, voidConfirm }) {
   return [
     { id: 'new', label: 'New', icon: 'NewForm', hint: 'Clear the form and start a new one', onClick: onNew, hidden: !onNew, disabled: busy },
-    { id: 'save', label: saveLabel, icon: 'SaveForm', hint: saveHint, onClick: onSave, hidden: !onSave, disabled: busy || saveDisabled },
+    { id: 'save', label: saveLabel, icon: 'SaveForm', hint: saveHint ?? 'Save and start a new one', onClick: onSave, hidden: !onSave, disabled: busy || saveDisabled },
     {
       id: 'void',
       label: 'Void',
@@ -216,3 +225,4 @@ export function attachLaterButton({ setFiles, busy = false, what = 'it' }) {
     },
   };
 }
+

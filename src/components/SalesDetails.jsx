@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, useLedgerQuery } from '../lib/api.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * Rep, ship date, Ship Via and the customer custom fields marked for sales forms, for the header
@@ -76,7 +77,7 @@ export function useSalesDetails(customerName, customers) {
           <>
             <label>
               <span className="qb-label">Ship date</span>
-              <input type="date" className="qb-input w-[132px]" value={shipDate} onChange={(e) => setShipDate(e.target.value)} />
+              <DateBox className="qb-input w-[132px]" value={shipDate} onChange={(e) => setShipDate(e.target.value)} />
             </label>
             <label>
               <span className="qb-label">Ship via</span>

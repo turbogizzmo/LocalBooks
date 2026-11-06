@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Save & Close, Save & New and Clear on every form.** Invoices, sales receipts, estimates, credit
+  memos, bills, checks, expenses, card credits, vendor credits, purchase orders, deposits, transfers
+  and journal entries now end in these three buttons. **Alt+S** saves and closes the form's window;
+  **Alt+N** saves and leaves a blank form for the next one.
+- **Date keys in every date box.** Press **t** for today, **+** or **-** to move a day, **w** / **k**
+  for the first or last day of the week, **m** / **h** for the month and **y** / **r** for the year.
+  Typing a date still works. In a check number box, **+** and **-** step the number.
+- **Form shortcuts.** On an open form, **Ctrl+D** voids it (after you confirm), **Ctrl+M** memorizes
+  it, and **Ctrl+Insert** / **Ctrl+Delete** insert or delete a line. They're also in the **Edit**
+  menu, and the toolbar buttons show their keys when you hover over them.
+
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

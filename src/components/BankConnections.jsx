@@ -6,6 +6,7 @@ import { api, errorText } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 const isFeedAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 const BRIDGE_URL = 'https://bridge.simplefin.org';
@@ -143,8 +144,7 @@ function LinkRow({ account, accounts, linkedIds, onChanged, setNotice }) {
               <>
                 <label className="flex items-center gap-1 text-xs text-qb-ink-muted">
                   from
-                  <input
-                    type="date"
+                  <DateBox
                     className="qb-input h-row text-sm"
                     value={syncFrom}
                     min={addDays(today, -90)}

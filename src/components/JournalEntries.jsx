@@ -5,6 +5,7 @@ import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import { useOpenFromList } from '../lib/windows.js';
+import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -12,6 +13,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 export const SOURCE_LABEL = {
   JOURNAL: 'Journal Entry', INVOICE: 'Invoice', RECEIVE_PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt',
@@ -23,7 +25,7 @@ let nextKey = 1;
 const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit: '', credit: '', memo: '' });
 
 /** A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited. */
-function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
+function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
   const [date, setDate] = useTransactionDate(editing?.entry.entryDate);
   const [memo, setMemo] = useState(editing?.entry.memo ?? '');
   const [adjusting, setAdjusting] = useState(editing?.entry.isAdjusting ?? false);
@@ -40,6 +42,12 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
   const withClasses = showsClassColumn(formClass, rows);
 
   useEffect(() => dateRef.current?.focus(), []);
+  // Ctrl+Insert / Ctrl+Delete on the lines; an entry keeps at least two.
+  const linesRef = useRef(null);
+  useLineCommands(linesRef, {
+    insert: (at) => setRows((rs) => [...rs.slice(0, at), blankRow(), ...rs.slice(at)]),
+    remove: (at) => setRows((rs) => (rs.length > 2 ? rs.filter((_, i) => i !== at) : rs.map((r, i) => (i === at ? blankRow() : r)))),
+  });
 
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const parsed = rows.map((r) => {
@@ -73,7 +81,7 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
       if (editing) {
         await api.replaceJournalEntry(editing.entry.id, { id: null, date, description: memo.trim(), lines }, adjusting);
         onPosted(`Journal entry #${editing.entry.entryNumber} replaced: the original is voided and the edited entry is posted.`);
-        return onCancel();
+        return true;
       }
       await api.postJournalEntry({ id: null, date, description: memo.trim(), lines }, adjusting);
       onPosted(`${adjusting ? 'Adjusting journal entry' : 'Journal entry'} posted: ${formatCents(totalDebit)} in balanced debits and credits.`);
@@ -82,6 +90,8 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
       setAdjusting(false);
       formClass.reset();
       setError(null);
+      dateRef.current?.focus();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -104,16 +114,17 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
       onPosted(`Journal entry #${editing.entry.entryNumber} voided: a reversing entry now offsets it.`);
       onCancel();
     });
+  const flow = useFormFlow({ save: () => save('post'), clear, onClose: onCancel, afterNew: editing ? onNew : undefined, busy });
 
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Journal entry"
         groups={[
           navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
           fileButtons({
             onNew: clear,
-            onSave: () => save('post'),
+            onSave: flow.saveAndNew,
             busy,
             onVoid: editing ? voidEntry : undefined,
             voidDisabled: editing?.entry.isVoided,
@@ -123,14 +134,14 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
               confirmLabel: 'Yes, void it',
             },
           }),
-          [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy, onClick: () => save('memorize') }],
+          [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy || !ready, onClick: () => save('memorize') }],
         ]}
       />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : 'Journal entry'}</h2>
         <label>
           <span className="qb-label">Journal date</span>
-          <input ref={dateRef} type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox ref={dateRef} className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Memo</span>
@@ -142,7 +153,7 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
         </label>
         {formClass.header}
       </div>
-      <table className="qb-grid">
+      <table ref={linesRef} className="qb-grid" data-line-grid>
         <colgroup>
           <col className="w-[28px]" />
           <col className="w-[280px]" />
@@ -165,7 +176,7 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
         </thead>
         <tbody>
           {parsed.map((p, i) => (
-            <tr key={p.row.key} className="qb-grid-row">
+            <tr key={p.row.key} data-row={i} className="qb-grid-row">
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
               <td className="qb-grid-cell-edit">
                 <AccountSelect className="" accounts={accounts} value={p.row.accountId} onChange={(accountId) => update(p.row.key, { accountId })} placeholder="Select account" aria-label={`Account ${i + 1}`} />
@@ -216,9 +227,7 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy || !ready} title="Save as a recurring transaction">
             Memorize…
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy || !ready}>
-            {busy ? 'Posting…' : editing ? 'Save changes' : 'Save & Post'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
       {memorizing && (
@@ -308,6 +317,7 @@ export default function JournalEntries({ accounts, intent }) {
             setComposing(false);
             setEditing(null);
           }}
+          onNew={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
         />
       )}

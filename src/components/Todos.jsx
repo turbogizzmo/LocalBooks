@@ -5,6 +5,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /** Who is signed in and what they may do with to-dos. Without users, everyone may do everything. */
 export function useTodoAccess() {
@@ -104,7 +105,7 @@ export function TodoDialog({ todo, preset, onClose, onSaved }) {
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Due date</span>
-            <input type="date" className="qb-input" value={form.dueDate} onChange={set('dueDate')} />
+            <DateBox className="qb-input" value={form.dueDate} onChange={set('dueDate')} />
           </label>
           {assignees.length > 0 ? (
             <label className="flex flex-col gap-0.5">

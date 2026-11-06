@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build"
+    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build",
+    "test": "node --test \"src/**/*.test.js\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

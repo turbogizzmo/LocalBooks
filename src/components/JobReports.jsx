@@ -5,6 +5,7 @@ import { useCompany } from './PrintDocuments.jsx';
 import { ReportTable, reportExports } from './CustomReport.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * The job costing reports (`job_reports.rs`) in the Reports menu's Jobs group: profitability and
@@ -89,11 +90,11 @@ function RangeControls({ range: r }) {
       </label>
       <label>
         <span className="qb-label">From</span>
-        <input type="date" className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => r.setRange([e.target.value || null, end])} />
+        <DateBox className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => r.setRange([e.target.value || null, end])} />
       </label>
       <label>
         <span className="qb-label">To</span>
-        <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => r.setRange([start, e.target.value])} aria-invalid={Boolean(start && end && end < start)} />
+        <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => r.setRange([start, e.target.value])} aria-invalid={Boolean(start && end && end < start)} />
       </label>
     </>
   );

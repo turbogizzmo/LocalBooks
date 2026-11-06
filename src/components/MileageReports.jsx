@@ -5,6 +5,7 @@ import { useCompany } from './PrintDocuments.jsx';
 import { ReportTable, reportExports } from './CustomReport.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * The mileage reports (`mileage.rs`) in the Reports menu's Jobs group: miles and deductible amount
@@ -98,11 +99,11 @@ export default function MileageReport({ report, navigate }) {
         </label>
         <label>
           <span className="qb-label">From</span>
-          <input type="date" className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
+          <DateBox className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
         </label>
         <label>
           <span className="qb-label">To</span>
-          <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={Boolean(start && end && end < start)} />
+          <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={Boolean(start && end && end < start)} />
         </label>
         <label>
           <span className="qb-label">{byVehicle ? 'Vehicle' : 'Customer:Job'}</span>

@@ -6,6 +6,7 @@ import { PERIODS, resolvePeriod } from './ReportParts.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * Find transactions (`custom_reports/find.rs`), like classic desktop accounting software's Edit ›
@@ -127,11 +128,11 @@ export default function FindTransactions({ intent, navigate }) {
           </label>
           <label>
             <span className="qb-label">From</span>
-            <input type="date" className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
+            <DateBox className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
           </label>
           <label>
             <span className="qb-label">To</span>
-            <input type="date" className="qb-input w-[132px]" value={end ?? ''} aria-invalid={Boolean(start && end && start > end)} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value || todayIso()]); }} />
+            <DateBox className="qb-input w-[132px]" value={end ?? ''} aria-invalid={Boolean(start && end && start > end)} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value || todayIso()]); }} />
           </label>
           <label>
             <span className="qb-label">Number</span>
