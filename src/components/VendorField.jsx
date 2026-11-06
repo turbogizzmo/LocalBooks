@@ -46,7 +46,8 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
     ...(typed !== '' && !exact ? [{ key: 'quick', add: 'quick' }, { key: 'details', add: 'details' }] : []),
   ];
   const shown = open && rows.length > 0;
-  const activeRow = Math.min(active, rows.length - 1);
+  // Never below 0, so ↓ on an empty list can't leave the highlight outside it.
+  const activeRow = Math.max(0, Math.min(active, rows.length - 1));
 
   const add = async (mode) => {
     if (busy) return;
@@ -78,7 +79,7 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setOpen(true);
-      setActive((a) => Math.min(a + 1, rows.length - 1));
+      setActive((a) => Math.max(0, Math.min(a + 1, rows.length - 1)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActive((a) => Math.max(a - 1, 0));
