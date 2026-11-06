@@ -85,7 +85,7 @@ export default function GeneralPreferences() {
             <Legend>Warnings</Legend>
             {check('warnBeforeEditing', 'Warn when editing a posted transaction', 'Saving changes voids the original and posts the edited one; this asks first.')}
             {check('warnBeforeVoiding', 'Warn when voiding a transaction', 'Void Transaction asks before reversing it.')}
-            <div className="flex items-center gap-2 px-2 py-0.5 text-sm">
+            <div className="flex flex-col items-start gap-0.5 px-2 py-0.5 text-sm">
               <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" onClick={bringBackMessages} disabled={hidden === 0}>
                 Bring back all one-time messages
               </button>
