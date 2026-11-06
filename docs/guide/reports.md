@@ -150,17 +150,22 @@ an account heading to open its register.
 | Report | Shows |
 |---|---|
 | **Profit & Loss Detail** | Every income and expense line in the period, by account, with a running balance |
+| **Profit & Loss by Month** | Each income and expense account with a column per month and a total. Income is positive, expenses negative, and the TOTAL row is net income |
 | **Balance Sheet Detail** | Every asset, liability and equity line in the period, by account, from each account's beginning balance |
 | **A/R Aging Detail** · **A/P Aging Detail** | Open invoices and credit memos (bills and vendor credits), grouped by how far past due they are |
 | **Open Invoices** · **Unpaid Bills** | The same open items, grouped by customer or vendor |
+| **Transaction List by Customer** · **Transaction List by Vendor** | One row per transaction that names a customer (or vendor), grouped by name, with its total |
 | **Customer Balance Summary** and **Detail** · **Vendor Balance Summary** and **Detail** | What makes up each customer's receivable or each vendor's payable balance, as of a date |
 | **Sales by Customer Detail** · **Sales by Product/Service Detail** | Each sale, by customer or by product or service, with quantity and rate |
 | **Income by Customer Summary** and **Detail** | Income less expenses for each customer (credits minus debits) |
 | **Expenses by Vendor Detail** | Each expense line, by vendor |
+| **Expenses by Vendor by Month** | Each vendor's expenses with a column per month; voided transactions are left out |
 | **Purchases by Vendor Summary** and **Detail** · **Purchases by Product/Service Summary** and **Detail** | Product and service lines on bills, checks, expenses and vendor credits |
 | **Check Detail** · **Deposit Detail** | Each check and bill payment (or deposit) with the lines it paid for, debits minus credits |
 | **1099 Detail** | The checks, expenses and bill payments from bank accounts behind the 1099 Summary, by vendor |
 | **Transaction List by Date** | One row per transaction, with its total |
+| **Transaction Detail by Account** | Every line in the period, by account, with debits, credits and a running balance from zero (the General Ledger starts from each account's beginning balance instead) |
+| **Voided Transactions** | Each voided transaction and the entry that voids it. The total counts both, so it is twice what was voided |
 | **Journal** | Every transaction with all of its debit and credit lines |
 | **Adjusting Journal Entries** | Only the journal entries marked **Adjusting entry**, with all of their lines |
 
@@ -185,8 +190,8 @@ Things to know:
 ## Accountant & Taxes reports
 
 The **Accountant & Taxes** group in the report list holds what an accountant asks for at year end:
-the **Trial Balance**, **General Ledger**, **Transaction List by Date**, **Journal** and
-**Adjusting Journal Entries**, and the reports below. Each one exports and prints like any other,
+the **Trial Balance**, **General Ledger**, **Transaction List by Date**, **Transaction Detail by
+Account**, **Voided Transactions**, **Journal** and **Adjusting Journal Entries**, and the reports below. Each one exports and prints like any other,
 and a click on a line opens its transaction.
 
 ### Adjusting Journal Entries
