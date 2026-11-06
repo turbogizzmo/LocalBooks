@@ -11,10 +11,11 @@ The list shows each customer's open balance in Accounts Receivable, or what you 
 vendor. Use **Find a customer** to filter the list. Customers are also added automatically when you
 post an invoice for a new name.
 
-You can also add a vendor while you enter a transaction. In the **Vendor** box on a bill, check,
-expense, purchase order or vendor credit, type the name. If no vendor matches, the list offers
-**＋ Add "…" as a new vendor** (added straight away) and **Add with details…** (added, then its
-record opens for the address, terms and 1099 status).
+You can also add a customer or vendor while you enter a transaction. In the **Customer** box on an
+invoice, sales receipt, estimate or credit memo, or the **Vendor** box on a bill, check, expense,
+purchase order or vendor credit, type the name. If nobody matches, the list offers
+**＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
+adds the name and opens its record for the address, terms and (for vendors) 1099 status.
 
 ### See a customer's or vendor's transactions
 

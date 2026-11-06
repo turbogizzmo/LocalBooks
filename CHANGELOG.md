@@ -13,10 +13,18 @@ people using LocalBooks.
   and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
   inactive. When an import brings classes, **Track classes on
   transactions** turns on, and the message after posting says so.
+- **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
+  **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
+  and **Voided Transactions** are in the report list. Like the other detail reports, each can be
+  customized, saved, exported and printed, and a click on a line opens its transaction.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
   too.
+- **Add a new customer or item right from a sale.** The Customer box on invoices, sales receipts,
+  estimates and credit memos works the same way, with **Add as a new customer**. The
+  Product/Service column ends in **＋ Add new item…**, which adds the product or service and fills
+  in the line.
 - **See all of a vendor's or customer's transactions.** Click a name in the Vendors or Customers
   list and its bills, checks, invoices and payments show underneath, newest first, with a total.
   Double-click one to open it.
