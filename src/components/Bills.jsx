@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
-import VendorField from './VendorField.jsx';
+import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
@@ -157,7 +157,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>
           <span className="qb-label">Vendor</span>
-          <VendorField inputRef={vendorRef} vendors={vendors} value={vendor} onChange={setVendor} />
+          <NameField kind="vendor" inputRef={vendorRef} names={vendors} value={vendor} onChange={setVendor} />
         </label>
         <label>
           <span className="qb-label">Bill no.</span>

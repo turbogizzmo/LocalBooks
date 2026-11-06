@@ -7,13 +7,16 @@ Receivable** (what customers owe you) and to the income account on each line.
 
 1. Click **Sales › Invoices** in the sidebar, or **+ New › Invoice**. The invoice form is at the
    top of the screen.
-2. In **Customer**, type the customer's name. Existing customers are suggested as you type; a new
-   name is added as a customer when you post.
+2. In **Customer**, type the customer's name. Matching customers are listed as you type. For a new
+   name, choose **Add as a new customer** (or **Add with details…** to fill in the address and
+   terms first); a name you type and post without choosing is added too.
 3. Check **Invoice date**, then pick **Terms** (Due on receipt, Net 15, Net 30 or Net 60). The
    **Due date** fills in for you; change it to use custom terms.
 4. Fill in the line items:
    - Choose a **Product/Service** to fill in its description, rate and income account, or type
-     a **Description** yourself.
+     a **Description** yourself. To add a new product or service on the spot, choose
+     **＋ Add new item…** at the end of the list; it is added to Products & Services and fills in
+     the line.
    - Enter **Qty** and **Rate**. Decimals are fine (for example 1.5 hours). **Amount** calculates
      itself.
    - Check the **Income account** for each line.

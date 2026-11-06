@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
-import VendorField from './VendorField.jsx';
+import NameField from './NameField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import Notice from './Notice.jsx';
@@ -87,7 +87,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
         <h2 className="mr-2 self-center text-md font-semibold">Vendor credit</h2>
         <label className="w-[220px]">
           <span className="qb-label">Vendor</span>
-          <VendorField autoFocus className="qb-input w-full" vendors={vendors.data ?? []} value={vendor} onChange={setVendor} placeholder="Vendor name" />
+          <NameField kind="vendor" autoFocus className="qb-input w-full" names={vendors.data ?? []} value={vendor} onChange={setVendor} placeholder="Vendor name" />
         </label>
         <label>
           <span className="qb-label">Ref no.</span>

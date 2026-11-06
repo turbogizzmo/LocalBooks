@@ -21,6 +21,7 @@ import CurrencyFields from './CurrencyFields.jsx';
 import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
+import NameField from './NameField.jsx';
 
 const TERMS = [
   { id: 'receipt', label: 'Due on receipt', days: 0 },
@@ -976,19 +977,7 @@ export default function Invoices({ accounts, intent }) {
         <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
           <label className="w-[260px]">
             <span className="qb-label">Customer</span>
-            <input
-              ref={customerRef}
-              className="qb-input w-full"
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              placeholder="Customer name"
-              list="invoice-customers"
-            />
-            <datalist id="invoice-customers">
-              {(customers.data ?? []).map((c) => (
-                <option key={c.id} value={c.name} />
-              ))}
-            </datalist>
+            <NameField kind="customer" inputRef={customerRef} className="qb-input w-full" names={customers.data ?? []} value={customer} onChange={setCustomer} placeholder="Customer name" />
           </label>
           <label>
             <span className="qb-label">Invoice date</span>

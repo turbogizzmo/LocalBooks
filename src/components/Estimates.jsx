@@ -13,6 +13,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import NameField from './NameField.jsx';
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -110,12 +111,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
         <h2 className="mr-2 self-center text-md font-semibold">New estimate</h2>
         <label className="w-[240px]">
           <span className="qb-label">Customer</span>
-          <input ref={customerRef} className="qb-input w-full" value={customer} onChange={(e) => setCustomer(e.target.value)} list="estimate-customers" placeholder="Customer name" />
-          <datalist id="estimate-customers">
-            {(customers.data ?? []).map((c) => (
-              <option key={c.id} value={c.name} />
-            ))}
-          </datalist>
+          <NameField kind="customer" inputRef={customerRef} className="qb-input w-full" names={customers.data ?? []} value={customer} onChange={setCustomer} placeholder="Customer name" />
         </label>
         <label>
           <span className="qb-label">Estimate date</span>

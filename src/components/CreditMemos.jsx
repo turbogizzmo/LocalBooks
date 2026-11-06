@@ -14,6 +14,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import NameField from './NameField.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 
@@ -104,12 +105,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         <h2 className="mr-2 self-center text-md font-semibold">{refund ? 'Refund receipt' : 'Credit memo'}</h2>
         <label className="w-[220px]">
           <span className="qb-label">Customer</span>
-          <input autoFocus className="qb-input w-full" value={customer} onChange={(e) => setCustomer(e.target.value)} list="credit-customers" placeholder="Customer name" />
-          <datalist id="credit-customers">
-            {(customers.data ?? []).filter((c) => c.isActive).map((c) => (
-              <option key={c.id} value={c.name} />
-            ))}
-          </datalist>
+          <NameField kind="customer" autoFocus className="qb-input w-full" names={customers.data ?? []} value={customer} onChange={setCustomer} placeholder="Customer name" />
         </label>
         <label>
           <span className="qb-label">Date</span>
