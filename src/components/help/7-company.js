@@ -176,6 +176,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'class-tracking', area: 'company', views: ['settings/preferences', 'accounting/classes'],
+    title: 'Track classes on transactions',
+    body: 'Turn on Track classes on transactions in Settings › Preferences › Class tracking. Forms then have a Class column on each line (or one Class box for the whole transaction). Choose ＋ Add new class… in the class list to add one as you go, or manage the list in Accounting › Classes.',
+    keywords: 'class classes class tracking department location division column quick add new class profit and loss by class',
+    go: { label: 'Go to Preferences', view: 'settings/preferences' },
+    guide: 'getting-started',
+  },
+  {
     id: 'general-preferences', area: 'company', views: ['settings/preferences'],
     title: 'Make Enter move between fields, and other typing preferences',
     body: 'In Settings › Preferences, General · My Preferences sets how typing works for you on this computer: Enter moves to the next field like Tab, name boxes open their list of matches as you type, clipped text shows in full on hover, and new transactions start on today’s date or the last date you entered.',

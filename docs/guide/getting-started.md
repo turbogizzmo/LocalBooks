@@ -68,6 +68,25 @@ Asset, are added the first time you use that feature.
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
+## Track classes
+
+Classes sort income and expenses by department, location, property or any other division you
+choose, so you can run a Profit and Loss by class. Class tracking is off until you turn it on.
+
+1. In **Settings › Preferences**, under **Class tracking**, tick **Track classes on transactions**.
+2. Choose **Assign classes**: **One to each line** (a **Class** column on each line), or **One to
+   the entire transaction** (one **Class** box at the top of the form).
+3. Optionally tick **Warn me when a transaction is not assigned a class**.
+
+Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, purchase orders, vendor
+credits, deposits and journal entries then have a Class column (or box). To add a class while you
+enter a transaction, choose **＋ Add new class…** at the bottom of the class list, type the name
+and press Enter; type `Parent:Name` to add it under an existing class. Manage the whole list in
+**Accounting › Classes**.
+
+A company file moved from QuickBooks doesn't bring its class list over yet: add your classes once,
+here or in **Accounting › Classes**.
+
 ## Set how typing works (General preferences)
 
 **Settings › Preferences** starts with **General · My Preferences**. These choices are yours on this

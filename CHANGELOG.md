@@ -18,6 +18,10 @@ people using LocalBooks.
 - **Double-click to edit an invoice, bill, check or expense.** Double-clicking a row in the
   Invoices, Bills or Expenses & Checks list opens it to edit, as **Edit…** in its menu does. When it
   can't be edited (it's voided, or a payment or credit is applied), LocalBooks says why.
+- **Classes are easier to find and add.** With **Track classes on transactions** on (Settings ›
+  Preferences › Class tracking), the Class column now shows on every form even before you've made
+  your first class, and the class list ends in **＋ Add new class…** so you can add one while you
+  enter a bill or invoice. The guide has a new **Track classes** section.
 - **Sort registers and Reconcile.** Click a column heading in an account register or in Reconcile
   to sort by date, number, payee, amount or cleared status.
 - **Pressing Enter moves between fields.** A new **General** section in **Settings › Preferences**
