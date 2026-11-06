@@ -169,7 +169,7 @@ export const topics = [
   {
     id: 'whats-new', area: 'company', views: [],
     title: 'What’s new in LocalBooks',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the form toolbar, adding customers, vendors, items and classes as you type, a name's transactions, sorting registers, Enter between fields and six more reports.',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the form toolbar, adding customers, vendors, items and classes as you type, a name’s transactions, sorting registers, Enter between fields and six more reports.',
     keywords: 'new whats new what’s new release notes changes changelog latest version update features',
     go: null,
     guide: 'whats-new',
