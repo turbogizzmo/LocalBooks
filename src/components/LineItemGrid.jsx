@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { usePriceLevels } from './PriceLevels.jsx';
+import NewItemDialog from './NewItemDialog.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
+/** The item column's "Add new item…" entry. */
+const NEW_ITEM = '__new';
+
 export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
@@ -119,16 +123,21 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       setActive(null);
     }
   };
-  const pickProduct = (index, productId) => {
-    const product = products.find((p) => p.id === productId);
+  // The line whose item column chose "＋ Add new item…", while its dialog is open.
+  const [adding, setAdding] = useState(null);
+  const pickProduct = (index, productId, known = null) => {
+    if (productId === NEW_ITEM) return setAdding(index);
+    const product = known ?? products.find((p) => p.id === productId);
     if (!product) return update(index, { productId: null });
     const line = lines[index];
+    // A new item's own rate: it isn't in the price lists yet.
+    const rate = known ? (product.rateCents > 0 ? centsToInput(product.rateCents) : null) : rateAt(productId, customerLevel);
     update(index, {
       productId,
       description: product.description ?? product.name,
       accountId: product.incomeAccountId,
       isTaxable: Boolean(product.isTaxable),
-      rate: rateAt(productId, customerLevel) ?? line.rate,
+      rate: rate ?? line.rate,
       qty: line.qty.trim() === '' ? '1' : line.qty,
       levelId: customerLevel,
       levelAuto: true,
@@ -197,7 +206,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       <select
                         data-col="product"
                         value={line.productId ?? ''}
-                        onChange={(e) => pickProduct(i, e.target.value === '' ? null : Number(e.target.value))}
+                        onChange={(e) => pickProduct(i, e.target.value === '' ? null : e.target.value === NEW_ITEM ? NEW_ITEM : Number(e.target.value))}
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
@@ -206,6 +215,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>
                         ))}
+                        <option value={NEW_ITEM}>＋ Add new item…</option>
                       </select>
                     </td>
                   )}
@@ -337,6 +347,18 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           );
         })}
       </tbody>
+      {adding !== null && (
+        // A portal: the dialog renders on <body>, not in the table.
+        <NewItemDialog
+          accounts={accounts}
+          defaultAccountId={lines[adding]?.accountId ?? defaultAccountId}
+          onClose={() => setAdding(null)}
+          onCreated={(product) => {
+            pickProduct(adding, product.id, product);
+            setAdding(null);
+          }}
+        />
+      )}
     </table>
   );
 }
