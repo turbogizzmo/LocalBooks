@@ -228,7 +228,7 @@ totals only.
 ### Income Tax Summary and Income Tax Detail
 
 These total your books by the lines of your income tax return. They use the **Tax form** set in
-**Settings › Preferences** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
+**Settings › Preferences › Accounting** (Schedule C, Form 1065, Form 1120-S or Form 1120); you can pick another one
 on the report.
 
 First give each account its tax line:

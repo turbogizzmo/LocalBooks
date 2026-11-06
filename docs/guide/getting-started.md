@@ -28,19 +28,20 @@ later in the Chart of Accounts.
 
 ## Enter your company details
 
-1. In the left sidebar, open **Settings › Preferences Console**. (Click **Settings** to show or
-   hide its pages: one for each Settings tab.)
-2. Under **Company**, fill in **Company name**, **Legal name**, **Address**, **Email**, **Phone**
+1. In the left sidebar, open **Settings › Preferences Console** (or choose **Edit › Preferences**).
+   Click **General** in the list on the left, then the **Company Preferences** tab.
+2. Under **Company information**, fill in **Company name**, **Legal name**, **Address**, **Email**, **Phone**
    and **EIN**. Each field saves as soon as you click away from it; a green **✓ Saved** confirms it.
 3. Click **Upload logo…** to add your logo. It prints on invoices, estimates and reports.
 
 ## Choose your accounting settings
 
-1. Under **Accounting & tax**, set **First month of fiscal year**. Reports such as "This fiscal
-   year" and the Balance Sheet's Retained Earnings follow this.
-2. Set **Currency symbol** (for example `$` or `€`) and **Home currency** (for example `USD`).
-   The home currency locks once you record a foreign-currency transaction.
-3. Choose your **Tax form** (Schedule C, 1065, 1120-S, 1120 or 990). The **Tax calendar** below then
+1. In Preferences, click **Accounting**, then **Company Preferences**. Set **First month of fiscal
+   year**. Reports such as "This fiscal year" and the Balance Sheet's Retained Earnings follow this.
+2. Under **Multiple Currencies › Company Preferences**, set **Currency symbol** (for example `$` or
+   `€`) and **Home currency** (for example `USD`). The home currency locks once you record a
+   foreign-currency transaction.
+3. Back in **Accounting**, choose your **Tax form** (Schedule C, 1065, 1120-S, 1120 or 990). The **Tax calendar** below then
    lists your federal due dates.
 
 > **Tip:** The tax calendar is a reminder, not tax advice. Weekends move to Monday, but holidays,
@@ -64,7 +65,7 @@ Asset, are added the first time you use that feature.
 
 ## Make sure backups are on
 
-1. Under **Automatic backups**, keep **Daily backup** turned on. A backup is taken when LocalBooks
+1. In **Preferences › General › Company Preferences**, under **Automatic backups**, keep **Daily backup** turned on. A backup is taken when LocalBooks
    starts, at most once a day.
 2. Set **Keep** to how many daily backups to keep (1–60).
 
@@ -73,7 +74,7 @@ Asset, are added the first time you use that feature.
 Classes sort income and expenses by department, location, property or any other division you
 choose, so you can run a Profit and Loss by class. Class tracking is off until you turn it on.
 
-1. In **Settings › Preferences**, under **Class tracking**, tick **Track classes on transactions**.
+1. In **Settings › Preferences › Accounting › Company Preferences**, under **Class tracking**, tick **Track classes on transactions**.
 2. Choose **Assign classes**: **One to each line** (a **Class** column on each line), or **One to
    the entire transaction** (one **Class** box at the top of the form).
 3. Optionally tick **Warn me when a transaction is not assigned a class**.
@@ -87,10 +88,26 @@ and press Enter; type `Parent:Name` to add it under an existing class. Manage th
 A company file moved from QuickBooks doesn't bring its class list over yet: add your classes once,
 here or in **Accounting › Classes**.
 
+## Find your way around Preferences
+
+**Settings › Preferences Console** (or **Edit › Preferences**) looks like the desktop product's
+Preferences window: a list of categories on the left (Accounting, Bills, Checking, Desktop View,
+Finance Charge, General, Items & Inventory, Jobs & Estimates, Multiple Currencies, Payments,
+Reminders, Reports & Graphs, Sales & Customers, Sales Tax, Send Forms, Tax: 1099, Time & Expenses),
+and two tabs for each:
+
+- **My Preferences** are yours, on this computer, and take effect at once.
+- **Company Preferences** are everyone's and are saved in the company file as soon as you leave a
+  box. Only an Admin can change them.
+
+Some settings live on their own screen (sales tax rates, reminders, email, forms). The category
+lists them under **Set on their own screens**, with a link to each. LocalBooks remembers the
+category you used last.
+
 ## Set how typing works (General preferences)
 
-**Settings › Preferences** starts with **General · My Preferences**. These choices are yours on this
-computer and take effect at once, in every LocalBooks window. **Default** puts them all back.
+**Preferences › General › My Preferences** sets how typing works for you. **Default** puts these
+choices back.
 
 - **Pressing Enter moves between fields.** Enter goes to the next box, as Tab does. Record the
   transaction with its button (**Post**, **Save**). Off by default. In Preferences itself, Enter
@@ -103,6 +120,46 @@ computer and take effect at once, in every LocalBooks window. **Default** puts t
 - **Date for new transactions.** New bills, checks, invoices, sales receipts, deposits and journal
   entries start on **Today's date**, or on **The last date you entered**, which helps when you
   enter a stack of older paperwork.
+- **Automatically place a decimal point.** Amounts typed without a point are in cents: `1234`
+  becomes 12.34 and `5` becomes 0.05, which is quick on a number pad. Typing a point still means
+  dollars (`12.` is 12.00). Off by default.
+- **Beep when recording a transaction.** A short tone when a bill, check, invoice, payment, deposit
+  or journal entry is saved. **Test** plays it.
+- **Warn when editing a posted transaction.** Saving changes to a posted transaction voids the
+  original and posts the edited one in its place; this asks first. On by default.
+- **Warn when voiding a transaction.** **Void Transaction** asks before reversing it. On by default.
+- **Bring back all one-time messages.** Messages you turned off with **Don't show this message
+  again** appear again.
+- **When the item on a sales line changes.** If you typed your own description or price on a line
+  and then pick a different item, LocalBooks can **Ask whether to keep it** (the default), **Always
+  keep what I typed**, or **Never** keep it and use the new item's description and price.
+
+**Preferences › Accounting › My Preferences** has **Autofill memo in journal entries**: a line you
+start below the first one takes the first line's memo, which you can still change. On by default.
+
+## Warnings before saving (company preferences)
+
+These ask before a transaction is saved. Click **Save anyway** to record it as you entered it, or
+**Cancel** to go back and change it. They never stop you saving.
+
+| Category (Company Preferences) | Warning | Default |
+|---|---|---|
+| **Checking** | A check number already used by another check from the same bank account (voided checks don't count) | On |
+| **Bills** | A bill number already used by another bill from the same vendor | On |
+| **Accounting** | A date more than **N** days before today (0 turns it off) | 90 days |
+| **Accounting** | A date more than **N** days after today (0 turns it off) | 30 days |
+| **Accounting** | A transaction that posts to Retained Earnings, which LocalBooks updates itself at year end | On |
+
+The date warnings cover bills, checks, expenses, invoices, sales receipts, estimates, purchase
+orders and journal entries; they catch a slip like 2062 for 2026.
+
+Some things LocalBooks always does, so they have no switch: every line needs an account; journal
+entries, invoices, estimates and purchase orders get the next number when saved, so no two share
+one.
+
+**General › Company Preferences** also sets how dates and hours show for everyone: **Always show
+years as 4 digits** (turn it off for 10/13/26), and **Time format**, **Minutes (1:30)** or
+**Decimal (1.50)** in Time Tracking.
 
 ## Sort a list
 

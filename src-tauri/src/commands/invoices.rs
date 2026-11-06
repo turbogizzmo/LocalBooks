@@ -22,8 +22,11 @@ pub async fn create_invoice(
     app: AppHandle,
     db: State<'_, Db>,
     input: InvoiceInput,
+    confirmed: Option<Vec<String>>,
 ) -> Result<InvoiceSummary, String> {
-    let invoice = invoices::create_and_post_invoice(&db.pool().await, input).await?;
+    let pool = db.pool().await;
+    guards::check(&pool, guards::dated(input.issue_date), confirmed.as_deref()).await?;
+    let invoice = invoices::create_and_post_invoice(&pool, input).await?;
     notify(&app);
     Ok(invoice)
 }

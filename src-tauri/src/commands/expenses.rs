@@ -38,8 +38,10 @@ pub async fn list_bills(db: State<'_, Db>) -> Result<Vec<BillSummary>, String> {
 }
 
 #[tauri::command]
-pub async fn post_vendor_bill(app: AppHandle, db: State<'_, Db>, input: BillInput) -> Result<BillSummary, String> {
-    let bill = expenses::post_vendor_bill(&db.pool().await, input).await?;
+pub async fn post_vendor_bill(app: AppHandle, db: State<'_, Db>, input: BillInput, confirmed: Option<Vec<String>>) -> Result<BillSummary, String> {
+    let pool = db.pool().await;
+    guards::check(&pool, guards::bill(&input, None), confirmed.as_deref()).await?;
+    let bill = expenses::post_vendor_bill(&pool, input).await?;
     notify(&app);
     Ok(bill)
 }
@@ -73,8 +75,10 @@ pub async fn next_check_number(db: State<'_, Db>, account_id: i64) -> Result<Str
 }
 
 #[tauri::command]
-pub async fn post_expense(app: AppHandle, db: State<'_, Db>, input: ExpenseInput) -> Result<ExpenseView, String> {
-    let expense = expenses::post_expense(&db.pool().await, input).await?;
+pub async fn post_expense(app: AppHandle, db: State<'_, Db>, input: ExpenseInput, confirmed: Option<Vec<String>>) -> Result<ExpenseView, String> {
+    let pool = db.pool().await;
+    guards::check(&pool, guards::expense(&input, None), confirmed.as_deref()).await?;
+    let expense = expenses::post_expense(&pool, input).await?;
     notify(&app);
     Ok(expense)
 }

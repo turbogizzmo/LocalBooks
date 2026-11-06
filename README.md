@@ -150,7 +150,7 @@ corrections are reviewed rather than automatic.
 
 ### Closing date
 
-*Settings › Preferences Console › Closing date* locks the books through a date. Entries dated on or
+*Settings › Preferences Console › Accounting › Closing date* locks the books through a date. Entries dated on or
 before it cannot be posted, from any screen. Voids are blocked too, because a reversal carries the
 original date. The ledger checks this before every post, and a database trigger enforces it as a
 backstop. Moving or removing the date requires the passcode, which is stored as a salted
@@ -289,7 +289,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
-| Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
+| Preferences | Settings › Preferences Console (Edit › Preferences) | Categories with My and Company tabs; company details, logo, fiscal year, currencies, tax calendar; warnings before saving (duplicate check and bill numbers, far-off dates, Retained Earnings) with Save anyway; typing amounts without a decimal point | [guide](docs/guide/getting-started.md#find-your-way-around-preferences) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
 | Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
