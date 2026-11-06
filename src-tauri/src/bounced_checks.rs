@@ -88,9 +88,9 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 
 /// Every deposited invoice payment (straight to a bank account, or banked through a deposit) and
 /// every "other funds" deposit line that hasn't bounced yet, newest first. The bank account is
-/// where the money is now.
+/// where the money is now, and the date is when it got there (a check can't bounce before that).
 const CANDIDATES: &str = "
-    SELECT 'PAYMENT' AS kind, p.id, p.payment_date AS date, COALESCE(c.name, i.customer_name) AS customer_name,
+    SELECT 'PAYMENT' AS kind, p.id, COALESCE(d.deposit_date, p.payment_date) AS date, COALESCE(c.name, i.customer_name) AS customer_name,
            i.invoice_number, p.payment_method, p.reference, NULL AS memo, p.amount_cents,
            COALESCE(d.bank_account_id, p.deposit_account_id) AS bank_account_id
     FROM invoice_payments p

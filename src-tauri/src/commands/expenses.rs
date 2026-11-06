@@ -75,7 +75,11 @@ pub async fn next_check_number(db: State<'_, Db>, account_id: i64) -> Result<Str
 #[tauri::command]
 pub async fn post_expense(app: AppHandle, db: State<'_, Db>, input: ExpenseInput, to_be_printed: Option<bool>) -> Result<ExpenseView, String> {
     // A check can wait in the print queue (File › Print Forms › Checks) instead of taking a number now.
-    let expense = crate::print_queue::post_expense(&db.pool().await, input, to_be_printed.unwrap_or(false)).await?;
+    let pool = db.pool().await;
+    let expense = match to_be_printed {
+        Some(true) => crate::print_queue::post_expense(&pool, input, true).await?,
+        _ => expenses::post_expense(&pool, input).await?,
+    };
     notify(&app);
     Ok(expense)
 }
