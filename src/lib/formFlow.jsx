@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { ChildContext, forgetUnsaved, WindowManagerContext } from './windows.js';
 
 /**
@@ -59,6 +60,7 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
   useEffect(() => {
     const entry = { root: () => formRef.current, command };
     openForms.push(entry);
+    listenOnPage();
     return () => {
       const at = openForms.indexOf(entry);
       if (at >= 0) openForms.splice(at, 1);
@@ -72,14 +74,9 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
       if (!name || name === 'insert-line' || name === 'delete-line') return; // lines: useLineCommands
       if ((name === 'delete' || name === 'memorize') && !toolbarButton(formRef.current, name)) return;
       e.preventDefault();
-      if (name.startsWith('save')) {
-        // A field being typed in hands its value over (some commit on blur) and the form renders
-        // with it before the save reads it.
-        e.target?.blur?.();
-        setTimeout(() => command(name), 0);
-      } else {
-        command(name);
-      }
+      // A save waits a tick, so the form has rendered with the last key typed before it reads it.
+      if (name.startsWith('save')) setTimeout(() => command(name), 0);
+      else command(name);
     },
     [command],
   );
@@ -113,14 +110,16 @@ function pressToolbar(root, name) {
  */
 export function formKeyCommand(e) {
   const ctrl = e.ctrlKey || (IS_MAC && e.metaKey);
+  // The physical key when the event has one (Option+S types ß on a Mac), else the character.
+  const letter = (l) => e.code === `Key${l.toUpperCase()}` || (!e.code && String(e.key).toLowerCase() === l);
   if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-    if (e.code === 'KeyS') return 'save-close';
-    if (e.code === 'KeyN') return 'save-new';
+    if (letter('s')) return 'save-close';
+    if (letter('n')) return 'save-new';
     return null;
   }
   if (e.altKey || e.shiftKey) return null;
-  if (ctrl && e.code === 'KeyD') return 'delete';
-  if (e.ctrlKey && !e.metaKey && e.code === 'KeyM') return 'memorize';
+  if (ctrl && letter('d')) return 'delete';
+  if (e.ctrlKey && !e.metaKey && letter('m')) return 'memorize';
   if (ctrl && e.key === 'Insert') return 'insert-line';
   if (ctrl && e.key === 'Delete') return 'delete-line';
   return null;
@@ -171,6 +170,24 @@ function useCloseForm(onClose) {
 const openForms = [];
 
 /**
+ * With nothing focused (after a click on the form's background, or once a save has moved on), the
+ * form keys go to the open form, as the Edit menu's do. Listened for once, on the page.
+ */
+let listening = false;
+function listenOnPage() {
+  if (listening || typeof window === 'undefined') return;
+  listening = true;
+  window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (e.defaultPrevented || (t !== document.body && t !== document.documentElement)) return;
+    if (document.querySelector('[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]')) return;
+    const name = formKeyCommand(e);
+    if (!name || name === 'delete-line') return;
+    if (runFormCommand(name)) e.preventDefault();
+  });
+}
+
+/**
  * Runs an Edit-menu form command ('delete', 'memorize', 'insert-line', 'delete-line', 'save-close',
  * 'save-new') on the form that has focus, or else the visible one opened last. False when no form
  * took it.
@@ -206,20 +223,26 @@ export function useLineCommands(ref, { insert, remove }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const focusRow = (index) =>
-      requestAnimationFrame(() => {
-        const rows = el.querySelectorAll('[data-row]');
-        const row = rows[Math.min(index, rows.length - 1)];
-        row?.querySelector('input:not([type="checkbox"]):not(:disabled), select:not(:disabled), [tabindex="0"]')?.focus();
-      });
+    const focusRow = (index) => {
+      const rows = el.querySelectorAll('[data-row]');
+      const row = rows[Math.min(index, rows.length - 1)];
+      row?.querySelector('input:not([type="checkbox"]):not(:disabled), select:not(:disabled), [tabindex="0"]')?.focus();
+    };
+    // Listened for outside React, so the change is committed at once (flushSync) and the line at
+    // that position is in the page before it takes focus.
     const run = (name, row) => {
       const count = el.querySelectorAll('[data-row]').length;
+      let focused;
       if (name === 'insert-line') {
         const at = row ?? count;
-        const focused = latest.current.insert(at);
+        flushSync(() => {
+          focused = latest.current.insert(at);
+        });
         if (focused !== 'focused') focusRow(at);
       } else if (name === 'delete-line' && row !== null) {
-        const focused = latest.current.remove(row);
+        flushSync(() => {
+          focused = latest.current.remove(row);
+        });
         if (focused !== 'focused') focusRow(row);
       }
     };
