@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
@@ -157,19 +158,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
         <label>
           <span className="qb-label">Payee</span>
-          <input
-            ref={payeeRef}
-            className="qb-input w-[200px]"
-            value={payee}
-            onChange={(e) => setPayee(e.target.value)}
-            list="expense-payees"
-            placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'}
-          />
-          <datalist id="expense-payees">
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
+          <VendorField inputRef={payeeRef} vendors={vendors} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
         </label>
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>

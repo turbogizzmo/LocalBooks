@@ -157,7 +157,7 @@ function BankDetailsFields({ bank, setBank }) {
 }
 
 /** The full customer or vendor record: contact details, default terms and (vendors) 1099 status. */
-function PartyDialog({ kind, id, onClose, onSaved }) {
+export function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
@@ -210,7 +210,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         const view = await api.setVendorBank(id, bank.draft);
         setBank({ view, draft: undefined });
       }
-      onSaved(`Saved ${noun} ${saved.name}.`);
+      onSaved(`Saved ${noun} ${saved.name}.`, saved);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);

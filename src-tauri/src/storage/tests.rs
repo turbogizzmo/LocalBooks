@@ -138,6 +138,19 @@ fn recent_list_moves_reopened_files_to_the_top_without_duplicates() {
 }
 
 #[test]
+fn described_recent_list_is_most_recently_opened_first() {
+    // A list saved out of order (by an older version, or edited by hand) still shows newest first.
+    let list = vec![
+        recent("/books/old.localbooks", "2026-09-01 08:00"),
+        recent("/books/newest.localbooks", "2026-11-05 17:30"),
+        recent("/books/never.localbooks", ""),
+        recent("/books/middle.localbooks", "2026-10-15 12:00"),
+    ];
+    let shown: Vec<_> = describe_recent(&list).into_iter().map(|v| v.file_name).collect();
+    assert_eq!(shown, ["newest.localbooks", "middle.localbooks", "old.localbooks", "never.localbooks"]);
+}
+
+#[test]
 fn recent_list_is_capped_and_dedupes_the_same_file_spelled_differently() {
     let dir = std::env::temp_dir().join(format!("localbooks-recent-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("sub")).unwrap();

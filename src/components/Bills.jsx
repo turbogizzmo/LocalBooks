@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import MoneyBar from './MoneyBar.jsx';
@@ -113,12 +114,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>
           <span className="qb-label">Vendor</span>
-          <input ref={vendorRef} className="qb-input w-[200px]" value={vendor} onChange={(e) => setVendor(e.target.value)} list="bill-vendors" placeholder="Vendor" />
-          <datalist id="bill-vendors">
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
+          <VendorField inputRef={vendorRef} vendors={vendors} value={vendor} onChange={setVendor} />
         </label>
         <label>
           <span className="qb-label">Bill no.</span>

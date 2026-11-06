@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import VendorField from './VendorField.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
@@ -91,12 +92,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         <h2 className="mr-2 self-center text-md font-semibold">New purchase order</h2>
         <label>
           <span className="qb-label">Vendor</span>
-          <input className="qb-input w-[200px]" value={vendor} onChange={(e) => setVendor(e.target.value)} list="po-vendors" autoFocus />
-          <datalist id="po-vendors">
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
+          <VendorField vendors={vendors} value={vendor} onChange={setVendor} autoFocus />
         </label>
         <label>
           <span className="qb-label">PO date</span>
