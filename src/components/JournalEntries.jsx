@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
@@ -7,7 +8,7 @@ import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
-import { formatDate, todayIso } from '../lib/dates.js';
+import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
 export const SOURCE_LABEL = {
@@ -21,7 +22,7 @@ const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit:
 
 /** A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited. */
 function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
-  const [date, setDate] = useState(editing?.entry.entryDate ?? todayIso());
+  const [date, setDate] = useTransactionDate(editing?.entry.entryDate);
   const [memo, setMemo] = useState(editing?.entry.memo ?? '');
   const [adjusting, setAdjusting] = useState(editing?.entry.isAdjusting ?? false);
   const [rows, setRows] = useState(() =>

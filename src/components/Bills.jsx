@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
@@ -26,11 +27,10 @@ const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PAR
 /** A new bill, or (with `editing` = { bill, lines }) a posted bill being edited. */
 function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
-  const today = todayIso();
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
-  const [billDate, setBillDate] = useState(editing?.bill.billDate ?? today);
-  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(today, 30));
+  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);

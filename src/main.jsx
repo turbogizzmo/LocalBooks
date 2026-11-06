@@ -6,10 +6,14 @@ import NoCompanyOpen from './components/CompanyFiles.jsx';
 import SignIn from './components/Users.jsx';
 import { api } from './lib/api.js';
 import { loadStartPage } from './lib/windows.js';
+import { installMyPreferenceBehaviours } from './lib/myPreferences.js';
 import './index.css';
 import './styles/print.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
+// Preferences › General: Enter moves between fields, tooltips for clipped text.
+installMyPreferenceBehaviours();
 
 // If the company file could not be opened at launch, explain that instead of starting the app; with
 // no company open (File › Close Company), show the No Company Open screen; with a company that has

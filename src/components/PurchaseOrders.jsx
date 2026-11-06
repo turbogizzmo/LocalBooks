@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import VendorField from './VendorField.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
@@ -61,7 +62,7 @@ function PurchaseOrderDocument({ company, order, lines, accounts }) {
 function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const [vendor, setVendor] = useState('');
-  const [poDate, setPoDate] = useState(todayIso);
+  const [poDate, setPoDate] = useTransactionDate();
   const [expected, setExpected] = useState('');
   const [memo, setMemo] = useState('');
   const [rows, setRows] = useState(() => [blankSplit(defaultCategory), blankSplit(defaultCategory)]);

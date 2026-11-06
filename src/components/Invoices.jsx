@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -563,9 +564,9 @@ export default function Invoices({ accounts, intent }) {
     [accounts],
   );
   const [customer, setCustomer] = useState('');
-  const [issueDate, setIssueDate] = useState(todayIso());
+  const [issueDate, setIssueDate] = useTransactionDate();
   const [terms, setTerms] = useState('net30');
-  const [dueDate, setDueDate] = useState(addDays(todayIso(), 30));
+  const [dueDate, setDueDate] = useState(() => addDays(issueDate, 30));
   const [lines, setLines] = useState(() => Array.from({ length: INITIAL_ROWS }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -676,9 +677,9 @@ export default function Invoices({ accounts, intent }) {
 
   const reset = () => {
     setCustomer('');
-    setIssueDate(todayIso());
+    setIssueDate(newTransactionDate());
     setTerms('net30');
-    setDueDate(addDays(todayIso(), 30));
+    setDueDate(addDays(newTransactionDate(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
     setEditing(null);

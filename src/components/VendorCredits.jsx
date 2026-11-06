@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import VendorField from './VendorField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
@@ -20,7 +21,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
   const [vendor, setVendor] = useState('');
   const [reference, setReference] = useState('');
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState('');
   const [rows, setRows] = useState(() => [blankSplit(null)]);
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
@@ -11,7 +12,7 @@ import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
-import { formatDate, todayIso } from '../lib/dates.js';
+import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 
@@ -40,7 +41,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const was = editing?.expense;
   const [payee, setPayee] = useState(was?.payeeName ?? '');
   const [accountId, setAccountId] = useState(was?.paymentAccountId ?? defaultPayFrom);
-  const [date, setDate] = useState(was?.expenseDate ?? todayIso());
+  const [date, setDate] = useTransactionDate(was?.expenseDate);
   const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
   const [method, setMethod] = useState(was?.paymentMethod ?? 'CREDIT_CARD');
   const [memo, setMemo] = useState(was?.memo ?? '');

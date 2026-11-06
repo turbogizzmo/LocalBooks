@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PartyDialog } from './PartyList.jsx';
 import { api, errorText } from '../lib/api.js';
+import { useMyPreferences } from '../lib/myPreferences.js';
 
 /** How many matching vendors the list shows at once. */
 const MAX_SHOWN = 12;
@@ -24,6 +25,8 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [details, setDetails] = useState(null);
+  // Preferences › General: open the list while typing, or only on ↓.
+  const autoOpen = useMyPreferences().autoOpenDropDowns;
 
   const typed = value.trim();
   const known = useMemo(() => vendors.filter((v) => v.isActive !== false), [vendors]);
@@ -107,10 +110,10 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
         onChange={(e) => {
           onChange(e.target.value);
           setActive(0);
-          setOpen(true);
+          setOpen(autoOpen);
           setError(null);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => autoOpen && setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />
