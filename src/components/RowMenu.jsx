@@ -89,7 +89,7 @@ export default function RowMenu({ items, label = 'Actions' }) {
   );
 }
 
-function ConfirmDialog({ item, onClose }) {
+export function ConfirmDialog({ item, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const cancelRef = useRef(null);

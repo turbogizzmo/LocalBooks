@@ -17,11 +17,18 @@ taken before you billed the work.
 
 ## Apply one payment to several invoices
 
-1. On **Sales › Invoices**, click **Receive payment** (or use **+ New › Receive Payment**).
-2. Choose the customer. Their open invoices are listed, oldest first.
+1. On **Sales › Invoices**, click **Receive Payments** in the toolbar (or use **+ New › Receive
+   Payment**).
+2. In **Received from**, choose the customer. Their open invoices are listed, oldest first, and
+   **Customer balance** shows at the top right.
 3. Type the **Amount received**. LocalBooks applies it to the oldest invoices first; adjust
-   **Amount to apply** on any row if the customer told you otherwise.
-4. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment**.
+   **Amount to apply** on any row if the customer told you otherwise. To spread the amount
+   received over the invoices again, click **Auto Apply** in the toolbar.
+4. Click how you were paid: **Cash**, **Check**, **Card** (credit or debit), **Bank / ACH** (ACH,
+   e-check or bank transfer), or **More** for **Wire** and **Other**. The chosen tile is
+   highlighted.
+5. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment** (or **Save** in
+   the toolbar). **New** in the toolbar clears the form to start over.
 
 ## Payments in another currency
 

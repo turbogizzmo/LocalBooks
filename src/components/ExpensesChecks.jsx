@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -140,8 +141,49 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     }
   };
 
+  // The toolbar across the top of the form (FormToolbar.jsx).
+  const openFromList = useOpenFromList();
+  const clear = () => {
+    if (editing) return onCancel();
+    setFiles([]);
+    setPayee('');
+    setMemo('');
+    setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    formClass.reset();
+    setError(null);
+    payeeRef.current?.focus();
+  };
+  const voidExpense = () =>
+    api.voidTransaction(was.journalEntryId).then(() => {
+      onPosted(`${EXPENSE_KINDS[kind]} voided: a reversing entry now offsets it.`);
+      onCancel();
+    });
+  const toolbar = (
+    <FormToolbar
+      label={EXPENSE_KINDS[kind]}
+      groups={[
+        navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+        fileButtons({
+          onNew: clear,
+          onSave: () => save('post'),
+          busy,
+          onVoid: editing ? voidExpense : undefined,
+          voidDisabled: !was?.journalEntryId || was.isVoided,
+          voidConfirm: was && {
+            title: 'Void this transaction?',
+            body: `${EXPENSE_KINDS[kind]} of ${formatMoney(was.totalCents, was.currencyCode)}${was.payeeName ? ` to ${was.payeeName}` : ''}. A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+            confirmLabel: 'Yes, void it',
+          },
+        }),
+        [{ ...attachLaterButton({ setFiles, busy, what: 'it' }), hidden: Boolean(editing) }],
+        [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring transaction', disabled: busy, onClick: () => save('memorize') }],
+      ]}
+    />
+  );
+
   return (
     <section className="qb-panel flex-none">
+      {toolbar}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <div className="mr-1 flex self-center overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Type">
           {Object.entries(EXPENSE_KINDS).map(([id, label]) => (

@@ -10,7 +10,9 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
-import { useAttachmentRows } from './Attachments.jsx';
+import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
@@ -161,7 +163,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
 }
 
 /** Receive Payment: one customer payment applied across that customer's open invoices, oldest first. */
-function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
+function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const { homeCurrency } = useCompany();
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
@@ -220,6 +222,17 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
     setApplied(next);
   };
 
+  const customerBalance = customerInvoices.filter((i) => (i.currencyCode ?? '') === currency).reduce((s, i) => s + i.balanceCents, 0);
+  const clear = () => {
+    setCustomer('');
+    setCurrency('');
+    setApplied({});
+    setReceived('');
+    setReference('');
+    setError(null);
+    customerRef.current?.focus();
+  };
+
   const save = async () => {
     const inputs = rows
       .filter((inv) => appliedCents(inv) > 0)
@@ -251,10 +264,34 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Receive payment"
+        groups={[
+          navButtons({ onFind }),
+          fileButtons({ onNew: clear, onSave: save, busy }),
+          [
+            {
+              id: 'auto-apply',
+              label: 'Auto Apply',
+              icon: 'ReceivePayment',
+              hint: 'Apply the amount received to the oldest invoices first',
+              disabled: !customer || receivedCents === null || received.trim() === '',
+              onClick: () => autoApply(received),
+            },
+          ],
+        ]}
+      />
+      <div className="flex items-start justify-between px-3 pt-2">
+        <h2 className="text-3xl font-light text-qb-ink">Receive Payment</h2>
+        {customer && (
+          <div className="flex items-baseline gap-3 pt-1 text-xs uppercase tracking-wide text-qb-ink-muted">
+            Customer balance <span className="num text-lg font-semibold normal-case tracking-normal text-qb-ink">{money(customerBalance)}</span>
+          </div>
+        )}
+      </div>
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
-        <h2 className="mr-2 self-center text-md font-semibold">Receive payment</h2>
         <label>
-          <span className="qb-label">Customer</span>
+          <span className="qb-label">Received from</span>
           <select ref={customerRef} className="qb-input w-[220px]" value={customer} onChange={(e) => pickCustomer(e.target.value)}>
             <option value="">Choose a customer…</option>
             {customers.map((c) => (
@@ -296,12 +333,8 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
-          <span className="qb-label">Method</span>
-          <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
+          <span className="qb-label">Amount received</span>
+          <input className="qb-input num w-[120px]" value={received} onChange={(e) => autoApply(e.target.value)} placeholder="0.00" inputMode="decimal" disabled={!customer} />
         </label>
         <label>
           <span className="qb-label">Reference no.</span>
@@ -311,10 +344,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel }) {
           <span className="qb-label">Deposit to</span>
           <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={setAccountId} className="qb-input w-[190px]" />
         </label>
-        <label>
-          <span className="qb-label">Amount received</span>
-          <input className="qb-input num w-[120px]" value={received} onChange={(e) => autoApply(e.target.value)} placeholder="0.00" inputMode="decimal" disabled={!customer} />
-        </label>
+        <div>
+          <span className="qb-label">Payment method</span>
+          <PaymentMethodTiles value={method} onChange={setMethod} />
+        </div>
         <div className="ml-auto text-right">
           <div className="qb-label">Amount to apply</div>
           <div className="num text-3xl font-semibold leading-none">{money(totalApplied)}</div>
@@ -647,14 +680,16 @@ export default function Invoices({ accounts, intent }) {
   const openFromList = useOpenFromList();
 
   // `focusCustomer` is off for an invoice opened in its own window, which should not open the
-  // customer suggestions before anyone has touched it.
-  const loadForEdit = (inv, focusCustomer = true) => {
+  // customer suggestions before anyone has touched it. `viewLocked` is for the toolbar's Previous
+  // and Next, which show a voided or paid invoice locked (Save off, a notice saying why) instead of
+  // stopping at it.
+  const loadForEdit = (inv, focusCustomer = true, viewLocked = false) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details }) => {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
-        if (invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
-        if (invoice.amountPaidCents > 0) {
+        if (!viewLocked && invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
+        if (!viewLocked && invoice.amountPaidCents > 0) {
           return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
         }
         setReceiving(false);
@@ -699,6 +734,8 @@ export default function Invoices({ accounts, intent }) {
     setFromEstimate(null);
     setEditing(null);
     setDiscountText('');
+    setFiles([]);
+    setShowAttachments(false);
     formClass.reset();
     tax.reset();
     sales.reset();
@@ -706,7 +743,28 @@ export default function Invoices({ accounts, intent }) {
 
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
+  // Files picked for an invoice not posted yet; attached once it posts.
+  const [files, setFiles] = useState([]);
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [printPortal, forms] = useFormPrinter(setNotice);
+  const emailed = useEmailStatuses('INVOICE');
+  // The posted invoice on the form, as the list has it, for the toolbar's Print, Email, Void and Attach.
+  const current = editing ? (invoices.data ?? []).find((i) => i.id === editing.id) ?? null : null;
+  const ordered = useMemo(() => [...(invoices.data ?? [])].sort((a, b) => a.invoiceNumber - b.invoiceNumber || a.id - b.id), [invoices.data]);
+  const at = current ? ordered.indexOf(current) : -1;
+  const dirty = customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]');
+  const step = (inv) => {
+    setShowAttachments(false);
+    setFiles([]);
+    loadForEdit(inv, false, true);
+  };
+  // Saved invoices with payments, and voided ones, are shown but not saved again.
+  const locked = current && (current.isVoided || current.amountPaidCents > 0);
+
   const save = async (mode) => {
+    if (locked) {
+      return setNotice({ kind: 'error', text: current.isVoided ? 'This invoice is voided.' : 'Remove its payments and credits before editing this invoice.' });
+    }
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
     if (invalidCount > 0) {
@@ -751,13 +809,17 @@ export default function Invoices({ accounts, intent }) {
       }
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
+      const attachError = files.length > 0 ? await attachPicked(inv.journalEntryId, files) : null;
+      if (mode === 'print') forms.print('INVOICE', inv.id);
+      if (mode === 'email') forms.email('INVOICE', inv.id);
       setNotice({
         kind: 'success',
         text: inv.currencyCode
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
-            (queued ? ' Marked Email later.' : ''),
+            (queued ? ' Marked Email later.' : '') +
+            (attachError ? ` ${attachError}` : ''),
       });
       reset();
     } catch (err) {
@@ -767,10 +829,87 @@ export default function Invoices({ accounts, intent }) {
     }
   };
 
+  const onFind = () => openFromList('accounting/find', 'find', { text: '' });
+  const saved = current ? { kind: 'INVOICE', id: current.id } : null;
+  const notSavedHint = 'Save the invoice first, or use the Post and… entry';
+  const toolbarGroups = [
+    navButtons({
+      onFind,
+      onPrevious: () => step(at > 0 ? ordered[at - 1] : ordered[ordered.length - 1]),
+      onNext: () => step(ordered[at + 1]),
+      previousDisabled: busy || dirty || ordered.length === 0 || at === 0,
+      nextDisabled: busy || dirty || !current || at >= ordered.length - 1,
+    }),
+    fileButtons({
+      onNew: reset,
+      onSave: () => save('post'),
+      saveHint: editing ? 'Save changes: voids the original and posts this version' : 'Save and post to the ledger',
+      busy,
+      saveDisabled: Boolean(locked),
+      onVoid: () =>
+        api.voidTransaction(current.journalEntryId).then(() => {
+          setNotice({ kind: 'success', text: `Invoice #${current.invoiceNumber} voided: a reversing entry now offsets it.` });
+          reset();
+        }),
+      voidDisabled: !current?.journalEntryId || current.isVoided || current.amountPaidCents > 0,
+      voidHint: !current ? 'Open a saved invoice to void it' : current.amountPaidCents > 0 ? 'Void its payments first' : undefined,
+      voidConfirm: current && {
+        title: 'Void this transaction?',
+        body: `Invoice #${current.invoiceNumber} for ${current.customerName} (${formatMoney(current.totalCents, current.currencyCode)}). A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+        confirmLabel: 'Yes, void it',
+      },
+    }),
+    [
+      {
+        id: 'print',
+        label: 'Print',
+        icon: 'Print',
+        menu: [
+          { label: 'Print…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.print(saved.kind, saved.id) },
+          { label: 'Save as PDF…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.savePdf(saved.kind, saved.id) },
+          !editing && { label: 'Post and print…', disabled: busy, onSelect: () => save('print') },
+        ],
+      },
+      {
+        id: 'email',
+        label: 'Email',
+        icon: 'Email',
+        menu: [
+          { label: 'Email…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.email(saved.kind, saved.id) },
+          !editing && { label: 'Post and email…', disabled: busy, onSelect: () => save('email') },
+          saved && !current.isVoided &&
+            (emailed.get(current.id)?.queued
+              ? { label: 'Remove from Email later', onSelect: () => forms.setLater('INVOICE', current.id, false) }
+              : { label: 'Email later', hint: 'Queue it in Sales › Send Forms', onSelect: () => forms.setLater('INVOICE', current.id, true) }),
+        ],
+      },
+      {
+        id: 'attach',
+        label: 'Attach File',
+        icon: 'Attach',
+        hint: current ? 'Show and add files attached to this invoice' : 'Pick files to attach when this invoice posts',
+        disabled: busy || current?.journalEntryId === null,
+        onClick: async () => {
+          if (current) setShowAttachments((v) => !v);
+          else {
+            const picked = await pickAttachments();
+            if (picked.length) setFiles((f) => [...new Set([...f, ...picked])]);
+          }
+        },
+      },
+    ],
+    [
+      { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring invoice', disabled: busy, onClick: () => save('memorize') },
+      { id: 'receive', label: 'Receive Payments', icon: 'ReceivePayment', hint: 'Record a customer payment against open invoices', disabled: receiving, onClick: () => setReceiving(true) },
+    ],
+  ];
+
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {printPortal}
       {receiving && (
         <ReceivePaymentPanel
+          onFind={onFind}
           invoices={invoices.data ?? []}
           accounts={accounts}
           onCancel={() => setReceiving(false)}
@@ -795,6 +934,18 @@ export default function Invoices({ accounts, intent }) {
         />
       )}
       <section className="qb-panel flex-none">
+        <FormToolbar label="Invoice" groups={toolbarGroups} />
+        {locked && (
+          <Notice
+            kind="info"
+            text={current.isVoided ? `Invoice #${current.invoiceNumber} is voided. It stays in the books for the record.` : `Invoice #${current.invoiceNumber} has payments or credits applied, so it is shown read-only. Remove them to edit it.`}
+          />
+        )}
+        {showAttachments && current?.journalEntryId && (
+          <div className="border-b border-qb-border bg-qb-canvas">
+            <Attachments entryId={current.journalEntryId} />
+          </div>
+        )}
         <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
           <label className="w-[260px]">
             <span className="qb-label">Customer</span>
@@ -856,11 +1007,6 @@ export default function Invoices({ accounts, intent }) {
           {formClass.header}
           {tax.picker}
           <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
-          {!receiving && (
-            <button type="button" className="qb-btn qb-btn-secondary self-center" onClick={() => setReceiving(true)}>
-              Receive payment
-            </button>
-          )}
           <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={issueDate} />
           <div className="ml-auto text-right">
             <div className="qb-label">Balance due</div>
@@ -887,6 +1033,7 @@ export default function Invoices({ accounts, intent }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines([blankLine(defaultAccountId)])}>
             Clear all lines
           </button>
+          {!current && files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
           <span className="text-xs text-qb-ink-muted">Click a row to edit · Enter moves to the next line</span>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm">
@@ -902,10 +1049,7 @@ export default function Invoices({ accounts, intent }) {
             <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
               Cancel
             </button>
-            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy} title="Save as a recurring invoice">
-              Memorize…
-            </button>
-            <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
+            <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('post')} disabled={busy || Boolean(locked)}>
               {busy ? 'Posting…' : editing ? 'Save changes' : 'Save & Post to Ledger'}
             </button>
           </div>
