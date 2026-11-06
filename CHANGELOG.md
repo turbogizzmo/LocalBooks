@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.11.0]
+
 - **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
   **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
   and **Voided Transactions** are in the report list. Like the other detail reports, each can be
