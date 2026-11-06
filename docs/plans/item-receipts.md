@@ -3,7 +3,7 @@
 People moving from desktop accounting software receive stock against a purchase order before the
 vendor's bill arrives: the goods are on the shelf and can be sold, but there is nothing to pay
 yet. When the bill comes, they turn the receipt into a bill. This note is the design for that.
-It was split out of T8 (`docs/gaps.md`) because it needs decisions the rest of T8 didn't.
+It was split out of T8 as T12 (`docs/gaps.md`) because it needs decisions the rest of T8 didn't.
 
 ## What we have
 

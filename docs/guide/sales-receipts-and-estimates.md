@@ -5,13 +5,16 @@
 Use a sales receipt when the customer pays at the time of sale, so no invoice is needed.
 
 1. Go to **Sales › All Sales** and click **New sales receipt** (or **+ New › Sales Receipt**).
-2. Optionally enter **Customer (optional)**, then set **Sales receipt date**, **Payment method**
-   and **Reference no.**
+2. Optionally enter **Customer (optional)**, then set **Sales receipt date** and **Reference
+   no.**, and click the **Payment method** tile: **Cash**, **Check**, **Card**, **Bank / ACH**, or
+   **More** for Wire and Other.
 3. Choose **Deposit to**: a bank account, or **Undeposited Funds** to deposit it later with other
    money.
 4. Add the line items as on an invoice and check **Amount received**.
 5. Click **Save & Post to Ledger**.
-6. To send the customer a copy, open the receipt's menu in **All Sales** and choose **Email…**
+   To post and print or email it in one step, use **Print ▾ › Post and print…** or **Email ▾ ›
+   Post and email…** in the toolbar instead.
+6. To send the customer a copy later, open the receipt's menu in **All Sales** and choose **Email…**
    (or **Email later**, to send it with others from **Sales › Send Forms**), **Print…** or
    **Save as PDF…**.
 

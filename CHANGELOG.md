@@ -17,6 +17,9 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+
+## [0.11.0]
+
 - **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
   **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
   and **Voided Transactions** are in the report list. Like the other detail reports, each can be
@@ -49,6 +52,16 @@ people using LocalBooks.
   entered. In Preferences, Enter now saves the box and moves to the next one.
 - **Recent companies in the order you opened them.** The No Company Open screen shows when you last
   opened each company file, newest first, instead of when the file last changed.
+- **A toolbar on every transaction form.** Invoices, sales receipts, estimates, credit memos,
+  bills, checks and expenses, vendor credits, purchase orders, deposits, transfers, journal
+  entries and Receive Payment have a row of large buttons across the top: **Find**, **New**,
+  **Save**, **Void**, **Print ▾**, **Email ▾**, **Attach File** and **Memorize**, showing only what
+  each form can do. On an invoice, **Previous** and **Next** step through your invoices, and
+  **Print ▾ › Post and print…** posts and prints in one step.
+- **Payment method tiles.** Receive Payment and sales receipts show how you were paid as large
+  tiles (**Cash**, **Check**, **Card**, **Bank / ACH**, and **More** for Wire and Other) instead of
+  a drop-down. Receive Payment also shows the customer's balance at the top right and has an
+  **Auto Apply** button.
 - **The sidebar says where the company file is.** Its footer ends in **local**, **network** or
   **cloud** (a Dropbox, iCloud or other synced folder), instead of always saying offline.
 
