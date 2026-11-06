@@ -67,7 +67,9 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
   const { side, records } = sides[sideIndex];
   const isDeposit = side === 'DEPOSIT';
   const split = splits ? summarizeSplits(splits) : null;
-  const amountCents = split ? split.total : parseMoneyToCents(amounts[sideIndex]);
+  // What the split lines add up to as typed, including lines still waiting for an account.
+  const typedTotal = splits ? splits.reduce((sum, r) => sum + Math.max(parseMoneyToCents(r.amount) ?? 0, 0), 0) : 0;
+  const amountCents = split ? typedTotal : parseMoneyToCents(amounts[sideIndex]);
   // What still keeps the row from being recorded, or null when it is complete.
   const missing = !/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')
     ? 'a date'
@@ -136,8 +138,8 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
   };
   const closeSplits = () => {
     // Back to one line: keep the first account and the total.
-    setOtherId(split?.lines[0]?.accountId ?? otherId);
-    const total = split?.total ?? 0;
+    setOtherId(splits.find((r) => r.accountId !== null)?.accountId ?? otherId);
+    const total = typedTotal;
     setAmounts(sideIndex === 0 ? [total ? centsToInput(total) : '', ''] : ['', total ? centsToInput(total) : '']);
     setSplits(null);
   };
@@ -215,7 +217,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
             <input
               className="qb-input num w-[104px]"
               inputMode="decimal"
-              value={splits ? (index === sideIndex && split.total ? centsToInput(split.total) : '') : amounts[index]}
+              value={splits ? (index === sideIndex && typedTotal ? centsToInput(typedTotal) : '') : amounts[index]}
               onChange={(e) => typeAmount(index, e.target.value)}
               readOnly={Boolean(splits)}
               onFocus={() => splits && setSideIndex(index)}

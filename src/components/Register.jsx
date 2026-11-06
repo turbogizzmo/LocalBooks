@@ -231,7 +231,7 @@ export default function Register({ accounts, intent }) {
   // QuickReport (Ctrl+Q): this account's transactions for the register's dates. Transaction
   // History (Ctrl+H) and Journal (Ctrl+Y): the selected row's transaction.
   const selectedRow = data?.rows.find((r) => r.journalEntryId === selected) ?? null;
-  const rowLabel = (r) => `${SOURCE_LABEL[r.sourceType] ?? r.sourceType} #${r.entryNumber}`;
+  const rowLabel = (r) => `${SOURCE_LABEL[r.sourceType] ?? r.sourceType} #${r.num ?? r.entryNumber}`;
   const openReport = ([view, action, target]) => openChild(view, action, target, { forceNew: true });
   const runQuickReport = () => account && openReport(quickReport({ kind: 'account', id: account.id, name: account.name, startDate: start, endDate: end }));
   const runJournal = (r) => openReport(transactionJournal({ journalEntryId: r.journalEntryId, label: rowLabel(r) }));
