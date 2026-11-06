@@ -69,7 +69,8 @@ export async function goTo(label) {
 
 /** The Settings tabs on show, in order. */
 export async function settingsTabs() {
-  return $$('[role="tablist"] [role="tab"]').map((tab) => tab.getText());
+  // Settings' own tabs, not the My / Company Preferences tabs inside Preferences.
+  return $$('[role="tablist"][aria-label="Settings"] [role="tab"]').map((tab) => tab.getText());
 }
 
 /**

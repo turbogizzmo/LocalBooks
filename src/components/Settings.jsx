@@ -550,7 +550,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      <div className="flex max-w-full flex-none gap-px self-start overflow-x-auto rounded-xs border border-qb-border-strong text-sm scrollbar-thin" role="tablist">
+      <div className="flex max-w-full flex-none gap-px self-start overflow-x-auto rounded-xs border border-qb-border-strong text-sm scrollbar-thin" role="tablist" aria-label="Settings">
         {tabs.map(([id, label]) => (
           <button
             key={id}
