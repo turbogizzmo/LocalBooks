@@ -26,6 +26,10 @@ people using LocalBooks.
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
   too.
+- **Add a new customer or item right from a sale.** The Customer box on invoices, sales receipts,
+  estimates and credit memos works the same way, with **Add as a new customer**. The
+  Product/Service column ends in **＋ Add new item…**, which adds the product or service and fills
+  in the line.
 - **See all of a vendor's or customer's transactions.** Click a name in the Vendors or Customers
   list and its bills, checks, invoices and payments show underneath, newest first, with a total.
   Double-click one to open it.
