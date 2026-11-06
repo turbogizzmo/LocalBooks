@@ -13,6 +13,10 @@ people using LocalBooks.
   customer or vendor and sets the due date; Receive Payments and Pay Bills show the discount
   offered and its last day. A customer message picked on an invoice, sales receipt or estimate
   prints on it. The Terms and Payment method boxes end in **＋ Add new…**.
+- **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
+  **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
+  and **Voided Transactions** are in the report list. Like the other detail reports, each can be
+  customized, saved, exported and printed, and a click on a line opens its transaction.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

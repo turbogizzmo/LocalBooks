@@ -235,6 +235,8 @@ pub struct Filters {
     pub exclude_voided: bool,
     /// Only journal entries marked as adjusting entries.
     pub adjusting_only: bool,
+    /// Only voided transactions and the entries that void them (the Voided Transactions report).
+    pub voided_only: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -699,10 +701,14 @@ impl LineFilter<'_> {
                 return false;
             }
         }
-        if f.exclude_voided && (l.is_voided || l.is_reversal) {
+        // The Voided Transactions report's own filter wins over "leave out voided" ticked in Customize.
+        if f.exclude_voided && !f.voided_only && (l.is_voided || l.is_reversal) {
             return false;
         }
         if f.adjusting_only && !l.is_adjusting {
+            return false;
+        }
+        if f.voided_only && !(l.is_voided || l.is_reversal) {
             return false;
         }
         true
@@ -1194,8 +1200,22 @@ pub fn presets() -> Vec<Preset> {
         sign: Sign::Debit,
         ..ledger(&[Type, Date, Num, Name, Memo, Account, Class, Amount], Some(GroupBy::Transaction), Filters { transaction_types: types(codes), ..Filters::default() })
     };
+    let by_month = |s: ReportSettings| ReportSettings { column_by: Some(Period::Month), ..summary(s) };
+    let names_list = |kind: NameKind| ReportSettings {
+        per_transaction: true,
+        ..ledger(&[Type, Date, Num, Memo, Account, Split, Amount], Some(GroupBy::Name), Filters { name_kind: Some(kind), ..Filters::default() })
+    };
     let purchases_by_vendor = ReportSettings { group_by: Some(GroupBy::Name), ..items(&purchases, true, &[Type, Date, Num, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail) };
     vec![
+        // Credits minus debits, so income is positive, expenses negative and the total is net income.
+        preset(
+            "pl-by-month",
+            "Profit & Loss by Month",
+            "Business overview",
+            range,
+            "fiscalYearToDate",
+            ReportSettings { sign: Sign::Credit, ..by_month(ledger(&[], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))) },
+        ),
         preset("pl-detail", "Profit & Loss Detail", "Business overview", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Name, Memo, Class, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))),
         preset(
             "bs-detail",
@@ -1209,6 +1229,7 @@ pub fn presets() -> Vec<Preset> {
         preset("open-invoices", "Open Invoices", "Who owes you", as_of, "today", ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_RECEIVABLE", &["INVOICE", "CREDIT_MEMO"]))),
         preset("customer-balance-summary", "Customer Balance Summary", "Who owes you", as_of, "today", summary(customer_balance.clone())),
         preset("customer-balance-detail", "Customer Balance Detail", "Who owes you", as_of, "today", customer_balance),
+        preset("transaction-list-customer", "Transaction List by Customer", "Who owes you", range, "fiscalYearToDate", names_list(NameKind::Customer)),
         preset("sales-customer-detail", "Sales by Customer Detail", "Sales and customers", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Memo, Item, Qty, Rate, Account, Amount, Balance], Some(GroupBy::Name), classes(&["INCOME"]))),
         preset("sales-product-detail", "Sales by Product/Service Detail", "Sales and customers", range, "fiscalYearToDate", items(&sales, false, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail)),
         preset("income-customer-summary", "Income by Customer Summary", "Sales and customers", range, "fiscalYearToDate", summary(income_by_customer.clone())),
@@ -1217,6 +1238,8 @@ pub fn presets() -> Vec<Preset> {
         preset("unpaid-bills", "Unpaid Bills", "What you owe", as_of, "today", ledger(&[Type, Date, Num, Memo, DueDate, Aging, OpenBalance], Some(GroupBy::Name), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"]))),
         preset("vendor-balance-summary", "Vendor Balance Summary", "What you owe", as_of, "today", summary(vendor_balance.clone())),
         preset("vendor-balance-detail", "Vendor Balance Detail", "What you owe", as_of, "today", vendor_balance),
+        preset("transaction-list-vendor", "Transaction List by Vendor", "What you owe", range, "fiscalYearToDate", names_list(NameKind::Vendor)),
+        preset("expenses-vendor-month", "Expenses by Vendor by Month", "Expenses and vendors", range, "fiscalYearToDate", by_month(ledger(&[], Some(GroupBy::Name), Filters { exclude_voided: true, ..classes(&["EXPENSE"]) }))),
         preset("expenses-vendor-detail", "Expenses by Vendor Detail", "Expenses and vendors", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Memo, Account, Class, Amount, Balance], Some(GroupBy::Name), classes(&["EXPENSE"]))),
         preset("purchases-vendor-summary", "Purchases by Vendor Summary", "Expenses and vendors", range, "fiscalYearToDate", summary(purchases_by_vendor.clone())),
         preset("purchases-vendor-detail", "Purchases by Vendor Detail", "Expenses and vendors", range, "fiscalYearToDate", purchases_by_vendor),
@@ -1246,6 +1269,15 @@ pub fn presets() -> Vec<Preset> {
             range,
             "thisMonth",
             ReportSettings { per_transaction: true, ..ledger(&[Type, Date, Num, Name, Memo, Account, Split, Amount], None, Filters::default()) },
+        ),
+        preset("transaction-detail-account", "Transaction Detail by Account", ACCOUNTANT, range, "thisMonth", ledger(&[Type, Date, Num, Name, Memo, Class, Split, Debit, Credit, Balance], Some(GroupBy::Account), Filters::default())),
+        preset(
+            "voided-transactions",
+            "Voided Transactions",
+            ACCOUNTANT,
+            range,
+            "fiscalYearToDate",
+            ReportSettings { per_transaction: true, ..ledger(&[Type, Date, Num, Name, Memo, Account, Amount], None, Filters { voided_only: true, ..Filters::default() }) },
         ),
         preset("journal", "Journal", ACCOUNTANT, range, "thisMonth", ledger(&[Type, Date, Num, Name, Memo, Account, Debit, Credit], Some(GroupBy::Transaction), Filters::default())),
         preset(
