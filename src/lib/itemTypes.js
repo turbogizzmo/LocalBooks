@@ -51,6 +51,27 @@ export function layOut(items, formLines = []) {
         linesCents -= off;
         if (f.isTaxable) taxableCents -= off;
         amountCents = -off;
+      } else if (f.kind === 'CHARGE') {
+        const above = base;
+        base = null;
+        if (above === null || above <= 0) {
+          error = 'CHARGE_NEEDS_BASE';
+          break;
+        }
+        const ppm = f.percentPpm ?? null;
+        if (ppm === null || ppm < 1 || ppm > 1_000_000) {
+          error = 'BAD_CHARGE_PERCENT';
+          break;
+        }
+        const on = mulDivRound(above, ppm, 1_000_000) ?? 0;
+        if (on < 1) {
+          error = 'CHARGE_ROUNDS_TO_ZERO';
+          break;
+        }
+        sinceSubtotal += on;
+        linesCents += on;
+        if (f.isTaxable) taxableCents += on;
+        amountCents = on;
       }
       rows.push({ number, form: index, amountCents });
     }
@@ -105,6 +126,9 @@ export function layoutMessage(code) {
       BAD_DISCOUNT_AMOUNT: 'Enter each discount as an amount above zero or a percentage such as 10%.',
       DISCOUNT_ROUNDS_TO_ZERO: 'A percentage discount rounds to 0.00; use a larger percentage or an amount.',
       DISCOUNT_TOO_LARGE: 'A discount is more than the line above it.',
+      CHARGE_NEEDS_BASE: 'A percent charge must come right after an item or a subtotal, and that line must be above zero.',
+      BAD_CHARGE_PERCENT: 'Enter each percent charge as a percentage such as 3%.',
+      CHARGE_ROUNDS_TO_ZERO: 'A percent charge rounds to 0.00; use a larger percentage or a fixed charge.',
       TAXABLE_NEGATIVE: 'The taxable discounts are more than the taxable lines; untick Tax on a discount.',
     }[code] ?? 'The lines don’t add up; check the subtotals and discounts.'
   );

@@ -161,6 +161,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &crate::item_types::charge_rows(form, &layout), tax.is_some()).await?;
     crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
@@ -196,26 +197,33 @@ pub async fn convert_to_invoice(
         let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
             sqlx::query_as("SELECT tax_rate_id, discount_cents FROM estimates WHERE id = ?1").bind(estimate_id).fetch_one(&mut *tx).await.map_err(db_err)?;
-        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool, i64)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, line_number
+        type Row = (String, i64, i64, i64, Option<i64>, Option<i64>, bool, i64, Option<i64>);
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, line_number, percent_ppm
              FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
-        // Subtotals and the other form lines come over in their places.
+        // Subtotals, discounts and percent charges come over in their places; a percent charge is
+        // worked out again on the invoice.
+        let (charges, lines): (Vec<Row>, Vec<Row>) = rows.into_iter().partition(|r| r.8.is_some());
         let numbers: Vec<i64> = lines.iter().map(|l| l.7).collect();
         let stored = crate::item_types::form_lines_of(&mut *tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+        let mut placed: Vec<(i64, crate::item_types::FormLineInput)> =
+            stored.iter().map(|v| v.line_number).zip(crate::item_types::inputs_of(&stored, &numbers)).collect();
+        placed.extend(charges.iter().map(|c| (c.7, crate::item_types::charge_input(c.7, &c.0, c.8.unwrap_or(0), c.3, c.4, c.5, c.6, &numbers))));
+        placed.sort_by_key(|(n, _)| *n);
         let mut details = carried.clone();
-        details.form_lines = crate::item_types::inputs_of(&stored, &numbers);
+        details.form_lines = placed.into_iter().map(|(_, f)| f).collect();
         let invoice = InvoiceInput {
             customer_name,
             issue_date,
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _)| InvoiceLineInput {
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
                     rate_cents,
@@ -255,6 +263,8 @@ pub async fn convert_to_invoice(
 #[serde(rename_all = "camelCase")]
 pub struct EstimateLineView {
     pub line_number: i64,
+    /// Set on a percent charge: its percent of the line above.
+    pub percent_ppm: Option<i64>,
     pub product_service_id: Option<i64>,
     pub description: String,
     pub quantity_e4: i64,
@@ -277,7 +287,7 @@ pub struct EstimateDetail {
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
     let estimate = get_estimate(pool, estimate_id).await?;
     let lines = sqlx::query_as(
-        "SELECT line_number, product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
+        "SELECT line_number, percent_ppm, product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
          FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
     )
     .bind(estimate_id)

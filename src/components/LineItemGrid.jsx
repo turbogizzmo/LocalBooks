@@ -12,10 +12,10 @@ const NEW_ITEM = '__new';
 /** The item column's fixed Subtotal entry: a subtotal is a line kind, not an item to set up. */
 const SUBTOTAL = '__subtotal';
 
-/** `kind` is ITEM (a product, service or charge), SUBTOTAL or DISCOUNT. */
+/** `kind` is ITEM (a product, service or fixed charge), SUBTOTAL, DISCOUNT or CHARGE (a percent charge). */
 export const blankLine = (accountId) => ({ key: nextKey++, kind: 'ITEM', productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
-/** True for a line that is not an item: a subtotal or a discount. */
+/** True for a line that is not a plain item: a subtotal, a discount or a percent charge. */
 export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
 
 /**
@@ -25,7 +25,17 @@ export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
 export function linesFromDocument(items, formLines, defaultAccountId) {
   return [
     ...documentOrder(items, formLines).map(({ item, form }) =>
-      form
+      item?.percentPpm
+        ? {
+            ...blankLine(item.incomeAccountId),
+            kind: 'CHARGE',
+            productId: item.productServiceId,
+            classId: item.classId ?? null,
+            isTaxable: Boolean(item.isTaxable),
+            description: item.description,
+            rate: percentText(item.percentPpm),
+          }
+        : form
         ? {
             ...blankLine(form.accountId ?? null),
             kind: form.kind,
@@ -52,6 +62,10 @@ export function linesFromDocument(items, formLines, defaultAccountId) {
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
   if (line.kind === 'SUBTOTAL') return { blank: false, form: true, amount: null, errors: {} };
+  if (line.kind === 'CHARGE') {
+    const percentPpm = parsePercentPpm(line.rate);
+    return { blank: false, form: true, amount: null, percentPpm, errors: { account: line.accountId === null, rate: percentPpm === null } };
+  }
   if (line.kind === 'DISCOUNT') {
     // An amount ("5.00") or a percentage of the line above ("10%").
     const text = line.rate.trim();
@@ -106,7 +120,18 @@ export function summarizeLines(lines) {
               classId: line.classId ?? null,
               isTaxable: Boolean(line.isTaxable),
             }
-          : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
+          : line.kind === 'CHARGE'
+            ? {
+                afterLines: itemsBefore,
+                kind: 'CHARGE',
+                description: line.description.trim(),
+                productServiceId: line.productId,
+                percentPpm: st.percentPpm,
+                accountId: line.accountId,
+                classId: line.classId ?? null,
+                isTaxable: Boolean(line.isTaxable),
+              }
+            : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
       );
       formIndex.push(i);
     } else if (!evaluated[i].blank) itemsBefore += 1;
@@ -214,9 +239,9 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     if (productId === SUBTOTAL) return update(index, { kind: 'SUBTOTAL', productId: null, description: 'Subtotal', qty: '', rate: '', isTaxable: false });
     const product = known ?? products.find((p) => p.id === productId);
     if (!product) return update(index, { kind: 'ITEM', productId: null, ...(isFormLine(line) ? { description: '', rate: '' } : {}) });
-    if (product.itemType === 'DISCOUNT') {
+    if (product.itemType === 'DISCOUNT' || (product.itemType === 'OTHER_CHARGE' && product.percentPpm)) {
       return update(index, {
-        kind: 'DISCOUNT',
+        kind: product.itemType === 'DISCOUNT' ? 'DISCOUNT' : 'CHARGE',
         productId,
         description: product.description ?? product.name,
         accountId: product.incomeAccountId,
@@ -312,7 +337,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
-                        {products.filter((p) => p.isActive && (itemTypes || (p.itemType ?? 'ITEM') !== 'DISCOUNT')).map((p) => (
+                        {products.filter((p) => p.isActive && (itemTypes || !(p.itemType === 'DISCOUNT' || p.percentPpm))).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>
@@ -395,7 +420,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                           className="num"
                           value={line.rate}
                           onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
-                          placeholder={formLine ? '0.00 or %' : undefined}
+                          placeholder={line.kind === 'DISCOUNT' ? '0.00 or %' : line.kind === 'CHARGE' ? '%' : undefined}
                           onKeyDown={(e) => onKeyDown(e, i)}
                           aria-invalid={bad('rate')}
                         />

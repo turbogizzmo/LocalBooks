@@ -253,6 +253,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
     let form = &input.details.form_lines;
     let layout = crate::item_types::lay_out(&amounts, form, "INV")?;
     crate::item_types::check_form_lines(tx, form, &layout, "INV").await?;
+    let charges = crate::item_types::charge_rows(form, &layout);
     let numbers = layout.item_numbers();
     let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
@@ -271,6 +272,13 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         match credits.iter_mut().find(|(k, _)| *k == key) {
             Some((_, sum)) => *sum += amount,
             None => credits.push((key, amount)),
+        }
+    }
+    for c in &charges {
+        let key = (c.account_id, c.class_id);
+        match credits.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, sum)) => *sum += c.amount_cents,
+            None => credits.push((key, c.amount_cents)),
         }
     }
     let ar_account = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
@@ -356,6 +364,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         .await
         .map_err(db_err)?;
     }
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &charges, tax.is_some()).await?;
     crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details_carrying(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details, carried).await?;
 
@@ -582,6 +591,8 @@ pub struct InvoiceItemView {
     pub product_service_id: Option<i64>,
     pub class_id: Option<i64>,
     pub is_taxable: bool,
+    /// Set on a percent charge: its percent of the line above.
+    pub percent_ppm: Option<i64>,
 }
 
 /// Everything needed to print an invoice.
@@ -600,7 +611,7 @@ pub struct InvoiceDetail {
 pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceDetail, String> {
     let invoice = get_summary(pool, invoice_id).await?;
     let items = sqlx::query_as::<_, InvoiceItemView>(
-        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable
+        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, percent_ppm
          FROM invoice_items WHERE invoice_id = ?1 ORDER BY line_number",
     )
     .bind(invoice_id)

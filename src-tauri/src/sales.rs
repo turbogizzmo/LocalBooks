@@ -395,6 +395,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let form = &input.details.form_lines;
     let layout = crate::item_types::lay_out(&amounts, form, "SR")?;
     crate::item_types::check_form_lines(tx, form, &layout, "SR").await?;
+    let charges = crate::item_types::charge_rows(form, &layout);
     let numbers = layout.item_numbers();
     let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
@@ -467,7 +468,15 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
             None => credits.push((key, amount)),
         }
     }
+    for c in &charges {
+        let key = (c.account_id, c.class_id);
+        match credits.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, sum)) => *sum += c.amount_cents,
+            None => credits.push((key, c.amount_cents)),
+        }
+    }
 
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &charges, tax.is_some()).await?;
     crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &input.details).await?;
 

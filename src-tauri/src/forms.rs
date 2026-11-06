@@ -665,7 +665,8 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         .iter()
         .zip(details)
         .map(|(i, details)| {
-            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
+            let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
+            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details })
         })
         .collect();
     let lines = with_form_lines(items, &detail.form_lines, &money);
@@ -713,8 +714,8 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
@@ -768,8 +769,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -813,22 +814,46 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
-async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
+async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
     let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
     Ok(rows
         .into_iter()
         .zip(details)
-        .map(|((description, qty, rate, amount, _, number), details)| (number, FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details }))
+        .map(|((description, qty, rate, amount, _, number, percent), details)| {
+            // A percent charge shows its percent in the rate column.
+            let rate = percent.map_or_else(|| money(rate), crate::item_types::percent_text);
+            (number, FormLine { description, quantity: format_quantity(qty), rate, amount: money(amount), details })
+        })
         .collect())
 }
 
 /// Item lines (by line number) and the document's subtotals and other form lines, in line order,
 /// as the printed form shows them.
+///
+/// A group heading prints its description; a group set to print as one line prints its
+/// description, quantity and total instead, and its items are left off.
 fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String) -> Vec<FormLine> {
-    let mut numbered = items;
+    // Item lines a one-line group hides: the `group_line_count` item lines after its heading.
+    let mut hidden: Vec<i64> = Vec::new();
+    for f in form.iter().filter(|f| f.kind == "GROUP" && f.print_items == Some(false)) {
+        let count = f.group_line_count.unwrap_or(0) as usize;
+        hidden.extend(items.iter().map(|(n, _)| *n).filter(|n| *n > f.line_number).take(count));
+    }
+    let mut numbered: Vec<(i64, FormLine)> = items.into_iter().filter(|(n, _)| !hidden.contains(n)).collect();
     for f in form {
-        let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
-        let line = FormLine { description: f.description.clone(), quantity: String::new(), rate, amount: money(f.amount_cents), details: Vec::new() };
+        let line = if f.kind == "GROUP" {
+            let one_line = f.print_items == Some(false);
+            FormLine {
+                description: f.description.clone(),
+                quantity: if one_line { f.group_quantity_e4.map(format_quantity).unwrap_or_default() } else { String::new() },
+                rate: String::new(),
+                amount: if one_line { money(f.amount_cents) } else { String::new() },
+                details: Vec::new(),
+            }
+        } else {
+            let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
+            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount: money(f.amount_cents), details: Vec::new() }
+        };
         numbered.push((f.line_number, line));
     }
     numbered.sort_by_key(|(n, _)| *n);

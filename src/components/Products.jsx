@@ -19,11 +19,12 @@ const incomeOnly = (a) => a.classification === 'INCOME';
 /** The kinds of item, as the Type box offers them (see docs/plans/item-types.md). */
 export const ITEM_TYPES = [
   { value: 'ITEM', label: 'Service or part' },
+  { value: 'OTHER_CHARGE', label: 'Other charge' },
   { value: 'DISCOUNT', label: 'Discount' },
 ];
 
 /**
- * The rate box read for an item type: a discount (later, a charge) takes an amount or a
+ * The rate box read for an item type: a discount or an other charge takes an amount or a
  * percentage such as 10%. Returns { rateCents, kind } or { error }.
  */
 export function readRate(itemType, text) {

@@ -425,3 +425,79 @@ fn percents_print_without_trailing_zeros() {
     assert_eq!(percent_text(82_500), "8.25%");
     assert_eq!(percent_text(1), "0.0001%");
 }
+
+// ------------------------------------------------------------------------------------------------
+// Other charges
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
+    let pool = test_pool().await;
+    let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
+    let shipping = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Shipping".into(), description: None, rate_cents: 1_500, income_account_id: services, is_taxable: false },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None },
+    )
+    .await
+    .unwrap();
+    let handling = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Handling 3%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: false },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000) },
+    )
+    .await
+    .unwrap();
+    let est_line = |rate_cents, product| SalesLineInput { product_service_id: product, description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false };
+    // 123.45 of work, 3% handling on it (3.70), a fixed 15.00 shipping line, then a subtotal.
+    let estimate = crate::estimates::create_estimate(
+        &pool,
+        crate::estimates::EstimateInput {
+            customer_name: "Initech".into(),
+            estimate_date: d(1),
+            expiration_date: None,
+            memo: None,
+            lines: vec![est_line(12_345, None), est_line(1_500, Some(shipping.id))],
+            tax_rate_id: None,
+            discount_cents: 0,
+            details: with_form(vec![
+                FormLineInput { product_service_id: Some(handling.id), description: "Handling".into(), ..FormLineInput::charge(1, services, 30_000, false) },
+                FormLineInput::subtotal(2),
+            ]),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(estimate.total_cents, 12_345 + 370 + 1_500);
+    let detail = crate::estimates::estimate_detail(&pool, estimate.id).await.unwrap();
+    let percents: Vec<(i64, Option<i64>, i64)> = detail.lines.iter().map(|l| (l.line_number, l.percent_ppm, l.rate_cents)).collect();
+    assert_eq!(percents, vec![(1, None, 12_345), (2, Some(30_000), 370), (3, None, 1_500)]);
+
+    let converted = crate::estimates::convert_to_invoice(&pool, estimate.id, d(5), d(30)).await.unwrap();
+    let inv = invoice_detail(&pool, converted.converted_to_invoice_id.unwrap()).await.unwrap();
+    assert_eq!(inv.invoice.total_cents, 14_215);
+    assert_eq!(inv.items.iter().map(|i| (i.line_number, i.percent_ppm)).collect::<Vec<_>>(), vec![(1, None), (2, Some(30_000)), (3, None)]);
+    assert_eq!(inv.form_lines.iter().map(|f| (f.line_number, f.amount_cents)).collect::<Vec<_>>(), vec![(4, 14_215)]);
+    assert_posts(&pool, inv.invoice.journal_entry_id.unwrap(), ar, 14_215).await;
+}
+
+#[tokio::test]
+async fn a_percent_charge_must_use_a_charge_item() {
+    let pool = test_pool().await;
+    let services = account_id(&pool, "4100").await;
+    let discounts = discounts_given(&pool).await;
+    let promo = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
+        crate::sales::ItemKind::discount(Some(10_000)),
+    )
+    .await
+    .unwrap();
+    let err = create_and_post_invoice(
+        &pool,
+        invoice(vec![line(services, 1_000, false)], vec![FormLineInput { product_service_id: Some(promo.id), ..FormLineInput::charge(1, services, 10_000, false) }], None, 0),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.starts_with("INV_NOT_A_CHARGE"), "{err}");
+}
