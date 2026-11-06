@@ -20,6 +20,7 @@ import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 import NameField from './NameField.jsx';
+import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 
 const TERMS = [
   { id: 'receipt', label: 'Due on receipt', days: 0 },
@@ -500,6 +501,11 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                       {inv.invoiceNumber}
                       {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
+                      {inv.toBePrinted && !inv.isVoided && (
+                        <span className="ml-1 rounded-xs bg-qb-green-tint px-1 text-2xs font-semibold text-qb-green-active" title="Waiting in File › Print Forms › Invoices">
+                          To print
+                        </span>
+                      )}
                       {attachments.clip(inv.journalEntryId)}
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
@@ -521,6 +527,16 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                         label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
+                          ...(inv.isVoided
+                            ? []
+                            : [
+                                {
+                                  label: inv.toBePrinted ? 'Remove from print queue' : 'Print later',
+                                  hint: inv.toBePrinted ? undefined : 'Queue it in File › Print Forms › Invoices',
+                                  onSelect: () =>
+                                    api.setToBePrinted('INVOICE', inv.id, !inv.toBePrinted).catch((err) => onNotice({ kind: 'error', text: errorText(err) })),
+                                },
+                              ]),
                           attachments.menuItem(inv.journalEntryId),
                           {
                             label: 'Edit…',
@@ -707,6 +723,7 @@ export default function Invoices({ accounts, intent }) {
 
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
+  const printLater = usePrintLater('INVOICE', !editing);
   const save = async (mode) => {
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
@@ -750,7 +767,9 @@ export default function Invoices({ accounts, intent }) {
         reset();
         return;
       }
-      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
+      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on);
+      if (fromEstimate && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
+      printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
       setNotice({
         kind: 'success',
@@ -758,7 +777,8 @@ export default function Invoices({ accounts, intent }) {
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
-            (queued ? ' Marked Email later.' : ''),
+            (queued ? ' Marked Email later.' : '') +
+            (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : ''),
       });
       reset();
     } catch (err) {
@@ -888,6 +908,7 @@ export default function Invoices({ accounts, intent }) {
                 Email later
               </label>
             )}
+            {!editing && <PrintLaterBox printLater={printLater} />}
             <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
               Cancel
             </button>

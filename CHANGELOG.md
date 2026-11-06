@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Print checks and invoices later, in a batch.** Tick **Print later** on Write Checks or on an
+  invoice and it waits in **File › Print Forms › Checks…** or **Invoices…**, marked *To print* in
+  the list. Print the batch from there: checks take numbers in order from the first number on your
+  check stock, and LocalBooks asks **Did they all print?** so only the ones that came out right
+  keep their numbers. The forms remember whether you last left Print later on.
+- **Record a bounced check.** **Banking › Record Bounced Check…** takes a deposited customer check
+  the bank returned: the invoice it paid opens again, the bank goes down by the check and the
+  bank's fee (posted to the expense account you choose), and a returned-check fee you charge the
+  customer goes on a new invoice. Voiding the bounced check puts it all back.
+- **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
+  starting at what the card owes. It posts as a transfer.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

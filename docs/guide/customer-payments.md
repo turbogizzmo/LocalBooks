@@ -38,6 +38,34 @@ statement. See [Bank deposits and transfers](deposits-and-transfers.md).
 > returns to Partial or Open. A payment that is already part of a bank deposit can't be voided
 > until the deposit is voided.
 
+## Record a bounced check
+
+When the bank returns a customer's check unpaid:
+
+1. Choose **Banking › Record Bounced Check…** (or **Banking › Bounced Checks**).
+2. Under **Check that bounced**, pick the payment. Only payments that reached the bank are listed,
+   whether they were deposited straight to the bank or in a deposit from Undeposited Funds. (A
+   payment still in Undeposited Funds never reached the bank: void it instead.)
+3. Enter the **Date it bounced**, the **Bank fee** the bank charged you and the expense account for
+   it, and, if you charge the customer for the returned check, the **Customer fee** and the income
+   account for it.
+4. Click **Record Bounced Check**.
+
+LocalBooks posts one entry: Accounts Receivable goes back up by the check, and the bank goes down
+by the check plus the bank's fee (the fee goes to its expense account). The invoice the check paid
+opens again, so it shows in A/R aging and on statements from the bounce date, and the customer can
+pay it again. The customer fee goes on a new invoice, *Returned check charge*.
+
+Money from a deposit's **other funds** lines can bounce too: it goes back to the account the
+deposit credited.
+
+To undo it, open the bounced check's **Actions** menu on the Bounced Checks screen and choose
+**Void bounced check**: the bank and the fee go back, the payment counts toward the invoice again,
+and the fee invoice is voided (refused if the customer has already paid it). While a bounced check
+stands, its payment, the invoice and the deposit it was in can't be voided.
+
+Bounced sales receipts and foreign-currency payments aren't handled yet.
+
 ## Charge interest on overdue invoices (finance charges)
 
 Finance charges bill customers interest on invoices they pay late. Each charge is an invoice of its

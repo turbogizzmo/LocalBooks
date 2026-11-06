@@ -495,6 +495,8 @@ pub struct ExpenseView {
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
     pub home_total_cents: i64,
+    /// Waiting in File › Print Forms › Checks (a queued check has no number yet).
+    pub to_be_printed: bool,
 }
 
 const EXPENSE_SELECT: &str = "
@@ -504,7 +506,7 @@ const EXPENSE_SELECT: &str = "
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
             FROM expense_lines WHERE expense_id = x.id) AS category_account_id,
-           x.journal_entry_id, x.is_voided
+           x.journal_entry_id, x.is_voided, x.to_be_printed
     FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
 
 /// Records an expense or check (Dr each split account / Cr the payment account) or a card credit

@@ -165,6 +165,7 @@ async fn compute(conn: &mut sqlx::SqliteConnection, as_of: NaiveDate, settings: 
                 i.total_cents
                   - COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p
                               WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)
+                  + COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date <= ?1), 0)
                   - COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a
                               WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date <= ?1), 0) AS balance,
                 EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_fc,

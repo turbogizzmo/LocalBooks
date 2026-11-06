@@ -94,6 +94,8 @@ pub struct InvoiceSummary {
     pub is_finance_charge: bool,
     /// The rep's initials, when the invoice has one.
     pub sales_rep: Option<String>,
+    /// Waiting in File › Print Forms › Invoices.
+    pub to_be_printed: bool,
 }
 
 const SUMMARY_SELECT: &str = "
@@ -107,7 +109,8 @@ const SUMMARY_SELECT: &str = "
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
            EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge,
-           (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep
+           (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep,
+           i.to_be_printed
     FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN tax_rates t ON t.id = i.tax_rate_id";
 
