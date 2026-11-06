@@ -555,3 +555,36 @@ async fn presets_on_a_company_file() {
         }
     }
 }
+
+#[tokio::test]
+async fn added_presets_tie_out() {
+    let pool = company().await;
+    let preset = |id: &str| year(custom_reports::presets().into_iter().find(|p| p.id == id).unwrap_or_else(|| panic!("preset {id}")).settings);
+
+    // Voided Transactions has exactly the transactions that "leave out voided" drops from the list
+    // by date: the voided entries and the entries that void them.
+    let voided = run(&pool, &preset("voided-transactions")).await;
+    let all = run(&pool, &preset("transaction-list-date")).await;
+    let mut kept = preset("transaction-list-date");
+    kept.filters.exclude_voided = true;
+    let kept = run(&pool, &kept).await;
+    assert!(voided.line_count >= 2, "the fixture voids an expense");
+    assert_eq!(voided.line_count, all.line_count - kept.line_count);
+    let mut ticked = preset("voided-transactions");
+    ticked.filters.exclude_voided = true;
+    assert_eq!(run(&pool, &ticked).await.line_count, voided.line_count, "leave out voided doesn't empty the report");
+
+    // Profit & Loss by Month: the months add up to the total column, and the total is the year's
+    // net income, as on the Profit & Loss Detail.
+    let by_month = run(&pool, &preset("pl-by-month")).await;
+    let total_row = by_month.rows.last().unwrap();
+    assert_eq!(text(&total_row.cells[0]), "TOTAL");
+    let months: i64 = total_row.cells[1..total_row.cells.len() - 1].iter().map(cents).sum();
+    assert_eq!(months, cents(total_row.cells.last().unwrap()));
+
+    // The lists by name keep only transactions that name a customer (or a vendor), one row each.
+    let by_customer = run(&pool, &preset("transaction-list-customer")).await;
+    let by_vendor = run(&pool, &preset("transaction-list-vendor")).await;
+    assert!(by_customer.line_count > 0 && by_vendor.line_count > 0);
+    assert!(by_customer.line_count + by_vendor.line_count <= all.line_count);
+}

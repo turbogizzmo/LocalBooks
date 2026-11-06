@@ -13,6 +13,10 @@ people using LocalBooks.
   a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
   print as a single line. They print in place, come back when you edit, and carry from an estimate
   to its invoice; discount items show in Sales by Product/Service.
+- **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
+  **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
+  and **Voided Transactions** are in the report list. Like the other detail reports, each can be
+  customized, saved, exported and printed, and a click on a line opens its transaction.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

@@ -1,0 +1,102 @@
+---
+source: src/harness/report_presets.rs
+expression: "render(preset.title, &report)"
+---
+Transaction List by Vendor, 2025-01-01 to 2025-12-31
+
+                               Type                      Date          Num                       Memo                      Account                   Split                            Amount
+First Harbor Bank
+                               Expense                   2025-01-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-02-28                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-03-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-04-30                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-05-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-06-30                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-07-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-08-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-09-30                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-10-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-11-30                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+                               Expense                   2025-12-31                              Monthly service fee       Bank Charges & Fees       Checking                          15.00
+Total First Harbor Bank                                                                                                                                                               180.00
+Harbor Power & Light
+                               Expense                   2025-01-12                              Electricity               Utilities                 Credit Card                      191.50
+                               Expense                   2025-02-12                              Electricity               Utilities                 Credit Card                      203.00
+                               Expense                   2025-03-12                              Electricity               Utilities                 Credit Card                      214.50
+                               Expense                   2025-04-12                              Electricity               Utilities                 Credit Card                      180.00
+                               Expense                   2025-05-12                              Electricity               Utilities                 Credit Card                      191.50
+                               Expense                   2025-06-12                              Electricity               Utilities                 Credit Card                      203.00
+                               Expense                   2025-06-13                              Duplicate entry           Utilities                 Credit Card                      191.50
+                               Expense                   2025-07-12                              Electricity               Utilities                 Credit Card                      214.50
+                               Expense                   2025-08-12                              Electricity               Utilities                 Credit Card                      180.00
+                               Expense                   2025-09-12                              Electricity               Utilities                 Credit Card                      191.50
+                               Expense                   2025-10-12                              Electricity               Utilities                 Credit Card                      203.00
+                               Expense                   2025-11-12                              Electricity               Utilities                 Credit Card                      214.50
+                               Expense                   2025-12-12                              Electricity               Utilities                 Credit Card                      180.00
+Total Harbor Power & Lig                                                                                                                                                            2,558.50
+Jordan Reyes
+                               Check                     2025-02-18    1004                      Illustration              Contractors               Checking                         950.00
+                               Check                     2025-04-18    1007                      Illustration              Contractors               Checking                         950.00
+                               Check                     2025-06-18    1010                      Illustration              Contractors               Checking                         950.00
+                               Check                     2025-08-18    1013                      Illustration              Contractors               Checking                         950.00
+                               Check                     2025-10-18    1016                      Illustration              Contractors               Checking                         950.00
+                               Check                     2025-12-18    1019                      Illustration              Contractors               Checking                         950.00
+Total Jordan Reyes                                                                                                                                                                  5,700.00
+Lumen Media
+                               Bill                      2025-12-01    LM-88                     Bill #LM-88 - Lumen Medi  Advertising & Marketing   Accounts Payable (A/P)         1,500.00
+                               Bill Payment              2025-12-31                              Bill Payment - Lumen Med  Accounts Payable (A/P)    Credit Card                      375.00
+Total Lumen Media                                                                                                                                                                   1,875.00
+Northwind Software
+                               Bill                      2025-01-03    NW-01                     Bill #NW-01 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-01-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-02-03    NW-02                     Bill #NW-02 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-02-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-03-03    NW-03                     Bill #NW-03 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-03-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-04-03    NW-04                     Bill #NW-04 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-04-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-05-03    NW-05                     Bill #NW-05 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-05-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-06-03    NW-06                     Bill #NW-06 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-06-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-07-03    NW-07                     Bill #NW-07 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-07-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-08-03    NW-08                     Bill #NW-08 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-08-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-09-03    NW-09                     Bill #NW-09 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-09-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-10-03    NW-10                     Bill #NW-10 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-10-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-11-03    NW-11                     Bill #NW-11 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+                               Bill Payment              2025-11-28                              Bill Payment - Northwind  Accounts Payable (A/P)    Checking                         129.00
+                               Bill                      2025-12-03    NW-12                     Bill #NW-12 - Northwind   Software & Cloud Service  Accounts Payable (A/P)           129.00
+Total Northwind Software                                                                                                                                                            2,967.00
+Pacific Office Outfitter
+                               Check                     2025-01-08    1001                      Workstations and plotter  Equipment                 Checking                      18,750.00
+Total Pacific Office Out                                                                                                                                                           18,750.00
+Pinecrest Office Supply
+                               Bill                      2025-09-05    PC-4410                   Bill #PC-4410 - Pinecres  Office Supplies           -Split-                          942.50
+                               Bill Payment              2025-10-01                              Bill Payment - Pinecrest  Accounts Payable (A/P)    Checking                         400.00
+                               Bill                      2025-11-20    PC-4521                   Bill #PC-4521 - Pinecres  Office Supplies           Accounts Payable (A/P)           187.40
+Total Pinecrest Office S                                                                                                                                                            1,529.90
+Riverbend Properties
+                               Check                     2025-01-01    1002                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-02-01    1003                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-03-01    1005                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-04-01    1006                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-05-01    1008                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-06-01    1009                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-07-01    1011                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-08-01    1012                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-09-01    1014                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-10-01    1015                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-11-01    1017                      Studio rent               Rent & Lease              Checking                       2,400.00
+                               Check                     2025-12-01    1018                      Studio rent               Rent & Lease              Checking                       2,400.00
+Total Riverbend Properti                                                                                                                                                           28,800.00
+Riverside Print Shop
+                               Bill                      2025-11-10    RP-77                     Bill #RP-77 - Riverside   Office Supplies           Accounts Payable (A/P)           450.00
+                               Vendor Credit             2025-11-25    RP-C1                     Vendor credit #RP-C1 - R  Accounts Payable (A/P)    Office Supplies                   60.00
+Total Riverside Print Sh                                                                                                                                                              510.00
+TOTAL                                                                                                                                                                              62,870.40
+
+74 lines
