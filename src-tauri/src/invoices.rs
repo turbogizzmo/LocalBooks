@@ -252,6 +252,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         .collect::<Result<Vec<_>, String>>()?;
     let form = &input.details.form_lines;
     let layout = crate::item_types::lay_out(&amounts, form, "INV")?;
+    crate::item_types::check_form_lines(tx, form, &layout, "INV").await?;
     let numbers = layout.item_numbers();
     let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
@@ -275,6 +276,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
     let ar_account = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
     let mut lines = vec![JournalLine::debit(ar_account, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
+    lines.extend(crate::item_types::discount_debits(form, &layout));
     lines.extend(discount.and_then(|d| d.line()));
     lines.extend(tax.and_then(|t| t.line(false)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
@@ -354,7 +356,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         .await
         .map_err(db_err)?;
     }
-    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, form, &layout).await?;
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details_carrying(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details, carried).await?;
 
     lines.extend(cost.lines.iter().cloned());

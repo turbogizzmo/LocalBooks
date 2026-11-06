@@ -827,7 +827,8 @@ async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i6
 fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String) -> Vec<FormLine> {
     let mut numbered = items;
     for f in form {
-        let line = FormLine { description: f.description.clone(), quantity: String::new(), rate: String::new(), amount: money(f.amount_cents), details: Vec::new() };
+        let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
+        let line = FormLine { description: f.description.clone(), quantity: String::new(), rate, amount: money(f.amount_cents), details: Vec::new() };
         numbered.push((f.line_number, line));
     }
     numbered.sort_by_key(|(n, _)| *n);

@@ -4,7 +4,7 @@ import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './C
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
-import { documentOrder, layOut } from '../lib/itemTypes.js';
+import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
 
 let nextKey = 1;
 /** The item column's "Add new item…" entry. */
@@ -12,10 +12,10 @@ const NEW_ITEM = '__new';
 /** The item column's fixed Subtotal entry: a subtotal is a line kind, not an item to set up. */
 const SUBTOTAL = '__subtotal';
 
-/** `kind` is ITEM (a product, service or charge) or SUBTOTAL. */
+/** `kind` is ITEM (a product, service or charge), SUBTOTAL or DISCOUNT. */
 export const blankLine = (accountId) => ({ key: nextKey++, kind: 'ITEM', productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
-/** True for a line that is not an item: a subtotal. */
+/** True for a line that is not an item: a subtotal or a discount. */
 export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
 
 /**
@@ -26,7 +26,15 @@ export function linesFromDocument(items, formLines, defaultAccountId) {
   return [
     ...documentOrder(items, formLines).map(({ item, form }) =>
       form
-        ? { ...blankLine(null), kind: form.kind, description: form.description }
+        ? {
+            ...blankLine(form.accountId ?? null),
+            kind: form.kind,
+            description: form.description,
+            productId: form.productServiceId ?? null,
+            classId: form.classId ?? null,
+            isTaxable: Boolean(form.isTaxable),
+            rate: form.kind !== 'DISCOUNT' ? '' : form.percentPpm ? percentText(form.percentPpm) : centsToInput(-form.amountCents),
+          }
         : {
             ...blankLine(item.incomeAccountId),
             productId: item.productServiceId,
@@ -43,7 +51,15 @@ export function linesFromDocument(items, formLines, defaultAccountId) {
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
-  if (isFormLine(line)) return { blank: false, form: true, amount: null, errors: {} };
+  if (line.kind === 'SUBTOTAL') return { blank: false, form: true, amount: null, errors: {} };
+  if (line.kind === 'DISCOUNT') {
+    // An amount ("5.00") or a percentage of the line above ("10%").
+    const text = line.rate.trim();
+    const percentPpm = text.endsWith('%') ? parsePercentPpm(text) : null;
+    const amountCents = text.endsWith('%') ? null : parseMoneyToCents(text);
+    const badRate = text.endsWith('%') ? percentPpm === null : amountCents === null || amountCents <= 0;
+    return { blank: false, form: true, amount: null, percentPpm, amountCents, errors: { account: line.accountId === null, rate: badRate } };
+  }
   const blank = line.productId === null && line.description.trim() === '' && line.qty.trim() === '' && line.rate.trim() === '';
   if (blank) return { blank: true, amount: 0 };
   // Quantities may be fractional (up to 4 decimals) and are carried as integers scaled by 10,000.
@@ -67,14 +83,31 @@ export function evaluateLine(line) {
 export function summarizeLines(lines) {
   const evaluated = lines.map(evaluateLine);
   const filled = evaluated.filter((s) => !s.blank && !s.form);
-  const invalidCount = filled.filter((s) => s.amount === null || Object.values(s.errors).some(Boolean)).length;
+  const invalidCount =
+    filled.filter((s) => s.amount === null || Object.values(s.errors).some(Boolean)).length +
+    evaluated.filter((s) => s.form && Object.values(s.errors).some(Boolean)).length;
   const itemsTotal = filled.reduce((sum, s) => (s.amount !== null ? sum + s.amount : sum), 0);
   const formLines = [];
   const formIndex = [];
   let itemsBefore = 0;
   lines.forEach((line, i) => {
     if (evaluated[i].form) {
-      formLines.push({ afterLines: itemsBefore, kind: line.kind, description: line.description.trim() });
+      const st = evaluated[i];
+      formLines.push(
+        line.kind === 'DISCOUNT'
+          ? {
+              afterLines: itemsBefore,
+              kind: 'DISCOUNT',
+              description: line.description.trim(),
+              productServiceId: line.productId,
+              percentPpm: st.percentPpm,
+              amountCents: st.amountCents,
+              accountId: line.accountId,
+              classId: line.classId ?? null,
+              isTaxable: Boolean(line.isTaxable),
+            }
+          : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
+      );
       formIndex.push(i);
     } else if (!evaluated[i].blank) itemsBefore += 1;
   });
@@ -96,7 +129,7 @@ export function summarizeLines(lines) {
   for (const row of layout.rows ?? []) if (row.form !== undefined) amountOf[formIndex[row.form]] = row.amountCents;
   // Trailing subtotals with nothing after them are fine; a form with only subtotals has no items.
   const total = layout.error ? itemsTotal : layout.linesCents;
-  return { evaluated, filled, invalidCount, total, payload, formLines, amountOf };
+  return { evaluated, filled, invalidCount, total, payload, formLines, amountOf, layoutError: layout.error ?? null };
 }
 
 const incomeOnly = (a) => a.classification === 'INCOME';
@@ -180,7 +213,20 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     const line = lines[index];
     if (productId === SUBTOTAL) return update(index, { kind: 'SUBTOTAL', productId: null, description: 'Subtotal', qty: '', rate: '', isTaxable: false });
     const product = known ?? products.find((p) => p.id === productId);
-    if (!product) return update(index, { kind: 'ITEM', productId: null, ...(isFormLine(line) ? { description: '' } : {}) });
+    if (!product) return update(index, { kind: 'ITEM', productId: null, ...(isFormLine(line) ? { description: '', rate: '' } : {}) });
+    if (product.itemType === 'DISCOUNT') {
+      return update(index, {
+        kind: 'DISCOUNT',
+        productId,
+        description: product.description ?? product.name,
+        accountId: product.incomeAccountId,
+        isTaxable: Boolean(product.isTaxable),
+        qty: '',
+        rate: product.percentPpm ? percentText(product.percentPpm) : product.rateCents > 0 ? centsToInput(product.rateCents) : '',
+        levelId: null,
+        levelAuto: false,
+      });
+    }
     // A new item's own rate: it isn't in the price lists yet.
     const rate = known ? (product.rateCents > 0 ? centsToInput(product.rateCents) : null) : rateAt(productId, customerLevel);
     update(index, {
@@ -190,7 +236,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       accountId: product.incomeAccountId,
       isTaxable: Boolean(product.isTaxable),
       rate: rate ?? line.rate,
-      qty: line.qty.trim() === '' ? '1' : line.qty,
+      qty: line.qty.trim() === '' || isFormLine(line) ? '1' : line.qty,
       levelId: customerLevel,
       levelAuto: true,
       rateTyped: false,
@@ -266,7 +312,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
-                        {products.filter((p) => p.isActive).map((p) => (
+                        {products.filter((p) => p.isActive && (itemTypes || (p.itemType ?? 'ITEM') !== 'DISCOUNT')).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>
@@ -285,7 +331,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       placeholder="Description"
                     />
                   </td>
-                  {formLine ? (
+                  {line.kind === 'SUBTOTAL' ? (
                     <td colSpan={spareColumns} className="qb-grid-cell" />
                   ) : (
                     <>
@@ -315,7 +361,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                           />
                         </td>
                       )}
-                      <td className="qb-grid-cell-edit">
+                      {formLine ? <td className="qb-grid-cell" /> : <td className="qb-grid-cell-edit">
                         <input
                           data-col="qty"
                           inputMode="decimal"
@@ -325,8 +371,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                           onKeyDown={(e) => onKeyDown(e, i)}
                           aria-invalid={bad('qty')}
                         />
-                      </td>
-                      {withLevels && (
+                      </td>}
+                      {withLevels && (formLine ? <td className="qb-grid-cell" /> :
                         <td className="qb-grid-cell-edit">
                           <select
                             data-col="level"
@@ -349,6 +395,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                           className="num"
                           value={line.rate}
                           onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
+                          placeholder={formLine ? '0.00 or %' : undefined}
                           onKeyDown={(e) => onKeyDown(e, i)}
                           aria-invalid={bad('rate')}
                         />
@@ -360,13 +407,13 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                 <>
                   {withProducts && (
                     <td className="qb-grid-cell" {...cellProps('product')}>
-                      {formLine ? 'Subtotal' : (product?.name ?? '')}
+                      {line.kind === 'SUBTOTAL' ? 'Subtotal' : (product?.name ?? '')}
                     </td>
                   )}
                   <td className="qb-grid-cell" title={line.description} {...cellProps('description')}>
                     {line.description}
                   </td>
-                  {formLine ? (
+                  {line.kind === 'SUBTOTAL' ? (
                     <td colSpan={spareColumns} className="qb-grid-cell" />
                   ) : (
                     <>
@@ -394,11 +441,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                 </>
               )}
               <td className="qb-grid-cell num font-semibold">
-                {formLine ? money(amount ?? 0) : state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
+                {formLine ? (amount === null || amount === undefined ? '—' : money(amount)) : state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
               </td>
               {withTax && (
                 <td className="qb-grid-cell cell-flush text-center">
-                  {!formLine && <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />}
+                  {line.kind !== 'SUBTOTAL' && <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />}
                 </td>
               )}
               <td className="qb-grid-cell cell-flush text-center">

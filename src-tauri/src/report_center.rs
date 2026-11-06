@@ -280,9 +280,17 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
             FROM invoice_items it JOIN invoices i ON i.id = it.invoice_id
             WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.issue_date BETWEEN ?1 AND ?2
             UNION ALL
+            SELECT fl.product_service_id, 0, fl.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents
+            FROM invoice_form_lines fl JOIN invoices i ON i.id = fl.invoice_id
+            WHERE fl.kind = 'DISCOUNT' AND i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.issue_date BETWEEN ?1 AND ?2
+            UNION ALL
             SELECT sl.product_service_id, sl.quantity_e4, sl.amount_cents
             FROM sales_receipt_lines sl JOIN sales_receipts r ON r.id = sl.sales_receipt_id
             WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
+            UNION ALL
+            SELECT fl.product_service_id, 0, fl.amount_cents
+            FROM sales_receipt_form_lines fl JOIN sales_receipts r ON r.id = fl.sales_receipt_id
+            WHERE fl.kind = 'DISCOUNT' AND r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
             UNION ALL
             SELECT cl.product_service_id, -cl.quantity_e4, -cl.amount_cents
             FROM credit_memo_lines cl JOIN credit_memos m ON m.id = cl.credit_memo_id

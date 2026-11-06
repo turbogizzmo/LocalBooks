@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -43,7 +44,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload, formLines, total: linesTotal } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
   const [discountText, setDiscountText] = useState('');
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
@@ -53,6 +54,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (expires && expires < date) return setError('The expiration date is before the estimate date.');
+    if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     setBusy(true);
     try {

@@ -270,3 +270,158 @@ fn the_form_lays_out_the_shared_cases_the_same_way() {
         }
     }
 }
+
+// ------------------------------------------------------------------------------------------------
+// Discounts
+// ------------------------------------------------------------------------------------------------
+
+async fn discounts_given(pool: &SqlitePool) -> i64 {
+    // The account the document discount uses, made on first use.
+    match sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_optional(pool).await.unwrap() {
+        Some(id) => id,
+        None => sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Discounts Given', 'INCOME') RETURNING id").fetch_one(pool).await.unwrap(),
+    }
+}
+
+#[tokio::test]
+async fn an_invoice_with_discounts_and_tax_posts_balanced_and_taxes_the_discounted_amount() {
+    let pool = test_pool().await;
+    let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
+    let discounts = discounts_given(&pool).await;
+    let rate = crate::sales_tax::create_tax_rate(
+        &pool,
+        crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 80_000, agency_name: None, liability_account_id: None },
+    )
+    .await
+    .unwrap();
+    let item = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Loyalty 10%".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: true },
+        crate::sales::ItemKind::discount(Some(100_000)),
+    )
+    .await
+    .unwrap();
+    assert_eq!((item.item_type.as_str(), item.percent_ppm), ("DISCOUNT", Some(100_000)));
+
+    // 100.00 taxable less 10% (taxable), 50.00 untaxed, subtotal, 5.00 off it (not taxable),
+    // then a 2.00 document discount.
+    let input = invoice(
+        vec![line(services, 10_000, true), line(services, 5_000, false)],
+        vec![
+            FormLineInput { product_service_id: Some(item.id), description: "Loyalty".into(), ..FormLineInput::discount(1, discounts, Some(100_000), None, true) },
+            FormLineInput::subtotal(2),
+            FormLineInput::discount(2, discounts, None, Some(500), false),
+        ],
+        Some(rate.id),
+        200,
+    );
+    let inv = create_and_post_invoice(&pool, input).await.unwrap();
+    // Lines 150.00 − 10.00 − 5.00 = 135.00; taxable 90.00 less its share of the 2.00 discount
+    // (90/135 × 2.00 = 1.33) = 88.67; tax 8% = 7.09; total 135.00 − 2.00 + 7.09 = 140.09.
+    assert_eq!(inv.tax_cents, 709);
+    assert_eq!(inv.total_cents, 14_009);
+    assert_posts(&pool, inv.journal_entry_id.unwrap(), ar, 14_009).await;
+    let to_discounts: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
+        .bind(inv.journal_entry_id)
+        .bind(discounts)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(to_discounts, 1_000 + 500 + 200);
+
+    let form: Vec<(i64, String, i64, Option<i64>)> =
+        invoice_detail(&pool, inv.id).await.unwrap().form_lines.into_iter().map(|f| (f.line_number, f.kind, f.amount_cents, f.percent_ppm)).collect();
+    assert_eq!(form, vec![(2, "DISCOUNT".into(), -1_000, Some(100_000)), (4, "SUBTOTAL".into(), 14_000, None), (5, "DISCOUNT".into(), -500, None)]);
+
+    // The discount item is its own row in Sales by Product/Service.
+    let report = crate::report_center::sales_by_product(&pool, d(1), d(31)).await.unwrap();
+    let row = report.rows.iter().find(|r| r.label == "Loyalty 10%").expect("discount row");
+    assert_eq!(row.amount_cents, -1_000);
+}
+
+#[tokio::test]
+async fn a_sales_receipt_with_a_discount_posts_balanced() {
+    let pool = test_pool().await;
+    let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
+    let discounts = discounts_given(&pool).await;
+    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: 8_000, income_account_id: services, class_id: None, is_taxable: false };
+    let receipt = post_sales_receipt(
+        &pool,
+        SalesReceiptInput {
+            customer_name: None,
+            receipt_date: d(2),
+            deposit_account_id: checking,
+            payment_method: "CASH".into(),
+            reference: None,
+            memo: None,
+            lines: vec![sale],
+            tax_rate_id: None,
+            discount_cents: 0,
+            details: with_form(vec![FormLineInput::discount(1, discounts, Some(250_000), None, false)]),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(receipt.total_cents, 6_000);
+    assert_posts(&pool, receipt.journal_entry_id.unwrap(), checking, 6_000).await;
+}
+
+#[tokio::test]
+async fn a_discount_must_post_to_an_active_income_account_from_a_discount_item() {
+    let pool = test_pool().await;
+    let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
+    let err = create_and_post_invoice(&pool, invoice(vec![line(services, 1_000, false)], vec![FormLineInput::discount(1, checking, None, Some(100), false)], None, 0))
+        .await
+        .unwrap_err();
+    assert!(err.starts_with("INV_NOT_INCOME_ACCOUNT"), "{err}");
+    let plain = crate::sales::create_product(
+        &pool,
+        crate::sales::ProductInput { name: "Hour".into(), description: None, rate_cents: 100, income_account_id: services, is_taxable: false },
+    )
+    .await
+    .unwrap();
+    let discounts = discounts_given(&pool).await;
+    let err = create_and_post_invoice(
+        &pool,
+        invoice(vec![line(services, 1_000, false)], vec![FormLineInput { product_service_id: Some(plain.id), ..FormLineInput::discount(1, discounts, None, Some(100), false) }], None, 0),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.starts_with("INV_NOT_A_DISCOUNT"), "{err}");
+}
+
+#[tokio::test]
+async fn discount_items_cannot_be_stocked_or_price_levelled() {
+    let pool = test_pool().await;
+    let discounts = discounts_given(&pool).await;
+    let item = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 500, income_account_id: discounts, is_taxable: false },
+        crate::sales::ItemKind::discount(None),
+    )
+    .await
+    .unwrap();
+    let err = sqlx::query("INSERT INTO price_levels (name, kind) VALUES ('VIP', 'PER_ITEM')").execute(&pool).await.and(
+        sqlx::query("INSERT INTO price_level_items (price_level_id, product_id, basis, price_cents) VALUES ((SELECT id FROM price_levels), ?1, 'FIXED', 1)")
+            .bind(item.id)
+            .execute(&pool)
+            .await,
+    );
+    assert!(err.unwrap_err().to_string().contains("PRICE_LEVEL_DISCOUNT"));
+    let bad = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Odd".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
+        crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5) },
+    )
+    .await
+    .unwrap_err();
+    assert!(bad.starts_with("ITEM_BAD_PERCENT"), "{bad}");
+}
+
+#[test]
+fn percents_print_without_trailing_zeros() {
+    assert_eq!(percent_text(100_000), "10%");
+    assert_eq!(percent_text(25_000), "2.5%");
+    assert_eq!(percent_text(82_500), "8.25%");
+    assert_eq!(percent_text(1), "0.0001%");
+}

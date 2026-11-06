@@ -392,13 +392,17 @@ pub async fn tax_liability(pool: &SqlitePool, start_date: NaiveDate, end_date: N
     let rows: Vec<TaxLiabilityRow> = sqlx::query_as(
         "WITH docs (rate_id, sign, tax, taxable, other) AS (
             SELECT i.tax_rate_id, 1, i.tax_cents,
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1),
+                   (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
+                   + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                    (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+                   + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0)
             FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.issue_date BETWEEN ?1 AND ?2
             UNION ALL
             SELECT r.tax_rate_id, 1, r.tax_cents,
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1),
+                   (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1)
+                   + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                    (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
+                   + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0)
             FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
             UNION ALL
             SELECT m.tax_rate_id, -1, m.tax_cents,

@@ -99,6 +99,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let laid: Vec<crate::item_types::ItemAmount> =
         input.lines.iter().zip(&amounts).map(|(l, a)| crate::item_types::ItemAmount { amount_cents: *a, is_taxable: l.is_taxable }).collect();
     let layout = crate::item_types::lay_out(&laid, form, "EST")?;
+    crate::item_types::check_form_lines(tx, form, &layout, "EST").await?;
     let numbers = layout.item_numbers();
     let total = layout.lines_cents;
     if input.discount_cents < 0 || input.discount_cents > total {
@@ -160,7 +161,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
-    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout).await?;
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
 }

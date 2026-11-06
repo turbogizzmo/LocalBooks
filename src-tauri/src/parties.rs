@@ -259,6 +259,14 @@ pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bo
 /// Changes a product's name, description, default rate and income account. Documents already
 /// posted keep what they were posted with.
 pub async fn update_product(pool: &SqlitePool, id: i64, input: ProductInput) -> Result<ProductView, String> {
+    update_item(pool, id, input, None).await
+}
+
+/// Like [`update_product`], also changing the item's kind when `kind` is given.
+pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: Option<crate::sales::ItemKind>) -> Result<ProductView, String> {
+    if let Some(kind) = &kind {
+        kind.validate()?;
+    }
     let name = input.name.trim();
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
@@ -291,6 +299,15 @@ pub async fn update_product(pool: &SqlitePool, id: i64, input: ProductInput) -> 
         })?;
     if done.rows_affected() == 0 {
         return Err("PRODUCT_NOT_FOUND: that product does not exist".into());
+    }
+    if let Some(kind) = kind {
+        sqlx::query("UPDATE products_services SET item_type = ?1, percent_ppm = ?2 WHERE id = ?3")
+            .bind(&kind.item_type)
+            .bind(kind.percent_ppm)
+            .bind(id)
+            .execute(pool)
+            .await
+            .map_err(db_err)?;
     }
     product(pool, id).await
 }

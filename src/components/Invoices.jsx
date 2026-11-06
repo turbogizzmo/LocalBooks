@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
@@ -628,7 +629,7 @@ export default function Invoices({ accounts, intent }) {
     if (t && fromDate) setDueDate(addDays(fromDate, t.days));
   };
 
-  const { filled, invalidCount, payload, formLines, total: linesTotal } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
@@ -693,6 +694,7 @@ export default function Invoices({ accounts, intent }) {
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
+    if (layoutError) return setNotice({ kind: 'error', text: layoutMessage(layoutError) });
     if (discountCents === null) return setNotice({ kind: 'error', text: 'Enter the discount as an amount or a percentage such as 10%.' });
     // The product travels with each line: tracked stock records its cost of goods sold.
     const postedLines = formClass.apply(

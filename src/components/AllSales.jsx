@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect from './AccountSelect.jsx';
@@ -45,7 +46,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload, formLines, total: linesTotal } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
   const [discountText, setDiscountText] = useState('');
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
@@ -54,6 +55,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (depositId === null) return setError('Choose where the money was deposited.');
+    if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     const postedLines = formClass.apply(payload);
     const warning = formClass.missing(postedLines);
