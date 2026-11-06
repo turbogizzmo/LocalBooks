@@ -11,7 +11,7 @@ export function SalesAddresses({ header, onChange, billLabel = 'Bill To', showSh
         {extra}
       </span>
       <textarea
-        className="qb-input h-[62px] resize-none py-0.5 leading-tight"
+        className="qb-input h-[74px] resize-none py-0.5 leading-tight"
         value={header[key]}
         maxLength={500}
         spellCheck={false}
