@@ -60,9 +60,15 @@ details and custom fields over.
 
 ## Fix a mistake
 
-Posted invoices can't be edited. Open the row's **Actions** menu and choose **Void Transaction**,
-then create a corrected invoice. An invoice that already has payments can't be voided until the
-payments are voided. See [Journal entries and voiding](journal-entries-and-voids.md).
+Double-click the invoice in the list (or choose **Edit…** in its **Actions** menu) to open it, make
+your changes and save. LocalBooks voids the original and posts the corrected invoice in its place;
+both stay in the journal and the audit trail. Bills, checks and expenses open the same way from
+their lists.
+
+An invoice can't be edited while it is voided, reconciled, in a closed period, or has payments or
+credits applied: void its payments and remove its credits first. To cancel an invoice instead,
+choose **Void Transaction** in its **Actions** menu. See
+[Journal entries and voiding](journal-entries-and-voids.md).
 
 ## Charge interest on late invoices
 

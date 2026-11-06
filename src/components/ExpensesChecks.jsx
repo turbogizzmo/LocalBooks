@@ -351,7 +351,12 @@ export default function ExpensesChecks({ accounts, intent }) {
               )}
               {sorter.sorted.map((x) => (
                 <Fragment key={x.id}>
-                <tr className={`qb-grid-row ${x.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <tr
+                  className={`qb-grid-row cursor-pointer ${x.isVoided ? 'text-qb-ink-faint' : ''}`}
+                  // Double-click opens it to edit, as Edit… in its menu does.
+                  onDoubleClick={() => (x.isVoided ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' }) : openExpense(x))}
+                  title="Double-click to edit"
+                >
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>
                   <td className="qb-grid-cell">{EXPENSE_KINDS[x.kind] ?? x.kind}</td>
                   <td className="qb-grid-cell">

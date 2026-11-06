@@ -681,7 +681,18 @@ export default function Bills({ accounts, intent }) {
                 ];
                 return (
                   <Fragment key={b.id}>
-                    <tr className={`qb-grid-row ${b.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                    <tr
+                      className={`qb-grid-row cursor-pointer ${b.isVoided ? 'text-qb-ink-faint' : ''}`}
+                      // Double-click opens the bill to edit, as Edit… in its menu does.
+                      onDoubleClick={() =>
+                        b.isVoided
+                          ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} is voided, so it can't be edited.` })
+                          : b.amountPaidCents > 0
+                            ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
+                            : openBill(b)
+                      }
+                      title="Double-click to edit"
+                    >
                       <td className="qb-grid-cell font-semibold" title={b.vendorName}>{b.vendorName}</td>
                       <td className="qb-grid-cell">
                         {b.billNumber ?? ''}

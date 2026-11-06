@@ -485,6 +485,15 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                   <tr
                     className={`qb-grid-row ${isActive ? 'is-active' : ''} ${inv.isVoided ? 'text-qb-ink-faint' : ''}`}
                     onMouseDown={() => setActiveId(open && activeId !== inv.id ? inv.id : null)}
+                    // Double-click opens the invoice to edit, as Edit… in its menu does.
+                    onDoubleClick={() =>
+                      inv.isVoided
+                        ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} is voided, so it can't be edited.` })
+                        : inv.amountPaidCents > 0
+                          ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
+                          : onEdit(inv)
+                    }
+                    title={open ? 'Click to receive a payment, double-click to edit' : 'Double-click to edit'}
                   >
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
