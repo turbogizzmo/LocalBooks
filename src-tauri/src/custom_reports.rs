@@ -701,7 +701,8 @@ impl LineFilter<'_> {
                 return false;
             }
         }
-        if f.exclude_voided && (l.is_voided || l.is_reversal) {
+        // The Voided Transactions report's own filter wins over "leave out voided" ticked in Customize.
+        if f.exclude_voided && !f.voided_only && (l.is_voided || l.is_reversal) {
             return false;
         }
         if f.adjusting_only && !l.is_adjusting {

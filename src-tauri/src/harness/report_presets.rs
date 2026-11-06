@@ -570,6 +570,9 @@ async fn added_presets_tie_out() {
     let kept = run(&pool, &kept).await;
     assert!(voided.line_count >= 2, "the fixture voids an expense");
     assert_eq!(voided.line_count, all.line_count - kept.line_count);
+    let mut ticked = preset("voided-transactions");
+    ticked.filters.exclude_voided = true;
+    assert_eq!(run(&pool, &ticked).await.line_count, voided.line_count, "leave out voided doesn't empty the report");
 
     // Profit & Loss by Month: the months add up to the total column, and the total is the year's
     // net income, as on the Profit & Loss Detail.
