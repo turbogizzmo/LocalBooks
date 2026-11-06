@@ -113,6 +113,7 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
             refund_account_id: None,
             lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: 20_000, income_account_id: services, class_id: None, is_taxable: false }],
             tax_rate_id: None,
+            header: Default::default(),
         },
     )
     .await

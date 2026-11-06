@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Bill To and Ship To on sales forms.** Invoices, sales receipts (Sold To), estimates and credit
+  memos now have Bill To and Ship To boxes, filled from the customer and editable on each form, plus
+  **P.O. No.** and **FOB**. Each document keeps its own copy of the addresses, so changing a
+  customer's address later leaves saved documents as they were. They print and email with the
+  form; the form designer can turn Ship To and P.O. No. off.
+- **A fuller customer record.** Customers now have a shipping address next to the billing
+  address, a contact and an alternate contact, alternate phone, fax, website, account number,
+  credit limit and resale number. A job without its own addresses uses its customer's.
+- **Credit limit warning.** When an invoice would take a customer over their credit limit,
+  LocalBooks shows what they owe now and would owe, and asks before saving. It never blocks the
+  sale.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

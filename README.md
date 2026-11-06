@@ -295,6 +295,8 @@ under [`docs/guide/`](docs/guide/README.md).
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Bill To / Ship To | Sales forms | Bill To, Ship To, P.O. No. and FOB on invoices, sales receipts, estimates and credit memos, kept per document and filled from the customer | [guide](docs/guide/invoices.md) |
+| Credit limits | Customers › Edit… | A customer's credit limit, contacts, shipping address and account details; invoices over the limit ask before saving | [guide](docs/guide/customers-and-products.md) |
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
 | Sortable lists | Any list | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
@@ -547,6 +549,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
         ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
+        ├── sales_header.rs                  # Bill To / Ship To copies, P.O. No., FOB, credit limit
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
         ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache
         ├── bank_pdf.rs         # PDF bank and card statements: text layout to transaction table

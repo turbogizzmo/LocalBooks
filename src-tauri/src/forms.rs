@@ -165,14 +165,18 @@ pub struct FormTemplate {
     pub show_aging: bool,
     /// Sales forms: the rep, when the document has one.
     pub show_sales_rep: bool,
-    /// Sales forms: the ship date and shipping method, when the document has them.
+    /// Sales forms: the ship date, shipping method and FOB point, when the document has them.
     pub show_shipping: bool,
+    /// Sales forms: a Ship To block beside Bill To, when the document has a ship-to address.
+    pub show_ship_to: bool,
+    /// Sales forms: the customer's P.O. number, when the document has one.
+    pub show_po_number: bool,
     /// Sales forms: customer custom fields marked for sales forms, when filled in.
     pub show_custom_fields: bool,
     /// Sales forms: item custom fields marked for sales forms, under each line.
     pub show_item_fields: bool,
     /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company},
-    /// {rep}, {ship_date}, {ship_via}.
+    /// {rep}, {ship_date}, {ship_via}, {po_number}.
     pub message: String,
     /// Payment instructions or terms and conditions, below the message.
     pub terms: String,
@@ -210,6 +214,8 @@ impl Default for FormTemplate {
             show_aging: true,
             show_sales_rep: true,
             show_shipping: true,
+            show_ship_to: true,
+            show_po_number: true,
             show_custom_fields: true,
             show_item_fields: true,
             message: String::new(),
@@ -479,6 +485,10 @@ pub struct FormSales {
     pub ship_via: Option<String>,
     /// (label, value) of the customer fields printed on this document.
     pub fields: Vec<(String, String)>,
+    pub po_number: Option<String>,
+    pub fob: Option<String>,
+    /// The Ship To block's lines; empty when there is none.
+    pub ship_to: Vec<String>,
 }
 
 impl FormSales {
@@ -488,18 +498,25 @@ impl FormSales {
             ship_date: view.ship_date.as_deref().map(format_date),
             ship_via: view.ship_method_name.clone(),
             fields: view.custom_fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect(),
+            po_number: view.header.po_number.clone(),
+            fob: view.header.fob.clone(),
+            ship_to: address_lines(view.header.ship_to.as_deref()),
         }
     }
 
     /// The rows it adds beside the customer block, as the template allows.
     fn meta(&self, tpl: &FormTemplate) -> Vec<(String, String, bool)> {
         let mut rows = Vec::new();
+        if tpl.show_po_number {
+            rows.extend(self.po_number.iter().map(|p| ("P.O. No.".to_string(), p.clone(), false)));
+        }
         if tpl.show_sales_rep {
             rows.extend(self.rep.iter().map(|r| ("Rep".to_string(), r.clone(), false)));
         }
         if tpl.show_shipping {
             rows.extend(self.ship_date.iter().map(|d| ("Ship date".to_string(), d.clone(), false)));
             rows.extend(self.ship_via.iter().map(|v| ("Ship via".to_string(), v.clone(), false)));
+            rows.extend(self.fob.iter().map(|v| ("FOB".to_string(), v.clone(), false)));
         }
         if tpl.show_custom_fields {
             rows.extend(self.fields.iter().map(|(l, v)| (l.clone(), v.clone(), false)));
@@ -613,6 +630,19 @@ async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str) -> Result<Cust
     Ok(Customer { company_name, billing_address, email })
 }
 
+fn address_lines(text: Option<&str>) -> Vec<String> {
+    text.unwrap_or_default().lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect()
+}
+
+/// The Bill To lines under the customer's name: the document's own copy, or (for a document
+/// written before documents kept one) the customer's current company name and billing address.
+fn bill_to_details(name: &str, header: &crate::sales_header::SalesHeader, c: &Customer) -> Vec<String> {
+    match header.bill_to.as_deref() {
+        Some(own) => address_lines(Some(own)),
+        None => customer_details(name, c),
+    }
+}
+
 fn customer_details(name: &str, c: &Customer) -> Vec<String> {
     let mut details = Vec::new();
     if let Some(company) = c.company_name.as_deref().map(str::trim).filter(|s| !s.is_empty() && *s != name) {
@@ -683,7 +713,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         voided: inv.is_voided,
         customer_id: inv.customer_id,
         customer_name: inv.customer_name.clone(),
-        customer_details: customer_details(&inv.customer_name, &cust),
+        customer_details: bill_to_details(&inv.customer_name, &detail.details.header, &cust),
         customer_email: cust.email,
         meta,
         lines,
@@ -718,6 +748,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         .map_err(db_err)?;
     let money = |cents: i64| format_money(cents, None, symbol);
     let cust = customer(pool, Some(customer_id), &name).await?;
+    let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
     let mut meta = vec![("Estimate date".to_string(), format_date(&date), false)];
     if let Some(expires) = &expires {
         meta.push(("Expires".into(), format_date(expires), false));
@@ -733,7 +764,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         voided: false,
         customer_id: Some(customer_id),
         customer_name: name.clone(),
-        customer_details: customer_details(&name, &cust),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
         customer_email: cust.email,
         meta,
         lines: lines_of(pool, rows, &money).await?,
@@ -744,7 +775,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         total: money(total),
         balance: money(total),
         statement: None,
-        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?),
+        sales: FormSales::of(&sales),
     })
 }
 
@@ -774,6 +805,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     let money = |cents: i64| format_money(cents, None, symbol);
     // A walk-in sale has no customer.
     let name = name.unwrap_or_else(|| "Cash customer".into());
+    let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
     let cust = match customer_id {
         Some(id) => customer(pool, Some(id), &name).await?,
         None => Customer { company_name: None, billing_address: None, email: None },
@@ -793,7 +825,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         subtitle: None,
         voided,
         customer_id,
-        customer_details: customer_details(&name, &cust),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
         customer_name: name,
         customer_email: cust.email,
         meta,
@@ -805,7 +837,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         total: money(total),
         balance: money(0),
         statement: None,
-        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?),
+        sales: FormSales::of(&sales),
     })
 }
 
@@ -957,7 +989,15 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         sales: if statement.is_some() {
             FormSales::default()
         } else {
-            FormSales { rep: Some("JS".into()), ship_date: Some("10/02/2026".into()), ship_via: Some("UPS Ground".into()), fields: Vec::new() }
+            FormSales {
+                rep: Some("JS".into()),
+                ship_date: Some("10/02/2026".into()),
+                ship_via: Some("UPS Ground".into()),
+                fields: Vec::new(),
+                po_number: Some("PO-4471".into()),
+                fob: Some("Springfield".into()),
+                ship_to: vec!["Sample Company LLC".into(), "Receiving dock 4".into(), "200 Mill Road".into(), "Springfield, IL 62702".into()],
+            }
         },
         statement,
     }
@@ -978,6 +1018,7 @@ fn fill_placeholders(text: &str, doc: &FormDoc, company: &Company) -> String {
         ("{rep}", doc.sales.rep.as_deref().unwrap_or_default()),
         ("{ship_date}", doc.sales.ship_date.as_deref().unwrap_or_default()),
         ("{ship_via}", doc.sales.ship_via.as_deref().unwrap_or_default()),
+        ("{po_number}", doc.sales.po_number.as_deref().unwrap_or_default()),
     ]
     .iter()
     .fold(text.to_string(), |acc, (key, value)| acc.replace(key, value))
@@ -1272,16 +1313,32 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     let mut py = start;
     let party_w = meta_x - MARGIN - 20.0;
     let party_size = m.body + 0.5;
+    // With a Ship To block, Bill To and Ship To share the customer column side by side.
+    let ship_to = if tpl.show_ship_to && doc.kind != FormKind::Statement { doc.sales.ship_to.as_slice() } else { &[] };
+    let column_gap = 14.0;
+    let bill_w = if ship_to.is_empty() { party_w } else { (party_w - column_gap) / 2.0 };
     let mut party: Vec<(String, bool)> = vec![(doc.customer_name.clone(), true)];
     party.extend(doc.customer_details.iter().map(|d| (d.clone(), false)));
     if tpl.show_customer_email {
         party.extend(doc.customer_email.iter().map(|e| (e.clone(), false)));
     }
     for (text, bold) in &party {
-        for line in l.wrap(text, *bold, party_size, party_w) {
+        for line in l.wrap(text, *bold, party_size, bill_w) {
             py += party_size + 3.5;
             l.text(MARGIN, py, &line, *bold, party_size, INK, Align::Left);
         }
+    }
+    if !ship_to.is_empty() {
+        let ship_x = MARGIN + bill_w + column_gap;
+        l.text(ship_x, start, "SHIP TO", true, 7.5, label_color, Align::Left);
+        let mut sy = start;
+        for text in ship_to {
+            for line in l.wrap(text, false, party_size, bill_w) {
+                sy += party_size + 3.5;
+                l.text(ship_x, sy, &line, false, party_size, INK, Align::Left);
+            }
+        }
+        py = py.max(sy);
     }
     let mut my = start - 4.0;
     let meta_lead = m.small + 6.0;

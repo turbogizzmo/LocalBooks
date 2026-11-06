@@ -418,6 +418,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             sales_rep_id: None,
             price_level_id: None,
             custom_fields: Vec::new(),
+            ..Default::default()
         },
         crate::tax_ids::Access::OPEN,
     )

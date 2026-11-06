@@ -20,6 +20,7 @@ import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 import NameField from './NameField.jsx';
+import { askConfirm } from '../lib/dialogs.jsx';
 
 const TERMS = [
   { id: 'receipt', label: 'Due on receipt', days: 0 },
@@ -744,6 +745,18 @@ export default function Invoices({ accounts, intent }) {
         ...sales.payload(),
       };
       if (mode === 'memorize') return setMemorizing(input);
+      // A credit limit warns; it never stops the sale.
+      const homeTotal = currency ? toHomeCents(total, parseRateE6(rate)) : total;
+      const over = await api.checkCreditLimit(input.customerName, homeTotal, editing?.id ?? null);
+      if (
+        over &&
+        !(await askConfirm(
+          `This invoice takes ${over.customerName} over their credit limit of ${formatCents(over.creditLimitCents)}: they owe ${formatCents(over.balanceCents)} now and would owe ${formatCents(over.newBalanceCents)}. Save it anyway?`,
+          { confirmLabel: 'Save anyway' },
+        ))
+      ) {
+        return;
+      }
       if (editing) {
         await api.replaceInvoice(editing.id, input);
         setNotice({ kind: 'success', text: `Invoice #${editing.number} replaced: the original is voided and the edited invoice is posted.` });
@@ -867,6 +880,7 @@ export default function Invoices({ accounts, intent }) {
           </div>
         </div>
 
+        {sales.addresses}
         <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} />
 
         <div className="flex items-center gap-2 px-2 py-1">

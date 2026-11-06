@@ -188,7 +188,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .expect("vendor credit");
     crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None },
+        CreditMemoInput { customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None, header: Default::default() },
     )
     .await
     .expect("credit memo");

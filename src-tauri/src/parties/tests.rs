@@ -28,6 +28,7 @@ async fn protected_tax_ids_need_the_key_to_see_or_change() {
         sales_rep_id: None,
         price_level_id: None,
         custom_fields: Vec::new(),
+        ..Default::default()
     };
 
     let saved = update_party(&pool, "vendor", staples.id, input(Some("123-45-6789"), false), with_key).await.unwrap();
@@ -69,6 +70,7 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
         sales_rep_id: None,
         price_level_id: None,
         custom_fields: Vec::new(),
+        ..Default::default()
     };
     let saved = update_party(&pool, "customer", acme.id, input("Acme Inc"), Access::OPEN).await.unwrap();
     assert_eq!((saved.name.as_str(), saved.company_name.as_deref(), saved.terms_days), ("Acme Inc", Some("Acme Corp"), Some(15)));

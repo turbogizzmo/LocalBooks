@@ -104,6 +104,22 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'bill-ship-to', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'sales/customers'],
+    title: 'Bill To, Ship To, P.O. No. and FOB on sales forms',
+    body: 'Invoices, sales receipts, estimates and credit memos fill their Bill To and Ship To from the customer’s billing and shipping addresses (a job without its own uses its customer’s); change them on the form, and Copy Bill To puts the billing address in Ship To. Each document keeps its own copy and prints it, with the P.O. No. and FOB, so changing the customer later leaves saved documents as they were.',
+    keywords: 'bill to ship to shipping address billing address sold to po number purchase order fob free on board header address block',
+    go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
+    id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
+    title: 'Customer credit limits',
+    body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',
+    keywords: 'credit limit over limit customer balance warning account number contact fax website resale number tax id alternate contact',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'invoices',
+  },
+  {
     id: 'products', area: 'sales', views: ['sales/products', 'sales/invoices'],
     title: 'Set up products and services',
     body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list.',

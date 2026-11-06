@@ -134,6 +134,7 @@ async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Acce
         sales_rep_id: None,
         price_level_id: None,
         custom_fields: Vec::new(),
+        ..Default::default()
     };
     parties::update_party(pool, "vendor", id, input, access).await.expect("set the tax ID");
 }
@@ -204,6 +205,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
             refund_account_id: None,
             lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false }],
             tax_rate_id: None,
+            header: Default::default(),
         },
     )
     .await

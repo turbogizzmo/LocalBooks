@@ -17,7 +17,7 @@ const LAYOUTS = [
   ['COMPACT', 'Compact', 'Smaller type and tighter rows: more lines per page'],
 ];
 const ACCENTS = ['#2ca01c', '#0b6e4f', '#1f4e79', '#2b6cb0', '#6b46c1', '#b83280', '#c05621', '#333333'];
-const PLACEHOLDERS = '{number} {customer} {date} {due_date} {total} {balance} {company} {rep} {ship_date} {ship_via} (also {invoice_number} {amount} {balance_due})';
+const PLACEHOLDERS = '{number} {customer} {date} {due_date} {total} {balance} {company} {rep} {ship_date} {ship_via} {po_number} (also {invoice_number} {amount} {balance_due})';
 
 function Section({ title, children }) {
   return (
@@ -369,7 +369,9 @@ export default function FormDesigner() {
               {kind !== 'STATEMENT' && (
                 <>
                   <Check label="Rep, when the form has one" checked={draft.showSalesRep} onChange={set('showSalesRep')} />
-                  <Check label="Ship date and Ship via, when filled in" checked={draft.showShipping} onChange={set('showShipping')} />
+                  <Check label="Ship date, Ship via and FOB, when filled in" checked={draft.showShipping} onChange={set('showShipping')} />
+                  <Check label="Ship To address, when the form has one" checked={draft.showShipTo} onChange={set('showShipTo')} />
+                  <Check label="P.O. No., when filled in" checked={draft.showPoNumber} onChange={set('showPoNumber')} />
                   <Check label="Customer custom fields marked for sales forms" checked={draft.showCustomFields} onChange={set('showCustomFields')} />
                 </>
               )}

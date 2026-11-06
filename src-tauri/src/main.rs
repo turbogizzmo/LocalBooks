@@ -78,6 +78,7 @@ mod release_check;
 mod reports;
 mod revaluation;
 mod sales;
+mod sales_header;
 mod sales_lists;
 mod sales_tax;
 mod tax_ids;

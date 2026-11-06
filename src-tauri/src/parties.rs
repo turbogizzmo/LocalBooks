@@ -51,9 +51,23 @@ pub struct PartyDetails {
     pub sales_rep_id: Option<i64>,
     /// Customers only: the price level their sales forms fill rates from (`None` = standard prices).
     pub price_level_id: Option<i64>,
+    /// Customers only: the second address; `address` is the billing address.
+    pub shipping_address: Option<String>,
+    /// Customers only: the main and second contact, and more ways to reach them.
+    pub contact_name: Option<String>,
+    pub alt_contact_name: Option<String>,
+    pub alt_phone: Option<String>,
+    pub fax: Option<String>,
+    pub website: Option<String>,
+    /// Customers only: the number they know us by, or we know them by.
+    pub account_number: Option<String>,
+    /// Customers only: an invoice that would take them over this warns before saving.
+    pub credit_limit_cents: Option<i64>,
+    /// Customers only: their resale certificate or tax ID, as text.
+    pub resale_number: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyDetailsInput {
     pub name: String,
@@ -88,6 +102,24 @@ pub struct PartyDetailsInput {
     pub sales_rep_id: Option<i64>,
     #[serde(default)]
     pub price_level_id: Option<i64>,
+    #[serde(default)]
+    pub shipping_address: Option<String>,
+    #[serde(default)]
+    pub contact_name: Option<String>,
+    #[serde(default)]
+    pub alt_contact_name: Option<String>,
+    #[serde(default)]
+    pub alt_phone: Option<String>,
+    #[serde(default)]
+    pub fax: Option<String>,
+    #[serde(default)]
+    pub website: Option<String>,
+    #[serde(default)]
+    pub account_number: Option<String>,
+    #[serde(default)]
+    pub credit_limit_cents: Option<i64>,
+    #[serde(default)]
+    pub resale_number: Option<String>,
     /// Custom field values to set (fields left out keep theirs).
     #[serde(default)]
     pub custom_fields: Vec<crate::custom_fields::FieldValue>,
@@ -102,10 +134,13 @@ pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_
     let sql = match table(kind)? {
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
                                NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
-                               sales_rep_id, price_level_id
+                               sales_rep_id, price_level_id, shipping_address, contact_name, alt_contact_name, alt_phone, fax,
+                               website, account_number, credit_limit_cents, resale_number
                         FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
-                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id
+                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
+                     NULL AS shipping_address, NULL AS contact_name, NULL AS alt_contact_name, NULL AS alt_phone, NULL AS fax,
+                     NULL AS website, NULL AS account_number, NULL AS credit_limit_cents, NULL AS resale_number
               FROM vendors WHERE id = ?1",
     };
     let mut party = sqlx::query_as::<_, PartyDetails>(sql)
@@ -135,6 +170,14 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     if let Some(e) = &email {
         if !(e.contains('@') && e.rsplit('@').next().is_some_and(|d| d.contains('.'))) {
             return Err("PARTY_BAD_EMAIL: enter a valid email address".into());
+        }
+    }
+    if input.credit_limit_cents.is_some_and(|c| !(0..=crate::ledger::MAX_LINE_CENTS).contains(&c)) {
+        return Err("PARTY_BAD_CREDIT_LIMIT: the credit limit must be zero or more".into());
+    }
+    if let Some(site) = clean(&input.website) {
+        if site.chars().any(char::is_whitespace) || !site.contains('.') {
+            return Err("PARTY_BAD_WEBSITE: enter a web address such as example.com".into());
         }
     }
     if input.terms_days.is_some_and(|d| !(0..=365).contains(&d)) {
@@ -174,7 +217,9 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     let query = if t == "customers" {
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
-                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14 WHERE id = ?12",
+                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14,
+                    shipping_address = ?15, contact_name = ?16, alt_contact_name = ?17, alt_phone = ?18, fax = ?19, website = ?20,
+                    account_number = ?21, credit_limit_cents = ?22, resale_number = ?23 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -190,6 +235,15 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(id)
         .bind(input.sales_rep_id)
         .bind(input.price_level_id)
+        .bind(clean(&input.shipping_address).map(|a| crate::sales_header::normalize_address(&a)))
+        .bind(clean(&input.contact_name))
+        .bind(clean(&input.alt_contact_name))
+        .bind(clean(&input.alt_phone))
+        .bind(clean(&input.fax))
+        .bind(clean(&input.website))
+        .bind(clean(&input.account_number))
+        .bind(input.credit_limit_cents)
+        .bind(clean(&input.resale_number))
     } else {
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,

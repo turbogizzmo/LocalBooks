@@ -114,6 +114,9 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
     let d = |day| NaiveDate::from_ymd_opt(2026, 10, day).unwrap();
+    // The invoice copies the billing address when it is written, so it is set first.
+    crate::sales::create_customer(&pool, "Initech", None).await.unwrap();
+    sqlx::query("UPDATE customers SET billing_address = '9 Elm St\nAustin, TX', email = 'ap@initech.test' WHERE name = 'Initech'").execute(&pool).await.unwrap();
     let invoice = create_and_post_invoice(
         &pool,
         InvoiceInput {
@@ -129,7 +132,6 @@ async fn real_invoices_render_saved_templates_to_pdf() {
     )
     .await
     .unwrap();
-    sqlx::query("UPDATE customers SET billing_address = '9 Elm St\nAustin, TX', email = 'ap@initech.test' WHERE name = 'Initech'").execute(&pool).await.unwrap();
 
     assert_eq!(get_template(&pool, None, FormKind::Invoice).await.unwrap(), FormTemplate::default_for(FormKind::Invoice));
     let custom = FormTemplate { title: "Statement of Work".into(), show_customer_email: true, ..FormTemplate::default_for(FormKind::Invoice) };
@@ -328,6 +330,7 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
                 ship_date: Some(d(2)),
                 ship_method_id: Some(ups.id),
                 custom_fields: vec![FieldValue { field_id: po.id, value: "PO-55".into() }],
+                ..Default::default()
             },
         },
     )

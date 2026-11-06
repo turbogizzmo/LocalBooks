@@ -7,6 +7,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
+import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
@@ -172,7 +173,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
 
   useEffect(() => {
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId }),
+      (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -205,6 +206,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         formStyleId: form.formStyleId ?? null,
         salesRepId: form.salesRepId ?? null,
         priceLevelId: form.priceLevelId ?? null,
+        ...(kind === 'customer' ? customerRecordPayload(form) : {}),
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
       if (kind === 'vendor' && bank.draft !== undefined) {
@@ -236,11 +238,17 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             {field('Company name', 'companyName')}
             {field('Email', 'email', { type: 'email' })}
             {field('Phone', 'phone', { type: 'tel' })}
-            <label className="col-span-2 flex flex-col gap-0.5">
-              <span className="font-semibold text-qb-ink-muted">{kind === 'customer' ? 'Billing address' : 'Address'}</span>
-              <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
-            </label>
+            {kind === 'customer' && <CustomerContactFields form={form} setForm={setForm} />}
+            {kind === 'customer' ? (
+              <CustomerAddressFields form={form} setForm={setForm} />
+            ) : (
+              <label className="col-span-2 flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Address</span>
+                <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
+              </label>
+            )}
             {field('Terms (days)', 'termsDays', { inputMode: 'numeric', placeholder: kind === 'customer' ? 'e.g. 30 for Net 30' : 'e.g. 30' })}
+            {kind === 'customer' && <CustomerAccountFields form={form} setForm={setForm} />}
             {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
             {kind === 'vendor' && (

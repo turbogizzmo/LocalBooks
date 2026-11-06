@@ -24,9 +24,23 @@ and so on) show in a panel under the list, newest first, with a total. Click a h
 tick **Show voided** to include voided ones, and double-click a transaction to open it.
 Double-click the name itself to edit the customer or vendor.
 
-To add a company name, billing address, phone, payment terms or notes, open the customer's
-**Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
-and estimates, and the email address is filled in when you choose **Email…** on one of them.
+To add a company name, address, phone, payment terms or notes, open the customer's **Actions**
+menu and choose **Edit…**. A customer's record also holds:
+
+- **Billing address (Bill To)** and **Shipping address (Ship To)**. **Copy billing** puts the
+  billing address in the shipping box. New invoices, sales receipts, estimates and credit memos
+  fill their Bill To and Ship To from these. A job (a name like `Acme:Kitchen`) whose boxes are
+  blank uses its customer's addresses.
+- **Contact** and **Alt. contact**, **Alt. phone**, **Fax** and **Website**. The contact prints in
+  the address blocks, under the company name.
+- **Account no.**, the customer's account number.
+- **Credit limit**. An invoice that would take the customer over it asks before saving (see
+  [Credit limits](invoices.md#credit-limits)). Leave it blank for no limit.
+- **Resale no. / tax ID**, for a resale certificate or the customer's tax ID.
+
+The email address is filled in when you choose **Email…** on one of their forms. Changing a
+customer's address doesn't change documents already saved; each keeps the address it was saved
+with.
 
 ## Add a product or service
 

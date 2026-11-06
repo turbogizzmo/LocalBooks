@@ -243,6 +243,7 @@ async fn a_customer_default_is_set_on_the_customer() {
         sales_rep_id: None,
         price_level_id,
         custom_fields: vec![],
+        ..Default::default()
     };
     let saved = update_party(&b.pool, "customer", acme.id, input(Some(level.id)), Access::OPEN).await.unwrap();
     assert_eq!(saved.price_level_id, Some(level.id));
