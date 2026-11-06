@@ -501,3 +501,83 @@ async fn a_percent_charge_must_use_a_charge_item() {
     .unwrap_err();
     assert!(err.starts_with("INV_NOT_A_CHARGE"), "{err}");
 }
+
+// ------------------------------------------------------------------------------------------------
+// Groups
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_group_posts_its_items_and_can_print_as_one_line() {
+    let pool = test_pool().await;
+    let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
+    let product = |name: &str, rate_cents| crate::sales::ProductInput { name: name.into(), description: None, rate_cents, income_account_id: services, is_taxable: false };
+    let install = crate::sales::create_product(&pool, product("Install", 8_000)).await.unwrap();
+    let cable = crate::sales::create_product(&pool, product("Cable", 1_250)).await.unwrap();
+    let kit = save_group(
+        &pool,
+        None,
+        GroupInput {
+            name: "Install kit".into(),
+            description: Some("Installation, with cable".into()),
+            print_items: false,
+            members: vec![GroupMemberInput { product_id: install.id, quantity_e4: 10_000 }, GroupMemberInput { product_id: cable.id, quantity_e4: 40_000 }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(kit.members.iter().map(|m| (m.product_name.as_str(), m.quantity_e4)).collect::<Vec<_>>(), vec![("Install", 10_000), ("Cable", 40_000)]);
+    // A group can't take an item's name, nor an item a group's.
+    assert!(save_group(&pool, None, GroupInput { name: "cable".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: cable.id, quantity_e4: 1 }] })
+        .await
+        .unwrap_err()
+        .contains("ITEM_GROUP_NAME"));
+    assert!(crate::sales::create_product(&pool, product("Install Kit", 1)).await.unwrap_err().contains("ITEM_GROUP_NAME"));
+
+    let member = |p: &crate::sales::ProductView, quantity_e4| InvoiceLineInput {
+        description: p.name.clone(),
+        quantity_e4,
+        rate_cents: p.rate_cents,
+        income_account_id: services,
+        product_service_id: Some(p.id),
+        class_id: None,
+        is_taxable: false,
+    };
+    let heading = FormLineInput { item_group_id: Some(kit.id), description: "Installation, with cable".into(), ..FormLineInput::group(0, 2, false) };
+    let inv = create_and_post_invoice(
+        &pool,
+        invoice(vec![member(&install, 10_000), member(&cable, 40_000), line(services, 2_000, false)], vec![heading, FormLineInput::discount(2, services, Some(50_000), None, false)], None, 0),
+    )
+    .await
+    .unwrap();
+    // 80.00 + 4 × 12.50 = 130.00, 5% off the group = 6.50, then 20.00.
+    assert_eq!(inv.total_cents, 13_000 - 650 + 2_000);
+    assert_posts(&pool, inv.journal_entry_id.unwrap(), ar, 14_350).await;
+
+    let doc = crate::forms::invoice_doc(&pool, inv.id, "$").await.unwrap();
+    let printed: Vec<(&str, &str, &str)> = doc.lines.iter().map(|l| (l.description.as_str(), l.quantity.as_str(), l.amount.as_str())).collect();
+    assert_eq!(printed, vec![("Installation, with cable", "1", "$130.00"), ("Discount", "", "-$6.50"), ("Work", "1", "$20.00")]);
+
+    // The group is kept on the invoice as it was, even after the group changes.
+    set_group_active(&pool, kit.id, false).await.unwrap();
+    let form = invoice_detail(&pool, inv.id).await.unwrap().form_lines;
+    assert_eq!((form[0].kind.as_str(), form[0].group_line_count, form[0].print_items), ("GROUP", Some(2), Some(false)));
+}
+
+#[tokio::test]
+async fn a_group_holds_items_and_fixed_charges_only() {
+    let pool = test_pool().await;
+    let discounts = discounts_given(&pool).await;
+    let promo = crate::sales::create_item(
+        &pool,
+        crate::sales::ProductInput { name: "Promo".into(), description: None, rate_cents: 100, income_account_id: discounts, is_taxable: false },
+        crate::sales::ItemKind::discount(None),
+    )
+    .await
+    .unwrap();
+    let err = save_group(&pool, None, GroupInput { name: "Bad".into(), description: None, print_items: true, members: vec![GroupMemberInput { product_id: promo.id, quantity_e4: 10_000 }] })
+        .await
+        .unwrap_err();
+    assert!(err.contains("ITEM_TYPE_IN_GROUP"), "{err}");
+    let err = save_group(&pool, None, GroupInput { name: "Empty".into(), description: None, print_items: true, members: vec![] }).await.unwrap_err();
+    assert!(err.starts_with("ITEM_GROUP_EMPTY"), "{err}");
+}

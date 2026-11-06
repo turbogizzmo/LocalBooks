@@ -73,6 +73,7 @@ features![
     installed_quickbooks,
     inventory,
     invoices,
+    item_groups,
     item_prices,
     job_reports,
     journal,

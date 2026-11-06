@@ -3,6 +3,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
+import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
 
@@ -11,11 +12,16 @@ let nextKey = 1;
 const NEW_ITEM = '__new';
 /** The item column's fixed Subtotal entry: a subtotal is a line kind, not an item to set up. */
 const SUBTOTAL = '__subtotal';
+/** Item column values for groups: "group:<id>". */
+const GROUP = 'group:';
 
-/** `kind` is ITEM (a product, service or fixed charge), SUBTOTAL, DISCOUNT or CHARGE (a percent charge). */
+/**
+ * `kind` is ITEM (a product, service or fixed charge), SUBTOTAL, DISCOUNT, CHARGE (a percent
+ * charge) or GROUP (a group's heading; its items follow it with `inGroup` set to its key).
+ */
 export const blankLine = (accountId) => ({ key: nextKey++, kind: 'ITEM', productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
-/** True for a line that is not a plain item: a subtotal, a discount or a percent charge. */
+/** True for a line that is not a plain item: a subtotal, discount, percent charge or group heading. */
 export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
 
 /**
@@ -23,8 +29,23 @@ export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
  * with a blank line to type into at the end.
  */
 export function linesFromDocument(items, formLines, defaultAccountId) {
-  return [
-    ...documentOrder(items, formLines).map(({ item, form }) =>
+  // The heading whose items are being read, and how many are still to come.
+  let open = null;
+  const lines = documentOrder(items, formLines).map(({ item, form }) => {
+    const line = toLine(item, form, defaultAccountId);
+    if (line.kind === 'GROUP') open = { key: line.key, left: form.groupLineCount ?? 0 };
+    else if (open && item && !item.percentPpm && open.left > 0) {
+      line.inGroup = open.key;
+      open.left -= 1;
+      if (open.left === 0) open = null;
+    }
+    return line;
+  });
+  return [...lines, blankLine(defaultAccountId)];
+}
+
+function toLine(item, form, defaultAccountId) {
+  return (
       item?.percentPpm
         ? {
             ...blankLine(item.incomeAccountId),
@@ -44,6 +65,8 @@ export function linesFromDocument(items, formLines, defaultAccountId) {
             classId: form.classId ?? null,
             isTaxable: Boolean(form.isTaxable),
             rate: form.kind !== 'DISCOUNT' ? '' : form.percentPpm ? percentText(form.percentPpm) : centsToInput(-form.amountCents),
+            groupId: form.itemGroupId ?? null,
+            printItems: form.printItems ?? true,
           }
         : {
             ...blankLine(item.incomeAccountId),
@@ -53,15 +76,13 @@ export function linesFromDocument(items, formLines, defaultAccountId) {
             description: item.description,
             qty: formatQuantity(item.quantityE4).replace(/,/g, ''),
             rate: centsToInput(item.rateCents),
-          },
-    ),
-    blankLine(defaultAccountId),
-  ];
+          }
+  );
 }
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
-  if (line.kind === 'SUBTOTAL') return { blank: false, form: true, amount: null, errors: {} };
+  if (line.kind === 'SUBTOTAL' || line.kind === 'GROUP') return { blank: false, form: true, amount: null, errors: {} };
   if (line.kind === 'CHARGE') {
     const percentPpm = parsePercentPpm(line.rate);
     return { blank: false, form: true, amount: null, percentPpm, errors: { account: line.accountId === null, rate: percentPpm === null } };
@@ -87,6 +108,15 @@ export function evaluateLine(line) {
     amount,
     errors: { account: line.accountId === null, qty: qty === null, rate: rate === null || rate <= 0 },
   };
+}
+
+/** How many filled item lines follow the group heading at `index` and belong to it. */
+function groupItems(lines, evaluated, index) {
+  let count = 0;
+  for (let j = index + 1; j < lines.length && lines[j].inGroup === lines[index].key && !isFormLine(lines[j]); j += 1) {
+    if (!evaluated[j].blank) count += 1;
+  }
+  return count;
 }
 
 /**
@@ -131,11 +161,29 @@ export function summarizeLines(lines) {
                 classId: line.classId ?? null,
                 isTaxable: Boolean(line.isTaxable),
               }
-            : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
+            : line.kind === 'GROUP'
+              ? {
+                  afterLines: itemsBefore,
+                  kind: 'GROUP',
+                  description: line.description.trim(),
+                  itemGroupId: line.groupId ?? null,
+                  // Its items: the filled item lines right after it that came from it.
+                  groupLineCount: groupItems(lines, evaluated, i),
+                  groupQuantityE4: 10_000,
+                  printItems: line.printItems !== false,
+                }
+              : { afterLines: itemsBefore, kind: line.kind, description: line.description.trim() },
       );
       formIndex.push(i);
     } else if (!evaluated[i].blank) itemsBefore += 1;
   });
+  // A heading whose items were all removed is dropped.
+  for (let k = formLines.length - 1; k >= 0; k -= 1) {
+    if (formLines[k].kind === 'GROUP' && formLines[k].groupLineCount === 0) {
+      formLines.splice(k, 1);
+      formIndex.splice(k, 1);
+    }
+  }
   const payload = lines
     .map((line, i) => ({ line, state: evaluated[i] }))
     .filter(({ state }) => !state.blank && !state.form)
@@ -171,6 +219,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
 export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const { amountOf } = summarizeLines(lines);
+  const groups = useLedgerQuery(api.listItemGroups).data ?? [];
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
   const tableRef = useRef(null);
@@ -215,7 +264,10 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
 
   const update = (index, patch) => setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   const remove = (index) => {
-    setLines((ls) => (ls.length > 1 ? ls.filter((_, i) => i !== index) : [blankLine(defaultAccountId)]));
+    // Removing a group's heading leaves its items as ordinary lines.
+    const key = lines[index]?.kind === 'GROUP' ? lines[index].key : null;
+    const freed = (ls) => (key === null ? ls : ls.map((l) => (l.inGroup === key ? { ...l, inGroup: null } : l)));
+    setLines((ls) => (ls.length > 1 ? freed(ls.filter((_, i) => i !== index)) : [blankLine(defaultAccountId)]));
     setActive(null);
   };
   const activate = (index, col) => {
@@ -236,6 +288,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const pickProduct = (index, productId, known = null) => {
     if (productId === NEW_ITEM) return setAdding(index);
     const line = lines[index];
+    if (typeof productId === 'string' && productId.startsWith(GROUP)) return expandGroup(index, Number(productId.slice(GROUP.length)));
     if (productId === SUBTOTAL) return update(index, { kind: 'SUBTOTAL', productId: null, description: 'Subtotal', qty: '', rate: '', isTaxable: false });
     const product = known ?? products.find((p) => p.id === productId);
     if (!product) return update(index, { kind: 'ITEM', productId: null, ...(isFormLine(line) ? { description: '', rate: '' } : {}) });
@@ -266,6 +319,29 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       levelAuto: true,
       rateTyped: false,
     });
+  };
+  // A group becomes its heading and one line per item, priced for the customer.
+  const expandGroup = (index, groupId) => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const heading = { ...blankLine(lines[index].accountId), kind: 'GROUP', groupId, description: group.description ?? group.name, printItems: group.printItems };
+    const members = group.members.map((m) => {
+      const product = products.find((p) => p.id === m.productId);
+      return {
+        ...blankLine(product?.incomeAccountId ?? defaultAccountId),
+        productId: m.productId,
+        description: product?.description ?? product?.name ?? m.productName,
+        isTaxable: Boolean(product?.isTaxable),
+        qty: formatQuantity(m.quantityE4).replace(/,/g, ''),
+        rate: rateAt(m.productId, customerLevel) ?? '',
+        levelId: customerLevel,
+        levelAuto: true,
+        rateTyped: false,
+        inGroup: heading.key,
+      };
+    });
+    setLines((ls) => [...ls.slice(0, index), heading, ...members, ...ls.slice(index + 1)]);
+    setActive(null);
   };
   const pickLevel = (index, levelId) => {
     const line = lines[index];
@@ -324,7 +400,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           const formLine = isFormLine(line);
           const amount = amountOf[i];
           return (
-            <tr key={line.key} data-row={i} className={`qb-grid-row ${isActive ? 'is-active' : ''} ${formLine ? 'font-semibold' : ''}`}>
+            <tr key={line.key} data-row={i} className={`qb-grid-row ${isActive ? 'is-active' : ''} ${formLine ? 'font-semibold' : ''} ${line.inGroup ? 'bg-qb-canvas' : ''}`}>
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
               {isActive ? (
                 <>
@@ -332,8 +408,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                     <td className="qb-grid-cell-edit">
                       <select
                         data-col="product"
-                        value={line.kind === 'SUBTOTAL' ? SUBTOTAL : (line.productId ?? '')}
-                        onChange={(e) => pickProduct(i, e.target.value === '' ? null : [NEW_ITEM, SUBTOTAL].includes(e.target.value) ? e.target.value : Number(e.target.value))}
+                        value={line.kind === 'SUBTOTAL' ? SUBTOTAL : line.kind === 'GROUP' ? `${GROUP}${line.groupId}` : (line.productId ?? '')}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          pickProduct(i, v === '' ? null : [NEW_ITEM, SUBTOTAL].includes(v) || v.startsWith(GROUP) ? v : Number(v));
+                        }}
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
@@ -342,6 +421,12 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>
                         ))}
+                        {itemTypes &&
+                          groups.filter((g) => g.isActive || g.id === line.groupId).map((g) => (
+                            <option key={`g${g.id}`} value={`${GROUP}${g.id}`}>
+                              Group: {g.name}
+                            </option>
+                          ))}
                         {itemTypes && <option value={SUBTOTAL}>Subtotal</option>}
                         <option value={NEW_ITEM}>＋ Add new item…</option>
                       </select>
@@ -356,8 +441,15 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       placeholder="Description"
                     />
                   </td>
-                  {line.kind === 'SUBTOTAL' ? (
-                    <td colSpan={spareColumns} className="qb-grid-cell" />
+                  {line.kind === 'SUBTOTAL' || line.kind === 'GROUP' ? (
+                    <td colSpan={spareColumns} className="qb-grid-cell">
+                      {line.kind === 'GROUP' && (
+                        <label className="flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
+                          <input type="checkbox" className="accent-qb-green" checked={line.printItems === false} onChange={(e) => update(i, { printItems: !e.target.checked })} />
+                          Print as one line
+                        </label>
+                      )}
+                    </td>
                   ) : (
                     <>
                       <td className="qb-grid-cell-edit">
@@ -432,14 +524,21 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                 <>
                   {withProducts && (
                     <td className="qb-grid-cell" {...cellProps('product')}>
-                      {line.kind === 'SUBTOTAL' ? 'Subtotal' : (product?.name ?? '')}
+                      {line.kind === 'SUBTOTAL' ? 'Subtotal' : line.kind === 'GROUP' ? `Group: ${groups.find((g) => g.id === line.groupId)?.name ?? ''}` : (product?.name ?? '')}
                     </td>
                   )}
                   <td className="qb-grid-cell" title={line.description} {...cellProps('description')}>
                     {line.description}
                   </td>
-                  {line.kind === 'SUBTOTAL' ? (
-                    <td colSpan={spareColumns} className="qb-grid-cell" />
+                  {line.kind === 'SUBTOTAL' || line.kind === 'GROUP' ? (
+                    <td colSpan={spareColumns} className="qb-grid-cell">
+                      {line.kind === 'GROUP' && (
+                        <label className="flex items-center gap-1 font-normal" title="On the printed form, show the group as one line with its total">
+                          <input type="checkbox" className="accent-qb-green" checked={line.printItems === false} onChange={(e) => update(i, { printItems: !e.target.checked })} />
+                          Print as one line
+                        </label>
+                      )}
+                    </td>
                   ) : (
                     <>
                       <td className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
@@ -470,7 +569,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
               </td>
               {withTax && (
                 <td className="qb-grid-cell cell-flush text-center">
-                  {line.kind !== 'SUBTOTAL' && <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />}
+                  {!['SUBTOTAL', 'GROUP'].includes(line.kind) && <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />}
                 </td>
               )}
               <td className="qb-grid-cell cell-flush text-center">

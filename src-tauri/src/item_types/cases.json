@@ -477,5 +477,109 @@
       }
     ],
     "error": "CHARGE_ROUNDS_TO_ZERO"
+  },
+  {
+    "name": "a group, then 10% off it",
+    "items": [
+      [
+        1000,
+        true
+      ],
+      [
+        2000,
+        true
+      ],
+      [
+        500,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      },
+      {
+        "afterLines": 2,
+        "kind": "DISCOUNT",
+        "percentPpm": 100000,
+        "accountId": 1,
+        "isTaxable": true
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "F",
+        0,
+        3000
+      ],
+      [
+        2,
+        "I",
+        0
+      ],
+      [
+        3,
+        "I",
+        1
+      ],
+      [
+        4,
+        "F",
+        1,
+        -300
+      ],
+      [
+        5,
+        "I",
+        2
+      ]
+    ],
+    "linesCents": 3200,
+    "taxableCents": 2700
+  },
+  {
+    "name": "a subtotal inside a group",
+    "items": [
+      [
+        1000,
+        false
+      ],
+      [
+        2000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      },
+      {
+        "afterLines": 1,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "error": "INSIDE_GROUP"
+  },
+  {
+    "name": "a group with too few items after it",
+    "items": [
+      [
+        1000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      }
+    ],
+    "error": "BAD_GROUP"
   }
 ]

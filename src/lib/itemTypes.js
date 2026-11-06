@@ -18,11 +18,17 @@ export function layOut(items, formLines = []) {
   let taxableCents = 0;
   // The amount of the line above, when a discount may apply to it.
   let base = null;
+  // The open group: its heading's row, the position after its last item, and its total so far.
+  let group = null;
   let error = null;
   for (let position = 0; position <= items.length && !error; position += 1) {
     for (const [index, f] of formLines.entries()) {
       if (f.afterLines !== position || error) continue;
       number += 1;
+      if (group) {
+        error = 'INSIDE_GROUP';
+        break;
+      }
       let amountCents = 0;
       if (f.kind === 'SUBTOTAL') {
         amountCents = sinceSubtotal;
@@ -51,6 +57,14 @@ export function layOut(items, formLines = []) {
         linesCents -= off;
         if (f.isTaxable) taxableCents -= off;
         amountCents = -off;
+      } else if (f.kind === 'GROUP') {
+        const count = f.groupLineCount ?? 0;
+        if (count < 1 || position + count > items.length || (f.groupQuantityE4 ?? 1) <= 0) {
+          error = 'BAD_GROUP';
+          break;
+        }
+        group = { row: rows.length, end: position + count, total: 0 };
+        base = null;
       } else if (f.kind === 'CHARGE') {
         const above = base;
         base = null;
@@ -85,6 +99,14 @@ export function layOut(items, formLines = []) {
       if (item.isTaxable) taxableCents += amount;
       base = amount;
       rows.push({ number, item: position });
+      if (group) {
+        group.total += amount;
+        if (position + 1 === group.end) {
+          rows[group.row].amountCents = group.total;
+          base = group.total;
+          group = null;
+        }
+      }
     }
   }
   if (!error && taxableCents < 0) error = 'TAXABLE_NEGATIVE';
@@ -129,6 +151,8 @@ export function layoutMessage(code) {
       CHARGE_NEEDS_BASE: 'A percent charge must come right after an item or a subtotal, and that line must be above zero.',
       BAD_CHARGE_PERCENT: 'Enter each percent charge as a percentage such as 3%.',
       CHARGE_ROUNDS_TO_ZERO: 'A percent charge rounds to 0.00; use a larger percentage or a fixed charge.',
+      INSIDE_GROUP: 'A group holds only its items; move the subtotal, discount or charge below the group.',
+      BAD_GROUP: 'A group must be followed by its items.',
       TAXABLE_NEGATIVE: 'The taxable discounts are more than the taxable lines; untick Tax on a discount.',
     }[code] ?? 'The lines don’t add up; check the subtotals and discounts.'
   );

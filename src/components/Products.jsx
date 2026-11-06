@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import PriceLevels from './PriceLevels.jsx';
+import ItemGroups from './ItemGroups.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
@@ -144,6 +145,7 @@ export default function Products({ accounts, intent }) {
   const [showInactive, setShowInactive] = useState(false);
   const [changingPrices, setChangingPrices] = useState(false);
   const [pricingLevels, setPricingLevels] = useState(false);
+  const [grouping, setGrouping] = useState(false);
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
@@ -260,13 +262,17 @@ export default function Products({ accounts, intent }) {
           }}
         />
       )}
+      {grouping && <ItemGroups products={data ?? []} onClose={() => setGrouping(false)} />}
       {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
       {pricingLevels && !changingPrices && <PriceLevels onClose={() => setPricingLevels(false)} />}
       <section className={`qb-panel min-h-0 flex-1 flex-col ${changingPrices || pricingLevels ? 'hidden' : 'flex'}`}>
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
-          <button type="button" className="qb-btn qb-btn-secondary ml-auto mr-2 h-row flex-none" onClick={() => setPricingLevels(true)}>
+          <button type="button" className="qb-btn qb-btn-secondary ml-auto mr-2 h-row flex-none" onClick={() => setGrouping(true)}>
+            Groups…
+          </button>
+          <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setPricingLevels(true)}>
             Price levels…
           </button>
           <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setChangingPrices(true)}>
