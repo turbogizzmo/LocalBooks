@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -67,17 +69,28 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const formClass = useFormClass(accounts);
+  const openFromList = useOpenFromList();
   const { lines, invalid, total } = summarizeSplits(rows);
 
-  const save = async () => {
+  const clear = () => {
+    setVendor('');
+    setPoDate(todayIso());
+    setExpected('');
+    setMemo('');
+    setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    formClass.reset();
+    setError(null);
+  };
+
+  const save = async (mode) => {
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (invalid > 0) return setError(`${invalid} row(s) need an account and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one line.');
     const posted = formClass.apply(lines).map(({ memo: description, ...l }) => ({ ...l, description }));
     setBusy(true);
     try {
-      await api.createPurchaseOrder({ vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted });
-      onSaved(`Purchase order for ${vendor.trim()} saved: ${formatCents(total)}. It does not post to the books until you turn it into a bill.`);
+      const id = await api.createPurchaseOrder({ vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted });
+      onSaved(`Purchase order for ${vendor.trim()} saved: ${formatCents(total)}. It does not post to the books until you turn it into a bill.`, mode === 'print' ? id : null);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -87,6 +100,14 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Purchase order"
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({ onNew: clear, onSave: () => save('save'), busy }),
+          [{ id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] }],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">New purchase order</h2>
         <label>
@@ -118,7 +139,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>Close</button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>Save purchase order</button>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('save')} disabled={busy}>Save purchase order</button>
         </div>
       </div>
     </section>
@@ -176,6 +197,8 @@ export default function PurchaseOrders({ accounts, intent }) {
   const [notice, setNotice] = useState(null);
   const [billing, setBilling] = useState(null);
   const [printing, setPrinting] = useState(null);
+  // A purchase order saved with Save and print, printed once the list has it.
+  const [printId, setPrintId] = useState(null);
   const [filter, setFilter] = useState('OPEN');
   const sorter = useSort((data ?? []).filter((o) => filter === 'ALL' || o.status === filter), {
     number: (o) => o.poNumber,
@@ -197,6 +220,14 @@ export default function PurchaseOrders({ accounts, intent }) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
   };
+  useEffect(() => {
+    const order = printId !== null && (data ?? []).find((o) => o.id === printId);
+    if (!order) return;
+    setPrintId(null);
+    print(order);
+    // print is recreated each render; only a newly listed order should print.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printId, data]);
   const setClosed = async (order, closed) => {
     try {
       await api.setPurchaseOrderClosed(order.id, closed);
@@ -220,9 +251,10 @@ export default function PurchaseOrders({ accounts, intent }) {
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
           onCancel={() => setComposing(false)}
-          onSaved={(text) => {
+          onSaved={(text, toPrint) => {
             setComposing(false);
             setNotice({ kind: 'success', text });
+            setPrintId(toPrint);
             reload();
           }}
         />

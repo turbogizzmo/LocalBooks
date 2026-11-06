@@ -32,6 +32,13 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'form-toolbar', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
+    title: 'Use the toolbar on a form',
+    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
+    keywords: 'toolbar ribbon buttons print email attach void find previous next payment method cash check card tiles',
+    guide: 'getting-started',
+  },
+  {
     id: 'preferences', area: 'company', views: ['settings/preferences'],
     title: 'Set company details and preferences',
     body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices, estimates and reports; Settings › Custom Forms sets how invoices and estimates look.',

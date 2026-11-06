@@ -170,6 +170,28 @@ Also in **Edit › Preferences › Desktop View**, for this computer:
 **Start on** takes effect the next time a company opens. Holding **Alt** (**Option** on a Mac) while
 clicking **Open** still opens with no windows, whatever you chose.
 
+## Use the toolbar on a form
+
+Invoices, sales receipts, estimates, credit memos, bills, checks and expenses, vendor credits,
+purchase orders, deposits, transfers, journal entries and Receive Payment each have a row of large
+buttons across the top. A form shows only the buttons it can use; a button it can't use right now
+is greyed out, and hovering over it says why.
+
+| Button | What it does |
+|---|---|
+| **Find** | Opens **Find Transactions**. |
+| **Previous** / **Next** | On an invoice, opens the invoice before or after the one on the form (by number). With nothing open, **Previous** opens the latest invoice. Save or clear your changes first. |
+| **New** | Clears the form for a new one. While you're editing a saved transaction, it closes the edit instead. |
+| **Save** | Saves and posts, the same as the button at the bottom of the form. |
+| **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. |
+| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. |
+| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. |
+| **Attach File** | On a new form, picks files to attach when it posts. On a saved invoice, shows its attachments. |
+| **Memorize** | Saves the form as a recurring transaction. |
+
+Press **Tab** to move through the buttons, or the **Left** and **Right** arrow keys to move along the
+row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the menu.
+
 ## Find things in the menu bar
 
 The menu bar is laid out like QuickBooks Desktop's, so the commands you know are where you expect

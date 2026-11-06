@@ -38,6 +38,9 @@ Loss** for you. See [Record customer payments](customer-payments.md).
 
 ## Print or email it
 
+With the invoice open on the form, use **Print ▾** or **Email ▾** in the toolbar. On a new
+invoice, **Print ▾ › Post and print…** and **Email ▾ › Post and email…** post it first. Or:
+
 1. In the invoice list, open the row's **Actions** menu.
 2. Choose **Print…** to print it, **Save as PDF…** to save a PDF file, or **Email…** to open a
    new message in your mail app with the PDF attached.

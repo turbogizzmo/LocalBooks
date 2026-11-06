@@ -5,7 +5,8 @@ row in the same PR (see `AGENTS.md`). Keep the table format: one row per gap, `|
 columns below in this order, so tools can read it.
 
 - **id:** stable; never reuse one. `R*` rows come from `docs/requirements-gap-review.md` (its
-  summary number), `A*` rows from the 2026-10-26 architecture audit.
+  summary number), `A*` rows from the 2026-10-26 architecture audit, `U*` rows from testers'
+  feedback on how the screens work.
 - **status:** `open`, `partial`, `in-progress` (claimed by an open PR), `done` (link the PR), or
   `wontfix` (say why in the notes).
 - **size:** S ≈ a day or two, M ≈ a week, L ≈ several weeks, XL ≈ a project of its own.
@@ -39,6 +40,8 @@ re-check one against the code before you start it.
 | R19 | partial | M | Accessibility untested | Every screen is reachable and operable by keyboard; an automated a11y check runs in the e2e suite |
 | R20 | partial | S | US-only, and not stated anywhere | README and the tester page say it is US-only and what that means |
 | R21 | done | S | PCI DSS: out of scope while card numbers are never stored | Keep a check that no field accepts a card number |
+| U1 | in-progress | M | Transaction forms had no toolbar, and the payment method was a drop-down, unlike the desktop forms people are moving from | Each transaction form shows a toolbar of only the actions it supports (Find, New, Save, Void, Print, Email, Attach, Memorize), reachable by Tab and arrow keys; Receive Payment and sales receipts pick the method with `aria-pressed` tiles |
+| U2 | open | M | The form toolbar's Previous/Next, Print and Email on a saved document work on invoices only; other forms open saved transactions from their lists, and bills, checks, credit memos and deposits have no printable form of their own | Previous/Next step through saved bills, checks, sales receipts and journal entries; each of those prints from the toolbar |
 
 ## Engineering (from the 2026-10-26 audit)
 

@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -27,6 +29,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
   useEffect(() => bankRef.current?.focus(), []);
@@ -48,6 +51,15 @@ function DepositForm({ accounts, onPosted, onCancel }) {
       return next;
     });
 
+  const clear = () => {
+    setPicked(new Set());
+    setRows([blankSplit(null)]);
+    setMemo('');
+    formClass.reset();
+    setError(null);
+    bankRef.current?.focus();
+  };
+
   const save = async () => {
     if (bankId === null) return setError('Choose the bank account to deposit into.');
     if (other.invalid > 0) return setError(`${other.invalid} other-funds row(s) need an account and an amount above zero.`);
@@ -65,11 +77,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
         otherLines,
       });
       onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}.`);
-      setPicked(new Set());
-      setRows([blankSplit(null)]);
-      setMemo('');
-      formClass.reset();
-      setError(null);
+      clear();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -79,6 +87,10 @@ function DepositForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Bank deposit"
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Bank deposit</h2>
         <label>
@@ -179,12 +191,23 @@ function TransferForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const fromRef = useRef(null);
+  const openFromList = useOpenFromList();
 
   useEffect(() => fromRef.current?.focus(), []);
   const cents = parseMoneyToCents(amount);
 
+  const clear = () => {
+    setFromId(null);
+    setToId(null);
+    setAmount('');
+    setMemo('');
+    setError(null);
+    fromRef.current?.focus();
+  };
+
+  // Called by the form's submit and by the toolbar's Save, which passes no event.
   const save = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (fromId === null || toId === null) return setError('Choose both accounts.');
     if (fromId === toId) return setError('Choose two different accounts.');
     if (cents === null || cents <= 0) return setError('Enter an amount above zero.');
@@ -204,6 +227,10 @@ function TransferForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Transfer"
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+      />
       <form className="flex flex-wrap items-end gap-2 px-2 py-1" onSubmit={save}>
         <h2 className="mr-2 self-center text-md font-semibold">Transfer</h2>
         <label>
