@@ -194,9 +194,12 @@ function listenOnPage() {
  */
 export function runFormCommand(name) {
   const active = document.activeElement;
-  const visible = openForms.filter((f) => f.root()?.isConnected && f.root().getClientRects().length > 0);
-  const target = visible.find((f) => f.root().contains(active)) ?? visible[visible.length - 1];
-  return target ? target.command(name) !== false : false;
+  // A form unmounting may have no root any more before it leaves the list.
+  const visible = openForms
+    .map((f) => ({ f, root: f.root() }))
+    .filter(({ root }) => root?.isConnected && root.getClientRects().length > 0);
+  const target = visible.find(({ root }) => root.contains(active)) ?? visible[visible.length - 1];
+  return target ? target.f.command(name) !== false : false;
 }
 
 /** Sends 'insert-line' / 'delete-line' to the grid with focus inside `root`, or its first grid. */
