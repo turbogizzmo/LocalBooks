@@ -456,10 +456,19 @@ function UnbalancedList({ items }) {
   );
 }
 
+/** What a post did with the file's classes, as a sentence (empty when the file has none). */
+function classesNote(c) {
+  if (!c) return '';
+  return (
+    ` Classes: ${c.added} added, ${c.matched} already there; each line keeps its class.` +
+    (c.trackingTurnedOn ? ' Class tracking is now on (Settings › Class tracking).' : '')
+  );
+}
+
 /** Customers, vendors and items from the file, brought in as LocalBooks records. */
 function ListsPanel({ summary, busy, accountsReady, run }) {
   const l = summary.lists;
-  if (!l || l.customers + l.vendors + l.items === 0) return null;
+  if (!l || l.customers + l.vendors + l.items + (l.classes ?? 0) === 0) return null;
   const all = l.customers + l.vendors + l.items;
   const done = l.customersDone + l.vendorsDone + l.itemsDone;
   return (
@@ -468,6 +477,10 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
       <span className="text-qb-ink-muted">
         {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items in the file
         {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
+        {l.classes > 0 &&
+          (l.classesDone === l.classes
+            ? ` · ${countOf(l.classes, ['class', 'classes'])} in LocalBooks`
+            : ` · ${countOf(l.classes, ['class', 'classes'])}, added when you post (class tracking turns on)`)}
       </span>
       {done < all && !summary.listsOnly && (
         <button
@@ -605,7 +618,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
     if (
       !(await askConfirm(
         `Add this file’s lists to your books?\n\n${countOf(used.length, ['account', 'accounts'])}, ${countOf(l.customers, ['customer', 'customers'])}, ` +
-          `${countOf(l.vendors, ['vendor', 'vendors'])} and ${countOf(l.items, ['item', 'items'])}: each matches an existing record of the same name or is created. ` +
+          `${countOf(l.vendors, ['vendor', 'vendors'])}, ${countOf(l.items, ['item', 'items'])} and ${countOf(l.classes ?? 0, ['class', 'classes'])}: each matches an existing record of the same name or is created. ` +
           'No transactions are posted. You can undo it later with "Reverse added lists" or "Start over".',
       ))
     )
@@ -622,7 +635,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           `. Customers: ${li.customersCreated} added, ${li.customersMatched} already there. Vendors: ${li.vendorsCreated} added, ${li.vendorsMatched} already there. ` +
           `Items: ${li.itemsCreated} added, ${li.itemsMatched} already there` +
           (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
-          '.'
+          '.' +
+          classesNote(r.classes)
         );
       },
     );
@@ -665,7 +679,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           (f?.fellBack ? ` ${countOf(f.fellBack, ['document', 'documents'])} posted as journal entries instead (listed in step 3).` : '') +
           (f?.notImported ? ` ${countOf(f.notImported, ['estimate or purchase order', 'estimates and purchase orders'])} could not be brought in (listed in step 3; they post nothing).` : '') +
           (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
-          (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '')
+          (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '') +
+          classesNote(r.classes)
         );
       },
     );

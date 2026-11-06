@@ -415,3 +415,122 @@ async fn an_import_brings_in_price_levels_and_sets_customer_defaults() {
     let imported = crate::price_levels::history(&pool, 10).await.unwrap().iter().filter(|h| h.details["event"] == "PRICE_LEVEL_IMPORTED").count();
     assert_eq!(imported, 3);
 }
+
+/// Synthetic books with classes: a declared list (a subclass, a hidden class) and a class that only
+/// a transaction line names.
+const CLASSES_IIF: &str = "!ACCNT\tNAME\tACCNTTYPE\r
+ACCNT\tAccounts Receivable\tAR\r
+ACCNT\tChecking\tBANK\r
+ACCNT\tConstruction:Labor\tINC\r
+ACCNT\tRepairs\tEXP\r
+!CLASS\tNAME\tHIDDEN\r
+CLASS\tRemodel\tN\r
+CLASS\tRemodel:Kitchen\tN\r
+CLASS\tOld Jobs\tY\r
+!CUST\tNAME\r
+CUST\tCustomer\r
+!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\r
+!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\r
+!ENDTRNS\r
+TRNS\t\tINVOICE\t7/16/98\tAccounts Receivable\tCustomer\t\t175\t1\t\r
+SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\tRemodel : Kitchen\t-100\t\tCabinets\r
+SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\tOld Jobs\t-75\t\tOld work\r
+ENDTRNS\r
+TRNS\t\tGENERAL JOURNAL\t7/20/98\tChecking\t\t\t-40\t\t\r
+SPL\t\tGENERAL JOURNAL\t7/20/98\tRepairs\t\tNew Build\t40\t\tDoor\r
+ENDTRNS\r
+";
+
+#[test]
+fn reads_the_class_list_and_each_lines_class() {
+    let ledger = read(CLASSES_IIF.as_bytes()).unwrap();
+    assert_eq!(
+        ledger.classes,
+        [("New Build".to_string(), true), ("Old Jobs".to_string(), false), ("Remodel".to_string(), true), ("Remodel:Kitchen".to_string(), true)],
+        "declared classes keep HIDDEN; a class only a line names is added"
+    );
+    let invoice = by_kind(&ledger, "Invoice");
+    let classes: Vec<Option<&str>> = invoice.lines.iter().map(|l| l.class.as_deref()).collect();
+    assert_eq!(classes, [None, Some("Remodel:Kitchen"), Some("Old Jobs")]);
+    let Some(SourceDocument::Invoice { lines, .. }) = &invoice.document else { panic!("an invoice document") };
+    assert_eq!(lines.iter().map(|l| l.class.as_deref()).collect::<Vec<_>>(), [Some("Remodel:Kitchen"), Some("Old Jobs")]);
+}
+
+#[test]
+fn a_file_with_only_a_class_list_reads() {
+    let ledger = read(b"!CLASS\tNAME\r\nCLASS\tEast\r\nCLASS\tEast:Retail\r\n").unwrap();
+    assert_eq!(ledger.classes, [("East".to_string(), true), ("East:Retail".to_string(), true)]);
+}
+
+async fn class_of_lines(pool: &sqlx::SqlitePool, table: &str) -> Vec<Option<String>> {
+    sqlx::query_scalar(&format!("SELECT k.full_name FROM {table} l LEFT JOIN v_classes k ON k.id = l.class_id ORDER BY l.id"))
+        .fetch_all(pool)
+        .await
+        .unwrap()
+}
+
+async fn class_active(pool: &sqlx::SqlitePool, full_name: &str) -> bool {
+    sqlx::query_scalar("SELECT is_active FROM v_classes WHERE full_name = ?1").bind(full_name).fetch_one(pool).await.unwrap()
+}
+
+async fn tracking(pool: &sqlx::SqlitePool) -> String {
+    crate::preferences::get(pool, "class_tracking").await.unwrap()
+}
+
+/// A journal import creates the classes, posts every line with its class, keeps the hidden class
+/// inactive, turns class tracking on, and a reverse makes the created classes inactive.
+#[tokio::test]
+async fn a_journal_import_brings_classes_and_turns_tracking_on() {
+    use crate::qbw_ledger_import::{auto_map_accounts, batch_summary, post_batch, reverse_batch, stage, ClassesResult, ImportMode, PostLedgerInput};
+    let pool = crate::db::test_pool().await;
+    assert_eq!(tracking(&pool).await, "false", "off in a new company");
+    let ledger = read(CLASSES_IIF.as_bytes()).unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Classes.iif"), 1, &ledger).await.unwrap();
+    let lists = batch_summary(&pool, batch).await.unwrap().lists;
+    assert_eq!((lists.classes, lists.classes_done), (4, 0));
+    auto_map_accounts(&pool, batch).await.unwrap();
+
+    let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Journal }).await.unwrap();
+    assert_eq!(posted.classes, Some(ClassesResult { added: 4, matched: 0, tracking_turned_on: true }));
+    assert_eq!(tracking(&pool).await, "true");
+    assert_eq!(batch_summary(&pool, batch).await.unwrap().lists.classes_done, 4);
+    // The invoice (dated first) then the journal entry, each line in file order.
+    let lines = class_of_lines(&pool, "journal_lines").await;
+    assert_eq!(lines, [None, Some("Remodel:Kitchen".into()), Some("Old Jobs".into()), None, Some("New Build".into())]);
+    assert!(class_active(&pool, "Remodel:Kitchen").await);
+    assert!(!class_active(&pool, "Old Jobs").await, "hidden in the file, inactive here, still on its line");
+
+    let reversed = reverse_batch(&pool, batch).await.unwrap();
+    assert_eq!(reversed.entries_voided, 2);
+    for class in ["New Build", "Remodel", "Remodel:Kitchen", "Old Jobs"] {
+        assert!(!class_active(&pool, class).await, "{class} is inactive after the reverse");
+    }
+}
+
+/// A full import matches classes LocalBooks already has (an inactive one stays inactive) and puts
+/// each class on the document lines as well as the entry.
+#[tokio::test]
+async fn a_full_import_matches_existing_classes_and_classes_document_lines() {
+    use crate::classes::{create_class, set_class_active, ClassInput};
+    use crate::qbw_ledger_import::{auto_map_accounts, post_batch, stage, ClassesResult, ImportMode, PostLedgerInput};
+    let pool = crate::db::test_pool().await;
+    let remodel = create_class(&pool, ClassInput { name: "REMODEL".into(), parent_id: None }).await.unwrap();
+    let new_build = create_class(&pool, ClassInput { name: "new build".into(), parent_id: None }).await.unwrap();
+    set_class_active(&pool, new_build.id, false).await.unwrap();
+    crate::preferences::set(&pool, "class_tracking", "true").await.unwrap();
+
+    let ledger = read(CLASSES_IIF.as_bytes()).unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Classes.iif"), 1, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+    assert_eq!(posted.full.as_ref().map(|f| (f.invoices, f.fell_back)), Some((1, 0)), "{:?}", posted.full);
+    assert_eq!(posted.classes, Some(ClassesResult { added: 2, matched: 2, tracking_turned_on: false }), "already on");
+
+    let kitchen: i64 = sqlx::query_scalar("SELECT parent_id FROM classes WHERE name = 'Kitchen'").fetch_one(&pool).await.unwrap();
+    assert_eq!(kitchen, remodel.id, "the subclass goes under the class that was already there");
+    assert_eq!(class_of_lines(&pool, "invoice_items").await, [Some("REMODEL:Kitchen".into()), Some("Old Jobs".into())]);
+    let lines = class_of_lines(&pool, "journal_lines").await;
+    assert_eq!(lines, [None, Some("REMODEL:Kitchen".into()), Some("Old Jobs".into()), None, Some("new build".into())]);
+    assert!(!class_active(&pool, "new build").await, "inactive before the import, inactive after");
+    assert!(class_active(&pool, "REMODEL").await);
+}

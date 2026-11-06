@@ -106,8 +106,8 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
         .map_err(db_err)?;
         for (n, l) in t.lines.iter().enumerate() {
             sqlx::query(
-                "INSERT INTO ledger_import_lines (batch_id, source_txn_id, line_no, source_account_id, cents, memo)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO ledger_import_lines (batch_id, source_txn_id, line_no, source_account_id, cents, memo, class_name)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )
             .bind(batch_id)
             .bind(t.id)
@@ -115,6 +115,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
             .bind(l.account_id)
             .bind(l.cents)
             .bind(&l.memo)
+            .bind(&l.class)
             .execute(&mut *tx)
             .await
             .map_err(db_err)?;
@@ -181,6 +182,15 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
                 .await
                 .map_err(db_err)?;
         }
+    }
+    for (name, active) in &ledger.classes {
+        sqlx::query("INSERT OR IGNORE INTO ledger_import_classes (batch_id, full_name, is_active) VALUES (?1, ?2, ?3)")
+            .bind(batch_id)
+            .bind(name)
+            .bind(*active as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
     }
     for level in &ledger.sales_lists.price_levels {
         sqlx::query(
@@ -278,6 +288,10 @@ pub struct ListsView {
     pub vendors_done: i64,
     pub items: i64,
     pub items_done: i64,
+    /// Classes in the file (its class list and any class a line names), and how many are matched
+    /// to or created as LocalBooks classes.
+    pub classes: i64,
+    pub classes_done: i64,
 }
 
 /// The copy taken just before the import posted, which "Start over" restores.
@@ -435,7 +449,9 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
             (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR') AS vendors,
             (SELECT COUNT(*) FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND party_id IS NOT NULL) AS vendors_done,
             (SELECT COUNT(*) FROM ledger_import_items WHERE batch_id = ?1) AS items,
-            (SELECT COUNT(*) FROM ledger_import_items WHERE batch_id = ?1 AND product_id IS NOT NULL) AS items_done",
+            (SELECT COUNT(*) FROM ledger_import_items WHERE batch_id = ?1 AND product_id IS NOT NULL) AS items_done,
+            (SELECT COUNT(*) FROM ledger_import_classes WHERE batch_id = ?1) AS classes,
+            (SELECT COUNT(*) FROM ledger_import_classes WHERE batch_id = ?1 AND class_id IS NOT NULL) AS classes_done",
     )
     .bind(batch_id)
     .fetch_one(pool)
@@ -1159,6 +1175,91 @@ pub struct PostLedgerResult {
     /// For a file of lists only: the accounts, and the customers, vendors and items, it added.
     pub accounts: Option<AutoMapResult>,
     pub lists: Option<ImportListsResult>,
+    /// What became of the file's classes, when it has any.
+    pub classes: Option<ClassesResult>,
+}
+
+/// What an import did with the file's classes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClassesResult {
+    /// Classes created, subclasses included.
+    pub added: i64,
+    /// Classes the file has that LocalBooks already had (matched by name).
+    pub matched: i64,
+    /// Class tracking was off, and the import turned it on.
+    pub tracking_turned_on: bool,
+}
+
+/// The LocalBooks classes a batch's classes became.
+#[derive(Default)]
+struct ClassMap {
+    /// Lowercased `Parent:Child` path → class.
+    ids: HashMap<String, i64>,
+    /// Classes to make inactive once the lines are posted: hidden in the file, or inactive in
+    /// LocalBooks before the import needed them.
+    hide_after: Vec<i64>,
+    result: ClassesResult,
+}
+
+impl ClassMap {
+    fn id(&self, name: Option<&str>) -> Option<i64> {
+        name.and_then(|n| self.ids.get(&n.to_lowercase()).copied())
+    }
+}
+
+/// Matches each staged class to a LocalBooks class by its `Parent:Child` path, creating what is
+/// missing, records the match, and turns class tracking on. Every class is active until
+/// [`finish_classes`], since lines can only be posted to active classes.
+async fn bring_in_classes(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, batch_id: i64) -> Result<ClassMap, String> {
+    let rows: Vec<(String, bool, Option<i64>, bool)> = sqlx::query_as(
+        "SELECT full_name, is_active, class_id, created_by_import FROM ledger_import_classes WHERE batch_id = ?1 ORDER BY lower(full_name)",
+    )
+    .bind(batch_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let mut map = ClassMap::default();
+    for (name, active, earlier, created_earlier) in rows {
+        let class = crate::classes::find_or_create_path(tx, &name).await?;
+        // A class this batch created before (posted, reversed, posted again) is still its own.
+        let created = class.created || (created_earlier && earlier == Some(class.id));
+        if !active || (class.was_inactive && !created) {
+            map.hide_after.push(class.id);
+        }
+        if created {
+            map.result.added += 1;
+        } else {
+            map.result.matched += 1;
+        }
+        sqlx::query("UPDATE ledger_import_classes SET class_id = ?3, created_by_import = ?4 WHERE batch_id = ?1 AND full_name = ?2")
+            .bind(batch_id)
+            .bind(&name)
+            .bind(class.id)
+            .bind(created as i64)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        map.ids.insert(name.to_lowercase(), class.id);
+    }
+    if !map.ids.is_empty() {
+        let changed = sqlx::query(
+            "INSERT INTO system_preferences (key, value) VALUES ('class_tracking', 'true')
+             ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE system_preferences.value <> 'true'",
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        map.result.tracking_turned_on = changed.rows_affected() > 0;
+    }
+    Ok(map)
+}
+
+/// Makes the classes that should be inactive inactive again, once the lines are posted.
+async fn finish_classes(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, map: &ClassMap) -> Result<Option<ClassesResult>, String> {
+    crate::classes::deactivate_with_subclasses(tx, &map.hide_after).await?;
+    Ok((!map.ids.is_empty()).then(|| map.result.clone()))
 }
 
 /// How a batch posts: every transaction as a journal entry, or sales documents as LocalBooks
@@ -1293,9 +1394,10 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let mut lines: BTreeMap<i64, Vec<(i64, i64, Option<String>)>> = BTreeMap::new();
-    for (txn, account, cents, memo) in sqlx::query_as::<_, (i64, i64, i64, Option<String>)>(
-        "SELECT source_txn_id, source_account_id, cents, memo FROM ledger_import_lines WHERE batch_id = ?1 ORDER BY source_txn_id, line_no",
+    // (account, cents, memo, class name); the class becomes an id once the classes are in.
+    let mut lines: BTreeMap<i64, Vec<(i64, i64, Option<String>, Option<String>)>> = BTreeMap::new();
+    for (txn, account, cents, memo, class) in sqlx::query_as::<_, (i64, i64, i64, Option<String>, Option<String>)>(
+        "SELECT source_txn_id, source_account_id, cents, memo, class_name FROM ledger_import_lines WHERE batch_id = ?1 ORDER BY source_txn_id, line_no",
     )
     .bind(batch_id)
     .fetch_all(pool)
@@ -1303,7 +1405,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     .map_err(db_err)?
     {
         // Unmapped accounts only occur on unbalanced transactions, which are never posted.
-        lines.entry(txn).or_default().push((map.get(&account).copied().unwrap_or(0), cents, memo));
+        lines.entry(txn).or_default().push((map.get(&account).copied().unwrap_or(0), cents, memo, class));
     }
 
     if input.mode == ImportMode::Full {
@@ -1311,6 +1413,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     }
     let mut result = PostLedgerResult::default();
     let mut staged = Vec::with_capacity(txns.len());
+    let mut line_classes: Vec<Vec<Option<String>>> = Vec::with_capacity(txns.len());
     for t in txns {
         if t.imbalance_cents != 0 {
             result.skipped_unbalanced += 1;
@@ -1330,6 +1433,8 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         if source_lines.is_empty() && document.is_none() {
             continue;
         }
+        let (source_lines, classes): (Vec<_>, Vec<_>) = source_lines.into_iter().map(|(a, c, m, class)| ((a, c, m, None), class)).unzip();
+        line_classes.push(classes);
         staged.push(Staged { source_id: t.source_id, kind: t.kind, date, doc_num: t.doc_num, name: t.name, memo: t.memo, lines: source_lines, document });
     }
     if input.mode == ImportMode::Full && result.skipped_already_posted > 0 {
@@ -1337,6 +1442,15 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
     }
 
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let classes = match bring_in_classes(&mut tx, batch_id).await {
+        Ok(classes) => classes,
+        Err(err) => return Err(ledger::rollback(tx, err).await),
+    };
+    for (t, names) in staged.iter_mut().zip(&line_classes) {
+        for (line, name) in t.lines.iter_mut().zip(names) {
+            line.3 = classes.id(name.as_deref());
+        }
+    }
     let outcomes = match input.mode {
         ImportMode::Journal => {
             let mut outcomes = Vec::with_capacity(staged.len());
@@ -1348,10 +1462,10 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
                     lines: t
                         .lines
                         .iter()
-                        .map(|(account, cents, memo)| {
+                        .map(|(account, cents, memo, class)| {
                             let mut line = if *cents < 0 { JournalLine::debit(*account, -cents) } else { JournalLine::credit(*account, *cents) };
                             line.memo = memo.clone();
-                            line
+                            line.with_class(*class)
                         })
                         .collect(),
                     currency: None,
@@ -1363,7 +1477,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             }
             outcomes
         }
-        ImportMode::Full => match crate::qbw_full_import::post_all(&mut tx, batch_id, &map, &staged).await {
+        ImportMode::Full => match crate::qbw_full_import::post_all(&mut tx, batch_id, &map, &classes.ids, &staged).await {
             Ok((outcomes, counts)) => {
                 result.full = Some(counts);
                 outcomes
@@ -1371,6 +1485,10 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
             Err(err) => return Err(ledger::rollback(tx, err).await),
         },
     };
+    match finish_classes(&mut tx, &classes).await {
+        Ok(done) => result.classes = done,
+        Err(err) => return Err(ledger::rollback(tx, err).await),
+    }
     let line_counts: HashMap<i64, usize> = staged.iter().map(|t| (t.source_id, t.lines.len())).collect();
     for o in &outcomes {
         if let Err(e) = sqlx::query(
@@ -1453,12 +1571,22 @@ async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult,
     let mut accounts = auto_map_accounts(pool, batch_id).await?;
     accounts.reactivated += reactivated;
     let lists = import_lists(pool, batch_id).await?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let classes = match bring_in_classes(&mut tx, batch_id).await {
+        Ok(map) => finish_classes(&mut tx, &map).await,
+        Err(err) => Err(err),
+    };
+    let classes = match classes {
+        Ok(c) => c,
+        Err(err) => return Err(ledger::rollback(tx, err).await),
+    };
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
     sqlx::query("UPDATE ledger_import_batches SET lists_added = 1, posted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
         .bind(batch_id)
         .execute(pool)
         .await
         .map_err(db_err)?;
-    Ok(PostLedgerResult { accounts: Some(accounts), lists: Some(lists), ..Default::default() })
+    Ok(PostLedgerResult { accounts: Some(accounts), lists: Some(lists), classes, ..Default::default() })
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -1466,7 +1594,7 @@ async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult,
 pub struct ReverseLedgerResult {
     pub entries_voided: i64,
     pub accounts_deactivated: i64,
-    /// Customers, vendors and items the import created, now inactive.
+    /// Customers, vendors, items and classes the import created, now inactive.
     pub list_records_deactivated: i64,
 }
 
@@ -1530,6 +1658,8 @@ pub async fn reverse_batch(pool: &SqlitePool, batch_id: i64) -> Result<ReverseLe
              (SELECT party_id FROM ledger_import_parties WHERE batch_id = ?1 AND kind = 'VENDOR' AND created_by_import = 1)",
         "UPDATE products_services SET is_active = 0 WHERE is_active = 1 AND id IN
              (SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND created_by_import = 1)",
+        "UPDATE classes SET is_active = 0 WHERE is_active = 1 AND id IN
+             (SELECT class_id FROM ledger_import_classes WHERE batch_id = ?1 AND created_by_import = 1)",
     ] {
         let done = sqlx::query(sql).bind(batch_id).execute(pool).await.map_err(db_err)?;
         result.list_records_deactivated += done.rows_affected() as i64;
@@ -1562,6 +1692,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
         "DELETE FROM ledger_import_items WHERE batch_id = ?1",
         "DELETE FROM ledger_import_sales_lists WHERE batch_id = ?1",
         "DELETE FROM ledger_import_price_levels WHERE batch_id = ?1",
+        "DELETE FROM ledger_import_classes WHERE batch_id = ?1",
         "DELETE FROM ledger_import_transactions WHERE batch_id = ?1",
         "DELETE FROM ledger_import_accounts WHERE batch_id = ?1",
         "DELETE FROM ledger_import_batches WHERE id = ?1",

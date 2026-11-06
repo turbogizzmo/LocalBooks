@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Imports keep your classes.** Books moved from QuickBooks now arrive with their class list,
+  subclasses included, and every transaction line keeps its class, so Profit & Loss by Class
+  matches the original. This works for QuickBooks Desktop company files and backups (`.qbw`,
+  `.qbb`), IIF files (the class list and the CLASS column), report exports with a Class column,
+  and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
+  inactive. When an import brings classes, **Track classes on
+  transactions** turns on, and the message after posting says so.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
