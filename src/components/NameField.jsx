@@ -4,21 +4,28 @@ import { PartyDialog } from './PartyList.jsx';
 import { api, errorText } from '../lib/api.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
 
-/** How many matching vendors the list shows at once. */
+/** How many matching names the list shows at once. */
 const MAX_SHOWN = 12;
 
 const sameName = (a, b) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
+const KINDS = {
+  vendor: { noun: 'vendor', create: (name) => api.createVendor(name, null) },
+  customer: { noun: 'customer', create: (name) => api.createCustomer(name, null) },
+};
+
 /**
- * The vendor box on bills, checks, expenses, purchase orders and vendor credits. Typing shows the
- * vendors whose names contain what was typed. A name that is not on the vendor list can be added
- * from the same list: "Add … as a new vendor" adds it straight away, "Add with details…" adds it
- * and opens the vendor's record.
+ * The name box on forms: Vendor on bills, checks, expenses, purchase orders and vendor credits,
+ * Customer on invoices, sales receipts, estimates and credit memos. Typing shows the names that
+ * contain what was typed. A name that is not on the list can be added from the same list: "Add …
+ * as a new vendor" (or customer) adds it straight away, "Add with details…" adds it and opens its
+ * record.
  *
- * The value is the vendor's name (the forms post a name, and the ledger matches it to a vendor), so
- * a name typed and saved without choosing an entry is still added on save, as before.
+ * The value is the name (the forms post a name, and the ledger matches it to a vendor or customer),
+ * so a name typed and saved without choosing an entry is still added on save, as before.
  */
-export default function VendorField({ vendors, value, onChange, inputRef, className = 'qb-input w-[200px]', placeholder = 'Vendor', autoFocus = false, label }) {
+export default function NameField({ kind, names, value, onChange, inputRef, className = 'qb-input w-[200px]', placeholder, autoFocus = false, label }) {
+  const { noun, create } = KINDS[kind];
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -29,8 +36,8 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
   const autoOpen = useMyPreferences().autoOpenDropDowns;
 
   const typed = value.trim();
-  const known = useMemo(() => vendors.filter((v) => v.isActive !== false), [vendors]);
-  const exact = typed !== '' && vendors.some((v) => sameName(v.name, typed));
+  const known = useMemo(() => names.filter((v) => v.isActive !== false), [names]);
+  const exact = typed !== '' && names.some((v) => sameName(v.name, typed));
   const matches = useMemo(() => {
     const needle = typed.toLocaleLowerCase();
     const hits = needle === '' ? known : known.filter((v) => v.name.toLocaleLowerCase().includes(needle));
@@ -40,9 +47,9 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
       .slice(0, MAX_SHOWN);
   }, [known, typed]);
 
-  // The rows of the list: matching vendors, then the two add rows when the name is new.
+  // The rows of the list: matching names, then the two add rows when the name is new.
   const rows = [
-    ...matches.map((v) => ({ key: `v${v.id}`, vendor: v })),
+    ...matches.map((v) => ({ key: `n${v.id}`, name: v })),
     ...(typed !== '' && !exact ? [{ key: 'quick', add: 'quick' }, { key: 'details', add: 'details' }] : []),
   ];
   const shown = open && rows.length > 0;
@@ -54,7 +61,7 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
     setBusy(true);
     setError(null);
     try {
-      const created = await api.createVendor(typed, null);
+      const created = await create(typed);
       onChange(created.name);
       setOpen(false);
       if (mode === 'details') setDetails(created.id);
@@ -67,8 +74,8 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
 
   const choose = (row) => {
     if (!row) return;
-    if (row.vendor) {
-      onChange(row.vendor.name);
+    if (row.name) {
+      onChange(row.name.name);
       setOpen(false);
     } else {
       add(row.add);
@@ -99,7 +106,7 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
         ref={inputRef}
         className={className}
         value={value}
-        placeholder={placeholder}
+        placeholder={placeholder ?? (noun[0].toUpperCase() + noun.slice(1))}
         autoFocus={autoFocus}
         aria-label={label}
         role="combobox"
@@ -134,7 +141,7 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
                 choose(row);
               }}
             >
-              {row.vendor ? row.vendor.name : row.add === 'quick' ? <>＋ Add “{typed}” as a new vendor</> : 'Add with details…'}
+              {row.name ? row.name.name : row.add === 'quick' ? <>＋ Add “{typed}” as a new {noun}</> : 'Add with details…'}
             </li>
           ))}
         </ul>
@@ -144,7 +151,7 @@ export default function VendorField({ vendors, value, onChange, inputRef, classN
         // Rendered outside the field, whose <label> would otherwise take clicks meant for the dialog.
         createPortal(
           <PartyDialog
-            kind="vendor"
+            kind={kind}
             id={details}
             onClose={() => setDetails(null)}
             onSaved={(_text, saved) => {

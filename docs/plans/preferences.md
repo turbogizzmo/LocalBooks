@@ -8,7 +8,9 @@ building. It is the plan behind `docs/gaps.md` row T3.
 **Sources** (November 2026): the category labels of QuickBooks Desktop Pro 2021 for Windows and of
 QuickBooks for Mac 2021, read from installers kept outside the repo (`research-samples/`, never
 committed). The Jobs & Estimates, Time & Expenses and Reports company options, and parts of Sales &
-Customers, come from public product knowledge, not the installer.
+Customers, come from public product knowledge, not the installer. A public three-part video tour of
+the Preferences window (Steiner Business Solutions, "Guide to Quickbooks Preferences Menu", parts
+1–3 on YouTube) confirmed the options per category and added the rows marked *(tour)*.
 
 **Where LocalBooks keeps them.** Company options are keys in `preferences.rs` (Settings ›
 Preferences, admins only). Your own options for this computer are in `src/lib/myPreferences.js`
@@ -45,7 +47,7 @@ as in `docs/gaps.md`.
 | Class tracking: on, per line or per transaction, warn when missing | has | – |
 | Track expenses by customer or job | partial | M |
 | Number journal entries automatically; warn when posting to Retained Earnings | missing | S |
-| Copy the first line's memo to the other journal lines | missing | S |
+| Copy the first line's memo to the other journal lines (a my preference in the tour) | missing | S |
 | Warn when a date is more than N days in the past or future | missing | S |
 | Closing date, with a password to change entries before it | has (closing date and passcode) | – |
 
@@ -58,6 +60,8 @@ as in `docs/gaps.md`.
 | Bills | Apply vendor credits and discounts automatically | missing | M |
 | Checking | Default account for each form (checks, pay bills, deposits, sales tax) (M) | missing | S |
 | Checking | Warn about a duplicate check number; date checks when printed; start at the payee | missing | S |
+| Checking | Put the vendor's account number in the check memo *(tour)* | missing | S |
+| Checking | Bank feed: how renaming rules apply to downloaded payees *(tour)* | partial (rules, no switch) | S |
 | Payments | Apply a payment to open invoices automatically; work out the amount from the invoices ticked | partial (no switch) | S |
 | Payments | Deposit to Undeposited Funds by default | partial (no switch) | S |
 | Sales | Default shipping method, FOB and markup | partial (lists, no default) | S |
@@ -65,6 +69,9 @@ as in `docs/gaps.md`.
 | Sales | Price levels on or off | partial (always on) | S |
 | Sales | Warn before selling to a customer with overdue invoices | missing | S |
 | Sales | Billable time and costs: ask, add, or don't add | missing | M |
+| Sales | Sales orders on or off, with their own duplicate-number warning and packing-slip template *(tour)* | missing (no sales orders) | L |
+| Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | missing | S |
+| Sales | Collections Center on or off *(tour)* | missing (no collections screen) | M |
 
 ## Reports, items, jobs, time, tax
 
@@ -77,14 +84,18 @@ as in `docs/gaps.md`.
 | Reports | Which accounts go in each Cash Flows section | missing | M |
 | Items | Inventory and purchase orders on or off; warn about duplicate PO numbers | missing | S |
 | Items | Warn or stop when stock would go below zero | missing | M |
-| Jobs & Estimates | Estimates on or off; rename job statuses; progress invoicing | partial / missing | S–M |
+| Items | Units of measure (sell by the each, case or pallet) *(tour)* | missing | L |
+| Jobs & Estimates | Estimates on or off; rename job statuses (Pending, Awarded, In progress, Closed, Not awarded); progress invoicing; warn about duplicate estimate numbers | partial / missing | S–M |
 | Time & Expenses | First day of the work week (Monday is fixed now); new time billable by default; time tracking on or off | missing | S |
-| Time & Expenses | Count reimbursed expenses as income; default markup account | missing | M |
-| Sales Tax | Owe tax when invoiced or when paid; filing frequency; mark taxable lines on forms | missing (see R11) | S–M |
+| Time & Expenses | Count reimbursed expenses as income; mark all expenses billable; default markup percent and account; invoice from a list of time and expenses *(tour)* | missing | M |
+| Sales Tax | Charge sales tax at all; most common tax item; taxable and non-taxable codes; mark taxable lines with a T on printed forms; owe tax when invoiced or when paid; filing monthly, quarterly or yearly | missing (see R11) | S–M |
 | Finance Charge | Charge from the due date or the invoice date; mark charges to print | missing | S |
-| Tax: 1099 | Map accounts to 1099 boxes | missing (see R10) | M |
+| Tax: 1099 | Do you file 1099s (on or off); map accounts to 1099 boxes | missing (see R10) | M |
 | Reminders (M) | Show reminders when a company opens | partial | S |
-| Send Forms | Tick "email later" for customers who prefer email; default message per form | partial / missing | S |
+| Reminders | Per reminder type: summary, full list or off, and how many days ahead *(tour)* | has (Reminders screen) | – |
+| Send Forms | Default delivery method (email, mail, none) for new customers; a message template per form type *(tour)* | partial / missing | S |
+| Reports | Default report formatting (fonts, header and footer) *(tour)* | missing | M |
+| Desktop View (M) | Show the Home page when a company opens; color scheme *(tour)* | partial (start page, no themes) | S |
 
 ## Already covered elsewhere
 
