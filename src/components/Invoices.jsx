@@ -616,6 +616,8 @@ export default function Invoices({ accounts, intent }) {
   const [fromEstimate, setFromEstimate] = useState(null);
   // Set while the form holds a posted invoice being edited: saving replaces it.
   const [editing, setEditing] = useState(null);
+  // Everything the form would save, as loaded; see `snapshot` below.
+  const [baseline, setBaseline] = useState(null);
   const [discountText, setDiscountText] = useState('');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
@@ -675,7 +677,29 @@ export default function Invoices({ accounts, intent }) {
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
-  useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
+  // Every field the invoice saves, so changing any of them (dates, terms, currency, rate, discount,
+  // tax, rep, ship and custom fields, class, lines) counts as unsaved.
+  const snapshot = JSON.stringify({
+    customer: customer.trim(),
+    issueDate,
+    dueDate,
+    payload,
+    taxRateId: tax.rateId,
+    discount: discountText.trim(),
+    currency,
+    rate: currency ? rate.trim() : '',
+    sales: sales.payload(),
+    formClass: formClass.formClass,
+  });
+  // A loaded invoice's baseline is taken once its fields have settled (the render after loading).
+  useEffect(() => {
+    if (editing && baseline === null) setBaseline(snapshot);
+  }, [editing, baseline, snapshot]);
+  // A new invoice counts as changed once it has a customer, a line or a discount.
+  const dirty = editing
+    ? baseline !== null && snapshot !== baseline
+    : customer.trim() !== '' || payload.length > 0 || discountText.trim() !== '';
+  useUnsavedChanges('invoice', dirty);
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
@@ -707,8 +731,10 @@ export default function Invoices({ accounts, intent }) {
           })),
           blankLine(defaultAccountId),
         ];
-        // What was loaded, so closing the window asks only once something has changed.
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: JSON.stringify(summarizeLines(loaded).payload) });
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName });
+        // Cleared so the effect above records what was loaded, and closing the window or stepping
+        // with Previous / Next asks only once something has changed.
+        setBaseline(null);
         setCustomer(invoice.customerName);
         setIssueDate(invoice.issueDate);
         setDueDate(invoice.dueDate);
@@ -733,6 +759,7 @@ export default function Invoices({ accounts, intent }) {
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
     setEditing(null);
+    setBaseline(null);
     setDiscountText('');
     setFiles([]);
     setShowAttachments(false);
@@ -752,7 +779,6 @@ export default function Invoices({ accounts, intent }) {
   const current = editing ? (invoices.data ?? []).find((i) => i.id === editing.id) ?? null : null;
   const ordered = useMemo(() => [...(invoices.data ?? [])].sort((a, b) => a.invoiceNumber - b.invoiceNumber || a.id - b.id), [invoices.data]);
   const at = current ? ordered.indexOf(current) : -1;
-  const dirty = customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]');
   const step = (inv) => {
     setShowAttachments(false);
     setFiles([]);
@@ -839,6 +865,7 @@ export default function Invoices({ accounts, intent }) {
       onNext: () => step(ordered[at + 1]),
       previousDisabled: busy || dirty || ordered.length === 0 || at === 0,
       nextDisabled: busy || dirty || !current || at >= ordered.length - 1,
+      blockedHint: dirty ? 'Save or clear your changes first' : undefined,
     }),
     fileButtons({
       onNew: reset,

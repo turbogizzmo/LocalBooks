@@ -15,6 +15,9 @@ import { ConfirmDialog } from './RowMenu.jsx';
  * with nothing left in it is dropped with its rule, so a form only shows what it can do.
  *
  * Every button is a tab stop in reading order; Left and Right arrows also move along the strip.
+ * A button that can't be used now stays focusable with `aria-disabled` (as the ARIA toolbar
+ * pattern recommends), so its hint saying why can be reached by keyboard and hover; it does
+ * nothing when pressed.
  */
 export default function FormToolbar({ label, groups, children }) {
   const [pending, setPending] = useState(null);
@@ -24,7 +27,7 @@ export default function FormToolbar({ label, groups, children }) {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     // Arrows inside an open menu or a field belong to it.
     if (e.target.closest('[role="menu"]') || e.target.tagName === 'INPUT') return;
-    const buttons = [...e.currentTarget.querySelectorAll('[data-toolbar-button]:not(:disabled)')];
+    const buttons = [...e.currentTarget.querySelectorAll('[data-toolbar-button]')];
     const at = buttons.indexOf(e.target);
     if (at < 0) return;
     e.preventDefault();
@@ -33,6 +36,7 @@ export default function FormToolbar({ label, groups, children }) {
   };
 
   const run = (item) => {
+    if (item.disabled) return;
     if (item.confirm) setPending({ ...item, onSelect: item.onClick });
     else item.onClick?.();
   };
@@ -59,9 +63,10 @@ export default function FormToolbar({ label, groups, children }) {
 }
 
 const BUTTON =
-  'flex min-w-[52px] flex-col items-center justify-start gap-0.5 rounded-sm px-1.5 pb-0.5 pt-1 text-2xs font-semibold leading-tight text-qb-ink ' +
-  'hover:bg-qb-surface hover:shadow-panel focus-visible:bg-qb-surface focus-visible:shadow-focus focus-visible:outline-none ' +
-  'disabled:cursor-not-allowed disabled:text-qb-ink-faint disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:shadow-none';
+  'flex min-w-[52px] flex-col items-center justify-start gap-0.5 rounded-sm px-1.5 pb-0.5 pt-1 text-2xs font-semibold leading-tight ' +
+  'focus-visible:bg-qb-surface focus-visible:shadow-focus focus-visible:outline-none';
+const ENABLED = 'text-qb-ink hover:bg-qb-surface hover:shadow-panel';
+const DISABLED = 'cursor-not-allowed text-qb-ink-faint opacity-60';
 
 const ToolButton = forwardRef(function ToolButton({ item, onClick, ...rest }, ref) {
   return (
@@ -69,10 +74,10 @@ const ToolButton = forwardRef(function ToolButton({ item, onClick, ...rest }, re
       ref={ref}
       type="button"
       data-toolbar-button
-      className={`${BUTTON} ${item.danger && !item.disabled ? 'text-qb-negative' : ''}`}
-      disabled={item.disabled}
+      className={`${BUTTON} ${item.disabled ? DISABLED : ENABLED} ${item.danger && !item.disabled ? 'text-qb-negative' : ''}`}
+      aria-disabled={item.disabled ? true : undefined}
       title={item.hint}
-      onClick={onClick}
+      onClick={item.disabled ? undefined : onClick}
       {...rest}
     >
       <Icon name={item.icon} size={20} />
@@ -132,7 +137,7 @@ function MenuButton({ item }) {
         item={{ ...item, disabled }}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
+          if (e.key === 'ArrowDown' && !disabled) {
             e.preventDefault();
             setOpen(true);
           }
@@ -169,15 +174,15 @@ function MenuButton({ item }) {
 
 /**
  * The buttons most forms share, so each form only says what it can do:
- *   navButtons({ onFind, onPrevious, onNext })      Find, ◀ Previous, Next ▶
+ *   navButtons({ onFind, onPrevious, onNext, blockedHint })   Find, ◀ Previous, Next ▶
  *   fileButtons({ onNew, onSave, saveLabel, saveDisabled, busy, onVoid, voidConfirm })
  * Leave a handler out to hide that button.
  */
-export function navButtons({ onFind, onPrevious, onNext, previousDisabled, nextDisabled }) {
+export function navButtons({ onFind, onPrevious, onNext, previousDisabled, nextDisabled, blockedHint }) {
   return [
     { id: 'find', label: 'Find', icon: 'Search', hint: 'Find transactions', onClick: onFind, hidden: !onFind },
-    { id: 'previous', label: 'Previous', icon: 'Back', hint: 'Open the previous one', onClick: onPrevious, hidden: !onPrevious, disabled: previousDisabled },
-    { id: 'next', label: 'Next', icon: 'Go', hint: 'Open the next one', onClick: onNext, hidden: !onNext, disabled: nextDisabled },
+    { id: 'previous', label: 'Previous', icon: 'Back', hint: (previousDisabled && blockedHint) || 'Open the previous one', onClick: onPrevious, hidden: !onPrevious, disabled: previousDisabled },
+    { id: 'next', label: 'Next', icon: 'Go', hint: (nextDisabled && blockedHint) || 'Open the next one', onClick: onNext, hidden: !onNext, disabled: nextDisabled },
   ];
 }
 
