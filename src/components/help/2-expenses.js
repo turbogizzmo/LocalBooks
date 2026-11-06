@@ -64,8 +64,8 @@ export const topics = [
   {
     id: 'vendors', area: 'expenses', views: ['expenses/vendors'],
     title: 'Add and review vendors',
-    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Vendors are also available when entering bills, expenses and checks.',
-    keywords: 'vendor supplier payee contact payable balance',
+    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check or expense, type a name that isn’t on the list and choose Add as a new vendor.',
+    keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add center',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
     guide: 'customers-and-products',
   },

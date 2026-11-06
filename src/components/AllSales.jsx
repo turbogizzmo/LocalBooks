@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
@@ -23,7 +24,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   const defaultDeposit = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
   const [customer, setCustomer] = useState('');
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [method, setMethod] = useState('CASH');
   const [reference, setReference] = useState('');
   const [depositId, setDepositId] = useState(defaultDeposit);

@@ -590,7 +590,7 @@ export default function NoCompanyOpen() {
                 <thead>
                   <tr>
                     <th className="qb-grid-head">Company name</th>
-                    <th className="qb-grid-head">Last modified</th>
+                    <th className="qb-grid-head">Last opened</th>
                     <th className="qb-grid-head text-right">File size</th>
                     {editing && <th className="qb-grid-head" aria-label="Remove from list" />}
                   </tr>
@@ -616,7 +616,7 @@ export default function NoCompanyOpen() {
                         {row.companyName}
                         {row.missing && <span className="ml-1.5 text-xs">(file not found)</span>}
                       </td>
-                      <td className="qb-grid-cell">{row.lastModified ?? '—'}</td>
+                      <td className="qb-grid-cell">{row.lastOpened || '—'}</td>
                       <td className="qb-grid-cell num">{formatBytes(row.fileSize)}</td>
                       {editing && (
                         <td className="qb-grid-cell cell-tight">
@@ -640,6 +640,12 @@ export default function NoCompanyOpen() {
             </div>
             <div className="min-h-[18px] break-all text-xs text-qb-ink-muted">
               <span className="font-semibold uppercase tracking-wide">Location:</span> {current?.location ?? ''}
+              {current?.lastModified && (
+                <>
+                  {' · '}
+                  <span className="font-semibold uppercase tracking-wide">Last modified:</span> {current.lastModified}
+                </>
+              )}
             </div>
             {editing && (
               <div className="text-xs text-qb-ink-muted">Removing a company takes it off this list only. The company file itself is not deleted.</div>

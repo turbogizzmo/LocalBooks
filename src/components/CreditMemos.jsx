@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
@@ -20,7 +21,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   const defaultBank = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
   const [customer, setCustomer] = useState('');
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState('');
   const [refundFrom, setRefundFrom] = useState(defaultBank);
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -484,6 +485,15 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                   <tr
                     className={`qb-grid-row ${isActive ? 'is-active' : ''} ${inv.isVoided ? 'text-qb-ink-faint' : ''}`}
                     onMouseDown={() => setActiveId(open && activeId !== inv.id ? inv.id : null)}
+                    // Double-click opens the invoice to edit, as Edit… in its menu does.
+                    onDoubleClick={() =>
+                      inv.isVoided
+                        ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} is voided, so it can't be edited.` })
+                        : inv.amountPaidCents > 0
+                          ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
+                          : onEdit(inv)
+                    }
+                    title={open ? 'Click to receive a payment, double-click to edit' : 'Double-click to edit'}
                   >
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
@@ -563,9 +573,9 @@ export default function Invoices({ accounts, intent }) {
     [accounts],
   );
   const [customer, setCustomer] = useState('');
-  const [issueDate, setIssueDate] = useState(todayIso());
+  const [issueDate, setIssueDate] = useTransactionDate();
   const [terms, setTerms] = useState('net30');
-  const [dueDate, setDueDate] = useState(addDays(todayIso(), 30));
+  const [dueDate, setDueDate] = useState(() => addDays(issueDate, 30));
   const [lines, setLines] = useState(() => Array.from({ length: INITIAL_ROWS }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -641,6 +651,12 @@ export default function Invoices({ accounts, intent }) {
   const loadForEdit = (inv, focusCustomer = true) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details }) => {
+        // However it was opened (Edit…, a double-click, a register, a customer's transactions),
+        // the same rules as saving apply.
+        if (invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
+        if (invoice.amountPaidCents > 0) {
+          return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
+        }
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
@@ -676,9 +692,9 @@ export default function Invoices({ accounts, intent }) {
 
   const reset = () => {
     setCustomer('');
-    setIssueDate(todayIso());
+    setIssueDate(newTransactionDate());
     setTerms('net30');
-    setDueDate(addDays(todayIso(), 30));
+    setDueDate(addDays(newTransactionDate(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
     setEditing(null);

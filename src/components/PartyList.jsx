@@ -11,6 +11,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import PartyTransactions from './PartyTransactions.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -157,7 +158,7 @@ function BankDetailsFields({ bank, setBank }) {
 }
 
 /** The full customer or vendor record: contact details, default terms and (vendors) 1099 status. */
-function PartyDialog({ kind, id, onClose, onSaved }) {
+export function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
   const [form, setForm] = useState(null);
   const [error, setError] = useState(null);
@@ -210,7 +211,7 @@ function PartyDialog({ kind, id, onClose, onSaved }) {
         const view = await api.setVendorBank(id, bank.draft);
         setBank({ view, draft: undefined });
       }
-      onSaved(`Saved ${noun} ${saved.name}.`);
+      onSaved(`Saved ${noun} ${saved.name}.`, saved);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
@@ -331,6 +332,8 @@ export default function PartyList({ kind, navigate }) {
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
+  // The customer or vendor whose transactions show below the list (a click picks one).
+  const [selected, setSelected] = useState(null);
 
   const setActive = async (p, active) => {
     try {
@@ -376,6 +379,7 @@ export default function PartyList({ kind, navigate }) {
     nameRef.current?.focus();
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
+  const selectedParty = (data ?? []).find((p) => p.id === selected) ?? null;
   const sorter = useSort(rows, {
     name: (p) => p.name,
     email: (p) => p.email,
@@ -468,7 +472,14 @@ export default function PartyList({ kind, navigate }) {
                   </tr>
                 )}
                 {sorter.sorted.map((p) => (
-                  <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setEditing(p.id)}>
+                  <tr
+                    key={p.id}
+                    className={`qb-grid-row cursor-pointer ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
+                    aria-selected={p.id === selected}
+                    onClick={() => setSelected(p.id)}
+                    onDoubleClick={() => setEditing(p.id)}
+                    title="Click to see transactions, double-click to edit"
+                  >
                     <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
                       {p.name.split(':').at(-1)}
                       {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
@@ -483,6 +494,7 @@ export default function PartyList({ kind, navigate }) {
                         label={`Actions for ${p.name}`}
                         items={[
                           { label: 'Edit…', onSelect: () => setEditing(p.id) },
+                          { label: 'Show transactions', onSelect: () => setSelected(p.id) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
@@ -496,6 +508,7 @@ export default function PartyList({ kind, navigate }) {
           </form>
         </div>
       </section>
+      {selectedParty && <PartyTransactions kind={kind} party={selectedParty} onClose={() => setSelected(null)} />}
     </div>
   );
 }

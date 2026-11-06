@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
+import VendorField from './VendorField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import Notice from './Notice.jsx';
@@ -19,7 +21,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
   const [vendor, setVendor] = useState('');
   const [reference, setReference] = useState('');
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState('');
   const [rows, setRows] = useState(() => [blankSplit(null)]);
   const [busy, setBusy] = useState(false);
@@ -62,12 +64,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
         <h2 className="mr-2 self-center text-md font-semibold">Vendor credit</h2>
         <label className="w-[220px]">
           <span className="qb-label">Vendor</span>
-          <input autoFocus className="qb-input w-full" value={vendor} onChange={(e) => setVendor(e.target.value)} list="credit-vendors" placeholder="Vendor name" />
-          <datalist id="credit-vendors">
-            {(vendors.data ?? []).filter((v) => v.isActive).map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
+          <VendorField autoFocus className="qb-input w-full" vendors={vendors.data ?? []} value={vendor} onChange={setVendor} placeholder="Vendor name" />
         </label>
         <label>
           <span className="qb-label">Ref no.</span>

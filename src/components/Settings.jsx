@@ -15,6 +15,8 @@ import { UsersSettings } from './Users.jsx';
 import QbwImporter from './QbwImporter.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import DesktopViewPreferences from './DesktopViewPreferences.jsx';
+import GeneralPreferences from './GeneralPreferences.jsx';
+import { focusNextField } from '../lib/myPreferences.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENCY_PRESETS = ['$', '€', '£', '¥', 'CA$', 'A$', '₹', 'CHF', 'R$'];
@@ -71,7 +73,12 @@ const textInput = (extra = {}) =>
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => commit()}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        // Enter saves the field and moves on to the next one, as Tab does.
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          if (!focusNextField(e.currentTarget)) e.currentTarget.blur();
+        }}
         aria-invalid={invalid}
         {...extra}
       />
@@ -1021,6 +1028,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
       </div>
       {!isAdmin && <Notice kind="info" text="Company-wide settings are managed by an Admin." />}
       {/* My Preferences are everyone's own: without the Preferences Console, they sit with your sign-in. */}
+      {(tab === 'preferences' || (!isAdmin && tab === 'users')) && <GeneralPreferences />}
       {(tab === 'preferences' || (!isAdmin && tab === 'users')) && <DesktopViewPreferences />}
       {tab === 'preferences' && <PreferencesConsole />}
       {tab === 'forms' && <FormDesigner />}

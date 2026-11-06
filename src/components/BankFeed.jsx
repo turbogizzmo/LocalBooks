@@ -390,7 +390,7 @@ export default function BankFeed({ accounts }) {
                   )}
                 </label>
               )}
-              {tracking.enabled && tracking.hasClasses && (
+              {tracking.enabled && (
                 <label>
                   <span className="qb-label">Class</span>
                   <ClassSelect classes={tracking.classes} value={classId} onChange={(id) => setClasses((c) => ({ ...c, [selected.id]: id }))} />

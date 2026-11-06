@@ -370,6 +370,8 @@ struct Line {
     entry_number: i64,
     date: NaiveDate,
     source_type: String,
+    /// The business document (bill, expense, invoice, ...) that posted it; `None` for manual entries.
+    source_id: Option<i64>,
     is_reversal: bool,
     is_voided: bool,
     /// An adjusting entry, or the entry that voids one.
@@ -556,7 +558,7 @@ const ACCOUNT_COLUMNS: &str = "a.id AS account_id, a.full_name AS account_name, 
 async fn ledger_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) -> Result<Vec<Line>, String> {
     // Item details for a line come from the document lines posted to the same account and class.
     let sql = format!(
-        "SELECT e.id AS journal_entry_id, e.entry_number, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type,
+        "SELECT e.id AS journal_entry_id, e.entry_number, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 e.reverses_entry_id IS NOT NULL AS is_reversal, e.is_voided,
                 (e.is_adjusting = 1 OR EXISTS (SELECT 1 FROM journal_entries o WHERE o.id = e.reverses_entry_id AND o.is_adjusting = 1)) AS is_adjusting, l.line_number, {ENTRY_COLUMNS},
                 COALESCE(l.memo, e.memo) AS memo, {ACCOUNT_COLUMNS},
@@ -587,7 +589,7 @@ async fn ledger_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDat
 
 async fn item_lines(pool: &SqlitePool, start: Option<NaiveDate>, end: NaiveDate) -> Result<Vec<Line>, String> {
     let sql = format!(
-        "SELECT e.id AS journal_entry_id, e.entry_number, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type,
+        "SELECT e.id AS journal_entry_id, e.entry_number, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 0 AS is_reversal, e.is_voided, e.is_adjusting, d.line_number, {ENTRY_COLUMNS},
                 COALESCE(d.memo, e.memo) AS memo, {ACCOUNT_COLUMNS},
                 NULL AS split, d.class_id, k.full_name AS class_name,

@@ -163,7 +163,7 @@ function SingleActivity({ employees, customers, products, onSaved }) {
           <span className="qb-label">Time (hh:mm or 1.5)</span>
           <input className="qb-input num w-[90px]" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0:00" aria-invalid={hours !== '' && minutes === null} />
         </label>
-        {tracking.enabled && tracking.hasClasses && (
+        {tracking.enabled && (
           <label>
             <span className="qb-label">Class</span>
             <ClassSelect className="qb-input w-[160px]" classes={tracking.classes} value={classId} onChange={setClassId} />
@@ -259,7 +259,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           <span className="qb-label">Week starting (Monday)</span>
           <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
         </label>
-        {tracking.enabled && tracking.hasClasses && (
+        {tracking.enabled && (
           <label>
             <span className="qb-label">Class</span>
             <ClassSelect className="qb-input w-[160px]" classes={tracking.classes} value={classId} onChange={setClassId} />

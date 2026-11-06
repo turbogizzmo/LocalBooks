@@ -341,9 +341,10 @@ pub struct RecentCompanyView {
     pub missing: bool,
 }
 
-/// The recent list with each file's current state on disk.
+/// The recent list with each file's current state on disk, most recently opened first.
 pub fn describe_recent(list: &[RecentCompany]) -> Vec<RecentCompanyView> {
-    list.iter()
+    let mut views: Vec<RecentCompanyView> = list
+        .iter()
         .map(|r| {
             let meta = std::fs::metadata(&r.path).ok().filter(|m| m.is_file());
             let file_name = r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -361,7 +362,12 @@ pub fn describe_recent(list: &[RecentCompany]) -> Vec<RecentCompanyView> {
                 missing: meta.is_none(),
             }
         })
-        .collect()
+        .collect();
+    // `add_recent` already keeps the list newest first; sorting again puts lists written by older
+    // versions (or edited by hand) in order too. `YYYY-MM-DD HH:MM` sorts as text, and the sort is
+    // stable, so files opened in the same minute keep their order.
+    views.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));
+    views
 }
 
 // ------------------------------------------------------------------------------------------------

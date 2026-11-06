@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
+import VendorField from './VendorField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import MoneyBar from './MoneyBar.jsx';
@@ -25,11 +27,10 @@ const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PAR
 /** A new bill, or (with `editing` = { bill, lines }) a posted bill being edited. */
 function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
-  const today = todayIso();
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
-  const [billDate, setBillDate] = useState(editing?.bill.billDate ?? today);
-  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(today, 30));
+  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -113,12 +114,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>
           <span className="qb-label">Vendor</span>
-          <input ref={vendorRef} className="qb-input w-[200px]" value={vendor} onChange={(e) => setVendor(e.target.value)} list="bill-vendors" placeholder="Vendor" />
-          <datalist id="bill-vendors">
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
+          <VendorField inputRef={vendorRef} vendors={vendors} value={vendor} onChange={setVendor} />
         </label>
         <label>
           <span className="qb-label">Bill no.</span>
@@ -502,14 +498,21 @@ export default function Bills({ accounts, intent }) {
   const [printing, setPrinting] = useState([]);
   const company = useCompany();
   const vendorRef = useRef(null);
-  const startEdit = (bill) =>
-    api.getDocumentLines('bill', bill.id).then(
+  // Every way in (Edit…, a double-click here, a register, a vendor's transactions) checks the same
+  // rules the save would: a voided bill, or one with payments or credits, can't be replaced.
+  const startEdit = (bill) => {
+    if (bill.isVoided) return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} is voided, so it can't be edited.` });
+    if (bill.amountPaidCents > 0) {
+      return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
+    }
+    return api.getDocumentLines('bill', bill.id).then(
       (lines) => {
         setPaying(false);
         setEditing({ bill, lines });
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
+  };
   const today = todayIso();
   // A bill chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
@@ -685,7 +688,18 @@ export default function Bills({ accounts, intent }) {
                 ];
                 return (
                   <Fragment key={b.id}>
-                    <tr className={`qb-grid-row ${b.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                    <tr
+                      className={`qb-grid-row cursor-pointer ${b.isVoided ? 'text-qb-ink-faint' : ''}`}
+                      // Double-click opens the bill to edit, as Edit… in its menu does.
+                      onDoubleClick={() =>
+                        b.isVoided
+                          ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} is voided, so it can't be edited.` })
+                          : b.amountPaidCents > 0
+                            ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
+                            : openBill(b)
+                      }
+                      title="Double-click to edit"
+                    >
                       <td className="qb-grid-cell font-semibold" title={b.vendorName}>{b.vendorName}</td>
                       <td className="qb-grid-cell">
                         {b.billNumber ?? ''}

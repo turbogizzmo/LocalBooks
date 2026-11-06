@@ -11,6 +11,18 @@ The list shows each customer's open balance in Accounts Receivable, or what you 
 vendor. Use **Find a customer** to filter the list. Customers are also added automatically when you
 post an invoice for a new name.
 
+You can also add a vendor while you enter a transaction. In the **Vendor** box on a bill, check,
+expense, purchase order or vendor credit, type the name. If no vendor matches, the list offers
+**＋ Add "…" as a new vendor** (added straight away) and **Add with details…** (added, then its
+record opens for the address, terms and 1099 status).
+
+### See a customer's or vendor's transactions
+
+Click a name in the Customers or Vendors list. Its transactions (invoices, payments, bills, checks
+and so on) show in a panel under the list, newest first, with a total. Click a heading to sort,
+tick **Show voided** to include voided ones, and double-click a transaction to open it.
+Double-click the name itself to edit the customer or vendor.
+
 To add a company name, billing address, phone, payment terms or notes, open the customer's
 **Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
 and estimates, and the email address is filled in when you choose **Email…** on one of them.

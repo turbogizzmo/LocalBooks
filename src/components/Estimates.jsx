@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
@@ -23,8 +24,8 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   const [customer, setCustomer] = useState('');
-  const [date, setDate] = useState(todayIso());
-  const [expires, setExpires] = useState(addDays(todayIso(), 30));
+  const [date, setDate] = useTransactionDate();
+  const [expires, setExpires] = useState(() => addDays(date, 30));
   const [memo, setMemo] = useState('');
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);

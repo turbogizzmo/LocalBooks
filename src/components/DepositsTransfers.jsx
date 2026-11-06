@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
@@ -7,7 +8,7 @@ import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
-import { formatDate, todayIso } from '../lib/dates.js';
+import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
 const isBank = (a) => a.accountType === 'BANK';
@@ -20,7 +21,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   const { data: waiting, error: waitingError } = useLedgerQuery(api.listUndeposited);
   const defaultBank = useMemo(() => accounts.find((a) => a.isActive && isBank(a))?.id ?? null, [accounts]);
   const [bankId, setBankId] = useState(defaultBank);
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState('');
   const [picked, setPicked] = useState(() => new Set());
   const [rows, setRows] = useState(() => [blankSplit(null)]);
@@ -173,7 +174,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
 function TransferForm({ accounts, onPosted, onCancel }) {
   const [fromId, setFromId] = useState(null);
   const [toId, setToId] = useState(null);
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useTransactionDate();
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
