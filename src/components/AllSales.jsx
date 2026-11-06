@@ -45,10 +45,10 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal } = summarizeLines(lines);
   const [discountText, setDiscountText] = useState('');
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
   const save = async () => {
     if (filled.length === 0) return setError('Add at least one line.');
@@ -71,6 +71,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         ...sales.payload(),
+        formLines,
       });
       onPosted(`Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.`);
     } catch (err) {
@@ -124,7 +125,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

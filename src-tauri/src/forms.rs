@@ -660,12 +660,15 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         meta.push(("Currency".into(), code.into(), false));
     }
     let details = item_details(pool, &detail.items.iter().map(|i| i.product_service_id).collect::<Vec<_>>()).await?;
-    let lines = detail
+    let items = detail
         .items
         .iter()
         .zip(details)
-        .map(|(i, details)| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
+        .map(|(i, details)| {
+            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
+        })
         .collect();
+    let lines = with_form_lines(items, &detail.form_lines, &money);
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
@@ -710,8 +713,8 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
@@ -736,7 +739,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         customer_details: customer_details(&name, &cust),
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: with_form_lines(lines_of(pool, rows, &money).await?, &crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?, &money),
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -765,8 +768,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -797,7 +800,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: with_form_lines(lines_of(pool, rows, &money).await?, &crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?, &money),
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -810,13 +813,25 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
-async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<FormLine>, String> {
+async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
     let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
     Ok(rows
         .into_iter()
         .zip(details)
-        .map(|((description, qty, rate, amount, _), details)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details })
+        .map(|((description, qty, rate, amount, _, number), details)| (number, FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details }))
         .collect())
+}
+
+/// Item lines (by line number) and the document's subtotals and other form lines, in line order,
+/// as the printed form shows them.
+fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String) -> Vec<FormLine> {
+    let mut numbered = items;
+    for f in form {
+        let line = FormLine { description: f.description.clone(), quantity: String::new(), rate: String::new(), amount: money(f.amount_cents), details: Vec::new() };
+        numbered.push((f.line_number, line));
+    }
+    numbered.sort_by_key(|(n, _)| *n);
+    numbered.into_iter().map(|(_, l)| l).collect()
 }
 
 fn statement_label(source_type: &str) -> &'static str {

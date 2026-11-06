@@ -244,11 +244,16 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
 /// Writes an invoice that takes over `carried` details from an estimate or the invoice it
 /// replaces (see `sales_lists::write_details_carrying`).
 pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails) -> Result<i64, String> {
-    let subtotal = validate_invoice(input)?;
-    let mut taxable = 0;
-    for line in input.lines.iter().filter(|l| l.is_taxable) {
-        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
-    }
+    validate_invoice(input)?;
+    let amounts = input
+        .lines
+        .iter()
+        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents)?, is_taxable: l.is_taxable }))
+        .collect::<Result<Vec<_>, String>>()?;
+    let form = &input.details.form_lines;
+    let layout = crate::item_types::lay_out(&amounts, form, "INV")?;
+    let numbers = layout.item_numbers();
+    let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "INV").await?;
@@ -336,7 +341,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(invoice_id)
-        .bind(n as i64)
+        .bind(numbers[idx])
         .bind(line.description.trim())
         .bind(line.quantity_e4)
         .bind(line.rate_cents)
@@ -349,6 +354,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         .await
         .map_err(db_err)?;
     }
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, form, &layout).await?;
     crate::sales_lists::write_details_carrying(tx, crate::sales_lists::SalesDoc::Invoice, invoice_id, &input.details, carried).await?;
 
     lines.extend(cost.lines.iter().cloned());
@@ -585,6 +591,8 @@ pub struct InvoiceDetail {
     pub payments: Vec<PaymentView>,
     /// Rep, shipping and printed customer fields.
     pub details: crate::sales_lists::SalesDetailsView,
+    /// Subtotals and other non-item lines, numbered with `items`.
+    pub form_lines: Vec<crate::item_types::FormLineView>,
 }
 
 pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceDetail, String> {
@@ -599,7 +607,8 @@ pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<Invoic
     .map_err(db_err)?;
     let payments = list_payments(pool, invoice_id).await?.into_iter().filter(|p| !p.is_voided).collect();
     let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Invoice, invoice_id).await?;
-    Ok(InvoiceDetail { invoice, items, payments, details })
+    let form_lines = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Invoice, invoice_id).await?;
+    Ok(InvoiceDetail { invoice, items, payments, details, form_lines })
 }
 
 /// Groups open invoice balances (home currency, i.e. the A/R still on the books) by days past due.

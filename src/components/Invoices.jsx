@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
@@ -13,7 +13,7 @@ import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './F
 import { useAttachmentRows } from './Attachments.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { useSuggestedRate } from './RateSuggestion.jsx';
@@ -607,21 +607,10 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
-        ({ estimate, lines: estimateLines, details }) => {
+        ({ estimate, lines: estimateLines, details, formLines: estimateForm }) => {
           setCustomer(estimate.customerName);
           sales.set(details);
-          setLines([
-            ...estimateLines.map((l) => ({
-              ...blankLine(l.incomeAccountId),
-              productId: l.productServiceId,
-              classId: l.classId ?? null,
-              isTaxable: Boolean(l.isTaxable),
-              description: l.description,
-              qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
-              rate: centsToInput(l.rateCents),
-            })),
-            blankLine(defaultAccountId),
-          ]);
+          setLines(linesFromDocument(estimateLines, estimateForm, defaultAccountId));
           setFromEstimate({ id: estimate.id, number: estimate.estimateNumber });
           tax.set(estimate.taxRateId ?? null);
           setNotice(null);
@@ -639,9 +628,9 @@ export default function Invoices({ accounts, intent }) {
     if (t && fromDate) setDueDate(addDays(fromDate, t.days));
   };
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const { filled, invalidCount, payload, formLines, total: linesTotal } = summarizeLines(lines);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
   useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
@@ -651,7 +640,7 @@ export default function Invoices({ accounts, intent }) {
   // customer suggestions before anyone has touched it.
   const loadForEdit = (inv, focusCustomer = true) => {
     api.getInvoiceDetail(inv.id).then(
-      ({ invoice, items, details }) => {
+      ({ invoice, items, details, formLines: storedForm }) => {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
         if (invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
@@ -661,18 +650,7 @@ export default function Invoices({ accounts, intent }) {
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
-        const loaded = [
-          ...items.map((l) => ({
-            ...blankLine(l.incomeAccountId),
-            productId: l.productServiceId,
-            classId: l.classId ?? null,
-            isTaxable: Boolean(l.isTaxable),
-            description: l.description,
-            qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
-            rate: centsToInput(l.rateCents),
-          })),
-          blankLine(defaultAccountId),
-        ];
+        const loaded = linesFromDocument(items, storedForm, defaultAccountId);
         // What was loaded, so closing the window asks only once something has changed.
         setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: JSON.stringify(summarizeLines(loaded).payload) });
         setCustomer(invoice.customerName);
@@ -742,6 +720,7 @@ export default function Invoices({ accounts, intent }) {
         discountCents: discount,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
         ...sales.payload(),
+        formLines,
       };
       if (mode === 'memorize') return setMemorizing(input);
       if (editing) {
@@ -867,7 +846,7 @@ export default function Invoices({ accounts, intent }) {
           </div>
         </div>
 
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} />
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>

@@ -4,15 +4,46 @@ import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './C
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
+import { documentOrder, layOut } from '../lib/itemTypes.js';
 
 let nextKey = 1;
 /** The item column's "Add new item…" entry. */
 const NEW_ITEM = '__new';
+/** The item column's fixed Subtotal entry: a subtotal is a line kind, not an item to set up. */
+const SUBTOTAL = '__subtotal';
 
-export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
+/** `kind` is ITEM (a product, service or charge) or SUBTOTAL. */
+export const blankLine = (accountId) => ({ key: nextKey++, kind: 'ITEM', productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
+
+/** True for a line that is not an item: a subtotal. */
+export const isFormLine = (line) => (line.kind ?? 'ITEM') !== 'ITEM';
+
+/**
+ * A stored document's item lines and form lines (subtotals) back as grid lines, in line order,
+ * with a blank line to type into at the end.
+ */
+export function linesFromDocument(items, formLines, defaultAccountId) {
+  return [
+    ...documentOrder(items, formLines).map(({ item, form }) =>
+      form
+        ? { ...blankLine(null), kind: form.kind, description: form.description }
+        : {
+            ...blankLine(item.incomeAccountId),
+            productId: item.productServiceId,
+            classId: item.classId ?? null,
+            isTaxable: Boolean(item.isTaxable),
+            description: item.description,
+            qty: formatQuantity(item.quantityE4).replace(/,/g, ''),
+            rate: centsToInput(item.rateCents),
+          },
+    ),
+    blankLine(defaultAccountId),
+  ];
+}
 
 /** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
 export function evaluateLine(line) {
+  if (isFormLine(line)) return { blank: false, form: true, amount: null, errors: {} };
   const blank = line.productId === null && line.description.trim() === '' && line.qty.trim() === '' && line.rate.trim() === '';
   if (blank) return { blank: true, amount: 0 };
   // Quantities may be fractional (up to 4 decimals) and are carried as integers scaled by 10,000.
@@ -28,15 +59,28 @@ export function evaluateLine(line) {
   };
 }
 
-/** Totals and validity across a set of lines. */
+/**
+ * Totals and validity across a set of lines. `payload` is the item lines, `formLines` the
+ * subtotals placed among them, and `amountOf[i]` each grid line's amount (a subtotal's sum too).
+ * `total` is the lines' total, net of line discounts: what the document discount comes off.
+ */
 export function summarizeLines(lines) {
   const evaluated = lines.map(evaluateLine);
-  const filled = evaluated.filter((s) => !s.blank);
+  const filled = evaluated.filter((s) => !s.blank && !s.form);
   const invalidCount = filled.filter((s) => s.amount === null || Object.values(s.errors).some(Boolean)).length;
-  const total = filled.reduce((sum, s) => (s.amount !== null ? sum + s.amount : sum), 0);
+  const itemsTotal = filled.reduce((sum, s) => (s.amount !== null ? sum + s.amount : sum), 0);
+  const formLines = [];
+  const formIndex = [];
+  let itemsBefore = 0;
+  lines.forEach((line, i) => {
+    if (evaluated[i].form) {
+      formLines.push({ afterLines: itemsBefore, kind: line.kind, description: line.description.trim() });
+      formIndex.push(i);
+    } else if (!evaluated[i].blank) itemsBefore += 1;
+  });
   const payload = lines
     .map((line, i) => ({ line, state: evaluated[i] }))
-    .filter(({ state }) => !state.blank)
+    .filter(({ state }) => !state.blank && !state.form)
     .map(({ line, state }) => ({
       productServiceId: line.productId,
       description: line.description.trim(),
@@ -47,7 +91,12 @@ export function summarizeLines(lines) {
       isTaxable: Boolean(line.isTaxable),
       amountCents: state.amount,
     }));
-  return { evaluated, filled, invalidCount, total, payload };
+  const layout = layOut(payload, formLines);
+  const amountOf = evaluated.map((s) => s.amount);
+  for (const row of layout.rows ?? []) if (row.form !== undefined) amountOf[formIndex[row.form]] = row.amountCents;
+  // Trailing subtotals with nothing after them are fine; a form with only subtotals has no items.
+  const total = layout.error ? itemsTotal : layout.linesCents;
+  return { evaluated, filled, invalidCount, total, payload, formLines, amountOf };
 }
 
 const incomeOnly = (a) => a.classification === 'INCOME';
@@ -61,8 +110,9 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false }) {
   const money = (cents) => formatMoney(cents, currency);
+  const { amountOf } = summarizeLines(lines);
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
   const tableRef = useRef(null);
@@ -127,12 +177,14 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const [adding, setAdding] = useState(null);
   const pickProduct = (index, productId, known = null) => {
     if (productId === NEW_ITEM) return setAdding(index);
-    const product = known ?? products.find((p) => p.id === productId);
-    if (!product) return update(index, { productId: null });
     const line = lines[index];
+    if (productId === SUBTOTAL) return update(index, { kind: 'SUBTOTAL', productId: null, description: 'Subtotal', qty: '', rate: '', isTaxable: false });
+    const product = known ?? products.find((p) => p.id === productId);
+    if (!product) return update(index, { kind: 'ITEM', productId: null, ...(isFormLine(line) ? { description: '' } : {}) });
     // A new item's own rate: it isn't in the price lists yet.
     const rate = known ? (product.rateCents > 0 ? centsToInput(product.rateCents) : null) : rateAt(productId, customerLevel);
     update(index, {
+      kind: 'ITEM',
       productId,
       description: product.description ?? product.name,
       accountId: product.incomeAccountId,
@@ -148,6 +200,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     const line = lines[index];
     update(index, { levelId, levelAuto: false, rateTyped: false, rate: (line.productId != null && rateAt(line.productId, levelId)) || line.rate });
   };
+  // Columns a subtotal leaves empty: account, class, quantity, price level and rate.
+  const spareColumns = 3 + (withClasses ? 1 : 0) + (withLevels ? 1 : 0);
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
 
   return (
@@ -196,8 +250,10 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
             },
           });
           const product = withProducts ? products.find((p) => p.id === line.productId) : null;
+          const formLine = isFormLine(line);
+          const amount = amountOf[i];
           return (
-            <tr key={line.key} data-row={i} className={`qb-grid-row ${isActive ? 'is-active' : ''}`}>
+            <tr key={line.key} data-row={i} className={`qb-grid-row ${isActive ? 'is-active' : ''} ${formLine ? 'font-semibold' : ''}`}>
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
               {isActive ? (
                 <>
@@ -205,8 +261,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                     <td className="qb-grid-cell-edit">
                       <select
                         data-col="product"
-                        value={line.productId ?? ''}
-                        onChange={(e) => pickProduct(i, e.target.value === '' ? null : e.target.value === NEW_ITEM ? NEW_ITEM : Number(e.target.value))}
+                        value={line.kind === 'SUBTOTAL' ? SUBTOTAL : (line.productId ?? '')}
+                        onChange={(e) => pickProduct(i, e.target.value === '' ? null : [NEW_ITEM, SUBTOTAL].includes(e.target.value) ? e.target.value : Number(e.target.value))}
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
@@ -215,6 +271,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>
                         ))}
+                        {itemTypes && <option value={SUBTOTAL}>Subtotal</option>}
                         <option value={NEW_ITEM}>＋ Add new item…</option>
                       </select>
                     </td>
@@ -228,108 +285,120 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       placeholder="Description"
                     />
                   </td>
-                  <td className="qb-grid-cell-edit">
-                    <AccountSelect
-                      data-col="account"
-                      className=""
-                      accounts={accounts}
-                      filter={incomeOnly}
-                      value={line.accountId}
-                      onChange={(accountId) => update(i, { accountId })}
-                      onKeyDown={(e) => onKeyDown(e, i)}
-                      placeholder="Select account"
-                      aria-invalid={bad('account')}
-                    />
-                  </td>
-                  {withClasses && (
-                    <td className="qb-grid-cell-edit">
-                      <ClassSelect
-                        data-col="class"
-                        className=""
-                        classes={classes}
-                        value={line.classId ?? null}
-                        onChange={(classId) => update(i, { classId })}
-                        onKeyDown={(e) => onKeyDown(e, i)}
-                        aria-label={`Class ${i + 1}`}
-                      />
-                    </td>
+                  {formLine ? (
+                    <td colSpan={spareColumns} className="qb-grid-cell" />
+                  ) : (
+                    <>
+                      <td className="qb-grid-cell-edit">
+                        <AccountSelect
+                          data-col="account"
+                          className=""
+                          accounts={accounts}
+                          filter={incomeOnly}
+                          value={line.accountId}
+                          onChange={(accountId) => update(i, { accountId })}
+                          onKeyDown={(e) => onKeyDown(e, i)}
+                          placeholder="Select account"
+                          aria-invalid={bad('account')}
+                        />
+                      </td>
+                      {withClasses && (
+                        <td className="qb-grid-cell-edit">
+                          <ClassSelect
+                            data-col="class"
+                            className=""
+                            classes={classes}
+                            value={line.classId ?? null}
+                            onChange={(classId) => update(i, { classId })}
+                            onKeyDown={(e) => onKeyDown(e, i)}
+                            aria-label={`Class ${i + 1}`}
+                          />
+                        </td>
+                      )}
+                      <td className="qb-grid-cell-edit">
+                        <input
+                          data-col="qty"
+                          inputMode="decimal"
+                          className="num"
+                          value={line.qty}
+                          onChange={(e) => update(i, { qty: e.target.value })}
+                          onKeyDown={(e) => onKeyDown(e, i)}
+                          aria-invalid={bad('qty')}
+                        />
+                      </td>
+                      {withLevels && (
+                        <td className="qb-grid-cell-edit">
+                          <select
+                            data-col="level"
+                            value={line.levelId ?? ''}
+                            onChange={(e) => pickLevel(i, e.target.value === '' ? null : Number(e.target.value))}
+                            onKeyDown={(e) => onKeyDown(e, i)}
+                            aria-label={`Price level ${i + 1}`}
+                          >
+                            <option value="">Standard</option>
+                            {pricing.levels.map((l) => (
+                              <option key={l.id} value={l.id}>{l.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+                      <td className="qb-grid-cell-edit">
+                        <input
+                          data-col="rate"
+                          inputMode="decimal"
+                          className="num"
+                          value={line.rate}
+                          onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
+                          onKeyDown={(e) => onKeyDown(e, i)}
+                          aria-invalid={bad('rate')}
+                        />
+                      </td>
+                    </>
                   )}
-                  <td className="qb-grid-cell-edit">
-                    <input
-                      data-col="qty"
-                      inputMode="decimal"
-                      className="num"
-                      value={line.qty}
-                      onChange={(e) => update(i, { qty: e.target.value })}
-                      onKeyDown={(e) => onKeyDown(e, i)}
-                      aria-invalid={bad('qty')}
-                    />
-                  </td>
-                  {withLevels && (
-                    <td className="qb-grid-cell-edit">
-                      <select
-                        data-col="level"
-                        value={line.levelId ?? ''}
-                        onChange={(e) => pickLevel(i, e.target.value === '' ? null : Number(e.target.value))}
-                        onKeyDown={(e) => onKeyDown(e, i)}
-                        aria-label={`Price level ${i + 1}`}
-                      >
-                        <option value="">Standard</option>
-                        {pricing.levels.map((l) => (
-                          <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                  )}
-                  <td className="qb-grid-cell-edit">
-                    <input
-                      data-col="rate"
-                      inputMode="decimal"
-                      className="num"
-                      value={line.rate}
-                      onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
-                      onKeyDown={(e) => onKeyDown(e, i)}
-                      aria-invalid={bad('rate')}
-                    />
-                  </td>
                 </>
               ) : (
                 <>
                   {withProducts && (
                     <td className="qb-grid-cell" {...cellProps('product')}>
-                      {product?.name ?? ''}
+                      {formLine ? 'Subtotal' : (product?.name ?? '')}
                     </td>
                   )}
                   <td className="qb-grid-cell" title={line.description} {...cellProps('description')}>
                     {line.description}
                   </td>
-                  <td className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
-                    {line.accountId !== null ? accountLabel(accounts, line.accountId) : state.blank ? '' : 'Select account'}
-                  </td>
-                  {withClasses && (
-                    <td className="qb-grid-cell" {...cellProps('class')}>
-                      {line.classId != null ? classLabel(classes, line.classId) : ''}
-                    </td>
+                  {formLine ? (
+                    <td colSpan={spareColumns} className="qb-grid-cell" />
+                  ) : (
+                    <>
+                      <td className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
+                        {line.accountId !== null ? accountLabel(accounts, line.accountId) : state.blank ? '' : 'Select account'}
+                      </td>
+                      {withClasses && (
+                        <td className="qb-grid-cell" {...cellProps('class')}>
+                          {line.classId != null ? classLabel(classes, line.classId) : ''}
+                        </td>
+                      )}
+                      <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
+                        {line.qty}
+                      </td>
+                      {withLevels && (
+                        <td className="qb-grid-cell" {...cellProps('level')}>
+                          {line.levelId != null ? levelName(line.levelId) : ''}
+                        </td>
+                      )}
+                      <td className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
+                        {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
+                      </td>
+                    </>
                   )}
-                  <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
-                    {line.qty}
-                  </td>
-                  {withLevels && (
-                    <td className="qb-grid-cell" {...cellProps('level')}>
-                      {line.levelId != null ? levelName(line.levelId) : ''}
-                    </td>
-                  )}
-                  <td className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
-                    {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
-                  </td>
                 </>
               )}
               <td className="qb-grid-cell num font-semibold">
-                {state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
+                {formLine ? money(amount ?? 0) : state.blank ? '' : state.amount !== null ? money(state.amount) : '—'}
               </td>
               {withTax && (
                 <td className="qb-grid-cell cell-flush text-center">
-                  <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />
+                  {!formLine && <input type="checkbox" className="accent-qb-green" checked={Boolean(line.isTaxable)} onChange={(e) => update(i, { isTaxable: e.target.checked })} aria-label={`Taxable ${i + 1}`} />}
                 </td>
               )}
               <td className="qb-grid-cell cell-flush text-center">

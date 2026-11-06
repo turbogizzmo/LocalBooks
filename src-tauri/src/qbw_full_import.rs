@@ -316,7 +316,7 @@ async fn write_sales(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, s
         Some(s) => crate::sales_lists::find_or_create_ship_method(tx, s).await?,
         None => None,
     };
-    let details = crate::sales_lists::SalesDetails { sales_rep_id: rep, ship_date: sales.ship_date, ship_method_id: ship, custom_fields: Vec::new() };
+    let details = crate::sales_lists::SalesDetails { sales_rep_id: rep, ship_date: sales.ship_date, ship_method_id: ship, custom_fields: Vec::new(), form_lines: Vec::new() };
     crate::sales_lists::write_imported(tx, doc, id, &details).await
 }
 

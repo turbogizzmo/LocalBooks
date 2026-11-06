@@ -1,0 +1,24 @@
+[
+  {
+    "name": "two subtotals",
+    "items": [[1000, true], [2000, false], [500, true]],
+    "form": [{ "afterLines": 2, "kind": "SUBTOTAL" }, { "afterLines": 3, "kind": "SUBTOTAL" }],
+    "rows": [[1, "I", 0], [2, "I", 1], [3, "F", 0, 3000], [4, "I", 2], [5, "F", 1, 500]],
+    "linesCents": 3500,
+    "taxableCents": 1500
+  },
+  {
+    "name": "subtotal at the top and twice in a row",
+    "items": [[700, false]],
+    "form": [{ "afterLines": 0, "kind": "SUBTOTAL" }, { "afterLines": 1, "kind": "SUBTOTAL" }, { "afterLines": 1, "kind": "SUBTOTAL" }],
+    "rows": [[1, "F", 0, 0], [2, "I", 0], [3, "F", 1, 700], [4, "F", 2, 0]],
+    "linesCents": 700,
+    "taxableCents": 0
+  },
+  {
+    "name": "placed past the last item",
+    "items": [[700, false]],
+    "form": [{ "afterLines": 2, "kind": "SUBTOTAL" }],
+    "error": "BAD_FORM_LINE"
+  }
+]

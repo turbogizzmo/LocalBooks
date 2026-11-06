@@ -272,6 +272,9 @@ pub struct SalesDetails {
     /// Customer fields shown on sales forms, as entered on this document. Fields left out or blank
     /// are not printed.
     pub custom_fields: Vec<FieldValue>,
+    /// Subtotals and other non-item lines, placed among the item lines (`item_types`). Written by
+    /// the document's writer, not by [`write_details`].
+    pub form_lines: Vec<crate::item_types::FormLineInput>,
 }
 
 impl SalesDetails {
@@ -399,6 +402,7 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         ship_date,
         ship_method_id,
         custom_fields: custom_fields.into_iter().map(|(field_id, value)| FieldValue { field_id, value }).collect(),
+        form_lines: Vec::new(),
     })
 }
 
@@ -410,6 +414,7 @@ impl SalesDetailsView {
             ship_date: self.ship_date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
             ship_method_id: self.ship_method_id,
             custom_fields: self.custom_fields.iter().map(|f| FieldValue { field_id: f.field_id, value: f.value.clone() }).collect(),
+            form_lines: Vec::new(),
         }
     }
 }

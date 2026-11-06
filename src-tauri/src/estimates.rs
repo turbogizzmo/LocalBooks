@@ -95,10 +95,16 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
             .ok_or_else(|| format!("EST_AMOUNT_TOO_LARGE: estimate total exceeds {}", format_cents(MAX_LINE_CENTS)))?;
         amounts.push(amount);
     }
+    let form = &input.details.form_lines;
+    let laid: Vec<crate::item_types::ItemAmount> =
+        input.lines.iter().zip(&amounts).map(|(l, a)| crate::item_types::ItemAmount { amount_cents: *a, is_taxable: l.is_taxable }).collect();
+    let layout = crate::item_types::lay_out(&laid, form, "EST")?;
+    let numbers = layout.item_numbers();
+    let total = layout.lines_cents;
     if input.discount_cents < 0 || input.discount_cents > total {
         return Err("EST_BAD_DISCOUNT: a discount is between zero and the subtotal".into());
     }
-    let taxable: i64 = input.lines.iter().zip(&amounts).filter(|(l, _)| l.is_taxable).map(|(_, a)| a).sum();
+    let taxable = layout.taxable_cents;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, total);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "EST").await?;
     let tax_cents = tax.map_or(0, |t| t.cents);
@@ -141,7 +147,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(estimate_id)
-        .bind(idx as i64 + 1)
+        .bind(numbers[idx])
         .bind(line.product_service_id)
         .bind(line.description.trim())
         .bind(line.quantity_e4)
@@ -154,6 +160,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
 }
@@ -188,21 +195,26 @@ pub async fn convert_to_invoice(
         let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
             sqlx::query_as("SELECT tax_rate_id, discount_cents FROM estimates WHERE id = ?1").bind(estimate_id).fetch_one(&mut *tx).await.map_err(db_err)?;
-        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable
+        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool, i64)> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, line_number
              FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
+        // Subtotals and the other form lines come over in their places.
+        let numbers: Vec<i64> = lines.iter().map(|l| l.7).collect();
+        let stored = crate::item_types::form_lines_of(&mut *tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+        let mut details = carried.clone();
+        details.form_lines = crate::item_types::inputs_of(&stored, &numbers);
         let invoice = InvoiceInput {
             customer_name,
             issue_date,
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable)| InvoiceLineInput {
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
                     rate_cents,
@@ -215,7 +227,7 @@ pub async fn convert_to_invoice(
             currency: None,
             tax_rate_id,
             discount_cents,
-            details: carried.clone(),
+            details,
         };
         // The estimate's rep, shipping and printed fields carry over to its invoice as they are.
         let invoice_id = crate::invoices::write_invoice_carrying(&mut tx, &invoice, &carried).await?;
@@ -241,6 +253,7 @@ pub async fn convert_to_invoice(
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateLineView {
+    pub line_number: i64,
     pub product_service_id: Option<i64>,
     pub description: String,
     pub quantity_e4: i64,
@@ -256,12 +269,14 @@ pub struct EstimateDetail {
     pub estimate: EstimateSummary,
     pub lines: Vec<EstimateLineView>,
     pub details: crate::sales_lists::SalesDetailsView,
+    /// Subtotals and other non-item lines, numbered with `lines`.
+    pub form_lines: Vec<crate::item_types::FormLineView>,
 }
 
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
     let estimate = get_estimate(pool, estimate_id).await?;
     let lines = sqlx::query_as(
-        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
+        "SELECT line_number, product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
          FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
     )
     .bind(estimate_id)
@@ -269,7 +284,8 @@ pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<Esti
     .await
     .map_err(db_err)?;
     let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
-    Ok(EstimateDetail { estimate, lines, details })
+    let form_lines = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    Ok(EstimateDetail { estimate, lines, details, form_lines })
 }
 
 /// Refuses converting an estimate that is already invoiced or was rejected.

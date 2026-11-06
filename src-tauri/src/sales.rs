@@ -339,11 +339,16 @@ pub async fn post_sales_receipt(pool: &SqlitePool, input: SalesReceiptInput) -> 
 }
 
 async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesReceiptInput) -> Result<i64, String> {
-    let subtotal = validate_sales_receipt(input)?;
-    let mut taxable = 0;
-    for line in input.lines.iter().filter(|l| l.is_taxable) {
-        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
-    }
+    validate_sales_receipt(input)?;
+    let amounts = input
+        .lines
+        .iter()
+        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents)?, is_taxable: l.is_taxable }))
+        .collect::<Result<Vec<_>, String>>()?;
+    let form = &input.details.form_lines;
+    let layout = crate::item_types::lay_out(&amounts, form, "SR")?;
+    let numbers = layout.item_numbers();
+    let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
@@ -396,7 +401,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(receipt_id)
-        .bind(n as i64)
+        .bind(numbers[idx])
         .bind(line.product_service_id)
         .bind(line.description.trim())
         .bind(line.quantity_e4)
@@ -415,6 +420,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         }
     }
 
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, form, &layout).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &input.details).await?;
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
