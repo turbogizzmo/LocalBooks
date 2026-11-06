@@ -82,6 +82,7 @@ features![
     mileage,
     preferences,
     price_levels,
+    profile_lists,
     purchase_orders,
     reconcile,
     recurring,

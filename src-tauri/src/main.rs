@@ -59,6 +59,7 @@ mod mileage;
 mod nacha;
 mod preferences;
 mod price_levels;
+mod profile_lists;
 mod qbmac_import;
 mod qbw_backup;
 mod qbw_company;

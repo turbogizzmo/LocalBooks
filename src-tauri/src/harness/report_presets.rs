@@ -86,6 +86,7 @@ async fn company() -> SqlitePool {
     let bill = crate::expenses::post_vendor_bill(
         p,
         BillInput {
+            terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),
             bill_date: d(2025, 11, 10),

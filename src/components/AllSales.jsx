@@ -11,7 +11,8 @@ import Notice from './Notice.jsx';
 import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
-import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -26,7 +27,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const defaultDeposit = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useTransactionDate();
-  const [method, setMethod] = useState('CASH');
+  const method = usePaymentMethodChoice('CASH');
   const [reference, setReference] = useState('');
   const [depositId, setDepositId] = useState(defaultDeposit);
   const [memo, setMemo] = useState('');
@@ -64,7 +65,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         customerName: customer.trim() || null,
         receiptDate: date,
         depositAccountId: depositId,
-        paymentMethod: method,
+        ...method.payload(),
         reference: reference || null,
         memo: memo || null,
         lines: postedLines,
@@ -94,11 +95,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Payment method</span>
-          <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
+          <PaymentMethodSelect value={method.id} onChange={method.set} className="qb-input w-[140px]" />
         </label>
         <label>
           <span className="qb-label">Reference no.</span>

@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
+  Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
+  Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
+  and vendors get a default term and a type. On invoices and bills the Terms box fills in from the
+  customer or vendor and sets the due date; Receive Payments and Pay Bills show the discount
+  offered and its last day. A customer message picked on an invoice, sales receipt or estimate
+  prints on it. The Terms and Payment method boxes end in **＋ Add new…**.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

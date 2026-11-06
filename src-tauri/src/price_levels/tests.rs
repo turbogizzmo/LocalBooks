@@ -226,6 +226,10 @@ async fn a_customer_default_is_set_on_the_customer() {
     let level = save(&b.pool, None, wholesale()).await.unwrap();
     let acme = crate::sales::create_customer(&b.pool, "Acme", None).await.unwrap();
     let input = |price_level_id| PartyDetailsInput {
+        terms_id: None,
+        customer_type_id: None,
+        job_type_id: None,
+        vendor_type_id: None,
         name: "Acme".into(),
         company_name: None,
         email: None,

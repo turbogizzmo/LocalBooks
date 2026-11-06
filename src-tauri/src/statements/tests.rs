@@ -96,7 +96,7 @@ async fn cash_basis_counts_invoices_as_paid_and_periods_line_up() {
     let pay = |invoice_id, day, cents| {
         crate::invoices::record_payment(
             &pool,
-            crate::invoices::PaymentInput { invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+            crate::invoices::PaymentInput { payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: day, amount_cents: cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
         )
     };
     let first = invoice("2026-01-10", 100_000).await;

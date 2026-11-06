@@ -7,7 +7,8 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { api, errorText, PAYMENT_METHODS, printDocument, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -43,7 +44,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [accountId, setAccountId] = useState(was?.paymentAccountId ?? defaultPayFrom);
   const [date, setDate] = useTransactionDate(was?.expenseDate);
   const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
-  const [method, setMethod] = useState(was?.paymentMethod ?? 'CREDIT_CARD');
+  const method = usePaymentMethodChoice(was?.paymentMethod ?? 'CREDIT_CARD', was?.paymentMethodId ?? null);
   const [memo, setMemo] = useState(was?.memo ?? '');
   const { homeCurrency } = useCompany();
   const [currency, setCurrency] = useState(was?.currencyCode ?? '');
@@ -107,7 +108,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         paymentAccountId: accountId,
         expenseDate: date,
         checkNumber: kind === 'CHECK' ? checkNumber.trim() || null : null,
-        paymentMethod: kind === 'EXPENSE' ? method : null,
+        ...(kind === 'EXPENSE' ? method.payload() : { paymentMethod: null, paymentMethodId: null }),
         memo: memo.trim() || null,
         lines: postedLines,
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
@@ -177,11 +178,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         ) : isCredit ? null : (
           <label>
             <span className="qb-label">Payment method</span>
-            <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
+            <PaymentMethodSelect value={method.id} onChange={method.set} className="qb-input w-[140px]" />
           </label>
         )}
         {formClass.header}

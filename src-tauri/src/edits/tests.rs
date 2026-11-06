@@ -28,7 +28,7 @@ async fn edits_void_and_repost_and_respect_payments() {
     assert_eq!(edits, 1);
 
     // Once paid, it must be unpaid before it can change.
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { invoice_id: edited, deposit_account_id: checking, payment_date: NaiveDate::from_ymd_opt(2026, 5, 9).unwrap(), amount_cents: 100, payment_method: "CASH".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { payment_method_id: None, invoice_id: edited, deposit_account_id: checking, payment_date: NaiveDate::from_ymd_opt(2026, 5, 9).unwrap(), amount_cents: 100, payment_method: "CASH".into(), reference: None, exchange_rate_e6: None }).await.unwrap();
     let err = replace_invoice(&pool, edited, invoice(1)).await.unwrap_err();
     assert!(err.starts_with("VOID_HAS_PAYMENTS"), "{err}");
     assert_eq!(balance(&pool, ar).await, 12_400, "a refused edit changes nothing");

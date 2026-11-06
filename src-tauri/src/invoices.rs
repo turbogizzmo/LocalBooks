@@ -94,6 +94,10 @@ pub struct InvoiceSummary {
     pub is_finance_charge: bool,
     /// The rep's initials, when the invoice has one.
     pub sales_rep: Option<String>,
+    /// The term it was issued with, and the early-payment discount that term offers.
+    #[sqlx(flatten)]
+    #[serde(flatten)]
+    pub terms: crate::profile_lists::DocumentTerms,
 }
 
 const SUMMARY_SELECT: &str = "
@@ -107,9 +111,16 @@ const SUMMARY_SELECT: &str = "
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
            EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge,
-           (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep
+           (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep,
+           tm.id AS terms_id, tm.name AS terms_name, COALESCE(tm.discount_ppm, 0) AS discount_ppm,
+           CASE WHEN tm.discount_days IS NOT NULL THEN date(i.issue_date, '+' || tm.discount_days || ' days') END AS discount_until
     FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id LEFT JOIN customers c ON c.id = i.customer_id
-    LEFT JOIN tax_rates t ON t.id = i.tax_rate_id";
+    LEFT JOIN tax_rates t ON t.id = i.tax_rate_id LEFT JOIN terms tm ON tm.id = i.terms_id";
+
+fn with_discount(mut invoice: InvoiceSummary) -> InvoiceSummary {
+    invoice.terms.fill(invoice.total_cents);
+    invoice
+}
 
 pub const PAYMENT_METHODS: &[&str] = &["CASH", "CHECK", "CREDIT_CARD", "ACH", "WIRE", "OTHER"];
 
@@ -121,7 +132,11 @@ pub struct PaymentInput {
     pub payment_date: NaiveDate,
     /// In the invoice's currency.
     pub amount_cents: i64,
+    /// The kind of payment; taken from `payment_method_id` when that is given.
     pub payment_method: String,
+    /// The Payment Method list entry ("Visa").
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
     pub reference: Option<String>,
     /// Payment-date exchange rate for a foreign-currency invoice; defaults to the invoice's rate.
     #[serde(default)]
@@ -135,6 +150,8 @@ pub struct PaymentView {
     pub payment_date: String,
     pub amount_cents: i64,
     pub payment_method: String,
+    /// The Payment Method list entry's name ("Visa"), when the payment has one.
+    pub payment_method_name: Option<String>,
     pub reference: Option<String>,
     pub deposit_account_id: i64,
     pub journal_entry_id: Option<i64>,
@@ -215,6 +232,7 @@ pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, Str
     sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} ORDER BY i.is_voided, i.invoice_number DESC"))
         .fetch_all(pool)
         .await
+        .map(|all| all.into_iter().map(with_discount).collect())
         .map_err(db_err)
 }
 
@@ -223,6 +241,7 @@ pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<In
         .bind(invoice_id)
         .fetch_one(pool)
         .await
+        .map(with_discount)
         .map_err(db_err)
 }
 
@@ -396,9 +415,10 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
 }
 
 async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -> Result<(), String> {
-    if !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
+    if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
     if input.amount_cents <= 0 {
         return Err("INV_BAD_AMOUNT: payment amount must be greater than zero".into());
     }
@@ -480,19 +500,20 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     let payment_id: i64 = sqlx::query_scalar(
         "INSERT INTO invoice_payments
             (invoice_id, payment_date, amount_cents, payment_method, reference, deposit_account_id,
-             exchange_rate_e6, home_amount_cents, ar_relief_cents)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             exchange_rate_e6, home_amount_cents, ar_relief_cents, payment_method_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          RETURNING id",
     )
     .bind(input.invoice_id)
     .bind(input.payment_date)
     .bind(input.amount_cents)
-    .bind(&input.payment_method)
+    .bind(method.as_deref().unwrap_or(&input.payment_method))
     .bind(reference)
     .bind(input.deposit_account_id)
     .bind(fx.map(|f| f.0))
     .bind(fx.map(|f| f.1))
     .bind(fx.map(|f| f.2))
+    .bind(method_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -552,8 +573,8 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
 
 pub async fn list_payments(pool: &SqlitePool, invoice_id: i64) -> Result<Vec<PaymentView>, String> {
     sqlx::query_as::<_, PaymentView>(
-        "SELECT id, payment_date, amount_cents, payment_method, reference, deposit_account_id, journal_entry_id, is_voided,
-                exchange_rate_e6, home_amount_cents, ar_relief_cents
+        "SELECT id, payment_date, amount_cents, payment_method, (SELECT name FROM payment_methods WHERE id = payment_method_id) AS payment_method_name,
+                reference, deposit_account_id, journal_entry_id, is_voided, exchange_rate_e6, home_amount_cents, ar_relief_cents
          FROM invoice_payments WHERE invoice_id = ?1 ORDER BY payment_date, id",
     )
     .bind(invoice_id)
