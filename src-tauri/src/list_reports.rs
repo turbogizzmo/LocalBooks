@@ -512,6 +512,15 @@ async fn average_days_to_pay(pool: &SqlitePool, start: NaiveDate, end: NaiveDate
     Ok(done(Some(start), end, columns, rows, by_customer.len(), notes))
 }
 
+/// A bill's lines for one job: the job (none for lines without one), its name and their amount.
+type JobPart = (Option<i64>, Option<String>, i64);
+
+/// Sorts groups by name with "none" last: (1 for none, lowercase name, id).
+type GroupKey = (u8, String, i64);
+
+/// A job's name and its open bills, each with the job's share of the open balance.
+type JobBills<'a> = (String, Vec<(&'a OpenBill, i64)>);
+
 #[derive(Debug, sqlx::FromRow)]
 struct OpenBill {
     bill_id: i64,
@@ -552,12 +561,12 @@ async fn unpaid_bills_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<Acco
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let mut by_bill: BTreeMap<i64, Vec<(Option<i64>, Option<String>, i64)>> = BTreeMap::new();
+    let mut by_bill: BTreeMap<i64, Vec<JobPart>> = BTreeMap::new();
     for (bill, job, name, amount) in lines {
         by_bill.entry(bill).or_default().push((job, name, amount));
     }
     // (sort name, job id) → (shown name, [(bill, share)])
-    let mut jobs: BTreeMap<(u8, String, i64), (String, Vec<(&OpenBill, i64)>)> = BTreeMap::new();
+    let mut jobs: BTreeMap<GroupKey, JobBills<'_>> = BTreeMap::new();
     for b in &bills {
         let parts = by_bill.get(&b.bill_id).cloned().unwrap_or_default();
         let mut left = b.open_cents;
@@ -720,7 +729,7 @@ enum TimeBy {
 }
 
 /// Sort key and label of a time row's group; rows without one sort last.
-fn time_group(by: TimeBy, t: &TimeRow) -> ((u8, String, i64), String) {
+fn time_group(by: TimeBy, t: &TimeRow) -> (GroupKey, String) {
     let (id, name, none) = match by {
         TimeBy::Job => (t.job_id, t.job.clone(), "No customer or job"),
         TimeBy::Name => (Some(t.employee_id), Some(t.employee.clone()), ""),
@@ -735,7 +744,7 @@ fn time_group(by: TimeBy, t: &TimeRow) -> ((u8, String, i64), String) {
 /// Hours by job, by employee or by service item, with the billable hours beside them.
 async fn time_summary(pool: &SqlitePool, by: TimeBy, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
     let time = time_rows(pool, start, end).await?;
-    let mut groups: BTreeMap<(u8, String, i64), (String, i64, i64)> = BTreeMap::new();
+    let mut groups: BTreeMap<GroupKey, (String, i64, i64)> = BTreeMap::new();
     for t in &time {
         let (key, label) = time_group(by, t);
         let g = groups.entry(key).or_insert((label, 0, 0));
@@ -764,7 +773,7 @@ async fn time_summary(pool: &SqlitePool, by: TimeBy, start: NaiveDate, end: Naiv
 
 async fn time_by_job_detail(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<AccountantReport, String> {
     let time = time_rows(pool, start, end).await?;
-    let mut groups: BTreeMap<(u8, String, i64), (String, Vec<&TimeRow>)> = BTreeMap::new();
+    let mut groups: BTreeMap<GroupKey, (String, Vec<&TimeRow>)> = BTreeMap::new();
     for t in &time {
         let (key, label) = time_group(TimeBy::Job, t);
         groups.entry(key).or_insert_with(|| (label, Vec::new())).1.push(t);
