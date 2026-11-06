@@ -234,7 +234,9 @@ export default function ExpensesChecks({ accounts, intent }) {
   const company = useCompany();
   const attachments = useAttachmentRows();
   const startEdit = (expense) =>
-    api.getDocumentLines('expense', expense.id).then(
+    expense.isVoided
+      ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' })
+      : api.getDocumentLines('expense', expense.id).then(
       (lines) => {
         setEditing({ expense, lines });
         setKind(expense.kind);

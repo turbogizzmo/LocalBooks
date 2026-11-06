@@ -498,14 +498,21 @@ export default function Bills({ accounts, intent }) {
   const [printing, setPrinting] = useState([]);
   const company = useCompany();
   const vendorRef = useRef(null);
-  const startEdit = (bill) =>
-    api.getDocumentLines('bill', bill.id).then(
+  // Every way in (Edit…, a double-click here, a register, a vendor's transactions) checks the same
+  // rules the save would: a voided bill, or one with payments or credits, can't be replaced.
+  const startEdit = (bill) => {
+    if (bill.isVoided) return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} is voided, so it can't be edited.` });
+    if (bill.amountPaidCents > 0) {
+      return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
+    }
+    return api.getDocumentLines('bill', bill.id).then(
       (lines) => {
         setPaying(false);
         setEditing({ bill, lines });
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
+  };
   const today = todayIso();
   // A bill chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();

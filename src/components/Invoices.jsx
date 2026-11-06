@@ -651,6 +651,12 @@ export default function Invoices({ accounts, intent }) {
   const loadForEdit = (inv, focusCustomer = true) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details }) => {
+        // However it was opened (Edit…, a double-click, a register, a customer's transactions),
+        // the same rules as saving apply.
+        if (invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
+        if (invoice.amountPaidCents > 0) {
+          return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
+        }
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
