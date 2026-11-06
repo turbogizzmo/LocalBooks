@@ -50,7 +50,8 @@ UPDATE vendors SET terms_id = (SELECT id FROM terms t WHERE t.net_days = vendors
 WHERE terms_days IS NOT NULL;
 
 -- A record given days without a term (imports write days only) is linked to the term for those
--- days, which is added when there is none. Updates that set the term themselves are left alone.
+-- days, which is added when there is none. Updates that set the term themselves, or that bring
+-- the days in step with the record's own term (a term's days changed), are left alone.
 CREATE TRIGGER trg_customer_terms_link_insert
 AFTER INSERT ON customers
 WHEN NEW.terms_days IS NOT NULL AND NEW.terms_id IS NULL
@@ -65,6 +66,7 @@ END;
 CREATE TRIGGER trg_customer_terms_link_update
 AFTER UPDATE OF terms_days ON customers
 WHEN NEW.terms_id IS OLD.terms_id AND NEW.terms_days IS NOT OLD.terms_days
+  AND (NEW.terms_id IS NULL OR NEW.terms_days IS NOT (SELECT net_days FROM terms WHERE id = NEW.terms_id))
 BEGIN
     INSERT OR IGNORE INTO terms (name, net_days)
     SELECT CASE NEW.terms_days WHEN 0 THEN 'Due on receipt' ELSE 'Net ' || NEW.terms_days END, NEW.terms_days
@@ -87,6 +89,7 @@ END;
 CREATE TRIGGER trg_vendor_terms_link_update
 AFTER UPDATE OF terms_days ON vendors
 WHEN NEW.terms_id IS OLD.terms_id AND NEW.terms_days IS NOT OLD.terms_days
+  AND (NEW.terms_id IS NULL OR NEW.terms_days IS NOT (SELECT net_days FROM terms WHERE id = NEW.terms_id))
 BEGIN
     INSERT OR IGNORE INTO terms (name, net_days)
     SELECT CASE NEW.terms_days WHEN 0 THEN 'Due on receipt' ELSE 'Net ' || NEW.terms_days END, NEW.terms_days

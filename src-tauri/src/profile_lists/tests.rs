@@ -54,8 +54,8 @@ fn a_term_sets_the_due_date_and_discount_date() {
     assert!(due_date(d(10, 1), -1).is_err());
     let view = TermsView { id: 1, name: "2% 10 Net 30".into(), net_days: 30, discount_ppm: 20_000, discount_days: Some(10), is_active: true, is_used: false };
     assert_eq!(view.dates(d(10, 1)).unwrap(), (d(10, 31), Some(d(10, 11))));
-    assert_eq!(early_discount_cents(123_45, 20_000), Some(2_47), "2% of $123.45, rounded half away from zero");
-    assert_eq!(early_discount_cents(100_000, 0), Some(0));
+    assert_eq!(early_discount_cents(12_345, 20_000), Some(247), "2% of $123.45, rounded half away from zero");
+    assert_eq!(early_discount_cents(10_0000, 0), Some(0));
 }
 
 #[tokio::test]
@@ -129,6 +129,8 @@ async fn terms_are_validated_unique_and_kept_once_used() {
     update_terms(&pool, two_ten.id, terms("2% 10 Net 45", 45, 20_000, Some(10))).await.unwrap();
     let days: Option<i64> = sqlx::query_scalar("SELECT terms_days FROM customers WHERE id = ?1").bind(acme.id).fetch_one(&pool).await.unwrap();
     assert_eq!(days, Some(45));
+    let kept: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM customers WHERE id = ?1").bind(acme.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(kept, Some(two_ten.id), "keeps its term, not the plain Net 45 with the same days");
 
     assert!(delete_terms(&pool, two_ten.id).await.unwrap_err().starts_with("TERMS_IN_USE"));
     delete_terms(&pool, no_discount.id).await.unwrap();
@@ -151,10 +153,10 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
     let two_ten = create_terms(&pool, terms("2% 10 Net 30", 30, 20_000, Some(10))).await.unwrap();
 
     let details = SalesDetails { terms_id: Some(two_ten.id), ..Default::default() };
-    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 1_234_56, details)).await.unwrap();
+    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 123_456, details)).await.unwrap();
     assert_eq!(inv.terms.terms_name.as_deref(), Some("2% 10 Net 30"));
     assert_eq!(inv.terms.discount_until.as_deref(), Some("2026-10-11"));
-    assert_eq!(inv.terms.early_discount_cents, 24_69, "2% of $1,234.56");
+    assert_eq!(inv.terms.early_discount_cents, 2_469, "2% of $1,234.56");
     assert_eq!(document_details(&pool, SalesDoc::Invoice, inv.id).await.unwrap().terms_name.as_deref(), Some("2% 10 Net 30"));
     assert!(list_terms(&pool).await.unwrap().iter().find(|t| t.id == two_ten.id).unwrap().is_used);
 
@@ -181,12 +183,12 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
         bill_date: d(10, 1),
         due_date: d(10, 31),
         memo: None,
-        total_cents: 500_00,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: 500_00, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
+        total_cents: 50_000,
+        lines: vec![BillLineInput { account_id: expense, amount_cents: 50_000, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
         terms_id,
     };
     let posted = post_vendor_bill(&pool, bill(Some(two_ten.id))).await.unwrap();
-    assert_eq!((posted.terms.discount_until.as_deref(), posted.terms.early_discount_cents), (Some("2026-10-11"), 10_00));
+    assert_eq!((posted.terms.discount_until.as_deref(), posted.terms.early_discount_cents), (Some("2026-10-11"), 1_000));
 
     set_terms_active(&pool, two_ten.id, false).await.unwrap();
     assert!(post_vendor_bill(&pool, bill(Some(two_ten.id))).await.unwrap_err().starts_with("BILL_INACTIVE_TERMS"));
@@ -265,12 +267,12 @@ async fn types_go_on_records_and_messages_print_on_sales_forms() {
     assert!(delete_profile_entry(&pool, retail.id).await.unwrap_err().starts_with("PROFILE_IN_USE"));
 
     let services = account(&pool, "4100").await;
-    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 100_00, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap();
+    let inv = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap();
     let details = document_details(&pool, SalesDoc::Invoice, inv.id).await.unwrap();
     assert_eq!(details.customer_message.as_deref(), Some(thanks.name.as_str()));
-    let err = create_and_post_invoice(&pool, invoice("Acme", services, 100_00, SalesDetails { customer_message_id: Some(remodel.id), ..Default::default() })).await.unwrap_err();
+    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(remodel.id), ..Default::default() })).await.unwrap_err();
     assert!(err.starts_with("INV_UNKNOWN_CUSTOMER_MESSAGE"), "{err}");
     set_profile_entry_active(&pool, thanks.id, false).await.unwrap();
-    let err = create_and_post_invoice(&pool, invoice("Acme", services, 100_00, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap_err();
+    let err = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() })).await.unwrap_err();
     assert!(err.starts_with("INV_INACTIVE_CUSTOMER_MESSAGE"), "{err}");
 }
