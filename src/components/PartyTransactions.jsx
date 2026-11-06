@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
+import TransactionHistory from './TransactionHistory.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
-import { formatDate } from '../lib/dates.js';
+import { formatDate, periodRange } from '../lib/dates.js';
 import { useOpenFromList } from '../lib/windows.js';
 import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
+import { quickReport, reportShortcut, transactionJournal, useReportOpener } from '../lib/quickReport.js';
 
 /** How many transactions the panel lists; the count and total still cover them all. */
 const LIMIT = 500;
+
+/** The transaction types each kind of name has, as journal entries show them. */
+const TYPES = {
+  customer: ['INVOICE', 'RECEIVE_PAYMENT', 'SALES_RECEIPT', 'CREDIT_MEMO', 'JOURNAL'],
+  vendor: ['BILL', 'BILL_PAYMENT', 'CHECK', 'EXPENSE', 'CARD_CREDIT', 'VENDOR_CREDIT', 'JOURNAL'],
+};
+
+const DATE_FILTERS = [
+  ['all', 'All dates'],
+  ['thisMonth', 'This month'],
+  ['thisQuarter', 'This quarter'],
+  ['thisYear', 'This year'],
+  ['lastYear', 'Last year'],
+  ['custom', 'Custom'],
+];
 
 /**
  * Every transaction with one customer or vendor, newest first, under the Customers or Vendors list
@@ -17,12 +34,33 @@ const LIMIT = 500;
  */
 export default function PartyTransactions({ kind, party, onClose }) {
   const [includeVoided, setIncludeVoided] = useState(false);
+  const [type, setType] = useState('');
+  const [dates, setDates] = useState('all');
+  const [[from, to], setRange] = useState(['', '']);
+  const [selected, setSelected] = useState(null);
+  const [history, setHistory] = useState(null);
   const openFromList = useOpenFromList();
-  const query = { filters: { names: [{ kind, id: party.id }], excludeVoided: !includeVoided }, limit: LIMIT };
+  const openReport = useReportOpener();
+  const chooseDates = (id) => {
+    setDates(id);
+    if (id === 'all') setRange(['', '']);
+    else if (id !== 'custom') setRange(periodRange(id));
+  };
+  // Without an end date the search stops at today, so "All dates" also reaches post-dated ones.
+  const query = {
+    filters: { names: [{ kind, id: party.id }], excludeVoided: !includeVoided, transactionTypes: type ? [type] : [] },
+    startDate: from || null,
+    endDate: to || (dates === 'all' ? '9999-12-31' : null),
+    limit: LIMIT,
+  };
   const { data, error, reload } = useLedgerQuery(() => api.findTransactions(query));
   useEffect(() => {
     reload();
-  }, [kind, party.id, includeVoided, reload]);
+  }, [kind, party.id, includeVoided, type, from, to, dates, reload]);
+  useEffect(() => {
+    setSelected(null);
+    setType('');
+  }, [kind, party.id]);
 
   const sorter = useSort(
     data?.rows,
@@ -37,9 +75,20 @@ export default function PartyTransactions({ kind, party, onClose }) {
     { storageKey: 'party-transactions' },
   );
   const open = (r) => openFromList(...transactionTarget(r));
+  const selectedRow = data?.rows.find((r) => r.journalEntryId === selected) ?? null;
+  const runJournal = (r) => openReport(transactionJournal({ journalEntryId: r.journalEntryId, label: `${r.typeLabel}${r.num ? ` #${r.num}` : ''}` }));
+  // Ctrl+H and Ctrl+Y act on the selected transaction; Ctrl+Q is the list's (the name's QuickReport).
+  const onKeyDown = (e) => {
+    const key = reportShortcut(e);
+    if (!selectedRow || (key !== 'history' && key !== 'journal')) return;
+    e.preventDefault();
+    if (key === 'history') setHistory(selectedRow.journalEntryId);
+    else runJournal(selectedRow);
+  };
 
   return (
-    <section className="qb-panel flex h-[40%] min-h-[160px] flex-none flex-col" aria-label={`Transactions with ${party.name}`}>
+    <section className="qb-panel flex h-[40%] min-h-[160px] flex-none flex-col outline-none" aria-label={`Transactions with ${party.name}`} tabIndex={-1} onKeyDown={onKeyDown}>
+      {history !== null && <TransactionHistory journalEntryId={history} onClose={() => setHistory(null)} onOpen={openFromList} />}
       <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
         <h2 className="truncate text-md font-semibold">Transactions · {party.name}</h2>
         {data && (
@@ -48,10 +97,30 @@ export default function PartyTransactions({ kind, party, onClose }) {
             {data.matchCount > data.rows.length && ` · newest ${data.rows.length} shown`} · double-click to open
           </span>
         )}
-        <label className="ml-auto flex items-center gap-1 text-sm">
+        <select className="qb-input ml-auto h-row w-[150px] text-sm" value={type} onChange={(e) => setType(e.target.value)} aria-label="Transaction type">
+          <option value="">All types</option>
+          {TYPES[kind].map((t) => (
+            <option key={t} value={t}>{SOURCE_LABEL[t] ?? t}</option>
+          ))}
+        </select>
+        <select className="qb-input h-row w-[120px] text-sm" value={dates} onChange={(e) => chooseDates(e.target.value)} aria-label="Dates">
+          {DATE_FILTERS.map(([id, label]) => (
+            <option key={id} value={id}>{label}</option>
+          ))}
+        </select>
+        {dates !== 'all' && (
+          <>
+            <input type="date" className="qb-input h-row w-[128px] text-sm" value={from} onChange={(e) => { setDates('custom'); setRange([e.target.value, to]); }} aria-label="From" />
+            <input type="date" className="qb-input h-row w-[128px] text-sm" value={to} onChange={(e) => { setDates('custom'); setRange([from, e.target.value]); }} aria-label="To" />
+          </>
+        )}
+        <label className="flex items-center gap-1 text-sm">
           <input type="checkbox" className="accent-qb-green" checked={includeVoided} onChange={(e) => setIncludeVoided(e.target.checked)} />
           Show voided
         </label>
+        <button type="button" className="text-sm text-qb-link hover:underline" onClick={() => openReport(quickReport({ kind, id: party.id, name: party.name, startDate: from, endDate: to }))} title="These transactions as a report (Ctrl+Q)">
+          QuickReport
+        </button>
         <button type="button" className="text-sm text-qb-link hover:underline" onClick={onClose} aria-label="Close transactions">
           Close
         </button>
@@ -81,14 +150,16 @@ export default function PartyTransactions({ kind, party, onClose }) {
             {data && data.rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">
-                  No transactions with {party.name} yet.
+                  {type || dates !== 'all' ? `No ${type ? (SOURCE_LABEL[type] ?? type).toLowerCase() + ' ' : ''}transactions with ${party.name} for these dates.` : `No transactions with ${party.name} yet.`}
                 </td>
               </tr>
             )}
             {sorter.sorted.map((r) => (
               <tr
                 key={r.journalEntryId}
-                className={`qb-grid-row cursor-pointer ${r.isVoided || r.isReversal ? 'text-qb-ink-faint' : ''}`}
+                className={`qb-grid-row cursor-pointer ${r.journalEntryId === selected ? 'is-active' : ''} ${r.isVoided || r.isReversal ? 'text-qb-ink-faint' : ''}`}
+                aria-selected={r.journalEntryId === selected}
+                onClick={() => setSelected(r.journalEntryId)}
                 onDoubleClick={() => open(r)}
                 title={opensOwnForm(r) ? `Double-click to open this ${(SOURCE_LABEL[r.sourceType] ?? 'transaction').toLowerCase()}` : 'Double-click to open in the journal'}
               >

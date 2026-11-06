@@ -288,6 +288,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Mileage | Employees › Mileage; + New › Mileage Trip | Vehicles, dated mileage rates you enter, trips by odometer or miles, billing trips on an invoice, mileage by vehicle and by job | [guide](docs/guide/mileage.md) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
+| Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar | [guide](docs/guide/getting-started.md) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
@@ -295,6 +296,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| QuickReport | Ctrl+Q in a register or the account, name and item lists; Ctrl+H, Ctrl+Y | A report of the selected account's, name's or item's transactions; Transaction History and Transaction Journal for one transaction | [guide](docs/guide/reports.md#quickreport-transaction-history-and-transaction-journal) |
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
 | Sortable lists | Any list | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |

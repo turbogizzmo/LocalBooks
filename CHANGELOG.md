@@ -6,6 +6,22 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Type checks and deposits straight into a register.** Bank and credit card registers end in a
+  blank row: enter the date, number, payee, account, memo and an amount, then click **Record** (or
+  press Enter). A bank payment becomes a check, a deposit a deposit, a card charge an expense and a
+  card payment a card credit, just as their forms would make them. **Restore** clears the row and
+  **Splits…** spreads it over several accounts.
+- **Find and filter in a register.** **Go To…** finds a transaction by number, payee, memo or
+  amount; **Dates** shows all, this month, this year or your own range; **2-line** puts the account
+  and memo on a second line. The **No.** column now shows each check's, invoice's or bill's own
+  number.
+- **QuickReport, Transaction History and Transaction Journal.** Press **Ctrl+Q** in a register, or
+  on an account, customer, vendor or item in its list, for a report of its transactions. Click a
+  transaction and press **Ctrl+H** to see what is linked to it (an invoice's payments, a payment's
+  deposit, a bill's payments) or **Ctrl+Y** for the debits and credits it posted.
+- **Filter a customer's or vendor's transactions.** The transactions panel under the Customers and
+  Vendors lists can show one transaction type and a date range.
+
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms

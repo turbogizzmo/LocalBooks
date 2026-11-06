@@ -235,6 +235,8 @@ pub struct Filters {
     pub exclude_voided: bool,
     /// Only journal entries marked as adjusting entries.
     pub adjusting_only: bool,
+    /// Only these journal entries (a Transaction Journal for one transaction).
+    pub entry_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -703,6 +705,9 @@ impl LineFilter<'_> {
             return false;
         }
         if f.adjusting_only && !l.is_adjusting {
+            return false;
+        }
+        if !f.entry_ids.is_empty() && !f.entry_ids.contains(&l.journal_entry_id) {
             return false;
         }
         true

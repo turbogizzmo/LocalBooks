@@ -62,14 +62,18 @@ function datesFor(period, fiscal, saved) {
   return resolvePeriod(period, fiscal);
 }
 
-/** `zoom` ({ title, filters, startDate, endDate }) opens a preset narrowed to what was clicked in another report. */
+/**
+ * `zoom` ({ title, filters, startDate, endDate, settings?, period? }) opens a preset narrowed to what
+ * was clicked in another report, or a QuickReport (`lib/quickReport.js`).
+ */
 export default function CustomReport({ report, custom, navigate, onOpen, zoom = null }) {
   const source = useMemo(() => {
     if (report.startsWith('preset:')) {
       const p = custom.presets.find((x) => x.id === report.slice('preset:'.length));
       if (p && zoom) {
-        const settings = { ...p.settings, filters: { ...p.settings.filters, ...zoom.filters }, startDate: zoom.startDate, endDate: zoom.endDate };
-        return { preset: p, title: zoom.title, dateMode: p.dateMode, period: 'custom', settings };
+        // A QuickReport also brings its own columns and grouping (`settings`), and may cover all dates.
+        const settings = { ...p.settings, ...zoom.settings, filters: { ...p.settings.filters, ...zoom.filters }, startDate: zoom.startDate, endDate: zoom.endDate };
+        return { preset: p, title: zoom.title, dateMode: p.dateMode, period: zoom.period ?? 'custom', settings };
       }
       return p && { preset: p, title: p.title, dateMode: p.dateMode, period: p.period, settings: p.settings };
     }

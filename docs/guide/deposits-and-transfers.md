@@ -13,6 +13,12 @@ same single amount as your bank statement.
    account and amount.
 5. Check **Total deposit** against your deposit slip, then click **Save & Post Deposit**.
 
+## Type a deposit into the register
+
+A deposit that isn't a customer payment (a refund, a loan, cash from the owner) can be typed
+straight into the bank account's register: see
+[Type a check or deposit into a register](expenses-and-checks.md#type-a-check-or-deposit-into-a-register).
+
 ## Move money between your accounts
 
 1. Click **Transfer** (or **+ New › Transfer**).
