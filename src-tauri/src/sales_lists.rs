@@ -362,14 +362,15 @@ pub(crate) async fn write_imported(tx: &mut Transaction<'_, Sqlite>, doc: SalesD
 }
 
 async fn write_columns(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
-    let terms = if doc == SalesDoc::Invoice { ", terms_id = ?6" } else { "" };
-    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, customer_message_id = ?5{terms} WHERE id = ?4", doc.table()))
-        .bind(details.sales_rep_id)
-        .bind(details.ship_date)
-        .bind(details.ship_method_id)
-        .bind(id)
-        .bind(details.customer_message_id)
-        .bind(details.terms_id.filter(|_| doc == SalesDoc::Invoice))
+    let invoice = doc == SalesDoc::Invoice;
+    let terms = if invoice { ", terms_id = ?6" } else { "" };
+    let sql = format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, customer_message_id = ?5{terms} WHERE id = ?4", doc.table());
+    let mut query = sqlx::query(&sql).bind(details.sales_rep_id).bind(details.ship_date).bind(details.ship_method_id).bind(id).bind(details.customer_message_id);
+    // Only an invoice's statement has a sixth parameter.
+    if invoice {
+        query = query.bind(details.terms_id);
+    }
+    query
         .execute(&mut **tx)
         .await
         .map(|_| ())

@@ -79,23 +79,30 @@ function AddDialog({ title, onClose, onSubmit, children }) {
   );
 }
 
+/**
+ * A term's input from the boxes on a form (name, net days, discount percent and days as typed),
+ * or an Error saying what to fix.
+ */
+export function termsInputFrom({ name, netDays, percent, discountDays }) {
+  const days = (text) => (/^\d{1,3}$/.test(String(text ?? '').trim()) ? Number(String(text).trim()) : null);
+  const net = days(netDays);
+  if (net === null || net > 365) throw new Error('Enter the net days as a whole number from 0 to 365.');
+  const ppm = parsePercentToPpm(percent);
+  if (ppm === null) throw new Error('Enter the discount as a percent under 100, such as 2 or 1.5.');
+  if (ppm === 0) return { name, netDays: net, discountPpm: 0, discountDays: null };
+  const within = days(discountDays);
+  if (within === null) throw new Error('Enter how many days the discount is offered, as a whole number.');
+  if (within > net) throw new Error('The discount days can’t be more than the net days.');
+  return { name, netDays: net, discountPpm: ppm, discountDays: within };
+}
+
 /** Asks for a new term: name, net days, and an optional early-payment discount. */
 export function NewTermsDialog({ onClose, onCreated }) {
   const [name, setName] = useState('');
   const [netDays, setNetDays] = useState('30');
   const [percent, setPercent] = useState('');
   const [discountDays, setDiscountDays] = useState('');
-  const submit = async () => {
-    const ppm = parsePercentToPpm(percent);
-    if (ppm === null) throw new Error('Enter the discount as a percent under 100, such as 2 or 1.5.');
-    const t = await api.createTerms({
-      name,
-      netDays: Number(netDays),
-      discountPpm: ppm,
-      discountDays: ppm > 0 && discountDays.trim() !== '' ? Number(discountDays) : null,
-    });
-    onCreated(t);
-  };
+  const submit = async () => onCreated(await api.createTerms(termsInputFrom({ name, netDays, percent, discountDays })));
   return (
     <AddDialog title="New term" onClose={onClose} onSubmit={submit}>
       <label className="col-span-2 flex flex-col gap-0.5">

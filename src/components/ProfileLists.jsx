@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import RowMenu from './RowMenu.jsx';
 import { InactiveToggle, Panel, useRunner } from './SalesLists.jsx';
-import { formatPpm, kindLabel, parsePercentToPpm, PAYMENT_KINDS, termsSummary } from './ProfileFields.jsx';
+import { formatPpm, kindLabel, PAYMENT_KINDS, termsInputFrom, termsSummary } from './ProfileFields.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 
 /** The lists, in the order of the Lists › Customer & Vendor Profile Lists menu. */
@@ -33,11 +33,7 @@ function actionsFor(entry, run, { onEdit, setActive, remove, usedHint }) {
 
 const blankTerms = { name: '', netDays: '30', percent: '', discountDays: '' };
 
-function termsInput(t) {
-  const ppm = parsePercentToPpm(t.percent);
-  if (ppm === null) throw new Error('Enter the discount as a percent under 100, such as 2 or 1.5.');
-  return { name: t.name, netDays: Number(t.netDays), discountPpm: ppm, discountDays: ppm > 0 && String(t.discountDays).trim() !== '' ? Number(t.discountDays) : null };
-}
+const termsInput = (t) => termsInputFrom(t);
 
 function TermsRow({ value, onChange, formId, busy, label }) {
   const input = (key, props) => (

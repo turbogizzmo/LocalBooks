@@ -315,8 +315,8 @@ pub async fn delete_payment_method(pool: &SqlitePool, id: i64) -> Result<(), Str
 }
 
 /// The method and kind to record for a payment. A chosen method must exist and be active, and
-/// decides the kind. Without one, the kind given is recorded with the first method of that kind
-/// (imports and older callers name only the kind), or none when no method has it.
+/// decides the kind. Without one, the kind given is recorded with the first active method of that
+/// kind (imports and older callers name only the kind), or with no method when none is active.
 pub(crate) async fn resolve_payment_method(conn: &mut SqliteConnection, id: Option<i64>, kind: Option<&str>, code: &str) -> Result<(Option<i64>, Option<String>), String> {
     if let Some(id) = id {
         let row: Option<(String, String, bool)> =
@@ -328,7 +328,7 @@ pub(crate) async fn resolve_payment_method(conn: &mut SqliteConnection, id: Opti
         };
     }
     let Some(kind) = kind else { return Ok((None, None)) };
-    let id: Option<i64> = sqlx::query_scalar("SELECT id FROM payment_methods WHERE kind = ?1 ORDER BY is_active DESC, id LIMIT 1")
+    let id: Option<i64> = sqlx::query_scalar("SELECT id FROM payment_methods WHERE kind = ?1 AND is_active = 1 ORDER BY id LIMIT 1")
         .bind(kind)
         .fetch_optional(&mut *conn)
         .await

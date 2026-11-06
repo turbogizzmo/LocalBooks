@@ -233,6 +233,17 @@ async fn payment_methods_name_a_kind_of_payment() {
     assert!(delete_payment_method(&pool, visa.id).await.unwrap_err().starts_with("PAYMENT_METHOD_IN_USE"));
     set_payment_method_active(&pool, visa.id, false).await.unwrap();
     assert!(post_sales_receipt(&pool, receipt(Some(visa.id), "CASH")).await.unwrap_err().starts_with("SR_INACTIVE_METHOD"));
+    // With every check method inactive, a kind-only payment records the kind and no method.
+    let check = list_payment_methods(&pool).await.unwrap().into_iter().find(|m| m.kind == "CHECK").unwrap();
+    set_payment_method_active(&pool, check.id, false).await.unwrap();
+    let by_check = post_sales_receipt(&pool, receipt(None, "CHECK")).await.unwrap();
+    let stored: (String, Option<i64>) = sqlx::query_as("SELECT payment_method, payment_method_id FROM sales_receipts WHERE id = ?1").bind(by_check.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(stored, ("CHECK".into(), None));
+    // A sales receipt's details (no terms column) save with a customer message.
+    let thanks = create_profile_entry(&pool, ProfileList::CustomerMessage, "Thanks!").await.unwrap();
+    let with_message = SalesReceiptInput { details: SalesDetails { customer_message_id: Some(thanks.id), ..Default::default() }, ..receipt(None, "CASH") };
+    let sold = post_sales_receipt(&pool, with_message).await.unwrap();
+    assert_eq!(document_details(&pool, SalesDoc::SalesReceipt, sold.id).await.unwrap().customer_message.as_deref(), Some("Thanks!"));
     let unused = create_payment_method(&pool, PaymentMethodInput { name: "Venmo".into(), kind: "OTHER".into() }).await.unwrap();
     delete_payment_method(&pool, unused.id).await.unwrap();
 }
