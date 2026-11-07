@@ -50,6 +50,7 @@ mod instance;
 mod inventory;
 mod invoices;
 mod item_prices;
+mod item_types;
 mod job_reports;
 mod ledger;
 mod list_reports;

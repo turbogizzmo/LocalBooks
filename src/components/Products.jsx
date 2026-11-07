@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ChangePrices from './ChangePrices.jsx';
 import PriceLevels from './PriceLevels.jsx';
+import ItemGroups from './ItemGroups.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
@@ -12,31 +13,61 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { todayIso } from '../lib/dates.js';
+import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
+/** The kinds of item, as the Type box offers them (see docs/plans/item-types.md). */
+export const ITEM_TYPES = [
+  { value: 'ITEM', label: 'Service or part' },
+  { value: 'OTHER_CHARGE', label: 'Other charge' },
+  { value: 'DISCOUNT', label: 'Discount' },
+];
+
+/**
+ * The rate box read for an item type: a discount or an other charge takes an amount or a
+ * percentage such as 10%. Returns { rateCents, kind } or { error }.
+ */
+export function readRate(itemType, text) {
+  const t = text.trim();
+  if (t.endsWith('%')) {
+    if (itemType === 'ITEM') return { error: 'Only a discount or a charge can be a percentage.' };
+    const percentPpm = parsePercentPpm(t);
+    return percentPpm === null ? { error: 'Enter the percentage as 0.0001% to 100%.' } : { rateCents: 0, kind: { itemType, percentPpm } };
+  }
+  const rateCents = t === '' ? 0 : parseMoneyToCents(t);
+  if (rateCents === null || rateCents < 0) return { error: 'Enter a valid rate.' };
+  return { rateCents, kind: { itemType, percentPpm: null } };
+}
+
+/** "10%" or the amount, as the list shows an item's rate. */
+const rateLabel = (p) => (p.percentPpm ? percentText(p.percentPpm) : p.rateCents ? formatCents(p.rateCents) : '');
+const typeLabel = (p) => (p.itemType && p.itemType !== 'ITEM' ? ITEM_TYPES.find((t) => t.value === p.itemType)?.label : null);
+
 function ProductDialog({ product, accounts, onClose, onSaved }) {
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
-  const [rate, setRate] = useState(product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
+  const [itemType, setItemType] = useState(product.itemType || 'ITEM');
+  const [rate, setRate] = useState(product.percentPpm ? percentText(product.percentPpm) : product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
   const [accountId, setAccountId] = useState(product.incomeAccountId);
   const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [fields, setFields] = useState([]);
-  const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
+  const read = readRate(itemType, rate);
   useEffect(() => {
     api.getCustomValues('ITEM', product.id).then(setFields, () => setFields([]));
   }, [product.id]);
 
   const submit = async (e) => {
     e.preventDefault();
-    if (rateCents === null || rateCents < 0) return setError('Enter a valid rate.');
+    if (read.error) return setError(read.error);
     setBusy(true);
     try {
-      const saved = await api.updateProduct(product.id, { name, description: description.trim() || null, rateCents, incomeAccountId: accountId, isTaxable: taxable });
+      const input = { name, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
+      const saved = await api.updateProduct(product.id, input, read.kind);
       if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
     } catch (err) {
@@ -54,20 +85,28 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
             <input className="qb-input" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="flex flex-col gap-0.5">
-            <span className="font-semibold text-qb-ink-muted">Rate</span>
-            <input className="qb-input num" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rateCents === null} />
+            <span className="font-semibold text-qb-ink-muted">{itemType === 'ITEM' ? 'Rate' : 'Amount or %'}</span>
+            <input className="qb-input num" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={Boolean(read.error)} />
+          </label>
+          <label className="col-span-2 flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Type</span>
+            <select className="qb-input" value={itemType} onChange={(e) => setItemType(e.target.value)} disabled={product.qtyOnHandE4 != null} title={product.qtyOnHandE4 != null ? 'An item tracked in stock stays a service or part' : undefined}>
+              {ITEM_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Description on sales forms</span>
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
-            <span className="font-semibold text-qb-ink-muted">Income account</span>
+            <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Discount account (debited)' : 'Income account'}</span>
             <AccountSelect accounts={accounts} filter={incomeOnly} value={accountId} onChange={setAccountId} />
           </label>
           <label className="col-span-2 flex items-center gap-1.5 text-sm">
             <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
-            Taxable: charge sales tax when this is sold
+            {itemType === 'DISCOUNT' ? 'Taxable: the discount lowers the taxable amount' : 'Taxable: charge sales tax when this is sold'}
           </label>
           <CustomFieldInputs fields={fields} onChange={setFields} />
         </div>
@@ -112,6 +151,7 @@ export default function Products({ accounts, intent }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
+  const [newType, setNewType] = useState('ITEM');
   const [accountId, setAccountId] = useState(null);
   const [taxable, setTaxable] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -119,6 +159,7 @@ export default function Products({ accounts, intent }) {
   const [showInactive, setShowInactive] = useState(false);
   const [changingPrices, setChangingPrices] = useState(false);
   const [pricingLevels, setPricingLevels] = useState(false);
+  const [grouping, setGrouping] = useState(false);
   const { priceLevels: levelsOn, loaded } = useSalesPrefs();
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
@@ -177,22 +218,25 @@ export default function Products({ accounts, intent }) {
   });
 
   const chosenAccount = accountId ?? defaultIncome;
-  const rateCents = rate.trim() === '' ? 0 : parseMoneyToCents(rate);
+  const read = readRate(newType, rate);
 
   const add = async (e) => {
     e.preventDefault();
     if (!name.trim()) return setNotice({ kind: 'error', text: 'Enter a product or service name.' });
-    if (rateCents === null || rateCents < 0) return setNotice({ kind: 'error', text: 'Enter a valid rate.' });
+    if (read.error) return setNotice({ kind: 'error', text: read.error });
     if (chosenAccount === null) return setNotice({ kind: 'error', text: 'Choose an income account.' });
     setBusy(true);
     try {
-      const product = await api.createProduct({
-        name: name.trim(),
-        description: description.trim() || null,
-        rateCents,
-        incomeAccountId: chosenAccount,
-        isTaxable: taxable,
-      });
+      const product = await api.createProduct(
+        {
+          name: name.trim(),
+          description: description.trim() || null,
+          rateCents: read.rateCents,
+          incomeAccountId: chosenAccount,
+          isTaxable: taxable,
+        },
+        read.kind,
+      );
       setNotice({ kind: 'success', text: `Added ${product.name}.` });
       setName('');
       setDescription('');
@@ -238,6 +282,7 @@ export default function Products({ accounts, intent }) {
           }}
         />
       )}
+      {grouping && <ItemGroups products={data ?? []} onClose={() => setGrouping(false)} />}
       {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
       {pricingLevels && !changingPrices && <PriceLevels onClose={() => setPricingLevels(false)} />}
       <section className={`qb-panel min-h-0 flex-1 flex-col ${changingPrices || pricingLevels ? 'hidden' : 'flex'}`}>
@@ -245,6 +290,9 @@ export default function Products({ accounts, intent }) {
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
           <span className="ml-auto" />
+          <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setGrouping(true)}>
+            Groups…
+          </button>
           {levelsOn && (
             <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setPricingLevels(true)}>
               Price levels…
@@ -299,7 +347,7 @@ export default function Products({ accounts, intent }) {
                     <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description on sales forms" aria-label="Description" />
                   </td>
                   <td className="qb-grid-cell-edit">
-                    <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" inputMode="decimal" aria-label="Rate" aria-invalid={rateCents === null} />
+                    <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={newType === 'ITEM' ? '0.00' : '0.00 or %'} inputMode="decimal" aria-label="Rate" aria-invalid={Boolean(read.error)} />
                   </td>
                   <td className="qb-grid-cell-edit">
                     <span className="flex items-center gap-1">
@@ -310,7 +358,13 @@ export default function Products({ accounts, intent }) {
                       </label>
                     </span>
                   </td>
-                  <td className="qb-grid-cell" colSpan={3} />
+                  <td className="qb-grid-cell-edit" colSpan={3}>
+                    <select value={newType} onChange={(e) => setNewType(e.target.value)} aria-label="Type">
+                      {ITEM_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="qb-grid-cell cell-tight">
                     <button type="submit" className="qb-btn qb-btn-primary h-[20px] w-full" disabled={busy}>
                       Add
@@ -333,10 +387,11 @@ export default function Products({ accounts, intent }) {
                   >
                     <td className="qb-grid-cell font-semibold">
                       {p.name}
+                      {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
                     </td>
                     <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
-                    <td className="qb-grid-cell num">{p.rateCents ? formatCents(p.rateCents) : ''}</td>
+                    <td className="qb-grid-cell num">{rateLabel(p)}</td>
                     <td className="qb-grid-cell">
                       {accountLabel(accounts, p.incomeAccountId)}
                       {p.isTaxable && <span className="ml-1 text-2xs font-semibold uppercase text-qb-ink-muted" title="Taxable">Tax</span>}
@@ -359,9 +414,9 @@ export default function Products({ accounts, intent }) {
                       </>
                     ) : (
                       <>
-                        <td className="qb-grid-cell text-qb-ink-faint" colSpan={3}>Not tracked</td>
+                        <td className="qb-grid-cell text-qb-ink-faint" colSpan={3}>{(p.itemType ?? 'ITEM') === 'ITEM' ? 'Not tracked' : ''}</td>
                         <td className="qb-grid-cell cell-tight">
-                          {inventoryOn && (
+                          {inventoryOn && (p.itemType ?? 'ITEM') === 'ITEM' && (
                             <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
                               Track stock…
                             </button>

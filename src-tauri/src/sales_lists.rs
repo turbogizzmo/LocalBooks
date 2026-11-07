@@ -276,6 +276,9 @@ pub struct SalesDetails {
     pub terms_id: Option<i64>,
     /// The Customer Message printed at the foot of the form.
     pub customer_message_id: Option<i64>,
+    /// Subtotals and other non-item lines, placed among the item lines (`item_types`). Written by
+    /// the document's writer, not by [`write_details`].
+    pub form_lines: Vec<crate::item_types::FormLineInput>,
 }
 
 impl SalesDetails {
@@ -441,6 +444,7 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         custom_fields: custom_fields.into_iter().map(|(field_id, value)| FieldValue { field_id, value }).collect(),
         terms_id,
         customer_message_id,
+        form_lines: Vec::new(),
     })
 }
 
@@ -454,6 +458,7 @@ impl SalesDetailsView {
             custom_fields: self.custom_fields.iter().map(|f| FieldValue { field_id: f.field_id, value: f.value.clone() }).collect(),
             terms_id: self.terms_id,
             customer_message_id: self.customer_message_id,
+            form_lines: Vec::new(),
         }
     }
 }

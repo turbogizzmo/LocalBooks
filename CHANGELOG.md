@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Subtotals, discounts, other charges and groups on sales forms.** On invoices, sales receipts
+  and estimates, choose **Subtotal** in the Product/Service list to add up the lines above it. A
+  new item type, **Discount**, takes an amount or a percentage off the line above (an item, a group
+  or a subtotal) and can lower the taxable amount. **Other charge** items add shipping, handling or
+  a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
+  print as a single line. They print in place, come back when you edit, and carry from an estimate
+  to its invoice; discount items show in Sales by Product/Service.
 - **Edit an invoice or bill that's already part paid.** An invoice with payments or credit memos
   applied, or a bill with payments or vendor credits applied, now opens for editing instead of
   asking you to void the payments first. The form tells you how much is applied, and saving keeps

@@ -147,6 +147,14 @@ export const topics = [
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'customers-and-products',
   },
+  {
+    id: 'item-types', area: 'sales', views: ['sales/products', 'sales/invoices', 'sales/all', 'sales/estimates'],
+    title: 'Subtotals, discounts, other charges and groups',
+    body: 'In the Product/Service list on an invoice, sales receipt or estimate, choose Subtotal to add up the lines above it. A Discount item takes an amount or a percentage (type 10%) off the line above: an item, a group or a subtotal. An Other charge can be an amount or a percentage of the line above. Choosing Group: … fills in a line for each of its items; tick Print as one line to print it with just its total. Set the Type on Products & Services, and make groups with Groups….',
+    keywords: 'subtotal discount item other charge shipping handling fee percent group bundle kit item type print as one line',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+    guide: 'invoices',
+  },
 
   {
     id: 'finance-charges', area: 'sales', views: ['sales/finance-charges', 'sales/invoices', 'sales/statements', 'settings/preferences'],

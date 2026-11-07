@@ -1,0 +1,585 @@
+[
+  {
+    "name": "two subtotals",
+    "items": [
+      [
+        1000,
+        true
+      ],
+      [
+        2000,
+        false
+      ],
+      [
+        500,
+        true
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 2,
+        "kind": "SUBTOTAL"
+      },
+      {
+        "afterLines": 3,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "I",
+        0
+      ],
+      [
+        2,
+        "I",
+        1
+      ],
+      [
+        3,
+        "F",
+        0,
+        3000
+      ],
+      [
+        4,
+        "I",
+        2
+      ],
+      [
+        5,
+        "F",
+        1,
+        500
+      ]
+    ],
+    "linesCents": 3500,
+    "taxableCents": 1500
+  },
+  {
+    "name": "subtotal at the top and twice in a row",
+    "items": [
+      [
+        700,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "SUBTOTAL"
+      },
+      {
+        "afterLines": 1,
+        "kind": "SUBTOTAL"
+      },
+      {
+        "afterLines": 1,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "F",
+        0,
+        0
+      ],
+      [
+        2,
+        "I",
+        0
+      ],
+      [
+        3,
+        "F",
+        1,
+        700
+      ],
+      [
+        4,
+        "F",
+        2,
+        0
+      ]
+    ],
+    "linesCents": 700,
+    "taxableCents": 0
+  },
+  {
+    "name": "placed past the last item",
+    "items": [
+      [
+        700,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 2,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "error": "BAD_FORM_LINE"
+  },
+  {
+    "name": "10% off the line above",
+    "items": [
+      [
+        10000,
+        true
+      ],
+      [
+        3333,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 2,
+        "kind": "DISCOUNT",
+        "percentPpm": 100000,
+        "accountId": 1
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "I",
+        0
+      ],
+      [
+        2,
+        "I",
+        1
+      ],
+      [
+        3,
+        "F",
+        0,
+        -333
+      ]
+    ],
+    "linesCents": 13000,
+    "taxableCents": 10000
+  },
+  {
+    "name": "taxable amount off a subtotal",
+    "items": [
+      [
+        10000,
+        true
+      ],
+      [
+        5000,
+        true
+      ],
+      [
+        2000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 2,
+        "kind": "SUBTOTAL"
+      },
+      {
+        "afterLines": 2,
+        "kind": "DISCOUNT",
+        "amountCents": 1500,
+        "accountId": 1,
+        "isTaxable": true
+      },
+      {
+        "afterLines": 3,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "I",
+        0
+      ],
+      [
+        2,
+        "I",
+        1
+      ],
+      [
+        3,
+        "F",
+        0,
+        15000
+      ],
+      [
+        4,
+        "F",
+        1,
+        -1500
+      ],
+      [
+        5,
+        "I",
+        2
+      ],
+      [
+        6,
+        "F",
+        2,
+        500
+      ]
+    ],
+    "linesCents": 15500,
+    "taxableCents": 13500
+  },
+  {
+    "name": "a discount under a discount",
+    "items": [
+      [
+        10000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "amountCents": 100,
+        "accountId": 1
+      },
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "amountCents": 100,
+        "accountId": 1
+      }
+    ],
+    "error": "DISCOUNT_NEEDS_BASE"
+  },
+  {
+    "name": "a discount at the top",
+    "items": [
+      [
+        10000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "DISCOUNT",
+        "amountCents": 100,
+        "accountId": 1
+      }
+    ],
+    "error": "DISCOUNT_NEEDS_BASE"
+  },
+  {
+    "name": "more than the line above",
+    "items": [
+      [
+        1000,
+        false
+      ],
+      [
+        5000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "amountCents": 1001,
+        "accountId": 1
+      }
+    ],
+    "error": "DISCOUNT_TOO_LARGE"
+  },
+  {
+    "name": "a percent that rounds to nothing",
+    "items": [
+      [
+        4,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "percentPpm": 100000,
+        "accountId": 1
+      }
+    ],
+    "error": "DISCOUNT_ROUNDS_TO_ZERO"
+  },
+  {
+    "name": "taxable discount off an untaxed line",
+    "items": [
+      [
+        1000,
+        false
+      ],
+      [
+        500,
+        true
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "amountCents": 1000,
+        "accountId": 1,
+        "isTaxable": true
+      }
+    ],
+    "error": "TAXABLE_NEGATIVE"
+  },
+  {
+    "name": "no amount",
+    "items": [
+      [
+        1000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "accountId": 1
+      }
+    ],
+    "error": "BAD_DISCOUNT_AMOUNT"
+  },
+  {
+    "name": "3% handling on a subtotal, then a subtotal",
+    "items": [
+      [
+        10000,
+        true
+      ],
+      [
+        2345,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 2,
+        "kind": "SUBTOTAL"
+      },
+      {
+        "afterLines": 2,
+        "kind": "CHARGE",
+        "percentPpm": 30000,
+        "accountId": 1,
+        "isTaxable": true
+      },
+      {
+        "afterLines": 2,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "I",
+        0
+      ],
+      [
+        2,
+        "I",
+        1
+      ],
+      [
+        3,
+        "F",
+        0,
+        12345
+      ],
+      [
+        4,
+        "F",
+        1,
+        370
+      ],
+      [
+        5,
+        "F",
+        2,
+        370
+      ]
+    ],
+    "linesCents": 12715,
+    "taxableCents": 10370
+  },
+  {
+    "name": "a charge after a discount",
+    "items": [
+      [
+        10000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "DISCOUNT",
+        "amountCents": 100,
+        "accountId": 1
+      },
+      {
+        "afterLines": 1,
+        "kind": "CHARGE",
+        "percentPpm": 10000,
+        "accountId": 1
+      }
+    ],
+    "error": "CHARGE_NEEDS_BASE"
+  },
+  {
+    "name": "a charge without a percent",
+    "items": [
+      [
+        10000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "CHARGE",
+        "accountId": 1
+      }
+    ],
+    "error": "BAD_CHARGE_PERCENT"
+  },
+  {
+    "name": "a charge that rounds to nothing",
+    "items": [
+      [
+        10,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 1,
+        "kind": "CHARGE",
+        "percentPpm": 10000,
+        "accountId": 1
+      }
+    ],
+    "error": "CHARGE_ROUNDS_TO_ZERO"
+  },
+  {
+    "name": "a group, then 10% off it",
+    "items": [
+      [
+        1000,
+        true
+      ],
+      [
+        2000,
+        true
+      ],
+      [
+        500,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      },
+      {
+        "afterLines": 2,
+        "kind": "DISCOUNT",
+        "percentPpm": 100000,
+        "accountId": 1,
+        "isTaxable": true
+      }
+    ],
+    "rows": [
+      [
+        1,
+        "F",
+        0,
+        3000
+      ],
+      [
+        2,
+        "I",
+        0
+      ],
+      [
+        3,
+        "I",
+        1
+      ],
+      [
+        4,
+        "F",
+        1,
+        -300
+      ],
+      [
+        5,
+        "I",
+        2
+      ]
+    ],
+    "linesCents": 3200,
+    "taxableCents": 2700
+  },
+  {
+    "name": "a subtotal inside a group",
+    "items": [
+      [
+        1000,
+        false
+      ],
+      [
+        2000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      },
+      {
+        "afterLines": 1,
+        "kind": "SUBTOTAL"
+      }
+    ],
+    "error": "INSIDE_GROUP"
+  },
+  {
+    "name": "a group with too few items after it",
+    "items": [
+      [
+        1000,
+        false
+      ]
+    ],
+    "form": [
+      {
+        "afterLines": 0,
+        "kind": "GROUP",
+        "groupLineCount": 2
+      }
+    ],
+    "error": "BAD_GROUP"
+  }
+]

@@ -45,8 +45,8 @@ pub async fn set_party_active(app: AppHandle, db: State<'_, Db>, kind: String, i
 }
 
 #[tauri::command]
-pub async fn update_product(app: AppHandle, db: State<'_, Db>, id: i64, input: ProductInput) -> Result<ProductView, String> {
-    let product = parties::update_product(&db.pool().await, id, input).await?;
+pub async fn update_product(app: AppHandle, db: State<'_, Db>, id: i64, input: ProductInput, kind: Option<crate::sales::ItemKind>) -> Result<ProductView, String> {
+    let product = parties::update_item(&db.pool().await, id, input, kind).await?;
     notify(&app);
     Ok(product)
 }

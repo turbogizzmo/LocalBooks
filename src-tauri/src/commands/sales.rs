@@ -34,8 +34,8 @@ pub async fn list_products(db: State<'_, Db>) -> Result<Vec<ProductView>, String
 }
 
 #[tauri::command]
-pub async fn create_product(app: AppHandle, db: State<'_, Db>, input: ProductInput) -> Result<ProductView, String> {
-    let product = sales::create_product(&db.pool().await, input).await?;
+pub async fn create_product(app: AppHandle, db: State<'_, Db>, input: ProductInput, kind: Option<sales::ItemKind>) -> Result<ProductView, String> {
+    let product = sales::create_item(&db.pool().await, input, kind.unwrap_or_default()).await?;
     notify(&app);
     Ok(product)
 }

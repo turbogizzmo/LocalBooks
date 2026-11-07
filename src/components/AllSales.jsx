@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { attachPicked, PendingAttachments, useAttachmentRows } from './Attachments.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
@@ -55,15 +56,16 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
   const [discountText, setDiscountText] = useState('');
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
   const save = async (mode) => {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (depositId === null) return setError('Choose where the money was deposited.');
+    if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     const postedLines = formClass.apply(payload);
     const warning = formClass.missing(postedLines);
@@ -81,6 +83,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         ...sales.payload(),
+        formLines,
       });
       const attachError = files.length > 0 ? await attachPicked(receipt.journalEntryId, files) : null;
       if (mode === 'print') forms.print('SALES_RECEIPT', receipt.id);
@@ -147,7 +150,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

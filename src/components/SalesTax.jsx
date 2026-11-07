@@ -6,6 +6,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, mulDivRound, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange, todayIso } from '../lib/dates.js';
+import { layOut } from '../lib/itemTypes.js';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
 export function useSalesTax() {
@@ -45,13 +46,16 @@ export function parseDiscount(text, subtotal) {
 }
 
 /**
- * A sales document's totals exactly as the ledger posts them: the discount comes off the subtotal
- * before tax, reducing the taxable amount in proportion.
+ * A sales document's totals exactly as the ledger posts them: the lines laid out with their
+ * subtotals (`formLines`, see `lib/itemTypes.js`), then the discount off the subtotal before tax,
+ * reducing the taxable amount in proportion.
  */
-export function documentTotals(payload, rate, discountCents = 0) {
-  const subtotal = payload.reduce((s, l) => s + (l.amountCents ?? 0), 0);
+export function documentTotals(payload, rate, discountCents = 0, formLines = []) {
+  const laid = layOut(payload, formLines);
+  const plain = laid.error !== undefined;
+  const subtotal = plain ? payload.reduce((s, l) => s + (l.amountCents ?? 0), 0) : laid.linesCents;
   const discount = Math.max(0, Math.min(discountCents ?? 0, subtotal));
-  let taxable = payload.filter((l) => l.isTaxable).reduce((s, l) => s + (l.amountCents ?? 0), 0);
+  let taxable = plain ? payload.filter((l) => l.isTaxable).reduce((s, l) => s + (l.amountCents ?? 0), 0) : laid.taxableCents;
   if (discount > 0 && subtotal > 0) taxable -= mulDivRound(discount, taxable, subtotal) ?? 0;
   const tax = rate ? (mulDivRound(taxable, rate.ratePpm, 1_000_000) ?? 0) : 0;
   return { subtotal, discount, tax, total: subtotal - discount + tax };

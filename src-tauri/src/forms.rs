@@ -668,14 +668,18 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         meta.push(("Currency".into(), code.into(), false));
     }
     let details = item_details(pool, &detail.items.iter().map(|i| i.product_service_id).collect::<Vec<_>>()).await?;
-    let lines = detail
+    let items = detail
         .items
         .iter()
         .zip(details)
-        .map(|(i, details)| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
+        .map(|(i, details)| {
+            let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
+            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details })
+        })
         .collect();
     let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
-    let lines = mark_taxable(pool, lines, &taxable, inv.tax_rate_id.is_some()).await?;
+    let mark = marks_taxable(pool, inv.tax_rate_id.is_some()).await?;
+    let lines = with_form_lines(mark_taxable(items, &taxable, mark), &detail.form_lines, &money, mark);
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
@@ -720,8 +724,8 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
@@ -746,7 +750,12 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         customer_details: customer_details(&name, &cust),
         customer_email: cust.email,
         meta,
-        lines: mark_taxable(pool, lines_of(pool, rows, &money).await?, &taxable_flags(pool, "estimate_lines", "estimate_id", estimate_id).await?, tax_name.is_some()).await?,
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "estimate_lines", "estimate_id", estimate_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -775,8 +784,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -807,7 +816,12 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: mark_taxable(pool, lines_of(pool, rows, &money).await?, &taxable_flags(pool, "sales_receipt_lines", "sales_receipt_id", receipt_id).await?, tax_name.is_some()).await?,
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "sales_receipt_lines", "sales_receipt_id", receipt_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -821,13 +835,20 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
 
 /// Preferences › Sales Tax › "Mark taxable amounts with a T when printing": a taxable line's amount
 /// gets a trailing T, on a document that charges tax. `taxable` is per line, in order.
-async fn mark_taxable(pool: &SqlitePool, mut lines: Vec<FormLine>, taxable: &[bool], charges_tax: bool) -> Result<Vec<FormLine>, String> {
-    if charges_tax && crate::preferences::flag(pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE).await? {
-        for (line, _) in lines.iter_mut().zip(taxable).filter(|(_, t)| **t) {
+/// Whether taxable lines print a "T": the document charges tax and the preference is on.
+async fn marks_taxable(pool: &SqlitePool, charges_tax: bool) -> Result<bool, String> {
+    Ok(charges_tax && crate::preferences::flag(pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE).await?)
+}
+
+/// Marks the taxable item lines (`taxable`, in line order) when `mark` is set. Done before the
+/// subtotals and other form lines are merged in, so each flag stays with its own item line.
+fn mark_taxable(mut lines: Vec<(i64, FormLine)>, taxable: &[bool], mark: bool) -> Vec<(i64, FormLine)> {
+    if mark {
+        for ((_, line), _) in lines.iter_mut().zip(taxable).filter(|(_, t)| **t) {
             line.amount.push_str(" T");
         }
     }
-    Ok(lines)
+    lines
 }
 
 async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) -> Result<Vec<bool>, String> {
@@ -835,13 +856,57 @@ async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) ->
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
-async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<FormLine>, String> {
+async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
     let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
     Ok(rows
         .into_iter()
         .zip(details)
-        .map(|((description, qty, rate, amount, _), details)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details })
+        .map(|((description, qty, rate, amount, _, number, percent), details)| {
+            // A percent charge shows its percent in the rate column.
+            let rate = percent.map_or_else(|| money(rate), crate::item_types::percent_text);
+            (number, FormLine { description, quantity: format_quantity(qty), rate, amount: money(amount), details })
+        })
         .collect())
+}
+
+/// Item lines (by line number) and the document's subtotals and other form lines, in line order,
+/// as the printed form shows them.
+///
+/// A group heading prints its description; a group set to print as one line prints its
+/// description, quantity and total instead, and its items are left off.
+///
+/// With `mark`, a taxable discount carries the "T" too (it lowers the taxable amount); subtotals and
+/// group headings don't.
+fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String, mark: bool) -> Vec<FormLine> {
+    // Item lines a one-line group hides: the `group_line_count` item lines after its heading.
+    let mut hidden: Vec<i64> = Vec::new();
+    for f in form.iter().filter(|f| f.kind == "GROUP" && f.print_items == Some(false)) {
+        let count = f.group_line_count.unwrap_or(0) as usize;
+        hidden.extend(items.iter().map(|(n, _)| *n).filter(|n| *n > f.line_number).take(count));
+    }
+    let mut numbered: Vec<(i64, FormLine)> = items.into_iter().filter(|(n, _)| !hidden.contains(n)).collect();
+    for f in form {
+        let line = if f.kind == "GROUP" {
+            let one_line = f.print_items == Some(false);
+            FormLine {
+                description: f.description.clone(),
+                quantity: if one_line { f.group_quantity_e4.map(format_quantity).unwrap_or_default() } else { String::new() },
+                rate: String::new(),
+                amount: if one_line { money(f.amount_cents) } else { String::new() },
+                details: Vec::new(),
+            }
+        } else {
+            let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
+            let mut amount = money(f.amount_cents);
+            if mark && f.kind == "DISCOUNT" && f.is_taxable {
+                amount.push_str(" T");
+            }
+            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount, details: Vec::new() }
+        };
+        numbered.push((f.line_number, line));
+    }
+    numbered.sort_by_key(|(n, _)| *n);
+    numbered.into_iter().map(|(_, l)| l).collect()
 }
 
 fn statement_label(source_type: &str) -> &'static str {

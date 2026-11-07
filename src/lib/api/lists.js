@@ -7,6 +7,6 @@ export default {
   getParty: (kind, id) => invoke('get_party', { kind, id }),
   updateParty: (kind, id, input) => invoke('update_party', { kind, id, input }),
   setPartyActive: (kind, id, active) => invoke('set_party_active', { kind, id, active }),
-  updateProduct: (id, input) => invoke('update_product', { id, input }),
+  updateProduct: (id, input, kind = null) => invoke('update_product', { id, input, kind }),
   setProductActive: (id, active) => invoke('set_product_active', { id, active }),
 };
