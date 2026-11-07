@@ -26,7 +26,7 @@ import {
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
-import { reportBasis, useCompanyPreferences } from '../lib/companyPreferences.js';
+import { reportBasis, useCompanyPreferences, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
@@ -82,7 +82,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   const [classChoice, setClassChoice] = useState('');
   const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
   // Opens on the company's default basis (Preferences › Reports & Graphs) unless a link chose one.
-  const prefs = useCompanyPreferences();
+  const { prefs, ready: prefsReady } = useCompanyPreferencesState();
   const [chosenBasis, setBasis] = useState(initial?.basis ?? null);
   const basis = chosenBasis ?? reportBasis(prefs);
   const [split, setSplit] = useState('total'); // total | months | quarters
@@ -98,7 +98,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   };
   const multi = !byClass && (split !== 'total' || compare !== 'none');
   const { data, error, reload } = useLedgerQuery(() => {
-    if (!prefs && !chosenBasis) return Promise.resolve(null); // wait for the default basis
+    if (!prefsReady && !chosenBasis) return Promise.resolve(null); // wait for the default basis (accrual if it can't load)
     if (byClass) return api.getProfitAndLossByClass(start, end);
     if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis);
     const columns = periodColumns();
@@ -113,7 +113,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
 
   useEffect(() => {
     if (start && end && start <= end) reload();
-  }, [start, end, classChoice, basis, split, compare, reload, prefs]);
+  }, [start, end, classChoice, basis, split, compare, reload, prefsReady]);
   const classSubtitle = classChoice === '' ? '' : ` · Class: ${classChoice === 'none' ? 'Unclassified' : `${classLabel(classes, Number(classChoice))} (with subclasses)`}`;
   const company = useCompany();
   const subtitle = data

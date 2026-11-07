@@ -502,22 +502,27 @@ const DEFAULT_SECTION = {
 function CashFlowMapping({ accounts }) {
   const { prefs } = usePrefs();
   const [state, setState] = useState(null);
-  const overrides = (() => {
+  const parse = (text) => {
     try {
-      return prefs.cash_flow_sections ? JSON.parse(prefs.cash_flow_sections) : {};
+      return text ? JSON.parse(text) : {};
     } catch {
       return {};
     }
-  })();
-  const [map, setMap] = useState(overrides);
+  };
+  // Follows the stored preference (another window's change shows here too); a change shows at
+  // once and is put back if saving fails.
+  const [map, setMap] = useState(() => parse(prefs.cash_flow_sections));
+  useEffect(() => setMap(parse(prefs.cash_flow_sections)), [prefs.cash_flow_sections]);
   const rows = (accounts ?? []).filter((a) => DEFAULT_SECTION[a.accountType] && (a.isActive || map[a.id]));
   const save = async (next) => {
+    const before = map;
     setMap(next);
     setState({ status: 'saving' });
     try {
       await api.setPreference('cash_flow_sections', Object.keys(next).length ? JSON.stringify(next) : '');
       setState({ status: 'saved' });
     } catch (err) {
+      setMap(before);
       setState({ status: 'error', message: errorText(err) });
     }
   };

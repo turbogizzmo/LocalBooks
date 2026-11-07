@@ -26,7 +26,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::guards::WARN_RETAINED_EARNINGS, "true"),
     ("four_digit_years", "true"),
     ("hours_format", "hhmm"),
-    // Reports & Graphs
+    // batch 3: Reports & Graphs and Accounting display
     (REPORT_BASIS, "accrual"),
     (crate::report_center::AGING_BASIS, "due"),
     (REPORT_ITEMS_SHOW, "name"),

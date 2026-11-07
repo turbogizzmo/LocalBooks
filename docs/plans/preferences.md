@@ -135,4 +135,5 @@ screen links there. Warnings before saving share one design: the backend's guard
 and the form asks and saves again with **Save anyway** (`src/lib/confirmable.js`).
 
 Batches 1 and 2 are done except **recall the last transaction for a name / pre-fill a vendor's
-accounts**, which stays in batch 1's row above as missing.
+accounts**, which stays in batch 1's row above as missing. Batch 3 (reports and display defaults) is
+done in #164; its one left-out option, default report formatting, says why in its row.

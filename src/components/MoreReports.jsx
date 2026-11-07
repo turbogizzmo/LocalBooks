@@ -175,7 +175,11 @@ export function CashFlowReport({ navigate }) {
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {p.controls}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-end gap-2">
+          {/* Which section each account goes in (Preferences › Reports & Graphs). */}
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-2" onClick={() => navigate?.('settings/preferences', 'cash-flow')}>
+            Classify accounts…
+          </button>
           <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
@@ -187,7 +191,7 @@ export function CashFlowReport({ navigate }) {
           subtitle={rangeText(data.startDate, data.endDate)}
           lines={data.lines}
           onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate })}
-          footer="Indirect method · cash is the total of the Bank accounts"
+          footer="Indirect method · cash is the total of the Bank accounts · each account's section is set in Preferences › Reports & Graphs"
         />
       )}
     </>

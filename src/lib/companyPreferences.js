@@ -9,6 +9,15 @@ export function useCompanyPreferences() {
   return useLedgerQuery(api.getPreferences).data;
 }
 
+/**
+ * The preferences and whether they are settled: `ready` once they loaded or failed to load, so a
+ * screen can wait for a default without waiting forever.
+ */
+export function useCompanyPreferencesState() {
+  const { data, error } = useLedgerQuery(api.getPreferences);
+  return { prefs: data, ready: data != null || error != null };
+}
+
 /** `ACCRUAL` or `CASH`: the basis summary reports open on (Reports & Graphs). */
 export const reportBasis = (prefs) => (prefs?.report_basis === 'cash' ? 'CASH' : 'ACCRUAL');
 
