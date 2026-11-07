@@ -38,6 +38,9 @@ pub struct DocumentLine {
     /// The ledger amount of the line (negative = debit).
     pub cents: i64,
     pub account_id: i64,
+    /// The line's class as a `Parent:Child` path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class: Option<String>,
 }
 
 /// An amount applied to another transaction.
@@ -129,6 +132,22 @@ pub enum SourceDocument {
     },
 }
 
+impl SourceDocument {
+    /// The document's form lines (none for payments, deposits, expenses and transfers, whose
+    /// lines are the ledger lines).
+    pub fn lines(&self) -> &[DocumentLine] {
+        match self {
+            SourceDocument::Invoice { lines, .. }
+            | SourceDocument::CreditMemo { lines, .. }
+            | SourceDocument::SalesReceipt { lines, .. }
+            | SourceDocument::Bill { lines, .. }
+            | SourceDocument::Estimate { lines, .. }
+            | SourceDocument::PurchaseOrder { lines, .. } => lines,
+            _ => &[],
+        }
+    }
+}
+
 /// LocalBooks' payment method for the name the file uses.
 pub fn payment_method(name: Option<&str>) -> &'static str {
     let n = name.unwrap_or_default().to_ascii_lowercase();
@@ -164,7 +183,8 @@ fn quantity_and_rate(row: &Row, amount_cents: i64) -> (i64, i64) {
 
 /// Form lines of a document: the lines with an amount that do not post to receivables or
 /// payables, in their order on the form.
-fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool) -> Vec<DocumentLine> {
+/// `classes` gives each class id its `Parent:Child` path (see `qbw_company::read_classes`).
+fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, String>) -> Vec<DocumentLine> {
     let mut sorted: Vec<&&Row> = rows.iter().collect();
     sorted.sort_by_key(|r| (r.get("txn_line_order").as_int().unwrap_or(i64::MAX), r.get("target_id").as_int().unwrap_or(0)));
     sorted
@@ -176,14 +196,27 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool) -> Vec<DocumentLine> {
                 return None;
             }
             let (quantity_e4, rate_cents) = quantity_and_rate(r, cents);
-            Some(DocumentLine { item_id: r.get("item_id").as_int(), description: text(r, "memo"), quantity_e4, rate_cents, cents, account_id })
+            Some(DocumentLine {
+                item_id: r.get("item_id").as_int(),
+                description: text(r, "memo"),
+                quantity_e4,
+                rate_cents,
+                cents,
+                account_id,
+                class: r.get("class_id").as_int().and_then(|c| classes.get(&c)).cloned(),
+            })
         })
         .collect()
 }
 
 /// Reads the documents, keyed by transaction id. `arap` says whether a source account is a
 /// receivables or payables account.
-pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i64) -> bool) -> HashMap<i64, SourceDocument> {
+pub fn read_documents(
+    pages: &[LogicalPage],
+    catalog: &Catalog,
+    arap: &dyn Fn(i64) -> bool,
+    classes: &HashMap<i64, String>,
+) -> HashMap<i64, SourceDocument> {
     let lines_of = |table: &str| -> BTreeMap<i64, Vec<Row>> {
         // Estimates and purchase orders are non-posting throughout; elsewhere a non-posting row
         // is a memo or subtotal line.
@@ -236,7 +269,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap), sales: sales_of(h) },
+            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes), sales: sales_of(h) },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -249,7 +282,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
             SourceDocument::CreditMemo {
                 customer_id,
                 number: text(h, "doc_num"),
-                lines: form_lines(&refs, arap),
+                lines: form_lines(&refs, arap, classes),
                 applied_to: applied.remove(&(3, tid)).unwrap_or_default(),
             },
         );
@@ -265,7 +298,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
                 customer_id: h.get("customer_id").as_int(),
                 number: text(h, "doc_num"),
                 method: method_of(h),
-                lines: form_lines(&refs, arap),
+                lines: form_lines(&refs, arap, classes),
                 sales: sales_of(h),
             },
         );
@@ -282,7 +315,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
         let Some(h) = bill_headers.get(&tid) else { continue };
         let Some(vendor_id) = h.get("vendor_id").as_int() else { continue };
         let refs: Vec<&Row> = rows.iter().collect();
-        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap) });
+        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes) });
     }
     for table in ["abmc_bill_check_header", "abmc_bill_ccard_header"] {
         for (tid, h) in headers_of(table) {
@@ -302,7 +335,7 @@ pub fn read_documents(pages: &[LogicalPage], catalog: &Catalog, arap: &dyn Fn(i6
     // Lines of non-posting documents, as positive amounts.
     let positive = |rows: &[Row]| -> Vec<DocumentLine> {
         let refs: Vec<&Row> = rows.iter().collect();
-        form_lines(&refs, &|_| false).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
+        form_lines(&refs, &|_| false, classes).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
     };
     let estimate_headers = headers_of("abmc_estimate_header");
     for (tid, rows) in lines_of("abmc_estimate_lineitem") {

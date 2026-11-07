@@ -29,6 +29,24 @@ To keep the receipt with an expense or check, click **Attach a receipt…** befo
 choose **Attach file…** in a posted row's **Actions** menu. See
 [Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
 
+## Print checks later, in a batch
+
+If you print checks on check stock, write them now and print them together later.
+
+1. On **Write check**, tick **Print later**. **Check no.** shows *To print*: the check posts now,
+   and gets its number when it prints. The box stays ticked for your next check until you untick
+   it. An unnumbered check already posted can be queued from its **Actions** menu (**Print later**).
+2. Choose **File › Print Forms › Checks…** (or **Expenses › Print Checks**).
+3. Pick the **Bank account**. Check that **First check number** matches the number printed on the
+   first check in the printer; the checks take numbers in order from it. Untick any you don't
+   want to print now, then click **Print…**.
+4. When printing finishes, LocalBooks asks **Did they all print?** Choose **Yes, all printed**, or
+   **Some didn't** and untick the checks that jammed or printed wrong.
+
+Only the checks you confirm keep their numbers and leave the queue; the rest stay queued without a
+number, to print again. **Cancel** saves nothing. A check's number can't be changed once it is
+printed, and a number already used on the account is refused.
+
 ## Record a credit card credit
 
 Use a card credit when a vendor gives money back onto a credit card: a refund for a return, a
@@ -52,6 +70,47 @@ A card credit only goes to a credit card account. A refund into a bank account i
 
 When you import a QuickBooks company file or IIF file with **Full import**, its credit card credits
 (`CCARD REFUND` in IIF) come in as LocalBooks card credits.
+
+## Type a check or deposit into a register
+
+A bank or credit card register (**Accounting › Account Registers**, or double-click the account in
+the Chart of Accounts) ends in a blank entry row, as a checkbook does:
+
+1. Enter the **Date**, the check **Number** (a bank register fills in the next one), the **Payee**
+   and the **Account** it goes to, and a **Memo** if you like.
+2. Type the amount in one of the two columns: **Payment** or **Deposit** in a bank register,
+   **Charge** or **Payment** in a credit card register.
+3. Click **Record**, or press **Enter** once the row is complete. **Restore** clears the row.
+
+Each row is recorded as the transaction its form would make: a payment from a bank account is a
+check, a deposit is a deposit, a charge is a credit card expense, and a payment or refund on a card
+is a card credit. They show up in Expenses & Checks or Deposits & Transfers like any other, and you
+edit or void them there or from the register's row menu.
+
+To spread one row over several accounts, click **Splits…**: a line grid opens under the row, with
+an account, memo, class and (for payments and charges) customer or job on each line. The row's
+amount is the total of the lines. Click **Splits…** again to go back to one account.
+
+A deposit has no payee of its own in LocalBooks, so a name typed in **Received from** is kept at the
+start of the deposit's memo. Deposits and card charges have no number. To deposit customer payments
+waiting in Undeposited Funds, use **Make Deposits** instead.
+
+### Find, filter and view a register
+
+- **Go To…** finds the next transaction by number, payee, memo or amount. **Next** and **Back**
+  move through the matches.
+- **Dates** shows **All**, **This month** or **This year**; type a **From** and **To** date for any
+  other range. A register that starts after its first transaction opens with the balance forward.
+- **2-line** shows each transaction on two lines: date, number, payee and amounts on the first;
+  type, account, class and memo on the second. LocalBooks remembers your choice.
+- **QuickReport** (**Ctrl+Q**) opens the account's transactions as a report for the register's
+  dates. Click a transaction, then press **Ctrl+H** for its
+  [Transaction History](reports.md#quickreport-transaction-history-and-transaction-journal) or
+  **Ctrl+Y** for its Transaction Journal.
+
+The register shows each document's own number in **No.** (the check, invoice or bill number);
+hover over it for the journal entry number. Printing a register is not in LocalBooks yet: use
+**Export** to save it as a CSV or Excel file.
 
 ## Pay in another currency
 

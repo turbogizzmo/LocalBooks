@@ -521,10 +521,17 @@ pub(crate) async fn recompute_paid(
     document_id: i64,
 ) -> Result<(), String> {
     let credit_table = if document_table == "bills" { "vendor_credit_applications" } else { "credit_applications" };
+    // A customer payment that bounced no longer pays its invoice while the bounce is live.
+    let bounced = if document_table == "invoices" {
+        "- COALESCE((SELECT SUM(amount_cents) FROM bounced_checks WHERE invoice_id = d.id AND is_voided = 0), 0)"
+    } else {
+        ""
+    };
     let (total, paid): (i64, i64) = sqlx::query_as(&format!(
         "SELECT d.total_cents,
                 COALESCE((SELECT SUM(amount_cents) FROM {payment_table} WHERE {fk} = d.id AND is_voided = 0), 0)
               + COALESCE((SELECT SUM(amount_cents) FROM {credit_table} WHERE {fk} = d.id AND is_voided = 0), 0)
+              {bounced}
          FROM {document_table} d WHERE d.id = ?1"
     ))
     .bind(document_id)
@@ -588,7 +595,11 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     let blocked: Option<String> = match source_type.as_str() {
         "INVOICE" => sqlx::query_scalar(
             "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments or credits applied; void or remove those first'
-             FROM invoices WHERE id = ?1 AND amount_paid_cents <> 0",
+             FROM invoices WHERE id = ?1 AND amount_paid_cents <> 0
+             UNION ALL
+             SELECT 'VOID_BOUNCED: a payment on this invoice is recorded as a bounced check; void the bounced check first'
+             FROM bounced_checks WHERE invoice_id = ?1 AND is_voided = 0
+             LIMIT 1",
         )
         .bind(doc)
         .fetch_optional(&mut **tx)
@@ -603,7 +614,10 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
         .await
         .map_err(db_err)?,
         "RECEIVE_PAYMENT" | "SALES_RECEIPT" => sqlx::query_scalar(
-            "SELECT 'VOID_DEPOSITED: this payment is included in a bank deposit; void the deposit first'
+            "SELECT 'VOID_BOUNCED: this payment is recorded as a bounced check; void the bounced check first'
+             FROM bounced_checks WHERE ?2 = 'RECEIVE_PAYMENT' AND invoice_payment_id = ?1 AND is_voided = 0
+             UNION ALL
+             SELECT 'VOID_DEPOSITED: this payment is included in a bank deposit; void the deposit first'
              FROM deposit_lines
              WHERE is_voided = 0 AND (CASE ?2 WHEN 'RECEIVE_PAYMENT' THEN invoice_payment_id ELSE sales_receipt_id END) = ?1
              LIMIT 1",
@@ -619,6 +633,17 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
                  EXISTS (SELECT 1 FROM credit_applications a WHERE a.credit_memo_id = m.id AND a.is_voided = 0)
                  OR EXISTS (SELECT 1 FROM credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id
                             WHERE r.credit_memo_id = m.id AND e.is_voided = 0))",
+        )
+        .bind(doc)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_err)?,
+        "DEPOSIT" => sqlx::query_scalar(
+            "SELECT 'VOID_BOUNCED: a check in this deposit is recorded as bounced; void the bounced check first'
+             FROM deposit_lines d JOIN bounced_checks b
+               ON b.is_voided = 0 AND (b.deposit_line_id = d.id OR b.invoice_payment_id = d.invoice_payment_id)
+             WHERE d.deposit_id = ?1 AND d.is_voided = 0
+             LIMIT 1",
         )
         .bind(doc)
         .fetch_optional(&mut **tx)
@@ -751,6 +776,19 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
                 .await
                 .map_err(db_err)?;
             recompute_paid(tx, "bills", "bill_payments", "bill_id", bill_id).await?;
+        }
+        "JOURNAL" => {
+            // A bounced check: its payment counts toward the invoice again.
+            let bounced: Option<Option<i64>> = sqlx::query_scalar(
+                "UPDATE bounced_checks SET is_voided = 1 WHERE journal_entry_id = ?1 AND is_voided = 0 RETURNING invoice_id",
+            )
+            .bind(journal_entry_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
+            if let Some(Some(invoice_id)) = bounced {
+                recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice_id).await?;
+            }
         }
         _ => {}
     }

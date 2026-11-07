@@ -4,6 +4,9 @@ import NameField from './NameField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import { attachPicked, PendingAttachments } from './Attachments.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { RefundDialog } from './CreditMemos.jsx';
@@ -26,6 +29,9 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
   const [rows, setRows] = useState(() => [blankSplit(null)]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Files picked before posting; attached once it posts.
+  const [files, setFiles] = useState([]);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
   useEffect(() => {
@@ -33,6 +39,16 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
   }, [defaultCategory]);
 
   const { lines, invalid, total } = summarizeSplits(rows);
+
+  const clear = () => {
+    setVendor('');
+    setReference('');
+    setMemo('');
+    setRows([blankSplit(defaultCategory)]);
+    setFiles([]);
+    formClass.reset();
+    setError(null);
+  };
 
   const save = async () => {
     if (!vendor.trim()) return setError('Enter a vendor.');
@@ -44,13 +60,12 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
     setBusy(true);
     try {
       const credit = await api.createVendorCredit({ vendorName: vendor.trim(), reference: reference.trim() || null, creditDate: date, memo: memo.trim() || null, lines: postedLines });
-      onPosted(`Vendor credit from ${credit.vendorName} posted: Dr Accounts Payable ${formatCents(credit.totalCents)} / Cr ${lines.length} line${lines.length === 1 ? '' : 's'}.`);
-      setVendor('');
-      setReference('');
-      setMemo('');
-      setRows([blankSplit(defaultCategory)]);
-      formClass.reset();
-      setError(null);
+      const attachError = files.length > 0 ? await attachPicked(credit.journalEntryId, files) : null;
+      onPosted(
+        `Vendor credit from ${credit.vendorName} posted: Dr Accounts Payable ${formatCents(credit.totalCents)} / Cr ${lines.length} line${lines.length === 1 ? '' : 's'}.` +
+          (attachError ? ` ${attachError}` : ''),
+      );
+      clear();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -60,6 +75,14 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Vendor credit"
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({ onNew: clear, onSave: save, busy }),
+          [attachLaterButton({ setFiles, busy, what: 'this credit' })],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Vendor credit</h2>
         <label className="w-[220px]">
@@ -86,6 +109,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withClasses withJobs />
       <div className="flex items-center gap-2 px-2 py-1">
+        {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>

@@ -67,6 +67,7 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         let new_id = crate::invoices::write_invoice_carrying(tx, &input, &carried).await?;
         let new_entry = entry_of(tx, "invoices", new_id).await?;
         record(tx, old, new_entry).await?;
+        crate::print_queue::carry_over(tx, crate::print_queue::Form::Invoice, invoice_id, new_id).await?;
         crate::mileage::follow_replaced_invoice(tx, invoice_id, new_id).await?;
         Ok(new_id)
     })
@@ -92,6 +93,7 @@ pub async fn replace_expense(pool: &SqlitePool, expense_id: i64, input: ExpenseI
         void_in_tx(tx, old).await?;
         let (new_id, new_entry) = crate::expenses::write_expense(tx, &input).await?;
         record(tx, old, new_entry).await?;
+        crate::print_queue::carry_over(tx, crate::print_queue::Form::Check, expense_id, new_id).await?;
         Ok(new_id)
     })
     .await
@@ -114,6 +116,7 @@ pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: 
                 AND NOT EXISTS (SELECT 1 FROM credit_refunds WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
+                AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id)
              , e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
         )

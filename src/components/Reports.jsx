@@ -7,6 +7,8 @@ import CustomReport, { isCustomReport, useCustomReports, withCustomReports } fro
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
 import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReports.jsx';
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
+import ListReport, { isListReport, useListReports, withListReports } from './ListReports.jsx';
+import ProcessMultipleReports from './ProcessMultipleReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
   AgingReport,
@@ -438,10 +440,20 @@ const REPORT_GROUPS = [
   },
 ];
 
+const PROCESS_MULTIPLE = 'process-multiple';
+
+/** Process Multiple Reports, at the end of the memorized reports (a group of its own until there are some). */
+function withProcessMultiple(groups) {
+  const entry = [PROCESS_MULTIPLE, 'Process Multiple Reports…'];
+  const memorized = groups.find((g) => g.title === 'Memorized reports');
+  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, entry] } : g)) : [...groups, { title: 'Memorized reports', reports: [entry] }];
+}
+
 export default function Reports({ navigate, intent }) {
   const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
   // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
-  const [initial, setInitial] = useState(null);
+  // A QuickReport or Transaction Journal opens with its `zoom`.
+  const [initial, setInitial] = useState(() => (intent?.data?.zoom ? { zoom: intent.data.zoom, at: Date.now() } : null));
   const setReport = (id) => {
     setReportId(id);
     setInitial(null);
@@ -454,12 +466,16 @@ export default function Reports({ navigate, intent }) {
   const zoom = (presetId, z) => openReport(`preset:${presetId}`, { zoom: z });
   const custom = useCustomReports();
   useEffect(() => {
-    if (intent?.data?.report) setReport(intent.data.report);
-  }, [intent]);
-  const groups = withCustomReports(REPORT_GROUPS, custom);
+    if (intent?.data?.zoom) openReport(intent.data.report, { zoom: intent.data.zoom });
+    else if (intent?.data?.report) setReport(intent.data.report);
+  }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
+  const listCatalog = useListReports();
+  const groups = withProcessMultiple(withCustomReports(withListReports(REPORT_GROUPS, listCatalog), custom));
   const reportName = groups.flatMap((g) => g.reports).find(([id]) => id === report)?.[1] ?? null;
   // The window is named after its report, and reopens on it with the desktop.
-  useWindowContent(reportName ? { name: reportName, action: 'open', data: { report } } : null);
+  // A QuickReport is named after what it reports on, and reopens narrowed the same way.
+  const zoomed = initial?.zoom && isCustomReport(report) ? initial.zoom : null;
+  useWindowContent(reportName ? { name: zoomed?.title ?? reportName, action: 'open', data: zoomed ? { report, zoom: zoomed } : { report } } : null);
   // A report chosen in the list opens in a window of its own (or brings forward the window that
   // already shows it), as reports do in QuickBooks; the Report Center stays where it is.
   const openFromList = useOpenFromList();
@@ -524,6 +540,8 @@ export default function Reports({ navigate, intent }) {
         {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
+        {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
+        {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
         {isCustomReport(report) && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>

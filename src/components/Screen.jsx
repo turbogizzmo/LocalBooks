@@ -20,6 +20,8 @@ import Invoices from './Invoices.jsx';
 import JournalEntries from './JournalEntries.jsx';
 import PartyList from './PartyList.jsx';
 import Products from './Products.jsx';
+import { PrintChecks, PrintInvoices } from './PrintForms.jsx';
+import BouncedChecks from './BouncedChecks.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
 import Reclassify from './Reclassify.jsx';
 import Reconcile from './Reconcile.jsx';
@@ -58,6 +60,8 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/statements' && <Statements />}
       {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={navigate} />}
       {view === 'sales/send-forms' && <SendForms />}
+      {view === 'sales/print-invoices' && <PrintInvoices />}
+      {view === 'expenses/print-checks' && <PrintChecks accounts={list} />}
       {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
       {view === 'expenses/bills' && <Bills {...props} />}
       {view === 'expenses/credits' && <VendorCredits {...props} />}
@@ -68,6 +72,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'banking/feeds' && <BankFeed accounts={list} />}
       {view === 'banking/transfers' && <DepositsTransfers {...props} />}
       {view === 'banking/reconcile' && <Reconcile accounts={list} />}
+      {view === 'banking/bounced-checks' && <BouncedChecks accounts={list} />}
       {view === 'accounting/chart-of-accounts' && <ChartOfAccounts accounts={list} intent={intent} navigate={navigate} />}
       {view === 'accounting/classes' && <Classes />}
       {view === 'accounting/reclassify' && <Reclassify accounts={list} />}

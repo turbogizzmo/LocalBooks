@@ -43,6 +43,10 @@ export const screens = {
     help: 'The Customer & Vendor Profile lists: Terms, Payment Method, Customer Type, Vendor Type, Job Type and Customer Message. Add, rename or make an entry inactive; one in use cannot be deleted.',
     guide: 'customers-and-products',
   },
+  'sales/print-invoices': {
+    help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
+    guide: 'invoices',
+  },
 };
 
 /**
@@ -68,6 +72,14 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'print-invoices-later', area: 'sales', views: ['sales/invoices', 'sales/print-invoices'],
+    title: 'Print invoices later, in a batch',
+    body: 'Tick Print later on a new invoice, or choose Print later in an invoice’s Actions menu, and it waits in File › Print Forms › Invoices… with a To print mark in the list. Print the batch from there; the form remembers whether you last left Print later on.',
+    keywords: 'print later to be printed queue batch print forms invoices',
+    go: { label: 'Go to Print Invoices', view: 'sales/print-invoices' },
+    guide: 'invoices',
+  },
+  {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',
     body: 'Fill in the invoice form at the top of Sales › Invoices: type the customer, then add lines with a quantity, rate and income account (decimals such as 1.5 hours are fine). Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF with your form design.',
@@ -78,8 +90,8 @@ export const topics = [
   {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
-    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later.',
-    keywords: 'paid payment customer receive partial undeposited',
+    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), and use Auto Apply to spread the amount over the oldest invoices.',
+    keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
   },
@@ -102,8 +114,8 @@ export const topics = [
   {
     id: 'sales-receipt', area: 'sales', views: ['sales/all'],
     title: 'Record a sale paid on the spot (sales receipt)',
-    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Choose whether the money goes to a bank account or to Undeposited Funds.',
-    keywords: 'cash sale receipt point of sale paid',
+    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Pick the payment method from the tiles, and choose whether the money goes to a bank account or to Undeposited Funds.',
+    keywords: 'cash sale receipt point of sale paid method tile',
     go: { label: 'New sales receipt', view: 'sales/all', action: 'sales-receipt' },
     guide: 'sales-receipts-and-estimates',
   },

@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
-import { useAttachmentRows } from './Attachments.jsx';
+import { attachPicked, PendingAttachments, useAttachmentRows } from './Attachments.jsx';
+import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -12,7 +14,8 @@ import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
+import { usePaymentMethodChoice } from './ProfileFields.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -20,7 +23,7 @@ import NameField from './NameField.jsx';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
-function SalesReceiptForm({ accounts, onPosted, onCancel }) {
+function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
@@ -34,6 +37,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Files picked before posting; attached once the receipt posts.
+  const [files, setFiles] = useState([]);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
@@ -51,7 +57,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
 
-  const save = async () => {
+  const save = async (mode) => {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (depositId === null) return setError('Choose where the money was deposited.');
@@ -73,7 +79,12 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         discountCents: discount,
         ...sales.payload(),
       });
-      onPosted(`Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.`);
+      const attachError = files.length > 0 ? await attachPicked(receipt.journalEntryId, files) : null;
+      if (mode === 'print') forms.print('SALES_RECEIPT', receipt.id);
+      if (mode === 'email') forms.email('SALES_RECEIPT', receipt.id);
+      onPosted(
+        `Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.` + (attachError ? ` ${attachError}` : ''),
+      );
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -83,6 +94,18 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Sales receipt"
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({ onNew, onSave: () => save('post'), busy }),
+          [
+            { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Post and print…', disabled: busy, onSelect: () => save('print') }] },
+            { id: 'email', label: 'Email', icon: 'Email', menu: [{ label: 'Post and email…', disabled: busy, onSelect: () => save('email') }] },
+            attachLaterButton({ setFiles, busy, what: 'this receipt' }),
+          ],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">New sales receipt</h2>
         <label className="w-[220px]">
@@ -92,10 +115,6 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         <label>
           <span className="qb-label">Sales receipt date</span>
           <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-        <label>
-          <span className="qb-label">Payment method</span>
-          <PaymentMethodSelect value={method.id} onChange={method.set} className="qb-input w-[140px]" />
         </label>
         <label>
           <span className="qb-label">Reference no.</span>
@@ -109,6 +128,10 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
         {formClass.header}
         {tax.picker}
         <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
+        <div>
+          <span className="qb-label">Payment method</span>
+          <PaymentMethodTiles value={method.id} onChange={method.set} />
+        </div>
         <div className="ml-auto text-right">
           <div className="qb-label">Amount received</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
@@ -127,11 +150,12 @@ function SalesReceiptForm({ accounts, onPosted, onCancel }) {
           Add line
         </button>
         <input className="qb-input w-[280px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" />
+        {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('post')} disabled={busy}>
             {busy ? 'Posting…' : 'Save & Post to Ledger'}
           </button>
         </div>
@@ -196,6 +220,8 @@ export default function AllSales({ accounts, intent }) {
         <SalesReceiptForm
           key={formKey}
           accounts={accounts}
+          forms={forms}
+          onNew={() => setFormKey((k) => k + 1)}
           onCancel={() => setComposing(false)}
           onPosted={(text) => {
             setNotice({ kind: 'success', text });

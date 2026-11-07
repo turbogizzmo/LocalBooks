@@ -22,6 +22,7 @@ export const NAV = [
       { id: 'sales/statements', label: 'Customer Statements' },
       { id: 'sales/finance-charges', label: 'Assess Finance Charges' },
       { id: 'sales/send-forms', label: 'Send Forms' },
+      { id: 'sales/print-invoices', label: 'Print Invoices' },
     ],
   },
   {
@@ -34,6 +35,7 @@ export const NAV = [
       { id: 'expenses/purchase-orders', label: 'Purchase Orders' },
       { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/vendors', label: 'Vendors' },
+      { id: 'expenses/print-checks', label: 'Print Checks' },
     ],
   },
   {
@@ -53,6 +55,7 @@ export const NAV = [
       { id: 'banking/feeds', label: 'Bank Feeds' },
       { id: 'banking/transfers', label: 'Deposits & Transfers' },
       { id: 'banking/reconcile', label: 'Reconcile' },
+      { id: 'banking/bounced-checks', label: 'Bounced Checks' },
     ],
   },
   {

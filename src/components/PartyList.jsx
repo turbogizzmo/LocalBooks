@@ -13,6 +13,7 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -404,6 +405,14 @@ export default function PartyList({ kind, navigate }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const selectedParty = (data ?? []).find((p) => p.id === selected) ?? null;
+  // QuickReport (Ctrl+Q): every transaction with the selected customer or vendor.
+  const openReport = useReportOpener();
+  const runQuickReport = (p) => openReport(quickReport({ kind, id: p.id, name: p.name }));
+  const onKeyDown = (e) => {
+    if (reportShortcut(e) !== 'quickReport' || !selectedParty || e.defaultPrevented) return;
+    e.preventDefault();
+    runQuickReport(selectedParty);
+  };
   const sorter = useSort(rows, {
     name: (p) => p.name,
     email: (p) => p.email,
@@ -429,7 +438,7 @@ export default function PartyList({ kind, navigate }) {
   });
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
+    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
         <PartyDialog
           kind={kind}
@@ -519,6 +528,7 @@ export default function PartyList({ kind, navigate }) {
                         items={[
                           { label: 'Edit…', onSelect: () => setEditing(p.id) },
                           { label: 'Show transactions', onSelect: () => setSelected(p.id) },
+                          { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },

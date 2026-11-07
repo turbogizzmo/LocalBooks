@@ -1,6 +1,6 @@
 [package]
 name = "localbooks"
-version = "0.10.3"
+version = "0.11.0"
 description = "LocalBooks: local-first double-entry accounting"
 edition = "2021"
 license = "MIT"
@@ -13,7 +13,7 @@ tauri-build = { version = "2", features = [] }
 aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "=0.6.0", default-features = false, features = ["alloc"] }
 base64 = "0.23"
-calamine = { version = "0.37", default-features = false }
+calamine = { version = "0.38", default-features = false }
 cfb = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
@@ -54,7 +54,7 @@ codegen-units = 1
 lto = true
 
 [dev-dependencies]
-calamine = { version = "0.37", features = ["dates"] }
+calamine = { version = "0.38", features = ["dates"] }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 insta = "1"
 proptest = { version = "1", default-features = false, features = ["std"] }

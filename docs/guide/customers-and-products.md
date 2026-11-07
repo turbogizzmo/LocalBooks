@@ -24,6 +24,13 @@ and so on) show in a panel under the list, newest first, with a total. Click a h
 tick **Show voided** to include voided ones, and double-click a transaction to open it.
 Double-click the name itself to edit the customer or vendor.
 
+To narrow the list, choose a transaction type (only invoices, say, or only bill payments) and a
+date range: **This month**, **This quarter**, **This year**, **Last year**, or your own **From** and
+**To** dates. The count and total cover what is shown. Click a transaction and press **Ctrl+H** for
+its [Transaction History](reports.md#quickreport-transaction-history-and-transaction-journal) or
+**Ctrl+Y** for its Transaction Journal; **QuickReport** (or **Ctrl+Q** on the name) opens the same
+transactions as a report.
+
 To add a company name, billing address, phone, payment terms, a customer or vendor type or notes,
 open the customer's **Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
 and estimates, and the email address is filled in when you choose **Email…** on one of them.
