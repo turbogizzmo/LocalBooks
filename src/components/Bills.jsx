@@ -11,6 +11,7 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { ConfirmDialog, voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { TermsSelect, useTerms } from './ProfileFields.jsx';
 import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -32,6 +33,26 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
   const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
   const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
+  const termsList = useTerms();
+  const [termsId, setTermsId] = useState(editing?.bill.termsId ?? null);
+  // Set once the user picks a term (or a saved bill is loaded): the vendor's term no longer fills in.
+  const [termsTouched, setTermsTouched] = useState(Boolean(editing));
+  const applyTerms = (t, fromDate) => {
+    if (t && fromDate) setDueDate(addDays(fromDate, t.netDays));
+  };
+  const vendorRecord = vendors.find((v) => v.name.toLowerCase() === vendor.trim().toLowerCase());
+  useEffect(() => {
+    if (termsTouched) return;
+    const t =
+      termsList.find((x) => x.isActive && x.id === vendorRecord?.termsId) ??
+      termsList.find((x) => x.isActive && x.netDays === 30 && x.discountPpm === 0) ??
+      null;
+    if (t && t.id !== termsId) {
+      setTermsId(t.id);
+      applyTerms(t, billDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorRecord?.id, vendorRecord?.termsId, termsList, termsTouched, termsId]);
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -91,7 +112,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (warning) return setError(warning);
     setBusy(true);
     try {
-      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines };
+      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
       const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
       const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
@@ -107,6 +128,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       setVendor('');
       setBillNumber('');
       setTotal('');
+      setTermsTouched(false);
+      setTermsId(null);
       setRows([blankSplit(defaultCategory)]);
       formClass.reset();
       setError(null);
@@ -180,7 +203,19 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             value={billDate}
             onChange={(e) => {
               setBillDate(e.target.value);
-              setDueDate(addDays(e.target.value, 30));
+              applyTerms(termsList.find((t) => t.id === termsId) ?? { netDays: 30 }, e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          <span className="qb-label">Terms</span>
+          <TermsSelect
+            className="qb-input w-[128px]"
+            value={termsId}
+            onChange={(t) => {
+              setTermsTouched(true);
+              setTermsId(t?.id ?? null);
+              applyTerms(t, billDate);
             }}
           />
         </label>
@@ -447,6 +482,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <col />
           <col className="w-[100px]" />
           <col className="w-[100px]" />
+          <col className="w-[150px]" />
           <col className="w-[120px]" />
           <col className="w-[130px]" />
         </colgroup>
@@ -456,6 +492,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             <th className="qb-grid-head">Vendor</th>
             <th className="qb-grid-head">Bill no.</th>
             <th className="qb-grid-head">Due date</th>
+            <th className="qb-grid-head" title="Early-payment discount the bill's terms offer, and the last day to take it">Discount offered</th>
             <th className="qb-grid-head text-right">Open balance</th>
             <th className="qb-grid-head text-right">Payment</th>
           </tr>
@@ -463,7 +500,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         <tbody>
           {open.length === 0 && (
             <tr>
-              <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
+              <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
             </tr>
           )}
           {open.map((b, i) => {
@@ -480,6 +517,9 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                 </td>
                 <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
                 <td className={`qb-grid-cell ${b.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
+                <td className="qb-grid-cell text-sm" title={b.termsName ?? undefined}>
+                  {b.discountUntil && b.earlyDiscountCents > 0 && (date <= b.discountUntil ? `${formatCents(b.earlyDiscountCents)} by ${formatDate(b.discountUntil)}` : <span className="text-qb-ink-faint">ended {formatDate(b.discountUntil)}</span>)}
+                </td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
                 <td className="qb-grid-cell-edit">
                   <input

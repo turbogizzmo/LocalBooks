@@ -1,6 +1,6 @@
 # Editing an invoice or bill that has payments or credits applied
 
-Status: built (gap T19). Migration 0071.
+Status: built (gap T20). Migration 0074.
 
 ## The problem
 
@@ -64,7 +64,7 @@ version and count toward nothing.
 ### The schema guards
 
 Payment and application rows are immutable by trigger: their document id could never change. Migration
-0071 recreates those triggers with one exception, so a re-link is possible only as part of a recorded
+0074 recreates those triggers with one exception, so a re-link is possible only as part of a recorded
 edit:
 
 - the row is live (not voided);
@@ -118,11 +118,11 @@ For every replacement, three things are recorded, all inside the edit's transact
 - The usual hash-chained `POST` record for the new entry and `VOID` record for the original (written
   by the triggers).
 - The `transaction_edits` row linking the original entry to its replacement.
-- A new `EDIT` record (written for every replacement, including expenses, checks and journal
-  entries, which simply list nothing re-linked) in the ledger audit trail (action type added by migration 0071), whose
+- A new `EDIT` record in the ledger audit trail (action type added by migration 0074), written for
+  every replacement; expenses, checks and journal entries simply list nothing re-linked. Its
   payload names the document kind, the old and new document ids and entry ids, and every row that
-  was re-linked: kind (`PAYMENT`, `CREDIT`, `BILL_PAYMENT`,
-  `VENDOR_CREDIT`, `BOUNCED_CHECK`), its id and amount. It is sealed into the chain like every other
+  was re-linked: kind (`PAYMENT`, `CREDIT`, `BILL_PAYMENT`, `VENDOR_CREDIT`, `BOUNCED_CHECK`), its
+  id and amount. It is sealed into the chain like every other
   record, so "which invoice was this payment applied to before" can always be answered.
 
 ## Screens

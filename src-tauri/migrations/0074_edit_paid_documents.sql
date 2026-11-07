@@ -10,7 +10,8 @@
 --    re-linked. SQLite cannot change a CHECK constraint in place, so the table is rebuilt exactly as
 --    in migrations 0045, 0054, 0059 and 0063: every row is copied as it is (ids, timestamps,
 --    payloads, actors and chain hashes, so the chain still verifies), and the triggers that reference
---    the table are dropped first and recreated unchanged.
+--    the table are dropped first and recreated unchanged (the customer and vendor ones as 0064
+--    left them).
 
 DROP TRIGGER trg_ledger_audit_account;
 DROP TRIGGER trg_ledger_audit_insert_unsealed;
@@ -116,6 +117,8 @@ WHEN NEW.name IS NOT OLD.name OR NEW.is_active IS NOT OLD.is_active OR NEW.email
   OR NEW.terms_days IS NOT OLD.terms_days OR NEW.notes IS NOT OLD.notes OR NEW.parent_id IS NOT OLD.parent_id
   OR NEW.tax_rate_id IS NOT OLD.tax_rate_id OR NEW.is_tax_exempt IS NOT OLD.is_tax_exempt
   OR NEW.sales_rep_id IS NOT OLD.sales_rep_id
+  OR (NEW.terms_id IS NOT OLD.terms_id AND OLD.terms_id IS NOT NULL)
+  OR NEW.customer_type_id IS NOT OLD.customer_type_id OR NEW.job_type_id IS NOT OLD.job_type_id
 BEGIN
     INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot)
     VALUES ('LIST_CHANGE', NEW.id, json_object(
@@ -127,11 +130,13 @@ BEGIN
             UNION ALL SELECT 'company name' WHERE NEW.company_name IS NOT OLD.company_name
             UNION ALL SELECT 'phone' WHERE NEW.phone IS NOT OLD.phone
             UNION ALL SELECT 'billing address' WHERE NEW.billing_address IS NOT OLD.billing_address
-            UNION ALL SELECT 'terms' WHERE NEW.terms_days IS NOT OLD.terms_days
+            UNION ALL SELECT 'terms' WHERE NEW.terms_days IS NOT OLD.terms_days OR (NEW.terms_id IS NOT OLD.terms_id AND OLD.terms_id IS NOT NULL)
             UNION ALL SELECT 'notes' WHERE NEW.notes IS NOT OLD.notes
             UNION ALL SELECT 'parent customer' WHERE NEW.parent_id IS NOT OLD.parent_id
             UNION ALL SELECT 'sales tax' WHERE NEW.tax_rate_id IS NOT OLD.tax_rate_id OR NEW.is_tax_exempt IS NOT OLD.is_tax_exempt
-            UNION ALL SELECT 'sales rep' WHERE NEW.sales_rep_id IS NOT OLD.sales_rep_id))
+            UNION ALL SELECT 'sales rep' WHERE NEW.sales_rep_id IS NOT OLD.sales_rep_id
+            UNION ALL SELECT 'customer type' WHERE NEW.customer_type_id IS NOT OLD.customer_type_id
+            UNION ALL SELECT 'job type' WHERE NEW.job_type_id IS NOT OLD.job_type_id))
     ));
 END;
 
@@ -141,6 +146,8 @@ WHEN NEW.name IS NOT OLD.name OR NEW.is_active IS NOT OLD.is_active OR NEW.email
   OR NEW.company_name IS NOT OLD.company_name OR NEW.phone IS NOT OLD.phone OR NEW.address IS NOT OLD.address
   OR NEW.terms_days IS NOT OLD.terms_days OR NEW.notes IS NOT OLD.notes OR NEW.is_1099 IS NOT OLD.is_1099
   OR NEW.tax_id_masked IS NOT OLD.tax_id_masked
+  OR (NEW.terms_id IS NOT OLD.terms_id AND OLD.terms_id IS NOT NULL)
+  OR NEW.vendor_type_id IS NOT OLD.vendor_type_id
 BEGIN
     INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot)
     VALUES ('LIST_CHANGE', NEW.id, json_object(
@@ -152,10 +159,11 @@ BEGIN
             UNION ALL SELECT 'company name' WHERE NEW.company_name IS NOT OLD.company_name
             UNION ALL SELECT 'phone' WHERE NEW.phone IS NOT OLD.phone
             UNION ALL SELECT 'address' WHERE NEW.address IS NOT OLD.address
-            UNION ALL SELECT 'terms' WHERE NEW.terms_days IS NOT OLD.terms_days
+            UNION ALL SELECT 'terms' WHERE NEW.terms_days IS NOT OLD.terms_days OR (NEW.terms_id IS NOT OLD.terms_id AND OLD.terms_id IS NOT NULL)
             UNION ALL SELECT 'notes' WHERE NEW.notes IS NOT OLD.notes
             UNION ALL SELECT '1099' WHERE NEW.is_1099 IS NOT OLD.is_1099
-            UNION ALL SELECT 'tax ID' WHERE NEW.tax_id_masked IS NOT OLD.tax_id_masked))
+            UNION ALL SELECT 'tax ID' WHERE NEW.tax_id_masked IS NOT OLD.tax_id_masked
+            UNION ALL SELECT 'vendor type' WHERE NEW.vendor_type_id IS NOT OLD.vendor_type_id))
     ));
 END;
 

@@ -479,6 +479,8 @@ pub struct FormSales {
     pub ship_via: Option<String>,
     /// (label, value) of the customer fields printed on this document.
     pub fields: Vec<(String, String)>,
+    /// The Customer Message chosen on the form, printed below the totals.
+    pub message: Option<String>,
 }
 
 impl FormSales {
@@ -488,6 +490,7 @@ impl FormSales {
             ship_date: view.ship_date.as_deref().map(format_date),
             ship_via: view.ship_method_name.clone(),
             fields: view.custom_fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect(),
+            message: view.customer_message.clone(),
         }
     }
 
@@ -650,12 +653,17 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         _ => 0,
     };
     let balance = if inv.is_voided { 0 } else { inv.balance_cents };
+    // The term it was issued with; an invoice from before the Terms list shows its days.
+    let terms = inv.terms.terms_name.clone().unwrap_or_else(|| if terms_days == 0 { "Due on receipt".into() } else { format!("Net {terms_days}") });
     let mut meta = vec![
         ("Invoice date".to_string(), format_date(&inv.issue_date), false),
-        ("Terms".to_string(), if terms_days == 0 { "Due on receipt".into() } else { format!("Net {terms_days}") }, false),
+        ("Terms".to_string(), terms, false),
         ("Due date".to_string(), format_date(&inv.due_date), false),
-        ("Balance due".to_string(), money(balance), true),
     ];
+    if let (Some(until), true) = (&inv.terms.discount_until, inv.terms.early_discount_cents > 0 && balance > 0) {
+        meta.push(("Discount".to_string(), format!("{} if paid by {}", money(inv.terms.early_discount_cents), format_date(until)), false));
+    }
+    meta.push(("Balance due".to_string(), money(balance), true));
     if let Some(code) = code {
         meta.push(("Currency".into(), code.into(), false));
     }
@@ -957,7 +965,13 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         sales: if statement.is_some() {
             FormSales::default()
         } else {
-            FormSales { rep: Some("JS".into()), ship_date: Some("10/02/2026".into()), ship_via: Some("UPS Ground".into()), fields: Vec::new() }
+            FormSales {
+                rep: Some("JS".into()),
+                ship_date: Some("10/02/2026".into()),
+                ship_via: Some("UPS Ground".into()),
+                fields: Vec::new(),
+                message: Some("Thank you for your business.".into()),
+            }
         },
         statement,
     }
@@ -1435,6 +1449,9 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         paragraph(&mut l, if doc.voided { None } else { Some("NOTES") }, memo, INK);
     }
     if !doc.voided {
+        if let Some(message) = &doc.sales.message {
+            paragraph(&mut l, None, message, INK);
+        }
         paragraph(&mut l, None, &fill_placeholders(&tpl.message, doc, company), INK);
     }
     if !tpl.terms.is_empty() {

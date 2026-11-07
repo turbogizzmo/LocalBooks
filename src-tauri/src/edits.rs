@@ -86,8 +86,9 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
 pub async fn replace_bill(pool: &SqlitePool, bill_id: i64, input: BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
         let old = live_entry(tx, "bills", bill_id, "bill").await?;
+        let carried_terms: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill_id).fetch_one(&mut **tx).await.map_err(db_err)?;
         crate::ledger::void_for_replacement(tx, old).await?;
-        let new_id = crate::expenses::write_bill(tx, &input).await?;
+        let new_id = crate::expenses::write_bill_carrying(tx, &input, carried_terms).await?;
         let new_entry = entry_of(tx, "bills", new_id).await?;
         record(tx, old, new_entry).await?;
         let moved = keep_applied(tx, AppliedTo::Bill, bill_id, new_id).await?;
