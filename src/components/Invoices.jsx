@@ -817,12 +817,6 @@ export default function Invoices({ accounts, intent }) {
 
   const save = async (mode, confirmed = false) => {
     if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
-    if (appliedText && confirmed !== true && mode !== 'memorize') {
-      return setConfirmSave({
-        confirm: { title: 'Save changes to a paid invoice?', body: appliedText, confirmLabel: 'Save changes' },
-        onSelect: () => save(mode, true),
-      });
-    }
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
     if (invalidCount > 0) {
@@ -845,6 +839,12 @@ export default function Invoices({ accounts, intent }) {
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setNotice({ kind: 'error', text: warning });
+    if (appliedText && confirmed !== true && mode !== 'memorize') {
+      return setConfirmSave({
+        confirm: { title: 'Save changes to a paid invoice?', body: appliedText, confirmLabel: 'Save changes' },
+        onSelect: () => save(mode, true),
+      });
+    }
 
     setBusy(true);
     try {

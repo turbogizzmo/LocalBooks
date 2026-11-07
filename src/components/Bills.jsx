@@ -84,12 +84,6 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const appliedText = editing?.bill.amountPaidCents > 0 ? `This bill has ${formatCents(editing.bill.amountPaidCents)} in payments or credits applied. Saving will keep them applied to the new version.` : null;
   const [confirmSave, setConfirmSave] = useState(null);
   const post = async (mode, confirmed = false) => {
-    if (appliedText && confirmed !== true && mode !== 'memorize') {
-      return setConfirmSave({
-        confirm: { title: 'Save changes to a paid bill?', body: appliedText, confirmLabel: 'Save changes' },
-        onSelect: () => post(mode, true),
-      });
-    }
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -110,6 +104,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
+    if (appliedText && confirmed !== true && mode !== 'memorize') {
+      return setConfirmSave({
+        confirm: { title: 'Save changes to a paid bill?', body: appliedText, confirmLabel: 'Save changes' },
+        onSelect: () => post(mode, true),
+      });
+    }
     setBusy(true);
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
