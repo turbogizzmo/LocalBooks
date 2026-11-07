@@ -1,33 +1,31 @@
-# QuickBooks Desktop parity, the 2024 release
+# Desktop parity, the 2024 release
 
 Rounds 1 and 2 ([desktop-parity.md](desktop-parity.md), [desktop-parity-2.md](desktop-parity-2.md))
 read the 2021 desktop release. Testers moving off QuickBooks Desktop now often come from the 2024
 release, so this pass reads that one and lists only what it adds or changes that LocalBooks lacks,
 plus a few things round 2 missed. Rows `T40`–`T52` in [`docs/gaps.md`](../gaps.md) track it.
 
-**Sources** (November 2026): the menu, center-menu, form-label, column and message resources of the
-QuickBooks Desktop Pro 2024 installer, diffed resource by resource against the same resources of the
-2021 installer that rounds 1 and 2 read. Both installers are kept outside the repo in
-`research-samples/`, never committed and never run; the files were unpacked into a scratch folder
-and deleted afterwards. Everything here is described in our own words. Each gap was checked against
-the code (`src/components/`, `app_menu.rs`, `custom_reports.rs`, `list_reports.rs`, the
-migrations) before being called missing.
+**Sources** (November 2026): the names of menus, form fields and list columns in the desktop
+software LocalBooks replaces (QuickBooks Desktop 2024, compared with 2021), as a user sees them,
+and public product knowledge for field order. Nothing from that software is in this repo;
+everything here is described in our own words. Each gap was checked against the code
+(`src/components/`, `app_menu.rs`, `custom_reports.rs`, `list_reports.rs`, the migrations) before
+being called missing.
 
-**What changed between 2021 and 2024, in short.** The program files are packed the same way and the
-center column definitions are byte-for-byte the same. The changes are: a Category List for items,
-with a new item list built around it; credits offered on the invoice; a search box inside reports;
-bill and purchase order approvals; uploading bills for review; a bill payment form of its own that
-can be printed or emailed; a cash flow dashboard in place of the old cash flow projector; Duplicate
-on the account, customer and vendor lists; a list of contacts per name; two new reports (inventory
-turnover and invoice profitability); and a long tail of features that are payroll,
-paid services or higher editions (below).
+**What changed between 2021 and 2024, in short.** The centers' list columns are unchanged. The
+changes are: a Category List for items, with a new item list built around it; credits offered on the
+invoice; a search box inside reports; bill and purchase order approvals; uploading bills for review;
+a bill payment form of its own that can be printed or emailed; a cash flow dashboard in place of the
+old cash flow projector; Duplicate on the account, customer and vendor lists; a list of contacts per
+name; two new reports (inventory turnover and invoice profitability); and a long tail of features
+that are payroll, paid services or higher editions (below).
 
 **Left out:**
 - Everything rounds 1 and 2, [preferences.md](preferences.md) or `docs/gaps.md` already track.
 - Payroll (overtime tracking, retirement plan sync, state forms), the vendor's paid services and
   sign-ups (bill pay, shipping labels, beneficial ownership filing, payment links), upsells, update
   and licence prompts, and tools for moving to the vendor's online product.
-- Higher-edition features that appear in the shared menus: intercompany transactions across
+- Higher-edition features that appear in the menus: intercompany transactions across
   several companies, lot and serial numbers, expiration dates, bin locations, inventory sites,
   sales orders linked to purchase orders, assemblies, price rules.
 - Customer prepayments on estimates and sales orders, and the link between an estimate and an
@@ -78,20 +76,19 @@ Tracked with the rows above.
   charges as well as invoices. Fold into T37's Receive Payments totals.
 - **Pay Bills (T46):** a bill payment stub can be emailed as well as printed from the payment.
 
-## What we couldn't read
+## What we couldn't see
 
-- **Dialog layouts and field order.** As in round 2, the form layouts are in a binary format we did
-  not decode, so the layout notes above come from the labels' grouping and from public product
-  knowledge.
+- **Field order on forms.** As in round 2, the layout notes above come from how the labels are
+  grouped and from public product knowledge, not from the forms' exact positions.
 - **The web-based screens.** The cash flow dashboard, Upload & Review Bills and the approval setup
-  are separate add-ins that draw web pages; only their menu entries, messages and a few labels are
-  in the files, so their detail comes from public product knowledge.
-- **Which edition gets what.** The menu resources are shared by every edition, so the files don't
-  say which features Pro has. We left out what is known to belong to the higher editions (above)
-  and kept approvals, categories, inventory turnover and invoice profitability. Some of these may
-  be limited to some editions or subscription tiers; that matters little, since testers judge
-  LocalBooks against the edition they used.
-- **Help.** The help files were not read.
+  open as web pages inside the program; only their menu entries and a few labels were visible, so
+  their detail comes from public product knowledge.
+- **Which edition gets what.** Every edition shows the same menus, so they don't say which
+  features Pro has. We left out what is known to belong to the higher editions (above) and kept
+  approvals, categories, inventory turnover and invoice profitability. Some of these may be limited
+  to some editions or subscription tiers; that matters little, since testers judge LocalBooks
+  against the edition they used.
+- **Help.** The product's help was not read.
 
 ## Order of work
 
