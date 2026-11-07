@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, linesKey, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
@@ -21,6 +21,9 @@ import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 import NameField from './NameField.jsx';
+
+/** A new invoice's lines: nothing entered. */
+const EMPTY_LINES = linesKey({ payload: [], formLines: [] });
 
 const TERMS = [
   { id: 'receipt', label: 'Due on receipt', days: 0 },
@@ -629,11 +632,12 @@ export default function Invoices({ accounts, intent }) {
     if (t && fromDate) setDueDate(addDays(fromDate, t.days));
   };
 
-  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
+  const summary = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summary;
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
-  useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
+  useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || linesKey(summary) !== (editing?.linesKey ?? EMPTY_LINES));
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
@@ -653,7 +657,7 @@ export default function Invoices({ accounts, intent }) {
         setFromEstimate(null);
         const loaded = linesFromDocument(items, storedForm, defaultAccountId);
         // What was loaded, so closing the window asks only once something has changed.
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: JSON.stringify(summarizeLines(loaded).payload) });
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: linesKey(summarizeLines(loaded)) });
         setCustomer(invoice.customerName);
         setIssueDate(invoice.issueDate);
         setDueDate(invoice.dueDate);
