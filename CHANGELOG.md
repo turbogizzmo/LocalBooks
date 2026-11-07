@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,
+  A/R and A/P Aging Detail, Open Invoices, Unpaid Bills, customer and vendor balances, purchases,
+  check and deposit detail, the journal, adjusting entries and more) and the list reports (phone and
+  contact lists, Item and Account Listings) now have menu entries, not only the Report Center. A
+  **List** submenu gathers the list reports, and **Memorized Reports** opens Process Multiple
+  Reports.
+- **Lists › Vehicle List, Vendors › Sales Tax › Pay Sales Tax… and Help › Check for Updates…** open
+  those screens directly.
+- **More form shortcuts.** On an open form, **Ctrl+N** starts a new one, **Ctrl+P** prints it, and
+  **Page Up** / **Page Down** open the previous and next, as the toolbar buttons do.
+
 - **Receive Payments takes early-payment discounts.** An invoice on terms such as *2% 10 Net 30*
   that is paid in full by the discount's last day can now take its discount right on Receive
   Payments, in a new **Discount** column you can change or clear. Choose the account it goes to

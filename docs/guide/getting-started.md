@@ -405,9 +405,13 @@ While a form is open:
 | **Ctrl+M** | Memorize the transaction (save it as a recurring one). |
 | **Ctrl+Insert** | Insert a blank line above the line you're on. Outside the lines, it adds one at the end. |
 | **Ctrl+Delete** | Delete the line you're on. |
+| **Ctrl+N** | Start a new form of the same kind, as the toolbar's **New** does. |
+| **Ctrl+P** | Print the form, on forms that print. |
+| **Page Up** / **Page Down** | Open the previous or next one, as the toolbar's **Previous** and **Next** do. In a list or a text box with more lines they scroll it instead. |
 
-The same four are in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for
-D, Insert and Delete (Fn+Delete is Delete); **⌘M** stays Minimize, so use **Control+M** to memorize.
+The first four are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too
+for D, Insert and Delete (Fn+Delete is Delete); **⌘M**, **⌘N** and **⌘P** stay the system's, so use
+**Control** with M, N and P.
 
 ### Date keys
 

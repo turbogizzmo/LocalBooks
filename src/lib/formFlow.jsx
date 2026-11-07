@@ -48,7 +48,7 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
       if (name === 'save-close') saveAndClose();
       else if (name === 'save-new') saveAndNew();
       else if (name === 'clear' && l.clear) l.clear();
-      else if (name === 'delete' || name === 'memorize') return pressToolbar(formRef.current, name);
+      else if (TOOLBAR_COMMANDS.includes(name)) return pressToolbar(formRef.current, name);
       else if (name === 'insert-line' || name === 'delete-line') return lineCommand(formRef.current, name);
       else return false;
       return true;
@@ -72,7 +72,7 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
       if (e.defaultPrevented || modalOpenAbove(formRef.current, e.target)) return;
       const name = formKeyCommand(e);
       if (!name || name === 'insert-line' || name === 'delete-line') return; // lines: useLineCommands
-      if ((name === 'delete' || name === 'memorize') && !toolbarButton(formRef.current, name)) return;
+      if (TOOLBAR_COMMANDS.includes(name) && !toolbarButton(formRef.current, name)) return;
       e.preventDefault();
       // A save waits a tick, so the form has rendered with the last key typed before it reads it.
       if (name.startsWith('save')) setTimeout(() => command(name), 0);
@@ -88,7 +88,8 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
  * Ctrl+D and Ctrl+M press the form toolbar's own button (FormToolbar.jsx), so they ask the same
  * question first (Void this transaction?) and are off whenever the button is.
  */
-const TOOLBAR_IDS = { delete: ['void', 'delete'], memorize: ['memorize'] };
+const TOOLBAR_IDS = { delete: ['void', 'delete'], memorize: ['memorize'], new: ['new'], print: ['print'], previous: ['previous'], next: ['next'] };
+const TOOLBAR_COMMANDS = Object.keys(TOOLBAR_IDS);
 
 function toolbarButton(root, name) {
   const selector = TOOLBAR_IDS[name].map((id) => `[data-toolbar-button][data-command="${id}"]:not(:disabled):not([aria-disabled="true"])`).join(', ');
@@ -103,10 +104,11 @@ function pressToolbar(root, name) {
 
 /**
  * The command a key press asks of a form, or null:
- *   Alt+S save-close · Alt+N save-new · Ctrl+D delete · Ctrl+M memorize ·
- *   Ctrl+Insert insert-line · Ctrl+Delete delete-line
+ *   Alt+S save-close · Alt+N save-new · Ctrl+D delete · Ctrl+M memorize · Ctrl+N new ·
+ *   Ctrl+P print · Ctrl+Insert insert-line · Ctrl+Delete delete-line ·
+ *   Page Up previous · Page Down next (not while a list or text box would scroll)
  * Letters are read from the physical key, so Option+S on a Mac (which types ß) still saves.
- * On a Mac, Cmd also works for D, Insert and Delete; Cmd+M stays Minimize.
+ * On a Mac, Cmd also works for D, Insert and Delete; Cmd+M, Cmd+N and Cmd+P stay the system's.
  */
 export function formKeyCommand(e) {
   const ctrl = e.ctrlKey || (IS_MAC && e.metaKey);
@@ -118,8 +120,15 @@ export function formKeyCommand(e) {
     return null;
   }
   if (e.altKey || e.shiftKey) return null;
+  if (!e.ctrlKey && !e.metaKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
+    const t = e.target;
+    if (t instanceof Element && t.closest('textarea, select, [role="listbox"], [role="grid"], [contenteditable="true"]')) return null;
+    return e.key === 'PageUp' ? 'previous' : 'next';
+  }
   if (ctrl && letter('d')) return 'delete';
   if (e.ctrlKey && !e.metaKey && letter('m')) return 'memorize';
+  if (e.ctrlKey && !e.metaKey && letter('n')) return 'new';
+  if (e.ctrlKey && !e.metaKey && letter('p')) return 'print';
   if (ctrl && e.key === 'Insert') return 'insert-line';
   if (ctrl && e.key === 'Delete') return 'delete-line';
   return null;
@@ -133,6 +142,10 @@ export const FORM_KEYS = {
   'save-new': 'Alt+N',
   delete: IS_MAC ? '⌘D' : 'Ctrl+D',
   memorize: 'Ctrl+M',
+  new: 'Ctrl+N',
+  print: 'Ctrl+P',
+  previous: 'Page Up',
+  next: 'Page Down',
   'insert-line': IS_MAC ? '⌘Insert' : 'Ctrl+Insert',
   'delete-line': IS_MAC ? '⌘Delete' : 'Ctrl+Delete',
 };
