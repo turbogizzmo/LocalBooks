@@ -73,7 +73,7 @@ const ENABLED = 'text-qb-ink hover:bg-qb-surface hover:shadow-panel';
 const DISABLED = 'cursor-not-allowed text-qb-ink-faint opacity-60';
 
 /** The keys that press a button, by its id, unless the button names its own. */
-const BUTTON_KEYS = { save: FORM_KEYS['save-new'], void: FORM_KEYS.delete, delete: FORM_KEYS.delete, memorize: FORM_KEYS.memorize };
+const BUTTON_KEYS = { save: FORM_KEYS['save-new'], void: FORM_KEYS.delete, delete: FORM_KEYS.delete, memorize: FORM_KEYS.memorize, new: FORM_KEYS.new, print: FORM_KEYS.print, previous: FORM_KEYS.previous, next: FORM_KEYS.next };
 
 const ToolButton = forwardRef(function ToolButton({ item, onClick, ...rest }, ref) {
   const keys = item.keys ?? BUTTON_KEYS[item.id];

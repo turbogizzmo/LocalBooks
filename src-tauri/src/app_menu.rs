@@ -107,6 +107,7 @@ const LISTS: &[Entry] = &[
         ],
     ),
     form("Price Level List", "sales/products", "price-levels"),
+    form("Vehicle List", "employees/mileage", "vehicles"),
     Entry::Sep,
     form("Templates", "settings", "forms"),
     keyed("Memorized Transaction List", "accounting/recurring", None, "CmdOrCtrl+T"),
@@ -151,7 +152,7 @@ const VENDORS: &[Entry] = &[
     form("Enter Bills", "expenses/bills", "bill"),
     form("Pay Bills", "expenses/bills", "pay-bills"),
     form("Enter Vendor Credits", "expenses/credits", "vendor-credit"),
-    Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), report("Sales Tax Liability", "sales-tax")]),
+    Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),
     Entry::Sep,
     form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
     Entry::Sep,
@@ -184,27 +185,71 @@ const BANKING: &[Entry] = &[
 
 const REPORTS: &[Entry] = &[
     page("Report Center", "reports"),
+    Entry::Sub("Memorized Reports", &[report("Process Multiple Reports…", "process-multiple")]),
     Entry::Sep,
     Entry::Sub(
         "Company & Financial",
         &[
             report("Profit & Loss Standard", "pl"),
-            report("Profit & Loss by Class", "plc"),
+            report("Profit & Loss Detail", "preset:pl-detail"),
+            report("Profit & Loss YTD Comparison", "list:pl-ytd"),
             report("Profit & Loss Prev Year Comparison", "pl-py"),
+            report("Profit & Loss by Month", "preset:pl-by-month"),
+            report("Profit & Loss by Class", "plc"),
+            Entry::Sep,
+            report("Income by Customer Summary", "preset:income-customer-summary"),
+            report("Income by Customer Detail", "preset:income-customer-detail"),
+            report("Expenses by Vendor Summary", "expenses-vendor"),
+            report("Expenses by Vendor Detail", "preset:expenses-vendor-detail"),
+            report("Expenses by Vendor by Month", "preset:expenses-vendor-month"),
             Entry::Sep,
             report("Balance Sheet Standard", "bs"),
+            report("Balance Sheet Detail", "preset:bs-detail"),
+            report("Balance Sheet Summary", "list:bs-summary"),
             report("Balance Sheet Prev Year Comparison", "bs-py"),
             Entry::Sep,
             report("Statement of Cash Flows", "cf"),
-            Entry::Sep,
-            report("Expenses by Vendor Summary", "expenses-vendor"),
+            report("Net Income Detail", "preset:net-income-detail"),
             Entry::Sep,
             report("Income & Expense Graph", "graph-ie"),
             report("Net Worth Graph", "graph-nw"),
         ],
     ),
-    Entry::Sub("Customers & Receivables", &[report("A/R Aging Summary", "ar"), report("Collections Report", "collections"), Entry::Sep, report("Accounts Receivable Graph", "graph-ar")]),
-    Entry::Sub("Sales", &[report("Sales by Customer Summary", "sales-customer"), report("Sales by Item Summary", "sales-product"), report("Sales by Rep Summary", "sales-rep"), report("Item Price List", "item-price-list"), Entry::Sep, report("Sales Graph", "graph-sales")]),
+    Entry::Sub(
+        "Customers & Receivables",
+        &[
+            report("A/R Aging Summary", "ar"),
+            report("A/R Aging Detail", "preset:ar-aging-detail"),
+            Entry::Sep,
+            report("Customer Balance Summary", "preset:customer-balance-summary"),
+            report("Customer Balance Detail", "preset:customer-balance-detail"),
+            report("Open Invoices", "preset:open-invoices"),
+            report("Collections Report", "collections"),
+            report("Average Days to Pay Summary", "list:average-days-to-pay"),
+            Entry::Sep,
+            report("Accounts Receivable Graph", "graph-ar"),
+            Entry::Sep,
+            report("Transaction List by Customer", "preset:transaction-list-customer"),
+            report("Customer Phone List", "list:customer-phone"),
+            report("Customer Contact List", "list:customer-contact"),
+        ],
+    ),
+    Entry::Sub(
+        "Sales",
+        &[
+            report("Sales by Customer Summary", "sales-customer"),
+            report("Sales by Customer Detail", "preset:sales-customer-detail"),
+            Entry::Sep,
+            report("Sales by Item Summary", "sales-product"),
+            report("Sales by Item Detail", "preset:sales-product-detail"),
+            Entry::Sep,
+            report("Sales by Rep Summary", "sales-rep"),
+            report("Sales by Rep Detail", "preset:sales-rep-detail"),
+            Entry::Sep,
+            report("Item Price List", "item-price-list"),
+            report("Sales Graph", "graph-sales"),
+        ],
+    ),
     Entry::Sub(
         "Jobs, Time & Mileage",
         &[
@@ -216,6 +261,12 @@ const REPORTS: &[Entry] = &[
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
+            report("Progress Invoices vs. Estimates", "progress"),
+            Entry::Sep,
+            report("Time by Job Summary", "list:time-job-summary"),
+            report("Time by Job Detail", "list:time-job-detail"),
+            report("Time by Name", "list:time-name"),
+            report("Time by Item", "list:time-item"),
             Entry::Sep,
             report("Mileage by Vehicle Summary", "mileage-vehicle"),
             report("Mileage by Vehicle Detail", "mileage-vehicle-detail"),
@@ -223,30 +274,98 @@ const REPORTS: &[Entry] = &[
             report("Mileage by Job Detail", "mileage-job-detail"),
         ],
     ),
-    Entry::Sub("Vendors & Payables", &[report("A/P Aging Summary", "ap"), Entry::Sep, report("Accounts Payable Graph", "graph-ap"), Entry::Sep, report("Sales Tax Liability", "sales-tax"), Entry::Sep, report("1099 Summary", "1099")]),
-    Entry::Sub("Purchases", &[report("Open Purchase Orders", "open-pos")]),
+    Entry::Sub(
+        "Vendors & Payables",
+        &[
+            report("A/P Aging Summary", "ap"),
+            report("A/P Aging Detail", "preset:ap-aging-detail"),
+            Entry::Sep,
+            report("Vendor Balance Summary", "preset:vendor-balance-summary"),
+            report("Vendor Balance Detail", "preset:vendor-balance-detail"),
+            report("Unpaid Bills Detail", "preset:unpaid-bills"),
+            report("Unpaid Bills by Job", "list:unpaid-bills-job"),
+            Entry::Sep,
+            report("Accounts Payable Graph", "graph-ap"),
+            Entry::Sep,
+            report("Sales Tax Liability", "sales-tax"),
+            Entry::Sep,
+            report("1099 Summary", "1099"),
+            report("1099 Detail", "preset:1099-detail"),
+            Entry::Sep,
+            report("Transaction List by Vendor", "preset:transaction-list-vendor"),
+            report("Vendor Phone List", "list:vendor-phone"),
+            report("Vendor Contact List", "list:vendor-contact"),
+        ],
+    ),
+    Entry::Sub(
+        "Purchases",
+        &[
+            report("Purchases by Vendor Summary", "preset:purchases-vendor-summary"),
+            report("Purchases by Vendor Detail", "preset:purchases-vendor-detail"),
+            Entry::Sep,
+            report("Purchases by Item Summary", "preset:purchases-item-summary"),
+            report("Purchases by Item Detail", "preset:purchases-item-detail"),
+            Entry::Sep,
+            report("Open Purchase Orders", "open-pos"),
+            report("Open Purchase Orders Detail", "list:open-po-detail"),
+        ],
+    ),
     Entry::Sub(
         "Inventory",
-        &[report("Inventory Valuation Summary", "inv-val"), report("Inventory Valuation Detail", "inv-detail"), report("Inventory Stock Status by Item", "stock-status")],
+        &[
+            report("Inventory Valuation Summary", "inv-val"),
+            report("Inventory Valuation Detail", "inv-detail"),
+            report("Inventory Stock Status by Item", "stock-status"),
+            Entry::Sep,
+            report("Physical Inventory Worksheet", "list:physical-inventory"),
+        ],
     ),
     Entry::Sub(
         "Banking",
-        &[report("Missing Checks", "missing-checks"), Entry::Sep, report("Previous Reconciliation", "prev-rec"), report("Reconciliation Discrepancy", "rec-discrepancy")],
+        &[
+            report("Deposit Detail", "preset:deposit-detail"),
+            report("Check Detail", "preset:check-detail"),
+            report("Missing Checks", "missing-checks"),
+            Entry::Sep,
+            report("Previous Reconciliation", "prev-rec"),
+            report("Reconciliation Discrepancy", "rec-discrepancy"),
+        ],
     ),
     Entry::Sub(
         "Accountant & Taxes",
         &[
+            report("Adjusting Journal Entries", "preset:adjusting-journal"),
+            Entry::Sep,
             report("Trial Balance", "tb"),
             report("General Ledger", "gl"),
+            report("Transaction Detail by Account", "preset:transaction-detail-account"),
+            report("Journal", "preset:journal"),
+            Entry::Sep,
+            report("Audit Trail", "list:audit-trail"),
+            report("Voided Transactions", "preset:voided-transactions"),
+            Entry::Sep,
+            report("Transaction List by Date", "preset:transaction-list-date"),
+            report("Account Listing", "list:account-listing"),
             Entry::Sep,
             report("Income Tax Summary", "income-tax-summary"),
             report("Income Tax Detail", "income-tax-detail"),
-            Entry::Sep,
-            page("Audit Trail", "accounting/audit"),
         ],
     ),
     Entry::Sub("Budgets & Forecasts", &[report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
+    Entry::Sub("List", &[
+        report("Account Listing", "list:account-listing"),
+        report("Item Listing", "list:item-listing"),
+        report("Item Price List", "item-price-list"),
+        Entry::Sep,
+        report("Customer Phone List", "list:customer-phone"),
+        report("Customer Contact List", "list:customer-contact"),
+        report("Vendor Phone List", "list:vendor-phone"),
+        report("Vendor Contact List", "list:vendor-contact"),
+    ]),
 ];
+
+/// Added to Help below LocalBooks Help.
+const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates")];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
 const MENUS: &[(&str, &[Entry])] =
@@ -324,6 +443,9 @@ pub fn install(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     if let Some(help) = menu.get(HELP_SUBMENU_ID).and_then(|item| item.as_submenu().cloned()) {
         help.insert(&MenuItem::with_id(app, format!("{CMD_PREFIX}help"), "LocalBooks Help", true, None::<&str>)?, 0)?;
         help.insert(&PredefinedMenuItem::separator(app)?, 1)?;
+        for (at, item) in (1..).zip(build(app, HELP, &mut n)?) {
+            help.insert(&item, at)?;
+        }
     }
     Ok(())
 }
@@ -400,13 +522,21 @@ mod tests {
             }
         }
         let mut items = Vec::new();
-        for entries in [FILE, EDIT, VIEW].into_iter().chain(MENUS.iter().map(|(_, e)| *e)) {
+        for entries in [FILE, EDIT, VIEW, HELP].into_iter().chain(MENUS.iter().map(|(_, e)| *e)) {
             walk(entries, &mut items);
         }
+        let presets: Vec<&str> = crate::custom_reports::presets().iter().map(|p| p.id).collect();
+        let lists: Vec<&str> = crate::list_reports::catalog().iter().map(|r| r.id).collect();
+        let process_multiple = read("Reports.jsx").contains("const PROCESS_MULTIPLE = 'process-multiple';");
         for (view, report) in items {
             assert!(pages.contains(&format!("id: '{view}'")), "no page {view}");
-            if let Some(report) = report {
-                assert!(reports.contains(&format!("['{report}', ")), "no report {report}");
+            match report.map(|r| r.split_once(':').unwrap_or(("", r))) {
+                None => {}
+                Some(("preset", id)) => assert!(presets.contains(&id), "no report preset {id}"),
+                Some(("list", id)) => assert!(lists.contains(&id), "no list report {id}"),
+                Some(("", "process-multiple")) => assert!(process_multiple, "no Process Multiple Reports"),
+                Some(("", id)) => assert!(reports.contains(&format!("['{id}', ")), "no report {id}"),
+                Some((kind, id)) => panic!("unknown report kind {kind}:{id}"),
             }
         }
     }
