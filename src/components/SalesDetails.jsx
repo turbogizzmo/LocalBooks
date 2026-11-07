@@ -154,6 +154,8 @@ export function useSalesDetails(customerName, customers) {
       setRepTouched(false);
       setRepId(null);
       setShipDate('');
+      // A new form takes the company's Ship Via, now or once preferences load.
+      setDefaulted(prefsLoaded);
       setShipMethodId(defaultShipMethodId);
       setMessageId(null);
       setValues({});
