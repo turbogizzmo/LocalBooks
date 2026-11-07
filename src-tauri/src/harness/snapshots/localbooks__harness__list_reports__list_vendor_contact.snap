@@ -1,0 +1,23 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Vendor Contact List, all dates to 2025-12-31
+
+Vendor                         Company                   Address                   Phone                     Email                     Terms                     1099                            Balance
+First Harbor Bank                                                                                                                                                No                                 0.00
+Harbor Power & Light                                                                                                                                             No                                 0.00
+Jordan Reyes                                             18 Gull Point Rd, Portla                                                                                Yes                                0.00
+Lakeside Ceramics                                                                                                                                                No                               108.00
+Lumen Media                                                                                                                                                      No                             1,125.00
+Northwind Software                                                                                                                                               No                               129.00
+Pacific Office Outfitter                                                                                                                                         No                                 0.00
+Pinecrest Office Supply                                                                                                                                          No                               729.90
+Riverbend Properties                                                                                                                                             No                                 0.00
+Riverside Print Shop                                                               555-0190                  orders@riverside.example  Net 30                    Yes                              390.00
+State Department of Reve                                                                                                                                         No                                 0.00
+TOTAL                                                                                                                                                                                           2,481.90
+
+11 lines
+
+11 active vendors; balances as of 2025-12-31.

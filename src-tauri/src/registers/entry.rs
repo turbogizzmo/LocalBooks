@@ -1,0 +1,143 @@
+//! Typing a transaction straight into a bank or credit card register.
+//!
+//! The register's entry row is only another way to fill in a form: a payment from a bank account
+//! is recorded as a check, a deposit as a deposit, a charge on a card as a card expense and a
+//! payment or refund on a card as a card credit. Each goes through the same code as its own form
+//! (`expenses::post_expense`, `banking::post_bank_deposit`), so the ledger rules stay there.
+
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
+
+use crate::banking::{DepositInput, DepositOtherLine};
+use crate::expenses::{ExpenseInput, SplitLineInput};
+use crate::ledger::db_err;
+
+/// Which column of the register the amount was typed in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RegisterSide {
+    /// Bank register: money out (recorded as a check).
+    Payment,
+    /// Bank register: money in (recorded as a deposit).
+    Deposit,
+    /// Credit card register: a purchase (recorded as a card expense).
+    Charge,
+    /// Credit card register: a payment or refund onto the card (recorded as a card credit).
+    Credit,
+}
+
+/// One account the entry is split to; a plain one-account row sends one of these.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterSplit {
+    pub account_id: i64,
+    pub amount_cents: i64,
+    pub memo: Option<String>,
+    #[serde(default)]
+    pub class_id: Option<i64>,
+    /// The customer or job a payment or charge is for (job costing); deposits have no place for it.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterEntryInput {
+    /// The register's account: a Bank or Credit Card account.
+    pub account_id: i64,
+    pub entry_date: NaiveDate,
+    /// Check number (bank payments only; other kinds have nowhere to keep it).
+    pub number: Option<String>,
+    pub payee_name: Option<String>,
+    pub memo: Option<String>,
+    pub side: RegisterSide,
+    pub lines: Vec<RegisterSplit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterEntryPosted {
+    /// `CHECK`, `DEPOSIT`, `EXPENSE` or `CARD_CREDIT`, as journal entries show it.
+    pub source_type: String,
+    /// The check, expense or deposit's id in its own table.
+    pub source_id: i64,
+    pub journal_entry_id: i64,
+}
+
+fn clean(text: Option<&str>) -> Option<&str> {
+    text.map(str::trim).filter(|t| !t.is_empty())
+}
+
+/// Records the register row through the form it stands for.
+pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -> Result<RegisterEntryPosted, String> {
+    let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
+        .bind(input.account_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    let account_type = account_type.ok_or_else(|| format!("REG_NOT_FOUND: account {} does not exist", input.account_id))?;
+    let kind = match (account_type.as_str(), input.side) {
+        ("BANK", RegisterSide::Payment) => "CHECK",
+        ("BANK", RegisterSide::Deposit) => "DEPOSIT",
+        ("CREDIT_CARD", RegisterSide::Charge) => "EXPENSE",
+        ("CREDIT_CARD", RegisterSide::Credit) => "CARD_CREDIT",
+        ("BANK" | "CREDIT_CARD", _) => return Err("REG_ENTRY_BAD_SIDE: that column doesn't belong to this register".into()),
+        _ => return Err("REG_ENTRY_UNSUPPORTED: transactions can be typed into bank and credit card registers; use a form or a journal entry for this account".into()),
+    };
+    if input.lines.is_empty() {
+        return Err("REG_ENTRY_NO_ACCOUNT: choose the account this goes to".into());
+    }
+    if input.lines.iter().any(|l| l.account_id == input.account_id) {
+        return Err("REG_ENTRY_SAME_ACCOUNT: the other account can't be the register's own account".into());
+    }
+    let memo = clean(input.memo.as_deref());
+
+    if kind == "DEPOSIT" {
+        // Deposits have no name of their own: the payee is kept in the memo so it shows in the register.
+        let memo = match (clean(input.payee_name.as_deref()), memo) {
+            (Some(payee), Some(memo)) => Some(format!("{payee} · {memo}")),
+            (Some(payee), None) => Some(payee.to_string()),
+            (None, memo) => memo.map(str::to_string),
+        };
+        let other_lines = input
+            .lines
+            .iter()
+            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id })
+            .collect();
+        let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines };
+        let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
+        let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
+        return Ok(RegisterEntryPosted {
+            source_type: kind.into(),
+            source_id: deposit_id,
+            journal_entry_id: entry.ok_or("REG_ENTRY_NOT_POSTED: the deposit was saved but not posted")?,
+        });
+    }
+
+    let expense = ExpenseInput {
+        payment_method_id: None,
+        kind: kind.into(),
+        payee_name: input.payee_name.clone(),
+        payment_account_id: input.account_id,
+        expense_date: input.entry_date,
+        check_number: if kind == "CHECK" { input.number.clone() } else { None },
+        payment_method: None,
+        memo: memo.map(str::to_string),
+        lines: input
+            .lines
+            .iter()
+            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id })
+            .collect(),
+        currency: None,
+    };
+    let posted = crate::expenses::post_expense(pool, expense).await?;
+    Ok(RegisterEntryPosted {
+        source_type: kind.into(),
+        source_id: posted.id,
+        journal_entry_id: posted.journal_entry_id.ok_or("REG_ENTRY_NOT_POSTED: the expense was saved but not posted")?,
+    })
+}
+
+#[cfg(test)]
+mod tests;

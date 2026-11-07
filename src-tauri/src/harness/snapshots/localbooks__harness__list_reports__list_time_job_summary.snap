@@ -1,0 +1,15 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Time by Job Summary, 2025-11-01 to 2025-11-30
+
+Customer:Job                   Billable Hours         Hours
+Brightwater Cafe                         1.5           1.5
+Brightwater Cafe:Patio M                   0        2.3333
+No customer or job                         0        0.8333
+TOTAL                                    1.5        4.6667
+
+3 lines
+
+3 entries of time from 2025-11-01 to 2025-11-30.

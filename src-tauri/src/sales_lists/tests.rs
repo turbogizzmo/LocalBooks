@@ -157,6 +157,7 @@ async fn sales_by_rep_totals_invoices_and_receipts() {
     crate::sales::post_sales_receipt(
         &pool,
         crate::sales::SalesReceiptInput {
+            payment_method_id: None,
             customer_name: None,
             receipt_date: d(2),
             deposit_account_id: checking,

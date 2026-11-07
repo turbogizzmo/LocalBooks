@@ -11,6 +11,7 @@ import { useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
+import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { todayIso } from '../lib/dates.js';
 import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -120,6 +121,16 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
 
 export default function Products({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listProducts);
+  // A click selects an item; Ctrl+Q opens its QuickReport (every line it is on).
+  const [selected, setSelected] = useState(null);
+  const openReport = useReportOpener();
+  const runQuickReport = (p) => openReport(quickReport({ kind: 'item', id: p.id, name: p.name }));
+  const onKeyDown = (e) => {
+    const p = selected !== null && (data ?? []).find((x) => x.id === selected);
+    if (reportShortcut(e) !== 'quickReport' || !p) return;
+    e.preventDefault();
+    runQuickReport(p);
+  };
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
   const sorter = useSort(data, {
@@ -229,7 +240,7 @@ export default function Products({ accounts, intent }) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
+    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog?.mode === 'track' && (
         <TrackDialog
           product={dialog.product}
@@ -355,7 +366,13 @@ export default function Products({ accounts, intent }) {
                   </tr>
                 )}
                 {sorter.sorted.filter((p) => showInactive || p.isActive).map((p) => (
-                  <tr key={p.id} className={`qb-grid-row ${p.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ mode: 'edit', product: p })}>
+                  <tr
+                    key={p.id}
+                    className={`qb-grid-row ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
+                    aria-selected={p.id === selected}
+                    onClick={() => setSelected(p.id)}
+                    onDoubleClick={() => setDialog({ mode: 'edit', product: p })}
+                  >
                     <td className="qb-grid-cell font-semibold">
                       {p.name}
                       {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
@@ -400,6 +417,7 @@ export default function Products({ accounts, intent }) {
                         label={`Actions for ${p.name}`}
                         items={[
                           { label: 'Edit…', onSelect: () => setDialog({ mode: 'edit', product: p }) },
+                          { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
                         ]}
                       />

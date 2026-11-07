@@ -55,6 +55,7 @@ const NAME: &[&str] = &["name", "payee", "receivedfrom", "namefullname"];
 const MEMO: &[&str] = &["memo", "memodescription", "description", "linememo", "linedescription"];
 const ACCOUNT: &[&str] = &["account", "accountname", "accountfullname", "fullaccountname", "distributionaccount"];
 const SPLIT: &[&str] = &["split", "splitaccount"];
+const CLASS: &[&str] = &["class", "classname", "classfullname"];
 const DEBIT: &[&str] = &["debit", "debits", "debitamount", "dr"];
 const CREDIT: &[&str] = &["credit", "credits", "creditamount", "cr"];
 const AMOUNT: &[&str] = &["amount"];
@@ -420,11 +421,13 @@ struct Entry {
     cents: Option<i64>,
     name: Option<String>,
     memo: Option<String>,
+    /// The line's class, `Parent:Child`.
+    class: Option<String>,
 }
 
 fn entry(account: String, debit: Option<&str>, credit: Option<&str>, name: Option<String>, memo: Option<String>) -> Entry {
     if debit.is_none() && credit.is_none() {
-        return Entry { account, amount: None, cents: Some(0), name, memo };
+        return Entry { account, amount: None, cents: Some(0), name, memo, class: None };
     }
     let read = |v: Option<&str>| v.map(parse_amount_cents).transpose();
     let (amount, cents) = match (read(debit), read(credit)) {
@@ -436,7 +439,7 @@ fn entry(account: String, debit: Option<&str>, credit: Option<&str>, name: Optio
         (Err(_), _) => (debit.unwrap_or_default().to_string(), None),
         (_, Err(_)) => (credit.unwrap_or_default().to_string(), None),
     };
-    Entry { account, amount: Some(amount), cents, name, memo }
+    Entry { account, amount: Some(amount), cents, name, memo, class: None }
 }
 
 /// A transaction as the report has it.
@@ -489,6 +492,7 @@ impl Group {
             amount: l.amount,
             doc_num: self.num.clone(),
             memo: l.memo,
+            class: l.class,
             ..Default::default()
         };
         let mut lines = self.lines.into_iter();
@@ -512,6 +516,7 @@ fn journal(t: &Table) -> Vec<Group> {
     let col = |names| t.col(names);
     let (trans_no, kind, date, num, name, memo, account, debit, credit) =
         (col(TRANS_NO), col(TYPE), col(DATE), col(NUM), col(NAME), col(MEMO), col(ACCOUNT), col(DEBIT), col(CREDIT));
+    let class = col(CLASS);
     let mut groups: Vec<Group> = Vec::new();
     let mut open: Option<Group> = None;
     for (n, row) in t.rows.iter().enumerate() {
@@ -543,7 +548,7 @@ fn journal(t: &Table) -> Vec<Group> {
             open = Some(own.clone_head());
         }
         let g = open.as_mut().expect("opened above");
-        g.lines.push(entry(account_path(account_name), cell(row, debit), cell(row, credit), own.name, text(row, memo)));
+        g.lines.push(Entry { class: text(row, class), ..entry(account_path(account_name), cell(row, debit), cell(row, credit), own.name, text(row, memo)) });
     }
     groups.extend(open);
     groups
@@ -580,6 +585,7 @@ fn by_account(t: &Table) -> Vec<Group> {
     let col = |names| t.col(names);
     let (trans_no, kind, date, num, name, memo, account, split, debit, credit) =
         (col(TRANS_NO), col(TYPE), col(DATE), col(NUM), col(NAME), col(MEMO), col(ACCOUNT), col(SPLIT), col(DEBIT), col(CREDIT));
+    let class = col(CLASS);
     // Open headings: (column, full path).
     let mut headings: Vec<(usize, String)> = Vec::new();
     let mut lines: Vec<AccountLine> = Vec::new();
@@ -626,7 +632,7 @@ fn by_account(t: &Table) -> Vec<Group> {
             lines: Vec::new(),
             row: t.header_row + n + 1,
         };
-        let line = entry(account_name, cell(row, debit), cell(row, credit), head.name.clone(), text(row, memo));
+        let line = Entry { class: text(row, class), ..entry(account_name, cell(row, debit), cell(row, credit), head.name.clone(), text(row, memo)) };
         lines.push(AccountLine { head, split: cell(row, split).map(account_path), line });
     }
 
@@ -787,6 +793,7 @@ pub fn read_files(files: &[(String, Vec<u8>)]) -> Result<ReportRead, String> {
     }
 
     let mut ledger = assemble(accounts, nonposting, names, items, Default::default(), &blocks);
+    ledger.add_classes_used();
     // The resolver numbers transactions by block, from 1.
     let label = |id: i64| usize::try_from(id - 1).ok().and_then(|i| labels.get(i).copied().flatten());
     for t in ledger.transactions.iter_mut().chain(ledger.unbalanced.iter_mut()) {

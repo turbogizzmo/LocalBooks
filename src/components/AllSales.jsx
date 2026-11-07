@@ -15,6 +15,7 @@ import { depositFilter, StatusBadge } from './Invoices.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { usePaymentMethodChoice } from './ProfileFields.jsx';
 import { useOpenFromList } from '../lib/windows.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -30,7 +31,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const defaultDeposit = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useTransactionDate();
-  const [method, setMethod] = useState('CASH');
+  const method = usePaymentMethodChoice('CASH');
   const [reference, setReference] = useState('');
   const [depositId, setDepositId] = useState(defaultDeposit);
   const [memo, setMemo] = useState('');
@@ -72,7 +73,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         customerName: customer.trim() || null,
         receiptDate: date,
         depositAccountId: depositId,
-        paymentMethod: method,
+        ...method.payload(),
         reference: reference || null,
         memo: memo || null,
         lines: postedLines,
@@ -132,7 +133,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         <DiscountField value={discountText} onChange={setDiscountText} invalid={discountCents === null} />
         <div>
           <span className="qb-label">Payment method</span>
-          <PaymentMethodTiles value={method} onChange={setMethod} />
+          <PaymentMethodTiles value={method.id} onChange={method.set} />
         </div>
         <div className="ml-auto text-right">
           <div className="qb-label">Amount received</div>

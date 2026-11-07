@@ -55,7 +55,7 @@ byteorder-lite 0.1.0  [Unlicense OR MIT]  https://github.com/image-rs/byteorder-
 bytes 1.12.1  [MIT]  https://github.com/tokio-rs/bytes
 cairo-rs 0.18.5  [MIT]  https://github.com/gtk-rs/gtk-rs-core
 cairo-sys-rs 0.18.2  [MIT]  https://github.com/gtk-rs/gtk-rs-core
-calamine 0.37.0  [MIT]  https://github.com/tafia/calamine
+calamine 0.38.0  [MIT]  https://github.com/tafia/calamine
 camino 1.2.6  [MIT OR Apache-2.0]  https://github.com/camino-rs/camino
 cargo_metadata 0.19.2  [MIT]  https://github.com/oli-obk/cargo_metadata
 cargo-platform 0.1.9  [MIT OR Apache-2.0]  https://github.com/rust-lang/cargo
@@ -2694,7 +2694,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
------ Used by: calamine 0.37.0 (LICENSE-MIT.md), quick-xml 0.42.0 (LICENSE-MIT.md) -----
+----- Used by: calamine 0.38.0 (LICENSE-MIT.md), quick-xml 0.42.0 (LICENSE-MIT.md) -----
 
 The MIT License (MIT)
 

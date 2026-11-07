@@ -10,7 +10,7 @@ export const FIELD_LISTS = [
 ];
 
 /** Runs a list action and reports how it went. */
-function useRunner() {
+export function useRunner() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const run = async (action, success) => {
@@ -29,7 +29,7 @@ function useRunner() {
   return { busy, notice, setNotice, run };
 }
 
-function Panel({ title, hint, notice, onDismiss, error, children, toolbar }) {
+export function Panel({ title, hint, notice, onDismiss, error, children, toolbar }) {
   return (
     <section className="qb-panel flex min-h-0 flex-col">
       <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
@@ -44,7 +44,7 @@ function Panel({ title, hint, notice, onDismiss, error, children, toolbar }) {
   );
 }
 
-function InactiveToggle({ value, onChange, count }) {
+export function InactiveToggle({ value, onChange, count }) {
   return (
     <label className="flex items-center gap-1 text-xs">
       <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />

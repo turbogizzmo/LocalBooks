@@ -196,6 +196,70 @@ pub(crate) async fn check_usable(tx: &mut Transaction<'_, Sqlite>, class_id: i64
 }
 
 // ------------------------------------------------------------------------------------------------
+// Classes brought in by an import
+// ------------------------------------------------------------------------------------------------
+
+/// What [`find_or_create_path`] found or made for one `Parent:Child` path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PathClass {
+    pub id: i64,
+    /// The last level did not exist and was created (active).
+    pub created: bool,
+    /// The last level existed but was inactive; it was made active so lines can use it.
+    pub was_inactive: bool,
+}
+
+/// Finds the class for a `Parent:Child` path, level by level, matching names without regard to
+/// case, and creates any level that is missing. An inactive level on the way is made active so
+/// lines can be posted to it; the caller decides what to put back (see `qbw_ledger_import`).
+pub(crate) async fn find_or_create_path(tx: &mut Transaction<'_, Sqlite>, path: &str) -> Result<PathClass, String> {
+    let mut parent: Option<i64> = None;
+    let mut found = None;
+    for level in path.split(':').map(str::trim).filter(|l| !l.is_empty()) {
+        let existing: Option<(i64, bool)> =
+            sqlx::query_as("SELECT id, is_active FROM classes WHERE COALESCE(parent_id, 0) = COALESCE(?1, 0) AND name = ?2 COLLATE NOCASE")
+                .bind(parent)
+                .bind(level)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
+        let class = match existing {
+            Some((id, true)) => PathClass { id, created: false, was_inactive: false },
+            Some((id, false)) => {
+                sqlx::query("UPDATE classes SET is_active = 1 WHERE id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
+                PathClass { id, created: false, was_inactive: true }
+            }
+            None => {
+                let id: i64 = sqlx::query_scalar("INSERT INTO classes (name, parent_id) VALUES (?1, ?2) RETURNING id")
+                    .bind(level)
+                    .bind(parent)
+                    .fetch_one(&mut **tx)
+                    .await
+                    .map_err(|e| name_err(e, level))?;
+                PathClass { id, created: true, was_inactive: false }
+            }
+        };
+        parent = Some(class.id);
+        found = Some(class);
+    }
+    found.ok_or_else(|| "CLASS_NAME_REQUIRED: a class name is empty".to_string())
+}
+
+/// Makes classes inactive together with their subclasses, inside the caller's transaction.
+pub(crate) async fn deactivate_with_subclasses(tx: &mut Transaction<'_, Sqlite>, ids: &[i64]) -> Result<u64, String> {
+    let mut done = 0;
+    for id in ids {
+        done += sqlx::query("UPDATE classes SET is_active = 0 WHERE is_active = 1 AND id IN (SELECT class_id FROM v_class_ancestry WHERE ancestor_id = ?1)")
+            .bind(id)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?
+            .rows_affected();
+    }
+    Ok(done)
+}
+
+// ------------------------------------------------------------------------------------------------
 // Reclassifying posted lines
 // ------------------------------------------------------------------------------------------------
 

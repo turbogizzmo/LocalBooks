@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
@@ -138,6 +139,16 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
   const [showInactive, setShowInactive] = useState(false);
   const [dialog, setDialog] = useState(null); // { account } (null account = new)
   const [notice, setNotice] = useState(null);
+  // A click selects an account; Ctrl+Q opens its QuickReport.
+  const [selected, setSelected] = useState(null);
+  const openReport = useReportOpener();
+  const runQuickReport = (a) => openReport(quickReport({ kind: 'account', id: a.id, name: a.fullName }));
+  const onKeyDown = (e) => {
+    const a = selected !== null && accounts.find((x) => x.id === selected);
+    if (reportShortcut(e) !== 'quickReport' || !a) return;
+    e.preventDefault();
+    runQuickReport(a);
+  };
 
   // + New › Account opens the new-account form.
   useEffect(() => {
@@ -190,7 +201,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
+    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog && (
         <AccountDialog
           account={dialog.account}
@@ -251,7 +262,13 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                     <td className="qb-grid-cell" />
                   </tr>,
                   ...rows.map((a) => (
-                    <tr key={a.id} className={`qb-grid-row ${a.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => navigate('accounting/register', 'open', { accountId: a.id })}>
+                    <tr
+                      key={a.id}
+                      className={`qb-grid-row ${a.id === selected ? 'is-active' : ''} ${a.isActive ? '' : 'text-qb-ink-faint'}`}
+                      aria-selected={a.id === selected}
+                      onClick={() => setSelected(a.id)}
+                      onDoubleClick={() => navigate('accounting/register', 'open', { accountId: a.id })}
+                    >
                       <td className="qb-grid-cell text-qb-ink-muted">{a.accountNumber ?? ''}</td>
                       <td className="qb-grid-cell" title={a.fullName}>
                         <span style={{ paddingLeft: `${(query ? 0 : a.depth) * 16}px` }}>{query ? a.fullName : a.name}</span>
@@ -267,6 +284,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                           label={`Actions for ${a.fullName}`}
                           items={[
                             { label: 'Open register', onSelect: () => navigate('accounting/register', 'open', { accountId: a.id }) },
+                            { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(a) },
                             { label: 'Edit…', onSelect: () => setDialog({ account: a }) },
                             a.isActive
                               ? { label: 'Make inactive', disabled: a.isSystem, hint: a.isSystem ? 'LocalBooks posts to this account automatically' : undefined, onSelect: () => setActive(a, false) }
