@@ -597,7 +597,18 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let live = m.live[&old].clone();
             let day = shifted(live.day, *shift);
             // The original is voided first (its own rules apply), then the edit posts on its new date.
-            let expected = m.void_blocker(old).or(closed_code(m.closed(day)));
+            // An invoice's or bill's payments stay applied to the edit, which must still cover them.
+            let paid = match live.kind {
+                Kind::Invoice(id) => Some(m.invoices[&id].paid),
+                Kind::Bill(id) => Some(m.bills[&id].paid),
+                _ => None,
+            };
+            let expected = match paid {
+                Some(paid) => closed_code(m.closed(live.day))
+                    .or(closed_code(m.closed(day)))
+                    .or((*cents < paid).then_some("EDIT_BELOW_PAID")),
+                None => m.void_blocker(old).or(closed_code(m.closed(day))),
+            };
             match live.kind {
                 Kind::Journal => {
                     let (debit, credit) = (live.deltas[0].0, live.deltas[1].0);
@@ -706,6 +717,7 @@ async fn post_invoice(
         None => crate::invoices::create_and_post_invoice(pool, input).await.map(|s| s.id),
     };
     let Some(invoice_id) = outcome(m, day, replacing, result)? else { return Ok(()) };
+    let replaced = replacing.map(|(old, _)| live_doc(m, old));
     if let Some((old, _)) = replacing {
         m.void(old);
     }
@@ -718,6 +730,16 @@ async fn post_invoice(
         invoice_id,
         InvoiceM { day, customer: customer.into(), income, fx_rate, total, home_total, paid: 0, relieved: 0, voided: false },
     );
+    // The original's payments now pay the edited invoice.
+    if let Some(old_id) = replaced {
+        let old = m.invoices.get_mut(&old_id).unwrap();
+        let (paid, relieved) = (std::mem::take(&mut old.paid), std::mem::take(&mut old.relieved));
+        let new = m.invoices.get_mut(&invoice_id).unwrap();
+        (new.paid, new.relieved) = (paid, relieved);
+        for payment in m.payments.values_mut().filter(|p| p.invoice == old_id && !p.voided) {
+            payment.invoice = invoice_id;
+        }
+    }
     Ok(())
 }
 
@@ -769,6 +791,7 @@ async fn post_bill(
         None => crate::expenses::post_vendor_bill(pool, input).await.map(|b| b.id),
     };
     let Some(bill_id) = outcome(m, day, replacing, result)? else { return Ok(()) };
+    let replaced = replacing.map(|(old, _)| live_doc(m, old));
     if let Some((old, _)) = replacing {
         m.void(old);
     }
@@ -777,6 +800,14 @@ async fn post_bill(
     deltas.push((a.ap, -total));
     m.post(entry, day, Kind::Bill(bill_id), deltas);
     m.bills.insert(bill_id, BillM { day, vendor: vendor.into(), total, paid: 0, voided: false });
+    // The original's payments now pay the edited bill.
+    if let Some(old_id) = replaced {
+        let paid = std::mem::take(&mut m.bills.get_mut(&old_id).unwrap().paid);
+        m.bills.get_mut(&bill_id).unwrap().paid = paid;
+        for (bill, _) in m.bill_payments.values_mut().filter(|(bill, _)| *bill == old_id) {
+            *bill = bill_id;
+        }
+    }
     Ok(())
 }
 
