@@ -26,7 +26,7 @@ pub async fn create_invoice(
     confirmed: Option<Vec<String>>,
 ) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
-    guards::check(&pool, guards::dated(input.issue_date), confirmed.as_deref()).await?;
+    guards::check(&pool, guards::sale(input.issue_date, &input.customer_name), confirmed.as_deref()).await?;
     // The invoice can wait in the print queue (File › Print Forms › Invoices).
     let invoice = match to_be_printed {
         Some(true) => crate::print_queue::create_invoice(&pool, input, true).await?,

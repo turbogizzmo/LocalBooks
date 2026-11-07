@@ -82,8 +82,11 @@ function toLine(item, form, defaultAccountId) {
   );
 }
 
-/** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
-export function evaluateLine(line) {
+/**
+ * Derives per-line state; blank lines are ignored, partially filled ones are invalid. With
+ * `allowZeroRate` (estimates), a rate of 0.00 is a line priced at nothing.
+ */
+export function evaluateLine(line, { allowZeroRate = false } = {}) {
   if (line.kind === 'SUBTOTAL' || line.kind === 'GROUP') return { blank: false, form: true, amount: null, errors: {} };
   if (line.kind === 'CHARGE') {
     const percentPpm = parsePercentPpm(line.rate);
@@ -102,13 +105,14 @@ export function evaluateLine(line) {
   // Quantities may be fractional (up to 4 decimals) and are carried as integers scaled by 10,000.
   const qty = parseQuantityE4(line.qty);
   const rate = parseMoneyToCents(line.rate);
-  const amount = qty !== null && rate !== null && rate > 0 ? quantityAmount(qty, rate) : null;
+  const priced = rate !== null && (rate > 0 || (allowZeroRate && rate === 0));
+  const amount = qty !== null && priced ? (rate === 0 ? 0 : quantityAmount(qty, rate)) : null;
   return {
     blank: false,
     qty,
     rate,
     amount,
-    errors: { account: line.accountId === null, qty: qty === null, rate: rate === null || rate <= 0 },
+    errors: { account: line.accountId === null, qty: qty === null, rate: !priced },
   };
 }
 
@@ -126,8 +130,8 @@ function groupItems(lines, evaluated, index) {
  * subtotals placed among them, and `amountOf[i]` each grid line's amount (a subtotal's sum too).
  * `total` is the lines' total, net of line discounts: what the document discount comes off.
  */
-export function summarizeLines(lines) {
-  const evaluated = lines.map(evaluateLine);
+export function summarizeLines(lines, options) {
+  const evaluated = lines.map((line) => evaluateLine(line, options));
   const filled = evaluated.filter((s) => !s.blank && !s.form);
   const invalidCount =
     filled.filter((s) => s.amount === null || Object.values(s.errors).some(Boolean)).length +
@@ -218,9 +222,9 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false }) {
   const money = (cents) => formatMoney(cents, currency);
-  const { amountOf } = summarizeLines(lines);
+  const { amountOf } = summarizeLines(lines, { allowZeroRate });
   const groups = useLedgerQuery(api.listItemGroups).data ?? [];
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
@@ -410,7 +414,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       </thead>
       <tbody>
         {lines.map((line, i) => {
-          const state = evaluateLine(line);
+          const state = evaluateLine(line, { allowZeroRate });
           const isActive = active === i;
           const bad = (field) => !state.blank && state.errors[field];
           const cellProps = (col) => ({

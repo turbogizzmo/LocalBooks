@@ -14,6 +14,7 @@ import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js'
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { todayIso } from '../lib/dates.js';
 import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
@@ -157,11 +158,17 @@ export default function Products({ accounts, intent }) {
   const [changingPrices, setChangingPrices] = useState(false);
   const [pricingLevels, setPricingLevels] = useState(false);
   const [grouping, setGrouping] = useState(false);
+  const { priceLevels: levelsOn, loaded } = useSalesPrefs();
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
     if (intent?.action === 'price-levels') setPricingLevels(true);
   }, [intent]);
+  useEffect(() => {
+    if (!loaded || levelsOn || !pricingLevels) return;
+    setPricingLevels(false);
+    setNotice({ kind: 'info', text: 'Price levels are turned off. Turn them on in Preferences › Sales & Customers.' });
+  }, [loaded, levelsOn, pricingLevels]);
   const setActive = async (p, active) => {
     try {
       await api.setProductActive(p.id, active);
@@ -280,12 +287,15 @@ export default function Products({ accounts, intent }) {
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
-          <button type="button" className="qb-btn qb-btn-secondary ml-auto mr-2 h-row flex-none" onClick={() => setGrouping(true)}>
+          <span className="ml-auto" />
+          <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setGrouping(true)}>
             Groups…
           </button>
-          <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setPricingLevels(true)}>
-            Price levels…
-          </button>
+          {levelsOn && (
+            <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setPricingLevels(true)}>
+              Price levels…
+            </button>
+          )}
           <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setChangingPrices(true)}>
             Change prices…
           </button>

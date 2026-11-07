@@ -97,6 +97,7 @@ features![
     revaluation,
     sales,
     sales_lists,
+    sales_prefs,
     sales_tax,
     search,
     statements,

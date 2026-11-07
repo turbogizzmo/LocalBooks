@@ -526,6 +526,33 @@ pub fn charge_input(line_number: i64, description: &str, percent_ppm: i64, accou
     }
 }
 
+/// Which item lines stay when zero-amount lines are left off (`drop_zero`), as
+/// `sales_prefs::without_zero_lines` decides it: all of them when every line is zero.
+pub fn kept_lines(amounts: &[i64], drop_zero: bool) -> Vec<bool> {
+    let staying = crate::sales_prefs::without_zero_lines((0..amounts.len()).collect(), drop_zero, |i: &usize| amounts[*i]);
+    (0..amounts.len()).map(|i| staying.contains(&i)).collect()
+}
+
+/// The form lines once some item lines are left out (`kept[i]` false): each stays after the same
+/// item lines it followed, and a group counts only its items that stay (a group left with none
+/// goes too).
+pub fn without_items(form: Vec<FormLineInput>, kept: &[bool]) -> Vec<FormLineInput> {
+    let staying = |from: usize, to: usize| kept[from.min(kept.len())..to.min(kept.len())].iter().filter(|k| **k).count();
+    form.into_iter()
+        .filter_map(|mut f| {
+            let start = f.after_lines;
+            f.after_lines = staying(0, start);
+            if f.kind == FormLineKind::Group {
+                f.group_line_count = staying(start, start + f.group_line_count);
+                if f.group_line_count == 0 {
+                    return None;
+                }
+            }
+            Some(f)
+        })
+        .collect()
+}
+
 /// Stored form lines back as inputs, placed among item lines numbered `item_numbers`.
 pub fn inputs_of(views: &[FormLineView], item_numbers: &[i64]) -> Vec<FormLineInput> {
     views
