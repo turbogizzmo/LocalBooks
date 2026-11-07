@@ -35,6 +35,18 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Fix a mistake on a bill
+
+Double-click the bill in the list (or choose **Edit…** in its **Actions** menu), make your changes
+and click **Save changes**. LocalBooks voids the original and posts the corrected bill in its place;
+both stay in the journal and the audit trail.
+
+A bill you've already paid part of, or applied a vendor credit to, opens the same way. The form says
+how much is applied, and saving asks once more: the payments and vendor credits stay applied to the
+corrected bill, and the checks or ACH payments themselves don't change. The edit is refused if the
+new total is less than what's applied (void a payment or remove a credit first) or if the vendor
+changes. A voided bill, or one in a closed period, can't be edited.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is
