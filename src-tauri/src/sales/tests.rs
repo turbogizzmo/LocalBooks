@@ -123,7 +123,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     create_customer(&pool, "Acme Corp", None).await.expect_err("duplicate (case-insensitive) customer");
     record_payment(
         &pool,
-        PaymentInput { payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();
