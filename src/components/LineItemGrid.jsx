@@ -562,6 +562,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         <input
                           data-col="rate"
                           inputMode="decimal"
+                          data-money={line.kind === 'CHARGE' ? undefined : ''}
                           className="num"
                           value={line.rate}
                           onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}

@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { todayIso } from './dates.js';
-import { setImpliedDecimal } from './money.js';
+import { impliedDecimalText, setImpliedDecimal } from './money.js';
 
 const STORAGE_KEY = 'localbooks.myPreferences';
 const CHANGED = 'localbooks-my-preferences-changed';
@@ -72,6 +72,24 @@ function read() {
 
 let current = typeof window === 'undefined' ? { ...MY_PREFERENCE_DEFAULTS } : read();
 setImpliedDecimal(current.autoDecimalPoint);
+
+// With the decimal point placed automatically, a money box (marked `data-money`) shows "12.34"
+// once you leave it after typing "1234", instead of keeping digits that look like dollars. The
+// new text goes through the box's own onChange, so the form's state matches what's shown.
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'focusout',
+    (e) => {
+      const box = e.target;
+      if (!(box instanceof HTMLInputElement) || !box.hasAttribute('data-money')) return;
+      const text = impliedDecimalText(box.value);
+      if (text === null || text === box.value) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, text);
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+    true,
+  );
+}
 
 /** The General preferences as they stand now (for code outside React). */
 export function myPreferences() {

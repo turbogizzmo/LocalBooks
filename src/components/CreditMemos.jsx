@@ -246,7 +246,7 @@ function ApplyDialog({ memo, onClose, onDone }) {
                 <td className="qb-grid-cell">{formatDate(inv.dueDate)}</td>
                 <td className="qb-grid-cell num">{formatCents(inv.balanceCents)}</td>
                 <td className="qb-grid-cell-edit w-[120px]">
-                  <input className="num" value={amounts[inv.id] ?? ''} onChange={(e) => setAmounts((a) => ({ ...a, [inv.id]: e.target.value }))} inputMode="decimal" aria-label={`Apply to invoice ${inv.invoiceNumber}`} />
+                  <input className="num" value={amounts[inv.id] ?? ''} onChange={(e) => setAmounts((a) => ({ ...a, [inv.id]: e.target.value }))} inputMode="decimal" data-money aria-label={`Apply to invoice ${inv.invoiceNumber}`} />
                 </td>
               </tr>
             ))}
@@ -317,7 +317,7 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Amount</span>
-            <input className="qb-input num" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
+            <input className="qb-input num" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" data-money />
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Reference (check no.)</span>

@@ -260,7 +260,7 @@ function TransferForm({ accounts, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Amount</span>
-          <input className="qb-input num w-[120px]" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" aria-invalid={amount !== '' && (cents === null || cents <= 0)} />
+          <input className="qb-input num w-[120px]" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" data-money aria-invalid={amount !== '' && (cents === null || cents <= 0)} />
         </label>
         <label>
           <span className="qb-label">Date</span>
@@ -352,7 +352,7 @@ function CardPaydownForm({ accounts, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Amount</span>
-          <input className="qb-input num w-[120px]" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" aria-invalid={amount !== '' && (cents === null || cents <= 0)} />
+          <input className="qb-input num w-[120px]" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" data-money aria-invalid={amount !== '' && (cents === null || cents <= 0)} />
         </label>
         <label>
           <span className="qb-label">Date</span>

@@ -102,7 +102,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
         <div className="flex flex-wrap items-end gap-2">
           <label>
             <span className="qb-label">Bank fee</span>
-            <input className="qb-input num w-[100px]" value={bankFee} onChange={(e) => setBankFee(e.target.value)} placeholder="0.00" inputMode="decimal" />
+            <input className="qb-input num w-[100px]" value={bankFee} onChange={(e) => setBankFee(e.target.value)} placeholder="0.00" inputMode="decimal" data-money />
           </label>
           <label>
             <span className="qb-label">Bank fee account</span>
@@ -112,7 +112,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
             <>
               <label>
                 <span className="qb-label">Customer fee</span>
-                <input className="qb-input num w-[100px]" value={customerFee} onChange={(e) => setCustomerFee(e.target.value)} placeholder="0.00" inputMode="decimal" />
+                <input className="qb-input num w-[100px]" value={customerFee} onChange={(e) => setCustomerFee(e.target.value)} placeholder="0.00" inputMode="decimal" data-money />
               </label>
               <label>
                 <span className="qb-label">Customer fee income account</span>

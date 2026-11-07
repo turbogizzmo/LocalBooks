@@ -52,7 +52,7 @@ export default function NewItemDialog({ accounts, defaultAccountId = null, onClo
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Rate</span>
-            <input className="qb-input num" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" aria-invalid={rateCents === null} placeholder="0.00" />
+            <input className="qb-input num" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" data-money aria-invalid={rateCents === null} placeholder="0.00" />
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Description on sales forms</span>

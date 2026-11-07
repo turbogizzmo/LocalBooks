@@ -200,7 +200,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
               )}
               {withPricing && (
                 <td className="qb-grid-cell-edit">
-                  <input className="num" value={row.rate ?? ''} onChange={(e) => update(row.key, { rate: e.target.value })} inputMode="decimal" aria-invalid={evaluated.priced && (evaluated.rateCents === null || evaluated.rateCents <= 0)} aria-label={`Rate ${i + 1}`} />
+                  <input className="num" value={row.rate ?? ''} onChange={(e) => update(row.key, { rate: e.target.value })} inputMode="decimal" data-money aria-invalid={evaluated.priced && (evaluated.rateCents === null || evaluated.rateCents <= 0)} aria-label={`Rate ${i + 1}`} />
                 </td>
               )}
               {evaluated.priced ? (
@@ -209,7 +209,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
                 </td>
               ) : (
                 <td className="qb-grid-cell-edit">
-                  <input className="num" value={row.amount} onChange={(e) => update(row.key, { amount: e.target.value })} placeholder="0.00" inputMode="decimal" aria-invalid={amountBad} aria-label={`Amount ${i + 1}`} />
+                  <input className="num" value={row.amount} onChange={(e) => update(row.key, { amount: e.target.value })} placeholder="0.00" inputMode="decimal" data-money aria-invalid={amountBad} aria-label={`Amount ${i + 1}`} />
                 </td>
               )}
               <td className="qb-grid-cell cell-flush text-center">

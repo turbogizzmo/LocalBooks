@@ -145,7 +145,7 @@ export default function FinanceCharges({ accounts, navigate }) {
                         <input
                           className="qb-input num w-full text-right"
                           value={r.amount}
-                          inputMode="decimal"
+                          inputMode="decimal" data-money
                           aria-label={`Finance charge for ${c.customerName}`}
                           aria-invalid={bad}
                           onChange={(e) => update(c.customerName, { amount: e.target.value })}
