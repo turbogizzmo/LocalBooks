@@ -33,6 +33,10 @@ export const screens = {
     help: 'Charge interest on overdue invoices. Pick the assessment date, check or change each customer’s charge, and assess: each becomes an invoice that shows in A/R aging and on statements. Set the rate, minimum, grace days and account in Settings.',
     guide: 'customer-payments',
   },
+  'sales/bill-costs': {
+    help: 'Invoice billable expenses: costs on checks, expenses and bills given a Customer:Job with Bill? ticked. Pick the customer, tick the costs, check the markup, and create the invoice. Voiding it puts the costs back here.',
+    guide: 'getting-started',
+  },
   'sales/statements': {
     help: 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or open one to save it as PDF or email it.',
   },
@@ -169,6 +173,14 @@ export const topics = [
     guide: 'customer-payments',
   },
   {
+    id: 'bill-costs', area: 'sales', views: ['sales/bill-costs', 'expenses/expenses', 'expenses/bills'],
+    title: 'Bill expenses to a customer',
+    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you.',
+    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses',
+    go: { label: 'Go to Bill Costs', view: 'sales/bill-costs' },
+    guide: 'getting-started',
+  },
+  {
     id: 'change-prices', area: 'sales', views: ['sales/products'],
     title: 'Change many prices at once',
     body: 'On Sales › Products & Services, click Change prices… and tick the items. Raise or lower them by a percentage or a fixed amount, based on the current price or the unit cost, and round the result; check the new prices, then apply. Documents already written keep their prices, and each change is recorded in the audit trail.',
@@ -268,7 +280,7 @@ export const topics = [
   {
     id: '1099', area: 'expenses', views: ['expenses/vendors', 'reports'],
     title: 'Prepare 1099s',
-    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer and flags those over $600.',
+    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties).',
     keywords: '1099 1099-nec contractor tax id ein ssn year end vendor',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
   },

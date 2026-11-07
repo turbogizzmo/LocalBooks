@@ -6,8 +6,9 @@
 //!
 //! An invoice is overdue on the assessment date ("as of") when its due date is more than the grace
 //! days before it and it still has a balance as of that date (its total less the payments and
-//! credits dated on or before it). Interest runs from the due date, or from the end of the period the
-//! last finance charge on that invoice covered, to the as-of date. Home-currency invoices only.
+//! credits dated on or before it). Interest runs from the due date (or from the invoice date, when
+//! Preferences › Finance Charge says so), or from the end of the period the last finance charge on
+//! that invoice covered, to the as-of date. Home-currency invoices only.
 //!
 //! Rounding, all in integer arithmetic: for each customer,
 //!
@@ -88,6 +89,9 @@ pub struct Settings {
     pub grace_days: i64,
     pub income_account_id: Option<i64>,
     pub charge_finance_charges: bool,
+    /// Interest starts at the invoice date instead of the due date (Preferences › Finance Charge).
+    #[serde(default)]
+    pub from_invoice_date: bool,
 }
 
 pub async fn settings(pool: &SqlitePool) -> Result<Settings, String> {
@@ -99,6 +103,7 @@ pub async fn settings(pool: &SqlitePool) -> Result<Settings, String> {
         grace_days: get(pool, "finance_charge_grace_days").await?.parse().map_err(|_| "PREF_BAD_FC_GRACE: grace days are not a number")?,
         income_account_id: account.parse().ok(),
         charge_finance_charges: get(pool, "finance_charge_on_finance_charges").await? == "true",
+        from_invoice_date: get(pool, crate::preferences::tax_time::FINANCE_CHARGE_FROM).await? == "invoice_date",
     })
 }
 
@@ -109,9 +114,11 @@ pub struct OverdueInvoice {
     pub invoice_id: i64,
     pub invoice_number: i64,
     pub due_date: NaiveDate,
+    pub issue_date: NaiveDate,
     /// Open balance as of the assessment date.
     pub balance_cents: i64,
-    /// Interest runs from this date (the due date, or the end of the last charge on this invoice).
+    /// Interest runs from this date: the due date (or the invoice date, by preference), or the end
+    /// of the last charge on this invoice.
     pub from_date: NaiveDate,
     pub days: i64,
     pub is_finance_charge: bool,
@@ -154,14 +161,22 @@ pub fn charge_cents(invoices: &[OverdueInvoice], settings: &Settings) -> Result<
     Ok((interest, interest.max(settings.minimum_cents)))
 }
 
-type OpenRow = (i64, i64, Option<i64>, String, NaiveDate, i64, bool, Option<NaiveDate>);
+type OpenRow = (i64, i64, Option<i64>, String, NaiveDate, NaiveDate, i64, bool, Option<NaiveDate>);
+
+/// Where interest on an overdue invoice starts: its due date or, by preference, its invoice date;
+/// and never before the end of the period an earlier finance charge on it covered. Whether the
+/// invoice is overdue at all still goes by its due date and the grace days.
+pub fn interest_from(issue_date: NaiveDate, due_date: NaiveDate, charged_to: Option<NaiveDate>, from_invoice_date: bool) -> NaiveDate {
+    let start = if from_invoice_date { issue_date.min(due_date) } else { due_date };
+    charged_to.map_or(start, |c| c.max(start))
+}
 
 /// Customers with overdue invoices as of `as_of`, and the charge for each.
 async fn compute(conn: &mut sqlx::SqliteConnection, as_of: NaiveDate, settings: &Settings) -> Result<Vec<CustomerCharge>, String> {
     // Home-currency invoices issued by the as-of date, with their balance as of that date and the end
     // of the last period a live finance charge covered.
     let rows: Vec<OpenRow> = sqlx::query_as(
-        "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), i.due_date,
+        "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), i.issue_date, i.due_date,
                 i.total_cents
                   - COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p
                               WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)
@@ -183,16 +198,16 @@ async fn compute(conn: &mut sqlx::SqliteConnection, as_of: NaiveDate, settings: 
     .map_err(db_err)?;
 
     let mut customers: Vec<CustomerCharge> = Vec::new();
-    for (invoice_id, invoice_number, customer_id, customer_name, due_date, balance, is_fc, charged_to) in rows {
+    for (invoice_id, invoice_number, customer_id, customer_name, issue_date, due_date, balance, is_fc, charged_to) in rows {
         if balance <= 0 || (is_fc && !settings.charge_finance_charges) {
             continue;
         }
-        let from_date = charged_to.map_or(due_date, |c| c.max(due_date));
+        let from_date = interest_from(issue_date, due_date, charged_to, settings.from_invoice_date);
         let days = (as_of - from_date).num_days();
         if days <= 0 {
             continue;
         }
-        let invoice = OverdueInvoice { invoice_id, invoice_number, due_date, balance_cents: balance, from_date, days, is_finance_charge: is_fc };
+        let invoice = OverdueInvoice { invoice_id, invoice_number, due_date, issue_date, balance_cents: balance, from_date, days, is_finance_charge: is_fc };
         match customers.last_mut().filter(|c| c.customer_name == customer_name) {
             Some(c) => {
                 c.overdue_balance_cents += balance;

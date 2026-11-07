@@ -782,6 +782,7 @@ async fn post_bill(
                 product_service_id: None,
                 class_id: None,
                 customer_id: None,
+                billable: None,
             })
             .collect(),
     };
@@ -831,7 +832,7 @@ async fn post_expense(
         memo: None,
         lines: lines
             .iter()
-            .map(|(account_id, amount_cents)| SplitLineInput { account_id: *account_id, amount_cents: *amount_cents, memo: None, class_id: None, customer_id: None })
+            .map(|(account_id, amount_cents)| SplitLineInput { account_id: *account_id, amount_cents: *amount_cents, memo: None, class_id: None, customer_id: None, billable: None })
             .collect(),
         currency: None,
     };

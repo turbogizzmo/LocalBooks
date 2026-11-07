@@ -634,7 +634,26 @@ pub async fn tax_dates(pool: &SqlitePool, as_of: NaiveDate, days: i64) -> Result
     let form = crate::preferences::get(pool, "tax_form").await.unwrap_or_else(|_| "SCHEDULE_C".into());
     let start_month = crate::preferences::fiscal_start_month(pool).await?;
     let until = as_of + Duration::days(days);
-    Ok(crate::preferences::tax_calendar(&form, start_month, as_of)
+    let mut calendar = crate::preferences::tax_calendar(&form, start_month, as_of);
+    // Tax: 1099 › "Do you file 1099s?" off leaves out the 1099 deadline.
+    if !crate::preferences::flag(pool, crate::preferences::tax_time::TAX_1099).await? {
+        calendar.retain(|d| !d.form.contains("1099"));
+    }
+    // The sales tax return for the last period that ended, at the filing frequency in Preferences.
+    if crate::preferences::flag(pool, "sales_tax_enabled").await.unwrap_or(false) {
+        let periods = crate::sales_tax::company_filing_periods(pool, as_of).await?;
+        for (range, due) in [(periods.last, periods.last_due), (periods.current, crate::sales_tax::filing_periods(periods.current.end + Duration::days(1), periods.frequency, periods.basis).last_due)] {
+            calendar.push(crate::preferences::TaxDeadline {
+                due_date: due,
+                statutory_date: due,
+                label: format!("Sales tax return for {} – {}", range.start.format("%m/%d/%Y"), range.end.format("%m/%d/%Y")),
+                form: "Sales tax return".into(),
+                is_past: due < as_of,
+            });
+        }
+        calendar.sort_by_key(|d| d.due_date);
+    }
+    Ok(calendar
         .into_iter()
         .filter(|d| d.due_date >= as_of && d.due_date <= until)
         .map(|d| {

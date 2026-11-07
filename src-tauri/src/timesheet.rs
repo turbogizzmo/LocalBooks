@@ -42,6 +42,34 @@ pub struct TimeActivityView {
     pub class_name: Option<String>,
 }
 
+/// The first day of the week that `date` is in, for a work week starting on `first_day`
+/// (Preferences › Time & Expenses; Monday unless changed).
+pub fn week_of(date: NaiveDate, first_day: chrono::Weekday) -> NaiveDate {
+    use chrono::Datelike;
+    let back = (7 + date.weekday().num_days_from_monday() - first_day.num_days_from_monday()) % 7;
+    date - chrono::Duration::days(i64::from(back))
+}
+
+/// A weekly timesheet's days, and the time defaults from Preferences › Time & Expenses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimesheetWeek {
+    pub start: NaiveDate,
+    pub end: NaiveDate,
+    /// `monday` … `sunday`.
+    pub first_day: String,
+    /// New time starts billable.
+    pub billable_by_default: bool,
+}
+
+/// The week `date` falls in, on the company's work week.
+pub async fn timesheet_week(pool: &SqlitePool, date: NaiveDate) -> Result<TimesheetWeek, String> {
+    use crate::preferences::tax_time;
+    let first_day = crate::preferences::get(pool, tax_time::WEEK_START).await?;
+    let start = week_of(date, tax_time::parse_weekday(&first_day)?);
+    Ok(TimesheetWeek { start, end: start + chrono::Duration::days(6), first_day, billable_by_default: crate::preferences::flag(pool, tax_time::TIME_BILLABLE).await? })
+}
+
 pub async fn list_employees(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT id, name, email, is_active, 0 AS open_balance_cents FROM employees ORDER BY name COLLATE NOCASE",

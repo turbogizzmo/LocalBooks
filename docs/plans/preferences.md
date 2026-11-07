@@ -30,7 +30,7 @@ as in `docs/gaps.md`.
 | Type amounts without a decimal point (1234 → 12.34) | M | has (T3 batch 1) | – |
 | Warn before editing a posted transaction; warn before deleting or voiding | M | has (T3 batch 1; nothing is ever deleted, so voiding) | – |
 | Bring back messages you chose not to see again | M | has (T3 batch 1: "Don't show this message again" on one-time messages) | – |
-| Recall the last transaction for a name, or pre-fill a vendor's usual accounts | M | missing | M |
+| Recall the last transaction for a name, or pre-fill a vendor's usual accounts | M | has (T3 batch 5: bills, checks and expenses) | – |
 | When an item changes on a line, keep a typed description or price: ask, always, never | M | has (T3 batch 1) | – |
 | Show hours as decimals or hours:minutes | C | has (T3 batch 2) | – |
 | Always show four-digit years | C | has (T3 batch 2) | – |
@@ -58,10 +58,10 @@ as in `docs/gaps.md`.
 | Bills | Bills due in N days by default | has (T3 batch 4: vendor terms first, then the company days, 10 by default) | – |
 | Bills | Warn about a bill number already used for that vendor | has (T3 batch 2) | – |
 | Bills | Apply vendor credits and discounts automatically | has (T3 batch 4: vendor credits and terms discounts in Pay Bills; a discount posts as a vendor credit to the chosen discount account) | – |
-| Checking | Default account for each form (checks, pay bills, deposits, sales tax) (M) | missing | S |
+| Checking | Default account for each form (checks, pay bills, deposits, sales tax) (M) | has (T3 batch 5: checks, Pay Bills, deposits; sales tax payments choose theirs) | – |
 | Checking | Warn about a duplicate check number | has (T3 batch 2) | – |
-| Checking | Date checks when printed; start at the payee | missing | S |
-| Checking | Put the vendor's account number in the check memo *(tour)* | missing | S |
+| Checking | Date checks when printed; start at the payee | has (T3 batch 5: date when printed; forms always start at the payee) | – |
+| Checking | Put the vendor's account number in the check memo *(tour)* | has (T3 batch 5) | – |
 | Checking | Bank feed: how renaming rules apply to downloaded payees *(tour)* | partial (rules, no switch) | S |
 | Payments | Apply a payment to open invoices automatically; work out the amount from the invoices ticked | has (T3 batch 4: exact match else oldest, oldest, or off; auto-calculate) | – |
 | Payments | Deposit to Undeposited Funds by default | has (T3 batch 4: payments and sales receipts) | – |
@@ -83,17 +83,17 @@ as in `docs/gaps.md`.
 | Reports | Age from the due date or the transaction date | has (T3 batch 3) | – |
 | Reports | Show accounts and items by name, description or both | has (T3 batch 3: items in Sales by Item, Inventory Valuation and Stock Status; accounts by number and path, above) | – |
 | Reports | Which accounts go in each Cash Flows section | has (T3 batch 3: Preferences › Reports & Graphs) | – |
-| Items | Inventory and purchase orders on or off | missing | S |
+| Items | Inventory and purchase orders on or off | has (T3 batch 5) | – |
 | Items | Warn about duplicate PO numbers | has (always: PO numbers are assigned and unique) | – |
-| Items | Warn or stop when stock would go below zero | missing | M |
-| Items | Units of measure (sell by the each, case or pallet) *(tour)* | missing | L |
+| Items | Warn or stop when stock would go below zero | has (T3 batch 5: warn, stop or off) | – |
+| Items | Units of measure (sell by the each, case or pallet) *(tour)* | left out: items have one unit, and quantities, stock and costs would all need a unit and conversions | L |
 | Jobs & Estimates | Estimates on or off; rename job statuses (Pending, Awarded, In progress, Closed, Not awarded); progress invoicing | has / has (T3 batch 4: jobs got a status) / left out: an estimate links to one invoice and its lines are not tracked as partly invoiced, so progress invoicing needs that schema first (its own gap) | S–M |
 | Jobs & Estimates | Warn about duplicate estimate numbers | has (always: estimate numbers are assigned and unique) | – |
-| Time & Expenses | First day of the work week (Monday is fixed now); new time billable by default; time tracking on or off | missing | S |
-| Time & Expenses | Count reimbursed expenses as income; mark all expenses billable; default markup percent and account; invoice from a list of time and expenses *(tour)* | missing | M |
-| Sales Tax | Charge sales tax at all; most common tax item; taxable and non-taxable codes; mark taxable lines with a T on printed forms; owe tax when invoiced or when paid; filing monthly, quarterly or yearly | missing (see R11) | S–M |
-| Finance Charge | Charge from the due date or the invoice date; mark charges to print | missing | S |
-| Tax: 1099 | Do you file 1099s (on or off); map accounts to 1099 boxes | missing (see R10) | M |
+| Time & Expenses | First day of the work week; new time billable by default; time tracking on or off | has (T3 batch 5: work week and billable default; time tracking is always on) | – |
+| Time & Expenses | Count reimbursed expenses as income; mark all expenses billable; default markup percent and account; invoice from a list of time and expenses *(tour)* | has for expenses (T3 batch 5: Sales › Bill Costs); invoicing time is T22 | – |
+| Sales Tax | Charge sales tax at all; most common tax item; taxable and non-taxable codes; mark taxable lines with a T on printed forms; owe tax when invoiced or when paid; filing monthly, quarterly or yearly | has (on/off and default rate on the Sales Tax screen; T mark, basis and frequency T3 batch 5; per-agency returns are R11) | – |
+| Finance Charge | Charge from the due date or the invoice date; mark charges to print | partial (T3 batch 5: due or invoice date; marking the charges to print is not built) | S |
+| Tax: 1099 | Do you file 1099s (on or off); map accounts to 1099 boxes | has (T3 batch 5; forms and e-file are R10) | – |
 | Reminders (M) | Show reminders when a company opens | partial | S |
 | Reminders | Per reminder type: summary, full list or off, and how many days ahead *(tour)* | has (Reminders screen) | – |
 | Send Forms | Default delivery method (email, mail, none) for new customers; a message template per form type *(tour)* | has (T3 batch 4: customers got a preferred delivery; the subject and message per form type are in Custom Forms) | – |
@@ -134,9 +134,11 @@ screen links there. Warnings before saving share one design: the backend's guard
 (`src-tauri/src/guards.rs`) refuse with a typed `NEEDS_CONFIRMATION` error listing each warning,
 and the form asks and saves again with **Save anyway** (`src/lib/confirmable.js`).
 
-Batches 1 and 2 are done except **recall the last transaction for a name / pre-fill a vendor's
-accounts**, which stays in batch 1's row above as missing. Batch 3 (reports and display defaults) is
-done in #164; its one left-out option, default report formatting, says why in its row.
+Batches 1, 2, 3 and 5 are done. Batch 1's last row, **recall the last transaction for a name /
+pre-fill a vendor's accounts**, came with batch 5 (#166). Batch 3 (reports and display defaults) is
+done in #164; its one left-out option, default report formatting, says why in its row. Units of
+measure are left out on purpose: items have one unit, and quantities, stock and costs would all
+need a unit and conversions.
 
 Batch 4 (sales, payments and bills defaults) is built except two pieces that wait on other PRs:
 the F.O.B. default (#158's F.O.B. box) and zero-amount estimate lines (#151's estimate lines). Left

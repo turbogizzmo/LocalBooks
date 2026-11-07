@@ -127,7 +127,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         lines: input
             .lines
             .iter()
-            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id })
+            .map(|l| SplitLineInput { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id: l.customer_id, billable: None })
             .collect(),
         currency: None,
     };

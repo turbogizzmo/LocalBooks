@@ -185,7 +185,7 @@ an account heading to open its register.
 | **Expenses by Vendor by Month** | Each vendor's expenses with a column per month; voided transactions are left out |
 | **Purchases by Vendor Summary** and **Detail** · **Purchases by Product/Service Summary** and **Detail** | Product and service lines on bills, checks, expenses and vendor credits |
 | **Check Detail** · **Deposit Detail** | Each check and bill payment (or deposit) with the lines it paid for, debits minus credits |
-| **1099 Detail** | The checks, expenses and bill payments from bank accounts behind the 1099 Summary, by vendor |
+| **1099 Detail** | The checks, expenses and bill payments from bank accounts behind the 1099 Summary, by vendor, each split over the accounts it paid and the 1099 box each account is mapped to (Preferences › Tax: 1099) |
 | **Transaction List by Date** | One row per transaction, with its total |
 | **Transaction Detail by Account** | Every line in the period, by account, with debits, credits and a running balance from zero (the General Ledger starts from each account's beginning balance instead) |
 | **Voided Transactions** | Each voided transaction and the entry that voids it. The total counts both, so it is twice what was voided |

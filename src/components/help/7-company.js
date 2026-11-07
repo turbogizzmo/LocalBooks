@@ -79,6 +79,14 @@ export const topics = [
     guide: 'custom-forms',
   },
   {
+    id: 'tax-time-preferences', area: 'company', views: ['settings/preferences', 'sales/tax', 'employees/time', 'sales/products'],
+    title: 'Sales tax, time, 1099 and inventory preferences',
+    body: 'In Preferences (Company Preferences): Sales Tax sets whether tax is owed when invoiced (accrual) or when paid (cash), how often you file (the report period and a return reminder), and the T on taxable printed lines. Finance Charge sets whether interest runs from the due date or the invoice date. Time & Expenses sets the first day of the work week and what starts billable. Tax: 1099 turns 1099s on or off and maps accounts to boxes. Items & Inventory turns inventory and purchase orders on or off and warns or stops a sale below zero. Checking puts the vendor account number in check memos and dates checks when printed; its My Preferences pick the account each form opens with.',
+    keywords: 'sales tax cash basis accrual filing frequency monthly quarterly finance charge invoice date work week monday sunday billable markup 1099 boxes negative inventory purchase orders off check memo account number check date default account recall',
+    go: { label: 'Go to Preferences', view: 'settings/preferences' },
+    guide: 'getting-started',
+  },
+  {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
     body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
