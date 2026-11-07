@@ -55,7 +55,8 @@ export function defaultDepositAccount(accounts, undepositedDefault) {
 
 /** Whether a customer's new forms start ticked to email or print later. */
 export function deliveryOf(customer) {
-  return { emailLater: customer?.preferredDelivery === 'EMAIL', printLater: customer?.preferredDelivery === 'PRINT' };
+  // Email later only helps for a customer there is an address to send to.
+  return { emailLater: customer?.preferredDelivery === 'EMAIL' && Boolean(customer?.email?.trim()), printLater: customer?.preferredDelivery === 'PRINT' };
 }
 
 /**

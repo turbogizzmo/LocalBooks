@@ -38,7 +38,7 @@ and estimates, and the email address is filled in when you choose **Email…** o
 ### Preferred delivery and job status
 
 A customer's **Preferred delivery** (on **Edit…**) decides how their new invoices and estimates
-start: **Email** ticks **Email later**, **Print** ticks **Print later** (invoices), **None** leaves
+start: **Email** ticks **Email later** (when the customer has an email address), **Print** ticks **Print later** (invoices), **None** leaves
 both unticked. A new customer takes the choice in **Preferences › Send Forms › Company
 Preferences**, however it is added.
 
