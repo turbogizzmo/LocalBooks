@@ -13,26 +13,30 @@ const NEW_ITEM = '__new';
 
 export const blankLine = (accountId) => ({ key: nextKey++, productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
-/** Derives per-line state; blank lines are ignored, partially filled ones are invalid. */
-export function evaluateLine(line) {
+/**
+ * Derives per-line state; blank lines are ignored, partially filled ones are invalid. With
+ * `allowZeroRate` (estimates), a rate of 0.00 is a line priced at nothing.
+ */
+export function evaluateLine(line, { allowZeroRate = false } = {}) {
   const blank = line.productId === null && line.description.trim() === '' && line.qty.trim() === '' && line.rate.trim() === '';
   if (blank) return { blank: true, amount: 0 };
   // Quantities may be fractional (up to 4 decimals) and are carried as integers scaled by 10,000.
   const qty = parseQuantityE4(line.qty);
   const rate = parseMoneyToCents(line.rate);
-  const amount = qty !== null && rate !== null && rate > 0 ? quantityAmount(qty, rate) : null;
+  const priced = rate !== null && (rate > 0 || (allowZeroRate && rate === 0));
+  const amount = qty !== null && priced ? (rate === 0 ? 0 : quantityAmount(qty, rate)) : null;
   return {
     blank: false,
     qty,
     rate,
     amount,
-    errors: { account: line.accountId === null, qty: qty === null, rate: rate === null || rate <= 0 },
+    errors: { account: line.accountId === null, qty: qty === null, rate: !priced },
   };
 }
 
 /** Totals and validity across a set of lines. */
-export function summarizeLines(lines) {
-  const evaluated = lines.map(evaluateLine);
+export function summarizeLines(lines, options) {
+  const evaluated = lines.map((line) => evaluateLine(line, options));
   const filled = evaluated.filter((s) => !s.blank);
   const invalidCount = filled.filter((s) => s.amount === null || Object.values(s.errors).some(Boolean)).length;
   const total = filled.reduce((sum, s) => (s.amount !== null ? sum + s.amount : sum), 0);
@@ -63,7 +67,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, allowZeroRate = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const [active, setActive] = useState(null);
   const focusCol = useRef('description');
@@ -208,7 +212,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       </thead>
       <tbody>
         {lines.map((line, i) => {
-          const state = evaluateLine(line);
+          const state = evaluateLine(line, { allowZeroRate });
           const isActive = active === i;
           const bad = (field) => !state.blank && state.errors[field];
           const cellProps = (col) => ({

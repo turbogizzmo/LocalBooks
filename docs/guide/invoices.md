@@ -23,11 +23,17 @@ Receivable** (what customers owe you) and to the income account on each line.
    - Press **Enter** to move to the next line, or click **Add line**.
 5. If you use sales reps, shipping methods or customer custom fields, fill in **Rep**, **Ship
    date**, **Ship via** and the custom fields at the top. The rep and custom fields fill in from
-   the customer. These boxes appear only once their lists have entries (see
+   the customer, and Ship via from **Preferences › Sales & Customers**. These boxes appear only once their lists have entries (see
    [Sales reps, Ship Via and custom fields](customers-and-products.md#sales-reps-ship-via-and-custom-fields)).
 6. Check **Balance due** at the top right, then click **Save & Post to Ledger**.
 
 The invoice appears in the list below with status **○ Open**.
+
+If an Admin turned on **Warn before selling to a customer with overdue invoices** (Preferences ›
+Sales & Customers), LocalBooks asks before saving a new invoice or sales receipt for a customer,
+or one of their jobs, with invoices past their due date, and says how much is overdue. Click
+**Save anyway** to go ahead. When the customer's **Preferred delivery** is Email or Print, **Email
+later** or **Print later** is ticked for you.
 
 ## Invoice in another currency
 
