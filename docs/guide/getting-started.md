@@ -174,6 +174,27 @@ one.
 years as 4 digits** (turn it off for 10/13/26), and **Time format**, **Minutes (1:30)** or
 **Decimal (1.50)** in Time Tracking.
 
+## Report and display preferences
+
+**Settings › Preferences › Reports & Graphs** sets how reports open for everyone (Company
+Preferences) and for you (My Preferences). **Accounting › Company Preferences** sets how accounts
+are named in reports.
+
+| Category | Option | What it changes | Default |
+|---|---|---|---|
+| **Reports & Graphs** | Summary reports basis | Profit and Loss and the Income & Expense graph open on accrual or cash; each report can still switch. The Balance Sheet is always accrual. | Accrual |
+| **Reports & Graphs** | Aging reports | A/R and A/P Aging count days from the due date, or from the invoice or bill date | Due date |
+| **Reports & Graphs** | Items | Sales by Item, Inventory Valuation and Stock Status show items by name, description or both (an item without a description shows its name) | Name only |
+| **Reports & Graphs** | Statement of Cash Flows | Which section (operating, investing or financing) each balance sheet account goes in; **Revert to defaults** puts every account back | By account type |
+| **Reports & Graphs** (My) | Show the report's options before running it | Profit and Loss, Balance Sheet, A/R and A/P Aging and the sales summaries ask for their dates (and basis) before they run; reports opened from a graph or link run at once | Off |
+| **Accounting** | Show account numbers in reports | "6300 Rent" or just "Rent" in the financial statements, trial balance and general ledger | On |
+| **Accounting** | Show lowest subaccount only | "Electric" instead of "Utilities:Electric" in the trial balance and general ledger | Off |
+
+By default the Statement of Cash Flows puts current assets and liabilities (receivables, payables,
+credit cards) in operating, fixed and other assets in investing, and long-term liabilities and
+equity in financing. Bank accounts are the cash itself, so they can't be moved. **Classify
+accounts…** on the report opens the list.
+
 ## Sort a list
 
 Click a column heading in a list (invoices, bills, estimates, checks, customers, products, the

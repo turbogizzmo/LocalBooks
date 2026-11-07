@@ -4,6 +4,7 @@ import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, saveXlsx, statementSheet, tableSheet, toCsv, xlsxName } from './ReportParts.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { accountLabel, useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
@@ -174,7 +175,11 @@ export function CashFlowReport({ navigate }) {
     <>
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         {p.controls}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-end gap-2">
+          {/* Which section each account goes in (Preferences › Reports & Graphs). */}
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-2" onClick={() => navigate?.('settings/preferences', 'cash-flow')}>
+            Classify accounts…
+          </button>
           <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} />
         </div>
       </div>
@@ -186,7 +191,7 @@ export function CashFlowReport({ navigate }) {
           subtitle={rangeText(data.startDate, data.endDate)}
           lines={data.lines}
           onAccount={(line) => navigate?.('accounting/register', 'open', { accountId: line.accountId, startDate: data.startDate, endDate: data.endDate })}
-          footer="Indirect method · cash is the total of the Bank accounts"
+          footer="Indirect method · cash is the total of the Bank accounts · each account's section is set in Preferences › Reports & Graphs"
         />
       )}
     </>
@@ -194,6 +199,7 @@ export function CashFlowReport({ navigate }) {
 }
 
 export function TrialBalanceReport({ navigate }) {
+  const prefs = useCompanyPreferences();
   const [asOf, setAsOf] = useState(todayIso());
   const { data, error, reload } = useLedgerQuery(() => (asOf ? api.getTrialBalanceAsOf(asOf) : Promise.resolve(null)));
   useEffect(() => {
@@ -202,7 +208,7 @@ export function TrialBalanceReport({ navigate }) {
   const rows = data
     ? [
         ...data.rows.map((r) => ({
-          cells: [r.accountNumber ? `${r.accountNumber} · ${r.fullName}` : r.fullName, money(r.debitCents), money(r.creditCents)],
+          cells: [accountLabel(prefs, r.accountNumber, r.fullName), money(r.debitCents), money(r.creditCents)],
           onClick: () => navigate?.('accounting/register', 'open', { accountId: r.accountId, endDate: data.asOf }),
         })),
         { kind: 'grand', cells: ['TOTAL', formatCents(data.totalDebitCents), formatCents(data.totalCreditCents)] },
@@ -217,7 +223,7 @@ export function TrialBalanceReport({ navigate }) {
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
       footer={data ? `Income and expense accounts show the fiscal year beginning ${longDate(data.fiscalYearStart)}; earlier years are in Retained Earnings.` : null}
-      onCsvRows={() => [...data.rows.map((r) => [r.accountNumber ? `${r.accountNumber} ${r.fullName}` : r.fullName, plainAmount(r.debitCents || null), plainAmount(r.creditCents || null)]), ['TOTAL', plainAmount(data.totalDebitCents), plainAmount(data.totalCreditCents)]]}
+      onCsvRows={() => [...data.rows.map((r) => [accountLabel(prefs, r.accountNumber, r.fullName, ' '), plainAmount(r.debitCents || null), plainAmount(r.creditCents || null)]), ['TOTAL', plainAmount(data.totalDebitCents), plainAmount(data.totalCreditCents)]]}
     />
   );
 }
@@ -295,7 +301,7 @@ export function AgingReport({ payable, initial = null }) {
           <span key="doc" className="pl-4 text-qb-ink-muted">
             {it.kind}
             {it.number ? ` #${it.number}` : ''} · {formatDate(it.date)}
-            {it.daysPastDue > 0 ? ` · ${it.daysPastDue} day${it.daysPastDue === 1 ? '' : 's'} past due` : ''}
+            {it.daysPastDue > 0 ? ` · ${it.daysPastDue} day${it.daysPastDue === 1 ? '' : 's'} ${data.basis === 'TRANSACTION' ? 'old' : 'past due'}` : ''}
           </span>,
           ...[0, 1, 2, 3, 4].map((b) => (agingBucket(it.daysPastDue) === b ? formatCents(it.openCents) : '')),
           formatCents(it.openCents),
@@ -328,7 +334,7 @@ export function AgingReport({ payable, initial = null }) {
       rows={rows}
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
-      footer={`Days past due · balances as of the report date · credit not yet used is negative · click a name for its open documents`}
+      footer={`${data?.basis === 'TRANSACTION' ? 'Days since the transaction date' : 'Days past due'} (Preferences › Reports & Graphs) · balances as of the report date · credit not yet used is negative · click a name for its open documents`}
       onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
     />
   );
