@@ -26,9 +26,8 @@ QuickBooks Mac uses three screens and asks no "do you have employees?"-style que
    Federal ID, company start date, **Income Tax Form Used**, first month of the fiscal year,
    first month of the tax year.
 2. **Choose your industry and chart of accounts.** An Industry menu, then a list of accounts
-   with checkboxes: *"We've preselected accounts we think you will need for your type of
-   business. You can deselect any of these or select more accounts."* A **Default** button
-   restores the suggested set.
+   with checkboxes. The suggested accounts for the industry start ticked, the user can untick
+   them or tick others, and a **Default** button restores the suggested set.
 3. **Expert settings** (optional tab): *Customers are charged sales tax* (with sales tax items),
    *Customer and/or job estimates are prepared*, *Inventory and purchase orders are used*,
    *Keep track of time*, and *Summary Reports Basis* (cash or accrual). Each industry has its
