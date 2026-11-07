@@ -1,0 +1,29 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Balance Sheet Summary, all dates to 2025-12-31
+
+                                       Total
+ASSETS
+  Current Assets
+    Bank Accounts                  18,313.22
+    Accounts Receivable            14,458.81
+    Other Current Assets           12,155.67
+  Total Current Assets             44,927.70
+  Fixed Assets                     20,250.00
+TOTAL ASSETS                       65,177.70
+LIABILITIES AND EQUITY
+  Liabilities
+    Current Liabilities
+      Accounts Payable              2,481.90
+      Credit Cards                    375.00
+      Other Current Liabilitie      2,147.55
+    Total Current Liabilitie        5,004.45
+  Total Liabilities                 5,004.45
+  Equity                           60,173.25
+TOTAL LIABILITIES AND EQ           65,177.70
+
+8 lines
+
+Accrual basis.
