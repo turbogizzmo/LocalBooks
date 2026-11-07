@@ -583,3 +583,18 @@ async fn a_group_holds_items_and_fixed_charges_only() {
     let err = save_group(&pool, None, GroupInput { name: "Empty".into(), description: None, print_items: true, members: vec![] }).await.unwrap_err();
     assert!(err.starts_with("ITEM_GROUP_EMPTY"), "{err}");
 }
+
+#[test]
+fn leaving_zero_lines_off_keeps_form_lines_in_place() {
+    // Items: 10.00, 0.00 (in the group), 5.00, 0.00. Group over items 0..2, subtotal after item 3.
+    let kept = kept_lines(&[1_000, 0, 500, 0], true);
+    assert_eq!(kept, vec![true, false, true, false]);
+    assert_eq!(kept_lines(&[0, 0], true), vec![true, true], "an estimate of only zero lines keeps them");
+    assert_eq!(kept_lines(&[1_000, 0], false), vec![true, true]);
+    let form = vec![FormLineInput::group(0, 2, true), FormLineInput::subtotal(3), FormLineInput::group(3, 1, true)];
+    let after = without_items(form, &kept);
+    assert_eq!(after.len(), 2, "a group whose only item is left off goes too");
+    assert_eq!((after[0].after_lines, after[0].group_line_count), (0, 1));
+    assert_eq!(after[1].after_lines, 2);
+    assert!(lay_out(&[item(1_000, false), item(500, false)], &after, "T").is_ok());
+}
