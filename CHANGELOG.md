@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **No more "database is locked" when several things save at once.** On a slow disk, a save
+  that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
   Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
   Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
