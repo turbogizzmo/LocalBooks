@@ -39,6 +39,10 @@ export const screens = {
   'sales/send-forms': {
     guide: 'custom-forms',
   },
+  'sales/print-invoices': {
+    help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
+    guide: 'invoices',
+  },
 };
 
 /**
@@ -47,6 +51,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'print-invoices-later', area: 'sales', views: ['sales/invoices', 'sales/print-invoices'],
+    title: 'Print invoices later, in a batch',
+    body: 'Tick Print later on a new invoice, or choose Print later in an invoice’s Actions menu, and it waits in File › Print Forms › Invoices… with a To print mark in the list. Print the batch from there; the form remembers whether you last left Print later on.',
+    keywords: 'print later to be printed queue batch print forms invoices',
+    go: { label: 'Go to Print Invoices', view: 'sales/print-invoices' },
+    guide: 'invoices',
+  },
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',

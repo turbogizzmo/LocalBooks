@@ -495,6 +495,8 @@ pub struct ExpenseView {
     pub currency_code: Option<String>,
     pub exchange_rate_e6: Option<i64>,
     pub home_total_cents: i64,
+    /// Waiting in File › Print Forms › Checks (a queued check has no number yet).
+    pub to_be_printed: bool,
 }
 
 const EXPENSE_SELECT: &str = "
@@ -504,7 +506,7 @@ const EXPENSE_SELECT: &str = "
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
             FROM expense_lines WHERE expense_id = x.id) AS category_account_id,
-           x.journal_entry_id, x.is_voided
+           x.journal_entry_id, x.is_voided, x.to_be_printed
     FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
 
 /// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
@@ -641,6 +643,18 @@ pub async fn list_expenses(pool: &SqlitePool) -> Result<Vec<ExpenseView>, String
         .fetch_all(pool)
         .await
         .map_err(db_err)
+}
+
+/// Checks waiting in the print queue, oldest first; only those from `account_id` when given.
+pub(crate) async fn list_to_print(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
+    sqlx::query_as::<_, ExpenseView>(&format!(
+        "{EXPENSE_SELECT} WHERE x.to_be_printed = 1 AND x.is_voided = 0 AND (?1 IS NULL OR x.payment_account_id = ?1)
+         ORDER BY x.expense_date, x.id"
+    ))
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 async fn system_account(tx: &mut Transaction<'_, Sqlite>, account_type: &str) -> Result<i64, String> {

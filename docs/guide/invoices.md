@@ -55,6 +55,12 @@ in the print dialog suggests that name too.
 To email several invoices together, tick **Email later** when you post them, then send them from
 **Sales › Send Forms**.
 
+To print several together, tick **Print later** when you post them (or choose **Print later** in a
+posted invoice's **Actions** menu); they show *To print* in the list. Then choose **File › Print
+Forms › Invoices…** (or **Sales › Print Invoices**), untick any to leave for later, and click
+**Print…**. LocalBooks asks **Did they all print?**: the invoices you confirm leave the queue, and
+the rest wait for the next batch. The invoice form remembers whether you last left Print later on.
+
 Invoices print with your company's form design. To change the title, colors, logo, columns or
 message, see [Design your invoices and estimates](custom-forms.md).
 
