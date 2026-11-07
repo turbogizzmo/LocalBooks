@@ -79,8 +79,9 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
 pub async fn replace_bill(pool: &SqlitePool, bill_id: i64, input: BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
         let old = live_entry(tx, "bills", bill_id, "bill").await?;
+        let carried_terms: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill_id).fetch_one(&mut **tx).await.map_err(db_err)?;
         void_in_tx(tx, old).await?;
-        let new_id = crate::expenses::write_bill(tx, &input).await?;
+        let new_id = crate::expenses::write_bill_carrying(tx, &input, carried_terms).await?;
         let new_entry = entry_of(tx, "bills", new_id).await?;
         record(tx, old, new_entry).await?;
         crate::billable_costs::follow_replaced_lines(tx, "bills", bill_id, new_id).await?;
@@ -106,16 +107,16 @@ pub(crate) async fn replace_expense_in_tx(tx: &mut Transaction<'_, Sqlite>, expe
 
 /// A saved check or expense as its form would send it again, dated `date` (home currency only).
 pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expense_id: i64, date: chrono::NaiveDate) -> Result<Option<ExpenseInput>, String> {
-    type Row = (String, Option<String>, i64, Option<String>, Option<String>, Option<String>, bool);
+    type Row = (String, Option<String>, i64, Option<String>, Option<String>, Option<String>, bool, Option<i64>);
     let row: Option<Row> = sqlx::query_as(
-        "SELECT x.kind, v.name, x.payment_account_id, x.check_number, x.payment_method, x.memo, x.currency_code IS NOT NULL OR x.is_credit = 1
+        "SELECT x.kind, v.name, x.payment_account_id, x.check_number, x.payment_method, x.memo, x.currency_code IS NOT NULL OR x.is_credit = 1, x.payment_method_id
          FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id WHERE x.id = ?1",
     )
     .bind(expense_id)
     .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    let Some((kind, payee_name, payment_account_id, check_number, payment_method, memo, skip)) = row else { return Ok(None) };
+    let Some((kind, payee_name, payment_account_id, check_number, payment_method, memo, skip, payment_method_id)) = row else { return Ok(None) };
     if skip {
         return Ok(None);
     }
@@ -138,6 +139,7 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
             .map(|(account_id, amount_cents, memo, class_id, customer_id, billable)| crate::expenses::SplitLineInput { account_id, amount_cents, memo, class_id, customer_id, billable: Some(billable) })
             .collect(),
         currency: None,
+        payment_method_id,
     }))
 }
 

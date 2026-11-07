@@ -49,6 +49,9 @@ pub struct BillInput {
     /// The bill total as printed on the vendor's bill; the split lines must add up to it exactly.
     pub total_cents: i64,
     pub lines: Vec<BillLineInput>,
+    /// The vendor's term the bill was entered with (its due date is entered with it).
+    #[serde(default)]
+    pub terms_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -82,6 +85,15 @@ pub struct BillSummary {
     pub category_account_id: Option<i64>,
     pub first_description: Option<String>,
     pub is_voided: bool,
+    /// The term it was entered with, and the early-payment discount that term offers.
+    #[sqlx(flatten)]
+    #[serde(flatten)]
+    pub terms: crate::profile_lists::DocumentTerms,
+}
+
+fn with_discount(mut bill: BillSummary) -> BillSummary {
+    bill.terms.fill(bill.total_cents);
+    bill
 }
 
 const BILL_SELECT: &str = "
@@ -93,8 +105,10 @@ const BILL_SELECT: &str = "
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
             FROM bill_lines WHERE bill_id = b.id) AS category_account_id,
            (SELECT NULLIF(memo, '') FROM bill_lines WHERE bill_id = b.id ORDER BY line_number LIMIT 1) AS first_description,
-           b.is_voided
-    FROM bills b JOIN vendors v ON v.id = b.vendor_id";
+           b.is_voided,
+           tm.id AS terms_id, tm.name AS terms_name, COALESCE(tm.discount_ppm, 0) AS discount_ppm,
+           CASE WHEN tm.discount_days IS NOT NULL THEN date(b.bill_date, '+' || tm.discount_days || ' days') END AS discount_until
+    FROM bills b JOIN vendors v ON v.id = b.vendor_id LEFT JOIN terms tm ON tm.id = b.terms_id";
 
 fn clean(text: Option<&str>) -> Option<&str> {
     text.map(str::trim).filter(|s| !s.is_empty())
@@ -102,7 +116,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 
 pub async fn list_vendors(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
-        "SELECT v.id, v.name, v.email, v.is_active,
+        "SELECT v.id, v.name, v.email, v.is_active, v.terms_days, v.terms_id,
                 COALESCE((SELECT SUM(total_cents - amount_paid_cents) FROM bills
                           WHERE vendor_id = v.id AND status IN ('UNPAID', 'PARTIAL') AND is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_vendor_credit_balances WHERE vendor_id = v.id), 0) AS open_balance_cents
@@ -124,6 +138,7 @@ pub async fn list_bills(pool: &SqlitePool) -> Result<Vec<BillSummary>, String> {
     ))
     .fetch_all(pool)
     .await
+    .map(|all| all.into_iter().map(with_discount).collect())
     .map_err(db_err)
 }
 
@@ -132,6 +147,7 @@ async fn get_bill(pool: &SqlitePool, bill_id: i64) -> Result<BillSummary, String
         .bind(bill_id)
         .fetch_one(pool)
         .await
+        .map(with_discount)
         .map_err(db_err)
 }
 
@@ -254,13 +270,22 @@ pub async fn set_vendor_account_number(pool: &SqlitePool, vendor_id: i64, number
 }
 
 pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
+    write_bill_carrying(tx, input, None).await
+}
+
+/// Like [`write_bill`], for a bill that replaces an edited one: its term (`carried_terms`) may be
+/// kept even when it has since been made inactive.
+pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input: &BillInput, carried_terms: Option<i64>) -> Result<i64, String> {
     let total = validate_bill(input)?;
     let vendor_name = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor_name).await?;
+    if let Some(terms) = input.terms_id {
+        crate::profile_lists::check_terms(&mut **tx, terms, carried_terms, "BILL").await?;
+    }
 
     let bill_id: i64 = sqlx::query_scalar(
-        "INSERT INTO bills (vendor_id, bill_number, bill_date, due_date, memo, total_cents, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'DRAFT') RETURNING id",
+        "INSERT INTO bills (vendor_id, bill_number, bill_date, due_date, memo, total_cents, status, terms_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'DRAFT', ?7) RETURNING id",
     )
     .bind(vendor_id)
     .bind(clean(input.bill_number.as_deref()))
@@ -268,6 +293,7 @@ pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInp
     .bind(input.due_date)
     .bind(clean(input.memo.as_deref()))
     .bind(total)
+    .bind(input.terms_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -530,7 +556,11 @@ pub struct ExpenseInput {
     pub payment_account_id: i64,
     pub expense_date: NaiveDate,
     pub check_number: Option<String>,
+    /// The kind of payment; taken from `payment_method_id` when that is given.
     pub payment_method: Option<String>,
+    /// The Payment Method list entry ("Visa").
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
     pub memo: Option<String>,
     pub lines: Vec<SplitLineInput>,
     /// Set when paid in a foreign currency; line amounts are then in that currency.
@@ -549,6 +579,7 @@ pub struct ExpenseView {
     pub expense_date: String,
     pub check_number: Option<String>,
     pub payment_method: Option<String>,
+    pub payment_method_id: Option<i64>,
     pub memo: Option<String>,
     pub total_cents: i64,
     pub line_count: i64,
@@ -565,7 +596,7 @@ pub struct ExpenseView {
 
 const EXPENSE_SELECT: &str = "
     SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
-           x.payment_method, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
+           x.payment_method, x.payment_method_id, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
            COALESCE(x.home_total_cents, x.total_cents) AS home_total_cents,
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
@@ -603,7 +634,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         return Err("EXP_NO_ITEMS: add at least one split line".into());
     }
     let total = sum_split_lines(input.lines.iter().map(|l| l.amount_cents), "EXP")?;
-    if let Some(method) = clean(input.payment_method.as_deref()) {
+    if let Some(method) = clean(input.payment_method.as_deref()).filter(|_| input.payment_method_id.is_none()) {
         if !crate::invoices::PAYMENT_METHODS.contains(&method) {
             return Err(format!("EXP_BAD_METHOD: unknown payment method '{method}'"));
         }
@@ -624,6 +655,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         None => None,
     };
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
     let memo = match clean(input.memo.as_deref()) {
         Some(memo) => Some(memo.to_string()),
         None if kind == "CHECK" => check_memo(tx, vendor_id).await?,
@@ -647,21 +679,22 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let expense_id: i64 = sqlx::query_scalar(
         "INSERT INTO expenses
             (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents,
-             currency_code, exchange_rate_e6, home_total_cents, is_credit)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id",
+             currency_code, exchange_rate_e6, home_total_cents, is_credit, payment_method_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id",
     )
     .bind(kind)
     .bind(vendor_id)
     .bind(input.payment_account_id)
     .bind(input.expense_date)
     .bind(check_number)
-    .bind(clean(input.payment_method.as_deref()))
+    .bind(method)
     .bind(memo.as_deref())
     .bind(total)
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
     .bind(home_total)
     .bind(is_credit)
+    .bind(method_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

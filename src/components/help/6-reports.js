@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   reports: {
-    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, graphs (income and expense, net worth, receivables, payables, sales, budget vs. actual), and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections and open purchase orders. Click an amount to see the transactions behind it (QuickZoom); export to CSV, print, or save as PDF.',
+    help: 'Every standard report: Profit and Loss (accrual or cash, by month, quarter or class, compared with an earlier period), Balance Sheet, previous year comparisons, budget vs. actual, Cash Flows, A/R and A/P aging, open invoices, unpaid bills, sales and expense summaries, job costing (job and item profitability, estimates vs. actuals, Profit and Loss by Job), detail reports you can customize and memorize, inventory valuation and stock status, missing checks, graphs (income and expense, net worth, receivables, payables, sales, budget vs. actual), phone and contact lists, item and account listings, time by job, name and item, the physical inventory worksheet, and under Accountant & Taxes the Trial Balance, General Ledger, adjusting entries, past reconciliations, income tax by tax line, collections, open purchase orders and the audit trail. Collapse headings to their totals, run several memorized reports at once, and click an amount to see the transactions behind it (QuickZoom); export to CSV, print, or save as PDF.',
     guide: 'reports',
   },
 };
@@ -20,6 +20,13 @@ export const topics = [
     title: 'See the transactions behind a number (QuickZoom)',
     body: 'Click an account or amount on the Profit and Loss, Balance Sheet or another statement to open its register for that column’s dates. On an aging summary, click a name to list its open invoices or bills; on a sales or vendor summary, click a line to open its detail report.',
     keywords: 'quickzoom quick zoom drill down details click amount transactions behind',
+    guide: 'reports',
+  },
+  {
+    id: 'quickreport', area: 'reports', views: ['reports', 'accounting/register', 'accounting/chart-of-accounts', 'sales/customers', 'expenses/vendors', 'sales/products'],
+    title: 'QuickReport, Transaction History and Transaction Journal',
+    body: 'Press Ctrl+Q in a register, or on an account, customer, vendor or item in its list, for a report of its transactions. Click a transaction in a register or a name’s transactions and press Ctrl+H for the transactions linked to it (an invoice’s payments, a payment’s deposit) or Ctrl+Y for the debits and credits it posted; Ctrl is used on a Mac too.',
+    keywords: 'quickreport quick report ctrl+q transaction history ctrl+h transaction journal ctrl+y linked payments debits credits',
     guide: 'reports',
   },
   {
@@ -47,8 +54,8 @@ export const topics = [
   {
     id: 'custom-reports', area: 'reports', views: ['reports'],
     title: 'Customize a report and memorize it',
-    body: 'On any detail report (P&L Detail, Sales by Customer Detail, Check Detail, Journal and the others), Customize… chooses the columns, the subtotals and the filters: accounts, names, transaction types, class, product or service, paid or cleared status, an amount range and memo text; Summary turns it into one row per group, optionally by month, quarter or year. Save as… keeps it under Memorized reports to run again, and a click on a line opens its transaction.',
-    keywords: 'custom report transaction detail customize filter columns memorize memorized saved report p&l detail balance sheet detail sales by customer detail purchases by vendor check detail deposit detail journal transaction list 1099 detail transaction list by customer transaction list by vendor transaction detail by account voided transactions void deleted expenses by vendor by month',
+    body: 'On any detail report (P&L Detail, Sales by Customer Detail, Check Detail, Journal and the others), Customize… chooses the columns, the subtotals and the filters: accounts, names, transaction types, class, product or service, paid or cleared status, an amount range and memo text; Summary turns it into one row per group, optionally by month, quarter or year. Save as… keeps it under Memorized reports to run again, Process Multiple Reports… runs, prints or exports several of them at once, and a click on a line opens its transaction.',
+    keywords: 'custom report transaction detail customize filter columns memorize memorized saved report p&l detail balance sheet detail sales by customer detail purchases by vendor check detail deposit detail journal transaction list 1099 detail transaction list by customer transaction list by vendor transaction detail by account voided transactions void deleted expenses by vendor by month net income detail sales by rep detail process multiple reports run several reports batch print many reports workbook collapse expand rows hide detail',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },
@@ -128,6 +135,14 @@ export const topics = [
     title: 'Value inventory and check stock levels',
     body: 'Inventory Valuation Summary shows each tracked item’s quantity, average cost and value as of a date, and Inventory Valuation Detail every movement in a period. Inventory Stock Status by Item adds what is on order and how fast each item sells.',
     keywords: 'inventory valuation summary detail stock status on hand average cost asset value reorder purchase order',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'list-reports', area: 'reports', views: ['reports'],
+    title: 'Print a phone list, contact list or listing',
+    body: 'Reports › Lists has Customer and Vendor Phone and Contact Lists (contact lists add each balance), the Item Listing and the Account Listing. Other groups add Balance Sheet Summary, Profit & Loss YTD Comparison, Average Days to Pay, Unpaid Bills by Job, Open Purchase Orders Detail, Time by Job, Name and Item, the Physical Inventory Worksheet and the Audit Trail; each prints and exports like any report.',
+    keywords: 'list reports customer phone list contact list vendor phone list vendor contact list item listing account listing chart of accounts list balance sheet summary p&l ytd comparison year to date average days to pay unpaid bills by job open purchase orders detail po time by job time by name time by item timesheet hours physical inventory worksheet count audit trail who changed',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },

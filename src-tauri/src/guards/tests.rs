@@ -19,6 +19,7 @@ fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput
         expense_date: date,
         check_number: Some(number.into()),
         payment_method: None,
+        payment_method_id: None,
         memo: None,
         lines: vec![SplitLineInput { account_id: rent, amount_cents: 5_000, memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
@@ -33,6 +34,7 @@ fn bill(vendor: &str, number: &str, expense: i64, date: NaiveDate) -> BillInput 
         due_date: date,
         memo: None,
         total_cents: 2_500,
+        terms_id: None,
         lines: vec![BillLineInput { account_id: expense, amount_cents: 2_500, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     }
 }

@@ -84,7 +84,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64
 async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cents: i64, deposit_account_id: i64, exchange_rate_e6: Option<i64>) {
     crate::invoices::record_payment(
         pool,
-        PaymentInput { invoice_id, deposit_account_id, payment_date: date, amount_cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
+        PaymentInput { payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
     )
     .await
     .unwrap_or_else(|e| panic!("payment on invoice {invoice_id} on {date}: {e}"));
@@ -95,6 +95,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
     let summary = crate::expenses::post_vendor_bill(
         pool,
         BillInput {
+            terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
             bill_date: date,
@@ -132,6 +133,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
     crate::expenses::post_expense(
         pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),
             payment_account_id: from,
@@ -234,6 +236,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             crate::sales::post_sales_receipt(
                 p,
                 SalesReceiptInput {
+                    payment_method_id: None,
                     customer_name: None,
                     receipt_date: d(2025, month, 20),
                     deposit_account_id: c.undeposited,
@@ -402,6 +405,10 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
         "vendor",
         reyes,
         crate::parties::PartyDetailsInput {
+            terms_id: None,
+            customer_type_id: None,
+            job_type_id: None,
+            vendor_type_id: None,
             name: "Jordan Reyes".into(),
             company_name: None,
             email: None,

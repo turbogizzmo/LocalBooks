@@ -1,7 +1,7 @@
 use super::*;
 
 fn line(account_id: i64, cents: i64) -> SourceLine {
-    SourceLine { account_id, cents, memo: None }
+    SourceLine { account_id, cents, memo: None, class: None }
 }
 
 fn txn(id: i64, lines: Vec<SourceLine>) -> SourceTransaction {

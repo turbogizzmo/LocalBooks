@@ -92,6 +92,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let mut panels = bill_line(stock.asset_account_id, 300_000, "Oak panels", None);
     (panels.product_service_id, panels.quantity_e4, panels.rate_cents) = (Some(oak), Some(200_000), Some(15_000));
     let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput {
+        terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
         bill_date: date,
@@ -160,6 +161,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
 
     let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job), billable: None };
     let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput {
+        payment_method_id: None,
         kind: kind.into(),
         payee_name: Some(payee.into()),
         payment_account_id: from,
@@ -196,6 +198,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     crate::sales::post_sales_receipt(
         p,
         SalesReceiptInput {
+            payment_method_id: None,
             customer_name: Some(MAPLE.into()),
             receipt_date: d(2025, 12, 2),
             deposit_account_id: checking,

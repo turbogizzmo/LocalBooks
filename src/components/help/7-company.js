@@ -159,6 +159,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'import-classes', area: 'company', views: ['settings/import', 'accounting/classes'],
+    title: 'Classes in an import',
+    body: 'When the file you import has classes (a QuickBooks Desktop company file or backup, an IIF class list or CLASS column, a report export with a Class column, or QuickBooks still installed on Windows), posting brings them in: each class matches one you already have by name under the same parent, or is created, and every line keeps its class, so Profit & Loss by Class splits the same way as before. Classes hidden in the original come in inactive. Class tracking turns on, and the message after posting says so. Reversing the import makes the classes it created inactive.',
+    keywords: 'class classes import migrate migration quickbooks iif subclass tracking department location job',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'qbw-undo', area: 'company', views: ['settings/import'],
     title: 'Undo or delete a desktop migration import',
     body: 'Reverse posted entries voids everything an import posted and deactivates the accounts it created, returning your balances to where they were. Delete import removes only the staged lines and never touches your books.',

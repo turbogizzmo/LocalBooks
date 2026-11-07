@@ -411,6 +411,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let result = crate::invoices::record_payment(
                 pool,
                 PaymentInput {
+                    payment_method_id: None,
                     invoice_id,
                     deposit_account_id: deposit_account,
                     payment_date: date(day),
@@ -741,6 +742,7 @@ async fn post_bill(
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
     let input = BillInput {
+        terms_id: None,
         vendor_name: vendor.into(),
         bill_number: None,
         bill_date: date(day),
@@ -789,6 +791,7 @@ async fn post_expense(
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
     let input = ExpenseInput {
+        payment_method_id: None,
         kind: if check { "CHECK" } else { "EXPENSE" }.into(),
         payee_name: Some("Payee".into()),
         payment_account_id: from,

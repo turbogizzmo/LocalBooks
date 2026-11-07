@@ -43,6 +43,10 @@ export const screens = {
   'sales/send-forms': {
     guide: 'custom-forms',
   },
+  'sales/profile-lists': {
+    help: 'The Customer & Vendor Profile lists: Terms, Payment Method, Customer Type, Vendor Type, Job Type and Customer Message. Add, rename or make an entry inactive; one in use cannot be deleted.',
+    guide: 'customers-and-products',
+  },
   'sales/print-invoices': {
     help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
     guide: 'invoices',
@@ -55,6 +59,22 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'terms-list', area: 'sales', views: ['sales/profile-lists', 'sales/invoices', 'expenses/bills', 'sales/customers', 'expenses/vendors'],
+    title: 'Set up payment terms',
+    body: 'Lists › Customer & Vendor Profile Lists › Terms List holds terms such as Net 30 or 2% 10 Net 30 (2 percent off if paid within 10 days). Give each customer and vendor a default term; on invoices and bills the Terms box sets the due date, and Receive Payments and Pay Bills show the discount offered and its last day.',
+    keywords: 'terms net 30 net 15 due on receipt discount early payment 2% 10 net 30 due date payment terms',
+    go: { label: 'Terms List', view: 'sales/profile-lists', action: 'terms' },
+    guide: 'customers-and-products',
+  },
+  {
+    id: 'profile-lists', area: 'sales', views: ['sales/profile-lists', 'sales/all', 'sales/invoices', 'expenses/expenses'],
+    title: 'Payment methods, types and customer messages',
+    body: 'The Payment Method list names the ways you are paid or pay (Visa, Check), each one kind of payment; Customer, Vendor and Job Type group records; a Customer Message prints at the foot of an invoice, sales receipt or estimate. Each box on forms and records ends in ＋ Add new… to add an entry without leaving.',
+    keywords: 'payment method visa mastercard customer type vendor type job type customer message thank you profile lists',
+    go: { label: 'Profile lists', view: 'sales/profile-lists' },
+    guide: 'customers-and-products',
+  },
   {
     id: 'print-invoices-later', area: 'sales', views: ['sales/invoices', 'sales/print-invoices'],
     title: 'Print invoices later, in a batch',

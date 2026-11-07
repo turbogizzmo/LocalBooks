@@ -328,6 +328,7 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
                 ship_date: Some(d(2)),
                 ship_method_id: Some(ups.id),
                 custom_fields: vec![FieldValue { field_id: po.id, value: "PO-55".into() }],
+                ..Default::default()
             },
         },
     )

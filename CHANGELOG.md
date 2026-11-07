@@ -47,6 +47,30 @@ people using LocalBooks.
 - **Recall a vendor's last bill or check.** Turn on **Automatically recall information**
   (Preferences › General › My Preferences) and a new bill or check for a vendor you have paid before
   starts with the same accounts, and amounts if you like.
+- **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
+  Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
+  Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
+  and vendors get a default term and a type. On invoices and bills the Terms box fills in from the
+  customer or vendor and sets the due date; Receive Payments and Pay Bills show the discount
+  offered and its last day. A customer message picked on an invoice, sales receipt or estimate
+  prints on it. The Terms and Payment method boxes end in **＋ Add new…**.
+- **Safer Excel imports.** A damaged or deliberately malformed `.xls` report file can no longer
+  crash LocalBooks or make it run out of memory while importing (the Excel reader is updated).
+- **Type checks and deposits straight into a register.** Bank and credit card registers end in a
+  blank row: enter the date, number, payee, account, memo and an amount, then click **Record** (or
+  press Enter). A bank payment becomes a check, a deposit a deposit, a card charge an expense and a
+  card payment a card credit, just as their forms would make them. **Restore** clears the row and
+  **Splits…** spreads it over several accounts.
+- **Find and filter in a register.** **Go To…** finds a transaction by number, payee, memo or
+  amount; **Dates** shows all, this month, this year or your own range; **2-line** puts the account
+  and memo on a second line. The **No.** column now shows each check's, invoice's or bill's own
+  number.
+- **QuickReport, Transaction History and Transaction Journal.** Press **Ctrl+Q** in a register, or
+  on an account, customer, vendor or item in its list, for a report of its transactions. Click a
+  transaction and press **Ctrl+H** to see what is linked to it (an invoice's payments, a payment's
+  deposit, a bill's payments) or **Ctrl+Y** for the debits and credits it posted.
+- **Filter a customer's or vendor's transactions.** The transactions panel under the Customers and
+  Vendors lists can show one transaction type and a date range.
 - **Print checks and invoices later, in a batch.** Tick **Print later** on Write Checks or on an
   invoice and it waits in **File › Print Forms › Checks…** or **Invoices…**, marked *To print* in
   the list. Print the batch from there: checks take numbers in order from the first number on your
@@ -58,6 +82,25 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+- **Phone lists, contact lists and more reports.** A new **Lists** group in the report list has the
+  **Customer** and **Vendor Phone Lists** and **Contact Lists**, the **Item Listing** and the
+  **Account Listing**. Also new: **Balance Sheet Summary**, **Profit & Loss YTD Comparison**, **Net
+  Income Detail**, **Sales by Rep Detail**, **Average Days to Pay Summary**, **Unpaid Bills by Job**,
+  **Open Purchase Orders Detail**, **Time by Job Summary** and **Detail**, **Time by Name**, **Time by
+  Item**, the **Physical Inventory Worksheet** (print it and write in the counts) and the **Audit
+  Trail**, showing who posted, voided or changed what and when.
+- **Collapse and expand report headings.** Click ▾ beside a heading to show only its total, or
+  **Collapse all** to see just the totals. Reports print the way they're shown.
+- **Process Multiple Reports.** Under **Memorized reports**, tick several reports and display them
+  together, print them in one go (each on a new page), or save them as one Excel workbook with a
+  worksheet per report.
+- **Imports keep your classes.** Books moved from QuickBooks now arrive with their class list,
+  subclasses included, and every transaction line keeps its class, so Profit & Loss by Class
+  matches the original. This works for QuickBooks Desktop company files and backups (`.qbw`,
+  `.qbb`), IIF files (the class list and the CLASS column), report exports with a Class column,
+  and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
+  inactive. When an import brings classes, **Track classes on transactions** turns on, and the
+  message after posting says so.
 
 ## [0.11.0]
 

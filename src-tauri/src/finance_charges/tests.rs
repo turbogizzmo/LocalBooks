@@ -204,6 +204,7 @@ async fn grace_days_minimum_and_balances_as_of_the_assessment_date() {
     let checking = account_id(&pool, "1010").await;
     let inv = invoice(&pool, "Acme", d(8, 1), d(9, 1), 100_000).await;
     let pay = |day: NaiveDate, cents| PaymentInput {
+        payment_method_id: None,
         invoice_id: inv.id,
         deposit_account_id: checking,
         payment_date: day,

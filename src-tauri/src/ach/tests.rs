@@ -17,6 +17,7 @@ fn at(day: u32, hour: u32) -> NaiveDateTime {
 async fn bill(pool: &SqlitePool, vendor: &str, number: Option<&str>, cents: i64) -> i64 {
     let rent = account_id(pool, "6300").await;
     let input = BillInput {
+        terms_id: None,
         vendor_name: vendor.into(),
         bill_number: number.map(str::to_string),
         bill_date: d(1),

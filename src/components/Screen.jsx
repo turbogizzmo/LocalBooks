@@ -30,6 +30,7 @@ import Recurring from './Recurring.jsx';
 import Register from './Register.jsx';
 import Reports from './Reports.jsx';
 import SalesLists from './SalesLists.jsx';
+import ProfileLists from './ProfileLists.jsx';
 import SalesTax from './SalesTax.jsx';
 import SendForms from './SendForms.jsx';
 import Settings from './Settings.jsx';
@@ -55,6 +56,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} />}
       {view === 'sales/products' && <Products accounts={list} intent={intent} />}
       {view === 'sales/lists' && <SalesLists />}
+      {view === 'sales/profile-lists' && <ProfileLists intent={intent} />}
       {view === 'sales/tax' && <SalesTax accounts={list} />}
       {view === 'sales/statements' && <Statements />}
       {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={navigate} />}

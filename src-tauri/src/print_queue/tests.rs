@@ -17,6 +17,7 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
     post_expense(
         pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: "CHECK".into(),
             payee_name: Some(payee.into()),
             payment_account_id: checking,
@@ -107,6 +108,7 @@ async fn only_unnumbered_live_checks_join_the_queue() {
 
     let (card, supplies) = (account_id(&pool, "2100").await, account_id(&pool, "6250").await);
     let expense = ExpenseInput {
+        payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: None,
         payment_account_id: card,
@@ -140,6 +142,7 @@ async fn an_edited_queued_check_stays_queued() {
     let queued = check(&pool, "Landlord", None, 10_000, true).await.unwrap();
     let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
     let edited = ExpenseInput {
+        payment_method_id: None,
         kind: "CHECK".into(),
         payee_name: Some("Landlord".into()),
         payment_account_id: checking,
