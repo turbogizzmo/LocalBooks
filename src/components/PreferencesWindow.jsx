@@ -720,22 +720,48 @@ function JobsCompany({ field }) {
   );
 }
 
-function PaymentsCompany({ field }) {
+function PaymentsCompany({ field, accounts }) {
   return (
-    <Group title="Receive Payments">
-      {field({
-        label: 'Apply payments',
-        prefKey: 'payment_auto_apply',
-        hint: 'How an amount received is spread over the customer’s open invoices; Auto Apply on the form always applies',
-        children: choice([
-          ['exact', 'Automatically: an exact match, else oldest first'],
-          ['oldest', 'Automatically: oldest invoices first'],
-          ['off', 'Not automatically: I tick the invoices'],
-        ]),
-      })}
-      {field({ label: 'Calculate the amount', prefKey: 'payment_auto_calculate', hint: 'The amount received becomes the total of the invoices ticked or paid', children: flag('Work out the payment amount from the invoices ticked') })}
-      {field({ label: 'Deposit to', prefKey: 'payment_undeposited_default', hint: 'Off: payments and sales receipts go to the first bank account unless you choose another', children: flag('Use Undeposited Funds as the usual deposit account') })}
-    </Group>
+    <>
+      <Group title="Receive Payments">
+        {field({
+          label: 'Apply payments',
+          prefKey: 'payment_auto_apply',
+          hint: 'How an amount received is spread over the customer’s open invoices; Auto Apply on the form always applies',
+          children: choice([
+            ['exact', 'Automatically: an exact match, else oldest first'],
+            ['oldest', 'Automatically: oldest invoices first'],
+            ['off', 'Not automatically: I tick the invoices'],
+          ]),
+        })}
+        {field({ label: 'Calculate the amount', prefKey: 'payment_auto_calculate', hint: 'The amount received becomes the total of the invoices ticked or paid', children: flag('Work out the payment amount from the invoices ticked') })}
+        {field({ label: 'Deposit to', prefKey: 'payment_undeposited_default', hint: 'Off: payments and sales receipts go to the first bank account unless you choose another', children: flag('Use Undeposited Funds as the usual deposit account') })}
+      </Group>
+      <Group title="Early-payment discounts">
+        {field({
+          label: 'Discounts',
+          prefKey: 'payment_auto_apply_discounts',
+          hint: 'Receive Payments takes the discount an invoice’s terms offer (such as 2% 10 Net 30) when it is paid in full by the last day; off, you type it on the invoice’s row',
+          children: flag('Take customers’ early-payment discounts automatically'),
+        })}
+        {field({
+          label: 'Discount account',
+          prefKey: 'payment_discount_account_id',
+          hint: 'Discounts customers take are debited here, usually an income account such as Sales Discounts; without one, Receive Payments takes no discounts',
+          children: ({ id, value, commit, invalid }) => (
+            <AccountSelect
+              id={id}
+              accounts={accounts ?? []}
+              filter={(a) => a.isActive && !a.isSystem && (a.classification === 'INCOME' || a.classification === 'EXPENSE')}
+              value={value === '' ? null : Number(value)}
+              onChange={(next) => commit(next === null ? '' : String(next))}
+              placeholder="Choose an income or expense account"
+              aria-invalid={invalid}
+            />
+          ),
+        })}
+      </Group>
+    </>
   );
 }
 

@@ -90,7 +90,7 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
     sqlx::query_as::<_, UndepositedItem>(
         "SELECT 'PAYMENT' AS kind, p.id AS id, p.payment_date AS date, i.customer_name, p.payment_method,
                 (SELECT name FROM payment_methods WHERE id = p.payment_method_id) AS payment_method_name, p.reference,
-                COALESCE(p.home_amount_cents, p.amount_cents) AS amount_cents, p.deposit_account_id AS undeposited_account_id
+                COALESCE(p.home_amount_cents, p.amount_cents - p.discount_cents) AS amount_cents, p.deposit_account_id AS undeposited_account_id
          FROM invoice_payments p
          JOIN invoices i ON i.id = p.invoice_id
          JOIN chart_of_accounts a ON a.id = p.deposit_account_id
@@ -139,7 +139,7 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     for item in &input.items {
         let row: Option<(i64, i64, Option<String>)> = match item.kind.as_str() {
             "PAYMENT" => sqlx::query_as(
-                "SELECT p.deposit_account_id, COALESCE(p.home_amount_cents, p.amount_cents), i.customer_name
+                "SELECT p.deposit_account_id, COALESCE(p.home_amount_cents, p.amount_cents - p.discount_cents), i.customer_name
                  FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
                  WHERE p.id = ?1 AND p.is_voided = 0 AND p.journal_entry_id IS NOT NULL",
             ),
