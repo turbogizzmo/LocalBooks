@@ -33,7 +33,50 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (SHOW_ACCOUNT_NUMBERS, "true"),
     (LOWEST_SUBACCOUNT_ONLY, "false"),
     (crate::statements::CASH_FLOW_SECTIONS, ""),
+    // Payments, Bills, Sales & Customers, Jobs & Estimates, Send Forms
+    (crate::auto_apply::AUTO_APPLY_PAYMENTS, "true"),
+    (crate::auto_apply::AUTO_CALCULATE_PAYMENTS, "true"),
+    (crate::auto_apply::AUTO_APPLY_VENDOR_CREDITS, "true"),
+    (DEPOSIT_TO_UNDEPOSITED, "true"),
+    (crate::guards::WARN_OVERDUE_CUSTOMERS, "false"),
+    (BILL_DUE_DAYS, "30"),
+    (DEFAULT_SHIP_METHOD, ""),
+    (DEFAULT_MARKUP, "0"),
+    (PRICE_LEVELS_ENABLED, "true"),
+    (ESTIMATES_ENABLED, "true"),
+    (DEFAULT_DELIVERY, "none"),
+    // Sales Tax, Finance Charge, Time & Expenses, Tax: 1099, Items & Inventory, Checking
+    (crate::sales_tax::TAX_BASIS, "accrual"),
+    (crate::sales_tax::FILING_FREQUENCY, "quarterly"),
+    (crate::sales_tax::MARK_TAXABLE, "false"),
+    (crate::finance_charges::CHARGE_FROM, "due"),
+    (WEEK_START, "monday"),
+    (TIME_BILLABLE, "false"),
+    (crate::workflows::FILES_1099, "true"),
+    (crate::workflows::ACCOUNT_BOXES, ""),
+    (crate::guards::NEGATIVE_STOCK, "allow"),
+    (CHECK_MEMO_ACCOUNT_NUMBER, "false"),
 ];
+
+/// The first day of the work week on timesheets.
+pub const WEEK_START: &str = "week_start_day";
+/// New time entries start billable.
+pub const TIME_BILLABLE: &str = "time_billable_default";
+/// A check to a vendor starts with the vendor's account number (the one they gave you) as its memo.
+pub const CHECK_MEMO_ACCOUNT_NUMBER: &str = "check_memo_vendor_account";
+
+/// Receive Payments deposits to Undeposited Funds unless the person picks a bank account.
+pub const DEPOSIT_TO_UNDEPOSITED: &str = "deposit_to_undeposited_funds";
+/// A new bill is due this many days after its date, unless the vendor has terms.
+pub const BILL_DUE_DAYS: &str = "bill_due_days";
+/// A ship method id that new invoices start with (blank: none).
+pub const DEFAULT_SHIP_METHOD: &str = "default_ship_method_id";
+/// Percent over cost suggested as the sales price of a new item.
+pub const DEFAULT_MARKUP: &str = "default_markup_percent";
+pub const PRICE_LEVELS_ENABLED: &str = "price_levels_enabled";
+pub const ESTIMATES_ENABLED: &str = "estimates_enabled";
+/// How new invoices and estimates are sent by default: `none` or `email` (Email later ticked).
+pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
 
 /// Summary reports (Profit & Loss, Balance Sheet, …) open on the `accrual` or `cash` basis.
 pub const REPORT_BASIS: &str = "report_basis";
@@ -49,11 +92,31 @@ const CHOICES: &[(&str, &[&str], &str)] = &[
     (REPORT_BASIS, &["accrual", "cash"], "PREF_BAD_BASIS: use accrual or cash"),
     (crate::report_center::AGING_BASIS, &["due", "transaction"], "PREF_BAD_AGING: age from the due date or the transaction date"),
     (REPORT_ITEMS_SHOW, &["name", "description", "both"], "PREF_BAD_ITEMS_SHOW: show items by name, description or both"),
+    (DEFAULT_DELIVERY, &["none", "email"], "PREF_BAD_DELIVERY: send forms by none or email"),
+    (crate::sales_tax::TAX_BASIS, &["accrual", "cash"], "PREF_BAD_TAX_BASIS: owe sales tax as invoiced (accrual) or as paid (cash)"),
+    (crate::sales_tax::FILING_FREQUENCY, &["monthly", "quarterly", "annually"], "PREF_BAD_FILING: file monthly, quarterly or annually"),
+    (crate::finance_charges::CHARGE_FROM, &["due", "invoice"], "PREF_BAD_FC_FROM: charge from the due date or the invoice date"),
+    (WEEK_START, &["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"], "PREF_BAD_WEEK_START: choose a day of the week"),
+    (crate::guards::NEGATIVE_STOCK, &["allow", "warn", "stop"], "PREF_BAD_NEGATIVE_STOCK: allow, warn or stop"),
 ];
 
 /// True/false preferences added with the Preferences categories (the older ones are listed in
 /// `validate`).
-const FLAGS: &[&str] = &[SHOW_ACCOUNT_NUMBERS, LOWEST_SUBACCOUNT_ONLY];
+const FLAGS: &[&str] = &[
+    SHOW_ACCOUNT_NUMBERS,
+    LOWEST_SUBACCOUNT_ONLY,
+    crate::auto_apply::AUTO_APPLY_PAYMENTS,
+    crate::auto_apply::AUTO_CALCULATE_PAYMENTS,
+    crate::auto_apply::AUTO_APPLY_VENDOR_CREDITS,
+    DEPOSIT_TO_UNDEPOSITED,
+    crate::guards::WARN_OVERDUE_CUSTOMERS,
+    PRICE_LEVELS_ENABLED,
+    ESTIMATES_ENABLED,
+    crate::sales_tax::MARK_TAXABLE,
+    TIME_BILLABLE,
+    crate::workflows::FILES_1099,
+    CHECK_MEMO_ACCOUNT_NUMBER,
+];
 
 fn default_of(key: &str) -> Option<&'static str> {
     DEFAULTS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
@@ -174,6 +237,26 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             Ok(n) if (1..=60).contains(&n) => Ok(n.to_string()),
             _ => Err("PREF_BAD_KEEP: keep between 1 and 60 automatic backups".into()),
         },
+        BILL_DUE_DAYS => match v.parse::<u32>() {
+            Ok(days) if days <= 365 => Ok(days.to_string()),
+            _ => Err("PREF_BAD_BILL_DAYS: enter 0 to 365 days".into()),
+        },
+        DEFAULT_MARKUP => match v.trim_end_matches('%').trim().parse::<u32>() {
+            Ok(pct) if pct <= 1000 => Ok(pct.to_string()),
+            _ => Err("PREF_BAD_MARKUP: enter a whole percent from 0 to 1000".into()),
+        },
+        DEFAULT_SHIP_METHOD => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_SHIP_METHOD: choose a ship method".into()),
+        },
+        crate::workflows::ACCOUNT_BOXES => {
+            let map = crate::workflows::parse_account_boxes(v)?;
+            if map.is_empty() {
+                Ok(String::new())
+            } else {
+                Ok(serde_json::to_string(&map.into_iter().map(|(id, b)| (id.to_string(), b)).collect::<BTreeMap<_, _>>()).map_err(|e| e.to_string())?)
+            }
+        }
         crate::statements::CASH_FLOW_SECTIONS => {
             let map: BTreeMap<i64, crate::statements::CashFlowSection> = crate::statements::parse_cash_flow_sections(v)?.into_iter().collect();
             if map.is_empty() {
@@ -301,6 +384,24 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
         .map_err(db_err)?;
         if !matches!(account, Some((classification, true)) if classification == "INCOME") {
             return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
+        }
+    }
+    if key == crate::workflows::ACCOUNT_BOXES {
+        for id in crate::workflows::parse_account_boxes(&normalized)?.keys() {
+            let classification: Option<String> = sqlx::query_scalar("SELECT t.classification FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+            if !matches!(classification.as_deref(), Some("EXPENSE" | "ASSET" | "LIABILITY")) {
+                return Err(format!("PREF_BAD_1099_MAP: account {id} is not an expense, asset or liability account"));
+            }
+        }
+    }
+    if key == DEFAULT_SHIP_METHOD && !normalized.is_empty() {
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM ship_methods WHERE id = ?1)").bind(normalized.parse::<i64>().unwrap_or_default()).fetch_one(pool).await.map_err(db_err)?;
+        if !exists {
+            return Err("PREF_BAD_SHIP_METHOD: that ship method does not exist".into());
         }
     }
     if key == crate::statements::CASH_FLOW_SECTIONS {

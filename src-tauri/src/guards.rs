@@ -24,6 +24,8 @@ pub const WARN_DUPLICATE_BILLS: &str = "warn_duplicate_bill_numbers";
 pub const WARN_PAST_DAYS: &str = "warn_date_past_days";
 pub const WARN_FUTURE_DAYS: &str = "warn_date_future_days";
 pub const WARN_RETAINED_EARNINGS: &str = "warn_retained_earnings";
+/// Warn before an invoice or sales receipt for a customer who has invoices past due.
+pub const WARN_OVERDUE_CUSTOMERS: &str = "warn_overdue_customers";
 /// About ten years; 0 turns the warning off.
 pub const MAX_WARN_DAYS: u32 = 3650;
 
@@ -167,6 +169,78 @@ pub async fn retained_earnings_warning(pool: &SqlitePool, account_ids: &[i64]) -
     }))
 }
 
+/// A customer with open invoices past their due date on `today` (Sales & Customers).
+pub async fn overdue_customer_warning(pool: &SqlitePool, customer_name: &str, today: NaiveDate) -> Result<Option<Warning>, String> {
+    let name = customer_name.trim();
+    if name.is_empty() || !preferences::flag(pool, WARN_OVERDUE_CUSTOMERS).await? {
+        return Ok(None);
+    }
+    let (count, open_cents, oldest): (i64, i64, Option<NaiveDate>) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(b.home_open_cents), 0), MIN(i.due_date) FROM invoices i
+         JOIN v_invoice_balances b ON b.invoice_id = i.id
+         LEFT JOIN customers c ON c.id = i.customer_id
+         WHERE COALESCE(c.name, i.customer_name) = ?1 COLLATE NOCASE
+           AND i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND b.home_open_cents > 0 AND i.due_date < ?2",
+    )
+    .bind(name)
+    .bind(today)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    let Some(oldest) = oldest.filter(|_| count > 0) else { return Ok(None) };
+    let invoices = if count == 1 { "1 invoice".to_string() } else { format!("{count} invoices") };
+    Ok(Some(Warning::new(
+        "CUSTOMER_OVERDUE",
+        format!(
+            "{name} has {invoices} past due, {} in all, the oldest due {}.",
+            crate::ledger::format_cents(open_cents),
+            oldest.format("%m/%d/%Y")
+        ),
+    )))
+}
+
+/// Company preference: what happens when a sale would take an item's stock below zero: `allow`
+/// (the default; the oversold units are costed later), `warn` (ask, Save anyway) or `stop`.
+pub const NEGATIVE_STOCK: &str = "negative_stock";
+
+/// Tracked items whose stock on hand is less than what a sale takes. `sold` is
+/// `(product, quantity × 10,000)` per line. With the preference at `stop` this is an error that
+/// Save anyway cannot pass.
+pub async fn negative_stock_warning(pool: &SqlitePool, sold: &[(i64, i64)]) -> Result<Option<Warning>, String> {
+    if sold.is_empty() {
+        return Ok(None);
+    }
+    let mode = preferences::get(pool, NEGATIVE_STOCK).await?;
+    if mode == "allow" {
+        return Ok(None);
+    }
+    let mut wanted: std::collections::BTreeMap<i64, i64> = std::collections::BTreeMap::new();
+    for (product, qty) in sold {
+        let total = wanted.entry(*product).or_default();
+        *total = total.checked_add(*qty).ok_or("STOCK_OVERFLOW: quantity out of range")?;
+    }
+    let mut short: Vec<String> = Vec::new();
+    for (product, qty) in wanted {
+        let item: Option<(String, i64)> =
+            sqlx::query_as("SELECT p.name, i.qty_on_hand_e4 FROM inventory_items i JOIN products_services p ON p.id = i.product_id WHERE i.product_id = ?1")
+                .bind(product)
+                .fetch_optional(pool)
+                .await
+                .map_err(db_err)?;
+        if let Some((name, on_hand)) = item.filter(|(_, on_hand)| *on_hand < qty) {
+            short.push(format!("{name} (selling {}, {} on hand)", crate::forms::format_quantity(qty), crate::forms::format_quantity(on_hand)));
+        }
+    }
+    if short.is_empty() {
+        return Ok(None);
+    }
+    let list = short.join(", ");
+    if mode == "stop" {
+        return Err(format!("STOCK_NEGATIVE: not enough in stock: {list}. Enter what you received first, or change Preferences › Items & Inventory."));
+    }
+    Ok(Some(Warning::new("NEGATIVE_STOCK", format!("This sale takes stock below zero: {list}."))))
+}
+
 /// What a save is about to post, for the guards to look at.
 #[derive(Debug, Default)]
 pub struct Posting<'a> {
@@ -176,6 +250,10 @@ pub struct Posting<'a> {
     pub check: Option<(i64, Option<&'a str>, Option<i64>)>,
     /// `(vendor name, bill number, bill being replaced)`.
     pub bill: Option<(&'a str, Option<&'a str>, Option<i64>)>,
+    /// The customer a new sale is for.
+    pub customer: Option<&'a str>,
+    /// Tracked items a new sale takes: `(product, quantity × 10,000)`.
+    pub sold: Vec<(i64, i64)>,
 }
 
 /// Every warning for `posting`, as of `today`.
@@ -190,6 +268,10 @@ pub async fn warnings_on(pool: &SqlitePool, posting: &Posting<'_>, today: NaiveD
     if let Some((vendor, number, except)) = posting.bill {
         out.extend(duplicate_bill_warning(pool, vendor, number, except).await?);
     }
+    if let Some(customer) = posting.customer {
+        out.extend(overdue_customer_warning(pool, customer, today).await?);
+    }
+    out.extend(negative_stock_warning(pool, &posting.sold).await?);
     out.extend(retained_earnings_warning(pool, &posting.account_ids).await?);
     Ok(out)
 }
@@ -208,7 +290,7 @@ pub fn expense(input: &crate::expenses::ExpenseInput, replacing: Option<i64>) ->
         date: Some(input.expense_date),
         account_ids: input.lines.iter().map(|l| l.account_id).collect(),
         check: (input.kind == "CHECK").then_some((input.payment_account_id, input.check_number.as_deref(), replacing)),
-        bill: None,
+        ..Default::default()
     }
 }
 
@@ -218,12 +300,24 @@ pub fn bill(input: &crate::expenses::BillInput, replacing: Option<i64>) -> Posti
         account_ids: input.lines.iter().map(|l| l.account_id).collect(),
         check: None,
         bill: Some((input.vendor_name.as_str(), input.bill_number.as_deref(), replacing)),
+        ..Default::default()
     }
 }
 
-/// Sales documents, estimates and purchase orders: only the date is guarded.
+/// Estimates, purchase orders and changes to a sale: only the date is guarded.
 pub fn dated(date: NaiveDate) -> Posting<'static> {
     Posting { date: Some(date), ..Default::default() }
+}
+
+/// A new invoice or sales receipt: its date, whether the customer is behind on paying, and the
+/// stock it takes (`(product, quantity × 10,000)` per line with an item).
+pub fn sale(date: NaiveDate, customer: Option<&str>, sold: impl IntoIterator<Item = (Option<i64>, i64)>) -> Posting<'_> {
+    Posting {
+        date: Some(date),
+        customer: customer.filter(|c| !c.trim().is_empty()),
+        sold: sold.into_iter().filter_map(|(product, qty)| product.map(|p| (p, qty))).collect(),
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]

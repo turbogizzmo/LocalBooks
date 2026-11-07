@@ -56,6 +56,11 @@ export function periodRange(period, iso = todayIso()) {
       const qs = Math.floor((m - 1) / 3) * 3 + 1;
       return [`${y}-${pad(qs)}-01`, last(y, qs + 2)];
     }
+    case 'lastQuarter': {
+      const qs = Math.floor((m - 1) / 3) * 3 + 1;
+      const [py, ps] = qs === 1 ? [y - 1, 10] : [y, qs - 3];
+      return [`${py}-${pad(ps)}-01`, last(py, ps + 2)];
+    }
     case 'lastYear':
       return [`${y - 1}-01-01`, `${y - 1}-12-31`];
     case 'thisYearToDate':

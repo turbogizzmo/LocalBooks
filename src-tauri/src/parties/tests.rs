@@ -27,6 +27,7 @@ async fn protected_tax_ids_need_the_key_to_see_or_change() {
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        account_number: None,
         custom_fields: Vec::new(),
     };
 
@@ -68,6 +69,7 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        account_number: None,
         custom_fields: Vec::new(),
     };
     let saved = update_party(&pool, "customer", acme.id, input("Acme Inc"), Access::OPEN).await.unwrap();
@@ -77,6 +79,14 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
     assert_eq!(styled.form_style_id, Some(1));
     assert!(update_party(&pool, "customer", acme.id, input("globex"), Access::OPEN).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
     assert!(!set_party_active(&pool, "customer", acme.id, false, Access::OPEN).await.unwrap().is_active);
+
+    // A vendor keeps your account number with them (for the check memo); it lists with the vendors.
+    let vendor = crate::expenses::create_vendor(&pool, "Harbor Hardware", None).await.unwrap();
+    let with_account = update_party(&pool, "vendor", vendor.id, PartyDetailsInput { account_number: Some(" 88-123 ".into()), ..input("Harbor Hardware") }, Access::OPEN).await.unwrap();
+    assert_eq!(with_account.account_number.as_deref(), Some("88-123"));
+    let listed = crate::expenses::list_vendors(&pool).await.unwrap();
+    assert_eq!(listed.iter().find(|v| v.id == vendor.id).unwrap().account_number.as_deref(), Some("88-123"));
+    assert!(update_party(&pool, "vendor", vendor.id, PartyDetailsInput { account_number: Some("x".repeat(41)), ..input("Harbor Hardware") }, Access::OPEN).await.unwrap_err().starts_with("PARTY_BAD_ACCOUNT_NUMBER"));
 
     // Jobs: typed as Customer:Job, renamed with their customer.
     let job = crate::sales::create_customer(&pool, "Acme Inc : Kitchen", None).await.unwrap();

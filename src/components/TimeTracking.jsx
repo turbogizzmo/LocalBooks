@@ -2,15 +2,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 import { centsToInput, formatCents, formatMinutes, parseHoursToMinutes, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function mondayOf(iso) {
+/** The first day (0 = Sunday) of the work week, from Preferences › Time & Expenses. */
+const weekStartDay = (prefs) => Math.max(0, WEEKDAYS.indexOf(prefs?.week_start_day ?? 'monday'));
+
+/** The first day of the work week containing `iso`. */
+function weekStartOf(iso, first) {
   const [y, m, d] = iso.split('-').map(Number);
-  const weekday = (new Date(y, m - 1, d).getDay() + 6) % 7;
+  const weekday = (new Date(y, m - 1, d).getDay() - first + 7) % 7;
   return addDays(iso, -weekday);
 }
 
@@ -79,7 +85,17 @@ function SingleActivity({ employees, customers, products, onSaved }) {
   const [date, setDate] = useState(todayIso());
   const [customerId, setCustomerId] = useState(null);
   const [serviceId, setServiceId] = useState(null);
-  const [billable, setBillable] = useState(false);
+  const [billable, setBillableState] = useState(false);
+  // New time for a customer starts billable when Preferences › Time & Expenses says so.
+  const billableByDefault = useCompanyPreferences()?.time_billable_default === 'true';
+  const [billableTouched, setBillableTouched] = useState(false);
+  const setBillable = (on) => {
+    setBillableTouched(true);
+    setBillableState(on);
+  };
+  useEffect(() => {
+    if (!billableTouched) setBillableState(billableByDefault && customerId != null);
+  }, [customerId, billableByDefault]); // eslint-disable-line react-hooks/exhaustive-deps
   const [rate, setRate] = useState('');
   const [hours, setHours] = useState('');
   const [description, setDescription] = useState('');
@@ -191,7 +207,12 @@ const blankRow = () => ({ key: nextRow++, customerId: null, serviceId: null, bil
 
 function WeeklyTimesheet({ employees, customers, products, onSaved }) {
   const [employeeId, setEmployeeId] = useState(null);
-  const [weekStart, setWeekStart] = useState(mondayOf(todayIso()));
+  const prefs = useCompanyPreferences();
+  const first = weekStartDay(prefs);
+  const [weekStart, setWeekStart] = useState(weekStartOf(todayIso(), 1));
+  useEffect(() => setWeekStart((w) => weekStartOf(w, first)), [first]);
+  const dayName = (i) => SHORT_DAYS[(first + i) % 7];
+  const billableByDefault = prefs?.time_billable_default === 'true';
   const [rows, setRows] = useState(() => [blankRow(), blankRow()]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -256,8 +277,8 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           <EmployeePicker employees={employees} value={employeeId} onChange={setEmployeeId} selectRef={employeeRef} />
         </label>
         <label>
-          <span className="qb-label">Week starting (Monday)</span>
-          <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
+          <span className="qb-label">Week starting ({WEEKDAYS[first][0].toUpperCase()}{WEEKDAYS[first].slice(1)})</span>
+          <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(weekStartOf(e.target.value, first))} />
         </label>
         {tracking.enabled && (
           <label>
@@ -292,7 +313,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
             <th className="qb-grid-head">Description</th>
             {days.map((d, i) => (
               <th key={d} className="qb-grid-head text-right">
-                {DAY_NAMES[i]} <span className="font-normal">{Number(d.slice(8))}</span>
+                {dayName(i)} <span className="font-normal">{Number(d.slice(8))}</span>
               </th>
             ))}
             <th className="qb-grid-head text-right">Total</th>
@@ -303,7 +324,10 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           {rows.map((r) => (
             <tr key={r.key} className="qb-grid-row">
               <td className="qb-grid-cell-edit">
-                <select value={r.customerId ?? ''} onChange={(e) => update(r.key, { customerId: e.target.value === '' ? null : Number(e.target.value) })} aria-label="Customer">
+                <select value={r.customerId ?? ''} onChange={(e) => {
+                    const customerId = e.target.value === '' ? null : Number(e.target.value);
+                    update(r.key, { customerId, ...(r.billableTouched ? {} : { billable: billableByDefault && customerId != null }) });
+                  }} aria-label="Customer">
                   <option value="">—</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -327,7 +351,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
                 </select>
               </td>
               <td className="qb-grid-cell text-center">
-                <input type="checkbox" className="accent-qb-green" checked={r.billable} onChange={(e) => update(r.key, { billable: e.target.checked })} aria-label="Billable" />
+                <input type="checkbox" className="accent-qb-green" checked={r.billable} onChange={(e) => update(r.key, { billable: e.target.checked, billableTouched: true })} aria-label="Billable" />
               </td>
               <td className="qb-grid-cell-edit">
                 <input className="num" value={r.rate} onChange={(e) => update(r.key, { rate: e.target.value })} disabled={!r.billable} placeholder={r.billable ? '0.00' : ''} aria-label="Hourly rate" />
@@ -342,7 +366,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
                     value={cell}
                     onChange={(e) => setCell(r.key, i, e.target.value)}
                     aria-invalid={cell.trim() !== '' && minutesOf(cell) === null}
-                    aria-label={`${DAY_NAMES[i]} hours`}
+                    aria-label={`${dayName(i)} hours`}
                   />
                 </td>
               ))}

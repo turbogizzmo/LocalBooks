@@ -163,3 +163,31 @@ async fn new_preferences_have_defaults_without_a_migration_and_validate() {
     assert!(preferences::set(&pool, "hours_format", "minutes").await.is_err());
     assert!(preferences::set(&pool, "four_digit_years", "yes").await.is_err());
 }
+
+#[tokio::test]
+async fn selling_to_a_customer_with_overdue_invoices_warns_when_turned_on() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-09-01", "dueDate": "2026-10-01",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 12_500, "incomeAccountId": services }]
+    }))
+    .unwrap();
+    crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
+    let today = d(2026, 11, 6);
+    let sale = sale(today, Some("acme"), []);
+
+    assert_eq!(preferences::get(&pool, WARN_OVERDUE_CUSTOMERS).await.unwrap(), "false", "off unless the company turns it on");
+    assert!(warnings_on(&pool, &sale, today).await.unwrap().is_empty());
+
+    preferences::set(&pool, WARN_OVERDUE_CUSTOMERS, "true").await.unwrap();
+    let warnings = warnings_on(&pool, &sale, today).await.unwrap();
+    assert_eq!(codes(&warnings), ["CUSTOMER_OVERDUE"]);
+    assert!(warnings[0].message.contains("1 invoice past due") && warnings[0].message.contains("10/01/2026"), "{}", warnings[0].message);
+    // Not yet due, another customer, and a walk-in sale don't warn.
+    assert_eq!(overdue_customer_warning(&pool, "Acme", d(2026, 9, 30)).await.unwrap(), None);
+    assert!(warnings_on(&pool, &super::sale(today, Some("Globex"), []), today).await.unwrap().is_empty());
+    assert!(warnings_on(&pool, &super::sale(today, None, []), today).await.unwrap().is_empty());
+    let err = confirm(warnings, None).unwrap_err();
+    assert!(confirm(warnings_in(&err).unwrap(), Some(&["CUSTOMER_OVERDUE".to_string()])).is_ok(), "Save anyway records it");
+}

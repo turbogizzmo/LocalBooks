@@ -161,10 +161,80 @@ pub struct Vendor1099Row {
     pub paid_cents: i64,
     #[sqlx(skip)]
     pub over_threshold: bool,
+    /// What was paid in each 1099 box, when Preferences › Tax: 1099 maps accounts to boxes; empty
+    /// otherwise (every payment is then nonemployee compensation).
+    #[sqlx(skip)]
+    pub boxes: Vec<BoxAmount>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoxAmount {
+    /// One of [`BOXES`].
+    pub code: String,
+    pub cents: i64,
+    pub over_threshold: bool,
 }
 
 /// The 1099-NEC reporting threshold.
 pub const NEC_THRESHOLD_CENTS: i64 = 60_000;
+
+/// Company preference: whether the company files 1099s (off hides the 1099 tools).
+pub const FILES_1099: &str = "files_1099";
+/// Company preference: a JSON object from account id to one of [`BOXES`]; only payments to mapped
+/// accounts are reported, each in its box. Blank reports every payment as nonemployee compensation.
+pub const ACCOUNT_BOXES: &str = "vendor_1099_accounts";
+
+/// The 1099 boxes accounts can map to: code, label and reporting threshold in cents. Royalties have
+/// the lower threshold the IRS sets for them; the others use the nonemployee compensation one.
+pub const BOXES: &[(&str, &str, i64)] = &[
+    ("NEC_1", "1099-NEC box 1: Nonemployee compensation", NEC_THRESHOLD_CENTS),
+    ("MISC_1", "1099-MISC box 1: Rents", NEC_THRESHOLD_CENTS),
+    ("MISC_2", "1099-MISC box 2: Royalties", 1_000),
+    ("MISC_3", "1099-MISC box 3: Other income", NEC_THRESHOLD_CENTS),
+    ("MISC_6", "1099-MISC box 6: Medical and health care payments", NEC_THRESHOLD_CENTS),
+    ("MISC_10", "1099-MISC box 10: Gross proceeds paid to an attorney", NEC_THRESHOLD_CENTS),
+];
+
+/// Parses [`ACCOUNT_BOXES`]; blank is no mapping.
+pub fn parse_account_boxes(value: &str) -> Result<std::collections::BTreeMap<i64, String>, String> {
+    if value.trim().is_empty() {
+        return Ok(Default::default());
+    }
+    let raw: std::collections::BTreeMap<String, String> = serde_json::from_str(value).map_err(|_| "PREF_BAD_1099_MAP: map each account to a 1099 box".to_string())?;
+    raw.into_iter()
+        .map(|(id, code)| {
+            let id = id.parse::<i64>().map_err(|_| format!("PREF_BAD_1099_MAP: '{id}' is not an account"))?;
+            if BOXES.iter().any(|(c, _, _)| *c == code) { Ok((id, code)) } else { Err(format!("PREF_BAD_1099_MAP: '{code}' is not a 1099 box")) }
+        })
+        .collect()
+}
+
+/// What each 1099 vendor was paid from a bank in `start..=end`, by the account each payment was
+/// for: `(vendor, account, cents)`. A bill payment is split over the bill's lines in proportion.
+async fn paid_by_account(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Result<Vec<(i64, i64, i64)>, String> {
+    // (vendor, account, line amount, document total, amount paid in the period)
+    let parts: Vec<(i64, i64, i64, i64, i64)> = sqlx::query_as(
+        "SELECT x.vendor_id, l.account_id, l.amount_cents, x.total_cents, COALESCE(x.home_total_cents, x.total_cents)
+         FROM expenses x JOIN expense_lines l ON l.expense_id = x.id JOIN chart_of_accounts a ON a.id = x.payment_account_id
+         WHERE x.vendor_id IS NOT NULL AND x.is_voided = 0 AND a.account_type = 'BANK' AND x.expense_date BETWEEN ?1 AND ?2
+         UNION ALL
+         SELECT b.vendor_id, l.account_id, l.amount_cents, b.total_cents, p.amount_cents
+         FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN bill_lines l ON l.bill_id = b.id JOIN chart_of_accounts a ON a.id = p.payment_account_id
+         WHERE p.is_voided = 0 AND a.account_type = 'BANK' AND p.payment_date BETWEEN ?1 AND ?2",
+    )
+    .bind(start)
+    .bind(end)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    parts
+        .into_iter()
+        .map(|(vendor, account, line, total, paid)| {
+            crate::ledger::mul_div_round(line, paid, total.max(1)).map(|cents| (vendor, account, cents)).ok_or_else(|| "RPT_OVERFLOW: amount out of range".to_string())
+        })
+        .collect()
+}
 
 /// Payments to vendors marked for a 1099 in a calendar year, from bank accounts (card payments are
 /// reported by the card company, so they are left out): checks and expenses paid from a bank, and
@@ -184,8 +254,28 @@ pub async fn vendors_1099(pool: &SqlitePool, year: i32, access: crate::tax_ids::
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let mapping = parse_account_boxes(&crate::preferences::get(pool, ACCOUNT_BOXES).await?)?;
+    let by_account = if mapping.is_empty() { Vec::new() } else { paid_by_account(pool, start, end).await? };
     for row in &mut rows {
-        row.over_threshold = row.paid_cents >= NEC_THRESHOLD_CENTS;
+        if !mapping.is_empty() {
+            // Only payments to mapped accounts are reported, each in its box.
+            let mut boxes: Vec<BoxAmount> = Vec::new();
+            for (code, _, threshold) in BOXES {
+                let cents = by_account
+                    .iter()
+                    .filter(|(vendor, account, _)| *vendor == row.vendor_id && mapping.get(account).map(String::as_str) == Some(*code))
+                    .try_fold(0i64, |sum, (_, _, c)| sum.checked_add(*c))
+                    .ok_or("RPT_OVERFLOW: amount out of range")?;
+                if cents != 0 {
+                    boxes.push(BoxAmount { code: (*code).to_string(), cents, over_threshold: cents >= *threshold });
+                }
+            }
+            row.paid_cents = boxes.iter().map(|b| b.cents).sum();
+            row.over_threshold = boxes.iter().any(|b| b.over_threshold);
+            row.boxes = boxes;
+        } else {
+            row.over_threshold = row.paid_cents >= NEC_THRESHOLD_CENTS;
+        }
         let view = crate::tax_ids::show(access, row.vendor_id, row.tax_id.as_deref(), row.tax_id_masked.as_deref())?;
         (row.tax_id, row.tax_id_masked) = (view.full, view.masked);
     }

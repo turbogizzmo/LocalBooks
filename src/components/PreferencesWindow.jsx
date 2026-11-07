@@ -12,6 +12,7 @@ import GeneralPreferences, { AccountingMyPreferences, ReportsMyPreferences } fro
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
+import { BOX_LABEL } from './MoreReports.jsx';
 
 /** One preference field that commits to the database as soon as the user leaves it or picks a value. */
 export function PrefField({ label, prefKey, prefs, hint, children }) {
@@ -479,9 +480,40 @@ function FinanceChargeCompany({ field, accounts }) {
           />
         ),
       })}
+      {field({ label: 'Calculate charges from', prefKey: 'finance_charge_from', hint: 'Interest runs from this date; an invoice is overdue only after its due date and the grace period either way', children: choice([['due', 'Due date'], ['invoice', 'Invoice date']], 'w-[160px]') })}
       {field({ label: 'Charge on finance charges', prefKey: 'finance_charge_on_finance_charges', hint: 'Whether overdue finance charge invoices themselves earn finance charges', children: flag('Assess finance charges on overdue finance charges') })}
     </Group>
   );
+}
+
+/**
+ * A preference holding a JSON object (account id → value): `[map, save]`. The map follows the
+ * stored preference (another window's change shows here too); `save` shows the change at once and
+ * puts it back if saving fails.
+ */
+function useJsonPreference(prefs, key, setState) {
+  const parse = (text) => {
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      return {};
+    }
+  };
+  const [map, setMap] = useState(() => parse(prefs[key]));
+  useEffect(() => setMap(parse(prefs[key])), [prefs[key]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = async (next) => {
+    const before = map;
+    setMap(next);
+    setState({ status: 'saving' });
+    try {
+      await api.setPreference(key, Object.keys(next).length ? JSON.stringify(next) : '');
+      setState({ status: 'saved' });
+    } catch (err) {
+      setMap(before);
+      setState({ status: 'error', message: errorText(err) });
+    }
+  };
+  return [map, save];
 }
 
 const CASH_FLOW_SECTION = { OPERATING: 'Operating', INVESTING: 'Investing', FINANCING: 'Financing' };
@@ -502,25 +534,8 @@ const DEFAULT_SECTION = {
 function CashFlowMapping({ accounts }) {
   const { prefs } = usePrefs();
   const [state, setState] = useState(null);
-  const overrides = (() => {
-    try {
-      return prefs.cash_flow_sections ? JSON.parse(prefs.cash_flow_sections) : {};
-    } catch {
-      return {};
-    }
-  })();
-  const [map, setMap] = useState(overrides);
+  const [map, save] = useJsonPreference(prefs, 'cash_flow_sections', setState);
   const rows = (accounts ?? []).filter((a) => DEFAULT_SECTION[a.accountType] && (a.isActive || map[a.id]));
-  const save = async (next) => {
-    setMap(next);
-    setState({ status: 'saving' });
-    try {
-      await api.setPreference('cash_flow_sections', Object.keys(next).length ? JSON.stringify(next) : '');
-      setState({ status: 'saved' });
-    } catch (err) {
-      setState({ status: 'error', message: errorText(err) });
-    }
-  };
   const choose = (account, section) => {
     const next = { ...map };
     if (section === DEFAULT_SECTION[account.accountType]) delete next[account.id];
@@ -585,6 +600,160 @@ function ReportsCompany({ field, accounts }) {
         <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">Account numbers and subaccounts are under Accounting › Company Preferences. The Balance Sheet is always on the accrual basis.</p>
       </Group>
       <CashFlowMapping accounts={accounts} />
+    </>
+  );
+}
+
+function ShipMethodSelect({ id, value, commit, invalid }) {
+  const methods = useLedgerQuery(api.listShipMethods).data ?? [];
+  return (
+    <select id={id} className="qb-input w-[220px]" value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+      <option value="">None</option>
+      {methods
+        .filter((m) => m.isActive || String(m.id) === value)
+        .map((m) => (
+          <option key={m.id} value={String(m.id)}>{m.name}</option>
+        ))}
+    </select>
+  );
+}
+
+function SalesCompany({ field }) {
+  return (
+    <>
+      <Group title="Sales forms" id="sales-forms">
+        {field({ label: 'Usual shipping method', prefKey: 'default_ship_method_id', hint: 'New invoices, sales receipts and estimates start with this Ship Via (the list is in Reps, Ship Via & Fields)', children: ShipMethodSelect })}
+        {field({ label: 'Usual markup', prefKey: 'default_markup_percent', hint: 'Percent over unit cost that Change Item Prices starts with when you price from cost', children: textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' }) })}
+        <Always label="Invoice numbers">Each invoice gets the next number, so no two share one.</Always>
+      </Group>
+      <Group title="Customers">
+        {field({ label: 'Overdue invoices', prefKey: 'warn_overdue_customers', hint: 'Asks before saving an invoice or sales receipt for a customer with invoices past due; Save anyway records it', children: flag('Warn before selling to a customer with overdue invoices') })}
+        {field({ label: 'Price levels', prefKey: 'price_levels_enabled', hint: 'Off: every line uses the item’s standard price and the customer’s level is ignored', children: flag('Use price levels') })}
+      </Group>
+    </>
+  );
+}
+
+function PaymentsCompany({ field }) {
+  return (
+    <Group title="Receive Payments">
+      {field({ label: 'Apply payments', prefKey: 'auto_apply_payments', hint: 'Typing the amount received fills in the oldest invoices first; Auto Apply still works when this is off', children: flag('Automatically apply payments') })}
+      {field({ label: 'Calculate payments', prefKey: 'auto_calculate_payments', hint: 'Ticking invoices or typing on them works out the amount received', children: flag('Automatically calculate payments') })}
+      {field({ label: 'Deposit to', prefKey: 'deposit_to_undeposited_funds', hint: 'Off: payments go straight to your first bank account unless you pick another', children: flag('Use Undeposited Funds as the default deposit-to account') })}
+    </Group>
+  );
+}
+
+function BillsCompany({ field }) {
+  return (
+    <Group title="Bills">
+      {field({ label: 'Bills are due', prefKey: 'bill_due_days', hint: 'Days after the bill date, for vendors without their own terms (0–365)', children: days })}
+      {field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}
+      {field({ label: 'Vendor credits', prefKey: 'auto_apply_vendor_credits', hint: 'Pay Bills uses each vendor’s open credits first and pays the rest', children: flag('Automatically use credits') })}
+      <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">Early-payment discounts are not offered: vendor terms in LocalBooks are a number of days, with no discount.</p>
+    </Group>
+  );
+}
+
+function JobsCompany({ field }) {
+  return (
+    <Group title="Estimates">
+      {field({ label: 'Estimates', prefKey: 'estimates_enabled', hint: 'Off hides Estimates from the Sales menu and Create; saved estimates are kept', children: flag('Use estimates') })}
+      <Always label="Estimate numbers">Each estimate gets the next number, so no two share one.</Always>
+      <Always label="Zero-amount lines">An estimate line needs a quantity and a rate above zero, so an invoice made from an estimate never prints a zero line.</Always>
+    </Group>
+  );
+}
+
+function SendFormsCompany({ field }) {
+  return (
+    <Group title="Delivery">
+      {field({ label: 'Delivery method', prefKey: 'default_delivery_method', hint: 'Email: new invoices and estimates for customers with an email address start with Email later ticked', children: choice([['none', 'None (print or send yourself)'], ['email', 'Email later']]) })}
+    </Group>
+  );
+}
+
+function SalesTaxCompany({ field }) {
+  return (
+    <Group title="Sales tax" id="sales-tax-prefs">
+      {field({ label: 'Owe sales tax', prefKey: 'sales_tax_basis', hint: 'The Sales Tax Liability report counts invoices when issued (accrual) or as customers pay (cash). Check which your state allows.', children: choice([['accrual', 'As of invoice date (accrual)'], ['cash', 'Upon receipt of payment (cash)']], 'w-[280px]') })}
+      {field({ label: 'File returns', prefKey: 'sales_tax_filing_frequency', hint: 'The liability report and Pay Sales Tax open on the period that just ended', children: choice([['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['annually', 'Annually']], 'w-[140px]') })}
+      {field({ label: 'Printed forms', prefKey: 'mark_taxable_lines', hint: 'Taxable lines on taxed invoices, estimates and sales receipts print their amount with a T', children: flag('Mark taxable amounts with "T" when printing') })}
+    </Group>
+  );
+}
+
+function TimeCompany({ field }) {
+  return (
+    <Group title="Time tracking">
+      {field({ label: 'First day of work week', prefKey: 'week_start_day', hint: 'Where weekly timesheets start', children: choice(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map((d) => [d, d[0].toUpperCase() + d.slice(1)]), 'w-[140px]') })}
+      {field({ label: 'Billable', prefKey: 'time_billable_default', hint: 'New time for a customer starts marked billable; time with no customer never is', children: flag('Mark all time entries as billable') })}
+      <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">
+        Whether hours show as 1:30 or 1.50 is under General › Company Preferences. Billable expenses (marking costs billable, a markup, and counting
+        reimbursements as income) need costs that can be added to an invoice, which LocalBooks does not have yet.
+      </p>
+    </Group>
+  );
+}
+
+/** Which accounts' payments go in which 1099 box. */
+function Account1099Mapping({ accounts }) {
+  const { prefs } = usePrefs();
+  const [state, setState] = useState(null);
+  const [map, save] = useJsonPreference(prefs, 'vendor_1099_accounts', setState);
+  const rows = (accounts ?? []).filter((a) => (a.classification === 'EXPENSE' || a.accountType === 'FIXED_ASSET' || a.accountType === 'OTHER_CURRENT_ASSET') && (a.isActive || map[a.id]));
+  const choose = (account, code) => {
+    const next = { ...map };
+    if (code === '') delete next[account.id];
+    else next[account.id] = code;
+    save(next);
+  };
+  const mapped = Object.keys(map).length;
+  return (
+    <Group title="1099 accounts" id="1099-accounts">
+      <p className="px-2 py-1 text-xs text-qb-ink-muted">
+        {mapped ? 'Only payments to the accounts mapped here count on the 1099 Summary, each in its box.' : 'No accounts mapped: every bank payment to a 1099 vendor counts as nonemployee compensation.'}
+        {state?.status === 'saving' && <span className="ml-1">Saving…</span>}
+        {state?.status === 'saved' && <span className="ml-1 font-semibold text-qb-green-active">✓ Saved</span>}
+        {state?.status === 'error' && <span className="ml-1 text-qb-negative">{state.message}</span>}
+      </p>
+      <div className="max-h-[260px] overflow-auto scrollbar-thin">
+        <table className="qb-grid">
+          <thead>
+            <tr>
+              <th className="qb-grid-head">Account</th>
+              <th className="qb-grid-head w-[330px]">1099 box</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.id} className="qb-grid-row">
+                <td className="qb-grid-cell truncate">{a.accountNumber ? `${a.accountNumber} · ${a.fullName}` : a.fullName}</td>
+                <td className="qb-grid-cell">
+                  <select aria-label={`1099 box for ${a.fullName}`} className="qb-input w-full" value={map[a.id] ?? ''} onChange={(e) => choose(a, e.target.value)}>
+                    <option value="">Not reported</option>
+                    {Object.entries(BOX_LABEL).map(([code, label]) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Group>
+  );
+}
+
+function Tax1099Company({ field, accounts }) {
+  const { prefs } = usePrefs();
+  return (
+    <>
+      <Group title="1099 forms">
+        {field({ label: 'Do you file 1099s?', prefKey: 'files_1099', hint: 'Off hides the 1099 Summary and the vendor’s 1099 box; vendors keep what was set', children: flag('Yes, this company files 1099-NEC or 1099-MISC forms') })}
+      </Group>
+      {prefs.files_1099 !== 'false' && <Account1099Mapping accounts={accounts} />}
     </>
   );
 }
@@ -654,9 +823,7 @@ export const CATEGORIES = [
   {
     id: 'bills',
     label: 'Bills',
-    company: ({ field }) => (
-      <Group title="Bills">{field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}</Group>
-    ),
+    company: (p) => <BillsCompany {...p} />,
     links: [
       { label: 'Bills', view: 'expenses/bills' },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'each vendor’s terms' },
@@ -666,7 +833,10 @@ export const CATEGORIES = [
     id: 'checking',
     label: 'Checking',
     company: ({ field }) => (
-      <Group title="Checks">{field({ label: 'Duplicate check numbers', prefKey: 'warn_duplicate_check_numbers', hint: 'Per bank account; voided checks don’t count', children: flag('Warn about duplicate check numbers') })}</Group>
+      <Group title="Checks">
+        {field({ label: 'Duplicate check numbers', prefKey: 'warn_duplicate_check_numbers', hint: 'Per bank account; voided checks don’t count', children: flag('Warn about duplicate check numbers') })}
+        {field({ label: 'Check memo', prefKey: 'check_memo_vendor_account', hint: 'A new check to a vendor starts with “Acct” and the account number on the vendor (Expenses › Vendors)', children: flag('Autofill payee account number in check memo') })}
+      </Group>
     ),
     links: [
       { label: 'Expenses & Checks', view: 'expenses/expenses', hint: 'the next check number is filled in for each account' },
@@ -698,9 +868,16 @@ export const CATEGORIES = [
   {
     id: 'items',
     label: 'Items & Inventory',
-    company: () => (
-      <Group title="Purchase orders">
+    company: ({ field }) => (
+      <Group title="Inventory">
+        {field({
+          label: 'Selling more than you have',
+          prefKey: 'negative_stock',
+          hint: 'For new invoices and sales receipts. Allowed sales cost the missing units at the last cost and true up when the bill comes in.',
+          children: choice([['allow', 'Allow it'], ['warn', 'Warn (Save anyway)'], ['stop', 'Don’t allow it']], 'w-[200px]'),
+        })}
         <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
+        <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">Units of measure (selling by the each, case or pallet) are not available: items have one unit.</p>
       </Group>
     ),
     links: [
@@ -711,11 +888,7 @@ export const CATEGORIES = [
   {
     id: 'jobs',
     label: 'Jobs & Estimates',
-    company: () => (
-      <Group title="Estimates">
-        <Always label="Estimate numbers">Each estimate gets the next number, so no two share one.</Always>
-      </Group>
-    ),
+    company: (p) => <JobsCompany {...p} />,
     links: [{ label: 'Estimates', view: 'sales/estimates' }],
   },
   {
@@ -727,6 +900,7 @@ export const CATEGORIES = [
   {
     id: 'payments',
     label: 'Payments',
+    company: (p) => <PaymentsCompany {...p} />,
     links: [
       { label: 'Invoices', view: 'sales/invoices', hint: 'Receive Payments applies a payment to open invoices' },
       { label: 'Deposits & Transfers', view: 'banking/transfers', hint: 'payments wait in Undeposited Funds until deposited' },
@@ -750,13 +924,9 @@ export const CATEGORIES = [
   {
     id: 'sales',
     label: 'Sales & Customers',
-    company: () => (
-      <Group title="Invoices">
-        <Always label="Invoice numbers">Each invoice gets the next number, so no two share one.</Always>
-      </Group>
-    ),
+    company: (p) => <SalesCompany {...p} />,
     links: [
-      { label: 'Products & Services', view: 'sales/products', hint: 'price levels' },
+      { label: 'Products & Services', view: 'sales/products', hint: 'price levels, and Change Item Prices' },
       { label: 'Reps, Ship Via & Fields', view: 'sales/lists' },
       { label: 'Customers', view: 'sales/customers' },
     ],
@@ -764,11 +934,13 @@ export const CATEGORIES = [
   {
     id: 'sales-tax',
     label: 'Sales Tax',
+    company: (p) => <SalesTaxCompany {...p} />,
     links: [{ label: 'Sales Tax', view: 'sales/tax', hint: 'turn sales tax on, rates and the default rate' }],
   },
   {
     id: 'send-forms',
     label: 'Send Forms',
+    company: (p) => <SendFormsCompany {...p} />,
     links: [
       { label: 'Email', view: 'settings/email', hint: 'how forms are sent' },
       { label: 'Custom Forms', view: 'settings/forms', hint: 'how invoices and estimates look' },
@@ -778,6 +950,7 @@ export const CATEGORIES = [
   {
     id: '1099',
     label: 'Tax: 1099',
+    company: (p) => <Tax1099Company {...p} />,
     links: [
       { label: '1099 Summary', view: 'reports', data: { report: '1099' } },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'tax IDs and which vendors get a 1099' },
@@ -786,7 +959,7 @@ export const CATEGORIES = [
   {
     id: 'time',
     label: 'Time & Expenses',
-    company: () => <Nothing>Whether hours show as 1:30 or 1.50 is under General › Company Preferences.</Nothing>,
+    company: (p) => <TimeCompany {...p} />,
     links: [
       { label: 'Time Tracking', view: 'employees/time' },
       { label: 'Mileage', view: 'employees/mileage' },

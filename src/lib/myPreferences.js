@@ -31,6 +31,8 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   keepTypedItemDetails: 'ask',
   /** A journal entry's new lines start with the first line's memo. */
   autofillJournalMemo: true,
+  /** A new check, expense or bill for a vendor starts from their last one: `off`, `accounts` (accounts only) or `all` (with amounts). */
+  recallVendorTransaction: 'off',
   /** A report opened from the list asks for its dates (and basis) before it runs (Reports & Graphs). */
   reportOptionsFirst: false,
 });

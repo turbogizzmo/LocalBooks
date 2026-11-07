@@ -1506,13 +1506,39 @@ fn decode_logo(data_url: Option<&str>) -> Option<PdfImage> {
 /// The document to print: `document_id` is the invoice, estimate or sales receipt, or for a
 /// statement the customer (with `period`, last month by default). Without one, the sample.
 async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, symbol: &str) -> Result<FormDoc, String> {
-    match (kind, document_id) {
-        (_, None) => Ok(sample_doc(kind, symbol)),
-        (FormKind::Invoice, Some(id)) => invoice_doc(pool, id, symbol).await,
-        (FormKind::Estimate, Some(id)) => estimate_doc(pool, id, symbol).await,
-        (FormKind::SalesReceipt, Some(id)) => sales_receipt_doc(pool, id, symbol).await,
-        (FormKind::Statement, Some(id)) => statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
+    let mut doc = match (kind, document_id) {
+        (_, None) => return Ok(sample_doc(kind, symbol)),
+        (FormKind::Invoice, Some(id)) => invoice_doc(pool, id, symbol).await?,
+        (FormKind::Estimate, Some(id)) => estimate_doc(pool, id, symbol).await?,
+        (FormKind::SalesReceipt, Some(id)) => sales_receipt_doc(pool, id, symbol).await?,
+        (FormKind::Statement, Some(id)) => return statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
+    };
+    if let Some(id) = document_id {
+        mark_taxable(pool, kind, id, &mut doc.lines).await?;
     }
+    Ok(doc)
+}
+
+/// Preferences › Sales Tax › "Mark taxable amounts with a T": a taxed document's taxable lines
+/// print their amount followed by T.
+async fn mark_taxable(pool: &SqlitePool, kind: FormKind, id: i64, lines: &mut [FormLine]) -> Result<(), String> {
+    if !crate::preferences::flag(pool, crate::sales_tax::MARK_TAXABLE).await? {
+        return Ok(());
+    }
+    let sql = match kind {
+        FormKind::Invoice => "SELECT l.is_taxable FROM invoice_items l JOIN invoices d ON d.id = l.invoice_id WHERE d.id = ?1 AND d.tax_rate_id IS NOT NULL ORDER BY l.line_number",
+        FormKind::Estimate => "SELECT l.is_taxable FROM estimate_lines l JOIN estimates d ON d.id = l.estimate_id WHERE d.id = ?1 AND d.tax_rate_id IS NOT NULL ORDER BY l.line_number",
+        FormKind::SalesReceipt => "SELECT l.is_taxable FROM sales_receipt_lines l JOIN sales_receipts d ON d.id = l.sales_receipt_id WHERE d.id = ?1 AND d.tax_rate_id IS NOT NULL ORDER BY l.line_number",
+        FormKind::Statement => return Ok(()),
+    };
+    let taxable: Vec<bool> = sqlx::query_scalar(sql).bind(id).fetch_all(pool).await.map_err(db_err)?;
+    // Only when the lines match one to one (a document without a rate returns none).
+    if taxable.len() == lines.len() {
+        for (line, _) in lines.iter_mut().zip(taxable).filter(|(_, t)| *t) {
+            line.amount.push_str(" T");
+        }
+    }
+    Ok(())
 }
 
 /// "Invoice 1001 · Acme" (a statement's number is its end date): the PDF's title and, as

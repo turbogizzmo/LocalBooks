@@ -8,6 +8,7 @@ import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -199,6 +200,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         // Unchanged (or not ours to change): the stored value stays as it is.
         keepTaxId: Boolean(form.taxIdLocked) || (form.taxId ?? '') === (form.originalTaxId ?? ''),
         is1099: Boolean(form.is1099),
+        accountNumber: form.accountNumber ?? null,
         taxRateId: form.taxRateId ?? null,
         isTaxExempt: Boolean(form.isTaxExempt),
         taxExemption: form.taxExemption,
@@ -218,6 +220,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
     }
   };
 
+  const no1099 = useCompanyPreferences()?.files_1099 === 'false';
   const field = (label, key, props = {}) => (
     <label className="flex flex-col gap-0.5">
       <span className="font-semibold text-qb-ink-muted">{label}</span>
@@ -241,9 +244,10 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
             </label>
             {field('Terms (days)', 'termsDays', { inputMode: 'numeric', placeholder: kind === 'customer' ? 'e.g. 30 for Net 30' : 'e.g. 30' })}
+            {kind === 'vendor' && field('Account no.', 'accountNumber', { maxLength: 40, placeholder: 'Your account with them' })}
             {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
-            {kind === 'vendor' && (
+            {kind === 'vendor' && !no1099 && (
               <label className="col-span-2 flex items-center gap-1.5 text-sm">
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
                 Track payments for a 1099

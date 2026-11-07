@@ -105,3 +105,34 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let services_row = report.lines.iter().find(|l| l.label == "4100 Services").unwrap();
     assert_eq!(services_row.amounts_cents, [Some(0), Some(150_000), Some(-150_000), Some(0)]);
 }
+
+#[tokio::test]
+async fn mapped_accounts_put_1099_payments_in_their_boxes() {
+    let pool = test_pool().await;
+    let (checking, rent, supplies) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "6250").await);
+    let vendor = crate::expenses::create_vendor(&pool, "Joe Contractor", None).await.unwrap();
+    sqlx::query("UPDATE vendors SET is_1099 = 1 WHERE id = ?1").bind(vendor.id).execute(&pool).await.unwrap();
+    let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Joe Contractor", "paymentAccountId": checking, "expenseDate": "2026-05-01",
+        "checkNumber": "500", "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": rent, "amountCents": 70_000, "memo": null }, { "accountId": supplies, "amountCents": 20_000, "memo": null }] })).unwrap();
+    crate::expenses::post_expense(&pool, check).await.unwrap();
+    // A bill half rent, half supplies, paid 40.00 of 100.00: 20.00 of rent.
+    let bill: BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Joe Contractor", "billNumber": "J-1", "billDate": "2026-06-01", "dueDate": "2026-06-30", "memo": null, "totalCents": 10_000,
+        "lines": [{ "accountId": rent, "amountCents": 5_000, "memo": null }, { "accountId": supplies, "amountCents": 5_000, "memo": null }] })).unwrap();
+    let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
+    crate::expenses::pay_vendor_bills(&pool, vec![crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(6, 15), amount_cents: 4_000, reference: None }]).await.unwrap();
+
+    let unmapped = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
+    assert_eq!((unmapped[0].paid_cents, unmapped[0].boxes.len()), (94_000, 0), "no mapping: every bank payment counts");
+
+    crate::preferences::set(&pool, ACCOUNT_BOXES, &format!(r#"{{"{rent}":"MISC_1"}}"#)).await.unwrap();
+    let mapped = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
+    assert_eq!(mapped[0].paid_cents, 72_000, "only rent: 700.00 by check and 20.00 of the bill payment");
+    assert_eq!(mapped[0].boxes, vec![BoxAmount { code: "MISC_1".into(), cents: 72_000, over_threshold: true }]);
+
+    for bad in [format!(r#"{{"{rent}":"W2"}}"#), r#"{"x":"NEC_1"}"#.to_string()] {
+        assert!(crate::preferences::set(&pool, ACCOUNT_BOXES, &bad).await.unwrap_err().starts_with("PREF_BAD_1099_MAP"), "{bad}");
+    }
+    let sales = account(&pool, "4000").await;
+    assert!(crate::preferences::set(&pool, ACCOUNT_BOXES, &format!(r#"{{"{sales}":"NEC_1"}}"#)).await.is_err(), "income accounts are not payments");
+}

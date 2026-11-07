@@ -10,6 +10,7 @@ import Classes from './Classes.jsx';
 import CleanUpBooks from './CleanUpBooks.jsx';
 import CreditMemos from './CreditMemos.jsx';
 import Dashboard from './Dashboard.jsx';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 import DepositsTransfers from './DepositsTransfers.jsx';
 import Estimates from './Estimates.jsx';
 import ExpensesChecks from './ExpensesChecks.jsx';
@@ -39,17 +40,30 @@ import MileageTracking from './MileageTracking.jsx';
 import Todos from './Todos.jsx';
 import VendorCredits from './VendorCredits.jsx';
 
+/** Estimates turned off in Preferences › Jobs & Estimates. */
+function EstimatesOff({ navigate }) {
+  return (
+    <div className="p-3 text-sm">
+      Estimates are turned off for this company.{' '}
+      <button type="button" className="text-qb-link hover:underline" onClick={() => navigate('settings/preferences')}>
+        Turn them on in Preferences › Jobs & Estimates
+      </button>
+    </div>
+  );
+}
+
 export default function Screen({ view: chosenView, intent, navigate, accounts, isAdmin, companyName }) {
   // An Admin-only Settings tab shows anyone else their first tab instead (App also moves the window there).
   const view = canOpen(chosenView, isAdmin) ? chosenView : openableInstead(chosenView);
   const list = accounts;
   const props = { accounts: list, intent, navigate };
+  const estimatesOff = useCompanyPreferences()?.estimates_enabled === 'false';
   return (
     <>
       {view === 'dashboard' && <Dashboard navigate={navigate} />}
       {view === 'sales/all' && <AllSales {...props} />}
       {view === 'sales/invoices' && <Invoices {...props} />}
-      {view === 'sales/estimates' && <Estimates {...props} />}
+      {view === 'sales/estimates' && (estimatesOff ? <EstimatesOff navigate={navigate} /> : <Estimates {...props} />)}
       {view === 'sales/credits' && <CreditMemos {...props} />}
       {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} />}
       {view === 'sales/products' && <Products accounts={list} intent={intent} />}

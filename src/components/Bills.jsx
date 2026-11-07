@@ -13,6 +13,8 @@ import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGr
 import { useFormClass } from './ClassSelect.jsx';
 import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
+import { useVendorRecall } from '../lib/vendorDefaults.js';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -31,7 +33,17 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
   const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
+  // Due in the vendor's terms, or in the days set in Preferences › Bills.
+  const prefs = useCompanyPreferences();
+  const termsDays = (name) => {
+    const v = vendors?.find((x) => x.name === name);
+    return Number.isInteger(v?.termsDays) ? v.termsDays : Number(prefs?.bill_due_days ?? 30);
+  };
   const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
+  const [dueTouched, setDueTouched] = useState(Boolean(editing));
+  useEffect(() => {
+    if (!dueTouched) setDueDate(addDays(billDate, termsDays(vendor)));
+  }, [prefs?.bill_due_days, vendor, billDate]); // eslint-disable-line react-hooks/exhaustive-deps
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -39,6 +51,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   // Files to attach once the bill posts, such as the vendor's invoice.
   const [files, setFiles] = useState([]);
   const formClass = useFormClass(accounts);
+  // The vendor's last transaction fills in (My Preferences › General).
+  const forgetRecall = useVendorRecall({ payee: vendor, vendors, rows, setRows, editing: Boolean(editing) });
   // Closing the window asks first while the bill has entries not yet saved.
   useDirtySince('bill', { vendor, billNumber, billDate, dueDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
@@ -96,6 +110,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       if (editing) return onCancelEdit();
       setFiles([]);
       setVendor('');
+      setDueTouched(false);
+      forgetRecall();
       setBillNumber('');
       setTotal('');
       setRows([blankSplit(defaultCategory)]);
@@ -115,6 +131,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (editing) return onCancelEdit();
     setFiles([]);
     setVendor('');
+    setDueTouched(false);
+    forgetRecall();
     setBillNumber('');
     setTotal('');
     setRows([blankSplit(defaultCategory)]);
@@ -171,13 +189,13 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             value={billDate}
             onChange={(e) => {
               setBillDate(e.target.value);
-              setDueDate(addDays(e.target.value, 30));
+              setDueDate(addDays(e.target.value, termsDays(vendor)));
             }}
           />
         </label>
         <label>
           <span className="qb-label">Due date</span>
-          <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => { setDueTouched(true); setDueDate(e.target.value); }} />
         </label>
         {formClass.header}
         <label>
@@ -300,7 +318,34 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const picked = open.filter((b) => selected[b.id] !== undefined);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
   const bad = picked.filter((b) => cents(b) === null || cents(b) <= 0 || cents(b) > b.balanceCents);
-  const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
+  // Preferences › Bills › Automatically use credits: each bill first takes the vendor's open
+  // credits, oldest first, and the payment covers the rest (the backend does the same, in this order).
+  const prefs = useCompanyPreferences();
+  const vendorCredits = useLedgerQuery(api.listVendorCredits).data;
+  const useCredits = !ach && prefs?.auto_apply_vendor_credits !== 'false';
+  const creditOf = useMemo(() => {
+    const out = {};
+    if (!useCredits) return out;
+    const left = new Map();
+    for (const c of [...(vendorCredits ?? [])].filter((c) => !c.isVoided && c.remainingCents > 0 && c.creditDate <= date).sort((a, b) => a.creditDate.localeCompare(b.creditDate) || a.id - b.id)) {
+      left.set(c.vendorId, [...(left.get(c.vendorId) ?? []), { ...c }]);
+    }
+    for (const b of picked) {
+      let want = Math.max(0, cents(b) ?? 0);
+      let used = 0;
+      for (const c of left.get(b.vendorId) ?? []) {
+        const take = Math.min(want, c.remainingCents);
+        c.remainingCents -= take;
+        want -= take;
+        used += take;
+      }
+      out[b.id] = used;
+    }
+    return out;
+  }, [useCredits, vendorCredits, date, picked.map((b) => `${b.id}:${selected[b.id]}`).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cash = (b) => Math.max(0, cents(b) ?? 0) - (creditOf[b.id] ?? 0);
+  const creditsUsed = picked.reduce((s, b) => s + (creditOf[b.id] ?? 0), 0);
+  const total = picked.reduce((s, b) => s + cash(b), 0);
   const payees = [...new Set(picked.map((b) => b.vendorId))];
   const firstCheck = checkNo.trim();
   const numbered = /^\d+$/.test(firstCheck);
@@ -319,17 +364,18 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     if (checks && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
     try {
-      const count = await api.payVendorBills(
+      const result = await api.payBillsApplyingCredits(
         picked.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) })),
       );
+      const count = picked.length;
       const written = checks
         ? payees.map((vendorId) => {
-            const theirs = picked.filter((b) => b.vendorId === vendorId);
+            const theirs = picked.filter((b) => b.vendorId === vendorId && cash(b) > 0);
             const numbers = theirs.map((b) => b.billNumber).filter(Boolean);
             return {
               payeeName: theirs[0].vendorName,
               expenseDate: date,
-              totalCents: theirs.reduce((s, b) => s + cents(b), 0),
+              totalCents: theirs.reduce((s, b) => s + cash(b), 0),
               currencyCode: null,
               checkNumber: checkNumber(vendorId),
               memo: numbers.length ? `Bill${numbers.length === 1 ? '' : 's'} ${numbers.join(', ')}` : null,
@@ -338,7 +384,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })
         : [];
       const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${range}.`, 'success', printChecks ? written : []);
+      const credited = result.creditsCents > 0 ? `, using ${formatCents(result.creditsCents)} of vendor credits` : '';
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${credited}${range}.`, 'success', printChecks ? written.filter((c) => c.totalCents > 0 && c.payeeName) : []);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -428,6 +475,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         <div className="ml-auto text-right">
           <div className="qb-label">Total payment</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          {creditsUsed > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditsUsed)} of vendor credits</div>}
         </div>
       </div>
       <table className="qb-grid">
@@ -469,7 +517,10 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                 </td>
                 <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
                 <td className={`qb-grid-cell ${b.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
-                <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
+                <td className="qb-grid-cell num">
+                  {formatCents(b.balanceCents)}
+                  {creditOf[b.id] > 0 && <span className="block text-2xs text-qb-ink-muted">credit {formatCents(creditOf[b.id])}</span>}
+                </td>
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"

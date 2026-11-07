@@ -88,7 +88,13 @@ pub struct Settings {
     pub grace_days: i64,
     pub income_account_id: Option<i64>,
     pub charge_finance_charges: bool,
+    /// Interest runs from the invoice date instead of the due date (Preferences › Finance Charge).
+    /// Which invoices are overdue still goes by the due date and the grace period.
+    pub from_invoice_date: bool,
 }
+
+/// Company preference: finance charges run from the `due` date (the default) or the `invoice` date.
+pub const CHARGE_FROM: &str = "finance_charge_from";
 
 pub async fn settings(pool: &SqlitePool) -> Result<Settings, String> {
     use crate::preferences::get;
@@ -99,6 +105,7 @@ pub async fn settings(pool: &SqlitePool) -> Result<Settings, String> {
         grace_days: get(pool, "finance_charge_grace_days").await?.parse().map_err(|_| "PREF_BAD_FC_GRACE: grace days are not a number")?,
         income_account_id: account.parse().ok(),
         charge_finance_charges: get(pool, "finance_charge_on_finance_charges").await? == "true",
+        from_invoice_date: get(pool, CHARGE_FROM).await? == "invoice",
     })
 }
 
@@ -154,14 +161,14 @@ pub fn charge_cents(invoices: &[OverdueInvoice], settings: &Settings) -> Result<
     Ok((interest, interest.max(settings.minimum_cents)))
 }
 
-type OpenRow = (i64, i64, Option<i64>, String, NaiveDate, i64, bool, Option<NaiveDate>);
+type OpenRow = (i64, i64, Option<i64>, String, NaiveDate, NaiveDate, i64, bool, Option<NaiveDate>);
 
 /// Customers with overdue invoices as of `as_of`, and the charge for each.
 async fn compute(conn: &mut sqlx::SqliteConnection, as_of: NaiveDate, settings: &Settings) -> Result<Vec<CustomerCharge>, String> {
     // Home-currency invoices issued by the as-of date, with their balance as of that date and the end
     // of the last period a live finance charge covered.
     let rows: Vec<OpenRow> = sqlx::query_as(
-        "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), i.due_date,
+        "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), i.issue_date, i.due_date,
                 i.total_cents
                   - COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p
                               WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)
@@ -183,11 +190,12 @@ async fn compute(conn: &mut sqlx::SqliteConnection, as_of: NaiveDate, settings: 
     .map_err(db_err)?;
 
     let mut customers: Vec<CustomerCharge> = Vec::new();
-    for (invoice_id, invoice_number, customer_id, customer_name, due_date, balance, is_fc, charged_to) in rows {
+    for (invoice_id, invoice_number, customer_id, customer_name, issue_date, due_date, balance, is_fc, charged_to) in rows {
         if balance <= 0 || (is_fc && !settings.charge_finance_charges) {
             continue;
         }
-        let from_date = charged_to.map_or(due_date, |c| c.max(due_date));
+        let start = if settings.from_invoice_date { issue_date } else { due_date };
+        let from_date = charged_to.map_or(start, |c| c.max(start));
         let days = (as_of - from_date).num_days();
         if days <= 0 {
             continue;

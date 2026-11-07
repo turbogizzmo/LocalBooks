@@ -292,3 +292,28 @@ async fn costs_round_without_drift_and_rules_hold() {
     assert!(err.starts_with("STOCK_IMMUTABLE"), "{err}");
     assert!(track_product(&s.pool, &TrackInput { product_id: s.product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap_err().starts_with("STOCK_ALREADY_TRACKED"));
 }
+
+#[tokio::test]
+async fn selling_below_zero_is_allowed_warned_or_stopped_as_the_company_says() {
+    use crate::guards::{negative_stock_warning, warnings_on, NEGATIVE_STOCK};
+    let s = shop().await;
+    bill(&s, 3, 1_000, s.inventory).await.unwrap();
+    let selling = |qty: i64| vec![(s.product, qty * 10_000)];
+
+    assert_eq!(crate::preferences::get(&s.pool, NEGATIVE_STOCK).await.unwrap(), "allow", "allowed unless the company says otherwise");
+    assert_eq!(negative_stock_warning(&s.pool, &selling(5)).await.unwrap(), None);
+
+    crate::preferences::set(&s.pool, NEGATIVE_STOCK, "warn").await.unwrap();
+    assert_eq!(negative_stock_warning(&s.pool, &selling(3)).await.unwrap(), None, "selling exactly what is on hand is fine");
+    let warning = negative_stock_warning(&s.pool, &selling(4)).await.unwrap().unwrap();
+    assert_eq!(warning.code, "NEGATIVE_STOCK");
+    assert!(warning.message.contains("Widget"), "{}", warning.message);
+    // Two lines of the same item add up; untracked items and lines without one don't count.
+    let sale = crate::guards::sale(NaiveDate::from_ymd_opt(2026, 4, 10).unwrap(), Some("Customer"), [(Some(s.product), 20_000), (Some(s.product), 20_000), (None, 990_000)]);
+    let today = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+    assert_eq!(warnings_on(&s.pool, &sale, today).await.unwrap().iter().map(|w| w.code.as_str()).collect::<Vec<_>>(), ["NEGATIVE_STOCK"]);
+
+    crate::preferences::set(&s.pool, NEGATIVE_STOCK, "stop").await.unwrap();
+    assert!(negative_stock_warning(&s.pool, &selling(4)).await.unwrap_err().starts_with("STOCK_NEGATIVE"));
+    assert_eq!(negative_stock_warning(&s.pool, &selling(2)).await.unwrap(), None);
+}

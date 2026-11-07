@@ -84,3 +84,56 @@ async fn sales_tax_is_charged_reported_and_paid() {
     assert_eq!((after.paid_cents, after.owed_cents), (1_237, 0));
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
 }
+
+#[tokio::test]
+async fn cash_basis_owes_tax_as_customers_pay() {
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": rate.id,
+        "lines": [
+            { "description": "Widgets", "quantityE4": 10_000, "rateCents": 20_000, "incomeAccountId": services, "isTaxable": true },
+            { "description": "Labor", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": false }
+        ]
+    }))
+    .unwrap();
+    // 200.00 taxable + 100.00 labor + 20.00 tax = 320.00; the customer pays half in July.
+    let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    assert_eq!(inv.total_cents, 32_000);
+    crate::invoices::record_payment(
+        &pool,
+        crate::invoices::PaymentInput { invoice_id: inv.id, deposit_account_id: checking, payment_date: d(20), amount_cents: 16_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+    )
+    .await
+    .unwrap();
+    let receipt: crate::sales::SalesReceiptInput = serde_json::from_value(serde_json::json!({
+        "customerName": null, "receiptDate": "2026-07-02", "depositAccountId": checking, "paymentMethod": "CASH", "reference": null, "memo": null, "taxRateId": rate.id,
+        "lines": [{ "productServiceId": null, "description": "Widget", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services, "isTaxable": true }]
+    }))
+    .unwrap();
+    crate::sales::post_sales_receipt(&pool, receipt).await.unwrap();
+
+    let accrual = tax_liability(&pool, d(1), d(31)).await.unwrap();
+    assert_eq!(accrual.basis, "ACCRUAL");
+    assert_eq!((accrual.rows[0].taxable_sales_cents, accrual.rows[0].non_taxable_sales_cents, accrual.tax_collected_cents), (25_000, 10_000, 2_500));
+
+    crate::preferences::set(&pool, TAX_BASIS, "cash").await.unwrap();
+    let cash = tax_liability(&pool, d(1), d(31)).await.unwrap();
+    assert_eq!(cash.basis, "CASH");
+    // Half the invoice (100.00 taxable, 50.00 labor, 10.00 tax) plus the whole sales receipt.
+    assert_eq!((cash.rows[0].taxable_sales_cents, cash.rows[0].non_taxable_sales_cents, cash.tax_collected_cents), (15_000, 5_000, 1_500));
+    assert_eq!(cash.owed_cents, accrual.owed_cents, "the liability account is the same either way");
+    // The rest counts when it is paid in August.
+    crate::invoices::record_payment(
+        &pool,
+        crate::invoices::PaymentInput { invoice_id: inv.id, deposit_account_id: checking, payment_date: NaiveDate::from_ymd_opt(2026, 8, 3).unwrap(), amount_cents: 16_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+    )
+    .await
+    .unwrap();
+    let august = tax_liability(&pool, NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 8, 31).unwrap()).await.unwrap();
+    assert_eq!(august.tax_collected_cents, 1_000);
+    for bad in ["CASH", "paid"] {
+        assert!(crate::preferences::set(&pool, TAX_BASIS, bad).await.unwrap_err().starts_with("PREF_BAD_TAX_BASIS"));
+    }
+}

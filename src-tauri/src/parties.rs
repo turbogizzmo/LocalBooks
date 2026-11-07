@@ -51,6 +51,9 @@ pub struct PartyDetails {
     pub sales_rep_id: Option<i64>,
     /// Customers only: the price level their sales forms fill rates from (`None` = standard prices).
     pub price_level_id: Option<i64>,
+    /// Vendors only: your account number with the vendor (for the check memo).
+    #[sqlx(default)]
+    pub account_number: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,6 +91,9 @@ pub struct PartyDetailsInput {
     pub sales_rep_id: Option<i64>,
     #[serde(default)]
     pub price_level_id: Option<i64>,
+    /// Vendors only.
+    #[serde(default)]
+    pub account_number: Option<String>,
     /// Custom field values to set (fields left out keep theirs).
     #[serde(default)]
     pub custom_fields: Vec<crate::custom_fields::FieldValue>,
@@ -105,7 +111,8 @@ pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_
                                sales_rep_id, price_level_id
                         FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
-                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id
+                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
+                     account_number
               FROM vendors WHERE id = ?1",
     };
     let mut party = sqlx::query_as::<_, PartyDetails>(sql)
@@ -136,6 +143,9 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         if !(e.contains('@') && e.rsplit('@').next().is_some_and(|d| d.contains('.'))) {
             return Err("PARTY_BAD_EMAIL: enter a valid email address".into());
         }
+    }
+    if clean(&input.account_number).is_some_and(|n| n.chars().count() > 40) {
+        return Err("PARTY_BAD_ACCOUNT_NUMBER: an account number is at most 40 characters".into());
     }
     if input.terms_days.is_some_and(|d| !(0..=365).contains(&d)) {
         return Err("PARTY_BAD_TERMS: terms are 0 to 365 days".into());
@@ -194,7 +204,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,
                     tax_id = CASE WHEN ?11 THEN tax_id ELSE ?8 END, tax_id_masked = CASE WHEN ?11 THEN tax_id_masked ELSE ?12 END,
-                    is_1099 = ?9 WHERE id = ?10",
+                    is_1099 = ?9, account_number = ?13 WHERE id = ?10",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -208,6 +218,7 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(id)
         .bind(keep_tax_id)
         .bind(tax_id_masked)
+        .bind(clean(&input.account_number))
     };
     let done = query.execute(pool).await.map_err(|e| {
         let msg = db_err(e);

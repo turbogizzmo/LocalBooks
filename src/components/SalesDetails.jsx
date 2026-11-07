@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 
 /**
  * Rep, ship date, Ship Via and the customer custom fields marked for sales forms, for the header
@@ -16,6 +17,13 @@ export function useSalesDetails(customerName, customers) {
   const [repTouched, setRepTouched] = useState(false);
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
+  // A new document starts with the default Ship Via (Preferences › Sales & Customers).
+  const prefs = useCompanyPreferences();
+  const defaultShip = prefs?.default_ship_method_id ? Number(prefs.default_ship_method_id) : null;
+  const [shipLoaded, setShipLoaded] = useState(false);
+  useEffect(() => {
+    if (!shipLoaded && defaultShip != null) setShipMethodId((id) => id ?? defaultShip);
+  }, [defaultShip]); // eslint-disable-line react-hooks/exhaustive-deps
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const customer = (customers ?? []).find((c) => c.name.toLowerCase() === (customerName ?? '').trim().toLowerCase());
@@ -122,6 +130,7 @@ export function useSalesDetails(customerName, customers) {
       setRepTouched(true);
       setRepId(details?.salesRepId ?? null);
       setShipDate(details?.shipDate ?? '');
+      setShipLoaded(true);
       setShipMethodId(details?.shipMethodId ?? null);
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
@@ -131,7 +140,8 @@ export function useSalesDetails(customerName, customers) {
       setRepTouched(false);
       setRepId(null);
       setShipDate('');
-      setShipMethodId(null);
+      setShipLoaded(false);
+      setShipMethodId(defaultShip);
       setValues({});
       setTouched(new Set());
     },

@@ -4,6 +4,7 @@ import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { filingPeriod } from '../lib/companyPreferences.js';
 import { centsToInput, formatCents, mulDivRound, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange, todayIso } from '../lib/dates.js';
 
@@ -261,6 +262,14 @@ export default function SalesTax({ accounts }) {
   const { data: rates, error } = useLedgerQuery(api.listTaxRates);
   const payments = useLedgerQuery(api.listSalesTaxPayments);
   const [[start, end], setRange] = useState(() => periodRange('thisQuarter'));
+  // Opens on the filing period that just ended, once the preferences load.
+  const [rangeSet, setRangeSet] = useState(false);
+  useEffect(() => {
+    if (prefs && !rangeSet) {
+      setRange(filingPeriod(prefs));
+      setRangeSet(true);
+    }
+  }, [prefs]); // eslint-disable-line react-hooks/exhaustive-deps
   const liability = useLedgerQuery(() => api.getTaxLiability(start, end));
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);

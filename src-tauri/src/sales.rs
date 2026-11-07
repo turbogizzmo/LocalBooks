@@ -89,6 +89,9 @@ pub struct PartyView {
     pub is_tax_exempt: bool,
     #[sqlx(default)]
     pub terms_days: Option<i64>,
+    /// Vendors: your account number with them.
+    #[sqlx(default)]
+    pub account_number: Option<String>,
     /// Customers: the default sales rep.
     #[sqlx(default)]
     pub sales_rep_id: Option<i64>,

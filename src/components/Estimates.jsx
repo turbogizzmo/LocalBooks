@@ -10,6 +10,7 @@ import { useOpenFromList } from '../lib/windows.js';
 import RowMenu from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useEmailLaterDefault } from '../lib/companyPreferences.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -33,6 +34,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
   const [emailLater, setEmailLater] = useState(false);
+  useEmailLaterDefault(customer, customers.data, setEmailLater);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
   const openFromList = useOpenFromList();

@@ -15,6 +15,29 @@ people using LocalBooks.
   statement follows.
 - **See a report's options first.** Turn on **Show the report's options before running it**
   (Reports & Graphs › My Preferences) and a report asks for its dates before it runs.
+- **Payments and bills preferences.** Receive Payments can stop filling in invoices as you type the
+  amount, or work the amount out from the invoices you tick (tick boxes are new), and can deposit
+  straight to a bank account instead of Undeposited Funds. **Pay Bills now uses a vendor's open
+  credits first** and pays only the rest (Preferences › Bills; on by default). New bills are due in
+  the vendor's terms or in the days you set (30 by default).
+- **Warn before selling to a customer who is behind.** Turn on the warning in Preferences › Sales &
+  Customers and LocalBooks asks before saving an invoice or sales receipt for a customer with
+  invoices past due.
+- **Sales defaults.** Set the usual Ship Via for new sales forms and the usual markup Change Item
+  Prices starts with when pricing from cost; turn price levels or estimates off; and have new
+  invoices and estimates start as **Email later** for customers with an email address (Send Forms).
+- **Sales tax on the cash basis.** Preferences › Sales Tax can owe tax when customers pay instead of
+  when you invoice: the Sales Tax Liability report then counts each payment's share of its
+  invoice. Set how often you file, and the report and Pay Sales Tax open on the period that just
+  ended. Printed forms can mark taxable amounts with a **T**.
+- **1099 boxes.** Preferences › Tax: 1099 maps expense accounts to 1099-NEC or 1099-MISC boxes
+  (rents, royalties and others); the 1099 Summary then counts only those payments, box by box. A
+  company that doesn't file 1099s can turn the 1099 tools off.
+- **Stop or warn when stock would go below zero** (Preferences › Items & Inventory).
+- **More preferences:** finance charges from the invoice date, the first day of the work week and
+  billable time by default, your account number with a vendor (new **Account no.** on the vendor) in
+  the check memo, and (General › My Preferences) a new check or bill that starts from the vendor's
+  last one.
 - **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
   the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
   Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings

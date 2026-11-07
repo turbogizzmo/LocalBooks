@@ -149,6 +149,8 @@ These ask before a transaction is saved. Click **Save anyway** to record it as y
 | **Accounting** | A date more than **N** days before today (0 turns it off) | 90 days |
 | **Accounting** | A date more than **N** days after today (0 turns it off) | 30 days |
 | **Accounting** | A transaction that posts to Retained Earnings, which LocalBooks updates itself at year end | On |
+| **Sales & Customers** | An invoice or sales receipt for a customer with invoices past due | Off |
+| **Items & Inventory** | A sale that takes an item's stock below zero (or set it to stop such sales) | Off (allowed) |
 
 The date warnings cover bills, checks, expenses, invoices, sales receipts, estimates, purchase
 orders and journal entries; they catch a slip like 2062 for 2026.
@@ -160,6 +162,50 @@ one.
 **General › Company Preferences** also sets how dates and hours show for everyone: **Always show
 years as 4 digits** (turn it off for 10/13/26), and **Time format**, **Minutes (1:30)** or
 **Decimal (1.50)** in Time Tracking.
+
+## More preferences, by category
+
+Each of these is in **Settings › Preferences** under its category. **My** options are yours on this
+computer; the others are **Company Preferences** (Admins only).
+
+| Category | Option | What it changes | Default |
+|---|---|---|---|
+| **Accounting** | Show account numbers in reports | Profit and Loss, Balance Sheet, Cash Flows, trial balance and general ledger show "6300 Rent" or just "Rent" | On |
+| **Accounting** | Show lowest subaccount only | "Electric" instead of "Utilities:Electric" in the trial balance and general ledger | Off |
+| **Reports & Graphs** | Summary reports basis | Profit and Loss and the Income & Expense graph open on accrual or cash (each report can still switch; the Balance Sheet is accrual) | Accrual |
+| **Reports & Graphs** | Aging reports | A/R and A/P Aging count days from the due date or from the transaction date | Due date |
+| **Reports & Graphs** | Items | Sales by Item, Inventory Valuation and Stock Status show items by name, description or both | Name |
+| **Reports & Graphs** | Statement of Cash Flows | Move any balance sheet account to the operating, investing or financing section | By account type |
+| **Reports & Graphs** (My) | Show the report's options before running it | Profit and Loss, Balance Sheet, aging and sales summaries ask for their dates first | Off |
+| **General** (My) | Vendor's last transaction | A new check, expense or bill for a vendor starts with the accounts (or accounts and amounts) of their last one | Don't fill in |
+| **Payments** | Automatically apply payments | Typing the amount received fills in the oldest invoices first (**Auto Apply** still works when off) | On |
+| **Payments** | Automatically calculate payments | Ticking invoices (or typing on them) works out the amount received | On |
+| **Payments** | Use Undeposited Funds | Off sends payments straight to your first bank account | On |
+| **Bills** | Bills are due | Days after the bill date, for vendors without their own terms | 30 |
+| **Bills** | Automatically use credits | Pay Bills uses each vendor's open credits first and pays only the rest | On |
+| **Sales & Customers** | Usual shipping method; usual markup | Ship Via on new sales forms; the percent Change Item Prices starts with when pricing from cost | None; 0 |
+| **Sales & Customers** | Warn before selling to a customer with overdue invoices | Asks before saving an invoice or sales receipt (Save anyway) | Off |
+| **Sales & Customers** | Use price levels | Off: every line uses the standard price | On |
+| **Jobs & Estimates** | Use estimates | Off hides Estimates; saved ones are kept | On |
+| **Send Forms** | Delivery method | **Email later** ticks Email later on new invoices and estimates for customers with an email | None |
+| **Sales Tax** | Owe sales tax | The Sales Tax Liability report counts invoices when issued (accrual) or as they are paid (cash) | Accrual |
+| **Sales Tax** | File returns | The liability report and Pay Sales Tax open on the month, quarter or year that just ended | Quarterly |
+| **Sales Tax** | Mark taxable amounts with "T" | Taxable lines on printed taxed forms show T after the amount | Off |
+| **Finance Charge** | Calculate charges from | Interest runs from the due date or the invoice date (overdue still goes by the due date) | Due date |
+| **Time & Expenses** | First day of work week; mark all time billable | Where weekly timesheets start; new time for a customer starts billable | Monday; off |
+| **Tax: 1099** | Do you file 1099s? | Off hides the 1099 Summary and the vendor's 1099 box | On |
+| **Tax: 1099** | 1099 accounts | Map expense accounts to 1099-NEC or 1099-MISC boxes; then only those payments count, each in its box | Not mapped (all count as NEC) |
+| **Items & Inventory** | Selling more than you have | Allow it, warn (Save anyway), or don't allow it, for new invoices and sales receipts | Allow |
+| **Checking** | Autofill payee account number in check memo | A new check starts with "Acct" and the **Account no.** on the vendor | Off |
+
+On the cash basis, the Sales Tax Liability report counts each customer payment's share of its
+invoice's sales and tax, sales receipts on their date and credit memos when refunded. The sales tax
+liability account itself is still posted when the invoice is saved, so **Owed** is the same on
+either basis.
+
+Not built yet, so they have no switch: sales orders, units of measure, a collections screen, job
+statuses, progress invoicing, billable expenses (and their markup and income account), early-payment
+discounts on bills, an FOB field on forms, and company-wide report fonts.
 
 ## Sort a list
 

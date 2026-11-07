@@ -71,6 +71,12 @@ export default function GeneralPreferences() {
             {radio('newTransactionDate', 'last', 'The last date you entered', 'Handy when entering a stack of older paperwork: each new form starts on the date of the one before.')}
           </fieldset>
           <fieldset>
+            <Legend>Vendor’s last transaction</Legend>
+            {radio('recallVendorTransaction', 'off', 'Don’t fill in')}
+            {radio('recallVendorTransaction', 'accounts', 'Fill in the accounts', 'A new check, expense or bill for a vendor starts with the accounts, memos and classes of their last one; you type the amounts.')}
+            {radio('recallVendorTransaction', 'all', 'Fill in the accounts and amounts', 'The same, with last time’s amounts, for bills that repeat.')}
+          </fieldset>
+          <fieldset>
             <Legend>Sound</Legend>
             <div className="flex items-start">
               {check('beepWhenRecorded', 'Beep when recording a transaction')}

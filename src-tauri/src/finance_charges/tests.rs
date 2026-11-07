@@ -85,7 +85,7 @@ fn interest_is_summed_then_rounded_half_up_once_per_customer() {
     assert_eq!(interest_cents(&parts, 1_000).unwrap(), 1);
     assert_eq!(interest_cents(&parts[..1], 1_000).unwrap(), 0);
 
-    let settings = Settings { annual_rate_milli_percent: 18_000, minimum_cents: 2_500, grace_days: 0, income_account_id: None, charge_finance_charges: false };
+    let settings = Settings { annual_rate_milli_percent: 18_000, minimum_cents: 2_500, grace_days: 0, income_account_id: None, charge_finance_charges: false, from_invoice_date: false };
     assert_eq!(charge_cents(&[overdue(100_000, 30)], &settings).unwrap(), (1_479, 2_500));
     assert_eq!(charge_cents(&[overdue(1_000_000, 30)], &settings).unwrap(), (14_795, 14_795));
 }
@@ -101,7 +101,7 @@ fn the_rounding_rule_never_overflows() {
 async fn preferences_validate_and_normalize() {
     let pool = test_pool().await;
     let s = settings(&pool).await.unwrap();
-    assert_eq!(s, Settings { annual_rate_milli_percent: 0, minimum_cents: 0, grace_days: 0, income_account_id: None, charge_finance_charges: false });
+    assert_eq!(s, Settings { annual_rate_milli_percent: 0, minimum_cents: 0, grace_days: 0, income_account_id: None, charge_finance_charges: false, from_invoice_date: false });
     use crate::preferences::set;
     assert_eq!(set(&pool, "finance_charge_annual_rate", "18.50%").await.unwrap(), "18.5");
     assert_eq!(set(&pool, "finance_charge_minimum", "$1,000").await.unwrap(), "1000.00");
@@ -114,7 +114,7 @@ async fn preferences_validate_and_normalize() {
     let interest = account_id(&pool, "7000").await;
     set(&pool, "finance_charge_account_id", &interest.to_string()).await.unwrap();
     let s = settings(&pool).await.unwrap();
-    assert_eq!(s, Settings { annual_rate_milli_percent: 18_500, minimum_cents: 100_000, grace_days: 10, income_account_id: Some(interest), charge_finance_charges: true });
+    assert_eq!(s, Settings { annual_rate_milli_percent: 18_500, minimum_cents: 100_000, grace_days: 10, income_account_id: Some(interest), charge_finance_charges: true, from_invoice_date: false });
 }
 
 #[tokio::test]
@@ -254,4 +254,22 @@ async fn assessing_needs_an_account_a_positive_charge_and_is_all_or_nothing() {
     // The record of an assessment cannot be rewritten.
     let err = sqlx::query("UPDATE finance_charge_basis SET to_date = '2026-12-31'").execute(&pool).await.unwrap_err();
     assert!(err.to_string().contains("FC_IMMUTABLE"), "{err}");
+}
+
+#[tokio::test]
+async fn finance_charges_run_from_the_due_date_or_the_invoice_date() {
+    let pool = test_pool().await;
+    turn_on(&pool).await;
+    invoice(&pool, "Acme", d(1, 1), d(1, 31), 100_000).await;
+    let days_from = |p: &Preview| p.customers[0].invoices[0].days;
+
+    let by_due = preview(&pool, d(3, 2)).await.unwrap();
+    assert_eq!((by_due.customers[0].invoices[0].from_date, days_from(&by_due)), (d(1, 31), 30));
+    crate::preferences::set(&pool, CHARGE_FROM, "invoice").await.unwrap();
+    let by_invoice = preview(&pool, d(3, 2)).await.unwrap();
+    assert_eq!((by_invoice.customers[0].invoices[0].from_date, days_from(&by_invoice)), (d(1, 1), 60));
+    assert!(by_invoice.customers[0].interest_cents > by_due.customers[0].interest_cents);
+    // Whether it is overdue still goes by the due date.
+    assert!(preview(&pool, d(1, 30)).await.unwrap().customers.is_empty());
+    assert!(crate::preferences::set(&pool, CHARGE_FROM, "ship").await.is_err());
 }

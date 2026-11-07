@@ -15,6 +15,7 @@ import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences, useEmailLaterDefault } from '../lib/companyPreferences.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
@@ -44,7 +45,15 @@ export function StatusBadge({ status, overdue, voided }) {
 
 function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const undeposited = accounts.find((a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
+  // Preferences › Payments: where payments go, and how amounts apply.
+  const prefs = useCompanyPreferences();
+  const firstBank = accounts.find((a) => a.accountType === 'BANK' && a.isActive);
+  const defaultDeposit = prefs?.deposit_to_undeposited_funds === 'false' ? (firstBank ?? undeposited) : undeposited;
   const [accountId, setAccountId] = useState(undeposited?.id ?? null);
+  const [accountChosen, setAccountChosen] = useState(false);
+  useEffect(() => {
+    if (!accountChosen && defaultDeposit) setAccountId(defaultDeposit.id);
+  }, [defaultDeposit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(invoice.balanceCents));
   const foreign = invoice.currencyCode;
@@ -129,7 +138,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
           </label>
           <label>
             <span className="qb-label">Deposit to</span>
-            <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={setAccountId} className="qb-input w-[190px]" />
+            <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={(id) => { setAccountChosen(true); setAccountId(id); }} className="qb-input w-[190px]" />
           </label>
           <label>
             <span className="qb-label">Payment date</span>
@@ -170,6 +179,11 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
   const undeposited = accounts.find((a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
+  // Preferences › Payments: where payments go, and how amounts apply.
+  const prefs = useCompanyPreferences();
+  const firstBank = accounts.find((a) => a.accountType === 'BANK' && a.isActive);
+  const defaultDeposit = prefs?.deposit_to_undeposited_funds === 'false' ? (firstBank ?? undeposited) : undeposited;
+  const autoCalculate = prefs?.auto_calculate_payments !== 'false';
   const [customer, setCustomer] = useState('');
   // One payment is in one currency; the customer's open invoices are filtered to it.
   const [currency, setCurrency] = useState('');
@@ -177,6 +191,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const [received, setReceived] = useState('');
   const [applied, setApplied] = useState({});
   const [accountId, setAccountId] = useState(undeposited?.id ?? null);
+  const [accountChosen, setAccountChosen] = useState(false);
+  useEffect(() => {
+    if (!accountChosen && defaultDeposit) setAccountId(defaultDeposit.id);
+  }, [defaultDeposit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [date, setDate] = useState(todayIso());
   const [method, setMethod] = useState('CHECK');
   const [reference, setReference] = useState('');
@@ -211,18 +229,33 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c > inv.balanceCents);
   });
 
-  // Typing the amount received auto-applies it to the oldest invoices first.
-  const autoApply = (text) => {
+  // Typing the amount received applies it to the oldest invoices first (Preferences › Payments ›
+  // Automatically apply payments); the backend decides, so it matches what the preference says.
+  const applySeq = useRef(0);
+  const autoApply = (text, onRequest = false) => {
     setReceived(text);
-    let remaining = parseMoneyToCents(text) ?? 0;
-    const next = {};
-    for (const inv of rows) {
-      const take = Math.max(0, Math.min(remaining, inv.balanceCents));
-      next[inv.id] = take > 0 ? centsToInput(take) : '';
-      remaining -= take;
-    }
-    setApplied(next);
+    if (!onRequest && prefs?.auto_apply_payments === 'false') return; // turned off: amounts stay as typed
+    const cents = parseMoneyToCents(text) ?? 0;
+    const seq = ++applySeq.current;
+    api.autoApplyCustomerPayment(customer, currency || null, cents, onRequest).then(
+      (allocations) => {
+        if (seq !== applySeq.current) return;
+        const byId = new Map(allocations.map((a) => [a.documentId, a.amountCents]));
+        setApplied(Object.fromEntries(rows.map((inv) => [inv.id, byId.get(inv.id) ? centsToInput(byId.get(inv.id)) : ''])));
+      },
+      (err) => setError(errorText(err)),
+    );
   };
+  // Changing what is applied works out the amount received from it (Automatically calculate payments).
+  const setRowApplied = (id, text) => {
+    const next = { ...applied, [id]: text };
+    setApplied(next);
+    if (autoCalculate) {
+      const total = rows.reduce((sum, inv) => sum + Math.max(0, parseMoneyToCents(next[inv.id] ?? '') ?? 0), 0);
+      setReceived(total > 0 ? centsToInput(total) : '');
+    }
+  };
+  const tick = (inv) => setRowApplied(inv.id, appliedCents(inv) > 0 ? '' : centsToInput(inv.balanceCents));
 
   const customerBalance = customerInvoices.filter((i) => (i.currencyCode ?? '') === currency).reduce((s, i) => s + i.balanceCents, 0);
   const clear = () => {
@@ -278,7 +311,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
               icon: 'ReceivePayment',
               hint: 'Apply the amount received to the oldest invoices first',
               disabled: !customer || receivedCents === null || received.trim() === '',
-              onClick: () => autoApply(received),
+              onClick: () => autoApply(received, true),
             },
           ],
         ]}
@@ -344,7 +377,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         </label>
         <label>
           <span className="qb-label">Deposit to</span>
-          <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={setAccountId} className="qb-input w-[190px]" />
+          <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={(id) => { setAccountChosen(true); setAccountId(id); }} className="qb-input w-[190px]" />
         </label>
         <div>
           <span className="qb-label">Payment method</span>
@@ -394,14 +427,16 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                 <td className="qb-grid-cell">#{inv.invoiceNumber}</td>
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
-                <td className="qb-grid-cell" />
+                <td className="qb-grid-cell">
+                  <input type="checkbox" className="accent-qb-green" checked={appliedCents(inv) > 0} onChange={() => tick(inv)} aria-label={`Pay invoice ${inv.invoiceNumber} in full`} />
+                </td>
                 <td className="qb-grid-cell num">{money(inv.totalCents)}</td>
                 <td className="qb-grid-cell num">{money(inv.balanceCents)}</td>
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"
                     value={applied[inv.id] ?? ''}
-                    onChange={(e) => setApplied((a) => ({ ...a, [inv.id]: e.target.value }))}
+                    onChange={(e) => setRowApplied(inv.id, e.target.value)}
                     placeholder="0.00"
                     inputMode="decimal"
                     aria-invalid={bad}
@@ -787,6 +822,7 @@ export default function Invoices({ accounts, intent }) {
 
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
+  useEmailLaterDefault(customer, customers.data, setEmailLater, Boolean(editing));
   const printLater = usePrintLater('INVOICE', !editing);
   // Files picked for an invoice not posted yet; attached once it posts.
   const [files, setFiles] = useState([]);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 
 const TYPES = [
@@ -42,6 +43,7 @@ export default function ChangePrices({ onClose }) {
   const [showInactive, setShowInactive] = useState(false);
   const [picked, setPicked] = useState(() => new Set());
   const [basis, setBasis] = useState('CURRENT_PRICE');
+  const prefs = useCompanyPreferences();
   const [kind, setKind] = useState('PERCENT');
   const [direction, setDirection] = useState(1);
   const [size, setSize] = useState('');
@@ -161,7 +163,19 @@ export default function ChangePrices({ onClose }) {
         </label>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">Based on</span>
-          <select className="qb-input" value={basis} onChange={(e) => setBasis(e.target.value)}>
+          <select
+            className="qb-input"
+            value={basis}
+            onChange={(e) => {
+              setBasis(e.target.value);
+              // Marking up from cost starts at the default markup (Preferences › Sales & Customers).
+              if (e.target.value === 'COST' && size === '' && Number(prefs?.default_markup_percent) > 0) {
+                setKind('PERCENT');
+                setDirection(1);
+                setSize(prefs.default_markup_percent);
+              }
+            }}
+          >
             <option value="CURRENT_PRICE">Current price</option>
             <option value="COST">Unit cost</option>
           </select>

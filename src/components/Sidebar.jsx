@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Icon } from '../lib/icons.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 
 /** Navigation tree: top-level links and accordion groups, in a classic accounting-software layout. */
 export const NAV = [
@@ -136,6 +137,7 @@ export function findNav(id) {
 const STORAGE_TAG = { LOCAL: 'local', NETWORK: 'network', SYNCED: 'cloud' };
 
 export default function Sidebar({ current, onSelect, onNew, companyName, storage, isAdmin = true }) {
+  const estimatesOff = useCompanyPreferences()?.estimates_enabled === 'false';
   const [open, setOpen] = useState(() => new Set(NAV.filter((n) => n.children).map((n) => n.id)));
   const toggle = (id) =>
     setOpen((s) => {
@@ -180,7 +182,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
               </button>
               {open.has(item.id) && (
                 <ul>
-                  {item.children.filter((child) => canOpen(child.id, isAdmin)).map((child) => (
+                  {item.children.filter((child) => canOpen(child.id, isAdmin) && !(child.id === 'sales/estimates' && estimatesOff)).map((child) => (
                     <li key={child.id}>
                       <button
                         type="button"

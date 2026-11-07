@@ -4,7 +4,7 @@ import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveText, saveXlsx, statementSheet, tableSheet, toCsv, xlsxName } from './ReportParts.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
-import { accountLabel, useCompanyPreferences } from '../lib/companyPreferences.js';
+import { accountLabel, filingPeriod, useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 
@@ -397,8 +397,15 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
   );
 }
 
+/** Opens on the filing period that just ended (Preferences › Sales Tax › filing frequency). */
 export function SalesTaxLiabilityReport() {
-  const p = usePeriod('thisQuarter');
+  const prefs = useCompanyPreferences();
+  if (!prefs) return null;
+  return <SalesTaxLiability range={filingPeriod(prefs)} />;
+}
+
+function SalesTaxLiability({ range }) {
+  const p = usePeriod('thisQuarter', range);
   const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getTaxLiability(p.start, p.end) : Promise.resolve(null)));
   useEffect(() => {
     reload();
@@ -420,7 +427,7 @@ export function SalesTaxLiabilityReport() {
       rows={rows}
       error={error}
       toolbar={p.controls}
-      footer="Invoices and sales receipts less credit memos, by document date · record payments under Sales › Sales Tax"
+      footer={`${data?.basis === 'CASH' ? 'Cash basis: invoices count as they are paid, sales receipts on their date, credit memos as refunded' : 'Accrual basis: invoices and sales receipts less credit memos, by document date'} (Preferences › Sales Tax) · record payments under Sales › Sales Tax`}
       onCsvRows={() => [
         ...data.rows.map((r) => [r.name, pct(r.ratePpm), plainAmount(r.taxableSalesCents), plainAmount(r.nonTaxableSalesCents), plainAmount(r.taxCollectedCents)]),
         ['Paid in the period', '', '', '', plainAmount(data.paidCents)],
@@ -429,6 +436,16 @@ export function SalesTaxLiabilityReport() {
     />
   );
 }
+
+/** The 1099 boxes accounts can map to (mirrors `workflows::BOXES`). */
+export const BOX_LABEL = {
+  NEC_1: '1099-NEC box 1: Nonemployee compensation',
+  MISC_1: '1099-MISC box 1: Rents',
+  MISC_2: '1099-MISC box 2: Royalties',
+  MISC_3: '1099-MISC box 3: Other income',
+  MISC_6: '1099-MISC box 6: Medical and health care payments',
+  MISC_10: '1099-MISC box 10: Gross proceeds paid to an attorney',
+};
 
 export function Vendors1099Report() {
   const thisYear = Number(todayIso().slice(0, 4));
@@ -444,7 +461,11 @@ export function Vendors1099Report() {
   // Tax IDs are masked on screen and in print; the Excel and CSV exports carry them in full for users who may see them.
   const fullInCsv = shown.some((r) => r.taxId);
   const rows = [
-    ...shown.map((r) => ({ cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
+    ...shown.flatMap((r) => [
+      { cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] },
+      // With accounts mapped to boxes (Preferences › Tax: 1099), what went in each box.
+      ...(r.boxes ?? []).map((b) => ({ cells: [<span key="box" className="pl-4 text-qb-ink-muted">{BOX_LABEL[b.code] ?? b.code}</span>, '', '', formatCents(b.cents)] })),
+    ]),
     ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', formatCents(total)] }] : []),
   ];
   return (

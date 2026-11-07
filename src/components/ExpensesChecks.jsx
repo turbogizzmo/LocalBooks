@@ -9,6 +9,7 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, printDocument, useLedgerQuery } from '../lib/api.js';
+import { useCheckMemo, useVendorRecall } from '../lib/vendorDefaults.js';
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -58,6 +59,9 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
   const formClass = useFormClass(accounts);
+  // The vendor's last transaction and account number fill in (Preferences › General and Checking).
+  const forgetRecall = useVendorRecall({ payee, vendors, rows, setRows, editing: Boolean(editing) || isCredit });
+  useCheckMemo({ payee, vendors, memo, setMemo, enabled: kind === 'CHECK' && !editing });
   // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
   const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
@@ -135,6 +139,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+      forgetRecall();
       formClass.reset();
       setError(attachError);
       payeeRef.current?.focus();
@@ -153,6 +158,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     setPayee('');
     setMemo('');
     setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    forgetRecall();
     formClass.reset();
     setError(null);
     payeeRef.current?.focus();

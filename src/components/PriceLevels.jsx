@@ -4,6 +4,7 @@ import { ROUNDING, STEPS, parsePercentMilli } from './ChangePrices.jsx';
 import { TableReport } from './MoreReports.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 
 const BASIS = [
@@ -38,7 +39,8 @@ export function levelSummary(level) {
 /** The customer form's "Price level" field. */
 export function CustomerPriceLevelField({ form, setForm }) {
   const levels = useLedgerQuery(api.listPriceLevels).data ?? [];
-  if (levels.length === 0 && !form.priceLevelId) return null;
+  const off = useCompanyPreferences()?.price_levels_enabled === 'false';
+  if (off || (levels.length === 0 && !form.priceLevelId)) return null;
   return (
     <label className="flex flex-col gap-0.5">
       <span className="font-semibold text-qb-ink-muted">Price level</span>
@@ -62,8 +64,10 @@ export function CustomerPriceLevelField({ form, setForm }) {
  */
 export function usePriceLevels() {
   const { data } = useLedgerQuery(api.getItemPriceList);
+  // Preferences › Sales & Customers › Use price levels: off, every line uses the standard price.
+  const off = useCompanyPreferences()?.price_levels_enabled === 'false';
   return useMemo(() => {
-    const levels = (data?.levels ?? []).filter((l) => l.isActive);
+    const levels = off ? [] : (data?.levels ?? []).filter((l) => l.isActive);
     const active = new Set(levels.map((l) => l.id));
     const prices = new Map();
     for (const row of data?.items ?? []) {
@@ -78,7 +82,7 @@ export function usePriceLevels() {
         return id != null && active.has(id) ? id : null;
       },
     };
-  }, [data]);
+  }, [data, off]);
 }
 
 const blankDraft = () => ({ id: null, name: '', kind: 'FIXED_PERCENT', percent: '', mode: 'NONE', step: 100, items: {}, isActive: true });
