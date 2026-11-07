@@ -133,6 +133,8 @@ async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Acce
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        preferred_delivery: None,
+        job_status: None,
         custom_fields: Vec::new(),
     };
     parties::update_party(pool, "vendor", id, input, access).await.expect("set the tax ID");

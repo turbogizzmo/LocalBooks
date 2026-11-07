@@ -92,6 +92,13 @@ pub struct PartyView {
     /// Customers: the default sales rep.
     #[sqlx(default)]
     pub sales_rep_id: Option<i64>,
+    /// Customers: how their forms are sent (`EMAIL`, `PRINT`, `NONE`), which ticks Email later or
+    /// Print later on their new forms.
+    #[sqlx(default)]
+    pub preferred_delivery: Option<String>,
+    /// Jobs: the job's status code.
+    #[sqlx(default)]
+    pub job_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -204,6 +211,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days, c.sales_rep_id,
+                c.preferred_delivery, c.job_status,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS open_balance_cents

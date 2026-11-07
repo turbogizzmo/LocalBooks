@@ -269,14 +269,21 @@ pub struct SalesDetails {
     pub sales_rep_id: Option<i64>,
     pub ship_date: Option<NaiveDate>,
     pub ship_method_id: Option<i64>,
+    /// The F.O.B. point printed with the shipping details (new forms start with the company's).
+    pub fob: Option<String>,
     /// Customer fields shown on sales forms, as entered on this document. Fields left out or blank
     /// are not printed.
     pub custom_fields: Vec<FieldValue>,
 }
 
 impl SalesDetails {
+    /// The F.O.B. as stored: trimmed, `None` when blank.
+    pub fn fob(&self) -> Option<&str> {
+        self.fob.as_deref().map(str::trim).filter(|f| !f.is_empty())
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.sales_rep_id.is_none() && self.ship_date.is_none() && self.ship_method_id.is_none() && self.custom_fields.iter().all(|f| f.value.trim().is_empty())
+        self.sales_rep_id.is_none() && self.ship_date.is_none() && self.ship_method_id.is_none() && self.fob().is_none() && self.custom_fields.iter().all(|f| f.value.trim().is_empty())
     }
 }
 
@@ -290,6 +297,7 @@ pub struct SalesDetailsView {
     pub ship_date: Option<String>,
     pub ship_method_id: Option<i64>,
     pub ship_method_name: Option<String>,
+    pub fob: Option<String>,
     /// Customer fields printed on this document, in the list's order, with their labels.
     pub custom_fields: Vec<custom_fields::LabeledValue>,
 }
@@ -327,11 +335,15 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
     if let Some(method) = details.ship_method_id.filter(|m| carried.ship_method_id != Some(*m)) {
         check_active(tx, "ship_methods", method, "shipping method", code).await?;
     }
-    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3 WHERE id = ?4", doc.table()))
+    if details.fob().is_some_and(|f| f.chars().count() > crate::sales_prefs::MAX_FOB_CHARS) {
+        return Err(format!("{code}_FOB_TOO_LONG: F.O.B. must be at most {} characters", crate::sales_prefs::MAX_FOB_CHARS));
+    }
+    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, fob = ?5 WHERE id = ?4", doc.table()))
         .bind(details.sales_rep_id)
         .bind(details.ship_date)
         .bind(details.ship_method_id)
         .bind(id)
+        .bind(details.fob())
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -342,11 +354,12 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
 /// An imported document's rep and shipping details, without the checks a new form gets: history
 /// keeps the rep it was sold by even when that rep is inactive now.
 pub(crate) async fn write_imported(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
-    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3 WHERE id = ?4", doc.table()))
+    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, fob = ?5 WHERE id = ?4", doc.table()))
         .bind(details.sales_rep_id)
         .bind(details.ship_date)
         .bind(details.ship_method_id)
         .bind(id)
+        .bind(details.fob().map(|f| f.chars().take(crate::sales_prefs::MAX_FOB_CHARS).collect::<String>()))
         .execute(&mut **tx)
         .await
         .map(|_| ())
@@ -356,8 +369,9 @@ pub(crate) async fn write_imported(tx: &mut Transaction<'_, Sqlite>, doc: SalesD
 /// A document's details as entered, for loading it back into its form (an edit, or an estimate
 /// becoming an invoice) and printing it.
 pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Result<SalesDetailsView, String> {
-    let row: Option<(Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>)> = sqlx::query_as(&format!(
-        "SELECT d.sales_rep_id, r.initials, r.name, d.ship_date, d.ship_method_id, s.name
+    type Row = (Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<String>);
+    let row: Option<Row> = sqlx::query_as(&format!(
+        "SELECT d.sales_rep_id, r.initials, r.name, d.ship_date, d.ship_method_id, s.name, d.fob
          FROM {} d LEFT JOIN sales_reps r ON r.id = d.sales_rep_id LEFT JOIN ship_methods s ON s.id = d.ship_method_id
          WHERE d.id = ?1",
         doc.table()
@@ -366,7 +380,7 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name)) = row else {
+    let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name, fob)) = row else {
         return Ok(SalesDetailsView::default());
     };
     Ok(SalesDetailsView {
@@ -376,14 +390,15 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
         ship_date,
         ship_method_id,
         ship_method_name,
+        fob,
         custom_fields: custom_fields::document_fields(pool, doc, id).await?,
     })
 }
 
 /// A document's details inside a write, to carry them onto another document.
 pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64) -> Result<SalesDetails, String> {
-    let (sales_rep_id, ship_date, ship_method_id): (Option<i64>, Option<NaiveDate>, Option<i64>) =
-        sqlx::query_as(&format!("SELECT sales_rep_id, ship_date, ship_method_id FROM {} WHERE id = ?1", doc.table()))
+    let (sales_rep_id, ship_date, ship_method_id, fob): (Option<i64>, Option<NaiveDate>, Option<i64>, Option<String>) =
+        sqlx::query_as(&format!("SELECT sales_rep_id, ship_date, ship_method_id, fob FROM {} WHERE id = ?1", doc.table()))
             .bind(id)
             .fetch_one(&mut **tx)
             .await
@@ -398,6 +413,7 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         sales_rep_id,
         ship_date,
         ship_method_id,
+        fob,
         custom_fields: custom_fields.into_iter().map(|(field_id, value)| FieldValue { field_id, value }).collect(),
     })
 }
@@ -409,6 +425,7 @@ impl SalesDetailsView {
             sales_rep_id: self.sales_rep_id,
             ship_date: self.ship_date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
             ship_method_id: self.ship_method_id,
+            fob: self.fob.clone(),
             custom_fields: self.custom_fields.iter().map(|f| FieldValue { field_id: f.field_id, value: f.value.clone() }).collect(),
         }
     }

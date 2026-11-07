@@ -82,6 +82,7 @@ mod reports;
 mod revaluation;
 mod sales;
 mod sales_lists;
+mod sales_prefs;
 mod sales_tax;
 mod tax_ids;
 #[cfg(test)]

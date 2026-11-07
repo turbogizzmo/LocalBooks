@@ -26,6 +26,25 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::guards::WARN_RETAINED_EARNINGS, "true"),
     ("four_digit_years", "true"),
     ("hours_format", "hhmm"),
+    // batch 4
+    (crate::sales_prefs::PRICE_LEVELS, "true"),
+    (crate::sales_prefs::ESTIMATES, "true"),
+    (crate::sales_prefs::DEFAULT_SHIP_METHOD, ""),
+    (crate::sales_prefs::DEFAULT_FOB, ""),
+    (crate::sales_prefs::DEFAULT_MARKUP, "0"),
+    (crate::guards::WARN_OVERDUE_CUSTOMER, "false"),
+    (crate::sales_prefs::DROP_ZERO_LINES, "true"),
+    ("job_status_pending", "Pending"),
+    ("job_status_awarded", "Awarded"),
+    ("job_status_in_progress", "In progress"),
+    ("job_status_closed", "Closed"),
+    ("job_status_not_awarded", "Not awarded"),
+    (crate::sales_prefs::AUTO_APPLY, "exact"),
+    (crate::sales_prefs::AUTO_CALCULATE, "true"),
+    (crate::sales_prefs::UNDEPOSITED_DEFAULT, "true"),
+    (crate::sales_prefs::BILL_DUE_DAYS, "10"),
+    (crate::sales_prefs::BILL_AUTO_CREDITS, "false"),
+    (crate::sales_prefs::DEFAULT_DELIVERY, "none"),
 ];
 
 fn default_of(key: &str) -> Option<&'static str> {
@@ -140,7 +159,7 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
         },
         LOGO_KEY => Err("PREF_LOGO: set the logo with the logo upload, which validates the image".into()),
         crate::smtp::SETTINGS_KEY => Err("PREF_SMTP: change email server settings in Settings › Email".into()),
-        other => Err(format!("PREF_UNKNOWN: '{other}' is not a preference")),
+        other => crate::sales_prefs::validate(other, v).unwrap_or_else(|| Err(format!("PREF_UNKNOWN: '{other}' is not a preference"))),
     }
 }
 
@@ -208,6 +227,9 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
         if !matches!(account, Some((classification, true)) if classification == "INCOME") {
             return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
         }
+    }
+    if key == crate::sales_prefs::DEFAULT_SHIP_METHOD && !normalized.is_empty() {
+        crate::sales_prefs::check_ship_method(pool, normalized.parse::<i64>().unwrap_or_default()).await?;
     }
     sqlx::query(
         "INSERT INTO system_preferences (key, value) VALUES (?1, ?2)

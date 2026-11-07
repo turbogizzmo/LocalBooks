@@ -51,6 +51,10 @@ pub struct PartyDetails {
     pub sales_rep_id: Option<i64>,
     /// Customers only: the price level their sales forms fill rates from (`None` = standard prices).
     pub price_level_id: Option<i64>,
+    /// Customers only: how their forms are sent (`EMAIL`, `PRINT`, `NONE`; `None` = not set).
+    pub preferred_delivery: Option<String>,
+    /// Jobs: `PENDING`, `AWARDED`, `IN_PROGRESS`, `CLOSED` or `NOT_AWARDED` (`None` = not set).
+    pub job_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,6 +92,10 @@ pub struct PartyDetailsInput {
     pub sales_rep_id: Option<i64>,
     #[serde(default)]
     pub price_level_id: Option<i64>,
+    #[serde(default)]
+    pub preferred_delivery: Option<String>,
+    #[serde(default)]
+    pub job_status: Option<String>,
     /// Custom field values to set (fields left out keep theirs).
     #[serde(default)]
     pub custom_fields: Vec<crate::custom_fields::FieldValue>,
@@ -102,10 +110,11 @@ pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_
     let sql = match table(kind)? {
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
                                NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
-                               sales_rep_id, price_level_id
+                               sales_rep_id, price_level_id, preferred_delivery, job_status
                         FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
-                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id
+                     NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
+                     NULL AS preferred_delivery, NULL AS job_status
               FROM vendors WHERE id = ?1",
     };
     let mut party = sqlx::query_as::<_, PartyDetails>(sql)
@@ -166,6 +175,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             _ => {}
         }
     }
+    let delivery = crate::sales_prefs::parse_delivery(input.preferred_delivery.as_deref())?;
+    let job_status = crate::sales_prefs::parse_job_status(input.job_status.as_deref())?;
     let keep_tax_id = input.keep_tax_id || t == "customers";
     if !keep_tax_id && !access.can_see() {
         return Err("TAX_ID_LOCKED: only users who can see sensitive data can change a tax ID".into());
@@ -174,7 +185,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     let query = if t == "customers" {
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
-                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14 WHERE id = ?12",
+                    tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14,
+                    preferred_delivery = ?15, job_status = ?16 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -190,6 +202,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(id)
         .bind(input.sales_rep_id)
         .bind(input.price_level_id)
+        .bind(delivery)
+        .bind(job_status)
     } else {
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,

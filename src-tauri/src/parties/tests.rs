@@ -27,6 +27,8 @@ async fn protected_tax_ids_need_the_key_to_see_or_change() {
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        preferred_delivery: None,
+        job_status: None,
         custom_fields: Vec::new(),
     };
 
@@ -68,6 +70,8 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        preferred_delivery: None,
+        job_status: None,
         custom_fields: Vec::new(),
     };
     let saved = update_party(&pool, "customer", acme.id, input("Acme Inc"), Access::OPEN).await.unwrap();

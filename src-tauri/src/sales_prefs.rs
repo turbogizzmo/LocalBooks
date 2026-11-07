@@ -1,0 +1,367 @@
+//! Preferences batch 4: the company defaults for sales, payments and bills (`docs/plans/preferences.md`).
+//!
+//! The keys live in `preferences::DEFAULTS` like every other company preference; this module holds
+//! what they change:
+//!
+//! - **Receive Payments:** how an amount received is spread over a customer's open invoices
+//!   ([`apply_payment`]): an invoice whose balance matches exactly, otherwise the oldest first, or
+//!   not at all (the person ticks invoices).
+//! - **Enter Bills:** the due date of a new bill when its vendor has no terms ([`bill_due_date`]).
+//! - **Pay Bills:** the vendor's open credits used on the bills chosen, oldest credit first
+//!   ([`plan_vendor_credits`]), so only the rest is paid.
+//! - **Estimates:** zero-amount lines left off when an estimate becomes an invoice
+//!   ([`without_zero_lines`]).
+//! - **Jobs:** the names shown for each job status ([`job_status_labels`]).
+//!
+//! The overdue-customer warning is a guard (`guards::overdue_customer_warning`).
+
+use std::collections::BTreeMap;
+
+use chrono::{Duration, NaiveDate};
+use serde::Serialize;
+use sqlx::SqlitePool;
+
+use crate::ledger::db_err;
+use crate::preferences;
+
+pub const PRICE_LEVELS: &str = "price_levels_enabled";
+pub const ESTIMATES: &str = "estimates_enabled";
+pub const DEFAULT_SHIP_METHOD: &str = "default_ship_method_id";
+pub const DEFAULT_FOB: &str = "default_fob";
+pub const DEFAULT_MARKUP: &str = "default_markup_percent";
+pub const DROP_ZERO_LINES: &str = "estimate_drop_zero_lines";
+pub const AUTO_APPLY: &str = "payment_auto_apply";
+pub const AUTO_CALCULATE: &str = "payment_auto_calculate";
+pub const UNDEPOSITED_DEFAULT: &str = "payment_undeposited_default";
+pub const BILL_DUE_DAYS: &str = "bill_due_days";
+pub const BILL_AUTO_CREDITS: &str = "bill_auto_apply_credits";
+pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
+/// The F.O.B. text printed on a sales form, as the schema allows it.
+pub const MAX_FOB_CHARS: usize = 30;
+/// Most days a bill can be due after its date, as for vendor terms.
+pub const MAX_BILL_DUE_DAYS: u32 = 365;
+/// A markup above 1,000% is almost certainly a typing slip.
+pub const MAX_MARKUP_MILLI: i64 = 1_000_000;
+
+/// Job statuses as stored on a job (`customers.job_status`), the preference that renames each, and
+/// its default name.
+pub const JOB_STATUSES: &[(&str, &str, &str)] = &[
+    ("PENDING", "job_status_pending", "Pending"),
+    ("AWARDED", "job_status_awarded", "Awarded"),
+    ("IN_PROGRESS", "job_status_in_progress", "In progress"),
+    ("CLOSED", "job_status_closed", "Closed"),
+    ("NOT_AWARDED", "job_status_not_awarded", "Not awarded"),
+];
+pub const MAX_STATUS_LABEL_CHARS: usize = 30;
+
+/// Checks and normalizes a batch 4 value; `None` when `key` isn't one of this batch's.
+pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
+    let v = value.trim();
+    let flag = || match v {
+        "true" | "false" => Ok(v.to_string()),
+        _ => Err("PREF_BAD_FLAG: use true or false".to_string()),
+    };
+    Some(match key {
+        PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
+        // A shipping method, checked against the list in `check_ship_method`; blank means none.
+        DEFAULT_SHIP_METHOD => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_SHIP_METHOD: choose a shipping method from the Ship Via list".into()),
+        },
+        DEFAULT_FOB if v.chars().count() > MAX_FOB_CHARS => Err(format!("PREF_TOO_LONG: F.O.B. must be at most {MAX_FOB_CHARS} characters")),
+        DEFAULT_FOB => Ok(v.to_string()),
+        DEFAULT_MARKUP => match crate::price_levels::parse_percent_milli(if v.is_empty() { "0" } else { v }) {
+            Some(milli) if (0..=MAX_MARKUP_MILLI).contains(&milli) => Ok(format_percent_milli(milli)),
+            _ => Err("PREF_BAD_MARKUP: enter a markup from 0 to 1000 percent".into()),
+        },
+        AUTO_APPLY => match v {
+            "exact" | "oldest" | "off" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_AUTO_APPLY: apply payments to an exact match, the oldest invoices, or not automatically".into()),
+        },
+        BILL_DUE_DAYS => match v.parse::<u32>() {
+            Ok(days) if days <= MAX_BILL_DUE_DAYS => Ok(days.to_string()),
+            _ => Err(format!("PREF_BAD_DUE_DAYS: enter 0 (due on receipt) to {MAX_BILL_DUE_DAYS} days")),
+        },
+        DEFAULT_DELIVERY => match v {
+            "none" | "email" | "print" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_DELIVERY: send forms by email, print, or none".into()),
+        },
+        _ => match JOB_STATUSES.iter().find(|(_, k, _)| *k == key) {
+            Some(_) if v.is_empty() => Err("PREF_REQUIRED: a job status needs a name".into()),
+            Some(_) if v.chars().count() > MAX_STATUS_LABEL_CHARS => Err(format!("PREF_TOO_LONG: a job status name must be at most {MAX_STATUS_LABEL_CHARS} characters")),
+            Some(_) => Ok(v.to_string()),
+            None => return None,
+        },
+    })
+}
+
+/// 12500 → "12.5" (thousandths of a percent, without trailing zeros).
+pub fn format_percent_milli(milli: i64) -> String {
+    let (whole, frac) = (milli / 1000, (milli % 1000).abs());
+    if frac == 0 {
+        whole.to_string()
+    } else {
+        format!("{whole}.{}", format!("{frac:03}").trim_end_matches('0'))
+    }
+}
+
+/// A default shipping method must be one on the Ship Via list and active.
+pub async fn check_ship_method(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    let active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM ship_methods WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+    match active {
+        Some(true) => Ok(()),
+        Some(false) => Err("PREF_BAD_SHIP_METHOD: that shipping method is inactive".into()),
+        None => Err("PREF_BAD_SHIP_METHOD: choose a shipping method from the Ship Via list".into()),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Receive Payments
+// ------------------------------------------------------------------------------------------------
+
+/// How a payment is spread over open invoices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoApply {
+    /// An invoice whose open balance equals the amount takes all of it; otherwise oldest first.
+    Exact,
+    /// Oldest first (by due date, then number), each paid in full before the next.
+    Oldest,
+    /// Nothing is applied until the person ticks invoices.
+    Off,
+}
+
+impl AutoApply {
+    pub fn parse(value: &str) -> AutoApply {
+        match value {
+            "oldest" => AutoApply::Oldest,
+            "off" => AutoApply::Off,
+            _ => AutoApply::Exact,
+        }
+    }
+}
+
+/// One open document and what it still owes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Open {
+    pub id: i64,
+    pub balance_cents: i64,
+}
+
+/// What each invoice receives, in the order given (oldest first). Never more than an invoice's
+/// balance; whatever is left over is not applied (the screen shows it as unapplied).
+pub fn apply_payment(open: &[Open], amount_cents: i64, mode: AutoApply) -> Vec<(i64, i64)> {
+    if amount_cents <= 0 || mode == AutoApply::Off {
+        return Vec::new();
+    }
+    if mode == AutoApply::Exact {
+        if let Some(inv) = open.iter().find(|i| i.balance_cents == amount_cents) {
+            return vec![(inv.id, amount_cents)];
+        }
+    }
+    let mut left = amount_cents;
+    let mut out = Vec::new();
+    for inv in open {
+        if left == 0 {
+            break;
+        }
+        let take = left.min(inv.balance_cents.max(0));
+        if take > 0 {
+            out.push((inv.id, take));
+            left -= take;
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedAmount {
+    pub document_id: i64,
+    pub amount_cents: i64,
+}
+
+/// A customer's open invoices in one currency (`None` = home), oldest first: by due date, then
+/// number, as Receive Payments lists them.
+pub async fn open_invoices(pool: &SqlitePool, customer_name: &str, currency: Option<&str>) -> Result<Vec<Open>, String> {
+    let rows: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT i.id, i.total_cents - i.amount_paid_cents FROM invoices i JOIN customers c ON c.id = i.customer_id
+         WHERE c.name = ?1 COLLATE NOCASE AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL') AND i.currency_code IS ?2
+           AND i.total_cents > i.amount_paid_cents
+         ORDER BY i.due_date, i.invoice_number",
+    )
+    .bind(customer_name.trim())
+    .bind(currency.map(str::trim).filter(|c| !c.is_empty()))
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(rows.into_iter().map(|(id, balance_cents)| Open { id, balance_cents }).collect())
+}
+
+/// Receive Payments: how `amount_cents` from the customer is applied under the company preference.
+pub async fn payment_application(pool: &SqlitePool, customer_name: &str, currency: Option<&str>, amount_cents: i64) -> Result<Vec<AppliedAmount>, String> {
+    let mode = AutoApply::parse(&preferences::get(pool, AUTO_APPLY).await?);
+    let open = open_invoices(pool, customer_name, currency).await?;
+    Ok(apply_payment(&open, amount_cents, mode).into_iter().map(|(document_id, amount_cents)| AppliedAmount { document_id, amount_cents }).collect())
+}
+
+// ------------------------------------------------------------------------------------------------
+// Bills
+// ------------------------------------------------------------------------------------------------
+
+/// A new bill's due date: the vendor's terms when it has them, otherwise the company's "bills are
+/// due N days after the bill date". A vendor not yet on the list has no terms.
+pub async fn bill_due_date(pool: &SqlitePool, vendor_name: &str, bill_date: NaiveDate) -> Result<NaiveDate, String> {
+    let terms: Option<i64> = sqlx::query_scalar("SELECT terms_days FROM vendors WHERE name = ?1 COLLATE NOCASE")
+        .bind(vendor_name.trim())
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .flatten();
+    let days = match terms {
+        Some(days) => days,
+        None => preferences::get(pool, BILL_DUE_DAYS).await?.parse::<i64>().unwrap_or(0),
+    };
+    Ok(bill_date + Duration::days(days.clamp(0, i64::from(MAX_BILL_DUE_DAYS))))
+}
+
+/// One vendor credit used on one bill.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditUse {
+    pub credit_id: i64,
+    pub bill_id: i64,
+    pub amount_cents: i64,
+}
+
+/// Spreads one vendor's credits (oldest first) over that vendor's chosen bills (in the order
+/// given), each bill taking as much as it owes. Credits and bills must belong to the same vendor.
+pub fn plan_vendor_credits(credits: &[Open], bills: &[Open]) -> Vec<CreditUse> {
+    let mut left: Vec<i64> = credits.iter().map(|c| c.balance_cents.max(0)).collect();
+    let mut out = Vec::new();
+    for bill in bills {
+        let mut owed = bill.balance_cents.max(0);
+        for (credit, remaining) in credits.iter().zip(left.iter_mut()) {
+            if owed == 0 {
+                break;
+            }
+            let take = owed.min(*remaining);
+            if take > 0 {
+                out.push(CreditUse { credit_id: credit.id, bill_id: bill.id, amount_cents: take });
+                *remaining -= take;
+                owed -= take;
+            }
+        }
+    }
+    out
+}
+
+/// Pay Bills: the vendor credits to use on `bill_ids` (in the order the screen lists them), when
+/// the company applies credits automatically; empty otherwise.
+pub async fn bill_credits(pool: &SqlitePool, bill_ids: &[i64]) -> Result<Vec<CreditUse>, String> {
+    if bill_ids.is_empty() || !preferences::flag(pool, BILL_AUTO_CREDITS).await? {
+        return Ok(Vec::new());
+    }
+    let mut by_vendor: BTreeMap<i64, Vec<Open>> = BTreeMap::new();
+    for &id in bill_ids {
+        let bill: Option<(i64, i64)> = sqlx::query_as(
+            "SELECT vendor_id, total_cents - amount_paid_cents FROM bills WHERE id = ?1 AND is_voided = 0 AND status IN ('UNPAID', 'PARTIAL')",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+        if let Some((vendor, balance_cents)) = bill {
+            by_vendor.entry(vendor).or_default().push(Open { id, balance_cents });
+        }
+    }
+    let mut out = Vec::new();
+    for (vendor, bills) in by_vendor {
+        let credits: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT c.id, b.remaining_cents FROM vendor_credits c JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id
+             WHERE c.vendor_id = ?1 AND c.is_voided = 0 AND b.remaining_cents > 0 ORDER BY c.credit_date, c.id",
+        )
+        .bind(vendor)
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+        let credits: Vec<Open> = credits.into_iter().map(|(id, balance_cents)| Open { id, balance_cents }).collect();
+        out.extend(plan_vendor_credits(&credits, &bills));
+    }
+    Ok(out)
+}
+
+/// Pay Bills with credits: uses each vendor credit on its bill, then records the payments, in one
+/// transaction. A bill the credits pay off in full needs no payment.
+pub async fn pay_bills_with_credits(pool: &SqlitePool, payments: Vec<crate::expenses::BillPaymentInput>, credits: Vec<crate::credits::ApplyCreditInput>) -> Result<usize, String> {
+    if payments.is_empty() && credits.is_empty() {
+        return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
+    }
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = async {
+        for credit in &credits {
+            crate::credits::apply_vendor_credit_in_tx(&mut tx, credit).await?;
+        }
+        for payment in &payments {
+            crate::expenses::write_bill_payment(&mut tx, payment, "STANDARD").await?;
+        }
+        Ok::<(), String>(())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            let mut bills: Vec<i64> = payments.iter().map(|p| p.bill_id).chain(credits.iter().map(|c| c.document_id)).collect();
+            bills.sort_unstable();
+            bills.dedup();
+            Ok(bills.len())
+        }
+        Err(err) => Err(crate::ledger::rollback(tx, err).await),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Estimates and jobs
+// ------------------------------------------------------------------------------------------------
+
+/// The lines an estimate's invoice keeps: all of them, or (with the preference on) those with an
+/// amount. An estimate whose lines are all zero keeps them, so the invoice is never empty.
+pub fn without_zero_lines<T>(lines: Vec<T>, drop_zero: bool, amount: impl Fn(&T) -> i64) -> Vec<T> {
+    if !drop_zero || lines.iter().all(|l| amount(l) == 0) {
+        return lines;
+    }
+    lines.into_iter().filter(|l| amount(l) != 0).collect()
+}
+
+pub async fn drop_zero_lines(pool: &SqlitePool) -> Result<bool, String> {
+    preferences::flag(pool, DROP_ZERO_LINES).await
+}
+
+/// The name shown for each job status, by stored code.
+pub async fn job_status_labels(pool: &SqlitePool) -> Result<BTreeMap<String, String>, String> {
+    let mut out = BTreeMap::new();
+    for (code, key, _) in JOB_STATUSES {
+        out.insert(code.to_string(), preferences::get(pool, key).await?);
+    }
+    Ok(out)
+}
+
+/// A job status code as stored, or `None` for blank.
+pub fn parse_job_status(value: Option<&str>) -> Result<Option<String>, String> {
+    match value.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(None),
+        Some(v) if JOB_STATUSES.iter().any(|(code, _, _)| *code == v) => Ok(Some(v.to_string())),
+        Some(v) => Err(format!("PARTY_BAD_JOB_STATUS: '{v}' is not a job status")),
+    }
+}
+
+/// A customer's preferred way to send forms, as stored, or `None` for blank.
+pub fn parse_delivery(value: Option<&str>) -> Result<Option<String>, String> {
+    match value.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(None),
+        Some(v @ ("EMAIL" | "PRINT" | "NONE")) => Ok(Some(v.to_string())),
+        Some(v) => Err(format!("PARTY_BAD_DELIVERY: '{v}' is not a way to send forms")),
+    }
+}
+
+#[cfg(test)]
+mod tests;
