@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { useTransactionDate } from '../lib/myPreferences.js';
+import { myPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
@@ -41,7 +41,18 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
 
   useEffect(() => dateRef.current?.focus(), []);
 
-  const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  // With My Preferences › Accounting › Autofill memo, a line started below the first one takes
+  // the first line's memo (it can still be changed).
+  const update = (key, patch) =>
+    setRows((rs) =>
+      rs.map((r, i) => {
+        if (r.key !== key) return r;
+        const next = { ...r, ...patch };
+        const first = rs[0].memo.trim();
+        if (i > 0 && !('memo' in patch) && next.memo === '' && first !== '' && myPreferences().autofillJournalMemo) next.memo = rs[0].memo;
+        return next;
+      }),
+    );
   const parsed = rows.map((r) => {
     const blank = r.accountId === null && r.debit.trim() === '' && r.credit.trim() === '' && r.memo.trim() === '';
     const debit = r.debit.trim() === '' ? 0 : parseMoneyToCents(r.debit);

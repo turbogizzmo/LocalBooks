@@ -24,6 +24,7 @@ pub(super) use crate::forms::{self, EmailDraft, FormKind, FormStyle, FormTemplat
 pub(super) use crate::email_log::{self, EmailStatus, QueuedForm, SentRecord};
 pub(super) use crate::mail_app::{self, ComposeOutcome};
 pub(super) use crate::secrets::SecretStore;
+pub(super) use crate::guards;
 pub(super) use crate::windows;
 pub(super) use crate::smtp::{self, SmtpSettings, SmtpStatus};
 pub(super) use crate::file_dentist::{self, CheckupReport, RebuildResult};

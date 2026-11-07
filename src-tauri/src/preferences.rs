@@ -16,6 +16,22 @@ pub const TAX_FORMS: &[(&str, &str)] = &[
     ("990", "Form 990 (tax-exempt organization)"),
 ];
 
+/// Preferences that no migration seeds: a company file that has never saved one uses the default
+/// here. `get` and `get_all` fill them in, so screens and guards always see a value.
+pub const DEFAULTS: &[(&str, &str)] = &[
+    (crate::guards::WARN_DUPLICATE_CHECKS, "true"),
+    (crate::guards::WARN_DUPLICATE_BILLS, "true"),
+    (crate::guards::WARN_PAST_DAYS, "90"),
+    (crate::guards::WARN_FUTURE_DAYS, "30"),
+    (crate::guards::WARN_RETAINED_EARNINGS, "true"),
+    ("four_digit_years", "true"),
+    ("hours_format", "hhmm"),
+];
+
+fn default_of(key: &str) -> Option<&'static str> {
+    DEFAULTS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+}
+
 /// Validates a preference value; unknown keys are rejected so typos never persist.
 fn validate(key: &str, value: &str) -> Result<String, String> {
     let v = value.trim();
@@ -91,7 +107,21 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             "" => Ok(String::new()),
             _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_FC_ACCOUNT: choose an Income account".into()),
         },
-        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY
+        crate::guards::WARN_PAST_DAYS | crate::guards::WARN_FUTURE_DAYS => match v.parse::<u32>() {
+            Ok(days) if days <= crate::guards::MAX_WARN_DAYS => Ok(days.to_string()),
+            _ => Err(format!("PREF_BAD_WARN_DAYS: enter 0 (don't warn) to {} days", crate::guards::MAX_WARN_DAYS)),
+        },
+        "hours_format" => match v {
+            "decimal" | "hhmm" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_HOURS_FORMAT: show hours as decimal or hhmm".into()),
+        },
+        crate::guards::WARN_DUPLICATE_CHECKS
+        | crate::guards::WARN_DUPLICATE_BILLS
+        | crate::guards::WARN_RETAINED_EARNINGS
+        | "four_digit_years"
+        | "class_tracking"
+        | "class_prompt"
+        | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY
         | crate::print_queue::PREF_CHECKS | crate::print_queue::PREF_INVOICES => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
@@ -134,7 +164,9 @@ pub async fn get_all(pool: &SqlitePool) -> Result<BTreeMap<String, String>, Stri
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    Ok(rows.into_iter().collect())
+    let mut all: BTreeMap<String, String> = DEFAULTS.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    all.extend(rows);
+    Ok(all)
 }
 
 pub async fn get(pool: &SqlitePool, key: &str) -> Result<String, String> {
@@ -143,7 +175,13 @@ pub async fn get(pool: &SqlitePool, key: &str) -> Result<String, String> {
         .fetch_optional(pool)
         .await
         .map_err(db_err)?
+        .or_else(|| default_of(key).map(str::to_string))
         .ok_or_else(|| format!("PREF_MISSING: preference '{key}' is not set"))
+}
+
+/// A true/false preference.
+pub async fn flag(pool: &SqlitePool, key: &str) -> Result<bool, String> {
+    Ok(get(pool, key).await? == "true")
 }
 
 /// Validates and saves one preference immediately; returns the stored (normalized) value.
