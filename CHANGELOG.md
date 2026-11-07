@@ -6,6 +6,14 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Receive Payments takes early-payment discounts.** An invoice on terms such as *2% 10 Net 30*
+  that is paid in full by the discount's last day can now take its discount right on Receive
+  Payments, in a new **Discount** column you can change or clear. Choose the account it goes to
+  (an income account such as Sales Discounts) in **Preferences › Payments**, and tick **Take
+  customers' early-payment discounts automatically** to have it filled in. The payment and the
+  discount post together and close the invoice; voiding the payment reverses both. This matches
+  what Pay Bills already does for vendor discounts.
+
 ## [0.12.0]
 
 - **Bill To and Ship To on sales forms.** Invoices, sales receipts (Sold To), estimates and credit

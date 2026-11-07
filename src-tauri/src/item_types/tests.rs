@@ -618,6 +618,7 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
     crate::invoices::record_payment(
         &pool,
         crate::invoices::PaymentInput {
+            discount_cents: 0,
             payment_method_id: None,
             invoice_id: original.id,
             deposit_account_id: checking,

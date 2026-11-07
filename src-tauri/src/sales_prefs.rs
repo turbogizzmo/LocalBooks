@@ -37,6 +37,8 @@ pub const BILL_DUE_DAYS: &str = "bill_due_days";
 pub const BILL_AUTO_CREDITS: &str = "bill_auto_apply_credits";
 pub const BILL_AUTO_DISCOUNTS: &str = "bill_auto_apply_discounts";
 pub const BILL_DISCOUNT_ACCOUNT: &str = "bill_discount_account_id";
+pub const PAYMENT_AUTO_DISCOUNTS: &str = "payment_auto_apply_discounts";
+pub const PAYMENT_DISCOUNT_ACCOUNT: &str = "payment_discount_account_id";
 pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
 /// The F.O.B. text printed on a sales form, as the schema allows it.
 pub const MAX_FOB_CHARS: usize = 30;
@@ -65,11 +67,16 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
     };
     Some(match key {
         PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
-        | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
+        | PAYMENT_AUTO_DISCOUNTS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
         // An expense (or asset) account, checked in `check_discount_account`; blank means none.
         BILL_DISCOUNT_ACCOUNT => match v {
             "" => Ok(String::new()),
             _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_DISCOUNT_ACCOUNT: choose an expense account for discounts".into()),
+        },
+        // An income (or expense) account, checked in `check_payment_discount_account`; blank means none.
+        PAYMENT_DISCOUNT_ACCOUNT => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_DISCOUNT_ACCOUNT: choose an income account for discounts, such as Sales Discounts".into()),
         },
         // A shipping method, checked against the list in `check_ship_method`; blank means none.
         DEFAULT_SHIP_METHOD => match v {
@@ -139,6 +146,22 @@ pub async fn check_discount_account(pool: &SqlitePool, id: i64) -> Result<(), St
     }
 }
 
+/// Discounts customers take are debited to this account: an active income account that reduces
+/// sales (such as Sales Discounts), or an expense account for a company that books them as a cost.
+pub async fn check_payment_discount_account<'e, E: sqlx::SqliteExecutor<'e>>(db: E, id: i64) -> Result<(), String> {
+    let row: Option<(String, bool, bool)> = sqlx::query_as(
+        "SELECT t.classification, a.is_active, a.is_system FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_err)?;
+    match row {
+        Some((class, true, false)) if class == "INCOME" || class == "EXPENSE" => Ok(()),
+        _ => Err("PREF_BAD_DISCOUNT_ACCOUNT: discounts customers take go to an active income account (such as Sales Discounts) or an expense account".into()),
+    }
+}
+
 // ------------------------------------------------------------------------------------------------
 // Receive Payments
 // ------------------------------------------------------------------------------------------------
@@ -201,7 +224,10 @@ pub fn apply_payment(open: &[Open], amount_cents: i64, mode: AutoApply) -> Vec<(
 #[serde(rename_all = "camelCase")]
 pub struct AppliedAmount {
     pub document_id: i64,
+    /// Money applied.
     pub amount_cents: i64,
+    /// Early-payment discount taken along with it (Receive Payments only).
+    pub discount_cents: i64,
 }
 
 /// A customer's open invoices in one currency (`None` = home), oldest first: by due date, then
@@ -222,14 +248,108 @@ pub async fn open_invoices(pool: &SqlitePool, customer_name: &str, currency: Opt
 }
 
 /// Receive Payments: how `amount_cents` from the customer is applied under the company preference,
-/// or under `mode` (the Auto Apply button applies even when the preference is off).
-pub async fn payment_application(pool: &SqlitePool, customer_name: &str, currency: Option<&str>, amount_cents: i64, mode: Option<&str>) -> Result<Vec<AppliedAmount>, String> {
+/// or under `mode` (the Auto Apply button applies even when the preference is off). With a
+/// `payment_date` and discounts taken automatically, an invoice whose terms still offer a discount
+/// owes that much less, and takes the discount when the money pays the rest in full.
+pub async fn payment_application(
+    pool: &SqlitePool,
+    customer_name: &str,
+    currency: Option<&str>,
+    amount_cents: i64,
+    mode: Option<&str>,
+    payment_date: Option<NaiveDate>,
+) -> Result<Vec<AppliedAmount>, String> {
     let mode = AutoApply::parse(&match mode {
         Some(mode) => mode.to_string(),
         None => preferences::get(pool, AUTO_APPLY).await?,
     });
-    let open = open_invoices(pool, customer_name, currency).await?;
-    Ok(apply_payment(&open, amount_cents, mode).into_iter().map(|(document_id, amount_cents)| AppliedAmount { document_id, amount_cents }).collect())
+    let mut open = open_invoices(pool, customer_name, currency).await?;
+    let mut discounts = BTreeMap::new();
+    if let Some(date) = payment_date.filter(|_| currency.is_none_or(|c| c.trim().is_empty())) {
+        if auto_customer_discounts(pool).await? {
+            for inv in &mut open {
+                let discount = offered_invoice_discount(pool, inv.id, date).await?.min(inv.balance_cents);
+                if discount > 0 {
+                    inv.balance_cents -= discount;
+                    discounts.insert(inv.id, (discount, inv.balance_cents));
+                }
+            }
+        }
+    }
+    Ok(apply_payment(&open, amount_cents, mode)
+        .into_iter()
+        .map(|(document_id, amount_cents)| {
+            let discount_cents = match discounts.get(&document_id) {
+                Some(&(discount, rest)) if amount_cents == rest => discount,
+                _ => 0,
+            };
+            AppliedAmount { document_id, amount_cents, discount_cents }
+        })
+        .collect())
+}
+
+/// Whether Receive Payments takes early-payment discounts without being asked: the preference is
+/// on and there is an account for them.
+pub async fn auto_customer_discounts(pool: &SqlitePool) -> Result<bool, String> {
+    Ok(preferences::flag(pool, PAYMENT_AUTO_DISCOUNTS).await? && !preferences::get(pool, PAYMENT_DISCOUNT_ACCOUNT).await?.is_empty())
+}
+
+/// The discount an invoice's terms offer when paid on `payment_date`: only on a home-currency
+/// invoice nothing has been paid or credited on yet, and only through the discount's last day.
+pub async fn offered_invoice_discount<'e, E: sqlx::SqliteExecutor<'e>>(db: E, invoice_id: i64, payment_date: NaiveDate) -> Result<i64, String> {
+    let row: Option<(i64, i64, i64, Option<String>)> = sqlx::query_as(
+        "SELECT i.total_cents, i.amount_paid_cents, COALESCE(tm.discount_ppm, 0),
+                CASE WHEN tm.discount_days IS NOT NULL THEN date(i.issue_date, '+' || tm.discount_days || ' days') END
+         FROM invoices i LEFT JOIN terms tm ON tm.id = i.terms_id
+         WHERE i.id = ?1 AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL') AND i.currency_code IS NULL",
+    )
+    .bind(invoice_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_err)?;
+    let Some((total, paid, ppm, until)) = row else { return Ok(0) };
+    let until = until.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+    if paid != 0 || ppm == 0 || until.is_none_or(|u| payment_date > u) {
+        return Ok(0);
+    }
+    // Never the whole invoice: some money must change hands.
+    Ok(crate::profile_lists::early_discount_cents(total, ppm).unwrap_or(0).clamp(0, total - 1))
+}
+
+/// An early-payment discount one invoice's terms offer on the payment date.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OfferedDiscount {
+    pub invoice_id: i64,
+    pub amount_cents: i64,
+}
+
+/// What Receive Payments may take off the invoices listed when paid on `payment_date`.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentDiscounts {
+    /// A discount account is set, so a discount can be taken at all.
+    pub available: bool,
+    /// Take them as invoices are paid in full, without being asked.
+    pub automatic: bool,
+    /// Each invoice whose terms still offer a discount.
+    pub offered: Vec<OfferedDiscount>,
+}
+
+/// Receive Payments: the early-payment discounts `invoice_ids` still offer on `payment_date`.
+pub async fn payment_discounts(pool: &SqlitePool, invoice_ids: &[i64], payment_date: NaiveDate) -> Result<PaymentDiscounts, String> {
+    let available = !preferences::get(pool, PAYMENT_DISCOUNT_ACCOUNT).await?.is_empty();
+    let mut out = PaymentDiscounts { available, automatic: available && preferences::flag(pool, PAYMENT_AUTO_DISCOUNTS).await?, offered: Vec::new() };
+    if !available {
+        return Ok(out);
+    }
+    for &invoice_id in invoice_ids {
+        let amount_cents = offered_invoice_discount(pool, invoice_id, payment_date).await?;
+        if amount_cents > 0 {
+            out.offered.push(OfferedDiscount { invoice_id, amount_cents });
+        }
+    }
+    Ok(out)
 }
 
 // ------------------------------------------------------------------------------------------------

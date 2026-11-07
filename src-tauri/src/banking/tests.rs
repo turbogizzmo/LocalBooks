@@ -44,6 +44,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
     .await
     .unwrap();
     let pay = |cents| PaymentInput {
+        discount_cents: 0,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: undeposited,
