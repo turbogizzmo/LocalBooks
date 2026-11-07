@@ -6,6 +6,26 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Defaults for selling, getting paid and paying bills.** New Company Preferences in Sales &
+  Customers, Jobs & Estimates, Payments, Bills and Send Forms:
+  - Receive Payments applies an amount to the invoice with exactly that balance, or else the
+    oldest invoices first. You can choose oldest first only, or tick invoices yourself, and ticking
+    invoices now works out the amount received. A tick column is new on the form.
+  - Payments and sales receipts go to Undeposited Funds unless you turn that off. **Sales receipts
+    used to start on your first bank account; they now start on Undeposited Funds.**
+  - A new bill is due after the vendor's terms. For a vendor without terms, it is due 10 days after
+    the bill date, or the days you set. **Bills used to be due in 30 days whatever the vendor's
+    terms.**
+  - Pay Bills can use each vendor's open credits on the bills you tick, oldest credit first, and
+    take the early-payment discount a bill's terms offer when paid in time, then pay only the rest.
+  - Your usual Ship Via fills in on new invoices, sales receipts and estimates.
+  - A warning before selling to a customer with overdue invoices (off until you turn it on).
+  - Turn off estimates or price levels if you don't use them, rename the five job statuses, and
+    give jobs a status on the customer's Edit….
+  - Each customer has a **Preferred delivery** (Email, Print or None) that ticks Email later or
+    Print later on their new forms; new customers take the Send Forms default.
+  - Change Item Prices starts from the default markup when you price from cost.
+
 - **No more "database is locked" when several things save at once.** On a slow disk, a save
   that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on

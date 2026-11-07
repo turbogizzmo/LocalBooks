@@ -104,6 +104,19 @@ Some settings live on their own screen (sales tax rates, reminders, email, forms
 lists them under **Set on their own screens**, with a link to each. LocalBooks remembers the
 category you used last.
 
+The defaults for selling, getting paid and paying bills are in these categories' Company
+Preferences:
+
+- **Sales & Customers:** the usual Ship Via on new sales forms, the default markup for
+  pricing from cost, price levels on or off, and a warning before selling to a customer with
+  overdue invoices.
+- **Jobs & Estimates:** estimates on or off, and the names of the five job statuses.
+- **Payments:** how a received payment is applied, whether ticking invoices works out the amount,
+  and whether payments go to Undeposited Funds.
+- **Bills:** how many days after the bill date a bill is due when the vendor has no terms, and
+  whether Pay Bills uses vendor credits and takes early-payment discounts.
+- **Send Forms:** how new customers' forms are sent (Email later, Print later or neither).
+
 ## Set how typing works (General preferences)
 
 **Preferences › General › My Preferences** sets how typing works for you. **Default** puts these

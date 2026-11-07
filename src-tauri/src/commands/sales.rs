@@ -48,7 +48,7 @@ pub async fn post_sales_receipt(
     confirmed: Option<Vec<String>>,
 ) -> Result<SalesReceiptSummary, String> {
     let pool = db.pool().await;
-    guards::check(&pool, guards::sale(input.receipt_date, input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4)), None), confirmed.as_deref()).await?;
+    guards::check(&pool, guards::sales_receipt(&input), confirmed.as_deref()).await?;
     let receipt = sales::post_sales_receipt(&pool, input).await?;
     notify(&app);
     Ok(receipt)

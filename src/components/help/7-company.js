@@ -217,8 +217,16 @@ export const topics = [
   {
     id: 'save-anyway', area: 'company', views: ['settings/preferences', 'expenses/expenses', 'expenses/bills', 'accounting/journal', 'sales/invoices'],
     title: 'Why LocalBooks asks before saving (Save anyway)',
-    body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, or a posting to Retained Earnings (Accounting). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',
-    keywords: 'duplicate check number bill number warning save anyway date past future retained earnings four digit years hours decimal time format',
+    body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, a posting to Retained Earnings (Accounting), or a new invoice or sales receipt for a customer with overdue invoices (Sales & Customers, off until an Admin turns it on). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',
+    keywords: 'duplicate check number bill number warning save anyway date past future retained earnings four digit years hours decimal time format overdue customer',
+    go: { label: 'Go to Preferences', view: 'settings/preferences' },
+    guide: 'getting-started',
+  },
+  {
+    id: 'sales-defaults', area: 'company', views: ['settings/preferences', 'sales/invoices', 'expenses/bills', 'sales/estimates', 'sales/customers'],
+    title: 'Defaults for selling, getting paid and paying bills',
+    body: 'An Admin sets these in Edit › Preferences, Company Preferences. Sales & Customers: the usual Ship Via on new sales forms, the default markup Change Item Prices starts with from cost, price levels on or off, and a warning before selling to a customer with overdue invoices. Jobs & Estimates: estimates on or off (off hides them from the menus, side bar and New) and the names of the five job statuses. Payments: apply a payment to an exact match or the oldest invoices automatically, or tick them yourself; work out the amount from the invoices ticked; deposit to Undeposited Funds. Bills: days until a bill is due when the vendor has no terms (10), and using vendor credits and taking early-payment discounts in Pay Bills (discounts go to the discount account you choose). Send Forms: whether new customers’ forms are marked Email later, Print later or neither. Each customer’s Preferred delivery and each job’s status are on the customer’s Edit….',
+    keywords: 'shipping method ship via fob markup price levels off overdue warning zero amount lines estimate invoice estimates off job status pending awarded closed auto apply payment exact match oldest calculate undeposited funds bill due days terms vendor credits pay bills discount preferred delivery send method email later print later',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
     guide: 'getting-started',
   },

@@ -218,7 +218,7 @@ async fn selling_below_zero_warns_stops_or_is_allowed() {
 }
 
 fn sale_posting(product: i64, qty_e4: i64) -> Posting<'static> {
-    sale(d(2026, 4, 10), [(Some(product), qty_e4), (None, 10_000)].into_iter(), None)
+    stock_sale(d(2026, 4, 10), [(Some(product), qty_e4), (None, 10_000)].into_iter(), None)
 }
 
 /// Preferences › Items & Inventory › inventory and purchase orders off: no new tracked items or
