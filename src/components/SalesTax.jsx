@@ -261,8 +261,8 @@ export default function SalesTax({ accounts }) {
   const { data: rates, error } = useLedgerQuery(api.listTaxRates);
   const payments = useLedgerQuery(api.listSalesTaxPayments);
   const [[start, end], chooseRange] = useState(() => periodRange('thisQuarter'));
-  // The liability opens on the current filing period (Preferences › Sales Tax › filing frequency)
-  // until a date is changed here.
+  // The liability opens on the last filing period that ended, the return to file now
+  // (Preferences › Sales Tax › filing frequency), until a date is changed here.
   const touched = useRef(false);
   const setRange = (range) => {
     touched.current = true;
@@ -270,7 +270,7 @@ export default function SalesTax({ accounts }) {
   };
   const filing = useLedgerQuery(() => api.getSalesTaxPeriods(todayIso())).data;
   useEffect(() => {
-    if (filing && !touched.current) chooseRange([filing.current.start, filing.current.end]);
+    if (filing && !touched.current) chooseRange([filing.last.start, filing.last.end]);
   }, [filing]);
   const liability = useLedgerQuery(() => api.getTaxLiability(start, end));
   const [dialog, setDialog] = useState(null);

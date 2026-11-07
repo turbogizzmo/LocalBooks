@@ -395,11 +395,11 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
   );
 }
 
-/** Opens on the current filing period from Preferences › Sales Tax. */
+/** Opens on the last filing period that ended (the return to file now), from Preferences › Sales Tax. */
 export function SalesTaxLiabilityReport() {
   const filing = useLedgerQuery(() => api.getSalesTaxPeriods(todayIso()));
   if (!filing.data && !filing.error) return null;
-  const range = filing.data ? [filing.data.current.start, filing.data.current.end] : null;
+  const range = filing.data ? [filing.data.last.start, filing.data.last.end] : null;
   return <SalesTaxLiability range={range} />;
 }
 

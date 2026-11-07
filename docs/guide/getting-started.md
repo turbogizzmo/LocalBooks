@@ -167,8 +167,8 @@ These company preferences (Admins only) change how LocalBooks works out tax, tim
 
 | Category (Company Preferences) | Option | What it does | Default |
 |---|---|---|---|
-| **Sales Tax** | **Owe sales tax** as of invoice date (accrual) or upon receipt of payment (cash) | The Sales Tax Liability report and **Pay sales tax** follow it. On cash basis an invoice counts as it is paid (in proportion to each payment or credit, less bounced checks); sales receipts count when made | Accrual |
-| **Sales Tax** | **File returns** monthly, quarterly or yearly | The Sales Tax screen and report open on the current period, and **Reminders › Tax dates** shows the last period's return, due on the 20th of the next month (check your state's date) | Quarterly |
+| **Sales Tax** | **Owe sales tax** as of invoice date (accrual) or upon receipt of payment (cash) | The Sales Tax Liability report and **Pay sales tax** follow it. On cash basis an invoice counts as it is settled: in proportion to each payment, and to each credit memo applied to it, less bounced checks, on their dates. Sales receipts count when made, and credit memos on their own date on both bases (so a credit applied to an invoice nets to zero over time) | Accrual |
+| **Sales Tax** | **File returns** monthly, quarterly or yearly | The Sales Tax screen and report open on the last period that ended (the return to file now), and **Reminders › Tax dates** shows that return, due on the 20th of the next month (check your state's date) | Quarterly |
 | **Sales Tax** | **Mark taxable amounts with a "T" when printing** | Taxable lines on printed and emailed invoices, sales receipts and estimates show a T | On |
 | **Finance Charge** | **Calculate charges from** the due date or the invoice date | Where interest starts. An invoice is overdue by its due date and grace days either way | Due date |
 | **Time & Expenses** | **First day of work week** | Weekly timesheets start on it | Monday |

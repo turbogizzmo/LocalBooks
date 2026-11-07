@@ -166,3 +166,44 @@ async fn filing_frequency_sets_the_period_and_the_reminder() {
     crate::preferences::set(&pool, "sales_tax_enabled", "false").await.unwrap();
     assert!(crate::reminders::tax_dates(&pool, day(2026, 11, 6), 30).await.unwrap().iter().all(|r| !r.label.starts_with("Sales tax")));
 }
+
+/// Cash basis and credit memos: a memo counts on its own date (as on accrual), and a memo applied to
+/// an invoice settles that share of the invoice on the date it is applied, so the two cancel and
+/// both bases agree once everything is settled.
+#[tokio::test]
+async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    crate::preferences::set(&pool, "sales_tax_basis", "cash").await.unwrap();
+    let rate = create_tax_rate(&pool, TaxRateInput { name: "State 10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": rate.id,
+        "lines": [{ "description": "Widgets", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": true }]
+    }))
+    .unwrap();
+    let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    // A full credit for the invoice, dated July 5 and applied August 3.
+    let memo = crate::credits::create_credit_memo(
+        &pool,
+        crate::credits::CreditMemoInput {
+            customer_name: "Acme".into(),
+            credit_date: d(5),
+            memo: None,
+            refund_account_id: None,
+            tax_rate_id: Some(rate.id),
+            lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(memo.total_cents, inv.total_cents);
+    let aug = |day| NaiveDate::from_ymd_opt(2026, 8, day).unwrap();
+    crate::credits::apply_customer_credit(&pool, crate::credits::ApplyCreditInput { credit_id: memo.id, document_id: inv.id, amount_cents: memo.total_cents, applied_date: aug(3) }).await.unwrap();
+
+    let tax = |r: &TaxLiabilityReport| r.tax_collected_cents;
+    assert_eq!(tax(&tax_liability(&pool, d(1), d(31)).await.unwrap()), -1_000, "July: the memo on its date");
+    assert_eq!(tax(&tax_liability(&pool, aug(1), aug(31)).await.unwrap()), 1_000, "August: the invoice, settled by the credit");
+    let year = tax_liability(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()).await.unwrap();
+    assert_eq!((tax(&year), year.owed_cents), (0, 0), "nothing owed either way");
+    assert_eq!(tax_liability_on(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), Basis::Accrual).await.unwrap().owed_cents, 0);
+}
