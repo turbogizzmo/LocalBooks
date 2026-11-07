@@ -235,3 +235,53 @@ async fn a_bounced_payment_follows_the_edited_invoice() {
     assert_eq!(control_and_aging(&pool, false).await, (40_000, 40_000));
     books_balance(&pool).await;
 }
+
+/// Pay Bills can use vendor credits and an early-payment discount (posted as a vendor credit)
+/// automatically; editing the bill afterwards keeps them all applied.
+#[tokio::test]
+async fn a_bill_paid_with_auto_applied_credits_and_discount_keeps_them_when_edited() {
+    use crate::sales_prefs::{pay_bills_plan, pay_bills_with_credits, BILL_AUTO_CREDITS, BILL_AUTO_DISCOUNTS, BILL_DISCOUNT_ACCOUNT};
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let bill = |cents: i64| -> BillInput {
+        serde_json::from_value(serde_json::json!({ "vendorName": "Landlord", "billNumber": "B-9", "billDate": "2026-06-01", "dueDate": "2026-07-01", "memo": null,
+            "totalCents": cents, "termsId": terms, "lines": [{ "accountId": rent, "amountCents": cents, "memo": "June" }] }))
+        .unwrap()
+    };
+    let original = crate::expenses::post_vendor_bill(&pool, bill(50_000)).await.unwrap().id;
+    let credit: crate::credits::VendorCreditInput = serde_json::from_value(serde_json::json!({ "vendorName": "Landlord", "reference": "CR-2", "creditDate": "2026-06-02", "memo": null,
+        "lines": [{ "accountId": rent, "amountCents": 5_000, "memo": null }] })).unwrap();
+    crate::credits::create_vendor_credit(&pool, credit).await.unwrap();
+    crate::preferences::set(&pool, BILL_AUTO_CREDITS, "true").await.unwrap();
+    crate::preferences::set(&pool, BILL_AUTO_DISCOUNTS, "true").await.unwrap();
+    crate::preferences::set(&pool, BILL_DISCOUNT_ACCOUNT, &rent.to_string()).await.unwrap();
+
+    let plan = pay_bills_plan(&pool, &[original], date(5)).await.unwrap();
+    assert_eq!((plan.discounts.len(), plan.credits.len()), (1, 1), "{plan:?}");
+    let credits = plan.credits.iter().map(|u| crate::credits::ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: date(5) }).collect();
+    let pay = crate::expenses::BillPaymentInput { bill_id: original, payment_account_id: checking, payment_date: date(5), amount_cents: 20_000, reference: None };
+    pay_bills_with_credits(&pool, vec![pay], credits, plan.discounts, date(5)).await.unwrap();
+    // 200.00 paid, 50.00 vendor credit and a 10.00 discount (2% of 500.00).
+    assert_eq!(control_and_aging(&pool, true).await, (24_000, 24_000));
+
+    let edited = replace_bill(&pool, original, bill(55_000)).await.unwrap();
+    let row: (i64, i64, String) = sqlx::query_as("SELECT total_cents, amount_paid_cents, status FROM bills WHERE id = ?1").bind(edited).fetch_one(&pool).await.unwrap();
+    assert_eq!(row, (55_000, 26_000, "PARTIAL".into()));
+    let on_new: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendor_credit_applications WHERE bill_id = ?1 AND is_voided = 0").bind(edited).fetch_one(&pool).await.unwrap();
+    assert_eq!(on_new, 2, "the vendor credit and the discount both follow the edit");
+    let unused: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(remaining_cents), 0) FROM v_vendor_credit_balances").fetch_one(&pool).await.unwrap();
+    assert_eq!(unused, 0, "no credit is freed up by the edit");
+    assert_eq!(control_and_aging(&pool, true).await, (29_000, 29_000), "A/P agrees with the aging");
+    let payload: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'EDIT' ORDER BY id DESC LIMIT 1").fetch_one(&pool).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    let kinds: Vec<&str> = payload["relinked"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["BILL_PAYMENT", "VENDOR_CREDIT", "VENDOR_CREDIT"]);
+
+    let err = replace_bill(&pool, edited, bill(25_999)).await.unwrap_err();
+    assert!(err.starts_with("EDIT_BELOW_PAID"), "{err}");
+    books_balance(&pool).await;
+}
