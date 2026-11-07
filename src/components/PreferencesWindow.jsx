@@ -13,6 +13,7 @@ import { CheckingCompany, CheckingMy, ItemsCompany, SalesTaxCompany, Tax1099Comp
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
+import DateBox from './DateBox.jsx';
 import { JOB_STATUSES } from '../lib/salesPrefs.js';
 
 /** One preference field that commits to the database as soon as the user leaves it or picks a value. */
@@ -121,7 +122,7 @@ function ClosingDate() {
         </div>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">Closing date</span>
-          <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {data.passcodeProtected && (
           <label className="flex flex-col gap-0.5 text-xs">

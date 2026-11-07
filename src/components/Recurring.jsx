@@ -5,6 +5,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 const KIND_LABEL = { JOURNAL: 'Journal entry', EXPENSE: 'Expense / check', BILL: 'Bill', INVOICE: 'Invoice' };
 const FREQUENCIES = [
@@ -88,11 +89,11 @@ export function MemorizeDialog({ kind, payload, date, defaultName, onClose, onSa
           </label>
           <label>
             <span className="qb-label">Next date</span>
-            <input type="date" className="qb-input w-full" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+            <DateBox className="qb-input w-full" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
           </label>
           <label>
             <span className="qb-label">End date (optional)</span>
-            <input type="date" className="qb-input w-full" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <DateBox className="qb-input w-full" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </label>
         </div>
         {error && <div className="mt-2 text-sm text-qb-negative">{error}</div>}
@@ -148,7 +149,7 @@ export default function Recurring() {
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">Enter transactions due through</span>
-          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
         <button type="button" className="qb-btn qb-btn-primary" disabled={due.length === 0} onClick={() => act(() => api.enterRecurring(asOf), entered)}>
           Enter all due ({due.length})

@@ -4,6 +4,7 @@ import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /** 18000 thousandths of a percent → "18%". */
 function rateLabel(milli) {
@@ -73,7 +74,7 @@ export default function FinanceCharges({ accounts, navigate }) {
         <div className="flex flex-wrap items-end gap-3 px-3 py-2">
           <label className="flex flex-col gap-0.5 text-xs">
             <span className="font-semibold text-qb-ink-muted">Assessment date</span>
-            <input type="date" className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <DateBox className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </label>
           {settings && (
             <span className="pb-1 text-xs text-qb-ink-muted">

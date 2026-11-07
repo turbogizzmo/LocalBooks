@@ -4,6 +4,7 @@ import { EmailMarks, FormSheet, useEmailStatuses, useFormPrinter } from './FormP
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { periodRange } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /** Sales › Customer Statements: pick a period and customers, preview, and print or save as PDF. */
 export default function Statements() {
@@ -47,11 +48,11 @@ export default function Statements() {
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">Statement period from</span>
-          <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => setRange([e.target.value, end])} />
+          <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => setRange([e.target.value, end])} />
         </label>
         <label>
           <span className="qb-label">To (statement date)</span>
-          <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => setRange([start, e.target.value])} aria-invalid={end < start} />
+          <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => setRange([start, e.target.value])} aria-invalid={end < start} />
         </label>
         <span className="self-center text-xs text-qb-ink-muted">Customers with a balance or activity in the period. A customer’s statement includes its jobs.</span>
         <button type="button" className="qb-btn qb-btn-primary ml-auto" onClick={print} disabled={picked.size === 0}>

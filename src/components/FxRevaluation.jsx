@@ -6,6 +6,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { formatCents, formatMoney, formatRate, parseRateE6 } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /** The last day of the month before `iso` (a typical period end). */
 function lastMonthEnd(iso) {
@@ -111,7 +112,7 @@ export default function FxRevaluation() {
         <div className="flex flex-wrap items-start gap-3 px-3 py-2">
           <label className="flex flex-col gap-0.5 text-xs">
             <span className="font-semibold text-qb-ink-muted">Revalue as of</span>
-            <input type="date" className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <DateBox className="qb-input" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </label>
           {currencies.map((code) => (
             <PeriodEndRate key={code} code={code} homeCurrency={homeCurrency} asOf={asOf} value={rates[code] ?? ''} onChange={setCurrencyRate} />

@@ -17,13 +17,14 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 | Install | `npm install` |
 | Run the app with hot reload | `npm run tauri dev` |
 | Rust tests (the gate) | `cd src-tauri && cargo test --locked` |
+| JS unit tests (pure helpers in `src/**/*.test.js`) | `npm test` |
 | Lint gate | `cd src-tauri && cargo clippy --all-targets --locked -- -D clippy::correctness -D clippy::suspicious -D clippy::perf` |
 | End-to-end tests | see `docs/testing/end-to-end.md` |
 | Run the app on test companies | the `run-localbooks` skill in `.claude/skills/` |
 | Release build (macOS) | `npm run build:mac` |
 
 CI (`.github/workflows/`) runs the Rust tests on macOS, Windows and Linux, end-to-end tests on
-Windows and Linux, and Clippy, on every pull request. A PR merges only when all of them are green.
+Windows and Linux, Clippy and the JS unit tests, on every pull request. A PR merges only when all of them are green.
 
 ## Non-negotiable rules
 

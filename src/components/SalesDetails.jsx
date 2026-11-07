@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SalesAddresses } from './SalesAddresses.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { ProfileEntrySelect } from './ProfileFields.jsx';
+import DateBox from './DateBox.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 /**
@@ -123,7 +124,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
           <>
             <label>
               <span className="qb-label">Ship date</span>
-              <input type="date" className="qb-input w-[132px]" value={shipDate} onChange={(e) => setShipDate(e.target.value)} />
+              <DateBox className="qb-input w-[132px]" value={shipDate} onChange={(e) => setShipDate(e.target.value)} />
             </label>
             <label>
               <span className="qb-label">Ship via</span>

@@ -33,6 +33,7 @@ import { useMyPreferences } from '../lib/myPreferences.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
+import DateBox from './DateBox.jsx';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -142,11 +143,11 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
         </label>
         <label>
           <span className="qb-label">From</span>
-          <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
+          <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
         </label>
         <label>
           <span className="qb-label">To</span>
-          <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
+          <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
         </label>
         {!byClass && (
           <>
@@ -282,7 +283,7 @@ function BalanceSheet({ navigate, initial = null }) {
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">As of</span>
-          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
         {data && (
           <div className="ml-auto self-center text-sm">
@@ -335,7 +336,7 @@ function BalanceSheetComparison({ navigate }) {
       <div className="qb-panel no-print flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">As of</span>
-          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
         <div className="ml-auto">
           <ExportMenu
@@ -471,7 +472,7 @@ function ReportOptions({ kind, name, onRun }) {
         {kind === 'as-of' ? (
           <label>
             <span className="qb-label">As of</span>
-            <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </label>
         ) : (
           p.controls

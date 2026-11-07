@@ -6,6 +6,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, mulDivRound, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 import { layOut } from '../lib/itemTypes.js';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
@@ -238,7 +239,7 @@ function PayDialog({ rates, accounts, owedCents, onClose, onPaid }) {
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Payment date</span>
-            <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Amount</span>
@@ -371,9 +372,9 @@ export default function SalesTax({ accounts }) {
         <section className="qb-panel flex min-h-0 flex-col">
           <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
             <h2 className="text-md font-semibold">Sales tax liability</h2>
-            <input type="date" className="qb-input h-row w-[128px] text-sm" value={start} onChange={(e) => setRange([e.target.value, end])} aria-label="From" />
+            <DateBox className="qb-input h-row w-[128px] text-sm" value={start} onChange={(e) => setRange([e.target.value, end])} aria-label="From" />
             <span className="text-sm text-qb-ink-muted">to</span>
-            <input type="date" className="qb-input h-row w-[128px] text-sm" value={end} onChange={(e) => setRange([start, e.target.value])} aria-label="To" />
+            <DateBox className="qb-input h-row w-[128px] text-sm" value={end} onChange={(e) => setRange([start, e.target.value])} aria-label="To" />
             <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setDialog({ mode: 'pay' })}>
               Pay sales tax
             </button>

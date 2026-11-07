@@ -10,6 +10,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { kindLabel } from './ProfileFields.jsx';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 const keyOf = (c) => `${c.kind}:${c.id}`;
 const isExpense = (a) => a.classification === 'EXPENSE';
@@ -89,7 +90,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
           </label>
           <label>
             <span className="qb-label">Date it bounced</span>
-            <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           {chosen && (
             <span className="self-center text-sm text-qb-ink-muted">

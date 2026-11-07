@@ -158,6 +158,16 @@ people using LocalBooks.
   and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
   inactive. When an import brings classes, **Track classes on transactions** turns on, and the
   message after posting says so.
+- **Save & Close, Save & New and Clear on every form.** Invoices, sales receipts, estimates, credit
+  memos, bills, checks, expenses, card credits, vendor credits, purchase orders, deposits, transfers
+  and journal entries now end in these three buttons. **Alt+S** saves and closes the form's window;
+  **Alt+N** saves and leaves a blank form for the next one.
+- **Date keys in every date box.** Press **t** for today, **+** or **-** to move a day, **w** / **k**
+  for the first or last day of the week, **m** / **h** for the month and **y** / **r** for the year.
+  Typing a date still works. In a check number box, **+** and **-** step the number.
+- **Form shortcuts.** On an open form, **Ctrl+D** voids it (after you confirm), **Ctrl+M** memorizes
+  it, and **Ctrl+Insert** / **Ctrl+Delete** insert or delete a line. They're also in the **Edit**
+  menu, and the toolbar buttons show their keys when you hover over them.
 
 ## [0.11.0]
 

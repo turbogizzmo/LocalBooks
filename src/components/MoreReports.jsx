@@ -7,6 +7,7 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { accountLabel, useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * Report period controls (preset, from, to), following the fiscal year like the statements do.
@@ -38,11 +39,11 @@ export function usePeriod(initial = 'fiscalYearToDate', range = null) {
       </label>
       <label>
         <span className="qb-label">From</span>
-        <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
+        <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => { setPeriod('custom'); setRange([e.target.value, end]); }} />
       </label>
       <label>
         <span className="qb-label">To</span>
-        <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
+        <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={end < start} />
       </label>
     </>
   );
@@ -53,7 +54,7 @@ function AsOf({ value, onChange }) {
   return (
     <label>
       <span className="qb-label">As of</span>
-      <input type="date" className="qb-input w-[132px]" value={value} onChange={(e) => onChange(e.target.value)} />
+      <DateBox className="qb-input w-[132px]" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -890,11 +891,11 @@ export function MissingChecksReport({ navigate }) {
           </label>
           <label>
             <span className="qb-label">From (optional)</span>
-            <input type="date" className="qb-input w-[132px]" value={from} onChange={(e) => setRange([e.target.value, to])} />
+            <DateBox className="qb-input w-[132px]" value={from} onChange={(e) => setRange([e.target.value, to])} />
           </label>
           <label>
             <span className="qb-label">To (optional)</span>
-            <input type="date" className="qb-input w-[132px]" value={to} onChange={(e) => setRange([from, e.target.value])} aria-invalid={Boolean(from && to && to < from)} />
+            <DateBox className="qb-input w-[132px]" value={to} onChange={(e) => setRange([from, e.target.value])} aria-invalid={Boolean(from && to && to < from)} />
           </label>
           {data && <span className="self-center text-sm text-qb-ink-muted">{summary}</span>}
         </>

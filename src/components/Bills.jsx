@@ -20,6 +20,8 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
+import DateBox, { CheckNumberBox } from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 const COLS = 10;
@@ -130,7 +132,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
               (files.length && !attachError ? ` ${files.length} file${files.length === 1 ? '' : 's'} attached.` : ''),
       );
       if (attachError) setError(attachError);
-      if (editing) return onCancelEdit();
+      if (editing) return true;
       setFiles([]);
       setVendor('');
       setBillNumber('');
@@ -141,6 +143,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       formClass.reset();
       setError(null);
       vendorRef.current?.focus();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -166,6 +169,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       onPosted(`Bill from ${editing.bill.vendorName} voided: a reversing entry now offsets it.`);
       onCancelEdit();
     });
+  // A bill being edited closes back to a new one; a new bill's window closes (formFlow.jsx).
+  const flow = useFormFlow({ save: () => post('post'), clear, onClose: editing ? onCancelEdit : undefined, afterNew: editing ? onCancelEdit : undefined, busy });
   const toolbar = (
     <FormToolbar
       label="Bill"
@@ -173,7 +178,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
         fileButtons({
           onNew: clear,
-          onSave: () => post('post'),
+          onSave: flow.saveAndNew,
           busy,
           onVoid: editing ? voidBill : undefined,
           voidDisabled: !editing?.bill.journalEntryId || editing.bill.isVoided,
@@ -190,7 +195,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   );
 
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       {toolbar}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
@@ -204,8 +209,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         </label>
         <label>
           <span className="qb-label">Bill date</span>
-          <input
-            type="date"
+          <DateBox
             className="qb-input w-[132px]"
             value={billDate}
             onChange={(e) => {
@@ -228,7 +232,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         </label>
         <label>
           <span className="qb-label">Due date</span>
-          <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
         {formClass.header}
         <label>
@@ -255,9 +259,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => post('memorize')} disabled={busy} title="Save as a recurring transaction">
             Memorize…
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={post} disabled={busy}>
-            {busy ? 'Posting…' : editing ? 'Save changes' : 'Post Bill'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs stockItems={stockItems.data ?? []} />
@@ -515,12 +517,12 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Payment date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {checks && (
           <label>
             <span className="qb-label">{payees.length > 1 ? 'First check no.' : 'Check no.'}</span>
-            <input className="qb-input num w-[90px]" value={checkNo} onChange={(e) => setCheckNo(e.target.value)} aria-label="Check number" />
+            <CheckNumberBox className="qb-input num w-[90px]" value={checkNo} onChange={(e) => setCheckNo(e.target.value)} aria-label="Check number" />
           </label>
         )}
         {checks && (
@@ -532,7 +534,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         {ach && (
           <label>
             <span className="qb-label">Vendors paid on</span>
-            <input type="date" className="qb-input w-[132px]" value={effectiveDate} min={date} onChange={(e) => setEffectiveDate(e.target.value)} />
+            <DateBox className="qb-input w-[132px]" value={effectiveDate} min={date} onChange={(e) => setEffectiveDate(e.target.value)} />
           </label>
         )}
         {ach && originator !== undefined && (

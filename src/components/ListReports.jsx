@@ -5,6 +5,7 @@ import { ExportMenu, longDate } from './ReportParts.jsx';
 import { RANGE_PERIODS, ReportTable, datesFor, reportExports } from './CustomReport.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * Reports outside the report builder (`list_reports.rs`): the phone and contact lists, item and
@@ -80,7 +81,7 @@ function Shown({ info, navigate }) {
         {info.dates === 'asOf' && (
           <label>
             <span className="qb-label">As of</span>
-            <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => setRange([null, e.target.value])} />
+            <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => setRange([null, e.target.value])} />
           </label>
         )}
         {info.dates === 'range' && (
@@ -102,11 +103,11 @@ function Shown({ info, navigate }) {
             </label>
             <label>
               <span className="qb-label">From</span>
-              <input type="date" className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
+              <DateBox className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
             </label>
             <label>
               <span className="qb-label">To</span>
-              <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
+              <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
             </label>
           </>
         )}

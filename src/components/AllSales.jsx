@@ -21,6 +21,8 @@ import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
@@ -91,6 +93,8 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
       onPosted(
         `Sales receipt #${receipt.receiptNumber} posted: Dr ${formatCents(receipt.totalCents)} to the deposit account / Cr income.` + (attachError ? ` ${attachError}` : ''),
       );
+      // The screen starts a new blank receipt (onPosted).
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -98,13 +102,15 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
     }
   };
 
+  const flow = useFormFlow({ save: () => save('post'), clear: onNew, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Sales receipt"
         groups={[
           navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
-          fileButtons({ onNew, onSave: () => save('post'), busy }),
+          fileButtons({ onNew, onSave: flow.saveAndNew, busy }),
           [
             { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Post and print…', disabled: busy, onSelect: () => save('print') }] },
             { id: 'email', label: 'Email', icon: 'Email', menu: [{ label: 'Post and email…', disabled: busy, onSelect: () => save('email') }] },
@@ -120,7 +126,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         </label>
         <label>
           <span className="qb-label">Sales receipt date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Reference no.</span>
@@ -160,11 +166,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
-            Cancel
+            Close
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('post')} disabled={busy}>
-            {busy ? 'Posting…' : 'Save & Post to Ledger'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}

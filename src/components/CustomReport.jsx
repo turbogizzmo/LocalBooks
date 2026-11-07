@@ -6,6 +6,7 @@ import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * The custom report builder (`custom_reports.rs`): the engine's presets in the Reports menu (P&L
@@ -165,7 +166,7 @@ function Builder({ source, custom, navigate, onOpen }) {
         {asOf ? (
           <label>
             <span className="qb-label">As of</span>
-            <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => setRange([null, e.target.value])} />
+            <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => setRange([null, e.target.value])} />
           </label>
         ) : (
           <>
@@ -186,11 +187,11 @@ function Builder({ source, custom, navigate, onOpen }) {
             </label>
             <label>
               <span className="qb-label">From</span>
-              <input type="date" className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
+              <DateBox className="qb-input w-[132px]" value={start ?? ''} onChange={(e) => { setPeriod('custom'); setRange([e.target.value || null, end]); }} />
             </label>
             <label>
               <span className="qb-label">To</span>
-              <input type="date" className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
+              <DateBox className="qb-input w-[132px]" value={end ?? ''} onChange={(e) => { setPeriod('custom'); setRange([start, e.target.value]); }} aria-invalid={!valid} />
             </label>
           </>
         )}

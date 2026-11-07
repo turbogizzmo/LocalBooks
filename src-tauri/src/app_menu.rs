@@ -62,8 +62,20 @@ const FILE: &[Entry] = &[
     Entry::Sep,
 ];
 
+/// Acts on the transaction form open in the focused window (`runFormCommand` in formFlow.jsx).
+/// No accelerators: the page handles Ctrl+D, Ctrl+M, Ctrl+Insert and Ctrl+Delete itself, so the keys
+/// work while typing in a field, and Cmd+M stays Minimize on macOS.
+const fn form_cmd(label: &'static str, command: &'static str) -> Entry {
+    Entry::Cmd { label, command, accel: None }
+}
+
 /// Added to the end of Edit.
 const EDIT: &[Entry] = &[
+    Entry::Sep,
+    form_cmd("Delete or Void Transaction (Ctrl+D)", "form:delete"),
+    form_cmd("Memorize Transaction (Ctrl+M)", "form:memorize"),
+    form_cmd("Insert Line (Ctrl+Insert)", "form:insert-line"),
+    form_cmd("Delete Line (Ctrl+Delete)", "form:delete-line"),
     Entry::Sep,
     page("Use Register", "accounting/register"),
     keyed("Find…", "accounting/find", None, "CmdOrCtrl+F"),
@@ -397,6 +409,24 @@ mod tests {
                 assert!(reports.contains(&format!("['{report}', ")), "no report {report}");
             }
         }
+    }
+
+    /// The Edit menu's form items name commands the page runs (`runFormCommand` in formFlow.jsx).
+    #[test]
+    fn edit_menu_form_commands_exist_in_the_page() {
+        let flow = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formFlow.jsx")).unwrap();
+        let app = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/App.jsx")).unwrap();
+        assert!(app.contains("runFormCommand(payload.slice(5))"), "App.jsx passes form: commands on");
+        let mut found = 0;
+        for entry in EDIT {
+            if let Entry::Cmd { command, .. } = entry {
+                if let Some(name) = command.strip_prefix("form:") {
+                    found += 1;
+                    assert!(flow.contains(&format!("'{name}'")), "formFlow.jsx has no command {name}");
+                }
+            }
+        }
+        assert_eq!(found, 4);
     }
 
     #[test]

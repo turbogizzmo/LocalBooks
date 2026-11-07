@@ -14,6 +14,8 @@ import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
@@ -93,6 +95,8 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     try {
       const id = await api.createPurchaseOrder({ vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted });
       onSaved(`Purchase order for ${vendor.trim()} saved: ${formatCents(total)}. It does not post to the books until you turn it into a bill.`, mode === 'print' ? id : null);
+      clear();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -100,13 +104,15 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     }
   };
 
+  const flow = useFormFlow({ save: () => save('save'), clear, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Purchase order"
         groups={[
           navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
-          fileButtons({ onNew: clear, onSave: () => save('save'), busy }),
+          fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [{ id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] }],
         ]}
       />
@@ -118,11 +124,11 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         </label>
         <label>
           <span className="qb-label">PO date</span>
-          <input type="date" className="qb-input w-[132px]" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Expected</span>
-          <input type="date" className="qb-input w-[132px]" value={expected} onChange={(e) => setExpected(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={expected} onChange={(e) => setExpected(e.target.value)} />
         </label>
         {formClass.header}
         <div className="ml-auto self-center text-sm">
@@ -136,7 +142,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>Close</button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('save')} disabled={busy}>Save purchase order</button>
+          <SaveButtons flow={flow} />
         </div>
       </div>
     </section>
@@ -163,11 +169,11 @@ function BillDialog({ order, onClose, onDone }) {
         <div className="grid grid-cols-2 gap-2">
           <label>
             <span className="qb-label">Bill date</span>
-            <input type="date" className="qb-input w-full" value={billDate} onChange={(e) => { setBillDate(e.target.value); setDueDate(addDays(e.target.value, 30)); }} />
+            <DateBox className="qb-input w-full" value={billDate} onChange={(e) => { setBillDate(e.target.value); setDueDate(addDays(e.target.value, 30)); }} />
           </label>
           <label>
             <span className="qb-label">Due date</span>
-            <input type="date" className="qb-input w-full" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateBox className="qb-input w-full" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </label>
           <label className="col-span-2">
             <span className="qb-label">Vendor’s bill no.</span>
@@ -251,7 +257,6 @@ export default function PurchaseOrders({ accounts, intent }) {
           defaultCategory={defaultCategory}
           onCancel={() => setComposing(false)}
           onSaved={(text, toPrint) => {
-            setComposing(false);
             setNotice({ kind: 'success', text });
             setPrintId(toPrint);
             reload();

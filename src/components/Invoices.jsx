@@ -26,6 +26,8 @@ import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/win
 import NameField from './NameField.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const INITIAL_ROWS = 4;
@@ -127,7 +129,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
           </label>
           <label>
             <span className="qb-label">Payment date</span>
-            <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="ml-auto flex items-center gap-3 self-center text-sm">
             {amountError || rateError ? (
@@ -352,7 +354,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         )}
         <label>
           <span className="qb-label">Payment date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Amount received</span>
@@ -904,7 +906,7 @@ export default function Invoices({ accounts, intent }) {
         await api.replaceInvoice(editing.id, input, appliedText);
         setNotice({ kind: 'success', text: `Invoice #${editing.number} replaced: the original is voided and the edited invoice is posted.` });
         reset();
-        return;
+        return true;
       }
       const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on);
       if (fromEstimate && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
@@ -924,6 +926,8 @@ export default function Invoices({ accounts, intent }) {
             (attachError ? ` ${attachError}` : ''),
       });
       reset();
+      customerRef.current?.focus();
+      return true;
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -931,6 +935,8 @@ export default function Invoices({ accounts, intent }) {
     }
   };
 
+  // The invoice form fills its window: Save & Close closes it (formFlow.jsx).
+  const flow = useFormFlow({ save: () => save('post'), clear: reset, busy, saveDisabled: Boolean(locked) });
   const onFind = () => openFromList('accounting/find', 'find', { text: '' });
   const saved = current ? { kind: 'INVOICE', id: current.id } : null;
   const notSavedHint = 'Save the invoice first, or use the Post and… entry';
@@ -945,7 +951,7 @@ export default function Invoices({ accounts, intent }) {
     }),
     fileButtons({
       onNew: reset,
-      onSave: () => save('post'),
+      onSave: flow.saveAndNew,
       saveHint: editing ? 'Save changes: voids the original and posts this version' : 'Save and post to the ledger',
       busy,
       saveDisabled: Boolean(locked),
@@ -1036,7 +1042,7 @@ export default function Invoices({ accounts, intent }) {
           onDismiss={reset}
         />
       )}
-      <section className="qb-panel flex-none">
+      <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
         <FormToolbar label="Invoice" groups={toolbarGroups} />
         {locked && (
           <Notice
@@ -1056,8 +1062,7 @@ export default function Invoices({ accounts, intent }) {
           </label>
           <label>
             <span className="qb-label">Invoice date</span>
-            <input
-              type="date"
+            <DateBox
               className="qb-input w-[132px]"
               value={issueDate}
               onChange={(e) => {
@@ -1080,8 +1085,7 @@ export default function Invoices({ accounts, intent }) {
           </label>
           <label>
             <span className="qb-label">Due date</span>
-            <input
-              type="date"
+            <DateBox
               className="qb-input w-[132px]"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
@@ -1132,12 +1136,7 @@ export default function Invoices({ accounts, intent }) {
               </label>
             )}
             {!editing && <PrintLaterBox printLater={printLater} />}
-            <button type="button" className="qb-btn qb-btn-secondary" onClick={reset} disabled={busy}>
-              Cancel
-            </button>
-            <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('post')} disabled={busy || Boolean(locked)}>
-              {busy ? 'Posting…' : editing ? 'Save changes' : 'Save & Post to Ledger'}
-            </button>
+            <SaveButtons flow={flow} busyLabel="Posting…" />
           </div>
         </div>
         {memorizing && (

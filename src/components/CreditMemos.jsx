@@ -15,6 +15,8 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
@@ -89,6 +91,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
           (attachError ? ` ${attachError}` : ''),
       );
       clear();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -96,13 +99,15 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
     }
   };
 
+  const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label={refund ? 'Refund receipt' : 'Credit memo'}
         groups={[
           navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
-          fileButtons({ onNew: clear, onSave: save, busy }),
+          fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [attachLaterButton({ setFiles, busy, what: refund ? 'this refund' : 'this credit memo' })],
         ]}
       />
@@ -114,7 +119,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {refund && (
           <label>
@@ -147,9 +152,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Posting…' : 'Save & Post'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
     </section>
@@ -219,7 +222,7 @@ function ApplyDialog({ memo, onClose, onDone }) {
           </span>
           <label className="ml-auto flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Date applied</span>
-            <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
         <table className="qb-grid">
@@ -310,7 +313,7 @@ export function RefundDialog({ title, remainingCents, accounts, direction, onRef
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Date</span>
-            <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Amount</span>

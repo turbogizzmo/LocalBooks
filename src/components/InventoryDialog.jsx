@@ -4,6 +4,7 @@ import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { formatCents, formatQuantity, mulDivRound, parseMoneyToCents, parseQuantityE4 } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
@@ -138,7 +139,7 @@ export function AdjustDialog({ item, accounts, onClose, onDone }) {
           )}
           <label className="flex w-[132px] flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Date</span>
-            <input type="date" className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateBox className="qb-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         </div>
         <div className="flex flex-wrap items-end gap-3">

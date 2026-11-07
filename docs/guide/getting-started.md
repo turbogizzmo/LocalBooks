@@ -372,15 +372,62 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 | **Find** | Opens **Find Transactions**. |
 | **Previous** / **Next** | On an invoice, opens the invoice before or after the one on the form (by number). With nothing open, **Previous** opens the latest invoice. Save or clear your changes first. A voided or paid invoice opens locked: you can print or email it, but not save changes. |
 | **New** | Clears the form for a new one. While you're editing a saved transaction, it closes the edit instead. |
-| **Save** | Saves and posts, the same as the button at the bottom of the form. |
-| **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. |
+| **Save** | Saves and posts, then clears the form for the next one (the same as **Save & New**). |
+| **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. **Ctrl+D** presses it. |
 | **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. |
 | **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. |
 | **Attach File** | On a new form, picks files to attach when it posts. On a saved invoice, shows its attachments. |
-| **Memorize** | Saves the form as a recurring transaction. |
+| **Memorize** | Saves the form as a recurring transaction. **Ctrl+M** presses it. |
 
 Press **Tab** to move through the buttons, or the **Left** and **Right** arrow keys to move along the
 row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the menu.
+
+## Save a form and type faster with the keyboard
+
+Every transaction form (invoice, sales receipt, estimate, credit memo and refund, bill, check,
+expense and card credit, vendor credit, purchase order, deposit, transfer and journal entry) ends
+in three buttons:
+
+| Button | Key | What it does |
+|---|---|---|
+| **Save & Close** | **Alt+S** | Saves it and closes the form's window. A form you opened from inside a list (with **+ New** on the Bills list, say) closes back to that list. |
+| **Save & New** | **Alt+N** | Saves it and leaves the form open and blank for the next one. After editing a saved transaction, you get a new blank form. |
+| **Clear** | | Empties the form without saving. While editing a saved transaction, it closes the edit. |
+
+If something is missing (no customer, lines out of balance), nothing is saved and the form says
+what to fix. On a Mac, **Alt** is the **Option** key.
+
+While a form is open:
+
+| Shortcut | What it does |
+|---|---|
+| **Ctrl+D** | Void (or delete) the transaction on the form, after you confirm, as the toolbar's **Void** does. |
+| **Ctrl+M** | Memorize the transaction (save it as a recurring one). |
+| **Ctrl+Insert** | Insert a blank line above the line you're on. Outside the lines, it adds one at the end. |
+| **Ctrl+Delete** | Delete the line you're on. |
+
+The same four are in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for
+D, Insert and Delete (Fn+Delete is Delete); **⌘M** stays Minimize, so use **Control+M** to memorize.
+
+### Date keys
+
+Every date box, on forms and reports, takes these keys. Typing a date works as always.
+
+| Key | Date |
+|---|---|
+| **t** | Today |
+| **+** (or **=**) / **-** | The next day / the day before (hold it down to keep going) |
+| **w** / **k** | The first / last day of the week (Sunday to Saturday) |
+| **m** / **h** | The first / last day of the month |
+| **y** / **r** | The first / last day of the year |
+
+The week, month and year are those of the date in the box. In a box where a date can't be before
+another (an ACH effective date, say), the keys stop at that date.
+
+### Check numbers
+
+In the **Check no.** box on **Write Checks** and **Pay Bills**, press **+** for the next number and
+**-** for the one before. Leading zeros and letters in front stay as they are (A-0099 becomes A-0100).
 
 ## Find things in the menu bar
 
@@ -390,7 +437,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 | Menu | What's in it |
 |---|---|
 | **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
-| **Edit** | Undo, cut, copy and paste; Use Register; **Find…** (Find Transactions); Preferences |
+| **Edit** | Undo, cut, copy and paste; **Delete or Void Transaction**, **Memorize Transaction**, **Insert Line** and **Delete Line** on the open form; Use Register; **Find…** (Find Transactions); Preferences |
 | **View** | Show or hide the left icon bar (the left pane); Open Window List; One Window or Multiple Windows |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |
 | **Company** | Home Page, users and passwords, closing date, bank feeds, budgets, general journal entries, reclassify, currency adjustment |

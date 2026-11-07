@@ -20,6 +20,7 @@ import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
 import { formatDate, setFourDigitYears } from './lib/dates.js';
 import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
+import { runFormCommand } from './lib/formFlow.jsx';
 import {
   guardWindowClose,
   isMainWindow,
@@ -175,6 +176,8 @@ export default function App() {
     keep(win.listen(MENU_NAVIGATE, ({ payload }) => select(payload.view, payload.action, payload.data)));
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
+      // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
+      if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
       // View › Show or Hide Left Icon Bar: hides the left pane, or brings back the full menu; kept for next time.
       if (payload === 'sidebar') api.setWindowPreferences({ sidebar: sidebarRef.current === 'hidden' ? 'menu' : 'hidden' }).catch(() => {});
     }));

@@ -8,6 +8,7 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { reportBasis, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { formatCents, formatCompactCents } from '../lib/money.js';
 import { formatDate, monthLabel, todayIso } from '../lib/dates.js';
+import DateBox from './DateBox.jsx';
 
 /**
  * The graph reports (`graphs.rs`) in the Reports menu's Graphs group: Income and Expense, Net
@@ -629,7 +630,7 @@ function AgingGraph({ payable, onOpenReport }) {
       controls={
         <label>
           <span className="qb-label">As of</span>
-          <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
       }
       footer={`The same balances as the ${reportName} · days past due · credit not yet used is subtracted in the column for its age`}

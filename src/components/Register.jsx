@@ -14,6 +14,7 @@ import { quickReport, reportShortcut, transactionJournal } from '../lib/quickRep
 import { useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -299,11 +300,11 @@ export default function Register({ accounts, intent }) {
         </label>
         <label>
           <span className="qb-label">From</span>
-          <input type="date" className="qb-input w-[132px]" value={start} onChange={(e) => setStart(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={start} onChange={(e) => setStart(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">To</span>
-          <input type="date" className="qb-input w-[132px]" value={end} onChange={(e) => setEnd(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => setEnd(e.target.value)} />
         </label>
         {(hasChildren || subaccounts) && (
           <label className="flex items-center gap-1 self-center pt-3 text-sm">

@@ -13,6 +13,8 @@ import { kindLabel } from './ProfileFields.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
 const isBank = (a) => a.accountType === 'BANK';
 const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
@@ -84,6 +86,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
       });
       onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}.`);
       clear();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -91,11 +94,13 @@ function DepositForm({ accounts, onPosted, onCancel }) {
     }
   };
 
+  const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Bank deposit"
-        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
       />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Bank deposit</h2>
@@ -106,7 +111,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
         {formClass.header}
         <label>
           <span className="qb-label">Date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Memo</span>
@@ -179,9 +184,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Posting…' : 'Save & Post Deposit'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
     </section>
@@ -211,9 +214,7 @@ function TransferForm({ accounts, onPosted, onCancel }) {
     fromRef.current?.focus();
   };
 
-  // Called by the form's submit and by the toolbar's Save, which passes no event.
-  const save = async (e) => {
-    e?.preventDefault?.();
+  const save = async () => {
     if (fromId === null || toId === null) return setError('Choose both accounts.');
     if (fromId === toId) return setError('Choose two different accounts.');
     if (cents === null || cents <= 0) return setError('Enter an amount above zero.');
@@ -224,6 +225,8 @@ function TransferForm({ accounts, onPosted, onCancel }) {
       setAmount('');
       setMemo('');
       setError(null);
+      fromRef.current?.focus();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -231,13 +234,21 @@ function TransferForm({ accounts, onPosted, onCancel }) {
     }
   };
 
+  const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Transfer"
-        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
       />
-      <form className="flex flex-wrap items-end gap-2 px-2 py-1" onSubmit={save}>
+      <form
+        className="flex flex-wrap items-end gap-2 px-2 py-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          flow.saveAndNew();
+        }}
+      >
         <h2 className="mr-2 self-center text-md font-semibold">Transfer</h2>
         <label>
           <span className="qb-label">Transfer funds from</span>
@@ -253,7 +264,7 @@ function TransferForm({ accounts, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Memo</span>
@@ -264,9 +275,7 @@ function TransferForm({ accounts, onPosted, onCancel }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
-          <button type="submit" className="qb-btn qb-btn-primary" disabled={busy}>
-            {busy ? 'Posting…' : 'Save & Post Transfer'}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </form>
     </section>
@@ -347,7 +356,7 @@ function CardPaydownForm({ accounts, onPosted, onCancel }) {
         </label>
         <label>
           <span className="qb-label">Date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Memo</span>

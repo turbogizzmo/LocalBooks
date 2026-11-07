@@ -9,6 +9,7 @@ import { formatDate, periodRange } from '../lib/dates.js';
 import { useOpenFromList } from '../lib/windows.js';
 import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
 import { quickReport, reportShortcut, transactionJournal, useReportOpener } from '../lib/quickReport.js';
+import DateBox from './DateBox.jsx';
 
 /** How many transactions the panel lists; the count and total still cover them all. */
 const LIMIT = 500;
@@ -110,8 +111,8 @@ export default function PartyTransactions({ kind, party, onClose }) {
         </select>
         {dates !== 'all' && (
           <>
-            <input type="date" className="qb-input h-row w-[128px] text-sm" value={from} onChange={(e) => { setDates('custom'); setRange([e.target.value, to]); }} aria-label="From" />
-            <input type="date" className="qb-input h-row w-[128px] text-sm" value={to} onChange={(e) => { setDates('custom'); setRange([from, e.target.value]); }} aria-label="To" />
+            <DateBox className="qb-input h-row w-[128px] text-sm" value={from} onChange={(e) => { setDates('custom'); setRange([e.target.value, to]); }} aria-label="From" />
+            <DateBox className="qb-input h-row w-[128px] text-sm" value={to} onChange={(e) => { setDates('custom'); setRange([from, e.target.value]); }} aria-label="To" />
           </>
         )}
         <label className="flex items-center gap-1 text-sm">

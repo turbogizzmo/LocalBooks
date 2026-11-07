@@ -19,6 +19,8 @@ import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachmen
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
+import DateBox, { CheckNumberBox } from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
 // Any account a cash outlay can be categorized to: not the payment side, not A/R or A/P.
 const isSplitAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
@@ -33,7 +35,7 @@ const PAY_FROM = {
 };
 
 /** A new expense, check or card credit, or (with `editing` = { expense, lines }) a posted one being edited. */
-function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, editing = null }) {
+function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null }) {
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -136,7 +138,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       if (editing) {
         await api.replaceExpense(was.id, input);
         onPosted(`${EXPENSE_KINDS[kind]} replaced: the original is voided and the edited one is posted.`);
-        return onCancel();
+        return true;
       }
       const posted = await api.postExpense(input, printLater.on);
       if (kind === 'CHECK') printLater.remember(printLater.on);
@@ -154,6 +156,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       formClass.reset();
       setError(attachError);
       payeeRef.current?.focus();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -178,6 +181,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       onPosted(`${EXPENSE_KINDS[kind]} voided: a reversing entry now offsets it.`);
       onCancel();
     });
+  const flow = useFormFlow({ save: () => save('post'), clear, onClose: onCancel, afterNew: editing ? onNew : undefined, busy });
   const toolbar = (
     <FormToolbar
       label={EXPENSE_KINDS[kind]}
@@ -185,7 +189,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
         fileButtons({
           onNew: clear,
-          onSave: () => save('post'),
+          onSave: flow.saveAndNew,
           busy,
           onVoid: editing ? voidExpense : undefined,
           voidDisabled: !was?.journalEntryId || was.isVoided,
@@ -202,7 +206,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   );
 
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       {toolbar}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <div className="mr-1 flex self-center overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Type">
@@ -229,12 +233,12 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </label>
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Check date' : isCredit ? 'Credit date' : 'Payment date'}</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         {kind === 'CHECK' ? (
           <label>
             <span className="qb-label">Check no.</span>
-            <input
+            <CheckNumberBox
               className="qb-input num w-[80px]"
               value={printLater.on ? 'To print' : checkNumber}
               disabled={printLater.on}
@@ -272,9 +276,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => save('memorize')} disabled={busy} title="Save as a recurring transaction">
             Memorize…
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Posting…' : editing ? 'Save changes' : `Save & Post ${kind === 'CARD_CREDIT' ? 'Credit' : EXPENSE_KINDS[kind]}`}
-          </button>
+          <SaveButtons flow={flow} busyLabel="Posting…" />
         </div>
       </div>
       {memorizing && (
@@ -369,6 +371,7 @@ export default function ExpensesChecks({ accounts, intent }) {
             setKind(null);
             setEditing(null);
           }}
+          onNew={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
         />
       )}

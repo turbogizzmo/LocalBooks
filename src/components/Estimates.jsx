@@ -15,6 +15,8 @@ import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import DateBox from './DateBox.jsx';
+import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
 /** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
@@ -96,6 +98,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
       if (mode === 'print') forms.print('ESTIMATE', estimate.id);
       if (mode === 'email') forms.email('ESTIMATE', estimate.id);
       clear();
+      return true;
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -103,13 +106,15 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
     }
   };
 
+  const flow = useFormFlow({ save: () => save('save'), clear, onClose: onCancel, busy });
+
   return (
-    <section className="qb-panel flex-none">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Estimate"
         groups={[
           navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
-          fileButtons({ onNew: clear, onSave: () => save('save'), busy }),
+          fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [
             { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] },
             { id: 'email', label: 'Email', icon: 'Email', menu: [{ label: 'Save and email…', disabled: busy, onSelect: () => save('email') }] },
@@ -124,11 +129,11 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
         </label>
         <label>
           <span className="qb-label">Estimate date</span>
-          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
           <span className="qb-label">Expiration date</span>
-          <input type="date" className="qb-input w-[132px]" value={expires} onChange={(e) => setExpires(e.target.value)} />
+          <DateBox className="qb-input w-[132px]" value={expires} onChange={(e) => setExpires(e.target.value)} />
         </label>
         {sales.picker}
         {formClass.header}
@@ -162,9 +167,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('save')} disabled={busy}>
-            {busy ? 'Saving…' : 'Save Estimate'}
-          </button>
+          <SaveButtons flow={flow} />
         </div>
       </div>
     </section>

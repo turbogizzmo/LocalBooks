@@ -21,7 +21,9 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     expect(await tableRow('1003')).toContain('$134.52');
     await click($('//button[@aria-label="Actions for invoice 1003"]'));
     await click($('//*[@role="menu"]//button[normalize-space()="Edit…"]'));
-    await click(button('Save changes'));
+    // The edited invoice has a window of its own; the Invoices list's window has a blank invoice
+    // form with its own Save & New behind it.
+    await click(button('Save & New', '//section[starts-with(@aria-label, "Invoice 1003")]'));
     // My Preferences › General: warn when editing a posted transaction (on by default).
     await click(button('Save changes', '//*[@role="alertdialog"]'));
     // The seeded invoice may be dated more than 90 days ago: that warning asks too.

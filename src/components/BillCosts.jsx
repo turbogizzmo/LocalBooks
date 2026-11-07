@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
+import DateBox from './DateBox.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
@@ -114,7 +115,7 @@ export default function BillCosts({ navigate }) {
           </label>
           <label className="flex flex-col gap-0.5 text-xs">
             <span className="font-semibold text-qb-ink-muted">Invoice date</span>
-            <input type="date" className="qb-input" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            <DateBox className="qb-input" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
           </label>
           <label className="flex flex-col gap-0.5 text-xs">
             <span className="font-semibold text-qb-ink-muted">Markup %</span>
