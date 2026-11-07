@@ -90,12 +90,13 @@ impl Chart {
         .await
         .map_err(db_err)?;
 
+        let numbers = crate::preferences::flag(pool, crate::preferences::SHOW_ACCOUNT_NUMBERS).await?;
         let mut chart = Chart { accounts: Vec::with_capacity(rows.len()), children: HashMap::new() };
         for (id, parent_id, number, name, account_type, normal, is_system) in rows {
             chart.children.entry(parent_id).or_default().push(chart.accounts.len());
             chart.accounts.push(Account {
                 id,
-                label: number.map_or_else(|| name.clone(), |n| format!("{n} {name}")),
+                label: number.filter(|_| numbers).map_or_else(|| name.clone(), |n| format!("{n} {name}")),
                 account_type,
                 is_debit_normal: normal == "DEBIT",
                 is_system,
@@ -659,10 +660,57 @@ pub struct CashFlowStatement {
     pub currency_symbol: String,
 }
 
+/// The three sections of the Statement of Cash Flows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CashFlowSection {
+    Operating,
+    Investing,
+    Financing,
+}
+
+/// Company preference: a JSON object from account id to `OPERATING`, `INVESTING` or `FINANCING`
+/// for the accounts whose section differs from their type's (Preferences › Reports & Graphs).
+pub const CASH_FLOW_SECTIONS: &str = "cash_flow_sections";
+
+/// The section an account of this type goes in unless the company moved it: current assets and
+/// liabilities are operating, fixed and other assets investing, long-term liabilities and equity
+/// financing. Bank accounts are the cash itself and income and expense accounts are in net
+/// income, so they have none.
+pub fn default_cash_flow_section(account_type: &str) -> Option<CashFlowSection> {
+    match account_type {
+        "ACCOUNTS_RECEIVABLE" | "OTHER_CURRENT_ASSET" | "ACCOUNTS_PAYABLE" | "CREDIT_CARD" | "OTHER_CURRENT_LIABILITY" => Some(CashFlowSection::Operating),
+        "FIXED_ASSET" | "OTHER_ASSET" => Some(CashFlowSection::Investing),
+        "LONG_TERM_LIABILITY" | "EQUITY" => Some(CashFlowSection::Financing),
+        _ => None,
+    }
+}
+
+fn cash_flow_section(account_id: i64, account_type: &str, overrides: &HashMap<i64, CashFlowSection>) -> Option<CashFlowSection> {
+    let default = default_cash_flow_section(account_type)?;
+    Some(overrides.get(&account_id).copied().unwrap_or(default))
+}
+
+/// Parses the [`CASH_FLOW_SECTIONS`] preference; blank is no overrides.
+pub fn parse_cash_flow_sections(value: &str) -> Result<HashMap<i64, CashFlowSection>, String> {
+    if value.trim().is_empty() {
+        return Ok(HashMap::new());
+    }
+    let raw: HashMap<String, CashFlowSection> =
+        serde_json::from_str(value).map_err(|_| "PREF_BAD_CASH_FLOW: each account maps to OPERATING, INVESTING or FINANCING".to_string())?;
+    raw.into_iter()
+        .map(|(id, section)| id.parse::<i64>().map(|id| (id, section)).map_err(|_| format!("PREF_BAD_CASH_FLOW: '{id}' is not an account")))
+        .collect()
+}
+
+async fn cash_flow_overrides(pool: &SqlitePool) -> Result<HashMap<i64, CashFlowSection>, String> {
+    parse_cash_flow_sections(&crate::preferences::get(pool, CASH_FLOW_SECTIONS).await?)
+}
+
 /// Statement of Cash Flows by the indirect method. Cash is the Bank accounts. Net income is
-/// adjusted by the change in every other current asset and liability (operating), fixed and other
-/// assets (investing), and long-term liabilities and equity (financing), so the net change always
-/// equals the change in bank balances.
+/// adjusted by the change in every other balance sheet account, each in the section its type
+/// puts it in ([`default_cash_flow_section`]) unless Preferences › Reports & Graphs moved it, so
+/// the net change always equals the change in bank balances.
 pub async fn cash_flow(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<CashFlowStatement, String> {
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
@@ -677,17 +725,18 @@ pub async fn cash_flow(pool: &SqlitePool, start_date: NaiveDate, end_date: Naive
     let mut lines: Vec<ReportLine> = Vec::new();
     let mut push = |kind, label: String, depth, amount: Option<i64>, account_id| lines.push(ReportLine { kind, label, depth, amount_cents: amount, account_id });
     // Cash goes up when an asset goes down or a liability or equity account goes up.
-    let section = |types: &[&str]| -> Vec<(i64, String, i64)> {
+    let overrides = cash_flow_overrides(pool).await?;
+    let section = |wanted: CashFlowSection| -> Vec<(i64, String, i64)> {
         chart
             .accounts
             .iter()
-            .filter(|a| types.contains(&a.account_type.as_str()))
+            .filter(|a| cash_flow_section(a.id, &a.account_type, &overrides) == Some(wanted))
             .filter_map(|a| movement.get(&a.id).filter(|m| **m != 0).map(|m| (a.id, a.label.clone(), -m)))
             .collect()
     };
-    let operating = section(&["ACCOUNTS_RECEIVABLE", "OTHER_CURRENT_ASSET", "ACCOUNTS_PAYABLE", "CREDIT_CARD", "OTHER_CURRENT_LIABILITY"]);
-    let investing = section(&["FIXED_ASSET", "OTHER_ASSET"]);
-    let financing = section(&["LONG_TERM_LIABILITY", "EQUITY"]);
+    let operating = section(CashFlowSection::Operating);
+    let investing = section(CashFlowSection::Investing);
+    let financing = section(CashFlowSection::Financing);
 
     push(LineKind::Section, "OPERATING ACTIVITIES".into(), 0, None, None);
     push(LineKind::Account, "Net Income".into(), 1, Some(net), None);
