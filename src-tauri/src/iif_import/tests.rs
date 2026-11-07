@@ -534,3 +534,25 @@ async fn a_full_import_matches_existing_classes_and_classes_document_lines() {
     assert!(!class_active(&pool, "new build").await, "inactive before the import, inactive after");
     assert!(class_active(&pool, "REMODEL").await);
 }
+
+/// "Bring in customers, vendors and items" brings the classes too, and a full import afterwards
+/// still says it turned class tracking on.
+#[tokio::test]
+async fn bringing_in_the_lists_brings_the_classes() {
+    use crate::qbw_ledger_import::{auto_map_accounts, batch_summary, import_lists, post_batch, stage, ClassesResult, ImportMode, PostLedgerInput};
+    let pool = crate::db::test_pool().await;
+    let ledger = read(CLASSES_IIF.as_bytes()).unwrap();
+    let batch = stage(&pool, std::path::Path::new("/exports/Classes.iif"), 1, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let lists = import_lists(&pool, batch).await.unwrap();
+    assert_eq!(lists.classes, Some(ClassesResult { added: 4, matched: 0, tracking_turned_on: true }));
+    let l = batch_summary(&pool, batch).await.unwrap().lists;
+    assert_eq!((l.classes, l.classes_done), (4, 4), "the panel counts them as in LocalBooks");
+    assert!(!class_active(&pool, "Old Jobs").await);
+
+    crate::preferences::set(&pool, "class_tracking", "false").await.unwrap();
+    let posted = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap();
+    assert_eq!(posted.classes, Some(ClassesResult { added: 4, matched: 0, tracking_turned_on: true }), "still the import's own classes");
+    assert_eq!(tracking(&pool).await, "true");
+    assert_eq!(class_of_lines(&pool, "journal_lines").await[1], Some("Remodel:Kitchen".into()));
+}

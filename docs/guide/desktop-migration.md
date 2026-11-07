@@ -364,8 +364,9 @@ installed? Export from my installed QuickBooks** below the file box instead: see
 3. For each source account, choose a LocalBooks account under **Post to this LocalBooks account**.
    Or click **Match existing accounts and create the rest** to map by name and create what's missing.
    Every account must have a LocalBooks account before you can post.
-4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**.
-   It matches existing records by name and adds the rest. Price levels come in with them (a
+4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**
+   (**…, items and classes** when it has classes). It matches existing records by name and adds
+   the rest; classes are added as described under [Classes](#classes). Price levels come in with them (a
    level with the same name as one you already have is left as it is), and the customers it adds
    get their default price level. Each level it creates is recorded in the audit trail.
 

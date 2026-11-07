@@ -797,6 +797,8 @@ pub struct ImportListsResult {
     /// Price levels: created, or matched by name to one already in LocalBooks (left as it is).
     pub price_levels_created: i64,
     pub price_levels_matched: i64,
+    /// What became of the file's classes, when it has any (see [`ClassesResult`]).
+    pub classes: Option<ClassesResult>,
 }
 
 /// Custom field values as staged: a JSON array of [label, value] pairs, or nothing.
@@ -1089,6 +1091,15 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     // import created get their default level.
     if let Err(e) = import_price_levels(&mut tx, batch_id, &mut result).await {
         return Err(ledger::rollback(tx, e).await);
+    }
+    // The class list too, so classes are in before the transactions that use them.
+    let classes = match bring_in_classes(&mut tx, batch_id).await {
+        Ok(map) => finish_classes(&mut tx, &map).await,
+        Err(err) => Err(err),
+    };
+    match classes {
+        Ok(c) => result.classes = c,
+        Err(err) => return Err(ledger::rollback(tx, err).await),
     }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(result)
@@ -1408,8 +1419,10 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         lines.entry(txn).or_default().push((map.get(&account).copied().unwrap_or(0), cents, memo, class));
     }
 
+    let mut tracking_turned_on = false;
     if input.mode == ImportMode::Full {
-        import_lists(pool, batch_id).await?;
+        // Turns class tracking on when the file has classes, so the post below only matches them.
+        tracking_turned_on = import_lists(pool, batch_id).await?.classes.is_some_and(|c| c.tracking_turned_on);
     }
     let mut result = PostLedgerResult::default();
     let mut staged = Vec::with_capacity(txns.len());
@@ -1486,7 +1499,9 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         },
     };
     match finish_classes(&mut tx, &classes).await {
-        Ok(done) => result.classes = done,
+        Ok(done) => {
+            result.classes = done.map(|c| ClassesResult { tracking_turned_on: c.tracking_turned_on || tracking_turned_on, ..c });
+        }
         Err(err) => return Err(ledger::rollback(tx, err).await),
     }
     let line_counts: HashMap<i64, usize> = staged.iter().map(|t| (t.source_id, t.lines.len())).collect();
@@ -1571,16 +1586,7 @@ async fn add_lists(pool: &SqlitePool, batch_id: i64) -> Result<PostLedgerResult,
     let mut accounts = auto_map_accounts(pool, batch_id).await?;
     accounts.reactivated += reactivated;
     let lists = import_lists(pool, batch_id).await?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
-    let classes = match bring_in_classes(&mut tx, batch_id).await {
-        Ok(map) => finish_classes(&mut tx, &map).await,
-        Err(err) => Err(err),
-    };
-    let classes = match classes {
-        Ok(c) => c,
-        Err(err) => return Err(ledger::rollback(tx, err).await),
-    };
-    crate::ledger::commit_write(tx).await.map_err(db_err)?;
+    let classes = lists.classes.clone();
     sqlx::query("UPDATE ledger_import_batches SET lists_added = 1, posted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?1")
         .bind(batch_id)
         .execute(pool)

@@ -465,29 +465,32 @@ function classesNote(c) {
   );
 }
 
-/** Customers, vendors and items from the file, brought in as LocalBooks records. */
+/** Customers, vendors, items and classes from the file, brought in as LocalBooks records. */
 function ListsPanel({ summary, busy, accountsReady, run }) {
   const l = summary.lists;
-  if (!l || l.customers + l.vendors + l.items + (l.classes ?? 0) === 0) return null;
-  const all = l.customers + l.vendors + l.items;
-  const done = l.customersDone + l.vendorsDone + l.itemsDone;
+  const classes = l?.classes ?? 0;
+  if (!l || l.customers + l.vendors + l.items + classes === 0) return null;
+  const all = l.customers + l.vendors + l.items + classes;
+  const done = l.customersDone + l.vendorsDone + l.itemsDone + (l.classesDone ?? 0);
+  const what = classes > 0 ? 'customers, vendors, items and classes' : 'customers, vendors and items';
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-qb-border px-3 py-2 text-xs">
-      <span className="font-semibold">Customers, vendors and items</span>
+      <span className="font-semibold">{what[0].toUpperCase() + what.slice(1)}</span>
       <span className="text-qb-ink-muted">
-        {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items in the file
+        {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items
+        {classes > 0 && ` · ${countOf(classes, ['class', 'classes'])}`} in the file
         {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
-        {l.classes > 0 &&
-          (l.classesDone === l.classes
-            ? ` · ${countOf(l.classes, ['class', 'classes'])} in LocalBooks`
-            : ` · ${countOf(l.classes, ['class', 'classes'])}, added when you post (class tracking turns on)`)}
       </span>
       {done < all && !summary.listsOnly && (
         <button
           type="button"
           className="qb-btn qb-btn-secondary ml-auto h-row px-2 text-xs"
           disabled={busy || !accountsReady}
-          title={accountsReady ? 'Matches existing records by name and creates the rest, with addresses, emails and terms' : 'Map the accounts first: items post to them'}
+          title={
+            accountsReady
+              ? `Matches existing records by name and creates the rest, with addresses, emails and terms${classes > 0 ? '; turns class tracking on' : ''}`
+              : 'Map the accounts first: items post to them'
+          }
           onClick={() =>
             run(
               () => api.importLedgerLists(summary.id),
@@ -495,11 +498,12 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
                 `Customers: ${r.customersCreated} added, ${r.customersMatched} already there. Vendors: ${r.vendorsCreated} added, ${r.vendorsMatched} already there. ` +
                 `Items: ${r.itemsCreated} added, ${r.itemsMatched} already there` +
                 (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
-                '.',
+                '.' +
+                classesNote(r.classes),
             )
           }
         >
-          Bring in customers, vendors and items
+          Bring in {what}
         </button>
       )}
       {done === all && <span className="ml-auto text-qb-green-active">✓ All in LocalBooks</span>}
