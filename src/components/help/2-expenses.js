@@ -18,6 +18,10 @@ export const screens = {
     help: 'Everyone you buy from, with what you still owe each of them.',
     guide: 'customers-and-products',
   },
+  'expenses/print-checks': {
+    help: 'Checks marked Print later, waiting to print. Choose the bank account, enter the number on the first check in the printer, and print: the checks take numbers in order, and only the ones you confirm printed keep them.',
+    guide: 'expenses-and-checks',
+  },
   'expenses/purchase-orders': {
     help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
   },
@@ -29,6 +33,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'print-checks-later', area: 'expenses', views: ['expenses/expenses', 'expenses/print-checks'],
+    title: 'Print checks later, in a batch',
+    body: 'Tick Print later on Write Checks and the check is saved without a number, showing To print in the list. File › Print Forms › Checks… prints the waiting checks in order from the first number on your check stock, then asks whether they all printed: the ones that did keep their numbers, the others stay queued.',
+    keywords: 'print later to be printed queue batch check numbers print forms',
+    go: { label: 'Go to Print Checks', view: 'expenses/print-checks' },
+    guide: 'expenses-and-checks',
+  },
   {
     id: 'expense-check', area: 'expenses', views: ['expenses/expenses'],
     title: 'Record an expense or write a check',

@@ -502,6 +502,7 @@ const ENTRY_COLUMNS: &str = "
             COALESCE(inv.home_total_cents, inv.total_cents)
             - COALESCE((SELECT SUM(COALESCE(p.ar_relief_cents, p.amount_cents)) FROM invoice_payments p
                         WHERE p.invoice_id = inv.id AND p.is_voided = 0 AND p.payment_date <= ?2), 0)
+            + COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = inv.id AND b.is_voided = 0 AND b.bounce_date <= ?2), 0)
             - COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = inv.id AND a.is_voided = 0 AND a.applied_date <= ?2), 0) END
         WHEN cm.id IS NOT NULL AND cm.refund_account_id IS NULL THEN CASE WHEN cm.journal_entry_id IS NOT e.id OR cm.is_voided = 1 THEN 0 ELSE
             -(cm.total_cents

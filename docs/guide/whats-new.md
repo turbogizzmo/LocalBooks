@@ -4,6 +4,23 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.11.0
+
+- **A toolbar on every form.** Find, New, Save, Void, Print, Email, Attach File and Memorize across
+  the top of invoices, bills, checks and the other forms, and payment-method tiles on Receive
+  Payment and sales receipts. [Use the toolbar on a form](getting-started.md#use-the-toolbar-on-a-form)
+- **Add a customer, vendor, item or class without leaving the form.** Type a new name and choose
+  **Add as a new customer** (or vendor); the item column ends in **＋ Add new item…** and the class
+  list in **＋ Add new class…**.
+  [Add a customer or vendor](customers-and-products.md#add-a-customer-or-vendor)
+- **See a name's transactions, and open anything from a register.** Click a customer or vendor to
+  list its transactions; double-click a register row or a list row to open it.
+  [See a customer's or vendor's transactions](customers-and-products.md#see-a-customers-or-vendors-transactions)
+- **Sort registers and Reconcile**, and **press Enter to move between fields** (Settings ›
+  Preferences › General). [Set how typing works](getting-started.md#set-how-typing-works-general-preferences)
+- **Six more reports**, including Profit & Loss by Month, Transaction List by Customer and by
+  Vendor, and Voided Transactions. [Detail reports](reports.md#detail-reports)
+
 ## 0.10.3
 
 - **Windows inside LocalBooks, as in QuickBooks Desktop.** Invoices, bills, registers and reports

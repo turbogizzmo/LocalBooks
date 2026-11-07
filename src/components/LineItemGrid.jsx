@@ -110,15 +110,6 @@ export function evaluateLine(line) {
   };
 }
 
-/**
- * What a form's lines amount to, as text: the item lines and the subtotals, discounts, charges
- * and groups among them. Two forms with the same key would post the same lines (unsaved-changes
- * checks compare it).
- */
-export function linesKey(summary) {
-  return JSON.stringify({ lines: summary.payload, formLines: summary.formLines });
-}
-
 /** How many filled item lines follow the group heading at `index` and belong to it. */
 function groupItems(lines, evaluated, index) {
   let count = 0;

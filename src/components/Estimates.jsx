@@ -6,6 +6,8 @@ import { useFormClass } from './ClassSelect.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -21,7 +23,7 @@ const STATUS = {
   CONVERTED: { label: '● Converted · invoice', className: 'text-qb-info' },
 };
 
-function EstimateForm({ accounts, onSaved, onCancel }) {
+function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
@@ -34,6 +36,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const [emailLater, setEmailLater] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
@@ -49,7 +52,19 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
-  const save = async () => {
+  const clear = () => {
+    setCustomer('');
+    setMemo('');
+    setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+    formClass.reset();
+    tax.reset();
+    sales.reset();
+    setDiscountText('');
+    setError(null);
+    customerRef.current?.focus();
+  };
+
+  const save = async (mode) => {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
@@ -72,15 +87,9 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
       });
       const queued = emailLater && (await api.setEmailLater('ESTIMATE', estimate.id, true).then(() => true, () => false));
       onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.${queued ? ' Marked Email later.' : ''}`);
-      setCustomer('');
-      setMemo('');
-      setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
-      formClass.reset();
-      tax.reset();
-      sales.reset();
-      setDiscountText('');
-      setError(null);
-      customerRef.current?.focus();
+      if (mode === 'print') forms.print('ESTIMATE', estimate.id);
+      if (mode === 'email') forms.email('ESTIMATE', estimate.id);
+      clear();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -90,6 +99,17 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Estimate"
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({ onNew: clear, onSave: () => save('save'), busy }),
+          [
+            { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] },
+            { id: 'email', label: 'Email', icon: 'Email', menu: [{ label: 'Save and email…', disabled: busy, onSelect: () => save('email') }] },
+          ],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">New estimate</h2>
         <label className="w-[240px]">
@@ -135,7 +155,7 @@ function EstimateForm({ accounts, onSaved, onCancel }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
             Close
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={save} disabled={busy}>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={() => save('save')} disabled={busy}>
             {busy ? 'Saving…' : 'Save Estimate'}
           </button>
         </div>
@@ -186,7 +206,7 @@ export default function Estimates({ accounts, intent, navigate }) {
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {printPortal}
-      {composing && <EstimateForm accounts={accounts} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />}
+      {composing && <EstimateForm accounts={accounts} forms={forms} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load estimates: ${error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">

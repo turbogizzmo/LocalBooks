@@ -3,11 +3,13 @@ import { useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { formatCents, parseMoneyToCents } from '../lib/money.js';
+import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
@@ -28,6 +30,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
   useEffect(() => bankRef.current?.focus(), []);
@@ -49,6 +52,15 @@ function DepositForm({ accounts, onPosted, onCancel }) {
       return next;
     });
 
+  const clear = () => {
+    setPicked(new Set());
+    setRows([blankSplit(null)]);
+    setMemo('');
+    formClass.reset();
+    setError(null);
+    bankRef.current?.focus();
+  };
+
   const save = async () => {
     if (bankId === null) return setError('Choose the bank account to deposit into.');
     if (other.invalid > 0) return setError(`${other.invalid} other-funds row(s) need an account and an amount above zero.`);
@@ -66,11 +78,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
         otherLines,
       });
       onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}.`);
-      setPicked(new Set());
-      setRows([blankSplit(null)]);
-      setMemo('');
-      formClass.reset();
-      setError(null);
+      clear();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -80,6 +88,10 @@ function DepositForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Bank deposit"
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Bank deposit</h2>
         <label>
@@ -180,12 +192,23 @@ function TransferForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const fromRef = useRef(null);
+  const openFromList = useOpenFromList();
 
   useEffect(() => fromRef.current?.focus(), []);
   const cents = parseMoneyToCents(amount);
 
+  const clear = () => {
+    setFromId(null);
+    setToId(null);
+    setAmount('');
+    setMemo('');
+    setError(null);
+    fromRef.current?.focus();
+  };
+
+  // Called by the form's submit and by the toolbar's Save, which passes no event.
   const save = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (fromId === null || toId === null) return setError('Choose both accounts.');
     if (fromId === toId) return setError('Choose two different accounts.');
     if (cents === null || cents <= 0) return setError('Enter an amount above zero.');
@@ -205,6 +228,10 @@ function TransferForm({ accounts, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Transfer"
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: save, busy })]}
+      />
       <form className="flex flex-wrap items-end gap-2 px-2 py-1" onSubmit={save}>
         <h2 className="mr-2 self-center text-md font-semibold">Transfer</h2>
         <label>
@@ -241,15 +268,109 @@ function TransferForm({ accounts, onPosted, onCancel }) {
   );
 }
 
+/**
+ * Pay Down Credit Card: pays a card's balance from a bank account. It posts as a transfer
+ * (Dr the card, Cr the bank), so it shows here and in both registers.
+ */
+function CardPaydownForm({ accounts, onPosted, onCancel }) {
+  const cards = accounts.filter((a) => a.isActive && a.accountType === 'CREDIT_CARD' && !a.isSystem);
+  const banks = accounts.filter((a) => a.isActive && isBank(a) && !a.isSystem);
+  const [cardId, setCardId] = useState(cards[0]?.id ?? null);
+  const [bankId, setBankId] = useState(banks[0]?.id ?? null);
+  const [date, setDate] = useTransactionDate();
+  const card = accounts.find((a) => a.id === cardId);
+  const owed = Math.max(0, card?.balanceCents ?? 0);
+  const [amount, setAmount] = useState('');
+  const [memo, setMemo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const cardRef = useRef(null);
+
+  useEffect(() => cardRef.current?.focus(), []);
+  // The amount starts at what the card owes now, and follows the card chosen.
+  useEffect(() => setAmount(owed > 0 ? centsToInput(owed) : ''), [cardId, owed]);
+  const cents = parseMoneyToCents(amount);
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (cardId === null) return setError('Choose the credit card to pay.');
+    if (bankId === null) return setError('Choose the bank account to pay from.');
+    if (cents === null || cents <= 0) return setError('Enter an amount above zero.');
+    setBusy(true);
+    try {
+      await api.postTransfer({
+        fromAccountId: bankId,
+        toAccountId: cardId,
+        transferDate: date,
+        amountCents: cents,
+        memo: memo.trim() || `Payment to ${accountLabel(accounts, cardId)}`,
+      });
+      onPosted(`Paid ${formatCents(cents)} to ${accountLabel(accounts, cardId)} from ${accountLabel(accounts, bankId)}: Dr the card / Cr the bank.`);
+      setMemo('');
+      setError(null);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="qb-panel flex-none">
+      <form className="flex flex-wrap items-end gap-2 px-2 py-1" onSubmit={save}>
+        <h2 className="mr-2 self-center text-md font-semibold">Pay down credit card</h2>
+        <label>
+          <span className="qb-label">Credit card</span>
+          <AccountSelect
+            ref={cardRef}
+            accounts={accounts}
+            filter={(a) => a.accountType === 'CREDIT_CARD' && !a.isSystem}
+            value={cardId}
+            onChange={setCardId}
+            placeholder="Select card"
+            className="qb-input w-[210px]"
+          />
+        </label>
+        <span className="self-center text-sm text-qb-ink-muted">Balance owed {formatCents(owed)}</span>
+        <label>
+          <span className="qb-label">Pay from</span>
+          <AccountSelect accounts={accounts} filter={(a) => isBank(a) && !a.isSystem} value={bankId} onChange={setBankId} placeholder="Select bank" className="qb-input w-[210px]" />
+        </label>
+        <label>
+          <span className="qb-label">Amount</span>
+          <input className="qb-input num w-[120px]" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" aria-invalid={amount !== '' && (cents === null || cents <= 0)} />
+        </label>
+        <label>
+          <span className="qb-label">Date</span>
+          <input type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label>
+          <span className="qb-label">Memo</span>
+          <input className="qb-input w-[200px]" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder={cardId ? `Payment to ${accountLabel(accounts, cardId)}` : ''} />
+        </label>
+        <div className="ml-auto flex items-center gap-2 self-center">
+          {error && <span className="text-sm text-qb-negative">{error}</span>}
+          <button type="button" className="qb-btn qb-btn-secondary" onClick={onCancel} disabled={busy}>
+            Close
+          </button>
+          <button type="submit" className="qb-btn qb-btn-primary" disabled={busy}>
+            {busy ? 'Posting…' : 'Save & Pay'}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+const INTENT_MODES = { 'bank-deposit': 'deposit', transfer: 'transfer', 'pay-card': 'pay-card' };
+
 export default function DepositsTransfers({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listBankingActivity);
-  const fromIntent = intent?.action === 'bank-deposit' ? 'deposit' : intent?.action === 'transfer' ? 'transfer' : null;
-  const [mode, setMode] = useState(fromIntent);
+  const [mode, setMode] = useState(INTENT_MODES[intent?.action] ?? null);
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    if (intent?.action === 'bank-deposit') setMode('deposit');
-    if (intent?.action === 'transfer') setMode('transfer');
+    if (INTENT_MODES[intent?.action]) setMode(INTENT_MODES[intent.action]);
   }, [intent]);
 
   const attachments = useAttachmentRows();
@@ -272,12 +393,16 @@ export default function DepositsTransfers({ accounts, intent }) {
     <div className="flex h-full flex-col gap-2 p-2">
       {mode === 'deposit' && <DepositForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
       {mode === 'transfer' && <TransferForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
+      {mode === 'pay-card' && <CardPaydownForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load activity: ${error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Deposits & transfers</h2>
           <div className="ml-auto flex gap-2">
+            <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setMode('pay-card')}>
+              Pay down card
+            </button>
             <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setMode('transfer')}>
               Transfer
             </button>

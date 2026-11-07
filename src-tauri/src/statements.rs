@@ -225,6 +225,8 @@ async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate,
             SELECT i.journal_entry_id, COALESCE(i.home_total_cents, i.total_cents),
                    COALESCE((SELECT SUM(COALESCE(p.ar_relief_cents, p.amount_cents)) FROM invoice_payments p
                              WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
+                 - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b
+                             WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0)
                  + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a
                              WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0) AS settled
             FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL
@@ -248,7 +250,7 @@ async fn cash_basis_movement(pool: &SqlitePool, chart: &Chart, start: NaiveDate,
                  + COALESCE((SELECT SUM(r.amount_cents) FROM vendor_credit_refunds r JOIN journal_entries re ON re.id = r.journal_entry_id
                              WHERE r.vendor_credit_id = c.id AND re.is_voided = 0 AND r.refund_date BETWEEN ?1 AND ?2), 0)
             FROM vendor_credits c WHERE c.is_voided = 0 AND c.journal_entry_id IS NOT NULL
-         ) WHERE settled > 0",
+         ) WHERE settled <> 0",
     )
     .bind(start)
     .bind(end)

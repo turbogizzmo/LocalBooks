@@ -13,6 +13,20 @@ people using LocalBooks.
   a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
   print as a single line. They print in place, come back when you edit, and carry from an estimate
   to its invoice; discount items show in Sales by Product/Service.
+- **Print checks and invoices later, in a batch.** Tick **Print later** on Write Checks or on an
+  invoice and it waits in **File › Print Forms › Checks…** or **Invoices…**, marked *To print* in
+  the list. Print the batch from there: checks take numbers in order from the first number on your
+  check stock, and LocalBooks asks **Did they all print?** so only the ones that came out right
+  keep their numbers. The forms remember whether you last left Print later on.
+- **Record a bounced check.** **Banking › Record Bounced Check…** takes a deposited customer check
+  the bank returned: the invoice it paid opens again, the bank goes down by the check and the
+  bank's fee (posted to the expense account you choose), and a returned-check fee you charge the
+  customer goes on a new invoice. Voiding the bounced check puts it all back.
+- **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
+  starting at what the card owes. It posts as a transfer.
+
+## [0.11.0]
+
 - **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
   **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
   and **Voided Transactions** are in the report list. Like the other detail reports, each can be
@@ -45,6 +59,16 @@ people using LocalBooks.
   entered. In Preferences, Enter now saves the box and moves to the next one.
 - **Recent companies in the order you opened them.** The No Company Open screen shows when you last
   opened each company file, newest first, instead of when the file last changed.
+- **A toolbar on every transaction form.** Invoices, sales receipts, estimates, credit memos,
+  bills, checks and expenses, vendor credits, purchase orders, deposits, transfers, journal
+  entries and Receive Payment have a row of large buttons across the top: **Find**, **New**,
+  **Save**, **Void**, **Print ▾**, **Email ▾**, **Attach File** and **Memorize**, showing only what
+  each form can do. On an invoice, **Previous** and **Next** step through your invoices, and
+  **Print ▾ › Post and print…** posts and prints in one step.
+- **Payment method tiles.** Receive Payment and sales receipts show how you were paid as large
+  tiles (**Cash**, **Check**, **Card**, **Bank / ACH**, and **More** for Wire and Other) instead of
+  a drop-down. Receive Payment also shows the customer's balance at the top right and has an
+  **Auto Apply** button.
 - **The sidebar says where the company file is.** Its footer ends in **local**, **network** or
   **cloud** (a Dropbox, iCloud or other synced folder), instead of always saying offline.
 
