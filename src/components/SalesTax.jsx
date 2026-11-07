@@ -261,7 +261,7 @@ function PayDialog({ rates, accounts, owedCents, onClose, onPaid }) {
 }
 
 /** Sales › Sales Tax: turn it on, set up rates, see what is owed and record payments. */
-export default function SalesTax({ accounts }) {
+export default function SalesTax({ accounts, intent }) {
   const prefs = useLedgerQuery(api.getPreferences).data;
   const { data: rates, error } = useLedgerQuery(api.listTaxRates);
   const payments = useLedgerQuery(api.listSalesTaxPayments);
@@ -281,6 +281,10 @@ export default function SalesTax({ accounts }) {
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
   const enabled = prefs?.sales_tax_enabled === 'true';
+  // Vendors › Sales Tax › Pay Sales Tax… opens the payment straight away.
+  useEffect(() => {
+    if (intent?.action === 'pay-sales-tax') setDialog({ mode: 'pay' });
+  }, [intent]);
 
   useEffect(() => {
     if (start && end && start <= end) liability.reload();

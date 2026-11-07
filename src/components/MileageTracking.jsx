@@ -618,6 +618,7 @@ export default function MileageTracking({ intent, navigate }) {
   const [notice, setNotice] = useState(null);
   useEffect(() => {
     if (intent?.action === 'mileage-trip') setTab('trips');
+    else if (intent?.action === 'vehicles') setTab('vehicles');
   }, [intent]);
 
   return (
