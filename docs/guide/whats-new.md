@@ -8,7 +8,7 @@ the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELO
 
 - **A toolbar on every form.** Find, New, Save, Void, Print, Email, Attach File and Memorize across
   the top of invoices, bills, checks and the other forms, and payment-method tiles on Receive
-  Payment and sales receipts. [Create the invoice](invoices.md#create-the-invoice)
+  Payment and sales receipts. [Use the toolbar on a form](getting-started.md#use-the-toolbar-on-a-form)
 - **Add a customer, vendor, item or class without leaving the form.** Type a new name and choose
   **Add as a new customer** (or vendor); the item column ends in **＋ Add new item…** and the class
   list in **＋ Add new class…**.
