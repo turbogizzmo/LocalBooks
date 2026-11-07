@@ -100,6 +100,7 @@ features![
     sales_tax,
     search,
     statements,
+    tax_and_time,
     timesheet,
     users,
     vendor_1099,

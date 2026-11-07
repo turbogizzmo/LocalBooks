@@ -674,6 +674,8 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         .zip(details)
         .map(|(i, details)| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
         .collect();
+    let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
+    let lines = mark_taxable(pool, lines, &taxable, inv.tax_rate_id.is_some()).await?;
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
@@ -744,7 +746,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         customer_details: customer_details(&name, &cust),
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: mark_taxable(pool, lines_of(pool, rows, &money).await?, &taxable_flags(pool, "estimate_lines", "estimate_id", estimate_id).await?, tax_name.is_some()).await?,
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -805,7 +807,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: mark_taxable(pool, lines_of(pool, rows, &money).await?, &taxable_flags(pool, "sales_receipt_lines", "sales_receipt_id", receipt_id).await?, tax_name.is_some()).await?,
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -815,6 +817,21 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         statement: None,
         sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?),
     })
+}
+
+/// Preferences › Sales Tax › "Mark taxable amounts with a T when printing": a taxable line's amount
+/// gets a trailing T, on a document that charges tax. `taxable` is per line, in order.
+async fn mark_taxable(pool: &SqlitePool, mut lines: Vec<FormLine>, taxable: &[bool], charges_tax: bool) -> Result<Vec<FormLine>, String> {
+    if charges_tax && crate::preferences::flag(pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE).await? {
+        for (line, _) in lines.iter_mut().zip(taxable).filter(|(_, t)| **t) {
+            line.amount.push_str(" T");
+        }
+    }
+    Ok(lines)
+}
+
+async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) -> Result<Vec<bool>, String> {
+    sqlx::query_scalar(&format!("SELECT is_taxable FROM {table} WHERE {parent} = ?1 ORDER BY line_number")).bind(id).fetch_all(pool).await.map_err(db_err)
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).

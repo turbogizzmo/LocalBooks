@@ -62,6 +62,28 @@ people using LocalBooks.
   (Preferences › Accounting › My Preferences).
 - **Two-digit years and decimal hours.** Company Preferences › General can show dates as 10/13/26
   and hours as 1.50 instead of 1:30.
+- **Sales tax on the cash basis, and your filing period.** In Preferences › Sales Tax, choose
+  whether you owe sales tax when you invoice or when you are paid, and whether you file monthly,
+  quarterly or yearly. The Sales Tax report and Pay sales tax follow the basis (on cash, an invoice
+  counts as it is paid), open on your filing period, and Reminders shows the next return. Printed
+  invoices, sales receipts and estimates can mark taxable lines with a **T**.
+- **Bill expenses to customers.** Tick **Bill?** on a check, expense or bill line for a customer,
+  then invoice those costs from **Sales › Bill Costs**, with a markup. Preferences › Time &
+  Expenses can tick Bill? for you, count reimbursements as income and set the default markup.
+- **1099 boxes.** Map expense accounts to 1099-NEC and 1099-MISC boxes in Preferences › Tax: 1099;
+  the 1099 Summary and Detail now show each box. Payments made from 2026 use the new $2,000
+  threshold ($600 before). Don't file 1099s? Turn them off and the 1099 fields and reports go away.
+- **Work week, billable time and finance charges.** Weekly timesheets can start on any day, new
+  time can start billable, and finance charges can run from the invoice date instead of the due
+  date.
+- **Inventory switches.** Warn, stop or say nothing when a sale would take stock below zero, and
+  turn inventory and purchase orders off if you don't use them (Preferences › Items & Inventory).
+- **Checking preferences.** Put the vendor's account number (a new **Account no.** on the vendor)
+  in check memos, re-date checks to the day they print, and choose the account Write Checks, Pay
+  Bills and Make Deposits open with.
+- **Recall a vendor's last bill or check.** Turn on **Automatically recall information**
+  (Preferences › General › My Preferences) and a new bill or check for a vendor you have paid before
+  starts with the same accounts, and amounts if you like.
 - **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
   Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
   Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers

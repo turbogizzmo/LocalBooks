@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useTransactionDate } from '../lib/myPreferences.js';
+import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
+import { useVendorRecall } from '../lib/recall.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
@@ -67,6 +68,19 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (defaultCategory === null) return;
     setRows((rs) => rs.map((r) => (r.accountId === null ? { ...r, accountId: defaultCategory } : r)));
   }, [defaultCategory]);
+
+  // My Preferences › General › recall: a known vendor's last bill fills the rows (and total).
+  useVendorRecall({
+    vendor,
+    vendors,
+    rows,
+    enabled: !editing,
+    kind: 'bill',
+    onRecalled: (recalled, recalledRows) => {
+      setRows(recalledRows);
+      if (recalledRows.some((r) => r.amount || r.rate)) setTotal((t) => t || centsToInput(recalled.totalCents));
+    },
+  });
 
   const totalCents = parseMoneyToCents(total);
   const { lines, invalid, total: allocated } = summarizeSplits(rows);
@@ -265,7 +279,12 @@ const newRequestId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-
 
 function PayBills({ bills, accounts, onDone, onCancel }) {
   const open = bills.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const defaultAccount = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
+  // Pay Bills opens on the account chosen in Preferences › Checking (My Preferences), else the first bank.
+  const { payBillsAccountId } = useMyPreferences();
+  const defaultAccount = useMemo(
+    () => accounts.find((a) => a.id === payBillsAccountId && a.isActive && isPaymentAccount(a))?.id ?? accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null,
+    [accounts, payBillsAccountId],
+  );
   const [accountId, setAccountId] = useState(defaultAccount);
   const [date, setDate] = useState(todayIso());
   const [selected, setSelected] = useState({});

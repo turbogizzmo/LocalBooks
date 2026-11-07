@@ -371,7 +371,18 @@ pub struct TrackInput {
 }
 
 /// Starts tracking quantity and cost for an existing product (starting at zero on hand).
+/// Refuses new inventory work while Preferences › Items & Inventory has inventory and purchase
+/// orders turned off. Items already tracked keep working: their sales and purchases still move stock.
+pub async fn require_enabled(pool: &SqlitePool) -> Result<(), String> {
+    if crate::preferences::flag(pool, crate::preferences::tax_time::INVENTORY).await? {
+        Ok(())
+    } else {
+        Err("INV_OFF: inventory and purchase orders are turned off in Preferences › Items & Inventory".into())
+    }
+}
+
 pub async fn track_product(pool: &SqlitePool, input: &TrackInput) -> Result<InventoryItemView, String> {
+    require_enabled(pool).await?;
     let mut conn = pool.acquire().await.map_err(db_err)?;
     let asset = match input.asset_account_id {
         Some(a) => a,

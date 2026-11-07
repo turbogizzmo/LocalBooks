@@ -102,6 +102,7 @@ async fn company() -> SqlitePool {
         product_service_id: item,
         class_id: None,
         customer_id: job,
+        billable: None,
     };
     let bill = crate::expenses::post_vendor_bill(
         p,

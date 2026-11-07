@@ -99,6 +99,13 @@ export default function GeneralPreferences() {
             {radio('keepTypedItemDetails', 'keep', 'Always keep what I typed')}
             {radio('keepTypedItemDetails', 'replace', "Never: use the new item's description and price")}
           </fieldset>
+          <fieldset>
+            <Legend>Automatically recall information</Legend>
+            <p className="px-2 text-2xs text-qb-ink-faint">On a new bill, check or expense, once you pick a vendor you have paid before:</p>
+            {radio('recallVendorTransaction', 'last', 'Recall the last transaction for this name', 'Its accounts, descriptions and amounts fill the lines; change anything before saving.')}
+            {radio('recallVendorTransaction', 'accounts', 'Pre-fill the accounts used last time', 'The same lines without amounts.')}
+            {radio('recallVendorTransaction', 'off', 'Don’t recall anything')}
+          </fieldset>
         </div>
       </div>
     </Panel>

@@ -48,7 +48,7 @@ async fn bill_on_terms(pool: &SqlitePool, vendor: &str, cents: i64, date: NaiveD
         memo: None,
         total_cents: cents,
         terms_id,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
+        lines: vec![BillLineInput { account_id: expense, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     };
     post_vendor_bill(pool, input).await.expect("bill posts").id
 }

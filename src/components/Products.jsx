@@ -95,6 +95,8 @@ export default function Products({ accounts, intent }) {
   };
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
+  // Preferences › Items & Inventory › inventory off: products already tracked keep their stock; no new ones.
+  const inventoryOn = useLedgerQuery(api.getPreferences).data?.inventory_enabled !== 'false';
   const sorter = useSort(data, {
     name: (p) => p.name,
     description: (p) => p.description,
@@ -359,9 +361,11 @@ export default function Products({ accounts, intent }) {
                       <>
                         <td className="qb-grid-cell text-qb-ink-faint" colSpan={3}>Not tracked</td>
                         <td className="qb-grid-cell cell-tight">
-                          <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
-                            Track stock…
-                          </button>
+                          {inventoryOn && (
+                            <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
+                              Track stock…
+                            </button>
+                          )}
                         </td>
                       </>
                     )}

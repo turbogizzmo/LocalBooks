@@ -31,6 +31,11 @@ pub struct BillLineInput {
     /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
     #[serde(default)]
     pub customer_id: Option<i64>,
+    /// Whether to invoice this cost to its customer or job (Sales › Bill Costs). Without a
+    /// customer a line is never billable; left out, it follows Preferences › Time & Expenses ›
+    /// "Mark all expenses as billable".
+    #[serde(default)]
+    pub billable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -212,6 +217,58 @@ pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<Bil
     get_bill(pool, bill_id).await
 }
 
+/// Whether a line is billable: only with a customer or job, and by the company default when the
+/// form didn't say.
+async fn is_billable(tx: &mut Transaction<'_, Sqlite>, billable: Option<bool>, customer_id: Option<i64>) -> Result<bool, String> {
+    if customer_id.is_none() {
+        return Ok(false);
+    }
+    match billable {
+        Some(b) => Ok(b),
+        None => {
+            let key = crate::preferences::tax_time::EXPENSES_BILLABLE;
+            let saved: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
+            Ok(saved.as_deref() == Some("true"))
+        }
+    }
+}
+
+/// The memo a check takes when it has none: the vendor's account number, by preference
+/// (Preferences › Checking).
+async fn check_memo(tx: &mut Transaction<'_, Sqlite>, vendor_id: Option<i64>) -> Result<Option<String>, String> {
+    let Some(vendor) = vendor_id else { return Ok(None) };
+    let key = crate::preferences::tax_time::CHECK_MEMO_ACCOUNT;
+    let on: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = ?1").bind(key).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    if on.as_deref() != Some("true") {
+        return Ok(None);
+    }
+    let number: Option<String> = sqlx::query_scalar("SELECT NULLIF(trim(account_number), '') FROM vendors WHERE id = ?1").bind(vendor).fetch_one(&mut **tx).await.map_err(db_err)?;
+    Ok(number.map(|n| format!("Acct #{n}")))
+}
+
+/// The account number a vendor knows this company by (printed in check memos by preference).
+pub async fn vendor_account_number(pool: &SqlitePool, vendor_id: i64) -> Result<Option<String>, String> {
+    sqlx::query_scalar::<_, Option<String>>("SELECT account_number FROM vendors WHERE id = ?1")
+        .bind(vendor_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| "PARTY_NOT_FOUND: that vendor does not exist".to_string())
+}
+
+/// Saves a vendor's account number (blank clears it); returns what was stored.
+pub async fn set_vendor_account_number(pool: &SqlitePool, vendor_id: i64, number: Option<&str>) -> Result<Option<String>, String> {
+    let number = number.map(str::trim).filter(|n| !n.is_empty());
+    if number.is_some_and(|n| n.chars().count() > 40) {
+        return Err("PARTY_BAD_ACCOUNT_NUMBER: an account number is at most 40 characters".into());
+    }
+    let done = sqlx::query("UPDATE vendors SET account_number = ?1 WHERE id = ?2").bind(number).bind(vendor_id).execute(pool).await.map_err(db_err)?;
+    if done.rows_affected() == 0 {
+        return Err("PARTY_NOT_FOUND: that vendor does not exist".into());
+    }
+    Ok(number.map(str::to_string))
+}
+
 pub(crate) async fn write_bill(tx: &mut Transaction<'_, Sqlite>, input: &BillInput) -> Result<i64, String> {
     write_bill_carrying(tx, input, None).await
 }
@@ -275,9 +332,10 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
             crate::job_reports::check_job(tx, job, &format!("BILL: line {n}")).await?;
         }
 
+        let billable = is_billable(tx, line.billable, line.customer_id).await?;
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id, customer_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id, customer_id, is_billable)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(bill_id)
         .bind(n as i64)
@@ -289,6 +347,7 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
         .bind(line.product_service_id)
         .bind(line.class_id)
         .bind(line.customer_id)
+        .bind(billable)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -480,6 +539,11 @@ pub struct SplitLineInput {
     /// The customer or job this cost is for (job costing); it doesn't change how the line posts.
     #[serde(default)]
     pub customer_id: Option<i64>,
+    /// Whether to invoice this cost to its customer or job (Sales › Bill Costs). Without a
+    /// customer a line is never billable; left out, it follows Preferences › Time & Expenses ›
+    /// "Mark all expenses as billable".
+    #[serde(default)]
+    pub billable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -592,6 +656,11 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     };
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
     let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
+    let memo = match clean(input.memo.as_deref()) {
+        Some(memo) => Some(memo.to_string()),
+        None if kind == "CHECK" => check_memo(tx, vendor_id).await?,
+        None => None,
+    };
 
     // Journal lines in the document's currency; the ledger converts foreign ones to home currency.
     // A charge debits each split and credits the payment account; a card credit is the reverse.
@@ -619,7 +688,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .bind(input.expense_date)
     .bind(check_number)
     .bind(method)
-    .bind(clean(input.memo.as_deref()))
+    .bind(memo.as_deref())
     .bind(total)
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
@@ -634,8 +703,9 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         if let Some(job) = line.customer_id {
             crate::job_reports::check_job(tx, job, &format!("EXP: split line {}", idx + 1)).await?;
         }
+        let billable = is_billable(tx, line.billable, line.customer_id).await?;
         sqlx::query(
-            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id, customer_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id, customer_id, is_billable) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(expense_id)
         .bind(idx as i64 + 1)
@@ -644,6 +714,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         .bind(clean(line.memo.as_deref()))
         .bind(line.class_id)
         .bind(line.customer_id)
+        .bind(billable)
         .execute(&mut **tx)
         .await
         .map_err(|e| format!("{} (split line {})", db_err(e), idx + 1))?;
