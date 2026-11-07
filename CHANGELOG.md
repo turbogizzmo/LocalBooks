@@ -46,6 +46,13 @@ people using LocalBooks.
 - **Process Multiple Reports.** Under **Memorized reports**, tick several reports and display them
   together, print them in one go (each on a new page), or save them as one Excel workbook with a
   worksheet per report.
+- **Imports keep your classes.** Books moved from QuickBooks now arrive with their class list,
+  subclasses included, and every transaction line keeps its class, so Profit & Loss by Class
+  matches the original. This works for QuickBooks Desktop company files and backups (`.qbw`,
+  `.qbb`), IIF files (the class list and the CLASS column), report exports with a Class column,
+  and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
+  inactive. When an import brings classes, **Track classes on transactions** turns on, and the
+  message after posting says so.
 
 ## [0.11.0]
 

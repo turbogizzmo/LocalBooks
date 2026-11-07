@@ -127,6 +127,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_chain",
     "ledger_import_accounts",
     "ledger_import_batches",
+    "ledger_import_classes",
     "ledger_import_items",
     "ledger_import_lines",
     "ledger_import_parties",
