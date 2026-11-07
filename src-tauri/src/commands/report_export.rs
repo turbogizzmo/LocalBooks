@@ -26,7 +26,7 @@ pub async fn report_csv(
 }
 
 /// Prompts with the native Save dialog for `filename`, filtered to its extension. `None` if cancelled.
-async fn choose_export_path(app: AppHandle, filename: String) -> Result<Option<PathBuf>, String> {
+pub(super) async fn choose_export_path(app: AppHandle, filename: String) -> Result<Option<PathBuf>, String> {
     let extension = std::path::Path::new(&filename).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "csv".into());
     let chosen = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()

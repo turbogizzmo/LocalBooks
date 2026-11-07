@@ -595,7 +595,7 @@ pub fn ledger(book: &Book) -> Ledger {
         for (s, c) in t.splits.iter().zip(&cents) {
             let (Some(account_id), Some(c)) = (cx.account(&s.account), *c) else { continue };
             if c != 0 {
-                lines.push(SourceLine { account_id, cents: -c, memo: s.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string) });
+                lines.push(SourceLine { account_id, cents: -c, memo: s.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(str::to_string), class: None });
             }
         }
         // A transaction that leaves every account where it was (a lot link, a zero-value entry)
@@ -630,7 +630,7 @@ pub fn ledger(book: &Book) -> Ledger {
 
     let (transactions, unbalanced): (Vec<_>, Vec<_>) = transactions.into_iter().partition(|t| t.imbalance_cents() == 0);
     let (customers, vendors) = cx.parties.into_lists();
-    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default() }
+    Ledger { accounts, customers, vendors, items: Vec::new(), transactions, unbalanced, unreadable, quality, sales_lists: Default::default(), classes: Vec::new() }
 }
 
 /// The book's customers (with their jobs as sub-customers) and vendors, as ledger parties.
@@ -713,7 +713,7 @@ impl Parties {
 
 /// A form line for a posted split, one unit at its amount.
 fn split_line(l: &SourceLine) -> DocumentLine {
-    DocumentLine { item_id: None, description: l.memo.clone(), quantity_e4: 10_000, rate_cents: l.cents.abs(), cents: l.cents, account_id: l.account_id }
+    DocumentLine { item_id: None, description: l.memo.clone(), quantity_e4: 10_000, rate_cents: l.cents.abs(), cents: l.cents, account_id: l.account_id, class: None }
 }
 
 /// The form lines of an invoice or bill: its entries when they add up, per account, to what the
@@ -758,7 +758,7 @@ fn form_lines(cx: &Context, st: &SourceTransaction, invoice: &Invoice) -> Vec<Do
             _ => (10_000, amount.abs()),
         };
         let description = e.description.as_deref().map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
-        lines.push(DocumentLine { item_id: None, description, quantity_e4, rate_cents, cents, account_id });
+        lines.push(DocumentLine { item_id: None, description, quantity_e4, rate_cents, cents, account_id, class: None });
     }
     if lines.is_empty() || covered.iter().any(|(a, c)| by_account.get(a) != Some(c)) {
         return from_splits();

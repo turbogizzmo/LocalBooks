@@ -31,8 +31,8 @@ its [Transaction History](reports.md#quickreport-transaction-history-and-transac
 **Ctrl+Y** for its Transaction Journal; **QuickReport** (or **Ctrl+Q** on the name) opens the same
 transactions as a report.
 
-To add a company name, billing address, phone, payment terms or notes, open the customer's
-**Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
+To add a company name, billing address, phone, payment terms, a customer or vendor type or notes,
+open the customer's **Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
 and estimates, and the email address is filled in when you choose **Email…** on one of them.
 
 ## Add a product or service
@@ -147,6 +147,65 @@ items and levels** to include those. It exports to Excel, CSV and PDF like other
 
 The Desktop Migration Wizard brings price levels in with customers, vendors and items, and gives
 the customers it adds their default level. See [the migration guide](desktop-migration.md).
+
+## Customer & Vendor Profile lists
+
+**Lists › Customer & Vendor Profile Lists** opens six short lists you can fill in as you need them
+(they are also under **Sales › Terms, Methods & Types**): Terms, Payment Method, Customer Type,
+Vendor Type, Job Type and Customer Message. Each one works the same way:
+
+1. Type the new entry in the first row and click **Add**.
+2. Double-click an entry (or choose **Edit** in its **Actions** menu) to rename it.
+3. Choose **Make inactive** to stop offering an entry. It stays on the records and forms that
+   already have it. Tick **Show inactive** to see it again and make it active.
+
+An entry can be deleted only while nothing uses it. You don't have to open the lists first: the
+Terms, Payment method, type and Customer message boxes all end in **＋ Add new…**, which adds an
+entry and picks it.
+
+### Terms
+
+A term says when an invoice or bill is due, and can offer a discount for paying early. A new
+company starts with **Due on receipt**, **Net 15**, **Net 30** and **Net 60**.
+
+- **Net days** is the number of days from the invoice or bill date to its due date.
+- **Discount %** and **Discount days** are optional. For example, *2% 10 Net 30* is 2 percent off
+  if paid within 10 days, otherwise the full amount is due in 30 days. The discount days can't be
+  more than the net days.
+
+Give each customer and vendor a default term in **Edit…** › **Terms**. On a new invoice or bill
+the **Terms** box fills in from the customer or vendor (Net 30 when they have none) and sets the
+due date. Choose another term and the due date follows it; you can still type a different due
+date. The invoice or bill keeps the term it was entered with, and printed invoices show it.
+
+When a term has a discount, **Receive Payments** and **Pay Bills** show the discount offered on
+each invoice or bill, and the last day to take it. Printed invoices show it too. LocalBooks
+doesn't yet take the discount for you: to give or take it, record the payment for the reduced
+amount and enter the difference as a credit memo or vendor credit.
+
+Changing a term's days changes the due dates of new invoices and bills only. Ones already entered
+keep their due dates.
+
+### Payment Method
+
+Payment methods are the names in the **Payment method** boxes on Receive Payments, sales
+receipts and expenses, such as *Visa*, *MasterCard* or *Check*. Each method is one of six kinds
+(check, cash, credit card, ACH / bank transfer, wire or other), which you choose when you add it.
+A new company has one method of each kind. You can rename a method that's in use, but not change
+its kind.
+
+### Customer, Vendor and Job Types
+
+Types group your records, for example *Retail* and *Wholesale* customers, *Supplier* and
+*Contractor* vendors, or *Remodel* and *New build* jobs. Pick a customer's or vendor's type in
+**Edit…**. A job (a customer under another customer, such as `Acme:Kitchen`) also has a **Job
+type**.
+
+### Customer Message
+
+A customer message is a line printed at the foot of an invoice, sales receipt or estimate, such as
+*Thank you for your business.* Pick it in the **Customer message** box on the form. A message can
+be up to 101 characters.
 
 ## Sales reps, Ship Via and custom fields
 

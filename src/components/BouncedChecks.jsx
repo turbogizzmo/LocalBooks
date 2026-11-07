@@ -6,12 +6,12 @@ import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
-import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { kindLabel } from './ProfileFields.jsx';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 
-const methodLabel = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.label ?? id ?? '';
 const keyOf = (c) => `${c.kind}:${c.id}`;
 const isExpense = (a) => a.classification === 'EXPENSE';
 const isIncome = (a) => a.classification === 'INCOME';
@@ -95,7 +95,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
           {chosen && (
             <span className="self-center text-sm text-qb-ink-muted">
               Comes out of {accountLabel(accounts, chosen.bankAccountId)}
-              {chosen.paymentMethod ? ` · paid by ${methodLabel(chosen.paymentMethod).toLowerCase()}` : ''}
+              {chosen.paymentMethod ? ` · paid by ${chosen.paymentMethodName ?? kindLabel(chosen.paymentMethod).toLowerCase()}` : ''}
             </span>
           )}
         </div>

@@ -26,14 +26,14 @@ as in `docs/gaps.md`.
 |---|---|---|---|
 | Enter moves between fields; open name lists while typing; full text of clipped entries on hover | M | has (this round) | – |
 | New transactions start on today or the last date entered | M | has (this round) | – |
-| Beep when a transaction is recorded | M | missing | S |
-| Type amounts without a decimal point (1234 → 12.34) | M | missing | S |
-| Warn before editing a posted transaction; warn before deleting or voiding | M | missing (voids always confirm) | S |
-| Bring back messages you chose not to see again | M | missing | S |
+| Beep when a transaction is recorded | M | has (T3 batch 1) | – |
+| Type amounts without a decimal point (1234 → 12.34) | M | has (T3 batch 1) | – |
+| Warn before editing a posted transaction; warn before deleting or voiding | M | has (T3 batch 1; nothing is ever deleted, so voiding) | – |
+| Bring back messages you chose not to see again | M | has (T3 batch 1: "Don't show this message again" on one-time messages) | – |
 | Recall the last transaction for a name, or pre-fill a vendor's usual accounts | M | missing | M |
-| When an item changes on a line, keep a typed description or price: ask, always, never | M | missing | S |
-| Show hours as decimals or hours:minutes | C | missing | S |
-| Always show four-digit years | C | missing | S |
+| When an item changes on a line, keep a typed description or price: ask, always, never | M | has (T3 batch 1) | – |
+| Show hours as decimals or hours:minutes | C | has (T3 batch 2) | – |
+| Always show four-digit years | C | has (T3 batch 2) | – |
 | Don't update a name's details from a transaction | C | missing | S |
 | Save before printing | C | missing | S |
 | Sign out after a period of no use | C | has (`auto_lock_minutes`) | – |
@@ -42,13 +42,13 @@ as in `docs/gaps.md`.
 
 | Option | Status | Effort |
 |---|---|---|
-| Show account numbers; show only the lowest subaccount | partial (numbers, no switch) | S |
-| Require an account on every line | missing | S |
+| Show account numbers; show only the lowest subaccount | has (T3 batch 3: statements, trial balance and general ledger) | – |
+| Require an account on every line | has (always: a line can't be saved without one) | – |
 | Class tracking: on, per line or per transaction, warn when missing | has | – |
 | Track expenses by customer or job | partial | M |
-| Number journal entries automatically; warn when posting to Retained Earnings | missing | S |
-| Copy the first line's memo to the other journal lines (a my preference in the tour) | missing | S |
-| Warn when a date is more than N days in the past or future | missing | S |
+| Number journal entries automatically; warn when posting to Retained Earnings | has (numbers always automatic and unique; warning T3 batch 2) | – |
+| Copy the first line's memo to the other journal lines (a my preference in the tour) | has (T3 batch 1, My Preferences › Accounting) | – |
+| Warn when a date is more than N days in the past or future | has (T3 batch 2; 90 and 30 days) | – |
 | Closing date, with a password to change entries before it | has (closing date and passcode) | – |
 
 ## Bills, Checking, Payments, Sales & Customers (company unless marked)
@@ -56,16 +56,17 @@ as in `docs/gaps.md`.
 | Category | Option | Status | Effort |
 |---|---|---|---|
 | Bills | Bills due in N days by default | missing (terms only) | S |
-| Bills | Warn about a bill number already used for that vendor | missing | S |
+| Bills | Warn about a bill number already used for that vendor | has (T3 batch 2) | – |
 | Bills | Apply vendor credits and discounts automatically | missing | M |
 | Checking | Default account for each form (checks, pay bills, deposits, sales tax) (M) | missing | S |
-| Checking | Warn about a duplicate check number; date checks when printed; start at the payee | missing | S |
+| Checking | Warn about a duplicate check number | has (T3 batch 2) | – |
+| Checking | Date checks when printed; start at the payee | missing | S |
 | Checking | Put the vendor's account number in the check memo *(tour)* | missing | S |
 | Checking | Bank feed: how renaming rules apply to downloaded payees *(tour)* | partial (rules, no switch) | S |
 | Payments | Apply a payment to open invoices automatically; work out the amount from the invoices ticked | partial (no switch) | S |
 | Payments | Deposit to Undeposited Funds by default | partial (no switch) | S |
 | Sales | Default shipping method, FOB and markup | partial (lists, no default) | S |
-| Sales | Warn about a duplicate invoice number | missing | S |
+| Sales | Warn about a duplicate invoice number | has (always: invoice numbers are assigned and unique) | – |
 | Sales | Price levels on or off | partial (always on) | S |
 | Sales | Warn before selling to a customer with overdue invoices | missing | S |
 | Sales | Billable time and costs: ask, add, or don't add | missing | M |
@@ -77,15 +78,17 @@ as in `docs/gaps.md`.
 
 | Category | Option | Status | Effort |
 |---|---|---|---|
-| Reports (M) | Show the report's options before running it | missing | S |
-| Reports | Summary reports default to accrual or cash | partial (per report) | S |
-| Reports | Age from the due date or the transaction date | missing | S |
-| Reports | Show accounts and items by name, description or both | missing | S |
-| Reports | Which accounts go in each Cash Flows section | missing | M |
-| Items | Inventory and purchase orders on or off; warn about duplicate PO numbers | missing | S |
+| Reports (M) | Show the report's options before running it | has (T3 batch 3: Profit and Loss, Balance Sheet, aging and sales summaries) | – |
+| Reports | Summary reports default to accrual or cash | has (T3 batch 3: Profit and Loss and the Income & Expense graph; the Balance Sheet has no cash basis) | – |
+| Reports | Age from the due date or the transaction date | has (T3 batch 3) | – |
+| Reports | Show accounts and items by name, description or both | has (T3 batch 3: items in Sales by Item, Inventory Valuation and Stock Status; accounts by number and path, above) | – |
+| Reports | Which accounts go in each Cash Flows section | has (T3 batch 3: Preferences › Reports & Graphs) | – |
+| Items | Inventory and purchase orders on or off | missing | S |
+| Items | Warn about duplicate PO numbers | has (always: PO numbers are assigned and unique) | – |
 | Items | Warn or stop when stock would go below zero | missing | M |
 | Items | Units of measure (sell by the each, case or pallet) *(tour)* | missing | L |
-| Jobs & Estimates | Estimates on or off; rename job statuses (Pending, Awarded, In progress, Closed, Not awarded); progress invoicing; warn about duplicate estimate numbers | partial / missing | S–M |
+| Jobs & Estimates | Estimates on or off; rename job statuses (Pending, Awarded, In progress, Closed, Not awarded); progress invoicing | partial / missing | S–M |
+| Jobs & Estimates | Warn about duplicate estimate numbers | has (always: estimate numbers are assigned and unique) | – |
 | Time & Expenses | First day of the work week (Monday is fixed now); new time billable by default; time tracking on or off | missing | S |
 | Time & Expenses | Count reimbursed expenses as income; mark all expenses billable; default markup percent and account; invoice from a list of time and expenses *(tour)* | missing | M |
 | Sales Tax | Charge sales tax at all; most common tax item; taxable and non-taxable codes; mark taxable lines with a T on printed forms; owe tax when invoiced or when paid; filing monthly, quarterly or yearly | missing (see R11) | S–M |
@@ -94,7 +97,7 @@ as in `docs/gaps.md`.
 | Reminders (M) | Show reminders when a company opens | partial | S |
 | Reminders | Per reminder type: summary, full list or off, and how many days ahead *(tour)* | has (Reminders screen) | – |
 | Send Forms | Default delivery method (email, mail, none) for new customers; a message template per form type *(tour)* | partial / missing | S |
-| Reports | Default report formatting (fonts, header and footer) *(tour)* | missing | M |
+| Reports | Default report formatting (fonts, header and footer) *(tour)* | left out: each report draws its own header and footer, and printed reports use one type style; a company-wide format needs a shared report layout first | M |
 | Desktop View (M) | Show the Home page when a company opens; color scheme *(tour)* | partial (start page, no themes) | S |
 
 ## Already covered elsewhere
@@ -125,5 +128,12 @@ book sync) don't apply either.
 5. **Tax and time:** sales tax basis and frequency (R11), finance charge basis, work-week start and
    billable defaults, 1099 account mapping (R10), negative-stock warning.
 
-The Preferences page should also be reorganized into the familiar category list, with My and
-Company tabs, so each option is where people look for it.
+The Preferences page is now the familiar category list, with My and Company tabs, so each option is
+where people look for it (T3, with batches 1 and 2). A category whose settings live on their own
+screen links there. Warnings before saving share one design: the backend's guards
+(`src-tauri/src/guards.rs`) refuse with a typed `NEEDS_CONFIRMATION` error listing each warning,
+and the form asks and saves again with **Save anyway** (`src/lib/confirmable.js`).
+
+Batches 1 and 2 are done except **recall the last transaction for a name / pre-fill a vendor's
+accounts**, which stays in batch 1's row above as missing. Batch 3 (reports and display defaults) is
+done in #164; its one left-out option, default report formatting, says why in its row.

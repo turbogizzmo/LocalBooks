@@ -17,8 +17,8 @@ import { CompanyContext } from './components/PrintDocuments.jsx';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
-import { formatDate } from './lib/dates.js';
-import { setCurrencySymbol } from './lib/money.js';
+import { formatDate, setFourDigitYears } from './lib/dates.js';
+import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
 import {
@@ -81,6 +81,8 @@ export default function App() {
   const list = useMemo(() => accounts.data ?? [], [accounts.data]);
   // Applied during render so every amount on screen uses the company's symbol in the same pass.
   setCurrencySymbol(prefs.data?.currency_symbol);
+  setFourDigitYears(prefs.data?.four_digit_years !== 'false');
+  setHoursFormat(prefs.data?.hours_format);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
   // Which company is open, as the window title shows it: its name, or the file's name until it is named.
   const openCompany = storage.data?.companyName ?? null;

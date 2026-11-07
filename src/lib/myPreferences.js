@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { todayIso } from './dates.js';
+import { setImpliedDecimal } from './money.js';
 
 const STORAGE_KEY = 'localbooks.myPreferences';
 const CHANGED = 'localbooks-my-preferences-changed';
@@ -18,7 +19,34 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   tooltipsForClippedText: true,
   /** New transactions start on today's date (`today`) or on the last date you entered (`last`). */
   newTransactionDate: 'today',
+  /** A short beep when a transaction is recorded. */
+  beepWhenRecorded: false,
+  /** Amounts typed without a decimal point are cents: 1234 is 12.34. */
+  autoDecimalPoint: false,
+  /** Ask before saving changes to a posted transaction (saving replaces it: the original is voided). */
+  warnBeforeEditing: true,
+  /** Ask before voiding a transaction. */
+  warnBeforeVoiding: true,
+  /** When the item on a sales line changes after its description or price was typed: `ask`, `keep` the typed text, or `replace` it. */
+  keepTypedItemDetails: 'ask',
+  /** A journal entry's new lines start with the first line's memo. */
+  autofillJournalMemo: true,
+  /** A report opened from the list asks for its dates (and basis) before it runs (Reports & Graphs). */
+  reportOptionsFirst: false,
 });
+
+/** Messages turned off with "Don't show this again", by key; Bring back all messages clears it. */
+export function hiddenMessages() {
+  return Array.isArray(current.hiddenMessages) ? current.hiddenMessages : [];
+}
+
+export function hideMessage(key) {
+  if (!hiddenMessages().includes(key)) setMyPreferences({ hiddenMessages: [...hiddenMessages(), key] });
+}
+
+export function bringBackMessages() {
+  setMyPreferences({ hiddenMessages: [] });
+}
 
 function read() {
   try {
@@ -28,6 +56,7 @@ function read() {
       if (typeof stored?.[key] === typeof MY_PREFERENCE_DEFAULTS[key]) prefs[key] = stored[key];
     }
     if (typeof stored?.lastEnteredDate === 'string') prefs.lastEnteredDate = stored.lastEnteredDate;
+    if (Array.isArray(stored?.hiddenMessages)) prefs.hiddenMessages = stored.hiddenMessages.filter((k) => typeof k === 'string');
     return prefs;
   } catch {
     return { ...MY_PREFERENCE_DEFAULTS };
@@ -35,6 +64,7 @@ function read() {
 }
 
 let current = typeof window === 'undefined' ? { ...MY_PREFERENCE_DEFAULTS } : read();
+setImpliedDecimal(current.autoDecimalPoint);
 
 /** The General preferences as they stand now (for code outside React). */
 export function myPreferences() {
@@ -44,6 +74,7 @@ export function myPreferences() {
 /** Changes some General preferences; every screen using them picks the change up at once. */
 export function setMyPreferences(changes) {
   current = { ...current, ...changes };
+  setImpliedDecimal(current.autoDecimalPoint);
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
   } catch {
@@ -52,7 +83,7 @@ export function setMyPreferences(changes) {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** Puts every General preference back to its default (the remembered last date is kept). */
+/** Puts every General preference back to its default (the remembered last date and hidden messages are kept). */
 export function resetMyPreferences() {
   setMyPreferences({ ...MY_PREFERENCE_DEFAULTS });
 }
@@ -66,6 +97,7 @@ export function useMyPreferences() {
     const onStorage = (e) => {
       if (e.key === STORAGE_KEY) {
         current = read();
+        setImpliedDecimal(current.autoDecimalPoint);
         refresh();
       }
     };

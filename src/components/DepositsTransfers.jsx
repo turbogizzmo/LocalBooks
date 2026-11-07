@@ -8,7 +8,8 @@ import { useOpenFromList } from '../lib/windows.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { kindLabel } from './ProfileFields.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -19,7 +20,6 @@ const isBank = (a) => a.accountType === 'BANK';
 const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isTransferable = (a) => !a.isSystem && TRANSFERABLE.includes(a.accountType);
 const isOtherFunds = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE', 'BANK'].includes(a.accountType);
-const methodLabel = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.label ?? id;
 
 function DepositForm({ accounts, onPosted, onCancel }) {
   const { data: waiting, error: waitingError } = useLedgerQuery(api.listUndeposited);
@@ -164,7 +164,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
               <td className="qb-grid-cell">{formatDate(i.date)}</td>
               <td className="qb-grid-cell">{i.kind === 'PAYMENT' ? 'Payment' : 'Sales Receipt'}</td>
               <td className="qb-grid-cell">{i.customerName ?? ''}</td>
-              <td className="qb-grid-cell">{methodLabel(i.paymentMethod)}</td>
+              <td className="qb-grid-cell">{i.paymentMethodName ?? kindLabel(i.paymentMethod)}</td>
               <td className="qb-grid-cell">{i.reference ?? ''}</td>
               <td className="qb-grid-cell num">{formatCents(i.amountCents)}</td>
             </tr>

@@ -249,13 +249,47 @@ fn write_cell(sheet: &mut Worksheet, row: u32, col: u16, value: &CellValue, form
 
 /// Renders `sheet` as an .xlsx workbook; `currency_symbol` comes from the company's preferences.
 pub fn to_xlsx(sheet: &Sheet, currency_symbol: &str) -> Result<Vec<u8>, String> {
-    if sheet.columns.is_empty() {
-        return Err("EXPORT_XLSX: the report has no columns".into());
+    to_xlsx_book(std::slice::from_ref(sheet), currency_symbol)
+}
+
+/// Renders several reports as one workbook, a worksheet each in order (Process Multiple Reports).
+/// Worksheet names are the titles, numbered where two would be the same.
+pub fn to_xlsx_book(sheets: &[Sheet], currency_symbol: &str) -> Result<Vec<u8>, String> {
+    if sheets.is_empty() {
+        return Err("EXPORT_XLSX: no reports to export".into());
     }
     let formats = Formats { money: money_format(currency_symbol) };
     let mut workbook = Workbook::new();
-    let ws = workbook.add_worksheet();
-    ws.set_name(sheet_name(&sheet.title)).map_err(xlsx_err)?;
+    for (sheet, name) in sheets.iter().zip(sheet_names(sheets.iter().map(|s| s.title.as_str()))) {
+        let ws = workbook.add_worksheet();
+        ws.set_name(name).map_err(xlsx_err)?;
+        write_sheet(ws, sheet, &formats)?;
+    }
+    workbook.save_to_buffer().map_err(xlsx_err)
+}
+
+/// Worksheet names for these titles: Excel's rules (see [`sheet_name`]), and no two the same
+/// ignoring case, so a repeated title gets " (2)", " (3)", ...
+pub(crate) fn sheet_names<'a>(titles: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut used: Vec<String> = Vec::new();
+    for title in titles {
+        let base = sheet_name(title);
+        let mut name = base.clone();
+        let mut n = 2;
+        while used.iter().any(|u| u.to_lowercase() == name.to_lowercase()) {
+            let suffix = format!(" ({n})");
+            name = format!("{}{suffix}", base.chars().take(31 - suffix.chars().count()).collect::<String>().trim_end());
+            n += 1;
+        }
+        used.push(name);
+    }
+    used
+}
+
+fn write_sheet(ws: &mut Worksheet, sheet: &Sheet, formats: &Formats) -> Result<(), String> {
+    if sheet.columns.is_empty() {
+        return Err("EXPORT_XLSX: the report has no columns".into());
+    }
 
     // Header block.
     let mut row: u32 = 0;
@@ -322,8 +356,7 @@ pub fn to_xlsx(sheet: &Sheet, currency_symbol: &str) -> Result<Vec<u8>, String> 
         ws.set_landscape();
     }
     ws.set_print_fit_to_pages(1, 0);
-
-    workbook.save_to_buffer().map_err(xlsx_err)
+    Ok(())
 }
 
 /// A single-column financial statement (Profit and Loss, Balance Sheet) as a sheet.

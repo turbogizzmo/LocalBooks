@@ -33,6 +33,8 @@ pub struct BounceCandidate {
     pub customer_name: Option<String>,
     pub invoice_number: Option<i64>,
     pub payment_method: Option<String>,
+    /// The Payment Method list entry's name, when the payment has one.
+    pub payment_method_name: Option<String>,
     pub reference: Option<String>,
     pub memo: Option<String>,
     pub amount_cents: i64,
@@ -91,7 +93,8 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 /// where the money is now, and the date is when it got there (a check can't bounce before that).
 const CANDIDATES: &str = "
     SELECT 'PAYMENT' AS kind, p.id, COALESCE(d.deposit_date, p.payment_date) AS date, COALESCE(c.name, i.customer_name) AS customer_name,
-           i.invoice_number, p.payment_method, p.reference, NULL AS memo, p.amount_cents,
+           i.invoice_number, p.payment_method, (SELECT name FROM payment_methods WHERE id = p.payment_method_id) AS payment_method_name,
+           p.reference, NULL AS memo, p.amount_cents,
            COALESCE(d.bank_account_id, p.deposit_account_id) AS bank_account_id
     FROM invoice_payments p
     JOIN invoices i ON i.id = p.invoice_id
@@ -103,7 +106,7 @@ const CANDIDATES: &str = "
       AND (pa.account_type = 'BANK' OR d.id IS NOT NULL)
       AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.invoice_payment_id = p.id AND b.is_voided = 0)
     UNION ALL
-    SELECT 'DEPOSIT_LINE', dl.id, d.deposit_date, NULL, NULL, NULL, NULL, COALESCE(dl.memo, d.memo), dl.amount_cents, d.bank_account_id
+    SELECT 'DEPOSIT_LINE', dl.id, d.deposit_date, NULL, NULL, NULL, NULL, NULL, COALESCE(dl.memo, d.memo), dl.amount_cents, d.bank_account_id
     FROM deposit_lines dl JOIN deposits d ON d.id = dl.deposit_id
     WHERE dl.is_voided = 0 AND d.is_voided = 0 AND d.journal_entry_id IS NOT NULL
       AND dl.invoice_payment_id IS NULL AND dl.sales_receipt_id IS NULL

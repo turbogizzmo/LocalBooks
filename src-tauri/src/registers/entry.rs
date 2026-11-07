@@ -116,6 +116,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     }
 
     let expense = ExpenseInput {
+        payment_method_id: None,
         kind: kind.into(),
         payee_name: input.payee_name.clone(),
         payment_account_id: input.account_id,

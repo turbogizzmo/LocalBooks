@@ -16,9 +16,61 @@ pub const TAX_FORMS: &[(&str, &str)] = &[
     ("990", "Form 990 (tax-exempt organization)"),
 ];
 
+/// Preferences that no migration seeds: a company file that has never saved one uses the default
+/// here. `get` and `get_all` fill them in, so screens and guards always see a value.
+pub const DEFAULTS: &[(&str, &str)] = &[
+    (crate::guards::WARN_DUPLICATE_CHECKS, "true"),
+    (crate::guards::WARN_DUPLICATE_BILLS, "true"),
+    (crate::guards::WARN_PAST_DAYS, "90"),
+    (crate::guards::WARN_FUTURE_DAYS, "30"),
+    (crate::guards::WARN_RETAINED_EARNINGS, "true"),
+    ("four_digit_years", "true"),
+    ("hours_format", "hhmm"),
+    // batch 3: Reports & Graphs and Accounting display
+    (REPORT_BASIS, "accrual"),
+    (crate::report_center::AGING_BASIS, "due"),
+    (REPORT_ITEMS_SHOW, "name"),
+    (SHOW_ACCOUNT_NUMBERS, "true"),
+    (LOWEST_SUBACCOUNT_ONLY, "false"),
+    (crate::statements::CASH_FLOW_SECTIONS, ""),
+];
+
+/// Summary reports (Profit & Loss, Balance Sheet, …) open on the `accrual` or `cash` basis.
+pub const REPORT_BASIS: &str = "report_basis";
+/// Items in reports show by `name`, `description` or `both`.
+pub const REPORT_ITEMS_SHOW: &str = "report_items_show";
+/// Account numbers show before account names in reports and account lists.
+pub const SHOW_ACCOUNT_NUMBERS: &str = "show_account_numbers";
+/// A subaccount shows by its own name instead of its full Parent:Child path.
+pub const LOWEST_SUBACCOUNT_ONLY: &str = "lowest_subaccount_only";
+
+/// Preferences that take one of a few words, with the error for anything else.
+const CHOICES: &[(&str, &[&str], &str)] = &[
+    (REPORT_BASIS, &["accrual", "cash"], "PREF_BAD_BASIS: use accrual or cash"),
+    (crate::report_center::AGING_BASIS, &["due", "transaction"], "PREF_BAD_AGING: age from the due date or the transaction date"),
+    (REPORT_ITEMS_SHOW, &["name", "description", "both"], "PREF_BAD_ITEMS_SHOW: show items by name, description or both"),
+];
+
+/// True/false preferences added with the Preferences categories (the older ones are listed in
+/// `validate`).
+const FLAGS: &[&str] = &[SHOW_ACCOUNT_NUMBERS, LOWEST_SUBACCOUNT_ONLY];
+
+fn default_of(key: &str) -> Option<&'static str> {
+    DEFAULTS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+}
+
 /// Validates a preference value; unknown keys are rejected so typos never persist.
 fn validate(key: &str, value: &str) -> Result<String, String> {
     let v = value.trim();
+    if let Some((_, allowed, err)) = CHOICES.iter().find(|(k, _, _)| *k == key) {
+        return if allowed.contains(&v) { Ok(v.to_string()) } else { Err((*err).to_string()) };
+    }
+    if FLAGS.contains(&key) {
+        return match v {
+            "true" | "false" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_FLAG: use true or false".into()),
+        };
+    }
     let text = |max: usize, label: &str| -> Result<String, String> {
         if v.chars().count() > max {
             Err(format!("PREF_TOO_LONG: {label} must be at most {max} characters"))
@@ -91,7 +143,21 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             "" => Ok(String::new()),
             _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_FC_ACCOUNT: choose an Income account".into()),
         },
-        "class_tracking" | "class_prompt" | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY
+        crate::guards::WARN_PAST_DAYS | crate::guards::WARN_FUTURE_DAYS => match v.parse::<u32>() {
+            Ok(days) if days <= crate::guards::MAX_WARN_DAYS => Ok(days.to_string()),
+            _ => Err(format!("PREF_BAD_WARN_DAYS: enter 0 (don't warn) to {} days", crate::guards::MAX_WARN_DAYS)),
+        },
+        "hours_format" => match v {
+            "decimal" | "hhmm" => Ok(v.to_string()),
+            _ => Err("PREF_BAD_HOURS_FORMAT: show hours as decimal or hhmm".into()),
+        },
+        crate::guards::WARN_DUPLICATE_CHECKS
+        | crate::guards::WARN_DUPLICATE_BILLS
+        | crate::guards::WARN_RETAINED_EARNINGS
+        | "four_digit_years"
+        | "class_tracking"
+        | "class_prompt"
+        | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY
         | crate::print_queue::PREF_CHECKS | crate::print_queue::PREF_INVOICES => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),
@@ -108,9 +174,67 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
             Ok(n) if (1..=60).contains(&n) => Ok(n.to_string()),
             _ => Err("PREF_BAD_KEEP: keep between 1 and 60 automatic backups".into()),
         },
+        crate::statements::CASH_FLOW_SECTIONS => {
+            let map: BTreeMap<i64, crate::statements::CashFlowSection> = crate::statements::parse_cash_flow_sections(v)?.into_iter().collect();
+            if map.is_empty() {
+                Ok(String::new())
+            } else {
+                Ok(serde_json::to_string(&map.into_iter().map(|(id, s)| (id.to_string(), s)).collect::<BTreeMap<_, _>>()).map_err(|e| e.to_string())?)
+            }
+        }
         LOGO_KEY => Err("PREF_LOGO: set the logo with the logo upload, which validates the image".into()),
         crate::smtp::SETTINGS_KEY => Err("PREF_SMTP: change email server settings in Settings › Email".into()),
         other => Err(format!("PREF_UNKNOWN: '{other}' is not a preference")),
+    }
+}
+
+/// How reports name accounts: with or without their numbers, and by their full Parent:Child path
+/// or only their own name (Preferences › Reports & Graphs and Accounting).
+#[derive(Debug, Clone, Copy)]
+pub struct AccountNames {
+    pub numbers: bool,
+    pub lowest_only: bool,
+}
+
+impl AccountNames {
+    pub async fn load(pool: &SqlitePool) -> Result<Self, String> {
+        Ok(Self { numbers: flag(pool, SHOW_ACCOUNT_NUMBERS).await?, lowest_only: flag(pool, LOWEST_SUBACCOUNT_ONLY).await? })
+    }
+
+    /// "6300 Utilities:Electric", "Electric", … as the preferences say.
+    pub fn label(&self, number: Option<&str>, full_name: &str) -> String {
+        let name = if self.lowest_only { full_name.rsplit(':').next().unwrap_or(full_name) } else { full_name };
+        match number.map(str::trim).filter(|n| self.numbers && !n.is_empty()) {
+            Some(n) => format!("{n} {name}"),
+            None => name.to_string(),
+        }
+    }
+}
+
+/// How reports name items: by name, description or both (Preferences › Reports & Graphs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemNames {
+    Name,
+    Description,
+    Both,
+}
+
+impl ItemNames {
+    pub async fn load(pool: &SqlitePool) -> Result<Self, String> {
+        Ok(match get(pool, REPORT_ITEMS_SHOW).await?.as_str() {
+            "description" => Self::Description,
+            "both" => Self::Both,
+            _ => Self::Name,
+        })
+    }
+
+    /// The item's label; an item without a description always shows its name.
+    pub fn label(self, name: &str, description: Option<&str>) -> String {
+        match (self, description.map(str::trim).filter(|d| !d.is_empty())) {
+            (Self::Description, Some(d)) => d.to_string(),
+            (Self::Both, Some(d)) => format!("{name} – {d}"),
+            _ => name.to_string(),
+        }
     }
 }
 
@@ -134,7 +258,9 @@ pub async fn get_all(pool: &SqlitePool) -> Result<BTreeMap<String, String>, Stri
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
-    Ok(rows.into_iter().collect())
+    let mut all: BTreeMap<String, String> = DEFAULTS.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    all.extend(rows);
+    Ok(all)
 }
 
 pub async fn get(pool: &SqlitePool, key: &str) -> Result<String, String> {
@@ -143,7 +269,13 @@ pub async fn get(pool: &SqlitePool, key: &str) -> Result<String, String> {
         .fetch_optional(pool)
         .await
         .map_err(db_err)?
+        .or_else(|| default_of(key).map(str::to_string))
         .ok_or_else(|| format!("PREF_MISSING: preference '{key}' is not set"))
+}
+
+/// A true/false preference.
+pub async fn flag(pool: &SqlitePool, key: &str) -> Result<bool, String> {
+    Ok(get(pool, key).await? == "true")
 }
 
 /// Validates and saves one preference immediately; returns the stored (normalized) value.
@@ -169,6 +301,14 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
         .map_err(db_err)?;
         if !matches!(account, Some((classification, true)) if classification == "INCOME") {
             return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
+        }
+    }
+    if key == crate::statements::CASH_FLOW_SECTIONS {
+        for id in crate::statements::parse_cash_flow_sections(&normalized)?.keys() {
+            let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?;
+            if account_type.as_deref().and_then(crate::statements::default_cash_flow_section).is_none() {
+                return Err(format!("PREF_BAD_CASH_FLOW: account {id} is not a balance sheet account outside cash"));
+            }
         }
     }
     sqlx::query(

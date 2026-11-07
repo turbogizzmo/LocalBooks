@@ -8,6 +8,9 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     await signIn('owner', seedNote(/owner \/ (.+) \(Admin\)/));
     await waitForApp();
     await openSettingsTab('Preferences Console');
+    // The closing date is under Accounting › Company Preferences.
+    await click($('//nav[@aria-label="Preference categories"]//button[normalize-space()="Accounting"]'));
+    await click($('//*[@role="tab"][normalize-space()="Company Preferences"]'));
     await type(field('Current passcode'), seedNote(/closing passcode: (\S+)/));
     await click(button('Reopen all periods'));
     await $('//*[contains(normalize-space(), "No closing date")]').waitForDisplayed();
@@ -18,7 +21,14 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     expect(await tableRow('1003')).toContain('$134.52');
     await click($('//button[@aria-label="Actions for invoice 1003"]'));
     await click($('//*[@role="menu"]//button[normalize-space()="Edit…"]'));
-    await click(button('Save & New'));
+    // The edited invoice has a window of its own; the Invoices list's window has a blank invoice
+    // form with its own Save & New behind it.
+    await click(button('Save & New', '//section[starts-with(@aria-label, "Invoice 1003")]'));
+    // My Preferences › General: warn when editing a posted transaction (on by default).
+    await click(button('Save changes', '//*[@role="alertdialog"]'));
+    // The seeded invoice may be dated more than 90 days ago: that warning asks too.
+    const saveAnyway = button('Save anyway', '//*[@role="alertdialog"]');
+    if (await saveAnyway.waitForDisplayed({ timeout: 3000 }).catch(() => false)) await click(saveAnyway);
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
     // The edited invoice is posted under the next number, for the same total, tax included.
     expect(await tableRow('1007')).toContain('$134.52');

@@ -33,18 +33,17 @@ export async function printDocument(title = null) {
   }
 }
 
-export const PAYMENT_METHODS = [
-  { id: 'CHECK', label: 'Check' },
-  { id: 'CASH', label: 'Cash' },
-  { id: 'CREDIT_CARD', label: 'Credit card' },
-  { id: 'ACH', label: 'ACH / bank transfer' },
-  { id: 'WIRE', label: 'Wire' },
-  { id: 'OTHER', label: 'Other' },
-];
-
 /** Backend errors look like "JE_UNBALANCED: total debits ..."; show the human part. */
 export function errorText(err) {
   const text = typeof err === 'string' ? err : (err?.message ?? String(err));
+  // A guard's warnings (see lib/confirmable.js) read as their messages.
+  if (text.startsWith('NEEDS_CONFIRMATION: ')) {
+    try {
+      return JSON.parse(text.slice(20)).warnings.map((w) => w.message).join(' ');
+    } catch {
+      // fall through to the plain text
+    }
+  }
   return text.replace(/^[A-Z][A-Z0-9_]*: /, '');
 }
 

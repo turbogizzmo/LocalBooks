@@ -6,6 +6,43 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
+  the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
+  date, and whether items show by name, description or both. Accounting › Company Preferences can
+  hide account numbers in reports or show only a subaccount's own name.
+- **Choose where accounts go on the Statement of Cash Flows.** Preferences › Reports & Graphs lists
+  each balance sheet account with its section (operating, investing or financing); move one and the
+  statement follows.
+- **See a report's options first.** Turn on **Show the report's options before running it**
+  (Reports & Graphs › My Preferences) and a report asks for its dates before it runs.
+- **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
+  the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
+  Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings
+  that live on their own screen, like sales tax rates or email, are linked from their category.
+- **Warnings before saving, with Save anyway.** LocalBooks now asks before saving a check whose
+  number was already used on that bank account, a bill whose number was already used for that
+  vendor, a transaction dated more than 90 days ago or 30 days ahead, or a posting to Retained
+  Earnings. Click **Save anyway** to record it as entered. Admins change the days, or turn each
+  warning off, in the Checking, Bills and Accounting company preferences.
+- **Type amounts without a decimal point.** Turn on **Automatically place a decimal point**
+  (Preferences › General › My Preferences) and `1234` becomes 12.34.
+- **More General preferences.** Beep when a transaction is recorded; warn before editing a posted
+  transaction or voiding one (both on, and now each can be turned off); bring back messages you
+  turned off with **Don't show this message again**; and choose whether a description or price you
+  typed stays when you change the item on a sales line (ask, always or never).
+- **Journal entry memos fill in.** A new journal entry line takes the first line's memo
+  (Preferences › Accounting › My Preferences).
+- **Two-digit years and decimal hours.** Company Preferences › General can show dates as 10/13/26
+  and hours as 1.50 instead of 1:30.
+- **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
+  Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
+  Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
+  and vendors get a default term and a type. On invoices and bills the Terms box fills in from the
+  customer or vendor and sets the due date; Receive Payments and Pay Bills show the discount
+  offered and its last day. A customer message picked on an invoice, sales receipt or estimate
+  prints on it. The Terms and Payment method boxes end in **＋ Add new…**.
+- **Safer Excel imports.** A damaged or deliberately malformed `.xls` report file can no longer
+  crash LocalBooks or make it run out of memory while importing (the Excel reader is updated).
 - **Type checks and deposits straight into a register.** Bank and credit card registers end in a
   blank row: enter the date, number, payee, account, memo and an amount, then click **Record** (or
   press Enter). A bank payment becomes a check, a deposit a deposit, a card charge an expense and a
@@ -32,6 +69,25 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+- **Phone lists, contact lists and more reports.** A new **Lists** group in the report list has the
+  **Customer** and **Vendor Phone Lists** and **Contact Lists**, the **Item Listing** and the
+  **Account Listing**. Also new: **Balance Sheet Summary**, **Profit & Loss YTD Comparison**, **Net
+  Income Detail**, **Sales by Rep Detail**, **Average Days to Pay Summary**, **Unpaid Bills by Job**,
+  **Open Purchase Orders Detail**, **Time by Job Summary** and **Detail**, **Time by Name**, **Time by
+  Item**, the **Physical Inventory Worksheet** (print it and write in the counts) and the **Audit
+  Trail**, showing who posted, voided or changed what and when.
+- **Collapse and expand report headings.** Click ▾ beside a heading to show only its total, or
+  **Collapse all** to see just the totals. Reports print the way they're shown.
+- **Process Multiple Reports.** Under **Memorized reports**, tick several reports and display them
+  together, print them in one go (each on a new page), or save them as one Excel workbook with a
+  worksheet per report.
+- **Imports keep your classes.** Books moved from QuickBooks now arrive with their class list,
+  subclasses included, and every transaction line keeps its class, so Profit & Loss by Class
+  matches the original. This works for QuickBooks Desktop company files and backups (`.qbw`,
+  `.qbb`), IIF files (the class list and the CLASS column), report exports with a Class column,
+  and exporting from QuickBooks still installed on Windows. Classes that were hidden come in
+  inactive. When an import brings classes, **Track classes on transactions** turns on, and the
+  message after posting says so.
 - **Save & Close, Save & New and Clear on every form.** Invoices, sales receipts, estimates, credit
   memos, bills, checks, expenses, card credits, vendor credits, purchase orders, deposits, transfers
   and journal entries now end in these three buttons. **Alt+S** saves and closes the form's window;
