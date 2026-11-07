@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
@@ -108,8 +109,50 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     }
   };
 
+  // The toolbar across the top of the form (FormToolbar.jsx).
+  const openFromList = useOpenFromList();
+  const clear = () => {
+    if (editing) return onCancelEdit();
+    setFiles([]);
+    setVendor('');
+    setBillNumber('');
+    setTotal('');
+    setRows([blankSplit(defaultCategory)]);
+    formClass.reset();
+    setError(null);
+    vendorRef.current?.focus();
+  };
+  const voidBill = () =>
+    api.voidTransaction(editing.bill.journalEntryId).then(() => {
+      onPosted(`Bill from ${editing.bill.vendorName} voided: a reversing entry now offsets it.`);
+      onCancelEdit();
+    });
+  const toolbar = (
+    <FormToolbar
+      label="Bill"
+      groups={[
+        navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+        fileButtons({
+          onNew: clear,
+          onSave: () => post('post'),
+          busy,
+          onVoid: editing ? voidBill : undefined,
+          voidDisabled: !editing?.bill.journalEntryId || editing.bill.isVoided,
+          voidConfirm: editing && {
+            title: 'Void this transaction?',
+            body: `The bill from ${editing.bill.vendorName} (${formatCents(editing.bill.totalCents)}). A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+            confirmLabel: 'Yes, void it',
+          },
+        }),
+        [{ ...attachLaterButton({ setFiles, busy, what: 'this bill' }), hidden: Boolean(editing) }],
+        [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring bill', disabled: busy, onClick: () => post('memorize') }],
+      ]}
+    />
+  );
+
   return (
     <section className="qb-panel flex-none">
+      {toolbar}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>

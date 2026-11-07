@@ -32,6 +32,13 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'form-toolbar', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
+    title: 'Use the toolbar on a form',
+    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
+    keywords: 'toolbar ribbon buttons print email attach void find previous next payment method cash check card tiles',
+    guide: 'getting-started',
+  },
+  {
     id: 'preferences', area: 'company', views: ['settings/preferences'],
     title: 'Set company details and preferences',
     body: 'The Preferences Console holds your company name, address, logo, fiscal year start, currency symbol, home currency and tax form; each saves as soon as you leave the field. The logo and details appear on printed invoices, estimates and reports; Settings › Custom Forms sets how invoices and estimates look.',
@@ -90,8 +97,8 @@ export const topics = [
   {
     id: 'backup', area: 'company', views: ['settings/data'],
     title: 'Back up, restore or open a company file',
-    body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept. Choosing a QuickBooks .qbw, .qbb or .qbm file instead starts a new company and opens the Desktop Migration Wizard on it. Hold Option or Alt while clicking Open (or choose File › Open Company Without Restoring Windows…) to open on a plain Home page with other windows closed.',
-    keywords: 'backup restore export file save localbooks open copy qbw qbb qbm quickbooks without restoring windows alt option',
+    body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept. Choosing a QuickBooks .qbw, .qbb or .qbm file instead starts a new company and opens the Desktop Migration Wizard on it. Hold Option or Alt while clicking Open (or choose File › Open Company Without Restoring Windows…) to open on a plain Home page with other windows closed. With no company open, the recent list shows when you last opened each file, newest first.',
+    keywords: 'backup restore export file save localbooks open copy qbw qbb qbm quickbooks without restoring windows alt option recent previous company last opened',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
   },
@@ -162,7 +169,7 @@ export const topics = [
   {
     id: 'whats-new', area: 'company', views: [],
     title: 'What’s new in LocalBooks',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently checks from Pay Bills, attachments, clicking a report to see its transactions, early payments and newest-first lists.',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently the form toolbar, adding customers, vendors, items and classes as you type, a name’s transactions, sorting registers, Enter between fields and six more reports.',
     keywords: 'new whats new what’s new release notes changes changelog latest version update features',
     go: null,
     guide: 'whats-new',
