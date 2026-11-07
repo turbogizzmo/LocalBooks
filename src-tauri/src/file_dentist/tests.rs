@@ -143,6 +143,7 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
     invoices::record_payment(
         &pool,
         PaymentInput {
+            payment_method_id: None,
             invoice_id: invoice.id,
             deposit_account_id: account(&pool, "1010").await,
             payment_date: day,

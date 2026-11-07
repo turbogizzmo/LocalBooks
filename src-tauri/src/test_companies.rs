@@ -66,7 +66,7 @@ fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> Inv
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
     invoices::record_payment(
         pool,
-        PaymentInput { invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: cents, payment_method: method.into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: cents, payment_method: method.into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .expect("record a payment");
@@ -76,6 +76,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
     expenses::post_vendor_bill(
         pool,
         BillInput {
+            terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
             bill_date: date,
@@ -98,6 +99,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, dat
     expenses::post_expense(
         pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),
             payment_account_id: paid_from,
@@ -117,6 +119,10 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, dat
 async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Access<'_>) {
     let id = expenses::create_vendor(pool, name, None).await.expect("create a vendor").id;
     let input = PartyDetailsInput {
+        terms_id: None,
+        customer_type_id: None,
+        job_type_id: None,
+        vendor_type_id: None,
         name: name.into(),
         company_name: None,
         email: None,
@@ -191,7 +197,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let euro = invoices::create_and_post_invoice(&pool, euro).await.expect("EUR invoice");
     invoices::record_payment(
         &pool,
-        PaymentInput { invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: 100_000, payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
+        PaymentInput { payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: 100_000, payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
     )
     .await
     .expect("partial EUR payment at a new rate");

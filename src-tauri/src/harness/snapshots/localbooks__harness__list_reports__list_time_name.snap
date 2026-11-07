@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Time by Name, 2025-11-01 to 2025-11-30
+
+Employee                       Billable Hours         Hours
+Dana Ortiz                               1.5        4.6667
+TOTAL                                    1.5        4.6667
+
+1 lines
+
+3 entries of time from 2025-11-01 to 2025-11-30.

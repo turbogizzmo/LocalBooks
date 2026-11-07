@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/icons.js';
-import { PAYMENT_METHODS } from '../lib/api.js';
+import { NewPaymentMethodDialog, usePaymentMethods } from './ProfileFields.jsx';
 
-// The methods with a tile of their own; the rest of PAYMENT_METHODS sit under More.
-const TILES = [
-  { id: 'CASH', label: 'Cash', icon: 'PayCash' },
-  { id: 'CHECK', label: 'Check', icon: 'PayCheck' },
-  { id: 'CREDIT_CARD', label: 'Card', icon: 'PayCard', hint: 'Credit or debit card' },
-  { id: 'ACH', label: 'Bank / ACH', icon: 'PayBank', hint: 'ACH, e-check or bank transfer' },
+// The kinds of payment with a tile of their own: each tile is the first active method of its kind.
+// Every other active method (Wire, Other, a second card such as Visa) sits under More.
+const TILE_KINDS = [
+  { kind: 'CASH', label: 'Cash', icon: 'PayCash' },
+  { kind: 'CHECK', label: 'Check', icon: 'PayCheck' },
+  { kind: 'CREDIT_CARD', label: 'Card', icon: 'PayCard', hint: 'Credit or debit card' },
+  { kind: 'ACH', label: 'Bank / ACH', icon: 'PayBank', hint: 'ACH, e-check or bank transfer' },
 ];
-const MORE = PAYMENT_METHODS.filter((m) => !TILES.some((t) => t.id === m.id));
 
 const TILE =
   'flex h-[58px] w-[66px] flex-col items-center justify-center gap-1 rounded-sm border text-2xs font-semibold uppercase tracking-wide ' +
@@ -20,15 +20,20 @@ const tileState = (pressed) =>
     : 'border-qb-border-strong bg-qb-surface text-qb-ink-muted hover:border-qb-ink-faint hover:text-qb-ink';
 
 /**
- * How a payment was received, as a row of large tiles: Cash, Check, Card, Bank / ACH, and More ▾
- * for the other stored methods (Wire, Other). The chosen tile is highlighted and `aria-pressed`.
- * `value` and `onChange` use the PAYMENT_METHODS ids, so nothing new is stored.
+ * How a payment was received, as a row of large tiles from the Payment Method list: Cash, Check,
+ * Card, Bank / ACH (the first active method of each kind, under its own name), and More ▾ for the
+ * rest of the list and "＋ Add new…". The chosen tile is highlighted and `aria-pressed`. `value` is
+ * the chosen method's id; `onChange` gets the method.
  */
 export default function PaymentMethodTiles({ value, onChange, label = 'Payment method' }) {
+  const methods = usePaymentMethods();
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const wrapRef = useRef(null);
   const moreRef = useRef(null);
   const menuRef = useRef(null);
+  const tiles = TILE_KINDS.map((t) => ({ ...t, method: methods.find((m) => m.isActive && m.kind === t.kind) })).filter((t) => t.method);
+  const MORE = methods.filter((m) => (m.isActive || m.id === value) && !tiles.some((t) => t.method.id === m.id));
   const moreChosen = MORE.find((m) => m.id === value);
 
   useEffect(() => {
@@ -41,8 +46,8 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const pickMore = (id) => {
-    onChange(id);
+  const pickMore = (m) => {
+    onChange(m);
     setOpen(false);
     moreRef.current?.focus();
   };
@@ -63,20 +68,20 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
 
   return (
     <div ref={wrapRef} role="group" aria-label={label} className="relative flex items-end gap-1">
-      {TILES.map((t) => (
+      {tiles.map((t) => (
         <button
-          key={t.id}
+          key={t.kind}
           type="button"
-          className={`${TILE} ${tileState(value === t.id)}`}
-          aria-pressed={value === t.id}
-          title={t.hint}
-          onClick={() => onChange(t.id)}
+          className={`${TILE} ${tileState(value === t.method.id)}`}
+          aria-pressed={value === t.method.id}
+          title={t.method.name === t.label ? t.hint : t.method.name}
+          onClick={() => onChange(t.method)}
         >
           <Icon name={t.icon} size={22} />
-          {t.label}
+          <span className="max-w-[62px] truncate">{t.method.name.length <= 10 ? t.method.name : t.label}</span>
         </button>
       ))}
-      {MORE.length > 0 && (
+      {(
         <button
           ref={moreRef}
           type="button"
@@ -84,12 +89,12 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
           aria-pressed={Boolean(moreChosen)}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={moreChosen ? `More payment methods: ${moreChosen.label} chosen` : 'More payment methods'}
+          aria-label={moreChosen ? `More payment methods: ${moreChosen.name} chosen` : 'More payment methods'}
           onClick={() => setOpen((o) => !o)}
         >
           <Icon name="PayMore" size={22} />
           <span className="flex items-center gap-0.5">
-            {moreChosen ? moreChosen.label : 'More'}
+            <span className="max-w-[48px] truncate">{moreChosen ? moreChosen.name : 'More'}</span>
             <Icon name="MenuArrow" size={10} strokeWidth={2.5} />
           </span>
         </button>
@@ -108,14 +113,34 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
               type="button"
               role="menuitemradio"
               aria-checked={value === m.id}
-              onClick={() => pickMore(m.id)}
+              onClick={() => pickMore(m)}
               className="flex w-full items-center gap-1 whitespace-nowrap px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none"
             >
               <span className="w-3 text-qb-green-active">{value === m.id ? '✓' : ''}</span>
-              {m.label}
+              {m.name}
             </button>
           ))}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setAdding(true);
+            }}
+            className="flex w-full items-center gap-1 whitespace-nowrap border-t border-qb-border px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover focus:bg-qb-row-hover focus:outline-none"
+          >
+            <span className="w-3" />＋ Add new…
+          </button>
         </div>
+      )}
+      {adding && (
+        <NewPaymentMethodDialog
+          onClose={() => setAdding(false)}
+          onCreated={(m) => {
+            setAdding(false);
+            onChange(m);
+          }}
+        />
       )}
     </div>
   );

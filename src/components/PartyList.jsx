@@ -6,6 +6,7 @@ import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
+import { ProfileEntrySelect, TermsSelect } from './ProfileFields.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
 import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -13,6 +14,7 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -158,7 +160,7 @@ function BankDetailsFields({ bank, setBank }) {
   );
 }
 
-/** The full customer or vendor record: contact details, default terms and (vendors) 1099 status. */
+/** The full customer or vendor record: contact details, default terms, type and (vendors) 1099 status. */
 export function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
   const [form, setForm] = useState(null);
@@ -173,7 +175,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
 
   useEffect(() => {
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
+      (p) => setForm({ ...p, originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -187,14 +189,17 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
     e.preventDefault();
     setBusy(true);
     try {
-      const terms = String(form.termsDays).trim();
       const saved = await api.updateParty(kind, id, {
         name: form.name,
         companyName: form.companyName,
         email: form.email,
         phone: form.phone,
         address: form.address,
-        termsDays: terms === '' ? null : Number(terms),
+        termsId: form.termsId ?? null,
+        termsDays: null,
+        customerTypeId: kind === 'customer' ? (form.customerTypeId ?? null) : null,
+        jobTypeId: kind === 'customer' ? (form.jobTypeId ?? null) : null,
+        vendorTypeId: kind === 'vendor' ? (form.vendorTypeId ?? null) : null,
         notes: form.notes,
         taxId: form.taxId,
         // Unchanged (or not ours to change): the stored value stays as it is.
@@ -247,7 +252,27 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
                 <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
               </label>
             )}
-            {field('Terms (days)', 'termsDays', { inputMode: 'numeric', placeholder: kind === 'customer' ? 'e.g. 30 for Net 30' : 'e.g. 30' })}
+            <label className="flex flex-col gap-0.5">
+              <span className="font-semibold text-qb-ink-muted">Terms</span>
+              <TermsSelect className="qb-input" value={form.termsId ?? null} onChange={(t) => setForm((f) => ({ ...f, termsId: t?.id ?? null }))} />
+            </label>
+            {kind === 'customer' ? (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Customer type</span>
+                <ProfileEntrySelect list="CUSTOMER_TYPE" noun="customer type" ariaLabel="Customer type" value={form.customerTypeId ?? null} onChange={(v) => setForm((f) => ({ ...f, customerTypeId: v }))} />
+              </label>
+            ) : (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Vendor type</span>
+                <ProfileEntrySelect list="VENDOR_TYPE" noun="vendor type" ariaLabel="Vendor type" value={form.vendorTypeId ?? null} onChange={(v) => setForm((f) => ({ ...f, vendorTypeId: v }))} />
+              </label>
+            )}
+            {kind === 'customer' && form.isJob && (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Job type</span>
+                <ProfileEntrySelect list="JOB_TYPE" noun="job type" ariaLabel="Job type" value={form.jobTypeId ?? null} onChange={(v) => setForm((f) => ({ ...f, jobTypeId: v }))} />
+              </label>
+            )}
             {kind === 'customer' && <CustomerAccountFields form={form} setForm={setForm} />}
             {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
@@ -388,6 +413,14 @@ export default function PartyList({ kind, navigate }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const selectedParty = (data ?? []).find((p) => p.id === selected) ?? null;
+  // QuickReport (Ctrl+Q): every transaction with the selected customer or vendor.
+  const openReport = useReportOpener();
+  const runQuickReport = (p) => openReport(quickReport({ kind, id: p.id, name: p.name }));
+  const onKeyDown = (e) => {
+    if (reportShortcut(e) !== 'quickReport' || !selectedParty || e.defaultPrevented) return;
+    e.preventDefault();
+    runQuickReport(selectedParty);
+  };
   const sorter = useSort(rows, {
     name: (p) => p.name,
     email: (p) => p.email,
@@ -413,7 +446,7 @@ export default function PartyList({ kind, navigate }) {
   });
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
+    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
         <PartyDialog
           kind={kind}
@@ -503,6 +536,7 @@ export default function PartyList({ kind, navigate }) {
                         items={[
                           { label: 'Edit…', onSelect: () => setEditing(p.id) },
                           { label: 'Show transactions', onSelect: () => setSelected(p.id) },
+                          { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },

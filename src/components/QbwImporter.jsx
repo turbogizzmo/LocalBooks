@@ -456,17 +456,29 @@ function UnbalancedList({ items }) {
   );
 }
 
-/** Customers, vendors and items from the file, brought in as LocalBooks records. */
+/** What a post did with the file's classes, as a sentence (empty when the file has none). */
+function classesNote(c) {
+  if (!c) return '';
+  return (
+    ` Classes: ${c.added} added, ${c.matched} already there; each line keeps its class.` +
+    (c.trackingTurnedOn ? ' Class tracking is now on (Settings › Class tracking).' : '')
+  );
+}
+
+/** Customers, vendors, items and classes from the file, brought in as LocalBooks records. */
 function ListsPanel({ summary, busy, accountsReady, run }) {
   const l = summary.lists;
-  if (!l || l.customers + l.vendors + l.items === 0) return null;
-  const all = l.customers + l.vendors + l.items;
-  const done = l.customersDone + l.vendorsDone + l.itemsDone;
+  const classes = l?.classes ?? 0;
+  if (!l || l.customers + l.vendors + l.items + classes === 0) return null;
+  const all = l.customers + l.vendors + l.items + classes;
+  const done = l.customersDone + l.vendorsDone + l.itemsDone + (l.classesDone ?? 0);
+  const what = classes > 0 ? 'customers, vendors, items and classes' : 'customers, vendors and items';
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-qb-border px-3 py-2 text-xs">
-      <span className="font-semibold">Customers, vendors and items</span>
+      <span className="font-semibold">{what[0].toUpperCase() + what.slice(1)}</span>
       <span className="text-qb-ink-muted">
-        {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items in the file
+        {l.customers.toLocaleString()} customers · {l.vendors.toLocaleString()} vendors · {l.items.toLocaleString()} items
+        {classes > 0 && ` · ${countOf(classes, ['class', 'classes'])}`} in the file
         {done > 0 && ` · ${done.toLocaleString()} of ${all.toLocaleString()} in LocalBooks`}
       </span>
       {done < all && !summary.listsOnly && (
@@ -474,7 +486,11 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
           type="button"
           className="qb-btn qb-btn-secondary ml-auto h-row px-2 text-xs"
           disabled={busy || !accountsReady}
-          title={accountsReady ? 'Matches existing records by name and creates the rest, with addresses, emails and terms' : 'Map the accounts first: items post to them'}
+          title={
+            accountsReady
+              ? `Matches existing records by name and creates the rest, with addresses, emails and terms${classes > 0 ? '; turns class tracking on' : ''}`
+              : 'Map the accounts first: items post to them'
+          }
           onClick={() =>
             run(
               () => api.importLedgerLists(summary.id),
@@ -482,11 +498,12 @@ function ListsPanel({ summary, busy, accountsReady, run }) {
                 `Customers: ${r.customersCreated} added, ${r.customersMatched} already there. Vendors: ${r.vendorsCreated} added, ${r.vendorsMatched} already there. ` +
                 `Items: ${r.itemsCreated} added, ${r.itemsMatched} already there` +
                 (r.itemsOnFallbackAccount ? ` (${r.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
-                '.',
+                '.' +
+                classesNote(r.classes),
             )
           }
         >
-          Bring in customers, vendors and items
+          Bring in {what}
         </button>
       )}
       {done === all && <span className="ml-auto text-qb-green-active">✓ All in LocalBooks</span>}
@@ -605,7 +622,7 @@ function LedgerReview({ summary, accounts, busy, run }) {
     if (
       !(await askConfirm(
         `Add this file’s lists to your books?\n\n${countOf(used.length, ['account', 'accounts'])}, ${countOf(l.customers, ['customer', 'customers'])}, ` +
-          `${countOf(l.vendors, ['vendor', 'vendors'])} and ${countOf(l.items, ['item', 'items'])}: each matches an existing record of the same name or is created. ` +
+          `${countOf(l.vendors, ['vendor', 'vendors'])}, ${countOf(l.items, ['item', 'items'])} and ${countOf(l.classes ?? 0, ['class', 'classes'])}: each matches an existing record of the same name or is created. ` +
           'No transactions are posted. You can undo it later with "Reverse added lists" or "Start over".',
       ))
     )
@@ -622,7 +639,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           `. Customers: ${li.customersCreated} added, ${li.customersMatched} already there. Vendors: ${li.vendorsCreated} added, ${li.vendorsMatched} already there. ` +
           `Items: ${li.itemsCreated} added, ${li.itemsMatched} already there` +
           (li.itemsOnFallbackAccount ? ` (${li.itemsOnFallbackAccount} post to your first income account: LocalBooks items need an income account; their description names the original account)` : '') +
-          '.'
+          '.' +
+          classesNote(r.classes)
         );
       },
     );
@@ -665,7 +683,8 @@ function LedgerReview({ summary, accounts, busy, run }) {
           (f?.fellBack ? ` ${countOf(f.fellBack, ['document', 'documents'])} posted as journal entries instead (listed in step 3).` : '') +
           (f?.notImported ? ` ${countOf(f.notImported, ['estimate or purchase order', 'estimates and purchase orders'])} could not be brought in (listed in step 3; they post nothing).` : '') +
           (r.skippedUnbalanced ? ` ${r.skippedUnbalanced} incomplete transactions were left out; enter them by hand.` : '') +
-          (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '')
+          (r.skippedAlreadyPosted ? ` ${r.skippedAlreadyPosted} were already posted.` : '') +
+          classesNote(r.classes)
         );
       },
     );

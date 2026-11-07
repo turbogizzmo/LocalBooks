@@ -28,6 +28,9 @@ use crate::ledger::{self, db_err, EntrySource, JournalEntry, JournalLine};
 use crate::qbw_documents::{DocumentLine, SourceDocument, SourceSales};
 use crate::sales_lists::SalesDoc;
 
+/// A staged line: (LocalBooks account, cents: negative = debit, memo, class).
+pub(crate) type Line = (i64, i64, Option<String>, Option<i64>);
+
 /// One staged transaction, with its lines already mapped to LocalBooks accounts.
 pub(crate) struct Staged {
     pub source_id: i64,
@@ -36,8 +39,7 @@ pub(crate) struct Staged {
     pub doc_num: Option<String>,
     pub name: Option<String>,
     pub memo: Option<String>,
-    /// (LocalBooks account, cents: negative = debit, memo)
-    pub lines: Vec<(i64, i64, Option<String>)>,
+    pub lines: Vec<Line>,
     pub document: Option<SourceDocument>,
 }
 
@@ -92,11 +94,17 @@ struct Books {
     vendors: HashMap<i64, (i64, String)>,
     /// source item → (product, name)
     products: HashMap<i64, (i64, String)>,
+    /// lowercased class path → class
+    classes: HashMap<String, i64>,
 }
 
 impl Books {
     fn kind(&self, account: i64) -> &str {
         self.accounts.get(&account).map_or("", |(t, _)| t.as_str())
+    }
+
+    fn class(&self, name: Option<&str>) -> Option<i64> {
+        name.and_then(|n| self.classes.get(&n.to_lowercase()).copied())
     }
 
     fn is_undeposited(&self, account: i64) -> bool {
@@ -160,15 +168,15 @@ async fn load_books(tx: &mut Transaction<'_, Sqlite>, batch_id: i64) -> Result<B
     .into_iter()
     .map(|(s, id, name)| (s, (id, name)))
     .collect();
-    Ok(Books { accounts, customers, vendors, products })
+    Ok(Books { accounts, customers, vendors, products, classes: HashMap::new() })
 }
 
-fn entry_lines(lines: &[(i64, i64, Option<String>)]) -> Vec<JournalLine> {
+fn entry_lines(lines: &[Line]) -> Vec<JournalLine> {
     lines
         .iter()
-        .map(|(account, cents, memo)| {
+        .map(|(account, cents, memo, class)| {
             let line = if *cents < 0 { JournalLine::debit(*account, -cents) } else { JournalLine::credit(*account, *cents) };
-            line.with_memo(memo.as_deref())
+            line.with_memo(memo.as_deref()).with_class(*class)
         })
         .collect()
 }
@@ -177,7 +185,7 @@ fn describe(t: &Staged) -> String {
     crate::qbw_ledger_import::describe(&t.kind, t.doc_num.as_deref(), t.name.as_deref(), t.memo.as_deref())
 }
 
-async fn post(tx: &mut Transaction<'_, Sqlite>, t: &Staged, description: String, lines: &[(i64, i64, Option<String>)], source: EntrySource) -> Result<i64, String> {
+async fn post(tx: &mut Transaction<'_, Sqlite>, t: &Staged, description: String, lines: &[Line], source: EntrySource) -> Result<i64, String> {
     let entry = JournalEntry { id: None, date: t.date, description, lines: entry_lines(lines), currency: None };
     ledger::post_entry_in_tx(tx, &entry, source).await
 }
@@ -194,6 +202,7 @@ struct FormLine {
     rate_cents: i64,
     amount_cents: i64,
     account_id: i64,
+    class_id: Option<i64>,
 }
 
 /// A document's form: its item lines, the discount and the sales tax.
@@ -224,7 +233,15 @@ fn form(lines: &[DocumentLine], map: &HashMap<i64, i64>, books: &Books, sign: i6
                 };
                 let product = l.item_id.and_then(|i| books.products.get(&i));
                 let description = l.description.clone().or_else(|| product.map(|p| p.1.clone())).unwrap_or_default();
-                out.lines.push(FormLine { product_id: product.map(|p| p.0), description, quantity_e4, rate_cents, amount_cents: cents, account_id: account });
+                out.lines.push(FormLine {
+                    product_id: product.map(|p| p.0),
+                    description,
+                    quantity_e4,
+                    rate_cents,
+                    amount_cents: cents,
+                    account_id: account,
+                    class_id: books.class(l.class.as_deref()),
+                });
             }
             _ => out.discount -= cents,
         }
@@ -267,16 +284,16 @@ fn receivable(t: &Staged, books: &Books) -> (i64, Option<i64>) {
 
 /// Lines on accounts of one type (receivables or payables), and their account when there is just one.
 fn control(t: &Staged, books: &Books, account_type: &str) -> (i64, Option<i64>) {
-    let lines: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| books.kind(l.0) == account_type).collect();
+    let lines: Vec<&Line> = t.lines.iter().filter(|l| books.kind(l.0) == account_type).collect();
     let accounts: HashSet<i64> = lines.iter().map(|l| l.0).collect();
     (lines.iter().map(|l| l.1).sum(), if accounts.len() == 1 { accounts.into_iter().next() } else { None })
 }
 
 /// The one credit of a bill payment, check or card charge: the account the money came out of.
 fn single_credit(t: &Staged) -> Result<(i64, i64), String> {
-    let credits: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| l.1 > 0).collect();
+    let credits: Vec<&Line> = t.lines.iter().filter(|l| l.1 > 0).collect();
     match credits.as_slice() {
-        [(account, cents, _)] => Ok((*account, *cents)),
+        [(account, cents, _, _)] => Ok((*account, *cents)),
         [] => Err("it puts money in rather than paying it out".into()),
         _ => Err("the money came out of more than one account".into()),
     }
@@ -285,8 +302,8 @@ fn single_credit(t: &Staged) -> Result<(i64, i64), String> {
 async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, id: i64, lines: &[FormLine]) -> Result<(), String> {
     for (n, l) in lines.iter().enumerate() {
         sqlx::query(&format!(
-            "INSERT INTO {table} ({fk}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+            "INSERT INTO {table} ({fk}, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
         ))
         .bind(id)
         .bind(n as i64 + 1)
@@ -296,6 +313,7 @@ async fn insert_lines(tx: &mut Transaction<'_, Sqlite>, table: &str, fk: &str, i
         .bind(l.amount_cents)
         .bind(l.account_id)
         .bind(l.product_id)
+        .bind(l.class_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -409,9 +427,9 @@ async fn write_credit_memo(
 
 /// The one debit of a receipt, payment or deposit: the account the money went into.
 fn single_debit(t: &Staged) -> Result<(i64, i64), String> {
-    let debits: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| l.1 < 0).collect();
+    let debits: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0).collect();
     match debits.as_slice() {
-        [(account, cents, _)] => Ok((*account, -cents)),
+        [(account, cents, _, _)] => Ok((*account, -cents)),
         _ => Err("the money went into more than one account".into()),
     }
 }
@@ -514,7 +532,7 @@ async fn write_payment(
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
-        let lines = [(into, -cents, None), (ar, cents, None)];
+        let lines = [(into, -cents, None, None), (ar, cents, None, None)];
         let entry = post(tx, t, format!("Payment - Invoice #{number} - {customer}"), &lines, EntrySource::ReceivePayment(row)).await?;
         sqlx::query("UPDATE invoice_payments SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(row).execute(&mut **tx).await.map_err(db_err)?;
         ledger::recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", invoice).await?;
@@ -529,7 +547,7 @@ async fn write_payment(
     let unapplied = total - applied;
     let mut note = None;
     if unapplied > 0 {
-        let lines = [(into, -unapplied, None), (ar, unapplied, None)];
+        let lines = [(into, -unapplied, None, None), (ar, unapplied, None, None)];
         entries.push(post(tx, t, format!("{} (unapplied)", describe(t)), &lines, EntrySource::Journal).await?);
         if !skipped.is_empty() {
             note = Some(format!("{} of it posted as a journal entry: {}", ledger::format_cents(unapplied), skipped.join("; ")));
@@ -544,8 +562,8 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     // The bank account is debited with what arrived; other debits are fees or cash back taken out
     // of the deposit. LocalBooks deposit lines are the money put in, so the deposit's total is
     // the gross amount and its entry (the file's own lines) carries the deductions.
-    let banks: Vec<&(i64, i64, Option<String>)> = t.lines.iter().filter(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")).collect();
-    let [&(bank, _, _)] = banks.as_slice() else {
+    let banks: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")).collect();
+    let [&(bank, _, _, _)] = banks.as_slice() else {
         return Err("it was not deposited into exactly one bank account".into());
     };
     let total: i64 = t.lines.iter().filter(|l| l.1 > 0).map(|l| l.1).sum();
@@ -575,7 +593,7 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     // The file gives each deposited payment its own Undeposited Funds line, but not which one;
     // the linked payments are matched against the deposit's Undeposited Funds total instead.
     let mut pooled: Vec<(i64, i64)> = Vec::new();
-    for (account, cents, _) in t.lines.iter().filter(|l| l.1 > 0 && books.is_undeposited(l.0)) {
+    for (account, cents, _, _) in t.lines.iter().filter(|l| l.1 > 0 && books.is_undeposited(l.0)) {
         match pooled.iter_mut().find(|(a, _)| a == account) {
             Some((_, sum)) => *sum += cents,
             None => pooled.push((*account, *cents)),
@@ -609,16 +627,17 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
         }
     }
     // What is left: the Undeposited Funds not matched to a payment, and every other line as it was.
-    let others = t.lines.iter().filter(|l| l.1 > 0 && !books.is_undeposited(l.0)).map(|(a, c, m)| (*a, *c, m.clone()));
-    for (account, cents, memo) in pooled.into_iter().map(|(a, c)| (a, c, None)).chain(others) {
+    let others = t.lines.iter().filter(|l| l.1 > 0 && !books.is_undeposited(l.0)).map(|(a, c, m, k)| (*a, *c, m.clone(), *k));
+    for (account, cents, memo, class) in pooled.into_iter().map(|(a, c)| (a, c, None, None)).chain(others) {
         if cents > 0 {
             n += 1;
-            sqlx::query("INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)")
+            sqlx::query("INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
                 .bind(id)
                 .bind(n)
                 .bind(account)
                 .bind(cents)
                 .bind(memo)
+                .bind(class)
                 .execute(&mut **tx)
                 .await
                 .map_err(db_err)?;
@@ -664,7 +683,7 @@ async fn write_bill(
             _ => (None, None),
         };
         let memo = l.description.clone().or_else(|| product.map(|p| p.1.clone())).unwrap_or_default();
-        rows.push((account, amount, memo, quantity, rate, product.map(|p| p.0)));
+        rows.push((account, amount, memo, quantity, rate, product.map(|p| p.0), books.class(l.class.as_deref())));
     }
     if rows.iter().map(|r| r.1).sum::<i64>() != total {
         return Err("its lines do not add up to its total".into());
@@ -681,13 +700,16 @@ async fn write_bill(
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
-        for (n, (account, amount, memo, _, _, _)) in rows.iter().enumerate() {
-            sqlx::query("INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)")
+        for (n, (account, amount, memo, _, _, _, class)) in rows.iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO vendor_credit_lines (vendor_credit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )
                 .bind(id)
                 .bind(n as i64 + 1)
                 .bind(account)
                 .bind(amount)
                 .bind(Some(memo.as_str()).filter(|m| !m.is_empty()))
+                .bind(class)
                 .execute(&mut **tx)
                 .await
                 .map_err(db_err)?;
@@ -709,10 +731,10 @@ async fn write_bill(
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    for (n, (account, amount, memo, quantity, rate, product)) in rows.iter().enumerate() {
+    for (n, (account, amount, memo, quantity, rate, product, class)) in rows.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(id)
         .bind(n as i64 + 1)
@@ -722,6 +744,7 @@ async fn write_bill(
         .bind(quantity)
         .bind(rate)
         .bind(product)
+        .bind(class)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -784,7 +807,7 @@ async fn write_bill_payment(
         .fetch_one(&mut **tx)
         .await
         .map_err(db_err)?;
-        let lines = [(ap, -cents, None), (from, cents, None)];
+        let lines = [(ap, -cents, None, None), (from, cents, None, None)];
         let entry = post(tx, t, format!("Bill payment - {vendor}"), &lines, EntrySource::BillPayment(row)).await?;
         sqlx::query("UPDATE bill_payments SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(row).execute(&mut **tx).await.map_err(db_err)?;
         ledger::recompute_paid(tx, "bills", "bill_payments", "bill_id", bill).await?;
@@ -799,7 +822,7 @@ async fn write_bill_payment(
     let unapplied = total - applied;
     let mut note = None;
     if unapplied > 0 {
-        let lines = [(ap, -unapplied, None), (from, unapplied, None)];
+        let lines = [(ap, -unapplied, None, None), (from, unapplied, None, None)];
         entries.push(post(tx, t, format!("{} (unapplied)", describe(t)), &lines, EntrySource::Journal).await?);
         note = Some(format!(
             "{} of it posted as a journal entry: {}",
@@ -849,13 +872,14 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
-    for (n, (account, cents, memo)) in t.lines.iter().filter(|l| l.0 != from).enumerate() {
-        sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo) VALUES (?1, ?2, ?3, ?4, ?5)")
+    for (n, (account, cents, memo, class)) in t.lines.iter().filter(|l| l.0 != from).enumerate() {
+        sqlx::query("INSERT INTO expense_lines (expense_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
             .bind(id)
             .bind(n as i64 + 1)
             .bind(account)
             .bind(cents.abs())
             .bind(memo)
+            .bind(class)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
@@ -868,7 +892,7 @@ async fn write_expense(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
 
 /// A transfer between two balance-sheet accounts.
 async fn write_transfer(tx: &mut Transaction<'_, Sqlite>, t: &Staged, books: &Books) -> Result<i64, String> {
-    let [(a, a_cents, _), (b, b_cents, _)] = t.lines.as_slice() else {
+    let [(a, a_cents, _, _), (b, b_cents, _, _)] = t.lines.as_slice() else {
         return Err("it has more than two lines".into());
     };
     if a_cents + b_cents != 0 || a == b {
@@ -979,9 +1003,11 @@ pub(crate) async fn post_all(
     tx: &mut Transaction<'_, Sqlite>,
     batch_id: i64,
     map: &HashMap<i64, i64>,
+    classes: &HashMap<String, i64>,
     staged: &[Staged],
 ) -> Result<(Vec<Outcome>, FullImportCounts), String> {
-    let books = load_books(tx, batch_id).await?;
+    let mut books = load_books(tx, batch_id).await?;
+    books.classes = classes.clone();
     let mut written = Written::default();
     let mut counts = FullImportCounts::default();
     let mut outcomes = Vec::with_capacity(staged.len());

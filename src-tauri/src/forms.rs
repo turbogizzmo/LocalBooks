@@ -489,6 +489,8 @@ pub struct FormSales {
     pub fob: Option<String>,
     /// The Ship To block's lines; empty when there is none.
     pub ship_to: Vec<String>,
+    /// The Customer Message chosen on the form, printed below the totals.
+    pub message: Option<String>,
 }
 
 impl FormSales {
@@ -501,6 +503,7 @@ impl FormSales {
             po_number: view.header.po_number.clone(),
             fob: view.header.fob.clone(),
             ship_to: address_lines(view.header.ship_to.as_deref()),
+            message: view.customer_message.clone(),
         }
     }
 
@@ -680,12 +683,17 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         _ => 0,
     };
     let balance = if inv.is_voided { 0 } else { inv.balance_cents };
+    // The term it was issued with; an invoice from before the Terms list shows its days.
+    let terms = inv.terms.terms_name.clone().unwrap_or_else(|| if terms_days == 0 { "Due on receipt".into() } else { format!("Net {terms_days}") });
     let mut meta = vec![
         ("Invoice date".to_string(), format_date(&inv.issue_date), false),
-        ("Terms".to_string(), if terms_days == 0 { "Due on receipt".into() } else { format!("Net {terms_days}") }, false),
+        ("Terms".to_string(), terms, false),
         ("Due date".to_string(), format_date(&inv.due_date), false),
-        ("Balance due".to_string(), money(balance), true),
     ];
+    if let (Some(until), true) = (&inv.terms.discount_until, inv.terms.early_discount_cents > 0 && balance > 0) {
+        meta.push(("Discount".to_string(), format!("{} if paid by {}", money(inv.terms.early_discount_cents), format_date(until)), false));
+    }
+    meta.push(("Balance due".to_string(), money(balance), true));
     if let Some(code) = code {
         meta.push(("Currency".into(), code.into(), false));
     }
@@ -997,6 +1005,7 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
                 po_number: Some("PO-4471".into()),
                 fob: Some("Springfield".into()),
                 ship_to: vec!["Sample Company LLC".into(), "Receiving dock 4".into(), "200 Mill Road".into(), "Springfield, IL 62702".into()],
+                message: Some("Thank you for your business.".into()),
             }
         },
         statement,
@@ -1492,6 +1501,9 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         paragraph(&mut l, if doc.voided { None } else { Some("NOTES") }, memo, INK);
     }
     if !doc.voided {
+        if let Some(message) = &doc.sales.message {
+            paragraph(&mut l, None, message, INK);
+        }
         paragraph(&mut l, None, &fill_placeholders(&tpl.message, doc, company), INK);
     }
     if !tpl.terms.is_empty() {

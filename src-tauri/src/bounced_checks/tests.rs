@@ -66,6 +66,7 @@ async fn pay(pool: &SqlitePool, invoice_id: i64, account: i64, cents: i64) -> i6
     record_payment(
         pool,
         PaymentInput {
+            payment_method_id: None,
             invoice_id,
             deposit_account_id: account,
             payment_date: d(5),

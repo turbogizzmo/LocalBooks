@@ -13,6 +13,7 @@ fn commands_are_classified() {
     // A View-only user can open a sales form, which fills its addresses and checks the credit limit.
     assert_eq!(need("customer_sales_defaults"), Need::Read);
     assert_eq!(need("check_credit_limit"), Need::Read);
+    assert_eq!(need("save_xlsx_book"), Need::Read, "Process Multiple Reports exports like a single report");
     assert_eq!(need("create_invoice"), Need::Write);
     assert_eq!(need("void_transaction"), Need::Write);
     assert_eq!(need("set_preference"), Need::Admin);

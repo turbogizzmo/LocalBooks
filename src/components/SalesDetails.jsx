@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SalesAddresses } from './SalesAddresses.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { ProfileEntrySelect } from './ProfileFields.jsx';
 
 /**
- * Rep, ship date, Ship Via and the customer custom fields marked for sales forms, for the header
- * of an invoice, sales receipt or estimate. Each box shows only once its list has an entry (or the
- * document being loaded already has a value), so a company that does not use them sees nothing.
- * The rep and fields fill in from the customer until the user changes them.
+ * Rep, ship date, Ship Via, the customer custom fields marked for sales forms and the Customer
+ * Message, for the header of an invoice, sales receipt or estimate. The rep, ship and field boxes
+ * show only once their list has an entry (or the document being loaded already has a value), so a
+ * company that does not use them sees nothing; the Customer Message box is always there, with
+ * "Add new" to start the list. The rep and fields fill in from the customer until the user changes
+ * them.
  *
  * `addresses` is the Bill To / Ship To / P.O. No. / FOB row. The addresses fill in from the customer
  * (a job uses its parent's when it has none) until the user edits them; the document keeps what
@@ -21,6 +24,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const [repTouched, setRepTouched] = useState(false);
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
+  const [messageId, setMessageId] = useState(null);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
@@ -76,8 +80,14 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const repOptions = reps.filter((r) => r.isActive || r.id === repId);
   const methodOptions = methods.filter((m) => m.isActive || m.id === shipMethodId);
 
-  const picker =
-    showRep || showShip || formFields.length > 0 ? (
+  const messageBox = (
+    <label>
+      <span className="qb-label">Customer message</span>
+      <ProfileEntrySelect list="CUSTOMER_MESSAGE" noun="customer message" value={messageId} onChange={setMessageId} className="qb-input w-[180px]" ariaLabel="Customer message" />
+    </label>
+  );
+
+  const picker = (
       <>
         {showRep && (
           <label>
@@ -133,8 +143,9 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
             />
           </label>
         ))}
+        {messageBox}
       </>
-    ) : null;
+  );
 
   const addresses = (
     <SalesAddresses
@@ -155,6 +166,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       salesRepId: repId,
       shipDate: shipDate || null,
       shipMethodId,
+      customerMessageId: messageId,
       customFields: formFields.map((f) => ({ fieldId: f.id, value: (values[f.id] ?? '').trim() })).filter((f) => f.value !== ''),
       billTo: header.billTo,
       shipTo: header.shipTo,
@@ -167,6 +179,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setRepId(details?.salesRepId ?? null);
       setShipDate(details?.shipDate ?? '');
       setShipMethodId(details?.shipMethodId ?? null);
+      setMessageId(details?.customerMessageId ?? null);
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
       setTouched(new Set(formFields.map((f) => f.id)));
@@ -181,6 +194,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setRepId(null);
       setShipDate('');
       setShipMethodId(null);
+      setMessageId(null);
       setValues({});
       setTouched(new Set());
       addressTouched.current = { billTo: false, shipTo: false };

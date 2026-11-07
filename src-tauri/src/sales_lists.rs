@@ -276,12 +276,21 @@ pub struct SalesDetails {
     /// Bill To, Ship To, P.O. number and FOB (see `sales_header`).
     #[serde(flatten)]
     pub header: SalesHeader,
+    /// Invoices only: the term the invoice was issued with (its due date is entered with it).
+    pub terms_id: Option<i64>,
+    /// The Customer Message printed at the foot of the form.
+    pub customer_message_id: Option<i64>,
 }
 
 impl SalesDetails {
     /// No rep, shipping or custom fields (the header is written either way).
     pub fn is_empty(&self) -> bool {
-        self.sales_rep_id.is_none() && self.ship_date.is_none() && self.ship_method_id.is_none() && self.custom_fields.iter().all(|f| f.value.trim().is_empty())
+        self.sales_rep_id.is_none()
+            && self.ship_date.is_none()
+            && self.ship_method_id.is_none()
+            && self.terms_id.is_none()
+            && self.customer_message_id.is_none()
+            && self.custom_fields.iter().all(|f| f.value.trim().is_empty())
     }
 }
 
@@ -300,6 +309,11 @@ pub struct SalesDetailsView {
     /// The document's own Bill To, Ship To, P.O. number and FOB.
     #[serde(flatten)]
     pub header: SalesHeader,
+    pub terms_id: Option<i64>,
+    pub terms_name: Option<String>,
+    pub customer_message_id: Option<i64>,
+    /// The message's text, printed at the foot of the form.
+    pub customer_message: Option<String>,
 }
 
 async fn check_active(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, what: &str, code: &str) -> Result<(), String> {
@@ -336,14 +350,16 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
     if let Some(method) = details.ship_method_id.filter(|m| carried.ship_method_id != Some(*m)) {
         check_active(tx, "ship_methods", method, "shipping method", code).await?;
     }
-    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3 WHERE id = ?4", doc.table()))
-        .bind(details.sales_rep_id)
-        .bind(details.ship_date)
-        .bind(details.ship_method_id)
-        .bind(id)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
+    if let Some(terms) = details.terms_id {
+        if doc != SalesDoc::Invoice {
+            return Err(format!("{code}_NO_TERMS: only invoices have terms"));
+        }
+        crate::profile_lists::check_terms(&mut **tx, terms, carried.terms_id, code).await?;
+    }
+    if let Some(message) = details.customer_message_id {
+        crate::profile_lists::check_entry(&mut **tx, crate::profile_lists::ProfileList::CustomerMessage, message, carried.customer_message_id, code).await?;
+    }
+    write_columns(tx, doc, id, details).await?;
     let carried_fields: Vec<i64> = carried.custom_fields.iter().map(|f| f.field_id).collect();
     custom_fields::write_document_fields(tx, doc, id, &details.custom_fields, &carried_fields).await
 }
@@ -352,31 +368,51 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
 /// keeps the rep it was sold by even when that rep is inactive now.
 /// Imported documents keep no address copy, so they print the customer's address as imported.
 pub(crate) async fn write_imported(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
-    sqlx::query(&format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3 WHERE id = ?4", doc.table()))
-        .bind(details.sales_rep_id)
-        .bind(details.ship_date)
-        .bind(details.ship_method_id)
-        .bind(id)
+    write_columns(tx, doc, id, details).await
+}
+
+async fn write_columns(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
+    let invoice = doc == SalesDoc::Invoice;
+    let terms = if invoice { ", terms_id = ?6" } else { "" };
+    let sql = format!("UPDATE {} SET sales_rep_id = ?1, ship_date = ?2, ship_method_id = ?3, customer_message_id = ?5{terms} WHERE id = ?4", doc.table());
+    let mut query = sqlx::query(&sql).bind(details.sales_rep_id).bind(details.ship_date).bind(details.ship_method_id).bind(id).bind(details.customer_message_id);
+    // Only an invoice's statement has a sixth parameter.
+    if invoice {
+        query = query.bind(details.terms_id);
+    }
+    query
         .execute(&mut **tx)
         .await
         .map(|_| ())
         .map_err(db_err)
 }
 
+/// `terms_id` on a document of this kind, as a column expression (only invoices have one).
+fn terms_column(doc: SalesDoc) -> &'static str {
+    if doc == SalesDoc::Invoice {
+        "d.terms_id"
+    } else {
+        "NULL"
+    }
+}
+
 /// A document's details as entered, for loading it back into its form (an edit, or an estimate
 /// becoming an invoice) and printing it.
 pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Result<SalesDetailsView, String> {
-    let row: Option<(Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>)> = sqlx::query_as(&format!(
-        "SELECT d.sales_rep_id, r.initials, r.name, d.ship_date, d.ship_method_id, s.name
+    type Row = (Option<i64>, Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>);
+    let row: Option<Row> = sqlx::query_as(&format!(
+        "SELECT d.sales_rep_id, r.initials, r.name, d.ship_date, d.ship_method_id, s.name, tm.id, tm.name, d.customer_message_id, m.name
          FROM {} d LEFT JOIN sales_reps r ON r.id = d.sales_rep_id LEFT JOIN ship_methods s ON s.id = d.ship_method_id
+         LEFT JOIN terms tm ON tm.id = {} LEFT JOIN profile_entries m ON m.id = d.customer_message_id
          WHERE d.id = ?1",
-        doc.table()
+        doc.table(),
+        terms_column(doc)
     ))
     .bind(id)
     .fetch_optional(pool)
     .await
     .map_err(db_err)?;
-    let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name)) = row else {
+    let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name, terms_id, terms_name, customer_message_id, customer_message)) = row else {
         return Ok(SalesDetailsView::default());
     };
     let header = crate::sales_header::read(pool, doc.table(), id).await?;
@@ -389,13 +425,17 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
         ship_method_name,
         custom_fields: custom_fields::document_fields(pool, doc, id).await?,
         header,
+        terms_id,
+        terms_name,
+        customer_message_id,
+        customer_message,
     })
 }
 
 /// A document's details inside a write, to carry them onto another document.
 pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64) -> Result<SalesDetails, String> {
-    let (sales_rep_id, ship_date, ship_method_id): (Option<i64>, Option<NaiveDate>, Option<i64>) =
-        sqlx::query_as(&format!("SELECT sales_rep_id, ship_date, ship_method_id FROM {} WHERE id = ?1", doc.table()))
+    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id): (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>) =
+        sqlx::query_as(&format!("SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id FROM {} d WHERE d.id = ?1", terms_column(doc), doc.table()))
             .bind(id)
             .fetch_one(&mut **tx)
             .await
@@ -412,6 +452,8 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         ship_method_id,
         custom_fields: custom_fields.into_iter().map(|(field_id, value)| FieldValue { field_id, value }).collect(),
         header: crate::sales_header::read(&mut **tx, doc.table(), id).await?,
+        terms_id,
+        customer_message_id,
     })
 }
 
@@ -424,6 +466,8 @@ impl SalesDetailsView {
             ship_method_id: self.ship_method_id,
             custom_fields: self.custom_fields.iter().map(|f| FieldValue { field_id: f.field_id, value: f.value.clone() }).collect(),
             header: self.header.clone(),
+            terms_id: self.terms_id,
+            customer_message_id: self.customer_message_id,
         }
     }
 }

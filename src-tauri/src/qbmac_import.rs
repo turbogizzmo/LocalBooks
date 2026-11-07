@@ -738,7 +738,7 @@ pub fn ledger(book: &Book) -> Ledger {
                     let account_id = t.account.filter(|a| known.contains(a))?;
                     let c = cents(t.amount.as_deref()).ok().flatten().filter(|c| *c != 0)?.abs();
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, c);
-                    Some(DocumentLine { item_id: t.item, description: t.memo.clone(), quantity_e4, rate_cents, cents: c, account_id })
+                    Some(DocumentLine { item_id: t.item, description: t.memo.clone(), quantity_e4, rate_cents, cents: c, account_id, class: None })
                 })
                 .collect();
             let document = match (view, customer, vendor) {
@@ -793,8 +793,8 @@ pub fn ledger(book: &Book) -> Ledger {
                     // signs) and cost of goods sold the other way. An item without both accounts
                     // posts no cost, which shows as a balance that differs from the file's.
                     if let Some((Some(cogs), Some(asset))) = item.map(|i| (i.cogs_account.filter(|a| known.contains(a)), i.asset_account.filter(|a| known.contains(a)))) {
-                        cost.push(SourceLine { account_id: cogs, cents: c, memo: t.memo.clone() });
-                        cost.push(SourceLine { account_id: asset, cents: -c, memo: t.memo.clone() });
+                        cost.push(SourceLine { account_id: cogs, cents: c, memo: t.memo.clone(), class: None });
+                        cost.push(SourceLine { account_id: asset, cents: -c, memo: t.memo.clone(), class: None });
                     }
                 }
                 Err(()) => {
@@ -837,7 +837,7 @@ pub fn ledger(book: &Book) -> Ledger {
             }
             continue;
         };
-        let mut lines: Vec<SourceLine> = posted.iter().map(|(t, a, c)| SourceLine { account_id: *a, cents: *c, memo: t.memo.clone() }).collect();
+        let mut lines: Vec<SourceLine> = posted.iter().map(|(t, a, c)| SourceLine { account_id: *a, cents: *c, memo: t.memo.clone(), class: None }).collect();
         lines.extend(cost);
         if lines.is_empty() {
             continue;
@@ -850,7 +850,7 @@ pub fn ledger(book: &Book) -> Ledger {
                 .filter(|(t, a, _)| !is_arap(*a) && (all || !t.is_source))
                 .map(|(t, a, c)| {
                     let (quantity_e4, rate_cents) = quantity_and_rate(t, *c);
-                    DocumentLine { item_id: t.item.filter(|i| items_by.contains_key(i)), description: t.memo.clone(), quantity_e4, rate_cents, cents: *c, account_id: *a }
+                    DocumentLine { item_id: t.item.filter(|i| items_by.contains_key(i)), description: t.memo.clone(), quantity_e4, rate_cents, cents: *c, account_id: *a, class: None }
                 })
                 .collect()
         };
@@ -897,7 +897,7 @@ pub fn ledger(book: &Book) -> Ledger {
         sales_lists.add_ship_method(name, *active);
     }
     sales_lists.ship_methods.sort();
-    Ledger { accounts, customers, vendors, items, transactions, unbalanced, unreadable, quality, sales_lists }
+    Ledger { accounts, customers, vendors, items, transactions, unbalanced, unreadable, quality, sales_lists, classes: Vec::new() }
 }
 
 #[cfg(test)]

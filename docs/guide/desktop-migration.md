@@ -43,7 +43,9 @@ Then choose the file in the wizard, as for a company file below. LocalBooks read
   `CUSTITEMDICT`; a value without a label comes in as *Custom field N*. Invoices and sales
   receipts keep their `REP`, `SHIPVIA` and `SHIPDATE`. Fixed % price levels (`PRICELEVEL`) come
   in too, with each customer's `PRICELEVEL` as their default level; IIF has no per-item prices, so
-  a per-item level comes in with no items (standard prices) for you to fill in.
+  a per-item level comes in with no items (standard prices) for you to fill in. The class list
+  (`CLASS`, subclasses written `Parent:Child`) comes in too, and each transaction line keeps the
+  class in its `CLASS` column (see [Classes](#classes)).
 - **IIF transactions:** a full import makes invoices, credit memos, sales receipts, payments,
   deposits, bills, vendor credits, item receipts, bill payments, checks, card charges, card credits, transfers,
   estimates and purchase orders. Anything else posts as a journal entry. IIF doesn't record which
@@ -147,8 +149,10 @@ which holds every transaction with all its lines. Everything then goes through t
 [report exports](#what-localbooks-does-with-them), so it imports the same way.
 
 LocalBooks compares the counts of invoices, bills and bill payments with the Journal and tells you
-if they differ, which usually means the Journal didn't cover all dates. Classes are counted but not
-brought in; set them up under **Lists › Classes**.
+if they differ, which usually means the Journal didn't cover all dates. On Windows the class list
+comes in, inactive classes included, and the Journal's **Class** column gives each line its class
+(see [Classes](#classes)). QuickBooks for Mac's Journal window has no Class column, so there only
+the class list comes in.
 
 ### QuickBooks Desktop for Mac
 
@@ -276,6 +280,8 @@ General Ledger, not both: each holds every transaction.
   reports don't say which invoice a payment paid, so payments apply to the customer's oldest open
   invoices, bill payments to the vendor's oldest open bills, and deposits to undeposited payments of
   the same amount.
+- **Classes:** when the report has a **Class** column, each line keeps its class, and the classes
+  are added when you post (see [Classes](#classes)).
 - **Several journals** (one per year, say) can be chosen together. With **Trans #**, a transaction
   in two of them is read once; without it, make sure their dates don't overlap.
 
@@ -358,8 +364,9 @@ installed? Export from my installed QuickBooks** below the file box instead: see
 3. For each source account, choose a LocalBooks account under **Post to this LocalBooks account**.
    Or click **Match existing accounts and create the rest** to map by name and create what's missing.
    Every account must have a LocalBooks account before you can post.
-4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**.
-   It matches existing records by name and adds the rest. Price levels come in with them (a
+4. If the file has customers, vendors and items, click **Bring in customers, vendors and items**
+   (**…, items and classes** when it has classes). It matches existing records by name and adds
+   the rest; classes are added as described under [Classes](#classes). Price levels come in with them (a
    level with the same name as one you already have is left as it is), and the customers it adds
    get their default price level. Each level it creates is recorded in the audit trail.
 
@@ -376,6 +383,24 @@ installed? Export from my installed QuickBooks** below the file box instead: see
 2. Click **Bring in … transactions…** (Full) or **Post … entries…** (Journal), check the count in the
    confirmation, and confirm.
 3. Compare the account balances with a trial balance from the original program.
+
+### Classes
+
+When the file has classes, posting brings them in, in either kind of import. A QuickBooks Desktop
+company file (`.qbw`) or backup (`.qbb`) brings its class list and each line's class; so do IIF
+files, report exports with a **Class** column, and QuickBooks still installed on Windows.
+
+- Each class matches a LocalBooks class with the same name (ignoring capitals) under the same
+  parent, or is created. Subclasses keep their parent: `Construction:Remodel` comes in as
+  **Remodel** under **Construction**.
+- Every line keeps its class, on the journal entry and, in a full import, on the invoice, bill,
+  check or deposit line too. **Profit & Loss by Class** then shows the same split as before.
+- Classes hidden in the original program come in inactive. They stay on the lines that use them.
+- **Track classes on transactions** (Settings › Preferences › Class tracking) turns on, and the
+  message after posting says so. Step 2 shows how many classes the file has.
+
+**Reverse posted entries…** or **Reverse added lists…** makes the classes the import created
+inactive. **Start over…** removes them with everything else.
 
 ### Older files that only yield invoice lines
 

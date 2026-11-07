@@ -57,6 +57,7 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
 
     // The invoice can still be paid; the credit counts toward what is paid.
     let pay = crate::invoices::PaymentInput {
+        payment_method_id: None,
         invoice_id: inv,
         deposit_account_id: checking,
         payment_date: d(7),

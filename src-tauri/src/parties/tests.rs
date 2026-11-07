@@ -11,6 +11,10 @@ async fn protected_tax_ids_need_the_key_to_see_or_change() {
     drop(conn);
     let staples = crate::expenses::create_vendor(&pool, "Staples", None).await.unwrap();
     let input = |tax_id: Option<&str>, keep: bool| PartyDetailsInput {
+        terms_id: None,
+        customer_type_id: None,
+        job_type_id: None,
+        vendor_type_id: None,
         name: "Staples".into(),
         company_name: None,
         email: None,
@@ -53,6 +57,10 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap();
     crate::sales::create_customer(&pool, "Globex", None).await.unwrap();
     let input = |name: &str| PartyDetailsInput {
+        terms_id: None,
+        customer_type_id: None,
+        job_type_id: None,
+        vendor_type_id: None,
         name: name.into(),
         company_name: Some(" Acme Corp ".into()),
         email: Some("ap@acme.test".into()),

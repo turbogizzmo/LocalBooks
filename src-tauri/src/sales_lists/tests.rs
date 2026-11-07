@@ -160,6 +160,7 @@ async fn sales_by_rep_totals_invoices_and_receipts() {
     crate::sales::post_sales_receipt(
         &pool,
         crate::sales::SalesReceiptInput {
+            payment_method_id: None,
             customer_name: None,
             receipt_date: d(2),
             deposit_account_id: checking,
@@ -222,6 +223,7 @@ async fn carried_details_survive_later_list_changes() {
         custom_fields: vec![FieldValue { field_id: po.id, value: "77".into() }],
         // The customer has no addresses, so the stored copies are blank.
         header: crate::sales_header::SalesHeader { bill_to: Some(String::new()), ship_to: Some(String::new()), ..Default::default() },
+        ..Default::default()
     };
     let estimate_input = || crate::estimates::EstimateInput {
         customer_name: "Initech".into(),

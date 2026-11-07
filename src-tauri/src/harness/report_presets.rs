@@ -26,11 +26,11 @@ use crate::sales::SalesLineInput;
 /// The date the reports run as of (stands in for "today").
 const TODAY: (i32, u32, u32) = (2025, 12, 31);
 
-fn today() -> NaiveDate {
+pub(super) fn today() -> NaiveDate {
     d(TODAY.0, TODAY.1, TODAY.2)
 }
 
-async fn company() -> SqlitePool {
+pub(super) async fn company() -> SqlitePool {
     let pool = harbor_lane().await;
     let p = &pool;
     let sales = account(p, "4000").await;
@@ -87,6 +87,7 @@ async fn company() -> SqlitePool {
     let bill = crate::expenses::post_vendor_bill(
         p,
         BillInput {
+            terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),
             bill_date: d(2025, 11, 10),
@@ -376,7 +377,7 @@ async fn presets() {
 
 /// The workbook the screen's Export to Excel saves (`reportExports` in `CustomReport.jsx`):
 /// quantity columns become plain numbers, every other cell goes as the engine returned it.
-fn excel(title: &str, report: &CustomReport) -> Vec<u8> {
+pub(super) fn excel(title: &str, report: &CustomReport) -> Vec<u8> {
     let columns: Vec<Value> = report
         .columns
         .iter()
@@ -588,4 +589,27 @@ async fn added_presets_tie_out() {
     let by_vendor = run(&pool, &preset("transaction-list-vendor")).await;
     assert!(by_customer.line_count > 0 && by_vendor.line_count > 0);
     assert!(by_customer.line_count + by_vendor.line_count <= all.line_count);
+}
+
+#[tokio::test]
+async fn net_income_and_rep_details_tie_out() {
+    let pool = company().await;
+    let preset = |id: &str| year(custom_reports::presets().into_iter().find(|p| p.id == id).unwrap_or_else(|| panic!("preset {id}")).settings);
+
+    // Net Income Detail: the TOTAL row is the year's net income on the Profit and Loss.
+    let report = run(&pool, &preset("net-income-detail")).await;
+    let amount = column(&report, "Amount");
+    let pl = crate::statements::profit_and_loss(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
+    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), pl.net_income_cents);
+
+    // Sales by Rep Detail: each rep's subtotal (and the total) is the Sales by Rep Summary's.
+    let report = run(&pool, &preset("sales-rep-detail")).await;
+    let amount = column(&report, "Amount");
+    let summary = crate::report_center::sales_by_rep(&pool, d(2025, 1, 1), d(2025, 12, 31)).await.unwrap();
+    let mut got: Vec<i64> = report.rows.iter().filter(|r| r.kind == RowKind::Subtotal).map(|r| cents(&r.cells[amount])).collect();
+    let mut want: Vec<i64> = summary.rows.iter().map(|r| r.amount_cents).collect();
+    got.sort();
+    want.sort();
+    assert_eq!(got, want);
+    assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), summary.total_cents);
 }
