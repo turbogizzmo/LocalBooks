@@ -18,7 +18,7 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     expect(await tableRow('1003')).toContain('$134.52');
     await click($('//button[@aria-label="Actions for invoice 1003"]'));
     await click($('//*[@role="menu"]//button[normalize-space()="Edit…"]'));
-    await click(button('Save changes'));
+    await click(button('Save & New'));
     await $('//*[@role="status"][contains(., "replaced")]').waitForDisplayed();
     // The edited invoice is posted under the next number, for the same total, tax included.
     expect(await tableRow('1007')).toContain('$134.52');

@@ -40,7 +40,7 @@ describe('From no users to a View only user', () => {
     await type($('[data-row="0"] [data-col="description"]'), 'End-to-end consulting');
     await type($('[data-row="0"] [data-col="qty"]'), '2');
     await type($('[data-row="0"] [data-col="rate"]'), '150');
-    await click(button('Save & Post to Ledger'));
+    await click(button('Save & New'));
     await notice('success', 'for E2E Customer posted').waitForDisplayed();
     // Listed with its total: 2 × 150.00.
     const [, customer, , , total] = await tableRow('E2E Customer');
