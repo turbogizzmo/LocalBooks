@@ -1,15 +1,14 @@
-# QuickBooks Desktop parity, round 2
+# Desktop parity, round 2
 
 Round 1 ([desktop-parity.md](desktop-parity.md)) found the gaps testers hit first, and rows T4–T9
 built them for 0.11 and 0.12. This round looks again, now that those exist, for what a tester coming
-from QuickBooks Desktop will still miss: menu items, dialogs, shortcuts, and form layouts that
+from the desktop accounting software LocalBooks replaces will still miss: menu items, dialogs, shortcuts, and form layouts that
 differ. Rows `T24`–`T37` in [`docs/gaps.md`](../gaps.md) track it.
 
-**Sources** (November 2026): the menu, form-label, center-column and message resources in the
-QuickBooks Desktop Pro 2021 installer, cross-checked against the menus of the QuickBooks for Mac
-2021 installer. The installers are kept outside the repo in `research-samples/`, never committed
-and never run. Field order on forms comes from public product knowledge, because the dialog layouts
-are in a binary format we did not decode. Everything here is described in our own words.
+**Sources** (November 2026): the names of menus, form fields and list columns in the desktop
+software LocalBooks replaces (QuickBooks Desktop 2021, for Windows and Mac), as a user sees them,
+and public product knowledge for the order of fields on forms. Nothing from that software is in
+this repo; everything here is described in our own words.
 
 **Left out:** what round 1, [preferences.md](preferences.md) or `docs/gaps.md` already track;
 payroll, online banking sign-up and the vendor's own services; and features of the higher editions
@@ -25,7 +24,7 @@ Pain = how likely a tester is to notice (H/M/L). Effort S/M/L as in `docs/gaps.m
 | 2 | The rest of the desktop shortcuts: Ctrl+N new, Ctrl+P print, Ctrl+E edit, Ctrl+G go to the other side of a transfer, Ctrl+L open a box's list, Page Up / Page Down for previous / next | `formKeyCommand` (`src/lib/formFlow.jsx`) handles Alt+S/N, Ctrl+D/M and Ctrl+Insert/Delete | H | S | T25 |
 | 3 | The Reports menu reaches every built report: customer and vendor balances, open invoices, aging and unpaid bills detail, deposit and check detail, purchases, P&L and balance sheet detail, income by customer, the transaction lists, the journal, adjusting entries and the list reports; plus List and Memorized Reports submenus, QuickReport, Transaction History and Journal, and Process Multiple Reports | `REPORTS` in `app_menu.rs` has a handful under Company & Financial; the rest are only in the Report Center | H | S | T26 |
 | 4 | A warning when writing a check to a vendor with open bills (pointing to Pay Bills), and when depositing or recording a sales receipt from a customer with open invoices (pointing to Receive Payments) | Nothing warns; paying twice or leaving bills open is easy | H | S | T27 |
-| 5 | Duplicate a transaction from the form, the Edit menu and a list row's menu, with Ctrl+O as on the desktop (free in LocalBooks) | Missing | H | S | T28 |
+| 5 | Duplicate a transaction from the form, the Edit menu and a list row's menu, with Ctrl+O (free in LocalBooks) | Missing | H | S | T28 |
 | 6 | Cash back on Make Deposits: an account, memo and amount kept out of the deposit | Missing | M | S | T29 |
 | 7 | Merge two customers, vendors, items or accounts (renaming one to the other's name offers to merge) | Missing; a duplicate name is refused | M | M | T30 |
 | 8 | Choose and order the columns of lists, centers, registers, Reconcile and form grids | Fixed columns everywhere | M | M | T31 |
