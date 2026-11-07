@@ -32,8 +32,9 @@ voided, and you can revalue that date again.
 
 LocalBooks can suggest exchange rates for you. It's **off** until you turn it on.
 
-1. Go to **Settings › Preferences Console**.
-2. Under **Accounting & tax**, check **Look up daily exchange rates**.
+1. Go to **Settings › Preferences Console**, click **Multiple Currencies**, then **Company
+   Preferences**.
+2. Check **Look up daily exchange rates**.
 
 From then on, when you pick a foreign currency on an invoice, expense or check, receive a payment
 on a foreign-currency invoice, or revalue, the rate field is filled with the

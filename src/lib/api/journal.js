@@ -1,5 +1,6 @@
 // Journal entries, voiding, the journal register and the audit log.
 import { invoke } from '@tauri-apps/api/core';
+import { recordTransaction } from '../confirmable.js';
 
 export default {
   voidTransaction: (journalEntryId) => invoke('void_transaction', { journalEntryId }),
@@ -7,5 +8,5 @@ export default {
   getJournalEntryLines: (journalEntryId) => invoke('get_journal_entry_lines', { journalEntryId }),
   listAuditLog: () => invoke('list_audit_log', { limit: 1000 }),
   verifyLedgerIntegrity: () => invoke('verify_ledger_integrity'),
-  postJournalEntry: (entry, adjusting = false) => invoke('post_journal_entry', { entry, adjusting }),
+  postJournalEntry: (entry, adjusting = false) => recordTransaction('post_journal_entry', { entry, adjusting }),
 };

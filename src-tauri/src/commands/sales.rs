@@ -45,8 +45,11 @@ pub async fn post_sales_receipt(
     app: AppHandle,
     db: State<'_, Db>,
     input: SalesReceiptInput,
+    confirmed: Option<Vec<String>>,
 ) -> Result<SalesReceiptSummary, String> {
-    let receipt = sales::post_sales_receipt(&db.pool().await, input).await?;
+    let pool = db.pool().await;
+    guards::check(&pool, guards::dated(input.receipt_date), confirmed.as_deref()).await?;
+    let receipt = sales::post_sales_receipt(&pool, input).await?;
     notify(&app);
     Ok(receipt)
 }

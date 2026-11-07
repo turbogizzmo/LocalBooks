@@ -150,7 +150,7 @@ corrections are reviewed rather than automatic.
 
 ### Closing date
 
-*Settings › Preferences Console › Closing date* locks the books through a date. Entries dated on or
+*Settings › Preferences Console › Accounting › Closing date* locks the books through a date. Entries dated on or
 before it cannot be posted, from any screen. Voids are blocked too, because a reversal carries the
 original date. The ledger checks this before every post, and a database trigger enforces it as a
 backstop. Moving or removing the date requires the passcode, which is stored as a salted
@@ -295,7 +295,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
 | Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
-| Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar; General (my) preferences such as Enter moving between fields and the date new transactions start on | [guide](docs/guide/getting-started.md#set-how-typing-works-general-preferences) |
+| Preferences | Settings › Preferences Console (Edit › Preferences) | Categories with My and Company tabs; company details, logo, fiscal year, currencies, tax calendar; warnings before saving (duplicate check and bill numbers, far-off dates, Retained Earnings) with Save anyway; typing amounts without a decimal point | [guide](docs/guide/getting-started.md#find-your-way-around-preferences) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
 | Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |

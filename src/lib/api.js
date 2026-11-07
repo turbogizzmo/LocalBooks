@@ -36,6 +36,14 @@ export async function printDocument(title = null) {
 /** Backend errors look like "JE_UNBALANCED: total debits ..."; show the human part. */
 export function errorText(err) {
   const text = typeof err === 'string' ? err : (err?.message ?? String(err));
+  // A guard's warnings (see lib/confirmable.js) read as their messages.
+  if (text.startsWith('NEEDS_CONFIRMATION: ')) {
+    try {
+      return JSON.parse(text.slice(20)).warnings.map((w) => w.message).join(' ');
+    } catch {
+      // fall through to the plain text
+    }
+  }
   return text.replace(/^[A-Z][A-Z0-9_]*: /, '');
 }
 

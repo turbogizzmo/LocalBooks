@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { errorText } from '../lib/api.js';
+import { myPreferences } from '../lib/myPreferences.js';
 
 /**
  * Small ▾ action menu for register rows. Items with `confirm` open a blocking confirmation dialog
  * before running; errors from the action are shown inside the dialog.
  *
- * item: { label, onSelect: async () => void, danger?, disabled?, hint?, confirm?: { title, body, confirmLabel } }
+ * item: { label, onSelect: async () => void, danger?, disabled?, hint?, confirm?: { title, body, confirmLabel, unless? } }
+ * `confirm.unless()` returning true skips the question (a My Preference turned off); the dialog
+ * still opens to show the action's progress and any error.
  */
 export default function RowMenu({ items, label = 'Actions' }) {
   const [open, setOpen] = useState(false);
@@ -57,7 +60,7 @@ export default function RowMenu({ items, label = 'Actions' }) {
 
   const choose = (item) => {
     setOpen(false);
-    if (item.confirm) setPending(item);
+    if (item.confirm) setPending({ ...item, skipQuestion: Boolean(item.confirm.unless?.()) });
     else item.onSelect();
   };
 
@@ -109,6 +112,16 @@ export function ConfirmDialog({ item, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const cancelRef = useRef(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (item.skipQuestion && !started.current) {
+      started.current = true;
+      confirm();
+    }
+    // Runs once, when the dialog opens without asking.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     cancelRef.current?.focus();
@@ -170,6 +183,7 @@ export function voidItem({ journalEntryId, voided, description, onVoid }) {
       title: 'Void this transaction?',
       body: `${description} A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
       confirmLabel: 'Yes, void it',
+      unless: () => !myPreferences().warnBeforeVoiding,
     },
     onSelect: () => onVoid(journalEntryId),
   };
