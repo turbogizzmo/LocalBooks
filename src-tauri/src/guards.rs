@@ -347,6 +347,7 @@ pub fn dated(date: NaiveDate) -> Posting<'static> {
 }
 
 /// A new invoice or sales receipt: its date, and whether the customer has overdue invoices.
+#[cfg(test)]
 pub fn sale(date: NaiveDate, customer_name: &str) -> Posting<'_> {
     Posting { date: Some(date), customer: Some(customer_name), ..Default::default() }
 }
