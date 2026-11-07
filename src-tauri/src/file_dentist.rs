@@ -318,7 +318,8 @@ async fn check_stored_totals(pool: &SqlitePool) -> Result<CheckResult, String> {
             "Invoice",
             "SELECT CAST(i.invoice_number AS TEXT), i.amount_paid_cents,
                     COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE invoice_id = i.id AND is_voided = 0), 0)
-                  + COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS expected
+                  + COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0)
+                  - COALESCE((SELECT SUM(amount_cents) FROM bounced_checks WHERE invoice_id = i.id AND is_voided = 0), 0) AS expected
              FROM invoices i WHERE i.amount_paid_cents <> expected ORDER BY i.id",
         ),
         (
