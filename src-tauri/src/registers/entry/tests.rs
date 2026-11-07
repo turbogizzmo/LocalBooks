@@ -113,6 +113,7 @@ async fn transaction_history_links_an_invoice_its_payment_and_the_deposit() {
     .unwrap();
     let invoice = crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
     let pay = |cents| crate::invoices::PaymentInput {
+        discount_cents: 0,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: undeposited,

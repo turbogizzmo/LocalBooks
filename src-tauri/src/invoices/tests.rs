@@ -23,6 +23,7 @@ fn d(day: u32) -> NaiveDate {
 
 fn payment(invoice_id: i64, account: i64, day: u32, cents: i64) -> PaymentInput {
     PaymentInput {
+        discount_cents: 0,
         payment_method_id: None,
         invoice_id,
         deposit_account_id: account,
@@ -293,6 +294,7 @@ async fn foreign_invoice_books_home_ar_and_payments_realize_fx() {
     assert_eq!((balance(&pool, ar).await, balance(&pool, services).await), (108_000, 108_000));
 
     let pay = |day, cents, rate| PaymentInput {
+        discount_cents: 0,
         payment_method_id: None,
         invoice_id: invoice.id,
         deposit_account_id: checking,
@@ -391,13 +393,13 @@ async fn foreign_payment_deposits_its_home_amount() {
     .unwrap();
     record_payment(
         &pool,
-        PaymentInput { payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .expect_err("a foreign payment needs its own rate");
     record_payment(
         &pool,
-        PaymentInput { payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: undeposited, payment_date: d(5), amount_cents: 50_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_270_000) },
     )
     .await
     .unwrap();

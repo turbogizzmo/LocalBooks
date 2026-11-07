@@ -411,6 +411,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let result = crate::invoices::record_payment(
                 pool,
                 PaymentInput {
+                    discount_cents: 0,
                     payment_method_id: None,
                     invoice_id,
                     deposit_account_id: deposit_account,

@@ -29,7 +29,7 @@ async fn discounts_statements_and_1099s() {
     let discounts: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE name = 'Discounts Given'").fetch_one(&pool).await.unwrap();
     assert_eq!(balance(&pool, discounts).await, 3_000);
 
-    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 10_000, payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
+    crate::invoices::record_payment(&pool, crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: inv.id, deposit_account_id: checking, payment_date: d(3, 20), amount_cents: 10_000, payment_method: "CHECK".into(), reference: Some("1001".into()), exchange_rate_e6: None }).await.unwrap();
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");

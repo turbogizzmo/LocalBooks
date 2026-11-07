@@ -84,7 +84,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64
 async fn receive(pool: &SqlitePool, invoice_id: i64, date: NaiveDate, amount_cents: i64, deposit_account_id: i64, exchange_rate_e6: Option<i64>) {
     crate::invoices::record_payment(
         pool,
-        PaymentInput { payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id, payment_date: date, amount_cents, payment_method: "CHECK".into(), reference: None, exchange_rate_e6 },
     )
     .await
     .unwrap_or_else(|e| panic!("payment on invoice {invoice_id} on {date}: {e}"));

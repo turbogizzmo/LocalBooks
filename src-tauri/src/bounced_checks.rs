@@ -102,7 +102,7 @@ const CANDIDATES: &str = "
     JOIN chart_of_accounts pa ON pa.id = p.deposit_account_id
     LEFT JOIN deposit_lines dl ON dl.invoice_payment_id = p.id AND dl.is_voided = 0
     LEFT JOIN deposits d ON d.id = dl.deposit_id
-    WHERE p.is_voided = 0 AND p.journal_entry_id IS NOT NULL AND i.is_voided = 0 AND i.currency_code IS NULL
+    WHERE p.is_voided = 0 AND p.journal_entry_id IS NOT NULL AND i.is_voided = 0 AND i.currency_code IS NULL AND p.discount_cents = 0
       AND (pa.account_type = 'BANK' OR d.id IS NOT NULL)
       AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.invoice_payment_id = p.id AND b.is_voided = 0)
     UNION ALL
@@ -159,7 +159,7 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
     let Some((_, date, amount, bank)) = row else {
         return Err(match kind {
             "PAYMENT" | "DEPOSIT_LINE" => {
-                "BOUNCE_UNAVAILABLE: that payment can't be recorded as bounced: it is voided, already bounced, still in Undeposited Funds (void it instead) or in a foreign currency".into()
+                "BOUNCE_UNAVAILABLE: that payment can't be recorded as bounced: it is voided, already bounced, still in Undeposited Funds (void it instead), took an early-payment discount (void it instead) or in a foreign currency".into()
             }
             other => format!("BOUNCE_BAD_KIND: unknown kind '{other}'"),
         });

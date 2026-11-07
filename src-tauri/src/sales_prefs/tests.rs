@@ -76,17 +76,17 @@ async fn receive_payments_applies_by_the_company_preference() {
     let older = invoice(&pool, "Acme", 10_000, d(9, 1), d(9, 30)).await;
     let newer = invoice(&pool, "Acme", 4_000, d(10, 1), d(10, 31)).await;
     invoice(&pool, "Globex", 4_000, d(9, 1), d(9, 30)).await;
-    let applied = |id, cents| AppliedAmount { document_id: id, amount_cents: cents };
+    let applied = |id, cents| AppliedAmount { document_id: id, amount_cents: cents, discount_cents: 0 };
 
     assert_eq!(preferences::get(&pool, AUTO_APPLY).await.unwrap(), "exact", "on, with exact matches first, by default");
-    assert_eq!(payment_application(&pool, "acme", None, 4_000, None).await.unwrap(), vec![applied(newer, 4_000)]);
-    assert_eq!(payment_application(&pool, "Acme", None, 12_000, None).await.unwrap(), vec![applied(older, 10_000), applied(newer, 2_000)]);
+    assert_eq!(payment_application(&pool, "acme", None, 4_000, None, None).await.unwrap(), vec![applied(newer, 4_000)]);
+    assert_eq!(payment_application(&pool, "Acme", None, 12_000, None, None).await.unwrap(), vec![applied(older, 10_000), applied(newer, 2_000)]);
     preferences::set(&pool, AUTO_APPLY, "oldest").await.unwrap();
-    assert_eq!(payment_application(&pool, "Acme", None, 4_000, None).await.unwrap(), vec![applied(older, 4_000)]);
+    assert_eq!(payment_application(&pool, "Acme", None, 4_000, None, None).await.unwrap(), vec![applied(older, 4_000)]);
     preferences::set(&pool, AUTO_APPLY, "off").await.unwrap();
-    assert!(payment_application(&pool, "Acme", None, 4_000, None).await.unwrap().is_empty());
-    assert_eq!(payment_application(&pool, "Acme", None, 4_000, Some("exact")).await.unwrap(), vec![applied(newer, 4_000)], "the Auto Apply button still applies");
-    assert!(payment_application(&pool, "Acme", Some("EUR"), 4_000, None).await.unwrap().is_empty(), "only invoices in the payment's currency");
+    assert!(payment_application(&pool, "Acme", None, 4_000, None, None).await.unwrap().is_empty());
+    assert_eq!(payment_application(&pool, "Acme", None, 4_000, Some("exact"), None).await.unwrap(), vec![applied(newer, 4_000)], "the Auto Apply button still applies");
+    assert!(payment_application(&pool, "Acme", Some("EUR"), 4_000, None, None).await.unwrap().is_empty(), "only invoices in the payment's currency");
     assert!(preferences::set(&pool, AUTO_APPLY, "newest").await.unwrap_err().starts_with("PREF_BAD_AUTO_APPLY"));
 }
 
@@ -327,4 +327,151 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
     let (reference, total): (Option<String>, i64) = sqlx::query_as("SELECT reference, total_cents FROM vendor_credits").fetch_one(&pool).await.unwrap();
     assert_eq!((reference.as_deref(), total), (Some("Discount"), 1_000), "the discount is posted as a vendor credit to the discount account");
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 11)).await.unwrap().discounts.is_empty(), "never twice");
+}
+
+async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDate, terms_id: Option<i64>) -> i64 {
+    let income = account(pool, "4100").await;
+    let input = InvoiceInput {
+        customer_name: customer.into(),
+        issue_date: issued,
+        due_date: issued + Duration::days(30),
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false }],
+        currency: None,
+        tax_rate_id: None,
+        discount_cents: 0,
+        details: crate::sales_lists::SalesDetails { terms_id, ..Default::default() },
+    };
+    create_and_post_invoice(pool, input).await.expect("invoice posts").id
+}
+
+/// A/R on the books, the aging, the open invoices and the customer's statement (when `customer_id`
+/// isn't 0) all agree.
+async fn assert_receivables_tie(pool: &SqlitePool, customer_id: i64, expected: i64) {
+    let ledger: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) FROM v_posted_lines l JOIN chart_of_accounts a ON a.id = l.account_id WHERE a.account_type = 'ACCOUNTS_RECEIVABLE'",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let open: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(total_cents - amount_paid_cents), 0) FROM invoices WHERE is_voided = 0").fetch_one(pool).await.unwrap();
+    let aging = crate::invoices::ar_aging(pool, d(12, 31)).await.unwrap().total_cents;
+    // A voided payment's reversing entry has no customer on the statement yet (see docs/gaps.md),
+    // so after a void the statement is left out.
+    let statement = match customer_id {
+        0 => expected,
+        id => crate::workflows::customer_statement(pool, id, d(1, 1), d(12, 31)).await.unwrap().closing_balance_cents,
+    };
+    assert_eq!((ledger, open, aging, statement), (expected, expected, expected, expected), "A/R, open invoices, aging and the statement tie out");
+}
+
+async fn net_cents(pool: &SqlitePool, account_id: i64) -> i64 {
+    sqlx::query_scalar("SELECT COALESCE(SUM(debit_cents - credit_cents), 0) FROM v_posted_lines WHERE account_id = ?1").bind(account_id).fetch_one(pool).await.unwrap()
+}
+
+#[tokio::test]
+async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_entry() {
+    use crate::invoices::{record_payments, PaymentInput};
+    let pool = test_pool().await;
+    let bank = account(&pool, "1010").await;
+    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE is_system = 1 AND account_type = 'OTHER_CURRENT_ASSET' ORDER BY id LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let discounts: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('4995', 'Sales Discounts', 'INCOME') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let early = invoice_on_terms(&pool, "Acme", 50_000, d(10, 1), Some(terms)).await;
+    let late = invoice_on_terms(&pool, "Acme", 30_000, d(9, 1), Some(terms)).await;
+    let part_paid = invoice_on_terms(&pool, "Acme", 20_000, d(10, 1), Some(terms)).await;
+    let no_terms = invoice_on_terms(&pool, "Acme", 10_000, d(10, 1), None).await;
+    let customer: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
+    let pay = |invoice_id, amount_cents, discount_cents, day| PaymentInput {
+        invoice_id,
+        deposit_account_id: undeposited,
+        payment_date: d(10, day),
+        amount_cents,
+        payment_method: "CHECK".into(),
+        payment_method_id: None,
+        reference: Some("5150".into()),
+        exchange_rate_e6: None,
+        discount_cents,
+    };
+    record_payments(&pool, vec![pay(part_paid, 5_000, 0, 2)]).await.unwrap();
+    assert_receivables_tie(&pool, customer, 105_000).await;
+
+    // Preferences › Payments: off until there is an income (or expense) account for discounts.
+    let ids = [early, late, part_paid, no_terms];
+    assert_eq!(payment_discounts(&pool, &ids, d(10, 11)).await.unwrap(), PaymentDiscounts::default());
+    let err = record_payments(&pool, vec![pay(early, 49_000, 1_000, 11)]).await.unwrap_err();
+    assert!(err.starts_with("INV_NO_DISCOUNT_ACCOUNT"), "{err}");
+    assert!(preferences::set(&pool, PAYMENT_DISCOUNT_ACCOUNT, &bank.to_string()).await.unwrap_err().starts_with("PREF_BAD_DISCOUNT_ACCOUNT"), "not a bank account");
+    preferences::set(&pool, PAYMENT_DISCOUNT_ACCOUNT, &discounts.to_string()).await.unwrap();
+    preferences::set(&pool, PAYMENT_AUTO_DISCOUNTS, "true").await.unwrap();
+
+    // Within the date, with nothing paid yet: 2% of 500.00 through the 10th day (Oct 11).
+    let offered = payment_discounts(&pool, &ids, d(10, 11)).await.unwrap();
+    assert!(offered.available && offered.automatic);
+    assert_eq!(offered.offered, vec![OfferedDiscount { invoice_id: early, amount_cents: 1_000 }], "none after the date, on a part-paid invoice or without terms");
+    assert!(payment_discounts(&pool, &ids, d(10, 12)).await.unwrap().offered.is_empty(), "the discount has ended");
+    // Auto Apply: 490.00 received pays the early invoice in full with its discount.
+    let plan = payment_application(&pool, "Acme", None, 49_000, Some("exact"), Some(d(10, 11))).await.unwrap();
+    assert_eq!(plan, vec![AppliedAmount { document_id: early, amount_cents: 49_000, discount_cents: 1_000 }]);
+    let partial = payment_application(&pool, "Acme", None, 20_000, Some("oldest"), Some(d(10, 11))).await.unwrap();
+    assert!(partial.iter().all(|a| a.discount_cents == 0), "money that doesn't pay the rest in full takes no discount: {partial:?}");
+
+    // Refused: after the date, on a part-paid invoice, more than offered, more than owed.
+    for (input, code) in [
+        (pay(late, 29_400, 600, 11), "INV_NO_DISCOUNT"),
+        (pay(early, 49_000, 1_000, 12), "INV_NO_DISCOUNT"),
+        (pay(part_paid, 14_700, 300, 11), "INV_NO_DISCOUNT"),
+        (pay(early, 48_900, 1_100, 11), "INV_BAD_DISCOUNT"),
+        (pay(early, 49_001, 1_000, 11), "INV_OVERPAYMENT"),
+    ] {
+        let err = record_payments(&pool, vec![input]).await.unwrap_err();
+        assert!(err.starts_with(code), "{code}: {err}");
+    }
+
+    record_payments(&pool, vec![pay(early, 49_000, 1_000, 11)]).await.unwrap();
+    let detail = invoice_detail(&pool, early).await.unwrap();
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.balance_cents), ("PAID", 0), "closed for payment plus discount");
+    assert_eq!((detail.payments[0].amount_cents, detail.payments[0].discount_cents), (50_000, 1_000));
+    let entry = detail.payments[0].journal_entry_id.unwrap();
+    let lines: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT account_id, debit_cents, credit_cents FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY id")
+        .bind(entry)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let ar: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'ACCOUNTS_RECEIVABLE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    assert_eq!(lines, vec![(undeposited, 49_000, 0), (discounts, 1_000, 0), (ar, 0, 50_000)], "one entry: cash and discount against A/R");
+    assert_eq!(net_cents(&pool, discounts).await, 1_000);
+    assert_receivables_tie(&pool, customer, 55_000).await;
+    assert!(payment_discounts(&pool, &[early], d(10, 11)).await.unwrap().offered.is_empty(), "never twice");
+
+    // Only the money reaches Undeposited Funds and the bank deposit.
+    let waiting = crate::banking::list_undeposited(&pool).await.unwrap();
+    let item = waiting.iter().find(|w| w.amount_cents == 49_000).expect("the discounted payment waits to be deposited for 490.00");
+    let deposit = crate::banking::DepositInput {
+        bank_account_id: bank,
+        deposit_date: d(10, 12),
+        memo: None,
+        items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: item.id }],
+        other_lines: Vec::new(),
+    };
+    let deposit_id = crate::banking::post_bank_deposit(&pool, deposit).await.unwrap();
+    assert_eq!(net_cents(&pool, undeposited).await, 5_000, "only the part payment is still waiting");
+
+    // Voiding the payment (after its deposit) reverses the discount with it and reopens the invoice.
+    let deposit_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(&pool).await.unwrap();
+    crate::ledger::void_transaction(&pool, deposit_entry).await.unwrap();
+    crate::ledger::void_transaction(&pool, entry).await.unwrap();
+    let detail = invoice_detail(&pool, early).await.unwrap();
+    assert_eq!((detail.invoice.status.as_str(), detail.invoice.amount_paid_cents), ("UNPAID", 0));
+    assert_eq!(net_cents(&pool, discounts).await, 0, "the discount is reversed");
+    assert_receivables_tie(&pool, 0, 105_000).await;
+    assert_eq!(payment_discounts(&pool, &[early], d(10, 11)).await.unwrap().offered.len(), 1, "offered again once the payment is voided");
 }
