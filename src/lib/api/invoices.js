@@ -4,7 +4,7 @@ import { recordTransaction } from '../confirmable.js';
 
 export default {
   listInvoices: () => invoke('list_invoices'),
-  createInvoice: (input) => recordTransaction('create_invoice', { input }),
+  createInvoice: (input, toBePrinted = false) => recordTransaction('create_invoice', { input, toBePrinted }),
   recordInvoicePayment: (input) => recordTransaction('record_invoice_payment', { input }),
   listInvoicePayments: (invoiceId) => invoke('list_invoice_payments', { invoiceId }),
   getArAging: () => invoke('get_ar_aging', { asOf: null }),

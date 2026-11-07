@@ -17,11 +17,18 @@ taken before you billed the work.
 
 ## Apply one payment to several invoices
 
-1. On **Sales › Invoices**, click **Receive payment** (or use **+ New › Receive Payment**).
-2. Choose the customer. Their open invoices are listed, oldest first.
+1. On **Sales › Invoices**, click **Receive Payments** in the toolbar (or use **+ New › Receive
+   Payment**).
+2. In **Received from**, choose the customer. Their open invoices are listed, oldest first, and
+   **Customer balance** shows at the top right.
 3. Type the **Amount received**. LocalBooks applies it to the oldest invoices first; adjust
-   **Amount to apply** on any row if the customer told you otherwise.
-4. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment**.
+   **Amount to apply** on any row if the customer told you otherwise. To spread the amount
+   received over the invoices again, click **Auto Apply** in the toolbar.
+4. Click how you were paid: **Cash**, **Check**, **Card** (credit or debit), **Bank / ACH** (ACH,
+   e-check or bank transfer), or **More** for **Wire** and **Other**. The chosen tile is
+   highlighted.
+5. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment** (or **Save** in
+   the toolbar). **New** in the toolbar clears the form to start over.
 
 ## Payments in another currency
 
@@ -37,6 +44,34 @@ statement. See [Bank deposits and transfers](deposits-and-transfers.md).
 > **Tip:** To undo a payment, open its **Actions** menu and choose **Void Transaction**. The invoice
 > returns to Partial or Open. A payment that is already part of a bank deposit can't be voided
 > until the deposit is voided.
+
+## Record a bounced check
+
+When the bank returns a customer's check unpaid:
+
+1. Choose **Banking › Record Bounced Check…** (or **Banking › Bounced Checks**).
+2. Under **Check that bounced**, pick the payment. Only payments that reached the bank are listed,
+   whether they were deposited straight to the bank or in a deposit from Undeposited Funds. (A
+   payment still in Undeposited Funds never reached the bank: void it instead.)
+3. Enter the **Date it bounced**, the **Bank fee** the bank charged you and the expense account for
+   it, and, if you charge the customer for the returned check, the **Customer fee** and the income
+   account for it.
+4. Click **Record Bounced Check**.
+
+LocalBooks posts one entry: Accounts Receivable goes back up by the check, and the bank goes down
+by the check plus the bank's fee (the fee goes to its expense account). The invoice the check paid
+opens again, so it shows in A/R aging and on statements from the bounce date, and the customer can
+pay it again. The customer fee goes on a new invoice, *Returned check charge*.
+
+Money from a deposit's **other funds** lines can bounce too: it goes back to the account the
+deposit credited.
+
+To undo it, open the bounced check's **Actions** menu on the Bounced Checks screen and choose
+**Void bounced check**: the bank and the fee go back, the payment counts toward the invoice again,
+and the fee invoice is voided (refused if the customer has already paid it). While a bounced check
+stands, its payment, the invoice and the deposit it was in can't be voided.
+
+Bounced sales receipts and foreign-currency payments aren't handled yet.
 
 ## Charge interest on overdue invoices (finance charges)
 

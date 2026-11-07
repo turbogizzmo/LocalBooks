@@ -3,6 +3,8 @@ import { myPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import { MemorizeDialog } from './Recurring.jsx';
 import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -98,8 +100,43 @@ function JournalForm({ accounts, onPosted, onCancel, editing = null }) {
     }
   };
 
+  const openFromList = useOpenFromList();
+  const clear = () => {
+    if (editing) return onCancel();
+    setRows([blankRow(), blankRow(), blankRow(), blankRow()]);
+    setMemo('');
+    setAdjusting(false);
+    formClass.reset();
+    setError(null);
+    dateRef.current?.focus();
+  };
+  const voidEntry = () =>
+    api.voidTransaction(editing.entry.id).then(() => {
+      onPosted(`Journal entry #${editing.entry.entryNumber} voided: a reversing entry now offsets it.`);
+      onCancel();
+    });
+
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label="Journal entry"
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({
+            onNew: clear,
+            onSave: () => save('post'),
+            busy,
+            onVoid: editing ? voidEntry : undefined,
+            voidDisabled: editing?.entry.isVoided,
+            voidConfirm: editing && {
+              title: 'Void this transaction?',
+              body: `Journal entry #${editing.entry.entryNumber}. A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+              confirmLabel: 'Yes, void it',
+            },
+          }),
+          [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy, onClick: () => save('memorize') }],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : 'Journal entry'}</h2>
         <label>

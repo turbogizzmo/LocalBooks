@@ -11,6 +11,6 @@ export default {
   payVendorBills: (inputs) => recordTransaction('pay_vendor_bills', { inputs }),
   listBillPayments: (billId) => invoke('list_bill_payments', { billId }),
   nextCheckNumber: (accountId) => invoke('next_check_number', { accountId }),
-  postExpense: (input) => recordTransaction('post_expense', { input }),
+  postExpense: (input, toBePrinted = false) => recordTransaction('post_expense', { input, toBePrinted }),
   listExpenses: () => invoke('list_expenses'),
 };
