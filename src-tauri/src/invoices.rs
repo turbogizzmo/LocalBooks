@@ -144,6 +144,10 @@ pub struct PaymentInput {
     /// Payment-date exchange rate for a foreign-currency invoice; defaults to the invoice's rate.
     #[serde(default)]
     pub exchange_rate_e6: Option<i64>,
+    /// Early-payment discount taken with this payment, on top of `amount_cents` (the money
+    /// received); at most what the invoice's terms offer on the payment date.
+    #[serde(default)]
+    pub discount_cents: i64,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -163,6 +167,8 @@ pub struct PaymentView {
     /// Home-currency cash received and A/R relieved (`None` for home-currency payments).
     pub home_amount_cents: Option<i64>,
     pub ar_relief_cents: Option<i64>,
+    /// The part of `amount_cents` taken as an early-payment discount rather than received.
+    pub discount_cents: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -436,13 +442,25 @@ pub async fn record_payment(pool: &SqlitePool, input: PaymentInput) -> Result<In
 }
 
 /// Receive Payment: applies one customer payment across several invoices. All post, or none do.
+/// A payment may take its invoice's early-payment discount (Preferences › Payments names the
+/// account it goes to).
 pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Result<usize, String> {
     if inputs.is_empty() {
         return Err("INV_NOTHING_TO_APPLY: enter an amount for at least one invoice".into());
     }
+    let discount_account = if inputs.iter().any(|i| i.discount_cents != 0) {
+        let account = crate::preferences::get(pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT)
+            .await?
+            .parse::<i64>()
+            .map_err(|_| "INV_NO_DISCOUNT_ACCOUNT: choose the account discounts go to in Preferences › Payments".to_string())?;
+        crate::sales_prefs::check_payment_discount_account(pool, account).await?;
+        Some(account)
+    } else {
+        None
+    };
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     for input in &inputs {
-        if let Err(err) = write_payment(&mut tx, input).await {
+        if let Err(err) = write_payment(&mut tx, input, discount_account).await {
             return Err(rollback(tx, err).await);
         }
     }
@@ -450,7 +468,7 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
     Ok(inputs.len())
 }
 
-async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -> Result<(), String> {
+async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {
     if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
@@ -477,10 +495,30 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     if status != "UNPAID" && status != "PARTIAL" {
         return Err(format!("INV_NOT_OPEN: invoice #{number} is {status}; only open invoices accept payments"));
     }
+    // The discount must be one the invoice's terms still offer on the payment date (nothing paid
+    // yet, on or before its last day); it is applied along with the money.
+    let discount = input.discount_cents;
+    if discount != 0 {
+        if discount < 0 {
+            return Err("INV_BAD_DISCOUNT: a discount can't be negative".into());
+        }
+        if currency_code.is_some() {
+            return Err(format!("INV_DISCOUNT_FOREIGN: invoice #{number} is in a foreign currency; take its discount with a credit memo"));
+        }
+        let offered = crate::sales_prefs::offered_invoice_discount(&mut **tx, input.invoice_id, input.payment_date).await?;
+        if offered == 0 {
+            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, or something has already been paid on it"));
+        }
+        if discount > offered {
+            return Err(format!("INV_BAD_DISCOUNT: the discount on invoice #{number} is at most {}", format_cents(offered)));
+        }
+    }
+    let applied = input.amount_cents.checked_add(discount).ok_or("INV_BAD_AMOUNT: amount out of range")?;
     let open_balance = total - paid;
-    if input.amount_cents > open_balance {
+    if applied > open_balance {
+        let with = if discount > 0 { format!(" with its {} discount", format_cents(discount)) } else { String::new() };
         return Err(format!(
-            "INV_OVERPAYMENT: payment of {} exceeds the open balance of {} on invoice #{number}",
+            "INV_OVERPAYMENT: payment of {}{with} exceeds the open balance of {} on invoice #{number}",
             format_cents(input.amount_cents),
             format_cents(open_balance)
         ));
@@ -501,7 +539,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
 
     // Home-currency effect: cash received at the payment rate, A/R relieved at the invoice's booked
     // rate (cumulatively, so the last payment clears A/R exactly), and the realized difference.
-    let new_paid = paid + input.amount_cents;
+    let new_paid = paid + applied;
     let fx = match (&currency_code, invoice_rate) {
         (Some(code), Some(_)) => {
             // No silent default to the booked rate: that would zero the realized gain or loss.
@@ -536,13 +574,13 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     let payment_id: i64 = sqlx::query_scalar(
         "INSERT INTO invoice_payments
             (invoice_id, payment_date, amount_cents, payment_method, reference, deposit_account_id,
-             exchange_rate_e6, home_amount_cents, ar_relief_cents, payment_method_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             exchange_rate_e6, home_amount_cents, ar_relief_cents, payment_method_id, discount_cents)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          RETURNING id",
     )
     .bind(input.invoice_id)
     .bind(input.payment_date)
-    .bind(input.amount_cents)
+    .bind(applied)
     .bind(method.as_deref().unwrap_or(&input.payment_method))
     .bind(reference)
     .bind(input.deposit_account_id)
@@ -550,6 +588,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     .bind(fx.map(|f| f.1))
     .bind(fx.map(|f| f.2))
     .bind(method_id)
+    .bind(discount)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -557,6 +596,16 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
     let ar_account = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
     let mut lines = Vec::with_capacity(3);
     match fx {
+        None if discount > 0 => {
+            // One entry: the money to the deposit account, the discount to the discount account,
+            // and both off A/R, so the customer's statement shows what the payment settled.
+            let account = discount_account.ok_or("INV_NO_DISCOUNT_ACCOUNT: choose the account discounts go to in Preferences › Payments")?;
+            let memo = format!("Early-payment discount on invoice #{number}");
+            let settled = format!("{} received + {} early-payment discount", format_cents(input.amount_cents), format_cents(discount));
+            lines.push(JournalLine::debit(input.deposit_account_id, input.amount_cents));
+            lines.push(JournalLine::debit(account, discount).with_memo(Some(&memo)));
+            lines.push(JournalLine::credit(ar_account, applied).with_memo(Some(&settled)));
+        }
         None => {
             lines.push(JournalLine::debit(input.deposit_account_id, input.amount_cents));
             lines.push(JournalLine::credit(ar_account, input.amount_cents));
@@ -610,7 +659,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput) -
 pub async fn list_payments(pool: &SqlitePool, invoice_id: i64) -> Result<Vec<PaymentView>, String> {
     sqlx::query_as::<_, PaymentView>(
         "SELECT id, payment_date, amount_cents, payment_method, (SELECT name FROM payment_methods WHERE id = payment_method_id) AS payment_method_name,
-                reference, deposit_account_id, journal_entry_id, is_voided, exchange_rate_e6, home_amount_cents, ar_relief_cents
+                reference, deposit_account_id, journal_entry_id, is_voided, exchange_rate_e6, home_amount_cents, ar_relief_cents, discount_cents
          FROM invoice_payments WHERE invoice_id = ?1 ORDER BY payment_date, id",
     )
     .bind(invoice_id)

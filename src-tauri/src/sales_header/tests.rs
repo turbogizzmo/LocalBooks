@@ -211,6 +211,7 @@ async fn a_paid_invoice_resaved_keeps_its_own_header() {
     crate::invoices::record_payment(
         &pool,
         crate::invoices::PaymentInput {
+            discount_cents: 0,
             payment_method_id: None,
             invoice_id: original,
             deposit_account_id: checking,
