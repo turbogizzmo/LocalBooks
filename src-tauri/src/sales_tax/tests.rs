@@ -55,6 +55,7 @@ async fn sales_tax_is_charged_reported_and_paid() {
             refund_account_id: None,
             tax_rate_id: Some(rate.id),
             lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 1_000, income_account_id: services, class_id: None, is_taxable: true }],
+            header: Default::default(),
         },
     )
     .await
@@ -192,6 +193,7 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
             refund_account_id: None,
             tax_rate_id: Some(rate.id),
             lines: vec![crate::sales::SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 10_000, income_account_id: services, class_id: None, is_taxable: true }],
+            header: Default::default(),
         },
     )
     .await

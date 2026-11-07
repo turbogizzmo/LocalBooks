@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SalesAddresses } from './SalesAddresses.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { ProfileEntrySelect } from './ProfileFields.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
@@ -10,8 +11,12 @@ import { useSalesPrefs } from '../lib/salesPrefs.js';
  * company that does not use them sees nothing; the Customer Message box is always there, with
  * "Add new" to start the list. The rep and fields fill in from the customer until the user changes
  * them. A new form starts with the company's usual Ship Via (Preferences › Sales & Customers).
+ *
+ * `addresses` is the Bill To / Ship To / P.O. No. / FOB row. The addresses fill in from the customer
+ * (a job uses its parent's when it has none) until the user edits them; the document keeps what
+ * was on the form when it was saved.
  */
-export function useSalesDetails(customerName, customers) {
+export function useSalesDetails(customerName, customers, { billLabel = 'Bill To' } = {}) {
   const reps = useLedgerQuery(api.listSalesReps).data ?? [];
   const methods = useLedgerQuery(api.listShipMethods).data ?? [];
   const allFields = useLedgerQuery(api.listCustomFields).data;
@@ -31,12 +36,35 @@ export function useSalesDetails(customerName, customers) {
   }, [prefsLoaded, defaulted, defaultShipMethodId]);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
+  const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
+  // Which address boxes the user (or a loaded document) set, so a customer change leaves them. A
+  // ref, so defaults that arrive after the user has started typing see the latest value.
+  const addressTouched = useRef({ billTo: false, shipTo: false });
+  const [refill, setRefill] = useState(0);
   const customer = (customers ?? []).find((c) => c.name.toLowerCase() === (customerName ?? '').trim().toLowerCase());
 
   useEffect(() => {
     if (!repTouched) setRepId(customer?.salesRepId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, customer?.salesRepId]);
+
+  useEffect(() => {
+    if (addressTouched.current.billTo && addressTouched.current.shipTo) return undefined;
+    let live = true;
+    const fill = (defaults) =>
+      live &&
+      setHeader((h) => ({
+        ...h,
+        billTo: addressTouched.current.billTo ? h.billTo : (defaults?.billTo ?? ''),
+        shipTo: addressTouched.current.shipTo ? h.shipTo : (defaults?.shipTo ?? ''),
+      }));
+    if (customer) api.customerSalesDefaults(customer.id).then(fill, () => {});
+    else fill(null);
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.id, refill]);
 
   useEffect(() => {
     if (formFields.length === 0) return undefined;
@@ -128,8 +156,20 @@ export function useSalesDetails(customerName, customers) {
       </>
   );
 
+  const addresses = (
+    <SalesAddresses
+      header={header}
+      billLabel={billLabel}
+      onChange={(key, value) => {
+        if (key === 'billTo' || key === 'shipTo') addressTouched.current = { ...addressTouched.current, [key]: true };
+        setHeader((h) => ({ ...h, [key]: value }));
+      }}
+    />
+  );
+
   return {
     picker,
+    addresses,
     /** The details for a form's input; spread into it. */
     payload: () => ({
       salesRepId: repId,
@@ -137,6 +177,10 @@ export function useSalesDetails(customerName, customers) {
       shipMethodId,
       customerMessageId: messageId,
       customFields: formFields.map((f) => ({ fieldId: f.id, value: (values[f.id] ?? '').trim() })).filter((f) => f.value !== ''),
+      billTo: header.billTo,
+      shipTo: header.shipTo,
+      poNumber: header.poNumber.trim() || null,
+      fob: header.fob.trim() || null,
     }),
     /** Loads a saved document's details (an edit, or an estimate becoming an invoice). */
     set: (details) => {
@@ -149,6 +193,11 @@ export function useSalesDetails(customerName, customers) {
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
       setTouched(new Set(formFields.map((f) => f.id)));
+      // A document written before forms kept addresses has none: fill from the customer.
+      const has = { billTo: details?.billTo != null, shipTo: details?.shipTo != null };
+      addressTouched.current = has;
+      setHeader({ billTo: details?.billTo ?? '', shipTo: details?.shipTo ?? '', poNumber: details?.poNumber ?? '', fob: details?.fob ?? '' });
+      if (!has.billTo || !has.shipTo) setRefill((n) => n + 1);
     },
     reset: () => {
       setRepTouched(false);
@@ -160,6 +209,9 @@ export function useSalesDetails(customerName, customers) {
       setMessageId(null);
       setValues({});
       setTouched(new Set());
+      addressTouched.current = { billTo: false, shipTo: false };
+      setHeader({ billTo: '', shipTo: '', poNumber: '', fob: '' });
+      setRefill((n) => n + 1);
     },
   };
 }

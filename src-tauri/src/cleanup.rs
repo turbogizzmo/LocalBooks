@@ -650,6 +650,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                     is_taxable: false,
                 }],
                 tax_rate_id: None,
+                header: Default::default(),
             };
             let memo_id = write_credit_memo(tx, &credit, true).await?;
             apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id: memo_id, document_id: invoice_id, amount_cents: open, applied_date: input.write_off_date }).await?;

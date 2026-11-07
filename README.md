@@ -301,6 +301,8 @@ under [`docs/guide/`](docs/guide/README.md).
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
+| Bill To / Ship To | Sales forms | Bill To, Ship To, P.O. No. and FOB on invoices, sales receipts, estimates and credit memos, kept per document and filled from the customer | [guide](docs/guide/invoices.md) |
+| Credit limits | Customers › Edit… | A customer's credit limit, contacts, shipping address and account details; invoices over the limit ask before saving | [guide](docs/guide/customers-and-products.md) |
 | QuickReport | Ctrl+Q in a register or the account, name and item lists; Ctrl+H, Ctrl+Y | A report of the selected account's, name's or item's transactions; Transaction History and Transaction Journal for one transaction | [guide](docs/guide/reports.md#quickreport-transaction-history-and-transaction-journal) |
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
@@ -554,6 +556,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
         ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
+        ├── sales_header.rs                  # Bill To / Ship To copies, P.O. No., FOB, credit limit
         ├── profile_lists.rs           # terms, payment methods, types, customer messages
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
         ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache

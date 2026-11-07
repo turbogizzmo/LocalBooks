@@ -26,7 +26,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: &str, due: &str, cent
 async fn credit_memo(pool: &SqlitePool, customer: &str, date: &str, cents: i64) -> i64 {
     let services = account(pool, "4100").await;
     let line = SalesLineInput { product_service_id: None, description: "Credit".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, class_id: None, is_taxable: false };
-    crate::credits::create_credit_memo(pool, CreditMemoInput { customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None })
+    crate::credits::create_credit_memo(pool, CreditMemoInput { customer_name: customer.into(), credit_date: d(date), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap()
         .id

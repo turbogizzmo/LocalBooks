@@ -96,6 +96,7 @@ features![
     report_export,
     revaluation,
     sales,
+    sales_header,
     sales_lists,
     sales_prefs,
     sales_tax,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { errorText } from '../lib/api.js';
 import { myPreferences } from '../lib/myPreferences.js';
 
@@ -13,6 +13,8 @@ import { myPreferences } from '../lib/myPreferences.js';
 export default function RowMenu({ items, label = 'Actions' }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, right: 0 });
+  // The button's top and bottom edges when the menu opened, to place the menu below or above it.
+  const [anchor, setAnchor] = useState({ top: 0, bottom: 0 });
   const [pending, setPending] = useState(null);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -38,9 +40,23 @@ export default function RowMenu({ items, label = 'Actions' }) {
     e.stopPropagation();
     const rect = buttonRef.current.getBoundingClientRect();
     // Fixed positioning escapes the scrolling table; anchoring the right edge keeps it on screen.
-    setPosition({ top: rect.bottom + 2, right: Math.max(4, window.innerWidth - rect.right) });
+    setAnchor({ top: rect.top, bottom: rect.bottom });
+    setPosition({ top: rect.bottom + 2, right: Math.max(4, window.innerWidth - rect.right), visibility: 'hidden' });
     setOpen((o) => !o);
   };
+
+  // Once the menu has its size: below the button when it fits, otherwise above it (rows near the
+  // bottom of the window), and never past the window's top or bottom edge, where a fixed menu
+  // could not be scrolled to.
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current) return;
+    const height = menuRef.current.offsetHeight;
+    const room = window.innerHeight - 4;
+    let top = anchor.bottom + 2;
+    if (top + height > room) top = anchor.top - 2 - height;
+    top = Math.max(4, Math.min(top, room - height));
+    setPosition((p) => ({ top, right: p.right }));
+  }, [open, anchor]);
 
   const choose = (item) => {
     setOpen(false);
@@ -68,7 +84,7 @@ export default function RowMenu({ items, label = 'Actions' }) {
         <div
           ref={menuRef}
           role="menu"
-          className="fixed z-40 min-w-[180px] max-w-[360px] rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"
+          className="fixed z-40 max-h-[calc(100vh-8px)] min-w-[180px] max-w-[360px] overflow-y-auto rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"
           style={position}
           onMouseDown={(e) => e.stopPropagation()}
         >

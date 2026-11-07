@@ -76,6 +76,7 @@ pub(super) async fn company() -> SqlitePool {
             refund_account_id: None,
             lines: vec![SalesLineInput { product_service_id: Some(prints), description: "Misprinted posters".into(), quantity_e4: 60_000, rate_cents: 2_500, income_account_id: sales, class_id: Some(studio), is_taxable: false }],
             tax_rate_id: None,
+            header: Default::default(),
         },
     )
     .await

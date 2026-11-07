@@ -146,6 +146,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
           )}
         </div>
       </div>
+      {sales.addresses}
       <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes allowZeroRate={ZERO_LINES} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>

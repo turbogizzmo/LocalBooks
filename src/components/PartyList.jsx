@@ -8,6 +8,7 @@ import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { ProfileEntrySelect, TermsSelect } from './ProfileFields.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
+import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
 import { JOB_STATUSES, useSalesPrefs } from '../lib/salesPrefs.js';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
@@ -182,7 +183,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
       api.getVendorAccountNumber(id).then((n) => setAccountNumber({ stored: n, draft: n ?? '' }), () => {});
     }
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, originalTaxId: p.taxId }),
+      (p) => setForm({ ...p, originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -218,6 +219,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         formStyleId: form.formStyleId ?? null,
         salesRepId: form.salesRepId ?? null,
         priceLevelId: form.priceLevelId ?? null,
+        ...(kind === 'customer' ? customerRecordPayload(form) : {}),
         preferredDelivery: form.preferredDelivery || null,
         jobStatus: form.jobStatus || null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
@@ -254,10 +256,15 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             {field('Company name', 'companyName')}
             {field('Email', 'email', { type: 'email' })}
             {field('Phone', 'phone', { type: 'tel' })}
-            <label className="col-span-2 flex flex-col gap-0.5">
-              <span className="font-semibold text-qb-ink-muted">{kind === 'customer' ? 'Billing address' : 'Address'}</span>
-              <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
-            </label>
+            {kind === 'customer' && <CustomerContactFields form={form} setForm={setForm} />}
+            {kind === 'customer' ? (
+              <CustomerAddressFields form={form} setForm={setForm} />
+            ) : (
+              <label className="col-span-2 flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Address</span>
+                <textarea className="qb-input h-[54px] py-1" value={form.address ?? ''} onChange={set('address')} />
+              </label>
+            )}
             <label className="flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Terms</span>
               <TermsSelect className="qb-input" value={form.termsId ?? null} onChange={(t) => setForm((f) => ({ ...f, termsId: t?.id ?? null }))} />
@@ -279,6 +286,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
                 <ProfileEntrySelect list="JOB_TYPE" noun="job type" ariaLabel="Job type" value={form.jobTypeId ?? null} onChange={(v) => setForm((f) => ({ ...f, jobTypeId: v }))} />
               </label>
             )}
+            {kind === 'customer' && <CustomerAccountFields form={form} setForm={setForm} />}
             {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
             {kind === 'vendor' && (

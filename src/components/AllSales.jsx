@@ -46,7 +46,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
-  const sales = useSalesDetails(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data, { billLabel: 'Sold To' });
 
   useEffect(() => {
     if (depositId === null && defaultDeposit !== null) setDepositId(defaultDeposit);
@@ -150,6 +150,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
           )}
         </div>
       </div>
+      {sales.addresses}
       <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
