@@ -642,18 +642,6 @@ function CurrenciesCompany({ field }) {
 // Batch 4: Sales & Customers, Jobs & Estimates, Payments, Bills, Send Forms
 // ------------------------------------------------------------------------------------------------
 
-/** A choice among fixed values. */
-const choice = (options, width = 'w-[260px]') =>
-  function Choice({ id, value, commit, invalid }) {
-    return (
-      <select id={id} className={`qb-input ${width}`} value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
-        {options.map(([v, label]) => (
-          <option key={v} value={v}>{label}</option>
-        ))}
-      </select>
-    );
-  };
-
 function ShipMethodChoice({ id, value, commit, invalid }) {
   const methods = useLedgerQuery(api.listShipMethods).data ?? [];
   return (
