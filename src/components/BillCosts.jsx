@@ -10,6 +10,19 @@ const key = (c) => `${c.source}:${c.lineId}`;
 /** Thousandths of a percent → "15", "12.5". */
 const percentText = (milli) => (milli / 1000).toLocaleString('en-US', { maximumFractionDigits: 3, useGrouping: false });
 
+/**
+ * A markup percent as the backend reads it: digits with up to 3 decimals (and an optional %), 0 to
+ * 1,000%, in thousandths of a percent; blank means the default from Preferences. `null` when invalid.
+ */
+function parseMarkup(text, fallback) {
+  const t = text.trim().replace(/%$/, '').trim();
+  if (t === '') return fallback;
+  const m = /^(\d{0,4})(?:\.(\d{0,3}))?$/.exec(t);
+  if (!m || (m[1] === '' && !m[2])) return null;
+  const milli = Number(m[1] || '0') * 1000 + Number((m[2] ?? '').padEnd(3, '0'));
+  return milli <= 1_000_000 ? milli : null;
+}
+
 /** round_half_away(amount × milli / 100,000), as the backend works it out per cost. */
 const markupOf = (cents, milli) => Math.round((cents * milli) / 100_000);
 
@@ -44,8 +57,8 @@ export default function BillCosts({ navigate }) {
   useEffect(() => setPicked(new Set(shown.map(key))), [customerId, costs.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chosen = shown.filter((c) => picked.has(key(c)));
-  const milli = Math.round(Number(markup || '0') * 1000);
-  const badMarkup = !(Number.isFinite(milli) && milli >= 0 && milli <= 1_000_000);
+  const milli = parseMarkup(markup, defaults?.markupMilliPercent ?? 0);
+  const badMarkup = milli === null;
   const subtotal = chosen.reduce((s, c) => s + c.amountCents, 0);
   const markupTotal = badMarkup ? 0 : chosen.reduce((s, c) => s + markupOf(c.amountCents, milli), 0);
   const toggle = (c) =>

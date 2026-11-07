@@ -33,7 +33,7 @@ export function recalledRows(lines, withAmounts) {
 export function useVendorRecall({ vendor, vendors, rows, enabled, kind, onRecalled }) {
   const { recallVendorTransaction: mode } = useMyPreferences();
   const done = useRef('');
-  const untouched = rows.every((r) => r.memo.trim() === '' && r.amount.trim() === '' && (r.qty ?? '').trim() === '' && !r.customerId);
+  const untouched = rows.every((r) => r.memo.trim() === '' && r.amount.trim() === '' && (r.qty ?? '').trim() === '' && (r.rate ?? '').trim() === '' && !r.customerId);
   useEffect(() => {
     if (!enabled || mode === 'off' || !untouched) return undefined;
     const known = (vendors ?? []).find((v) => sameName(v.name ?? v, vendor));
