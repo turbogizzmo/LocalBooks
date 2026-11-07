@@ -75,6 +75,26 @@ account. You can still change them on the form.
 
 To keep count of a product you stock, see [Track inventory](inventory.md).
 
+## Discounts, other charges and groups
+
+Besides services and parts, an item can be a **Discount** or an **Other charge**, and items can be
+put together in a **Group**. Choose the **Type** in the first row of Products & Services (or in an
+item's **Edit…** window).
+
+- **Discount**: enter an amount (`5.00`) or a percentage (`10%`) as its rate. On a sales form it
+  comes off the line above it: an item, a group or a subtotal. Its account is the one the discount
+  is debited to; *Discounts Given* is the usual choice. Tick **Tax** if the discount lowers the
+  taxable amount.
+- **Other charge**: shipping, handling, a rush fee. An amount works like any item; a percentage
+  (`3%`) is worked out on the line above it.
+- **Group**: click **Groups…**, then **New group…**. Give it a name, a description for sales forms
+  and its items with their quantities. Tick **Print as one line** to print the group as a single
+  line with its total instead of each item. A group holds services, parts and fixed charges, not
+  discounts or percent charges, and can't share a name with an item.
+
+Discounts can't be tracked in stock or given price-level prices. How each one works on a form is in
+[Create and send an invoice](invoices.md#subtotals-discounts-charges-and-groups).
+
 ## Change many prices at once
 
 **Change prices…** sets new sales prices for a group of products and services in one step, for

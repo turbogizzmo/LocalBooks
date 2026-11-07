@@ -443,8 +443,10 @@ type InvoiceRow = (Option<i64>, i64, i64, i64, i64, i64);
 async fn invoices_settled(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> Result<Vec<InvoiceRow>, String> {
     sqlx::query_as(
         "SELECT i.tax_rate_id, i.tax_cents,
-                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1),
-                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0),
                 i.total_cents,
                 COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
               + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
@@ -472,8 +474,10 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
     type DocRow = (Option<i64>, i64, i64, i64, i64);
     let others: Vec<DocRow> = sqlx::query_as(
         "SELECT r.tax_rate_id, 1, r.tax_cents,
-                (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0)
          FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
          UNION ALL
          SELECT m.tax_rate_id, -1, m.tax_cents,
@@ -494,8 +498,10 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
         Basis::Accrual => {
             let invoices: Vec<(Option<i64>, i64, i64, i64)> = sqlx::query_as(
                 "SELECT i.tax_rate_id, i.tax_cents,
-                        (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1),
+                        (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                         (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0)
                  FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.issue_date BETWEEN ?1 AND ?2",
             )
             .bind(start_date)
