@@ -255,6 +255,13 @@ pub(crate) async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, input: &Invo
 /// Writes an invoice that takes over `carried` details from an estimate or the invoice it
 /// replaces (see `sales_lists::write_details_carrying`).
 pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails) -> Result<i64, String> {
+    write_invoice_reimbursing(tx, input, carried, &[]).await
+}
+
+/// [`write_invoice_carrying`], where lines may also credit the expense accounts in `reimbursed`:
+/// billable expenses invoiced back to the customer reduce the expense unless Preferences › Time &
+/// Expenses counts them as income (`billable_costs`).
+pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, input: &InvoiceInput, carried: &crate::sales_lists::SalesDetails, reimbursed: &[i64]) -> Result<i64, String> {
     let subtotal = validate_invoice(input)?;
     let mut taxable = 0;
     for line in input.lines.iter().filter(|l| l.is_taxable) {
@@ -330,7 +337,7 @@ pub(crate) async fn write_invoice_carrying(tx: &mut Transaction<'_, Sqlite>, inp
         .map_err(db_err)?;
         match account {
             None => return Err(format!("INV_UNKNOWN_ACCOUNT: line {n} references an account that does not exist")),
-            Some((classification, _)) if classification != "INCOME" => {
+            Some((classification, _)) if classification != "INCOME" && !(classification == "EXPENSE" && reimbursed.contains(&line.income_account_id)) => {
                 return Err(format!("INV_NOT_INCOME_ACCOUNT: line {n} must use an Income account"))
             }
             Some((_, 0)) => return Err(format!("INV_INACTIVE_ACCOUNT: line {n} uses an inactive account")),

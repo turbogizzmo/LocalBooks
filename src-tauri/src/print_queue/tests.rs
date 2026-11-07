@@ -24,7 +24,7 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
             check_number: number.map(Into::into),
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id: rent, amount_cents: cents, memo: None, class_id: None, customer_id: None }],
+            lines: vec![SplitLineInput { account_id: rent, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
         queued,
@@ -114,7 +114,7 @@ async fn only_unnumbered_live_checks_join_the_queue() {
         check_number: None,
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: supplies, amount_cents: 1_000, memo: None, class_id: None, customer_id: None }],
+        lines: vec![SplitLineInput { account_id: supplies, amount_cents: 1_000, memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     let not_a_check = post_expense(&pool, expense, true).await.unwrap_err();
@@ -147,7 +147,7 @@ async fn an_edited_queued_check_stays_queued() {
         check_number: None,
         payment_method: None,
         memo: Some("October rent".into()),
-        lines: vec![SplitLineInput { account_id: rent, amount_cents: 11_000, memo: None, class_id: None, customer_id: None }],
+        lines: vec![SplitLineInput { account_id: rent, amount_cents: 11_000, memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     };
     let new_id = crate::edits::replace_expense(&pool, queued.id, edited).await.unwrap();

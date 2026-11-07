@@ -26,6 +26,25 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::guards::WARN_RETAINED_EARNINGS, "true"),
     ("four_digit_years", "true"),
     ("hours_format", "hhmm"),
+    // batch 5: tax and time (keys and validation in `preferences/tax_time.rs`)
+    (tax_time::SALES_TAX_BASIS, "accrual"),
+    (tax_time::SALES_TAX_FREQUENCY, "quarterly"),
+    (tax_time::SALES_TAX_MARK_TAXABLE, "true"),
+    (tax_time::FINANCE_CHARGE_FROM, "due_date"),
+    (tax_time::WEEK_START, "monday"),
+    (tax_time::TIME_BILLABLE, "false"),
+    (tax_time::EXPENSES_BILLABLE, "false"),
+    (tax_time::REIMBURSED_AS_INCOME, "false"),
+    (tax_time::REIMBURSED_ACCOUNT, ""),
+    (tax_time::MARKUP_PERCENT, "0"),
+    (tax_time::MARKUP_ACCOUNT, ""),
+    (tax_time::TAX_1099, "true"),
+    (tax_time::TAX_1099_ACCOUNTS, "{}"),
+    (tax_time::INVENTORY, "true"),
+    (tax_time::NEGATIVE_STOCK, "warn"),
+    (tax_time::CHECK_MEMO_ACCOUNT, "false"),
+    (tax_time::DATE_CHECKS_PRINTED, "false"),
+    // end batch 5
 ];
 
 fn default_of(key: &str) -> Option<&'static str> {
@@ -35,6 +54,9 @@ fn default_of(key: &str) -> Option<&'static str> {
 /// Validates a preference value; unknown keys are rejected so typos never persist.
 fn validate(key: &str, value: &str) -> Result<String, String> {
     let v = value.trim();
+    if let Some(result) = tax_time::validate(key, v) {
+        return result;
+    }
     let text = |max: usize, label: &str| -> Result<String, String> {
         if v.chars().count() > max {
             Err(format!("PREF_TOO_LONG: {label} must be at most {max} characters"))
@@ -187,6 +209,7 @@ pub async fn flag(pool: &SqlitePool, key: &str) -> Result<bool, String> {
 /// Validates and saves one preference immediately; returns the stored (normalized) value.
 pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, String> {
     let normalized = validate(key, value)?;
+    tax_time::check(pool, key, &normalized).await?;
     if key == "home_currency_code" && normalized != get(pool, key).await? {
         // Every posted amount is stored in the home currency; it cannot be relabelled afterwards.
         let has_foreign: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM journal_entries WHERE foreign_currency_code IS NOT NULL)")
@@ -426,6 +449,8 @@ pub fn tax_calendar(tax_form: &str, start_month: u32, as_of: NaiveDate) -> Vec<T
     deadlines.sort_by_key(|d| d.due_date);
     deadlines
 }
+
+pub mod tax_time;
 
 #[cfg(test)]
 mod tests;

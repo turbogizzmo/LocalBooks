@@ -39,19 +39,19 @@ async fn discounts_statements_and_1099s() {
     let listed = statement_customers(&pool, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(listed.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(), ["Acme"]);
 
-    // 1099s count payments from the bank, not by card.
+    // 1099s count payments from the bank, not by card ($600 threshold for 2025 payments).
     let vendor = crate::expenses::create_vendor(&pool, "Joe Contractor", None).await.unwrap();
     sqlx::query("UPDATE vendors SET is_1099 = 1, tax_id = '123-45-6789' WHERE id = ?1").bind(vendor.id).execute(&pool).await.unwrap();
     let pay = |from: i64, cents: i64| -> ExpenseInput {
-        serde_json::from_value(serde_json::json!({ "kind": "EXPENSE", "payeeName": "Joe Contractor", "paymentAccountId": from, "expenseDate": "2026-05-01",
+        serde_json::from_value(serde_json::json!({ "kind": "EXPENSE", "payeeName": "Joe Contractor", "paymentAccountId": from, "expenseDate": "2025-05-01",
             "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": cents, "memo": null }] })).unwrap()
     };
     crate::expenses::post_expense(&pool, pay(checking, 50_000)).await.unwrap();
     crate::expenses::post_expense(&pool, pay(card, 90_000)).await.unwrap();
-    let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
+    let rows = vendors_1099(&pool, 2025, crate::tax_ids::Access::OPEN).await.unwrap();
     assert_eq!((rows[0].paid_cents, rows[0].over_threshold), (50_000, false));
     crate::expenses::post_expense(&pool, pay(checking, 10_000)).await.unwrap();
-    assert!(vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap()[0].over_threshold);
+    assert!(vendors_1099(&pool, 2025, crate::tax_ids::Access::OPEN).await.unwrap()[0].over_threshold);
 }
 
 #[tokio::test]
@@ -104,4 +104,49 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     assert_eq!(rent_row.amounts_cents, [Some(360_000), Some(300_000), Some(60_000), Some(12_000)], "three rent checks against 3 × 1,000 budgeted");
     let services_row = report.lines.iter().find(|l| l.label == "4100 Services").unwrap();
     assert_eq!(services_row.amounts_cents, [Some(0), Some(150_000), Some(-150_000), Some(0)]);
+}
+
+/// Preferences › Tax: 1099 maps expense accounts to boxes; the 1099 Summary and Detail split each
+/// payment over what it paid, leave out unmapped accounts, and use the threshold for the year.
+#[tokio::test]
+async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year() {
+    let pool = test_pool().await;
+    let (checking, contractors, rent, supplies) = (account(&pool, "1010").await, account(&pool, "6400").await, account(&pool, "6300").await, account(&pool, "6250").await);
+    let vendor = crate::expenses::create_vendor(&pool, "Lee Builder", None).await.unwrap();
+    sqlx::query("UPDATE vendors SET is_1099 = 1 WHERE id = ?1").bind(vendor.id).execute(&pool).await.unwrap();
+    // A check in 2026: $1,500 of labor, $400 of supplies.
+    let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Lee Builder", "paymentAccountId": checking, "expenseDate": "2026-03-01",
+        "checkNumber": "101", "paymentMethod": null, "memo": null,
+        "lines": [{ "accountId": contractors, "amountCents": 150_000, "memo": null }, { "accountId": supplies, "amountCents": 40_000, "memo": null }] })).unwrap();
+    crate::expenses::post_expense(&pool, check).await.unwrap();
+    // A bill for $1,000 rent and $1,000 labor, half paid: $500 to each.
+    let bill: BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Lee Builder", "billNumber": "B-1", "billDate": "2026-04-01", "dueDate": "2026-05-01", "memo": null, "totalCents": 200_000,
+        "lines": [{ "accountId": rent, "amountCents": 100_000, "memo": null }, { "accountId": contractors, "amountCents": 100_000, "memo": null }] })).unwrap();
+    let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
+    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(4, 15), amount_cents: 100_000, reference: Some("102".into()) }).await.unwrap();
+
+    // No mapping yet: everything paid from the bank is nonemployee compensation, as before.
+    let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
+    assert_eq!(rows[0].paid_cents, 290_000);
+    assert_eq!(rows[0].boxes.iter().map(|b| (b.code.as_str(), b.paid_cents, b.threshold_cents)).collect::<Vec<_>>(), [("NEC-1", 290_000, 200_000)]);
+    assert!(rows[0].over_threshold, "over $2,000, the threshold for 2026 payments");
+
+    // Labor → NEC box 1, rent → MISC box 1; supplies unmapped.
+    let map = format!(r#"{{"{contractors}":"NEC-1","{rent}":"MISC-1"}}"#);
+    crate::preferences::set(&pool, "tax_1099_accounts", &map).await.unwrap();
+    let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
+    let boxes: Vec<_> = rows[0].boxes.iter().map(|b| (b.code.as_str(), b.paid_cents, b.over_threshold)).collect();
+    assert_eq!(boxes, [("NEC-1", 150_000 + 50_000, true), ("MISC-1", 50_000, false)]);
+    assert_eq!(rows[0].paid_cents, 250_000, "supplies are left out");
+    let detail: Vec<_> = rows[0].details.iter().map(|d| (d.kind.as_str(), d.number.as_deref(), d.box_code.as_str(), d.amount_cents)).collect();
+    assert_eq!(detail, [("CHECK", Some("101"), "NEC-1", 150_000), ("BILL_PAYMENT", Some("102"), "MISC-1", 50_000), ("BILL_PAYMENT", Some("102"), "NEC-1", 50_000)]);
+
+    // The threshold by payment year (gaps row R2), and by box.
+    assert_eq!((threshold_1099_cents("NEC-1", 2025), threshold_1099_cents("NEC-1", 2026), threshold_1099_cents("NEC-1", 2027)), (60_000, 200_000, 200_000));
+    assert_eq!((threshold_1099_cents("MISC-2", 2026), threshold_1099_cents("MISC-10", 2026)), (1_000, 60_000));
+
+    // Bad maps are refused.
+    assert!(crate::preferences::set(&pool, "tax_1099_accounts", &format!(r#"{{"{rent}":"MISC-99"}}"#)).await.unwrap_err().starts_with("PREF_BAD_1099_BOX"));
+    assert!(crate::preferences::set(&pool, "tax_1099_accounts", r#"{"999999":"NEC-1"}"#).await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNT"));
+    assert!(crate::preferences::set(&pool, "tax_1099_accounts", "not json").await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNTS"));
 }

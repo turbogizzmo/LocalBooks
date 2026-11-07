@@ -13,7 +13,8 @@ handlers![
 #[tauri::command]
 pub async fn replace_invoice(app: AppHandle, db: State<'_, Db>, id: i64, input: InvoiceInput, confirmed: Option<Vec<String>>) -> Result<i64, String> {
     let pool = db.pool().await;
-    guards::check(&pool, guards::dated(input.issue_date), confirmed.as_deref()).await?;
+    let replacing: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(id).fetch_optional(&pool).await.map_err(crate::ledger::db_err)?.flatten();
+    guards::check(&pool, guards::invoice(&input, replacing), confirmed.as_deref()).await?;
     let new_id = edits::replace_invoice(&pool, id, input).await?;
     notify(&app);
     Ok(new_id)

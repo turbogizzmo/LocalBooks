@@ -148,6 +148,67 @@ pub async fn statement_customers(pool: &SqlitePool, start_date: NaiveDate, end_d
 // 1099
 // ------------------------------------------------------------------------------------------------
 
+/// A box on Form 1099-NEC or 1099-MISC that expense accounts can be mapped to
+/// (Preferences › Tax: 1099).
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Box1099 {
+    pub code: &'static str,
+    pub form: &'static str,
+    pub label: &'static str,
+}
+
+pub const BOXES_1099: &[Box1099] = &[
+    Box1099 { code: "NEC-1", form: "1099-NEC", label: "Box 1: Nonemployee compensation" },
+    Box1099 { code: "MISC-1", form: "1099-MISC", label: "Box 1: Rents" },
+    Box1099 { code: "MISC-2", form: "1099-MISC", label: "Box 2: Royalties" },
+    Box1099 { code: "MISC-3", form: "1099-MISC", label: "Box 3: Other income" },
+    Box1099 { code: "MISC-6", form: "1099-MISC", label: "Box 6: Medical and health care payments" },
+    Box1099 { code: "MISC-10", form: "1099-MISC", label: "Box 10: Gross proceeds paid to an attorney" },
+];
+
+/// The 1099-NEC reporting threshold for payments made before 2026.
+pub const NEC_THRESHOLD_CENTS: i64 = 60_000;
+/// From payments made in 2026 the NEC and most MISC thresholds are $2,000 (Public Law 119-21,
+/// section 70433, amending 26 U.S.C. 6041(a) and 6041A(a)); later years are indexed for inflation,
+/// which the IRS has not yet published, so they use $2,000 too.
+pub const THRESHOLD_FROM_2026_CENTS: i64 = 200_000;
+
+/// The amount at which a box is reported for payments in `year`: royalties at $10, attorneys'
+/// gross proceeds at $600 (26 U.S.C. 6045(f), unchanged), the rest at $600 before 2026 and $2,000 from 2026.
+pub fn threshold_1099_cents(code: &str, year: i32) -> i64 {
+    match code {
+        "MISC-2" => 1_000,
+        "MISC-10" => 60_000,
+        _ if year >= 2026 => THRESHOLD_FROM_2026_CENTS,
+        _ => NEC_THRESHOLD_CENTS,
+    }
+}
+
+/// What a vendor was paid in one box.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoxAmount1099 {
+    pub code: String,
+    pub label: String,
+    pub paid_cents: i64,
+    pub threshold_cents: i64,
+    pub over_threshold: bool,
+}
+
+/// One payment's share for one expense account: a line of the 1099 Detail report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Detail1099 {
+    pub date: NaiveDate,
+    /// `CHECK`, `EXPENSE` or `BILL_PAYMENT`.
+    pub kind: String,
+    pub number: Option<String>,
+    pub account_name: String,
+    pub box_code: String,
+    pub amount_cents: i64,
+}
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Vendor1099Row {
@@ -158,34 +219,84 @@ pub struct Vendor1099Row {
     /// The tax ID with all but the last four digits starred; set whenever the vendor has a tax ID.
     pub tax_id_masked: Option<String>,
     pub address: Option<String>,
+    /// Everything reportable in the year, across boxes.
+    #[sqlx(skip)]
     pub paid_cents: i64,
+    /// Over the threshold in at least one box.
     #[sqlx(skip)]
     pub over_threshold: bool,
+    #[sqlx(skip)]
+    pub boxes: Vec<BoxAmount1099>,
+    #[sqlx(skip)]
+    pub details: Vec<Detail1099>,
 }
 
-/// The 1099-NEC reporting threshold.
-pub const NEC_THRESHOLD_CENTS: i64 = 60_000;
+/// A payment piece before mapping: vendor, date, kind, number, payment id, account, account name,
+/// line amount, document total, amount paid in home currency.
+type Piece = (i64, NaiveDate, String, Option<String>, i64, i64, String, i64, i64, i64);
 
 /// Payments to vendors marked for a 1099 in a calendar year, from bank accounts (card payments are
 /// reported by the card company, so they are left out): checks and expenses paid from a bank, and
 /// bill payments from a bank, by payment date.
+///
+/// Each payment is split over the expense accounts of what it paid (an expense's own lines, or the
+/// lines of the bill a payment paid, in proportion), and each account goes to the 1099 box it is
+/// mapped to in Preferences › Tax: 1099. Accounts not mapped are left out. With no account mapped
+/// at all, everything counts as nonemployee compensation (1099-NEC box 1), as before mapping existed.
 pub async fn vendors_1099(pool: &SqlitePool, year: i32, access: crate::tax_ids::Access<'_>) -> Result<Vec<Vendor1099Row>, String> {
     let (start, end) = (NaiveDate::from_ymd_opt(year, 1, 1).ok_or("RPT_BAD_YEAR: invalid year")?, NaiveDate::from_ymd_opt(year, 12, 31).ok_or("RPT_BAD_YEAR: invalid year")?);
-    let mut rows: Vec<Vendor1099Row> = sqlx::query_as(
-        "SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id, v.tax_id_masked, v.address,
-                COALESCE((SELECT SUM(COALESCE(x.home_total_cents, x.total_cents)) FROM expenses x JOIN chart_of_accounts a ON a.id = x.payment_account_id
-                          WHERE x.vendor_id = v.id AND x.is_voided = 0 AND a.account_type = 'BANK' AND x.expense_date BETWEEN ?1 AND ?2), 0)
-              + COALESCE((SELECT SUM(p.amount_cents) FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN chart_of_accounts a ON a.id = p.payment_account_id
-                          WHERE b.vendor_id = v.id AND p.is_voided = 0 AND a.account_type = 'BANK' AND p.payment_date BETWEEN ?1 AND ?2), 0) AS paid_cents
-         FROM vendors v WHERE v.is_1099 = 1 ORDER BY v.name COLLATE NOCASE",
+    let mapping = crate::preferences::tax_time::accounts_1099(pool).await?;
+    let mut rows: Vec<Vendor1099Row> = sqlx::query_as("SELECT v.id AS vendor_id, v.name AS vendor_name, v.tax_id, v.tax_id_masked, v.address FROM vendors v WHERE v.is_1099 = 1 ORDER BY v.name COLLATE NOCASE")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?;
+    let pieces: Vec<Piece> = sqlx::query_as(
+        "SELECT x.vendor_id, x.expense_date, x.kind, x.check_number, x.id, l.account_id, la.full_name, l.amount_cents, x.total_cents, COALESCE(x.home_total_cents, x.total_cents)
+         FROM expenses x JOIN chart_of_accounts a ON a.id = x.payment_account_id JOIN expense_lines l ON l.expense_id = x.id JOIN v_chart_of_accounts la ON la.id = l.account_id
+         WHERE x.vendor_id IN (SELECT id FROM vendors WHERE is_1099 = 1) AND x.is_voided = 0 AND a.account_type = 'BANK' AND x.expense_date BETWEEN ?1 AND ?2
+         UNION ALL
+         SELECT b.vendor_id, p.payment_date, 'BILL_PAYMENT', p.reference, -p.id, l.account_id, la.full_name, l.amount_cents, b.total_cents, p.amount_cents
+         FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN chart_of_accounts a ON a.id = p.payment_account_id JOIN bill_lines l ON l.bill_id = b.id JOIN v_chart_of_accounts la ON la.id = l.account_id
+         WHERE b.vendor_id IN (SELECT id FROM vendors WHERE is_1099 = 1) AND p.is_voided = 0 AND a.account_type = 'BANK' AND p.payment_date BETWEEN ?1 AND ?2
+         ORDER BY 1, 2, 5, 6",
     )
     .bind(start)
     .bind(end)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+
+    // Split each payment over its lines with running totals, so the shares add up to the payment.
+    let overflow = || "RPT_OVERFLOW: the 1099 amounts are out of range".to_string();
+    let mut details: std::collections::BTreeMap<i64, Vec<Detail1099>> = std::collections::BTreeMap::new();
+    let (mut current, mut cumulative, mut allocated) = (None, 0i64, 0i64);
+    for (vendor, date, kind, number, payment, account, account_name, line, total, paid) in pieces {
+        if current != Some(payment) {
+            (current, cumulative, allocated) = (Some(payment), 0, 0);
+        }
+        cumulative = cumulative.checked_add(line).ok_or_else(overflow)?;
+        let upto = if total == 0 { 0 } else { crate::ledger::mul_div_round(paid, cumulative, total).ok_or_else(overflow)? };
+        let amount = upto - allocated;
+        allocated = upto;
+        let code = if mapping.is_empty() { Some("NEC-1".to_string()) } else { mapping.get(&account).cloned() };
+        let Some(box_code) = code else { continue };
+        if amount != 0 {
+            details.entry(vendor).or_default().push(Detail1099 { date, kind, number, account_name, box_code, amount_cents: amount });
+        }
+    }
+
     for row in &mut rows {
-        row.over_threshold = row.paid_cents >= NEC_THRESHOLD_CENTS;
+        let lines = details.remove(&row.vendor_id).unwrap_or_default();
+        for b in BOXES_1099 {
+            let paid = lines.iter().filter(|d| d.box_code == b.code).try_fold(0i64, |s, d| s.checked_add(d.amount_cents)).ok_or_else(overflow)?;
+            if paid != 0 {
+                let threshold = threshold_1099_cents(b.code, year);
+                row.boxes.push(BoxAmount1099 { code: b.code.into(), label: format!("{} {}", b.form, b.label), paid_cents: paid, threshold_cents: threshold, over_threshold: paid >= threshold });
+            }
+        }
+        row.paid_cents = row.boxes.iter().try_fold(0i64, |s, b| s.checked_add(b.paid_cents)).ok_or_else(overflow)?;
+        row.over_threshold = row.boxes.iter().any(|b| b.over_threshold);
+        row.details = lines;
         let view = crate::tax_ids::show(access, row.vendor_id, row.tax_id.as_deref(), row.tax_id_masked.as_deref())?;
         (row.tax_id, row.tax_id_masked) = (view.full, view.masked);
     }
@@ -501,6 +612,7 @@ pub async fn purchase_order_lines(pool: &SqlitePool, id: i64) -> Result<Vec<Purc
 
 /// Records a purchase order. It posts nothing; the bill does when the order arrives.
 pub async fn create_purchase_order(pool: &SqlitePool, input: PurchaseOrderInput) -> Result<i64, String> {
+    crate::inventory::require_enabled(pool).await?;
     if input.lines.is_empty() {
         return Err("PO_NO_ITEMS: add at least one line".into());
     }
@@ -596,6 +708,7 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
                     product_service_id: l.product_service_id,
                     class_id: l.class_id,
                     customer_id: None,
+                    billable: None,
                 })
                 .collect(),
         };

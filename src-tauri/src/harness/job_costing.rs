@@ -85,6 +85,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         product_service_id: None,
         class_id: None,
         customer_id: job,
+        billable: None,
     };
 
     // Twenty oak panels into stock at $150.
@@ -157,7 +158,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .await
     .expect("job bill");
 
-    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job) };
+    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job), billable: None };
     let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput {
         kind: kind.into(),
         payee_name: Some(payee.into()),

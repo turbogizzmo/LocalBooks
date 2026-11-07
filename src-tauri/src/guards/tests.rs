@@ -20,7 +20,7 @@ fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput
         check_number: Some(number.into()),
         payment_method: None,
         memo: None,
-        lines: vec![SplitLineInput { account_id: rent, amount_cents: 5_000, memo: None, class_id: None, customer_id: None }],
+        lines: vec![SplitLineInput { account_id: rent, amount_cents: 5_000, memo: None, class_id: None, customer_id: None, billable: None }],
         currency: None,
     }
 }
@@ -33,7 +33,7 @@ fn bill(vendor: &str, number: &str, expense: i64, date: NaiveDate) -> BillInput 
         due_date: date,
         memo: None,
         total_cents: 2_500,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: 2_500, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
+        lines: vec![BillLineInput { account_id: expense, amount_cents: 2_500, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
     }
 }
 
@@ -162,4 +162,76 @@ async fn new_preferences_have_defaults_without_a_migration_and_validate() {
     assert_eq!(preferences::get_all(&pool).await.unwrap()["hours_format"], "decimal");
     assert!(preferences::set(&pool, "hours_format", "minutes").await.is_err());
     assert!(preferences::set(&pool, "four_digit_years", "yes").await.is_err());
+}
+
+/// Preferences › Items & Inventory › when a sale would take stock below zero: warn (the default),
+/// stop, or say nothing. An edit counts the units of the sale it replaces as back in stock.
+#[tokio::test]
+async fn selling_below_zero_warns_stops_or_is_allowed() {
+    use serde_json::json;
+    let pool = test_pool().await;
+    let sales = account(&pool, "4000").await;
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: sales, is_taxable: false })
+        .await
+        .unwrap()
+        .id;
+    let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    let equity = account(&pool, "3000").await;
+    crate::inventory::adjust(&pool, &crate::inventory::AdjustInput { item_id: item.id, date: d(2026, 4, 1), qty_change_e4: 50_000, total_cost_cents: Some(5_000), offset_account_id: equity, memo: None })
+        .await
+        .unwrap();
+    let sale = |qty_e4: i64| -> crate::invoices::InvoiceInput {
+        serde_json::from_value(json!({ "customerName": "Acme", "issueDate": "2026-04-10", "dueDate": "2026-05-10",
+            "lines": [{ "description": "Widget", "quantityE4": qty_e4, "rateCents": 2_500, "incomeAccountId": sales, "productServiceId": product },
+                      { "description": "Delivery", "quantityE4": 10_000, "rateCents": 1_000, "incomeAccountId": sales }] }))
+        .unwrap()
+    };
+    let today = d(2026, 4, 10);
+    let codes = |w: Vec<Warning>| w.into_iter().map(|w| w.code).collect::<Vec<_>>();
+
+    // 5 on hand: selling 5 is fine, selling 7 warns.
+    assert!(codes(warnings_on(&pool, &invoice(&sale(50_000), None), today).await.unwrap()).is_empty());
+    let warned = warnings_on(&pool, &invoice(&sale(70_000), None), today).await.unwrap();
+    assert_eq!(codes(warned.clone()), ["NEGATIVE_STOCK"]);
+    assert!(warned[0].message.contains("Widget (5 on hand, 7 on this sale)"), "{}", warned[0].message);
+    let answered = ["NEGATIVE_STOCK".to_string(), "DATE_FAR_PAST".to_string(), "DATE_FAR_FUTURE".to_string()];
+    assert!(super::check(&pool, invoice(&sale(70_000), None), Some(&answered)).await.is_ok(), "Save anyway");
+
+    // Selling 4 leaves 1; an edit of that invoice to 5 is fine, because its 4 come back first.
+    let first = crate::invoices::create_and_post_invoice(&pool, sale(40_000)).await.unwrap();
+    assert_eq!(codes(warnings_on(&pool, &invoice(&sale(50_000), None), today).await.unwrap()), ["NEGATIVE_STOCK"], "a new sale of 5 with 1 left");
+    assert!(codes(warnings_on(&pool, &invoice(&sale(50_000), first.journal_entry_id), today).await.unwrap()).is_empty(), "the edit returns its own 4");
+
+    // Stop refuses outright; Save anyway can't answer it.
+    crate::preferences::set(&pool, "negative_stock", "stop").await.unwrap();
+    let stopped = super::check(&pool, invoice(&sale(20_000), None), Some(&answered)).await.unwrap_err();
+    assert!(stopped.starts_with("INV_NOT_ENOUGH_STOCK"), "{stopped}");
+    // Sales receipts are guarded the same way.
+    assert!(super::check(&pool, sale_posting(product, 20_000), None).await.unwrap_err().starts_with("INV_NOT_ENOUGH_STOCK"));
+
+    // Off: no warning; the sale is costed at the last cost, as before the preference.
+    crate::preferences::set(&pool, "negative_stock", "off").await.unwrap();
+    assert!(codes(warnings_on(&pool, &invoice(&sale(20_000), None), today).await.unwrap()).is_empty());
+    assert!(crate::preferences::set(&pool, "negative_stock", "maybe").await.unwrap_err().starts_with("PREF_BAD_NEGATIVE_STOCK"));
+}
+
+fn sale_posting(product: i64, qty_e4: i64) -> Posting<'static> {
+    sale(d(2026, 4, 10), [(Some(product), qty_e4), (None, 10_000)].into_iter(), None)
+}
+
+/// Preferences › Items & Inventory › inventory and purchase orders off: no new tracked items or
+/// purchase orders; items already tracked keep working.
+#[tokio::test]
+async fn inventory_can_be_turned_off() {
+    let pool = test_pool().await;
+    let sales = account(&pool, "4000").await;
+    let product = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Bolt".into(), description: None, rate_cents: 100, income_account_id: sales, is_taxable: false }).await.unwrap().id;
+    crate::preferences::set(&pool, "inventory_enabled", "false").await.unwrap();
+    let track = crate::inventory::TrackInput { product_id: product, sku: None, asset_account_id: None, cogs_account_id: None };
+    assert!(crate::inventory::track_product(&pool, &track).await.unwrap_err().starts_with("INV_OFF"));
+    let po: crate::workflows::PurchaseOrderInput = serde_json::from_value(serde_json::json!({ "vendorName": "Supplier", "poDate": "2026-04-01", "memo": null,
+        "lines": [{ "description": "Bolts", "quantityE4": 10_000, "rateCents": 100, "amountCents": 100, "accountId": account(&pool, "6250").await }] })).unwrap();
+    assert!(crate::workflows::create_purchase_order(&pool, po).await.unwrap_err().starts_with("INV_OFF"));
+    crate::preferences::set(&pool, "inventory_enabled", "true").await.unwrap();
+    crate::inventory::track_product(&pool, &track).await.unwrap();
 }
