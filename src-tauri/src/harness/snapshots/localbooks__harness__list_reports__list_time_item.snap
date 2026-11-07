@@ -1,0 +1,14 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Time by Item, 2025-11-01 to 2025-11-30
+
+Service Item                   Billable Hours         Hours
+Logo Package                             1.5        3.8333
+No service item                            0        0.8333
+TOTAL                                    1.5        4.6667
+
+2 lines
+
+3 entries of time from 2025-11-01 to 2025-11-30.

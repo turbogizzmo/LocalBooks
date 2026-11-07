@@ -268,6 +268,7 @@ pub fn read(bytes: &[u8], default_account: &str) -> Result<Ledger, String> {
         unreadable,
         quality,
         sales_lists: Default::default(),
+        classes: Vec::new(),
     })
 }
 
@@ -313,7 +314,7 @@ impl Builder {
         let account = self.accounts.ensure(&t.account, t.account_type);
         // Money into the account is a debit (negative in the ledger) for an asset and a payment
         // (also a debit) for a card or liability: either way, the account line is -amount.
-        let mut lines = vec![SourceLine { account_id: account, cents: -amount, memo: None }];
+        let mut lines = vec![SourceLine { account_id: account, cents: -amount, memo: None, class: None }];
         let inflow = amount > 0;
         let mut transfers: Vec<(i64, i64)> = Vec::new();
         let mut opening = false;
@@ -345,7 +346,7 @@ impl Builder {
                 Target::Category(name) => self.category(&name, cents > 0),
                 Target::None => self.accounts.ensure(if cents > 0 { "Uncategorized Income" } else { "Uncategorized Expense" }, if cents > 0 { "INCOME" } else { "EXPENSE" }),
             };
-            lines.push(SourceLine { account_id: other, cents, memo });
+            lines.push(SourceLine { account_id: other, cents, memo, class: None });
         }
 
         // The copy of a transfer already read from the other account.

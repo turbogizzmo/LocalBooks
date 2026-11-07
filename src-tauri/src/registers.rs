@@ -8,6 +8,9 @@ use sqlx::SqlitePool;
 
 use crate::ledger::{db_err, DISPLAY_SOURCE_TYPE};
 
+pub mod entry;
+pub mod history;
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRow {
@@ -17,6 +20,9 @@ pub struct RegisterRow {
     pub entry_date: String,
     pub source_type: String,
     pub source_id: Option<i64>,
+    /// The document's own number (check, invoice, bill or reference number); a manual journal
+    /// entry's number; `None` for documents without one (deposits, transfers, card charges).
+    pub num: Option<String>,
     pub party_name: Option<String>,
     pub memo: Option<String>,
     pub account_name: String,
@@ -48,6 +54,20 @@ pub struct Register {
     pub ending_balance_cents: i64,
     pub rows: Vec<RegisterRow>,
 }
+
+/// The number a document shows (as reports' Num column does), for the entry `e`.
+const DOC_NUMBER: &str = "CASE e.source_type
+    WHEN 'CHECK' THEN (SELECT check_number FROM expenses WHERE id = e.source_id)
+    WHEN 'BILL_PAYMENT' THEN (SELECT reference FROM bill_payments WHERE id = e.source_id)
+    WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = e.source_id)
+    WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = e.source_id)
+    WHEN 'SALES_RECEIPT' THEN (SELECT CAST(receipt_number AS TEXT) FROM sales_receipts WHERE id = e.source_id)
+    WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = e.source_id)
+    WHEN 'BILL' THEN (SELECT bill_number FROM bills WHERE id = e.source_id)
+    WHEN 'VENDOR_CREDIT' THEN (SELECT reference FROM vendor_credits WHERE id = e.source_id)
+    WHEN 'JOURNAL' THEN CAST(e.entry_number AS TEXT)
+    WHEN 'OPENING_BALANCE' THEN CAST(e.entry_number AS TEXT)
+END";
 
 /// The register of `account_id` between the dates (either may be open-ended).
 pub async fn account_register(
@@ -85,7 +105,7 @@ pub async fn account_register(
     };
     let mut rows: Vec<RegisterRow> = sqlx::query_as(&format!(
         "SELECT l.id AS line_id, e.id AS journal_entry_id, e.entry_number, e.entry_date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
-                p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
+                {DOC_NUMBER} AS num, p.party_name, COALESCE(l.memo, e.memo) AS memo, a.full_name AS account_name,
                 (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
                  FROM journal_lines o JOIN v_chart_of_accounts o_a ON o_a.id = o.account_id
                  WHERE o.journal_entry_id = e.id AND o.account_id NOT IN ({scope})) AS split,

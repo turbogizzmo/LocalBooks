@@ -1,0 +1,12 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Physical Inventory Worksheet, all dates to 2025-12-31
+
+Item                           Description               SKU                             On Hand Physical Count
+Gift Mugs                      Logo mugs                 MUG-12                               12
+
+1 lines
+
+1 item tracked; On Hand as of 2025-12-31. Write the count in the last column.

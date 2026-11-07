@@ -237,6 +237,8 @@ pub struct Filters {
     pub adjusting_only: bool,
     /// Only voided transactions and the entries that void them (the Voided Transactions report).
     pub voided_only: bool,
+    /// Only these journal entries (a Transaction Journal for one transaction).
+    pub entry_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -710,6 +712,9 @@ impl LineFilter<'_> {
             return false;
         }
         if f.voided_only && !(l.is_voided || l.is_reversal) {
+            return false;
+        }
+        if !f.entry_ids.is_empty() && !f.entry_ids.contains(&l.journal_entry_id) {
             return false;
         }
         true
@@ -1217,6 +1222,15 @@ pub fn presets() -> Vec<Preset> {
             "fiscalYearToDate",
             ReportSettings { sign: Sign::Credit, ..by_month(ledger(&[], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))) },
         ),
+        // Every income and expense line, credits minus debits, so the total is net income.
+        preset(
+            "net-income-detail",
+            "Net Income Detail",
+            "Business overview",
+            range,
+            "fiscalYearToDate",
+            ReportSettings { sign: Sign::Credit, ..ledger(&[Type, Date, Num, Name, Memo, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"])) },
+        ),
         preset("pl-detail", "Profit & Loss Detail", "Business overview", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Name, Memo, Class, Split, Amount, Balance], Some(GroupBy::Account), classes(&["INCOME", "EXPENSE"]))),
         preset(
             "bs-detail",
@@ -1233,6 +1247,15 @@ pub fn presets() -> Vec<Preset> {
         preset("transaction-list-customer", "Transaction List by Customer", "Who owes you", range, "fiscalYearToDate", names_list(NameKind::Customer)),
         preset("sales-customer-detail", "Sales by Customer Detail", "Sales and customers", range, "fiscalYearToDate", ledger(&[Type, Date, Num, Memo, Item, Qty, Rate, Account, Amount, Balance], Some(GroupBy::Name), classes(&["INCOME"]))),
         preset("sales-product-detail", "Sales by Product/Service Detail", "Sales and customers", range, "fiscalYearToDate", items(&sales, false, &[Type, Date, Num, Name, Memo, Qty, Rate, Amount, Balance], Mode::Detail)),
+        // The lines behind Sales by Rep Summary: invoices and sales receipts, by the rep on each.
+        preset(
+            "sales-rep-detail",
+            "Sales by Rep Detail",
+            "Sales and customers",
+            range,
+            "fiscalYearToDate",
+            ReportSettings { group_by: Some(GroupBy::Rep), ..items(&types(&["INVOICE", "SALES_RECEIPT"]), false, &[Type, Date, Num, Name, Memo, Item, Qty, Rate, Amount, Balance], Mode::Detail) },
+        ),
         preset("income-customer-summary", "Income by Customer Summary", "Sales and customers", range, "fiscalYearToDate", summary(income_by_customer.clone())),
         preset("income-customer-detail", "Income by Customer Detail", "Sales and customers", range, "fiscalYearToDate", income_by_customer),
         preset("ap-aging-detail", "A/P Aging Detail", "What you owe", as_of, "today", ledger(&[Type, Date, Num, Name, DueDate, Aging, OpenBalance], Some(GroupBy::Aging), open_docs("ACCOUNTS_PAYABLE", &["BILL", "VENDOR_CREDIT"]))),

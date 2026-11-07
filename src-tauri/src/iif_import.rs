@@ -4,7 +4,7 @@
 //! An IIF file is tab-separated text, normally Windows-1252. A line starting with `!` declares the
 //! columns for one keyword (`!ACCNT`, `!CUST`, `!TRNS`, ...); every later line starting with that
 //! keyword is read with those columns, so a file can redeclare them part-way through. Lists come as
-//! one row per entry (`ACCNT`, `CUST`, `VEND`, `INVITEM`). A transaction is a `TRNS` row, its `SPL`
+//! one row per entry (`ACCNT`, `CUST`, `VEND`, `INVITEM`, `CLASS`). A transaction is a `TRNS` row, its `SPL`
 //! distribution rows and `ENDTRNS`; its amounts are signed (debits positive) and sum to zero. Dates
 //! are month-first (`7/16/98`, `7/16/1998`). This follows Intuit's IIF Import Kit (the header
 //! reference and sample files); see `docs/guide/desktop-migration.md`.
@@ -21,7 +21,7 @@ use std::collections::{HashMap, VecDeque};
 use chrono::NaiveDate;
 
 use crate::bank::{parse_amount_cents, parse_date};
-use crate::qbw_company::{Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceSalesLists, SourceTransaction, UnreadableLine};
+use crate::qbw_company::{class_path, Ledger, LedgerQuality, LineOutcome, SourceItem, SourceLine, SourceSalesLists, SourceTransaction, UnreadableLine};
 use crate::qbw_documents::{payment_method, Applied, DocumentLine, SourceDocument, SourceSales};
 use crate::text_import::{decode, quantity_e4, terms_days, Accounts, Names};
 
@@ -170,6 +170,8 @@ pub(crate) struct RawLine {
     pub rep: Option<String>,
     pub ship_via: Option<String>,
     pub ship_date: Option<String>,
+    /// The line's class, `Parent:Child`.
+    pub class: Option<String>,
 }
 
 impl RawLine {
@@ -190,6 +192,7 @@ impl RawLine {
             rep: row.text("REP"),
             ship_via: row.text("SHIPVIA"),
             ship_date: row.text("SHIPDATE"),
+            class: row.text("CLASS"),
         }
     }
 }
@@ -264,6 +267,7 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
     let mut problems: Vec<String> = Vec::new();
     let mut labels = FieldLabels::default();
     let mut sales_lists = SourceSalesLists::default();
+    let mut classes: Vec<(String, bool)> = Vec::new();
     // (is a customer, party id, values) and (item index, values), labeled once the dictionaries are read.
     let mut party_fields: Vec<(bool, i64, Vec<(usize, String)>)> = Vec::new();
     let mut item_fields: Vec<(usize, Vec<(usize, String)>)> = Vec::new();
@@ -368,6 +372,12 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                     items: Vec::new(),
                 });
             }
+            // The class list: one row per class, a subclass named "Parent:Child".
+            "CLASS" => {
+                if let Some(name) = row.get("NAME") {
+                    classes.push((name.to_string(), !row.yes("HIDDEN")));
+                }
+            }
             "SHIPMETH" => {
                 if let Some(name) = row.get("NAME") {
                     sales_lists.add_ship_method(name, !row.yes("HIDDEN"));
@@ -421,14 +431,20 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
             p.custom_fields = FieldLabels::resolve(&labels.names, values);
         }
     }
-    if blocks.is_empty() && accounts.list.is_empty() && names.customers.is_empty() && names.vendors.is_empty() && items.is_empty() {
+    if blocks.is_empty() && accounts.list.is_empty() && names.customers.is_empty() && names.vendors.is_empty() && items.is_empty() && classes.is_empty() {
         return Err(match problems.first() {
             Some(p) => format!("IIF_EMPTY: no lists or transactions could be read ({p})"),
             None => "IIF_EMPTY: this file has no lists or transactions in IIF format".into(),
         });
     }
 
-    Ok(assemble(accounts, nonposting, names, items, sales_lists, &blocks))
+    let mut ledger = assemble(accounts, nonposting, names, items, sales_lists, &blocks);
+    // The declared list first, so a hidden class stays hidden; then any class only a line names.
+    for (name, active) in classes {
+        ledger.add_class(&name, active);
+    }
+    ledger.add_classes_used();
+    Ok(ledger)
 }
 
 /// Resolves transaction blocks against the lists into a ledger: accounts and names a block uses
@@ -469,7 +485,18 @@ pub(crate) fn assemble(
             }
         }
     }
-    Ledger { accounts: accounts.list, customers: names.customers, vendors: names.vendors, items, transactions, unbalanced, unreadable, quality, sales_lists }
+    Ledger {
+        accounts: accounts.list,
+        customers: names.customers,
+        vendors: names.vendors,
+        items,
+        transactions,
+        unbalanced,
+        unreadable,
+        quality,
+        sales_lists,
+        classes: Vec::new(),
+    }
 }
 
 /// Resolves transaction blocks against the lists.
@@ -521,7 +548,7 @@ impl Transactions {
             };
             // IIF debits are positive; the ledger's are negative.
             let cents = -amount;
-            lines.push(SourceLine { account_id: account, cents, memo: raw.memo.clone() });
+            lines.push(SourceLine { account_id: account, cents, memo: raw.memo.clone(), class: raw.class.as_deref().and_then(class_path) });
             if i > 0 {
                 form.push(self.form_line(raw, Some(account), cents));
             }
@@ -569,6 +596,7 @@ impl Transactions {
             rate_cents,
             cents,
             account_id: account.or(item.and_then(|i| i.1)).unwrap_or(0),
+            class: raw.class.as_deref().and_then(class_path),
         }
     }
 

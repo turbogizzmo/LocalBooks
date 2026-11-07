@@ -33,15 +33,6 @@ export async function printDocument(title = null) {
   }
 }
 
-export const PAYMENT_METHODS = [
-  { id: 'CHECK', label: 'Check' },
-  { id: 'CASH', label: 'Cash' },
-  { id: 'CREDIT_CARD', label: 'Credit card' },
-  { id: 'ACH', label: 'ACH / bank transfer' },
-  { id: 'WIRE', label: 'Wire' },
-  { id: 'OTHER', label: 'Other' },
-];
-
 /** Backend errors look like "JE_UNBALANCED: total debits ..."; show the human part. */
 export function errorText(err) {
   const text = typeof err === 'string' ? err : (err?.message ?? String(err));
