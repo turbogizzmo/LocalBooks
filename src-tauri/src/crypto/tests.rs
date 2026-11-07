@@ -186,6 +186,32 @@ async fn a_tampered_slot_cost_is_refused_not_obeyed() {
 }
 
 #[tokio::test]
+async fn a_damaged_slot_is_reported_and_the_other_slots_still_open() {
+    let (pool, key, recovery) = protected().await;
+    let mut conn = pool.acquire().await.unwrap();
+    set_password(&mut conn, &key, 7, "corr3ct horse").await.unwrap();
+    set_password(&mut conn, &key, 8, "another one").await.unwrap();
+    // The schema refuses a nonce of the wrong length, so only damage below SQLite's checks makes one.
+    sqlx::query("PRAGMA ignore_check_constraints = ON").execute(&mut *conn).await.unwrap();
+    sqlx::query("UPDATE key_slots SET nonce = zeroblob(5) WHERE user_id = 7").execute(&mut *conn).await.unwrap();
+    sqlx::query("PRAGMA ignore_check_constraints = OFF").execute(&mut *conn).await.unwrap();
+
+    assert!(unlock_with_password(&mut conn, 7, "corr3ct horse").await.unwrap_err().starts_with("CRYPTO_SLOT"));
+    assert_eq!(unlock_with_password(&mut conn, 8, "another one").await.unwrap().key_id(), key.key_id());
+    assert_eq!(unlock_with_recovery_key(&mut conn, recovery.as_str()).await.unwrap().key_id(), key.key_id());
+}
+
+#[test]
+fn a_truncated_field_is_unreadable_not_a_crash() {
+    let key = DataKey { key: Zeroizing::new([3; KEY_LEN]), key_id: "00112233445566778899aabbccddeeff".into() };
+    let stored = key.encrypt_field("vendors", "tax_id", 1, "12-3456789").unwrap();
+    let body = stored.strip_prefix("lb1:").unwrap();
+    for cut in [0, 4, 15, 16, 20] {
+        assert!(key.decrypt_field("vendors", "tax_id", 1, &format!("lb1:{}", &body[..cut])).is_err(), "cut at {cut}");
+    }
+}
+
+#[tokio::test]
 async fn slots_need_an_existing_user() {
     let pool = test_pool().await;
     let mut conn = pool.acquire().await.unwrap();

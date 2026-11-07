@@ -29,8 +29,9 @@ people using LocalBooks.
   type, such as Invoices, to see its total; with All types the panel counts the transactions.
 - **The "Saved customer" note goes away** when you pick or open another customer or vendor, instead
   of staying above the list.
-- **A damaged encryption key slot no longer stops LocalBooks.** It reports a damaged key slot instead
-  of closing, and the recovery key still opens the file.
+- **A damaged company file no longer closes LocalBooks while unlocking.** If the part of the file
+  that holds one password's copy of the encryption key is damaged, LocalBooks now says so instead of
+  quitting, and other users' passwords and the recovery key still open the file.
 
 ## [0.12.0]
 
