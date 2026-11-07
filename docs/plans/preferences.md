@@ -137,5 +137,7 @@ and the form asks and saves again with **Save anyway** (`src/lib/confirmable.js`
 Batches 1 and 2 are done except **recall the last transaction for a name / pre-fill a vendor's
 accounts**, which stays in batch 1's row above as missing.
 
-Batch 4 (sales, payments and bills defaults) is done. Left out, with the reasons in the rows above:
-progress invoicing, and the sales order and Collections Center options.
+Batch 4 (sales, payments and bills defaults) is built except two pieces that wait on other PRs:
+the F.O.B. default (#158's F.O.B. box) and zero-amount estimate lines (#151's estimate lines). Left
+out, with the reasons in the rows above: progress invoicing, and the sales order and Collections
+Center options.
