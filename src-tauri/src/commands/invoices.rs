@@ -22,8 +22,14 @@ pub async fn create_invoice(
     app: AppHandle,
     db: State<'_, Db>,
     input: InvoiceInput,
+    to_be_printed: Option<bool>,
 ) -> Result<InvoiceSummary, String> {
-    let invoice = invoices::create_and_post_invoice(&db.pool().await, input).await?;
+    // The invoice can wait in the print queue (File › Print Forms › Invoices).
+    let pool = db.pool().await;
+    let invoice = match to_be_printed {
+        Some(true) => crate::print_queue::create_invoice(&pool, input, true).await?,
+        _ => invoices::create_and_post_invoice(&pool, input).await?,
+    };
     notify(&app);
     Ok(invoice)
 }

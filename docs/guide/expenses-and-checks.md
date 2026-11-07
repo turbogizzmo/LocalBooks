@@ -29,6 +29,24 @@ To keep the receipt with an expense or check, click **Attach a receipt…** befo
 choose **Attach file…** in a posted row's **Actions** menu. See
 [Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
 
+## Print checks later, in a batch
+
+If you print checks on check stock, write them now and print them together later.
+
+1. On **Write check**, tick **Print later**. **Check no.** shows *To print*: the check posts now,
+   and gets its number when it prints. The box stays ticked for your next check until you untick
+   it. An unnumbered check already posted can be queued from its **Actions** menu (**Print later**).
+2. Choose **File › Print Forms › Checks…** (or **Expenses › Print Checks**).
+3. Pick the **Bank account**. Check that **First check number** matches the number printed on the
+   first check in the printer; the checks take numbers in order from it. Untick any you don't
+   want to print now, then click **Print…**.
+4. When printing finishes, LocalBooks asks **Did they all print?** Choose **Yes, all printed**, or
+   **Some didn't** and untick the checks that jammed or printed wrong.
+
+Only the checks you confirm keep their numbers and leave the queue; the rest stay queued without a
+number, to print again. **Cancel** saves nothing. A check's number can't be changed once it is
+printed, and a number already used on the account is refused.
+
 ## Record a credit card credit
 
 Use a card credit when a vendor gives money back onto a credit card: a refund for a return, a

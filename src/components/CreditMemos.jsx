@@ -3,6 +3,9 @@ import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
+import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import { attachPicked, PendingAttachments } from './Attachments.jsx';
+import { useOpenFromList } from '../lib/windows.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -29,6 +32,9 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Files picked before posting; attached once it posts.
+  const [files, setFiles] = useState([]);
+  const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   // Only its Bill To / Ship To / P.O. No. / FOB row is used here.
@@ -44,6 +50,17 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
   const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
   const total = subtotal + taxCents;
+
+  const clear = () => {
+    setCustomer('');
+    setMemo('');
+    setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+    setFiles([]);
+    formClass.reset();
+    tax.reset();
+    sales.reset();
+    setError(null);
+  };
 
   const save = async () => {
     if (!customer.trim()) return setError('Enter a customer.');
@@ -64,18 +81,14 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         taxRateId: tax.rateId,
         ...(({ billTo, shipTo, poNumber, fob }) => ({ billTo, shipTo, poNumber, fob }))(sales.payload()),
       });
+      const attachError = files.length > 0 ? await attachPicked(memoRow.journalEntryId, files) : null;
       onPosted(
-        refund
+        (refund
           ? `Refund receipt #${memoRow.creditNumber} posted: Dr income / Cr ${accountLabel(accounts, refundFrom)} ${formatCents(memoRow.totalCents)}.`
-          : `Credit memo #${memoRow.creditNumber} for ${memoRow.customerName} posted: ${formatCents(memoRow.totalCents)} of credit to apply to invoices or refund.`,
+          : `Credit memo #${memoRow.creditNumber} for ${memoRow.customerName} posted: ${formatCents(memoRow.totalCents)} of credit to apply to invoices or refund.`) +
+          (attachError ? ` ${attachError}` : ''),
       );
-      setCustomer('');
-      setMemo('');
-      setLines(Array.from({ length: 3 }, () => blankLine(defaultIncome)));
-      formClass.reset();
-      tax.reset();
-      sales.reset();
-      setError(null);
+      clear();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -85,6 +98,14 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
 
   return (
     <section className="qb-panel flex-none">
+      <FormToolbar
+        label={refund ? 'Refund receipt' : 'Credit memo'}
+        groups={[
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          fileButtons({ onNew: clear, onSave: save, busy }),
+          [attachLaterButton({ setFiles, busy, what: refund ? 'this refund' : 'this credit memo' })],
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{refund ? 'Refund receipt' : 'Credit memo'}</h2>
         <label className="w-[220px]">
@@ -119,6 +140,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line
         </button>
+        {files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
         <span className="text-xs text-qb-ink-muted">Stock items are returned with Products › Adjust stock; credit them here as a service line.</span>
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
