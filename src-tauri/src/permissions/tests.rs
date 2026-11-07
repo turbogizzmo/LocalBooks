@@ -10,6 +10,7 @@ fn commands_are_classified() {
     assert_eq!(need("list_invoices"), Need::Read);
     assert_eq!(need("get_profit_and_loss"), Need::Read);
     assert_eq!(need("print_report"), Need::Read);
+    assert_eq!(need("save_xlsx_book"), Need::Read, "Process Multiple Reports exports like a single report");
     assert_eq!(need("create_invoice"), Need::Write);
     assert_eq!(need("void_transaction"), Need::Write);
     assert_eq!(need("set_preference"), Need::Admin);

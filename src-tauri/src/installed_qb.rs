@@ -96,6 +96,7 @@ const JOURNAL_BODY: &str = "<GeneralDetailReportType>Journal</GeneralDetailRepor
 <IncludeColumn>Name</IncludeColumn>\
 <IncludeColumn>Memo</IncludeColumn>\
 <IncludeColumn>Account</IncludeColumn>\
+<IncludeColumn>Class</IncludeColumn>\
 <IncludeColumn>Debit</IncludeColumn>\
 <IncludeColumn>Credit</IncludeColumn>";
 
@@ -597,11 +598,14 @@ pub fn export(transport: &mut dyn Transport, platform: Platform, progress: &mut 
 
     progress(total - 1, total);
     let size = files.iter().map(|(_, b)| b.len() as i64).sum();
-    let read = report_import::read_files(&files)?;
-    let classes = get(Query::Classes).iter().filter(|c| c.name == "ClassRet").count();
-    if classes > 0 {
-        notes.push(format!("QuickBooks has {classes} classes; this export does not bring classes in, so set them up under Lists › Classes"));
+    let mut read = report_import::read_files(&files)?;
+    // The class list, inactive classes included; the Journal's Class column gives each line its class.
+    for class in get(Query::Classes).iter().filter(|c| c.name == "ClassRet") {
+        if let Some(name) = class.text_at("FullName").or_else(|| class.text_at("Name")) {
+            read.ledger.add_class(name, class.text_at("IsActive") != Some("false"));
+        }
     }
+    read.ledger.add_classes_used();
     let company = get(Query::Company).iter().find_map(|c| c.text_at("CompanyName")).map(str::to_string);
     progress(total, total);
     Ok(Export { read, company, notes, size })

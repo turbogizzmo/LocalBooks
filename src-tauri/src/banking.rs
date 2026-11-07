@@ -24,6 +24,8 @@ pub struct UndepositedItem {
     pub date: String,
     pub customer_name: Option<String>,
     pub payment_method: String,
+    /// The Payment Method list entry's name, when the payment has one.
+    pub payment_method_name: Option<String>,
     pub reference: Option<String>,
     pub amount_cents: i64,
     pub undeposited_account_id: i64,
@@ -86,7 +88,8 @@ pub struct BankingActivity {
 
 pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>, String> {
     sqlx::query_as::<_, UndepositedItem>(
-        "SELECT 'PAYMENT' AS kind, p.id AS id, p.payment_date AS date, i.customer_name, p.payment_method, p.reference,
+        "SELECT 'PAYMENT' AS kind, p.id AS id, p.payment_date AS date, i.customer_name, p.payment_method,
+                (SELECT name FROM payment_methods WHERE id = p.payment_method_id) AS payment_method_name, p.reference,
                 COALESCE(p.home_amount_cents, p.amount_cents) AS amount_cents, p.deposit_account_id AS undeposited_account_id
          FROM invoice_payments p
          JOIN invoices i ON i.id = p.invoice_id
@@ -96,7 +99,8 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
            AND NOT EXISTS (SELECT 1 FROM deposit_lines d WHERE d.invoice_payment_id = p.id AND d.is_voided = 0)
            AND NOT EXISTS (SELECT 1 FROM undeposited_fund_matches m WHERE m.invoice_payment_id = p.id AND m.is_voided = 0)
          UNION ALL
-         SELECT 'SALES_RECEIPT', r.id, r.receipt_date, c.name, r.payment_method, r.reference,
+         SELECT 'SALES_RECEIPT', r.id, r.receipt_date, c.name, r.payment_method,
+                (SELECT name FROM payment_methods WHERE id = r.payment_method_id), r.reference,
                 r.total_cents, r.deposit_account_id
          FROM sales_receipts r
          LEFT JOIN customers c ON c.id = r.customer_id

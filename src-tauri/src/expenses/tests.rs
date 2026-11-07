@@ -24,6 +24,7 @@ fn d(day: u32) -> NaiveDate {
 
 fn bill(vendor: &str, lines: Vec<(i64, i64)>) -> BillInput {
     BillInput {
+        terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some("INV-778".into()),
         bill_date: d(1),
@@ -154,6 +155,7 @@ async fn expenses_and_checks_credit_the_payment_account() {
     let (checking, card, rent, fuel, ar) =
         (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6300").await, account_id(&pool, "6100").await, account_id(&pool, "1200").await);
     let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+        payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Shell".into()),
         payment_account_id: account,
@@ -215,6 +217,7 @@ async fn foreign_expense_credits_the_bank_in_home_currency() {
     let posted = post_expense(
         &pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: Some("Hotel Tokyo".into()),
             payment_account_id: checking,
@@ -264,6 +267,7 @@ async fn card_credits_debit_the_card_and_credit_the_splits() {
     let (checking, card, office, fuel) =
         (account_id(&pool, "1010").await, account_id(&pool, "2100").await, account_id(&pool, "6250").await, account_id(&pool, "6100").await);
     let input = |kind: &str, account: i64, lines: Vec<(i64, i64)>| ExpenseInput {
+        payment_method_id: None,
         kind: kind.into(),
         payee_name: Some("Office Depot".into()),
         payment_account_id: account,
@@ -343,6 +347,7 @@ async fn the_database_holds_card_credits_to_their_rules() {
     let charge = post_expense(
         &pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: None,
             payment_account_id: card,
@@ -367,6 +372,7 @@ async fn foreign_card_credit_debits_the_card_in_home_currency() {
     let posted = post_expense(
         &pool,
         ExpenseInput {
+            payment_method_id: None,
             kind: "CARD_CREDIT".into(),
             payee_name: Some("Hotel Tokyo".into()),
             payment_account_id: card,

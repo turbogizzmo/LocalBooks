@@ -904,7 +904,7 @@ fn check(ledger: &Ledger) {
 
     let opening = by_name(ledger, "Opening balance");
     assert_eq!(opening.memo.as_deref(), Some("Opening balance - Starting balances"));
-    assert_eq!(opening.lines[0], SourceLine { account_id: account(ledger, "Assets:Checking"), cents: -100_000, memo: None });
+    assert_eq!(opening.lines[0], SourceLine { account_id: account(ledger, "Assets:Checking"), cents: -100_000, memo: None, class: None });
 
     let invoice = by_name(ledger, "Acme Corp:Website");
     assert_eq!(invoice.date, NaiveDate::from_ymd_opt(2024, 1, 5).unwrap());
@@ -921,7 +921,8 @@ fn check(ledger: &Ledger) {
                 quantity_e4: 20_000,
                 rate_cents: 5_000,
                 cents: 10_000,
-                account_id: consulting
+                account_id: consulting,
+                class: None,
             }],
             sales: Default::default(),
         })
@@ -945,7 +946,7 @@ fn check(ledger: &Ledger) {
 
     // A home-currency transaction into the euro account carries its dollar value.
     let fund = by_name(ledger, "Fund the euro account");
-    assert!(fund.lines.contains(&SourceLine { account_id: account(ledger, "Assets:Euro Account"), cents: -11_000, memo: None }));
+    assert!(fund.lines.contains(&SourceLine { account_id: account(ledger, "Assets:Euro Account"), cents: -11_000, memo: None, class: None }));
 
     // Rejected: listed with the reason, never posted.
     assert_eq!(ledger.quality.rejected_lines, 3);
@@ -1182,7 +1183,7 @@ fn the_home_currency_is_the_one_most_transactions_use() {
     assert_eq!(l.quality.rejected_by_reason.get(NO_HOME_AMOUNT), Some(&1));
     assert_eq!(l.unreadable[0].name.as_deref(), Some("Fund the euro account (in USD with no EUR amount)"));
     let euro = account(&l, "Assets:Euro Account");
-    assert!(l.transactions.iter().all(|t| t.lines.contains(&SourceLine { account_id: euro, cents: -5_000, memo: None })));
+    assert!(l.transactions.iter().all(|t| t.lines.contains(&SourceLine { account_id: euro, cents: -5_000, memo: None, class: None })));
 }
 
 /// The fixture goes through staging and a full import: native invoice, payment, bill, bill
