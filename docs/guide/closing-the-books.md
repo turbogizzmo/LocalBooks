@@ -5,7 +5,7 @@ posted or voided from any screen, so filed numbers can't change by accident.
 
 ## Close the books
 
-1. Go to **Settings › Preferences Console** and scroll to **Closing date**.
+1. Go to **Settings › Preferences Console**, click **Accounting**, then **Company Preferences**, and scroll to **Closing date**.
 2. Enter the **Closing date**, usually the last day of the period you've filed or finalized.
 3. Optionally enter a **Passcode (optional)** of at least 4 characters. From then on, moving or
    removing the date needs it.

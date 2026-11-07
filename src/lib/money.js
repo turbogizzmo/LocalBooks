@@ -27,9 +27,27 @@ export function centsToInput(cents) {
   return `${negative ? '-' : ''}${dollars}.${String(remainder).padStart(2, '0')}`;
 }
 
-/** "1,234.5" / "$12" / ".99" -> integer cents; null when the text is not a valid amount. */
-export function parseMoneyToCents(text) {
+// My Preferences › General: amounts typed without a decimal point are in cents (1234 -> 12.34).
+let impliedDecimal = false;
+export function setImpliedDecimal(on) {
+  impliedDecimal = Boolean(on);
+}
+
+/**
+ * "1,234.5" / "$12" / ".99" -> integer cents; null when the text is not a valid amount. With the
+ * decimal point added automatically (`impliedDecimal`, the My Preference by default), digits typed
+ * without a point are cents: "1234" -> 1234 (12.34), "5" -> 5 (0.05). A typed point always wins.
+ */
+export function parseMoneyToCents(text, { impliedDecimal: implied = impliedDecimal } = {}) {
   const s = String(text).split(currencySymbol).join('').replace(/[$,\s]/g, '');
+  if (implied) {
+    const whole = /^(-)?(\d+)$/.exec(s);
+    if (whole) {
+      const cents = Number(whole[2]);
+      if (!Number.isSafeInteger(cents) || cents > MAX_CENTS) return null;
+      return whole[1] ? -cents : cents;
+    }
+  }
   const match = /^(-)?(\d*)(?:\.(\d{0,2}))?$/.exec(s);
   if (!match || (match[2] === '' && (match[3] ?? '') === '')) return null;
   const dollars = match[2] === '' ? 0 : Number(match[2]);
@@ -77,8 +95,18 @@ export function parseHoursToMinutes(text) {
   return whole * 60 + fracMinutes;
 }
 
-/** 90 -> "1:30" */
-export function formatMinutes(minutes) {
+// Company Preferences › General: hours shown as hours:minutes ("hhmm") or decimal hours ("decimal").
+let hoursFormat = 'hhmm';
+export function setHoursFormat(format) {
+  hoursFormat = format === 'decimal' ? 'decimal' : 'hhmm';
+}
+
+/** 90 -> "1:30", or "1.50" with decimal hours (rounded half up to the hundredth, integer math). */
+export function formatMinutes(minutes, format = hoursFormat) {
+  if (format === 'decimal') {
+    const hundredths = Math.floor((minutes * 100 + 30) / 60);
+    return `${Math.floor(hundredths / 100)}.${String(hundredths % 100).padStart(2, '0')}`;
+  }
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 }
 

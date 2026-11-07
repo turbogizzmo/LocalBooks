@@ -13,6 +13,25 @@ people using LocalBooks.
   a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
   print as a single line. They print in place, come back when you edit, and carry from an estimate
   to its invoice; discount items show in Sales by Product/Service.
+- **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
+  the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
+  Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings
+  that live on their own screen, like sales tax rates or email, are linked from their category.
+- **Warnings before saving, with Save anyway.** LocalBooks now asks before saving a check whose
+  number was already used on that bank account, a bill whose number was already used for that
+  vendor, a transaction dated more than 90 days ago or 30 days ahead, or a posting to Retained
+  Earnings. Click **Save anyway** to record it as entered. Admins change the days, or turn each
+  warning off, in the Checking, Bills and Accounting company preferences.
+- **Type amounts without a decimal point.** Turn on **Automatically place a decimal point**
+  (Preferences › General › My Preferences) and `1234` becomes 12.34.
+- **More General preferences.** Beep when a transaction is recorded; warn before editing a posted
+  transaction or voiding one (both on, and now each can be turned off); bring back messages you
+  turned off with **Don't show this message again**; and choose whether a description or price you
+  typed stays when you change the item on a sales line (ask, always or never).
+- **Journal entry memos fill in.** A new journal entry line takes the first line's memo
+  (Preferences › Accounting › My Preferences).
+- **Two-digit years and decimal hours.** Company Preferences › General can show dates as 10/13/26
+  and hours as 1.50 instead of 1:30.
 - **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
   Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
   Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers

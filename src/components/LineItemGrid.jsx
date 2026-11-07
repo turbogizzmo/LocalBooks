@@ -6,6 +6,8 @@ import NewItemDialog from './NewItemDialog.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
+import { askConfirm } from '../lib/dialogs.jsx';
+import { myPreferences } from '../lib/myPreferences.js';
 
 let nextKey = 1;
 /** The item column's "Add new item…" entry. */
@@ -285,7 +287,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   };
   // The line whose item column chose "＋ Add new item…", while its dialog is open.
   const [adding, setAdding] = useState(null);
-  const pickProduct = (index, productId, known = null) => {
+  const pickProduct = async (index, productId, known = null) => {
     if (productId === NEW_ITEM) return setAdding(index);
     const line = lines[index];
     if (typeof productId === 'string' && productId.startsWith(GROUP)) return expandGroup(index, Number(productId.slice(GROUP.length)));
@@ -307,9 +309,34 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     }
     // A new item's own rate: it isn't in the price lists yet.
     const rate = known ? (product.rateCents > 0 ? centsToInput(product.rateCents) : null) : rateAt(productId, customerLevel);
+    // Changing the item on a line whose description or price was typed: My Preferences › General
+    // say whether to keep the typed text, replace it, or ask.
+    // (Not for a discount or percent charge becoming an item: its "10%" is no price for an item.)
+    const typed = !isFormLine(line) && line.productId != null && line.productId !== productId && (line.descriptionTyped || line.rateTyped);
+    let keep = false;
+    if (typed) {
+      const mode = myPreferences().keepTypedItemDetails;
+      keep =
+        mode === 'keep' ||
+        (mode === 'ask' &&
+          (await askConfirm(`You typed your own ${[line.descriptionTyped && 'description', line.rateTyped && 'price'].filter(Boolean).join(' and ')} on this line. Keep it for ${product.name}?`, {
+            confirmLabel: 'Keep what I typed',
+          })));
+    }
+    if (keep) {
+      return update(index, {
+        productId,
+        accountId: product.incomeAccountId,
+        isTaxable: Boolean(product.isTaxable),
+        ...(line.descriptionTyped ? {} : { description: product.description ?? product.name }),
+        ...(line.rateTyped ? {} : { rate: rate ?? line.rate, levelId: customerLevel, levelAuto: true }),
+        qty: line.qty.trim() === '' ? '1' : line.qty,
+      });
+    }
     update(index, {
       kind: 'ITEM',
       productId,
+      descriptionTyped: false,
       description: product.description ?? product.name,
       accountId: product.incomeAccountId,
       isTaxable: Boolean(product.isTaxable),
@@ -436,7 +463,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                     <input
                       data-col="description"
                       value={line.description}
-                      onChange={(e) => update(i, { description: e.target.value })}
+                      onChange={(e) => update(i, { description: e.target.value, descriptionTyped: true })}
                       onKeyDown={(e) => onKeyDown(e, i)}
                       placeholder="Description"
                     />
