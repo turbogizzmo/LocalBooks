@@ -82,7 +82,7 @@ other invoice.
 
 ### Set up finance charges
 
-In **Settings › Preferences Console › Finance charges**:
+In **Settings › Preferences Console › Finance Charge › Company Preferences**:
 
 - **Annual interest rate**: the yearly percentage, such as `18` or `1.5` (up to three decimals).
 - **Minimum charge**: a smaller charge is raised to this amount. Leave it at `0.00` for none.

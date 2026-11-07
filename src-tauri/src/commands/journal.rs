@@ -17,8 +17,11 @@ pub async fn post_journal_entry(
     db: State<'_, Db>,
     entry: JournalEntry,
     adjusting: Option<bool>,
+    confirmed: Option<Vec<String>>,
 ) -> Result<i64, String> {
-    let id = ledger::post_journal_entry_flagged(&db.pool().await, entry, adjusting.unwrap_or(false)).await?;
+    let pool = db.pool().await;
+    guards::check(&pool, guards::journal(&entry), confirmed.as_deref()).await?;
+    let id = ledger::post_journal_entry_flagged(&pool, entry, adjusting.unwrap_or(false)).await?;
     notify(&app);
     Ok(id)
 }

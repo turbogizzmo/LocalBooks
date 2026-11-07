@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { hiddenMessages, hideMessage } from './myPreferences.js';
 
 /**
  * In-app replacements for window.confirm and window.prompt. The macOS webview (WKWebView under
@@ -7,9 +8,19 @@ import { createRoot } from 'react-dom/client';
  * every "Are you sure?" silently cancelled. These dialogs look and behave the same on every system.
  */
 
-/** Asks a yes/no question; resolves true only when the person confirms. */
-export function askConfirm(message, { confirmLabel = 'OK', danger = false } = {}) {
-  return show((done) => <Dialog message={message} confirmLabel={confirmLabel} danger={danger} onDone={done} />, false);
+/**
+ * Asks a yes/no question; resolves true only when the person confirms. With `hideKey`, the dialog
+ * offers "Don't show this again": once ticked and confirmed, later asks with that key answer yes
+ * at once, until My Preferences › General › Bring back all messages.
+ */
+export async function askConfirm(message, { confirmLabel = 'OK', danger = false, hideKey = null } = {}) {
+  if (hideKey && hiddenMessages().includes(hideKey)) return true;
+  const answer = await show((done) => <Dialog message={message} confirmLabel={confirmLabel} danger={danger} offerHide={Boolean(hideKey)} onDone={done} />, false);
+  if (answer === 'hide') {
+    hideMessage(hideKey);
+    return true;
+  }
+  return answer;
 }
 
 /** Asks for a line of text; resolves the text as typed, or null when cancelled. */
@@ -31,8 +42,9 @@ function show(render, cancelled) {
   });
 }
 
-function Dialog({ message, input = false, defaultValue = '', confirmLabel, danger = false, onDone }) {
+function Dialog({ message, input = false, defaultValue = '', confirmLabel, danger = false, offerHide = false, onDone }) {
   const [text, setText] = useState(defaultValue);
+  const [hide, setHide] = useState(false);
   const focusRef = useRef(null);
 
   useEffect(() => {
@@ -47,7 +59,7 @@ function Dialog({ message, input = false, defaultValue = '', confirmLabel, dange
 
   const submit = (e) => {
     e.preventDefault();
-    onDone(input ? text : true);
+    onDone(input ? text : hide ? 'hide' : true);
   };
 
   return (
@@ -56,6 +68,12 @@ function Dialog({ message, input = false, defaultValue = '', confirmLabel, dange
         <div className="space-y-2 px-3 py-2 text-sm">
           <p id="ask-message" className="whitespace-pre-line">{message}</p>
           {input && <input ref={focusRef} className="qb-input w-full" value={text} onChange={(e) => setText(e.target.value)} />}
+          {offerHide && (
+            <label className="flex items-center gap-1.5 text-xs text-qb-ink-muted">
+              <input type="checkbox" className="accent-qb-green" checked={hide} onChange={(e) => setHide(e.target.checked)} />
+              Don&apos;t show this message again
+            </label>
+          )}
         </div>
         <div className="flex justify-end gap-2 border-t border-qb-border px-3 py-1.5">
           <button ref={input ? undefined : focusRef} type="button" className="qb-btn qb-btn-secondary" onClick={() => onDone(undefined)}>

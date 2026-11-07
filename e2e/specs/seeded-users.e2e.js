@@ -91,7 +91,7 @@ describe('Tax IDs in a company with users', () => {
     await click(button('Go to Desktop View'));
     await waitForPage('Users & Passwords');
     expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
-    await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Users & Passwords');
+    await expect($('//*[@role="tablist"][@aria-label="Settings"]//*[@role="tab"][@aria-selected="true"]')).toHaveText('Users & Passwords');
     await expect(button('Close books')).not.toExist();
   });
 });

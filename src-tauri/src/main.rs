@@ -34,6 +34,7 @@ mod forms;
 mod fx_rates;
 mod gnucash_import;
 mod graphs;
+mod guards;
 #[cfg(test)]
 mod docs_checks;
 #[cfg(test)]
