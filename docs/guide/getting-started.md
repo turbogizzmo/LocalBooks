@@ -221,7 +221,7 @@ clicking **Open** still opens with no windows, whatever you chose.
 Invoices, sales receipts, estimates, credit memos, bills, checks and expenses, vendor credits,
 purchase orders, deposits, transfers, journal entries and Receive Payment each have a row of large
 buttons across the top. A form shows only the buttons it can use; a button it can't use right now
-is greyed out, and hovering over it says why.
+is greyed out, and hovering over it (or moving to it with the keyboard) says why.
 
 | Button | What it does |
 |---|---|

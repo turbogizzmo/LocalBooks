@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
-import VendorField from './VendorField.jsx';
+import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import { useOpenFromList } from '../lib/windows.js';
@@ -120,7 +120,7 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         <h2 className="mr-2 self-center text-md font-semibold">New purchase order</h2>
         <label>
           <span className="qb-label">Vendor</span>
-          <VendorField vendors={vendors} value={vendor} onChange={setVendor} autoFocus />
+          <NameField kind="vendor" names={vendors} value={vendor} onChange={setVendor} autoFocus />
         </label>
         <label>
           <span className="qb-label">PO date</span>

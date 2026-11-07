@@ -21,6 +21,8 @@ import CurrencyFields from './CurrencyFields.jsx';
 import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
+import NameField from './NameField.jsx';
+import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
@@ -534,6 +536,11 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                       {inv.invoiceNumber}
                       {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
+                      {inv.toBePrinted && !inv.isVoided && (
+                        <span className="ml-1 rounded-xs bg-qb-green-tint px-1 text-2xs font-semibold text-qb-green-active" title="Waiting in File › Print Forms › Invoices">
+                          To print
+                        </span>
+                      )}
                       {attachments.clip(inv.journalEntryId)}
                     </td>
                     <td className="qb-grid-cell" title={inv.customerName}>{inv.customerName}</td>
@@ -555,6 +562,16 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                         label={`Actions for invoice ${inv.invoiceNumber}`}
                         items={[
                           ...formMenuItems('INVOICE', inv.id, forms, emailed.get(inv.id)),
+                          ...(inv.isVoided
+                            ? []
+                            : [
+                                {
+                                  label: inv.toBePrinted ? 'Remove from print queue' : 'Print later',
+                                  hint: inv.toBePrinted ? undefined : 'Queue it in File › Print Forms › Invoices',
+                                  onSelect: () =>
+                                    api.setToBePrinted('INVOICE', inv.id, !inv.toBePrinted).catch((err) => onNotice({ kind: 'error', text: errorText(err) })),
+                                },
+                              ]),
                           attachments.menuItem(inv.journalEntryId),
                           {
                             label: 'Edit…',
@@ -618,6 +635,8 @@ export default function Invoices({ accounts, intent }) {
   const [fromEstimate, setFromEstimate] = useState(null);
   // Set while the form holds a posted invoice being edited: saving replaces it.
   const [editing, setEditing] = useState(null);
+  // Everything the form would save, as loaded; see `snapshot` below.
+  const [baseline, setBaseline] = useState(null);
   const [discountText, setDiscountText] = useState('');
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
@@ -677,7 +696,29 @@ export default function Invoices({ accounts, intent }) {
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
-  useUnsavedChanges('invoice', customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]'));
+  // Every field the invoice saves, so changing any of them (dates, terms, currency, rate, discount,
+  // tax, rep, ship and custom fields, class, lines) counts as unsaved.
+  const snapshot = JSON.stringify({
+    customer: customer.trim(),
+    issueDate,
+    dueDate,
+    payload,
+    taxRateId: tax.rateId,
+    discount: discountText.trim(),
+    currency,
+    rate: currency ? rate.trim() : '',
+    sales: sales.payload(),
+    formClass: formClass.formClass,
+  });
+  // A loaded invoice's baseline is taken once its fields have settled (the render after loading).
+  useEffect(() => {
+    if (editing && baseline === null) setBaseline(snapshot);
+  }, [editing, baseline, snapshot]);
+  // A new invoice counts as changed once it has a customer, a line or a discount.
+  const dirty = editing
+    ? baseline !== null && snapshot !== baseline
+    : customer.trim() !== '' || payload.length > 0 || discountText.trim() !== '';
+  useUnsavedChanges('invoice', dirty);
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
@@ -709,8 +750,10 @@ export default function Invoices({ accounts, intent }) {
           })),
           blankLine(defaultAccountId),
         ];
-        // What was loaded, so closing the window asks only once something has changed.
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, linesKey: JSON.stringify(summarizeLines(loaded).payload) });
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName });
+        // Cleared so the effect above records what was loaded, and closing the window or stepping
+        // with Previous / Next asks only once something has changed.
+        setBaseline(null);
         setCustomer(invoice.customerName);
         setIssueDate(invoice.issueDate);
         setDueDate(invoice.dueDate);
@@ -735,6 +778,7 @@ export default function Invoices({ accounts, intent }) {
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
     setEditing(null);
+    setBaseline(null);
     setDiscountText('');
     setFiles([]);
     setShowAttachments(false);
@@ -745,6 +789,7 @@ export default function Invoices({ accounts, intent }) {
 
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
+  const printLater = usePrintLater('INVOICE', !editing);
   // Files picked for an invoice not posted yet; attached once it posts.
   const [files, setFiles] = useState([]);
   const [showAttachments, setShowAttachments] = useState(false);
@@ -754,7 +799,6 @@ export default function Invoices({ accounts, intent }) {
   const current = editing ? (invoices.data ?? []).find((i) => i.id === editing.id) ?? null : null;
   const ordered = useMemo(() => [...(invoices.data ?? [])].sort((a, b) => a.invoiceNumber - b.invoiceNumber || a.id - b.id), [invoices.data]);
   const at = current ? ordered.indexOf(current) : -1;
-  const dirty = customer.trim() !== (editing?.customer ?? '') || JSON.stringify(payload) !== (editing?.linesKey ?? '[]');
   const step = (inv) => {
     setShowAttachments(false);
     setFiles([]);
@@ -809,7 +853,9 @@ export default function Invoices({ accounts, intent }) {
         reset();
         return true;
       }
-      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input);
+      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on);
+      if (fromEstimate && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
+      printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
       const attachError = files.length > 0 ? await attachPicked(inv.journalEntryId, files) : null;
       if (mode === 'print') forms.print('INVOICE', inv.id);
@@ -821,6 +867,7 @@ export default function Invoices({ accounts, intent }) {
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
             (queued ? ' Marked Email later.' : '') +
+            (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : '') +
             (attachError ? ` ${attachError}` : ''),
       });
       reset();
@@ -845,6 +892,7 @@ export default function Invoices({ accounts, intent }) {
       onNext: () => step(ordered[at + 1]),
       previousDisabled: busy || dirty || ordered.length === 0 || at === 0,
       nextDisabled: busy || dirty || !current || at >= ordered.length - 1,
+      blockedHint: dirty ? 'Save or clear your changes first' : undefined,
     }),
     fileButtons({
       onNew: reset,
@@ -955,19 +1003,7 @@ export default function Invoices({ accounts, intent }) {
         <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
           <label className="w-[260px]">
             <span className="qb-label">Customer</span>
-            <input
-              ref={customerRef}
-              className="qb-input w-full"
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              placeholder="Customer name"
-              list="invoice-customers"
-            />
-            <datalist id="invoice-customers">
-              {(customers.data ?? []).map((c) => (
-                <option key={c.id} value={c.name} />
-              ))}
-            </datalist>
+            <NameField kind="customer" inputRef={customerRef} className="qb-input w-full" names={customers.data ?? []} value={customer} onChange={setCustomer} placeholder="Customer name" />
           </label>
           <label>
             <span className="qb-label">Invoice date</span>
@@ -1050,6 +1086,7 @@ export default function Invoices({ accounts, intent }) {
                 Email later
               </label>
             )}
+            {!editing && <PrintLaterBox printLater={printLater} />}
             <SaveButtons flow={flow} busyLabel="Posting…" />
           </div>
         </div>

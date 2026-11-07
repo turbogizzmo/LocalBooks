@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
-import VendorField from './VendorField.jsx';
+import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Notice from './Notice.jsx';
@@ -12,6 +12,7 @@ import { api, errorText, PAYMENT_METHODS, printDocument, useLedgerQuery } from '
 import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
+import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -59,6 +60,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [error, setError] = useState(null);
   const payeeRef = useRef(null);
   const formClass = useFormClass(accounts);
+  // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
+  const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
   useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
@@ -109,7 +112,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         payeeName: payee.trim() || null,
         paymentAccountId: accountId,
         expenseDate: date,
-        checkNumber: kind === 'CHECK' ? checkNumber.trim() || null : null,
+        checkNumber: kind === 'CHECK' && !printLater.on ? checkNumber.trim() || null : null,
         paymentMethod: kind === 'EXPENSE' ? method : null,
         memo: memo.trim() || null,
         lines: postedLines,
@@ -121,11 +124,12 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         onPosted(`${EXPENSE_KINDS[kind]} replaced: the original is voided and the edited one is posted.`);
         return true;
       }
-      const posted = await api.postExpense(input);
+      const posted = await api.postExpense(input, printLater.on);
+      if (kind === 'CHECK') printLater.remember(printLater.on);
       const attachError = files.length > 0 ? await attachPicked(posted.journalEntryId, files) : null;
       const splits = `${lines.length} split${lines.length === 1 ? '' : 's'}`;
       onPosted(
-        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : ''}` : EXPENSE_KINDS[kind]} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
+        `${kind === 'CHECK' ? `Check${posted.checkNumber ? ` #${posted.checkNumber}` : posted.toBePrinted ? ' to be printed' : ''}` : EXPENSE_KINDS[kind]} of ${formatMoney(posted.totalCents, posted.currencyCode)}${posted.currencyCode ? ` (${formatCents(posted.homeTotalCents)})` : ''} posted: ` +
           (isCredit ? `Dr ${accountLabel(accounts, accountId)} / Cr ${splits}.` : `Cr ${accountLabel(accounts, accountId)} / Dr ${splits}.`) +
           (files.length && !attachError ? ` ${files.length} file${files.length === 1 ? '' : 's'} attached.` : ''),
       );
@@ -205,7 +209,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
         <label>
           <span className="qb-label">Payee</span>
-          <VendorField inputRef={payeeRef} vendors={vendors} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
+          <NameField kind="vendor" inputRef={payeeRef} names={vendors} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
         </label>
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>
@@ -218,7 +222,12 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         {kind === 'CHECK' ? (
           <label>
             <span className="qb-label">Check no.</span>
-            <CheckNumberBox className="qb-input num w-[80px]" value={checkNumber} onChange={(e) => setCheckNumber(e.target.value)} />
+            <CheckNumberBox
+              className="qb-input num w-[80px]"
+              value={printLater.on ? 'To print' : checkNumber}
+              disabled={printLater.on}
+              onChange={(e) => setCheckNumber(e.target.value)}
+            />
           </label>
         ) : isCredit ? null : (
           <label>
@@ -230,6 +239,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             </select>
           </label>
         )}
+        {kind === 'CHECK' && !editing && <PrintLaterBox printLater={printLater} />}
         {formClass.header}
         <CurrencyFields homeCurrency={homeCurrency} currency={currency} setCurrency={setCurrency} rate={rate} setRate={setRate} date={date} />
         <div className="ml-auto text-right">
@@ -309,6 +319,11 @@ export default function ExpensesChecks({ accounts, intent }) {
         : null,
   );
 
+  const togglePrintLater = (x) =>
+    api.setToBePrinted('CHECK', x.id, !x.toBePrinted).then(
+      () => setNotice({ kind: 'success', text: x.toBePrinted ? 'Taken out of the print queue.' : 'Waiting in File › Print Forms › Checks.' }),
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const voidEntry = async (journalEntryId) => {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
@@ -407,7 +422,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>
                   <td className="qb-grid-cell">{EXPENSE_KINDS[x.kind] ?? x.kind}</td>
                   <td className="qb-grid-cell">
-                    {x.checkNumber ?? ''}
+                    {x.checkNumber ?? (x.toBePrinted && !x.isVoided ? <span className="text-qb-ink-muted" title="Waiting in File › Print Forms › Checks">To print</span> : '')}
                     {attachments.clip(x.journalEntryId)}
                   </td>
                   <td className="qb-grid-cell font-semibold" title={x.payeeName ?? ''}>{x.payeeName ?? <span className="font-normal text-qb-ink-faint">—</span>}</td>
@@ -431,6 +446,10 @@ export default function ExpensesChecks({ accounts, intent }) {
                         attachments.menuItem(x.journalEntryId),
                         { label: 'Edit…', disabled: x.isVoided, onSelect: () => openExpense(x) },
                         ...(x.kind === 'CHECK' ? [{ label: 'Print check', disabled: x.isVoided, onSelect: () => printCheck(x) }] : []),
+                        // Only a check without a number can wait in the print queue; it gets one when it prints.
+                        ...(x.kind === 'CHECK' && !x.isVoided && (x.toBePrinted || !x.checkNumber)
+                          ? [{ label: x.toBePrinted ? 'Remove from print queue' : 'Print later', onSelect: () => togglePrintLater(x) }]
+                          : []),
                         voidItem({
                           journalEntryId: x.journalEntryId,
                           voided: x.isVoided,

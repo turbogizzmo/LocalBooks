@@ -39,6 +39,10 @@ export const screens = {
   'sales/send-forms': {
     guide: 'custom-forms',
   },
+  'sales/print-invoices': {
+    help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
+    guide: 'invoices',
+  },
 };
 
 /**
@@ -47,6 +51,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'print-invoices-later', area: 'sales', views: ['sales/invoices', 'sales/print-invoices'],
+    title: 'Print invoices later, in a batch',
+    body: 'Tick Print later on a new invoice, or choose Print later in an invoice’s Actions menu, and it waits in File › Print Forms › Invoices… with a To print mark in the list. Print the batch from there; the form remembers whether you last left Print later on.',
+    keywords: 'print later to be printed queue batch print forms invoices',
+    go: { label: 'Go to Print Invoices', view: 'sales/print-invoices' },
+    guide: 'invoices',
+  },
   {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',
@@ -58,8 +70,8 @@ export const topics = [
   {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
-    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later.',
-    keywords: 'paid payment customer receive partial undeposited',
+    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), and use Auto Apply to spread the amount over the oldest invoices.',
+    keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
   },
@@ -82,8 +94,8 @@ export const topics = [
   {
     id: 'sales-receipt', area: 'sales', views: ['sales/all'],
     title: 'Record a sale paid on the spot (sales receipt)',
-    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Choose whether the money goes to a bank account or to Undeposited Funds.',
-    keywords: 'cash sale receipt point of sale paid',
+    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Pick the payment method from the tiles, and choose whether the money goes to a bank account or to Undeposited Funds.',
+    keywords: 'cash sale receipt point of sale paid method tile',
     go: { label: 'New sales receipt', view: 'sales/all', action: 'sales-receipt' },
     guide: 'sales-receipts-and-estimates',
   },
@@ -98,16 +110,16 @@ export const topics = [
   {
     id: 'customers', area: 'sales', views: ['sales/customers'],
     title: 'Add and review customers',
-    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Customers are also available when creating invoices, estimates and billable time.',
-    keywords: 'customer client contact receivable balance',
+    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer.',
+    keywords: 'customer client contact receivable balance transactions add new customer quick add job',
     go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'customers-and-products',
   },
   {
     id: 'products', area: 'sales', views: ['sales/products', 'sales/invoices'],
     title: 'Set up products and services',
-    body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you.',
-    keywords: 'item service product price rate catalog',
+    body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list.',
+    keywords: 'item service product price rate catalog add new item quick add',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'customers-and-products',
   },

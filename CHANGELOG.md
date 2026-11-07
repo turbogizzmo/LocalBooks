@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Print checks and invoices later, in a batch.** Tick **Print later** on Write Checks or on an
+  invoice and it waits in **File › Print Forms › Checks…** or **Invoices…**, marked *To print* in
+  the list. Print the batch from there: checks take numbers in order from the first number on your
+  check stock, and LocalBooks asks **Did they all print?** so only the ones that came out right
+  keep their numbers. The forms remember whether you last left Print later on.
+- **Record a bounced check.** **Banking › Record Bounced Check…** takes a deposited customer check
+  the bank returned: the invoice it paid opens again, the bank goes down by the check and the
+  bank's fee (posted to the expense account you choose), and a returned-check fee you charge the
+  customer goes on a new invoice. Voiding the bounced check puts it all back.
+- **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
+  starting at what the card owes. It posts as a transfer.
 - **Save & Close, Save & New and Clear on every form.** Invoices, sales receipts, estimates, credit
   memos, bills, checks, expenses, card credits, vendor credits, purchase orders, deposits, transfers
   and journal entries now end in these three buttons. **Alt+S** saves and closes the form's window;
@@ -17,10 +28,20 @@ people using LocalBooks.
   it, and **Ctrl+Insert** / **Ctrl+Delete** insert or delete a line. They're also in the **Edit**
   menu, and the toolbar buttons show their keys when you hover over them.
 
+## [0.11.0]
+
+- **Six more reports.** **Profit & Loss by Month**, **Transaction List by Customer**,
+  **Transaction List by Vendor**, **Expenses by Vendor by Month**, **Transaction Detail by Account**
+  and **Voided Transactions** are in the report list. Like the other detail reports, each can be
+  customized, saved, exported and printed, and a click on a line opens its transaction.
 - **Add a new vendor right from a bill or check.** The Vendor box on bills, checks, expenses,
   purchase orders and vendor credits lists matching vendors as you type. When the name isn't on the
   list, choose **Add as a new vendor**, or **Add with details…** to fill in the address and terms
   too.
+- **Add a new customer or item right from a sale.** The Customer box on invoices, sales receipts,
+  estimates and credit memos works the same way, with **Add as a new customer**. The
+  Product/Service column ends in **＋ Add new item…**, which adds the product or service and fills
+  in the line.
 - **See all of a vendor's or customer's transactions.** Click a name in the Vendors or Customers
   list and its bills, checks, invoices and payments show underneath, newest first, with a total.
   Double-click one to open it.

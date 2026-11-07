@@ -54,7 +54,10 @@ const FILE: &[Entry] = &[
     // Import / Convert… opens the Desktop Migration Wizard (Settings › Import & Migration).
     Entry::Sub("Utilities", &[page("Import / Convert…", "settings/import"), form("Condense Data…", "settings", "data")]),
     Entry::Sep,
-    Entry::Sub("Print Forms", &[page("Statements…", "sales/statements")]),
+    Entry::Sub(
+        "Print Forms",
+        &[page("Invoices…", "sales/print-invoices"), page("Checks…", "expenses/print-checks"), Entry::Sep, page("Statements…", "sales/statements")],
+    ),
     page("Send Forms…", "sales/send-forms"),
     Entry::Sep,
 ];
@@ -160,6 +163,8 @@ const BANKING: &[Entry] = &[
     Entry::Sep,
     form("Make Deposits", "banking/transfers", "bank-deposit"),
     form("Transfer Funds", "banking/transfers", "transfer"),
+    form("Pay Down Credit Card…", "banking/transfers", "pay-card"),
+    page("Record Bounced Check…", "banking/bounced-checks"),
     page("Reconcile", "banking/reconcile"),
     Entry::Sep,
     Entry::Sub("Bank Feeds", &[page("Bank Feeds Center", "banking/feeds")]),

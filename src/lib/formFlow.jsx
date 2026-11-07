@@ -91,7 +91,7 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
 const TOOLBAR_IDS = { delete: ['void', 'delete'], memorize: ['memorize'] };
 
 function toolbarButton(root, name) {
-  const selector = TOOLBAR_IDS[name].map((id) => `[data-toolbar-button][data-command="${id}"]:not(:disabled)`).join(', ');
+  const selector = TOOLBAR_IDS[name].map((id) => `[data-toolbar-button][data-command="${id}"]:not(:disabled):not([aria-disabled="true"])`).join(', ');
   return root?.querySelector(selector) ?? null;
 }
 

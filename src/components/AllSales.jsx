@@ -18,6 +18,7 @@ import { useOpenFromList } from '../lib/windows.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
@@ -114,12 +115,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         <h2 className="mr-2 self-center text-md font-semibold">New sales receipt</h2>
         <label className="w-[220px]">
           <span className="qb-label">Customer (optional)</span>
-          <input autoFocus className="qb-input w-full" value={customer} onChange={(e) => setCustomer(e.target.value)} list="receipt-customers" placeholder="Walk-in" />
-          <datalist id="receipt-customers">
-            {(customers.data ?? []).map((c) => (
-              <option key={c.id} value={c.name} />
-            ))}
-          </datalist>
+          <NameField kind="customer" autoFocus className="qb-input w-full" names={customers.data ?? []} value={customer} onChange={setCustomer} placeholder="Walk-in" />
         </label>
         <label>
           <span className="qb-label">Sales receipt date</span>
