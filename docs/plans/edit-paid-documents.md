@@ -32,16 +32,18 @@ In one write transaction (`begin_write` … `commit_write`, so the audit rows ar
 commit), `edits::replace_invoice` / `replace_bill`:
 
 1. checks the original is live (not voided, posted);
-2. checks the edit is allowed while payments are applied (below);
+2. voids the original's journal entry with `ledger::void_for_replacement`: a reversing entry on the
+   original's date, with every voiding rule of `void_in_tx` except "has payments or credits" and
+   "has a bounced check": reconciled or ticked lines, closed period, reclassified lines, inventory
+   already used. The document itself is not marked void yet. Voiding first means stock the original
+   sold is back before the edited version sells it;
 3. posts the edited document (a new invoice or bill, a new number for invoices, as today);
 4. records the edit in `transaction_edits` (original entry → new entry) and moves attachments;
-5. calls `ledger::relink_applied`, which points every live payment, applied credit and live bounced
-   check at the new document and recomputes `amount_paid_cents` and status on both documents
-   (the original's drops to zero);
-6. voids the original's journal entry with the usual `ledger::void_in_tx`. With nothing applied any
-   more, its "has payments" rule passes, and every other voiding rule still runs: reconciled or
-   ticked lines, closed period (the reversal is dated on the original's date), reclassified lines,
-   inventory already used;
+5. if anything is applied, checks the edit may keep it (same customer or vendor, same currency and
+   rate, a total that still covers it; below);
+6. calls `ledger::relink_applied`, which points every live payment, applied credit and live bounced
+   check at the new document, recomputes `amount_paid_cents` and status on both documents (the
+   original's drops to zero) and then marks the original document void;
 7. writes one `EDIT` record in the ledger audit trail.
 
 Any error rolls the whole transaction back, so a refused edit changes nothing.
@@ -52,7 +54,7 @@ version and count toward nothing.
 ### Why the ledger rules still hold
 
 - Only `ledger.rs` writes journal rows: the replacement posts through `post_entry_in_tx` and voids
-  through `void_in_tx`; re-linking writes no journal rows at all, and lives in `ledger.rs` next to
+  through `void_for_replacement` (the same code as `void_in_tx`); re-linking writes no journal rows at all, and lives in `ledger.rs` next to
   `recompute_paid`.
 - Posted entries are never edited: the original is reversed, not changed; payments' entries are not
   touched.
