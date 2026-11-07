@@ -21,14 +21,27 @@ taken before you billed the work.
    Payment**).
 2. In **Received from**, choose the customer. Their open invoices are listed, oldest first, and
    **Customer balance** shows at the top right.
-3. Type the **Amount received**. LocalBooks applies it to the oldest invoices first; adjust
-   **Amount to apply** on any row if the customer told you otherwise. To spread the amount
-   received over the invoices again, click **Auto Apply** in the toolbar.
+3. Type the **Amount received**. LocalBooks applies it for you: to an invoice whose balance is
+   exactly that amount, otherwise to the oldest invoices first. Adjust the **Payment** on any row
+   if the customer told you otherwise, or tick and untick invoices in the first column. To spread
+   the amount received over the invoices again, click **Auto Apply** in the toolbar.
 4. Click how you were paid: **Cash**, **Check**, **Card** (credit or debit), **Bank / ACH** (ACH,
    e-check or bank transfer), or **More** for **Wire** and **Other**. The chosen tile is
    highlighted.
 5. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment** (or **Save** in
    the toolbar). **New** in the toolbar clears the form to start over.
+
+### How payments are applied (Preferences › Payments)
+
+An Admin chooses, in **Preferences › Payments › Company Preferences**:
+
+- **Apply payments:** *an exact match, else oldest first* (the usual), *oldest invoices first*, or
+  *not automatically*, where you tick the invoices yourself. **Auto Apply** on the form always
+  applies, whichever you choose.
+- **Calculate the amount:** when on, the **Amount received** becomes the total of the invoices you
+  tick or type a payment on.
+- **Deposit to:** when on, payments and sales receipts go to **Undeposited Funds** unless you
+  choose another account; when off, they start on your first bank account.
 
 ## Payments in another currency
 

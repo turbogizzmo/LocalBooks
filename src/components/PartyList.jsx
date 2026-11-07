@@ -9,6 +9,7 @@ import { CustomFieldInputs } from './SalesLists.jsx';
 import { ProfileEntrySelect, TermsSelect } from './ProfileFields.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
 import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
+import { JOB_STATUSES, useSalesPrefs } from '../lib/salesPrefs.js';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
@@ -212,6 +213,8 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         salesRepId: form.salesRepId ?? null,
         priceLevelId: form.priceLevelId ?? null,
         ...(kind === 'customer' ? customerRecordPayload(form) : {}),
+        preferredDelivery: form.preferredDelivery || null,
+        jobStatus: form.jobStatus || null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
       if (kind === 'vendor' && bank.draft !== undefined) {
@@ -337,6 +340,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               </label>
             )}
             {kind === 'customer' && <CustomerPriceLevelField form={form} setForm={setForm} />}
+            {kind === 'customer' && <CustomerSendFields form={form} setForm={setForm} />}
             <CustomFieldInputs fields={fields} onChange={setFields} />
             <label className="col-span-2 flex flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Notes</span>
@@ -354,10 +358,45 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   );
 }
 
+/**
+ * How a customer's forms are sent (ticks Email later or Print later on their new invoices and
+ * estimates), and a job's status, named as Preferences › Jobs & Estimates names them.
+ */
+function CustomerSendFields({ form, setForm }) {
+  const { jobStatus } = useSalesPrefs();
+  const isJob = String(form.name ?? '').includes(':') || Boolean(form.jobStatus);
+  const pick = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value || null }));
+  return (
+    <>
+      <label className="flex flex-col gap-0.5">
+        <span className="font-semibold text-qb-ink-muted">Preferred delivery</span>
+        <select className="qb-input" value={form.preferredDelivery ?? ''} onChange={pick('preferredDelivery')}>
+          <option value="">Not set</option>
+          <option value="EMAIL">Email (marked Email later)</option>
+          <option value="PRINT">Print (marked Print later)</option>
+          <option value="NONE">None</option>
+        </select>
+      </label>
+      {isJob && (
+        <label className="flex flex-col gap-0.5">
+          <span className="font-semibold text-qb-ink-muted">Job status</span>
+          <select className="qb-input" value={form.jobStatus ?? ''} onChange={pick('jobStatus')}>
+            <option value="">None</option>
+            {JOB_STATUSES.map((st) => (
+              <option key={st.code} value={st.code}>{jobStatus[st.code]}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
 /** Customer or vendor list with an inline "add" row at the top of the grid. */
 export default function PartyList({ kind, navigate }) {
   const cfg = CONFIG[kind];
   const { data, error } = useLedgerQuery(cfg.list);
+  const { jobStatus } = useSalesPrefs();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -524,6 +563,7 @@ export default function PartyList({ kind, navigate }) {
                     <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
                       {p.name.split(':').at(-1)}
                       {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
+                      {p.jobStatus && <span className="ml-1 text-2xs text-qb-info">· {jobStatus[p.jobStatus]}</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
                     </td>
                     <td className="qb-grid-cell text-qb-ink-muted">{p.email ?? ''}</td>

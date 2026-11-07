@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SalesAddresses } from './SalesAddresses.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { ProfileEntrySelect } from './ProfileFields.jsx';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 /**
  * Rep, ship date, Ship Via, the customer custom fields marked for sales forms and the Customer
@@ -9,7 +10,7 @@ import { ProfileEntrySelect } from './ProfileFields.jsx';
  * show only once their list has an entry (or the document being loaded already has a value), so a
  * company that does not use them sees nothing; the Customer Message box is always there, with
  * "Add new" to start the list. The rep and fields fill in from the customer until the user changes
- * them.
+ * them. A new form starts with the company's usual Ship Via (Preferences › Sales & Customers).
  *
  * `addresses` is the Bill To / Ship To / P.O. No. / FOB row. The addresses fill in from the customer
  * (a job uses its parent's when it has none) until the user edits them; the document keeps what
@@ -25,6 +26,14 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
   const [messageId, setMessageId] = useState(null);
+  // The company defaults go on a new form once preferences load, unless a document was loaded.
+  const { defaultShipMethodId, loaded: prefsLoaded } = useSalesPrefs();
+  const [defaulted, setDefaulted] = useState(false);
+  useEffect(() => {
+    if (!prefsLoaded || defaulted) return;
+    setDefaulted(true);
+    setShipMethodId(defaultShipMethodId);
+  }, [prefsLoaded, defaulted, defaultShipMethodId]);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
@@ -178,6 +187,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setRepTouched(true);
       setRepId(details?.salesRepId ?? null);
       setShipDate(details?.shipDate ?? '');
+      setDefaulted(true);
       setShipMethodId(details?.shipMethodId ?? null);
       setMessageId(details?.customerMessageId ?? null);
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
@@ -193,7 +203,9 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setRepTouched(false);
       setRepId(null);
       setShipDate('');
-      setShipMethodId(null);
+      // A new form takes the company's Ship Via, now or once preferences load.
+      setDefaulted(prefsLoaded);
+      setShipMethodId(defaultShipMethodId);
       setMessageId(null);
       setValues({});
       setTouched(new Set());

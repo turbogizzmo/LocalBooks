@@ -6,8 +6,10 @@ pay it.
 ## Enter a bill
 
 1. Go to **Expenses › Bills** and click **New bill** (or **+ New › Bill**).
-2. Choose the **Vendor**, then enter **Bill no.**, **Bill date**, **Due date** and the **Bill
-   total** from the vendor's invoice.
+2. Choose the **Vendor**, then enter **Bill no.**, **Bill date** and the **Bill total** from the
+   vendor's invoice. The **Due date** fills in from the vendor's terms, or for a vendor without
+   terms from **Preferences › Bills › Bills are due** (10 days unless an Admin changes it). Type
+   another due date if the bill says so.
 3. Split the bill across expense accounts, one line per category. A line can be an amount, or a
    quantity × rate (for example 2.5 hours at 40.00).
 4. The lines must add up to the bill total. When they do, the split shows as fully allocated.
@@ -56,6 +58,24 @@ numbers each one pays. The check numbers show in the **Num** column of reports a
 
 > **Tip:** A bill with payments can't be voided until those payments are voided. Void a payment
 > from its **Actions** menu.
+
+### Use vendor credits when paying
+
+Turn on **Use vendor credits automatically** in **Preferences › Bills › Company Preferences** and
+Pay Bills uses each vendor's open credits on the bills you tick, the oldest credit first. The
+**Credits used** column shows how much each bill takes, and **Payment** fills in with what is left.
+A bill the credits pay in full needs no payment and no check. Credits aren't used when you pay by
+ACH file; apply them from **Expenses › Vendor Credits** first.
+
+### Take early-payment discounts
+
+A bill on terms with a discount, such as *2% 10 Net 30*, shows the discount it offers in **Discount
+offered**. To take it automatically, tick **Take early-payment discounts automatically** in
+**Preferences › Bills** and choose the **Discount account** (an expense account such as Purchase
+Discounts). Then, when the payment date is on or before the discount's last day, Pay Bills takes
+the discount off a bill nothing has been paid on yet and pays the rest. The discount is recorded
+as a vendor credit to the discount account, used on that bill, so it shows in the vendor's
+history and reports like any other credit.
 
 ## Pay bills by ACH file
 

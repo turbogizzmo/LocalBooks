@@ -55,6 +55,7 @@ const OPEN: &[&str] = &[
     "take_desktop",
     "set_desktop_view",
     "set_window_preferences",
+    "set_menu_view_enabled",
 ];
 
 const ADMIN: &[&str] = &[

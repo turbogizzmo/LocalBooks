@@ -73,6 +73,10 @@ pub struct PartyDetails {
     pub credit_limit_cents: Option<i64>,
     /// Customers only: their resale certificate or tax ID, as text.
     pub resale_number: Option<String>,
+    /// Customers only: how their forms are sent (`EMAIL`, `PRINT`, `NONE`; `None` = not set).
+    pub preferred_delivery: Option<String>,
+    /// Jobs: `PENDING`, `AWARDED`, `IN_PROGRESS`, `CLOSED` or `NOT_AWARDED` (`None` = not set).
+    pub job_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -137,6 +141,9 @@ pub struct PartyDetailsInput {
     pub credit_limit_cents: Option<i64>,
     #[serde(default)]
     pub resale_number: Option<String>,
+    pub preferred_delivery: Option<String>,
+    #[serde(default)]
+    pub job_status: Option<String>,
     /// Custom field values to set (fields left out keep theirs).
     #[serde(default)]
     pub custom_fields: Vec<crate::custom_fields::FieldValue>,
@@ -152,12 +159,13 @@ pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_
         "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, terms_id,
                                customer_type_id, job_type_id, NULL AS vendor_type_id, parent_id IS NOT NULL AS is_job, notes,
                                NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
-                               sales_rep_id, price_level_id, shipping_address, contact_name, alt_contact_name, alt_phone, fax,
+                               sales_rep_id, price_level_id, preferred_delivery, job_status, shipping_address, contact_name, alt_contact_name, alt_phone, fax,
                                website, account_number, credit_limit_cents, resale_number
                         FROM customers WHERE id = ?1",
         _ => "SELECT id, name, company_name, email, phone, address, terms_days, terms_id,
                      NULL AS customer_type_id, NULL AS job_type_id, vendor_type_id, 0 AS is_job, notes, tax_id, tax_id_masked, is_1099, is_active,
                      NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
+                     NULL AS preferred_delivery, NULL AS job_status,
                      NULL AS shipping_address, NULL AS contact_name, NULL AS alt_contact_name, NULL AS alt_phone, NULL AS fax,
                      NULL AS website, NULL AS account_number, NULL AS credit_limit_cents, NULL AS resale_number
               FROM vendors WHERE id = ?1",
@@ -230,6 +238,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             _ => {}
         }
     }
+    let delivery = crate::sales_prefs::parse_delivery(input.preferred_delivery.as_deref())?;
+    let job_status = crate::sales_prefs::parse_job_status(input.job_status.as_deref())?;
     let keep_tax_id = input.keep_tax_id || t == "customers";
     if !keep_tax_id && !access.can_see() {
         return Err("TAX_ID_LOCKED: only users who can see sensitive data can change a tax ID".into());
@@ -239,9 +249,9 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
                     tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14,
-                    terms_id = ?15, customer_type_id = ?16, job_type_id = ?17,
-                    shipping_address = ?18, contact_name = ?19, alt_contact_name = ?20, alt_phone = ?21, fax = ?22, website = ?23,
-                    account_number = ?24, credit_limit_cents = ?25, resale_number = ?26 WHERE id = ?12",
+                    terms_id = ?15, customer_type_id = ?16, job_type_id = ?17, preferred_delivery = ?18, job_status = ?19,
+                    shipping_address = ?20, contact_name = ?21, alt_contact_name = ?22, alt_phone = ?23, fax = ?24, website = ?25,
+                    account_number = ?26, credit_limit_cents = ?27, resale_number = ?28 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -260,6 +270,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(input.terms_id)
         .bind(input.customer_type_id)
         .bind(input.job_type_id)
+        .bind(delivery)
+        .bind(job_status)
         .bind(clean(&input.shipping_address).map(|a| crate::sales_header::normalize_address(&a)))
         .bind(clean(&input.contact_name))
         .bind(clean(&input.alt_contact_name))

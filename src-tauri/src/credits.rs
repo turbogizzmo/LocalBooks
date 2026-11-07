@@ -461,7 +461,7 @@ pub async fn create_vendor_credit(pool: &SqlitePool, input: VendorCreditInput) -
     vendor_credit(pool, id).await
 }
 
-async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCreditInput) -> Result<i64, String> {
+pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCreditInput) -> Result<i64, String> {
     if input.lines.is_empty() {
         return Err("VC_NO_ITEMS: add at least one line".into());
     }
