@@ -112,10 +112,12 @@ impl FormLineInput {
     }
 
     /// A group heading over the next `count` item lines.
+    #[cfg(test)]
     pub fn group(after_lines: usize, count: usize, print_items: bool) -> Self {
         FormLineInput { group_line_count: count, group_quantity_e4: Some(10_000), print_items: Some(print_items), ..Self::blank(after_lines, FormLineKind::Group) }
     }
 
+    #[cfg(test)]
     pub fn subtotal(after_lines: usize) -> Self {
         Self::blank(after_lines, FormLineKind::Subtotal)
     }
@@ -126,6 +128,7 @@ impl FormLineInput {
     }
 
     /// A discount of a percentage (`percent_ppm`) or an amount off the line above.
+    #[cfg(test)]
     pub fn discount(after_lines: usize, account_id: i64, percent_ppm: Option<i64>, amount_cents: Option<i64>, is_taxable: bool) -> Self {
         FormLineInput { account_id: Some(account_id), percent_ppm, amount_cents, is_taxable, ..Self::blank(after_lines, FormLineKind::Discount) }
     }

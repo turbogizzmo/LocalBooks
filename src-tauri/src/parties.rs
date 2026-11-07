@@ -397,6 +397,7 @@ pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bo
 
 /// Changes a product's name, description, default rate and income account. Documents already
 /// posted keep what they were posted with.
+#[cfg(test)]
 pub async fn update_product(pool: &SqlitePool, id: i64, input: ProductInput) -> Result<ProductView, String> {
     update_item(pool, id, input, None).await
 }

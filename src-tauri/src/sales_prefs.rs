@@ -450,6 +450,7 @@ pub async fn drop_zero_lines(pool: &SqlitePool) -> Result<bool, String> {
 }
 
 /// The name shown for each job status, by stored code.
+#[cfg(test)]
 pub async fn job_status_labels(pool: &SqlitePool) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
     for (code, key, _) in JOB_STATUSES {
