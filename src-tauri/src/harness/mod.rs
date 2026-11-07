@@ -14,6 +14,7 @@ mod golden;
 mod graphs;
 mod job_costing;
 mod ledger_props;
+mod list_reports;
 mod report_presets;
 
 use sqlx::SqlitePool;

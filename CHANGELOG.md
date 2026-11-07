@@ -32,6 +32,18 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+- **Phone lists, contact lists and more reports.** A new **Lists** group in the report list has the
+  **Customer** and **Vendor Phone Lists** and **Contact Lists**, the **Item Listing** and the
+  **Account Listing**. Also new: **Balance Sheet Summary**, **Profit & Loss YTD Comparison**, **Net
+  Income Detail**, **Sales by Rep Detail**, **Average Days to Pay Summary**, **Unpaid Bills by Job**,
+  **Open Purchase Orders Detail**, **Time by Job Summary** and **Detail**, **Time by Name**, **Time by
+  Item**, the **Physical Inventory Worksheet** (print it and write in the counts) and the **Audit
+  Trail**, showing who posted, voided or changed what and when.
+- **Collapse and expand report headings.** Click ▾ beside a heading to show only its total, or
+  **Collapse all** to see just the totals. Reports print the way they're shown.
+- **Process Multiple Reports.** Under **Memorized reports**, tick several reports and display them
+  together, print them in one go (each on a new page), or save them as one Excel workbook with a
+  worksheet per report.
 
 ## [0.11.0]
 

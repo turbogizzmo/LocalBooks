@@ -253,7 +253,7 @@ under [`docs/guide/`](docs/guide/README.md).
 
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
-| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
@@ -271,7 +271,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
 | Custom forms & email | Settings › Custom Forms · Email; Sales › Send Forms | Invoice and estimate designer, PDFs, mail app or SMTP, sent history, Email later queue | [guide](docs/guide/custom-forms.md) |
-| Custom reports | Reports | Detail reports (P&L and Balance Sheet Detail, aging details, Open Invoices, customer and vendor balances, sales, purchases and income by name or item, Check and Deposit Detail, 1099 Detail, Journal, Transaction Lists by date, customer and vendor, Transaction Detail by Account, P&L and expenses by month, Voided Transactions) you can filter, regroup and save as memorized reports | [guide](docs/guide/reports.md#customize-a-report) |
+| Custom reports | Reports | Detail reports (P&L and Balance Sheet Detail, aging details, Open Invoices, customer and vendor balances, sales, purchases and income by name or item, Check and Deposit Detail, 1099 Detail, Journal, Transaction Lists by date, customer and vendor, Transaction Detail by Account, P&L and expenses by month, Voided Transactions) you can filter, regroup and save as memorized reports; Process Multiple Reports runs several at once | [guide](docs/guide/reports.md#customize-a-report) |
 | Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/custom-forms.md) |
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; click a name to see its transactions; products fill in invoice lines; add a new customer, vendor or item right from a form as you type | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md) |
@@ -297,7 +297,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar; General (my) preferences such as Enter moving between fields and the date new transactions start on | [guide](docs/guide/getting-started.md#set-how-typing-works-general-preferences) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
 | Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
-| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
+| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
 | QuickReport | Ctrl+Q in a register or the account, name and item lists; Ctrl+H, Ctrl+Y | A report of the selected account's, name's or item's transactions; Transaction History and Transaction Journal for one transaction | [guide](docs/guide/reports.md#quickreport-transaction-history-and-transaction-journal) |

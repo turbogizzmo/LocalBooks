@@ -7,6 +7,8 @@ import CustomReport, { isCustomReport, useCustomReports, withCustomReports } fro
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
 import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReports.jsx';
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
+import ListReport, { isListReport, useListReports, withListReports } from './ListReports.jsx';
+import ProcessMultipleReports from './ProcessMultipleReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
   AgingReport,
@@ -438,6 +440,15 @@ const REPORT_GROUPS = [
   },
 ];
 
+const PROCESS_MULTIPLE = 'process-multiple';
+
+/** Process Multiple Reports, at the end of the memorized reports (a group of its own until there are some). */
+function withProcessMultiple(groups) {
+  const entry = [PROCESS_MULTIPLE, 'Process Multiple Reports…'];
+  const memorized = groups.find((g) => g.title === 'Memorized reports');
+  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, entry] } : g)) : [...groups, { title: 'Memorized reports', reports: [entry] }];
+}
+
 export default function Reports({ navigate, intent }) {
   const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
   // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
@@ -458,7 +469,8 @@ export default function Reports({ navigate, intent }) {
     if (intent?.data?.zoom) openReport(intent.data.report, { zoom: intent.data.zoom });
     else if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
-  const groups = withCustomReports(REPORT_GROUPS, custom);
+  const listCatalog = useListReports();
+  const groups = withProcessMultiple(withCustomReports(withListReports(REPORT_GROUPS, listCatalog), custom));
   const reportName = groups.flatMap((g) => g.reports).find(([id]) => id === report)?.[1] ?? null;
   // The window is named after its report, and reopens on it with the desktop.
   // A QuickReport is named after what it reports on, and reopens narrowed the same way.
@@ -528,6 +540,8 @@ export default function Reports({ navigate, intent }) {
         {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
+        {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
+        {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
         {isCustomReport(report) && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>
