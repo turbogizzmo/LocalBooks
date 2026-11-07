@@ -598,3 +598,45 @@ fn leaving_zero_lines_off_keeps_form_lines_in_place() {
     assert_eq!(after[1].after_lines, 2);
     assert!(lay_out(&[item(1_000, false), item(500, false)], &after, "T").is_ok());
 }
+
+#[tokio::test]
+async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_its_payment() {
+    let pool = test_pool().await;
+    let (ar, checking, services) = (account_id(&pool, "1200").await, account_id(&pool, "1010").await, account_id(&pool, "4100").await);
+    let discounts = discounts_given(&pool).await;
+    // A group of two items, 10% off the group, a subtotal, then one more line.
+    let input = |extra_cents| {
+        invoice(
+            vec![line(services, 8_000, false), line(services, 2_000, false), line(services, extra_cents, false)],
+            vec![FormLineInput::group(0, 2, false), FormLineInput::discount(2, discounts, Some(100_000), None, false), FormLineInput::subtotal(2)],
+            None,
+            0,
+        )
+    };
+    let original = create_and_post_invoice(&pool, input(1_000)).await.unwrap();
+    assert_eq!(original.total_cents, 10_000 - 1_000 + 1_000);
+    crate::invoices::record_payment(
+        &pool,
+        crate::invoices::PaymentInput {
+            payment_method_id: None,
+            invoice_id: original.id,
+            deposit_account_id: checking,
+            payment_date: d(5),
+            amount_cents: 4_000,
+            payment_method: "CHECK".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let edited = crate::edits::replace_invoice(&pool, original.id, input(3_000)).await.unwrap();
+    let detail = invoice_detail(&pool, edited).await.unwrap();
+    assert_eq!(detail.invoice.total_cents, 12_000);
+    assert_eq!(detail.invoice.amount_paid_cents, 4_000, "the payment stays applied to the edited invoice");
+    assert_eq!(detail.invoice.balance_cents, 8_000);
+    let form: Vec<(i64, &str, i64)> = detail.form_lines.iter().map(|f| (f.line_number, f.kind.as_str(), f.amount_cents)).collect();
+    assert_eq!(form, vec![(1, "GROUP", 10_000), (4, "DISCOUNT", -1_000), (5, "SUBTOTAL", 9_000)]);
+    assert_posts(&pool, detail.invoice.journal_entry_id.unwrap(), ar, 12_000).await;
+}

@@ -245,7 +245,7 @@ export const topics = [
   {
     id: 'edit-transaction', area: 'accounting', views: ['sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
     title: 'Edit a posted transaction',
-    body: 'Choose Edit… on an invoice, bill, expense, check or manual journal entry: the form opens with its details and Save changes replaces it. The original is voided and the edited version posted in one step, so both stay in the audit trail; remove payments or credits first.',
+    body: 'Choose Edit… on an invoice, bill, expense, check or manual journal entry: the form opens with its details and Save changes replaces it. The original is voided and the edited version posted in one step, so both stay in the audit trail. An invoice or bill with payments or credits applied can be edited too: they stay applied to the new version, as long as the total still covers them and the customer or vendor is the same.',
     keywords: 'edit change correct fix modify posted transaction',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
