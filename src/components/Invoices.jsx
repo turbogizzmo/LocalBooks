@@ -7,7 +7,7 @@ import { DiscountField, documentTotals, parseDiscount, useFormTax } from './Sale
 import Notice from './Notice.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
-import RowMenu, { voidItem } from './RowMenu.jsx';
+import RowMenu, { ConfirmDialog, voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
@@ -524,9 +524,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     onDoubleClick={() =>
                       inv.isVoided
                         ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} is voided, so it can't be edited.` })
-                        : inv.amountPaidCents > 0
-                          ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
-                          : onEdit(inv)
+                        : onEdit(inv)
                     }
                     title={open ? 'Click to receive a payment, double-click to edit' : 'Double-click to edit'}
                   >
@@ -573,8 +571,8 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                           attachments.menuItem(inv.journalEntryId),
                           {
                             label: 'Edit…',
-                            disabled: inv.isVoided || inv.amountPaidCents > 0,
-                            hint: inv.amountPaidCents > 0 ? 'Remove its payments and credits first' : undefined,
+                            disabled: inv.isVoided,
+                            hint: inv.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                             onSelect: () => onEdit(inv),
                           },
                           voidItem({
@@ -730,9 +728,6 @@ export default function Invoices({ accounts, intent }) {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
         if (!viewLocked && invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
-        if (!viewLocked && invoice.amountPaidCents > 0) {
-          return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
-        }
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
@@ -748,7 +743,9 @@ export default function Invoices({ accounts, intent }) {
           })),
           blankLine(defaultAccountId),
         ];
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName });
+        // Payments and credits applied stay applied to the edited version (see appliedText).
+        const applied = invoice.amountPaidCents > 0 ? formatMoney(invoice.amountPaidCents, invoice.currencyCode) : null;
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, applied });
         // Cleared so the effect above records what was loaded, and closing the window or stepping
         // with Previous / Next asks only once something has changed.
         setBaseline(null);
@@ -802,12 +799,18 @@ export default function Invoices({ accounts, intent }) {
     setFiles([]);
     loadForEdit(inv, false, true);
   };
-  // Saved invoices with payments, and voided ones, are shown but not saved again.
-  const locked = current && (current.isVoided || current.amountPaidCents > 0);
+  // Voided invoices are shown but not saved again.
+  const locked = current && current.isVoided;
+  const appliedText = editing?.applied ? `This invoice has ${editing.applied} in payments or credits applied. Saving will keep them applied to the new version.` : null;
+  const [confirmSave, setConfirmSave] = useState(null);
 
-  const save = async (mode) => {
-    if (locked) {
-      return setNotice({ kind: 'error', text: current.isVoided ? 'This invoice is voided.' : 'Remove its payments and credits before editing this invoice.' });
+  const save = async (mode, confirmed = false) => {
+    if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
+    if (appliedText && confirmed !== true && mode !== 'memorize') {
+      return setConfirmSave({
+        confirm: { title: 'Save changes to a paid invoice?', body: appliedText, confirmLabel: 'Save changes' },
+        onSelect: () => save(mode, true),
+      });
     }
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
@@ -967,10 +970,11 @@ export default function Invoices({ accounts, intent }) {
           }}
         />
       )}
+      {confirmSave && <ConfirmDialog item={confirmSave} onClose={() => setConfirmSave(null)} />}
       {editing && (
         <Notice
           kind="info"
-          text={`Editing invoice #${editing.number}. Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
+          text={`Editing invoice #${editing.number}. ${appliedText ? `${appliedText} ` : ''}Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
           onDismiss={reset}
         />
       )}
@@ -986,7 +990,7 @@ export default function Invoices({ accounts, intent }) {
         {locked && (
           <Notice
             kind="info"
-            text={current.isVoided ? `Invoice #${current.invoiceNumber} is voided. It stays in the books for the record.` : `Invoice #${current.invoiceNumber} has payments or credits applied, so it is shown read-only. Remove them to edit it.`}
+            text={`Invoice #${current.invoiceNumber} is voided. It stays in the books for the record.`}
           />
         )}
         {showAttachments && current?.journalEntryId && (

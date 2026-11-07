@@ -549,7 +549,68 @@ pub(crate) async fn recompute_paid(
     Ok(())
 }
 
+/// The document whose applied amounts [`relink_applied`] moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AppliedTo {
+    Invoice,
+    Bill,
+}
+
+/// One payment, applied credit or bounced check that [`relink_applied`] moved.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Relinked {
+    /// `PAYMENT`, `CREDIT`, `BOUNCED_CHECK`, `BILL_PAYMENT` or `VENDOR_CREDIT`.
+    pub kind: &'static str,
+    pub id: i64,
+    pub amount_cents: i64,
+}
+
+/// Finishes replacing an invoice or bill whose entry [`void_for_replacement`] voided: points every
+/// live payment, applied credit and live bounced check of `old_id` at `new_id` (`transaction_edits`
+/// must already link their entries; the schema refuses any other move), recomputes both documents'
+/// paid amounts and marks the original void. No journal row changes: the entries of payments and
+/// credits never name the document they pay.
+pub(crate) async fn relink_applied(tx: &mut Transaction<'_, Sqlite>, to: AppliedTo, old_id: i64, new_id: i64) -> Result<Vec<Relinked>, String> {
+    let tables: &[(&'static str, &str, &str)] = match to {
+        AppliedTo::Invoice => &[("PAYMENT", "invoice_payments", "invoice_id"), ("CREDIT", "credit_applications", "invoice_id"), ("BOUNCED_CHECK", "bounced_checks", "invoice_id")],
+        AppliedTo::Bill => &[("BILL_PAYMENT", "bill_payments", "bill_id"), ("VENDOR_CREDIT", "vendor_credit_applications", "bill_id")],
+    };
+    let mut moved = Vec::new();
+    for (kind, table, fk) in tables {
+        let mut rows: Vec<(i64, i64)> = sqlx::query_as(&format!(
+            "UPDATE {table} SET {fk} = ?2 WHERE {fk} = ?1 AND is_voided = 0 RETURNING id, amount_cents"
+        ))
+        .bind(old_id)
+        .bind(new_id)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        rows.sort_unstable();
+        moved.extend(rows.into_iter().map(|(id, amount_cents)| Relinked { kind, id, amount_cents }));
+    }
+    let (document, payments, fk) = match to {
+        AppliedTo::Invoice => ("invoices", "invoice_payments", "invoice_id"),
+        AppliedTo::Bill => ("bills", "bill_payments", "bill_id"),
+    };
+    recompute_paid(tx, document, payments, fk, old_id).await?;
+    recompute_paid(tx, document, payments, fk, new_id).await?;
+    sqlx::query(&format!("UPDATE {document} SET is_voided = 1 WHERE id = ?1")).bind(old_id).execute(&mut **tx).await.map_err(db_err)?;
+    Ok(moved)
+}
+
 pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
+    void_entry(tx, journal_entry_id, false).await
+}
+
+/// Voids an invoice's or bill's entry so an edited version can replace it while its payments and
+/// credits stay applied. Every voiding rule runs except "has payments" (and, for invoices, "has a
+/// bounced check"); the document itself is marked void by [`relink_applied`] once they have moved.
+pub(crate) async fn void_for_replacement(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64) -> Result<(), String> {
+    void_entry(tx, journal_entry_id, true).await
+}
+
+async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, replacing: bool) -> Result<(), String> {
     let header: Option<(i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>)> = sqlx::query_as(
         "SELECT entry_number, entry_date, memo, source_type, source_id, status, is_voided, reverses_entry_id
          FROM journal_entries WHERE id = ?1",
@@ -592,7 +653,11 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
     }
 
     let doc = source_id.unwrap_or_default();
+    if replacing && !matches!(source_type.as_str(), "INVOICE" | "BILL") {
+        return Err(format!("VOID_NOT_REPLACEABLE: entry #{number} is not an invoice or bill"));
+    }
     let blocked: Option<String> = match source_type.as_str() {
+        _ if replacing => None,
         "INVOICE" => sqlx::query_scalar(
             "SELECT 'VOID_HAS_PAYMENTS: invoice #' || invoice_number || ' has payments or credits applied; void or remove those first'
              FROM invoices WHERE id = ?1 AND amount_paid_cents <> 0
@@ -730,6 +795,7 @@ pub(crate) async fn void_in_tx(tx: &mut Transaction<'_, Sqlite>, journal_entry_i
 
     let flag = |table: &'static str| format!("UPDATE {table} SET is_voided = 1 WHERE id = ?1");
     match source_type.as_str() {
+        "INVOICE" | "BILL" if replacing => {}
         "INVOICE" => {
             sqlx::query(&flag("invoices")).bind(doc).execute(&mut **tx).await.map_err(db_err)?;
         }

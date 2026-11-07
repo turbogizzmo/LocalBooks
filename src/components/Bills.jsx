@@ -8,7 +8,7 @@ import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
-import RowMenu, { voidItem } from './RowMenu.jsx';
+import RowMenu, { ConfirmDialog, voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { StatusBadge } from './Invoices.jsx';
@@ -59,7 +59,16 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   };
 
   const [memorizing, setMemorizing] = useState(null);
-  const post = async (mode) => {
+  // Payments and vendor credits applied stay applied to the edited version.
+  const appliedText = editing?.bill.amountPaidCents > 0 ? `This bill has ${formatCents(editing.bill.amountPaidCents)} in payments or credits applied. Saving will keep them applied to the new version.` : null;
+  const [confirmSave, setConfirmSave] = useState(null);
+  const post = async (mode, confirmed = false) => {
+    if (appliedText && confirmed !== true && mode !== 'memorize') {
+      return setConfirmSave({
+        confirm: { title: 'Save changes to a paid bill?', body: appliedText, confirmLabel: 'Save changes' },
+        onSelect: () => post(mode, true),
+      });
+    }
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -215,7 +224,9 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : "Attach the vendor's invoice…"} />
         </div>
       )}
+      {appliedText && <Notice kind="info" text={appliedText} />}
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+      {confirmSave && <ConfirmDialog item={confirmSave} onClose={() => setConfirmSave(null)} />}
       {memorizing && (
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
       )}
@@ -545,9 +556,6 @@ export default function Bills({ accounts, intent }) {
   // rules the save would: a voided bill, or one with payments or credits, can't be replaced.
   const startEdit = (bill) => {
     if (bill.isVoided) return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} is voided, so it can't be edited.` });
-    if (bill.amountPaidCents > 0) {
-      return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
-    }
     return api.getDocumentLines('bill', bill.id).then(
       (lines) => {
         setPaying(false);
@@ -709,8 +717,8 @@ export default function Bills({ accounts, intent }) {
                   attachments.menuItem(b.journalEntryId),
                   {
                     label: 'Edit…',
-                    disabled: b.isVoided || b.amountPaidCents > 0,
-                    hint: b.amountPaidCents > 0 ? 'Void its payments and remove its credits first' : undefined,
+                    disabled: b.isVoided,
+                    hint: b.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                     onSelect: () => openBill(b),
                   },
                   voidItem({
@@ -737,9 +745,7 @@ export default function Bills({ accounts, intent }) {
                       onDoubleClick={() =>
                         b.isVoided
                           ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} is voided, so it can't be edited.` })
-                          : b.amountPaidCents > 0
-                            ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
-                            : openBill(b)
+                          : openBill(b)
                       }
                       title="Double-click to edit"
                     >

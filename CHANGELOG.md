@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Edit an invoice or bill that's already part paid.** An invoice with payments or credit memos
+  applied, or a bill with payments or vendor credits applied, now opens for editing instead of
+  asking you to void the payments first. The form tells you how much is applied, and saving keeps
+  it all applied to the corrected version, so the open balance is the new total less what was
+  paid. Deposits and reconciliations aren't affected. The edit is refused, with a message saying
+  why, if the new total would be less than what's applied or the customer or vendor changes.
 - **Safer Excel imports.** A damaged or deliberately malformed `.xls` report file can no longer
   crash LocalBooks or make it run out of memory while importing (the Excel reader is updated).
 - **Type checks and deposits straight into a register.** Bank and credit card registers end in a
