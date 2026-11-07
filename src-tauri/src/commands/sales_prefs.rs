@@ -1,10 +1,11 @@
 //! Preferences batch 4: what Receive Payments, Enter Bills and Pay Bills ask the company defaults.
 
 use super::prelude::*;
-use crate::sales_prefs::{self, AppliedAmount, DiscountUse, PayBillsPlan};
+use crate::sales_prefs::{self, AppliedAmount, DiscountUse, PayBillsPlan, PaymentDiscounts};
 
 handlers![
     get_payment_application,
+    get_payment_discounts,
     get_bill_due_date,
     get_pay_bills_plan,
     pay_bills_with_credits,
@@ -13,8 +14,21 @@ handlers![
 
 /// How an amount received from a customer is spread over their open invoices.
 #[tauri::command]
-pub async fn get_payment_application(db: State<'_, Db>, customer_name: String, currency_code: Option<String>, amount_cents: i64, mode: Option<String>) -> Result<Vec<AppliedAmount>, String> {
-    sales_prefs::payment_application(&db.pool().await, &customer_name, currency_code.as_deref(), amount_cents, mode.as_deref()).await
+pub async fn get_payment_application(
+    db: State<'_, Db>,
+    customer_name: String,
+    currency_code: Option<String>,
+    amount_cents: i64,
+    mode: Option<String>,
+    payment_date: Option<NaiveDate>,
+) -> Result<Vec<AppliedAmount>, String> {
+    sales_prefs::payment_application(&db.pool().await, &customer_name, currency_code.as_deref(), amount_cents, mode.as_deref(), payment_date).await
+}
+
+/// The early-payment discounts the listed invoices still offer on the payment date.
+#[tauri::command]
+pub async fn get_payment_discounts(db: State<'_, Db>, invoice_ids: Vec<i64>, payment_date: NaiveDate) -> Result<PaymentDiscounts, String> {
+    sales_prefs::payment_discounts(&db.pool().await, &invoice_ids, payment_date).await
 }
 
 /// A new bill's due date: the vendor's terms, or the company's default days.

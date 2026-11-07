@@ -53,6 +53,8 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::sales_prefs::BILL_AUTO_CREDITS, "false"),
     (crate::sales_prefs::BILL_AUTO_DISCOUNTS, "false"),
     (crate::sales_prefs::BILL_DISCOUNT_ACCOUNT, ""),
+    (crate::sales_prefs::PAYMENT_AUTO_DISCOUNTS, "false"),
+    (crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT, ""),
     (crate::sales_prefs::DEFAULT_DELIVERY, "none"),
     // batch 5: tax and time (keys and validation in `preferences/tax_time.rs`)
     (tax_time::SALES_TAX_BASIS, "accrual"),
@@ -349,6 +351,9 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
     }
     if key == crate::sales_prefs::BILL_DISCOUNT_ACCOUNT && !normalized.is_empty() {
         crate::sales_prefs::check_discount_account(pool, normalized.parse::<i64>().unwrap_or_default()).await?;
+    }
+    if key == crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT && !normalized.is_empty() {
+        crate::sales_prefs::check_payment_discount_account(pool, normalized.parse::<i64>().unwrap_or_default()).await?;
     }
     if key == crate::sales_prefs::DEFAULT_SHIP_METHOD && !normalized.is_empty() {
         crate::sales_prefs::check_ship_method(pool, normalized.parse::<i64>().unwrap_or_default()).await?;

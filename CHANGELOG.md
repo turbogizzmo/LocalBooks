@@ -17,6 +17,13 @@ people using LocalBooks.
 - **More form shortcuts.** On an open form, **Ctrl+N** starts a new one, **Ctrl+P** prints it, and
   **Page Up** / **Page Down** open the previous and next, as the toolbar buttons do.
 
+- **Receive Payments takes early-payment discounts.** An invoice on terms such as *2% 10 Net 30*
+  that is paid in full by the discount's last day can now take its discount right on Receive
+  Payments, in a new **Discount** column you can change or clear. Choose the account it goes to
+  (an income account such as Sales Discounts) in **Preferences › Payments**, and tick **Take
+  customers' early-payment discounts automatically** to have it filled in. The payment and the
+  discount post together and close the invoice; voiding the payment reverses both. This matches
+  what Pay Bills already does for vendor discounts.
 - **A customer's or vendor's transactions add up correctly.** The panel below the Customers and
   Vendors lists used to add invoices and payments into one total, which meant nothing. Choose one
   type, such as Invoices, to see its total; with All types the panel counts the transactions.

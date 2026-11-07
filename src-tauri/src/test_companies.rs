@@ -66,7 +66,7 @@ fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> Inv
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
     invoices::record_payment(
         pool,
-        PaymentInput { payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: cents, payment_method: method.into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id: bank, payment_date: date, amount_cents: cents, payment_method: method.into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .expect("record a payment");
@@ -199,7 +199,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let euro = invoices::create_and_post_invoice(&pool, euro).await.expect("EUR invoice");
     invoices::record_payment(
         &pool,
-        PaymentInput { payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: 100_000, payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: euro.id, deposit_account_id: checking, payment_date: d(2025, 4, 1), amount_cents: 100_000, payment_method: "WIRE".into(), reference: Some("SWIFT 123".into()), exchange_rate_e6: Some(1_100_000) },
     )
     .await
     .expect("partial EUR payment at a new rate");

@@ -418,7 +418,7 @@ pub async fn match_undeposited(pool: &SqlitePool, items: &[MatchItem]) -> Result
         for item in items {
             let row: Option<(i64, i64, bool, Option<String>)> = match item.kind.as_str() {
                 "PAYMENT" => sqlx::query_as(
-                    "SELECT p.deposit_account_id, COALESCE(p.home_amount_cents, p.amount_cents), a.is_system = 1 AND a.account_type = 'OTHER_CURRENT_ASSET', i.customer_name
+                    "SELECT p.deposit_account_id, COALESCE(p.home_amount_cents, p.amount_cents - p.discount_cents), a.is_system = 1 AND a.account_type = 'OTHER_CURRENT_ASSET', i.customer_name
                      FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id JOIN chart_of_accounts a ON a.id = p.deposit_account_id
                      WHERE p.id = ?1 AND p.is_voided = 0 AND p.journal_entry_id IS NOT NULL",
                 ),
