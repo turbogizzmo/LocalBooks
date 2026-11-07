@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer Excel imports.** A damaged or deliberately malformed `.xls` report file can no longer
+  crash LocalBooks or make it run out of memory while importing (the Excel reader is updated).
 - **Type checks and deposits straight into a register.** Bank and credit card registers end in a
   blank row: enter the date, number, payee, account, memo and an amount, then click **Record** (or
   press Enter). A bank payment becomes a check, a deposit a deposit, a card charge an expense and a
