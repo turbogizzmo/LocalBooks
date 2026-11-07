@@ -17,6 +17,8 @@ people using LocalBooks.
 - **Credit limit warning.** When an invoice would take a customer over their credit limit,
   LocalBooks shows what they owe now and would owe, and asks before saving. It never blocks the
   sale.
+- **Row menus stay on screen.** A row's ▾ actions menu near the bottom of the window now opens
+  upward instead of running off the edge.
 - **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
   Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
   Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
