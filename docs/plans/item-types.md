@@ -232,7 +232,7 @@ in either is relaxed.
 - **Import from QuickBooks files.** `qbw_documents.rs` reads an invoice's lines with their item and
   ledger amount. The full import (`qbw_full_import::form`) already turns lines that post the other
   way into the document discount, and posts the file's own journal lines, so imported books stay
-  exact; this work leaves that as it is. Next (gaps row T20): lines whose item is a discount item
+  exact; this work leaves that as it is. Next (gaps row T21): lines whose item is a discount item
   become discount lines on that account, and other-charge items (`item_type` 4, already decoded)
   come in as `OTHER_CHARGE` items. The item-type codes for subtotal, discount and group items are
   not decoded yet. IIF and QIF imports are unchanged.
@@ -258,7 +258,7 @@ in either is relaxed.
 
 ## Building it
 
-Built in PR #151; the rest is gaps row T20. One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
+Built in PR #151; the rest is gaps row T21. One commit per type, on sales forms (invoices, sales receipts, estimates), in this order:
 
 1. **Subtotal**: migration `0067` (all of the storage above, so the schema lands once), `item_types.rs`,
    form-lines tables written and read back, the grid's Subtotal entry, printing.
