@@ -14,6 +14,7 @@ import DepositsTransfers from './DepositsTransfers.jsx';
 import Estimates from './Estimates.jsx';
 import ExpensesChecks from './ExpensesChecks.jsx';
 import FinanceCharges from './FinanceCharges.jsx';
+import BillCosts from './BillCosts.jsx';
 import FindTransactions from './FindTransactions.jsx';
 import FxRevaluation from './FxRevaluation.jsx';
 import Invoices from './Invoices.jsx';
@@ -59,6 +60,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/tax' && <SalesTax accounts={list} />}
       {view === 'sales/statements' && <Statements />}
       {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={navigate} />}
+      {view === 'sales/bill-costs' && <BillCosts navigate={navigate} />}
       {view === 'sales/send-forms' && <SendForms />}
       {view === 'sales/print-invoices' && <PrintInvoices />}
       {view === 'expenses/print-checks' && <PrintChecks accounts={list} />}

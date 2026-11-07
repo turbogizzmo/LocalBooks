@@ -153,11 +153,36 @@ pub(crate) async fn carry_over(tx: &mut Transaction<'_, Sqlite>, form: Form, old
 /// Saves the numbers of the checks that printed correctly and takes them out of the queue.
 /// Every number must be new for its bank account (counting voided checks and check bill payments,
 /// so a number is never used twice).
+///
+/// With Preferences › Checking › "Change check date when a check is printed", a check dated other
+/// than `today` is re-dated first. Posted entries never change, so this is an edit: the queued check
+/// is voided and posted again on the print date, both kept in the audit log, and the number goes on
+/// the replacement. Foreign-currency checks keep their date (their rate belongs to it).
 pub async fn mark_checks_printed(pool: &SqlitePool, printed: Vec<PrintedCheck>) -> Result<usize, String> {
+    mark_checks_printed_on(pool, printed, chrono::Local::now().date_naive()).await
+}
+
+pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedCheck>, today: chrono::NaiveDate) -> Result<usize, String> {
     if printed.is_empty() {
         return Ok(0);
     }
+    let redate = crate::preferences::flag(pool, crate::preferences::tax_time::DATE_CHECKS_PRINTED).await?;
     run(pool, async |tx| {
+        if redate {
+            for check in &mut printed {
+                let date: Option<(chrono::NaiveDate, bool)> = sqlx::query_as("SELECT expense_date, to_be_printed FROM expenses WHERE id = ?1 AND kind = 'CHECK' AND is_voided = 0")
+                    .bind(check.expense_id)
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(db_err)?;
+                if !matches!(date, Some((d, true)) if d != today) {
+                    continue;
+                }
+                if let Some(input) = crate::edits::expense_input_in_tx(tx, check.expense_id, today).await? {
+                    check.expense_id = crate::edits::replace_expense_in_tx(tx, check.expense_id, &input).await?;
+                }
+            }
+        }
         let mut seen: Vec<(i64, String)> = Vec::with_capacity(printed.len());
         for check in &printed {
             let number = check.check_number.trim();

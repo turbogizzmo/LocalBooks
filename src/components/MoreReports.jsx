@@ -401,8 +401,16 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
   );
 }
 
+/** Opens on the last filing period that ended (the return to file now), from Preferences › Sales Tax. */
 export function SalesTaxLiabilityReport() {
-  const p = usePeriod('thisQuarter');
+  const filing = useLedgerQuery(() => api.getSalesTaxPeriods(todayIso()));
+  if (!filing.data && !filing.error) return null;
+  const range = filing.data ? [filing.data.last.start, filing.data.last.end] : null;
+  return <SalesTaxLiability range={range} />;
+}
+
+function SalesTaxLiability({ range }) {
+  const p = usePeriod('fiscalQuarter', range);
   const { data, error, reload } = useLedgerQuery(() => (p.valid ? api.getTaxLiability(p.start, p.end) : Promise.resolve(null)));
   useEffect(() => {
     reload();
@@ -424,7 +432,7 @@ export function SalesTaxLiabilityReport() {
       rows={rows}
       error={error}
       toolbar={p.controls}
-      footer="Invoices and sales receipts less credit memos, by document date · record payments under Sales › Sales Tax"
+      footer={`${data?.basis === 'cash' ? 'Cash basis: invoices as they are paid; sales receipts and credit memos by date' : 'Accrual basis: invoices and sales receipts less credit memos, by document date'} (Preferences › Sales Tax) · record payments under Sales › Sales Tax`}
       onCsvRows={() => [
         ...data.rows.map((r) => [r.name, pct(r.ratePpm), plainAmount(r.taxableSalesCents), plainAmount(r.nonTaxableSalesCents), plainAmount(r.taxCollectedCents)]),
         ['Paid in the period', '', '', '', plainAmount(data.paidCents)],
@@ -434,7 +442,13 @@ export function SalesTaxLiabilityReport() {
   );
 }
 
-export function Vendors1099Report() {
+const KIND_1099 = { CHECK: 'Check', EXPENSE: 'Expense', BILL_PAYMENT: 'Bill payment' };
+
+/**
+ * 1099 Summary (per vendor and box) and 1099 Detail (each payment's share per account), from the
+ * account mapping in Preferences › Tax: 1099, with each box's threshold for the payment year.
+ */
+export function Vendors1099Report({ detail = false }) {
   const thisYear = Number(todayIso().slice(0, 4));
   const [year, setYear] = useState(thisYear - 1);
   const [all, setAll] = useState(false);
@@ -443,19 +457,36 @@ export function Vendors1099Report() {
     reload();
   }, [year, reload]);
   const shown = (data ?? []).filter((r) => all || r.overThreshold);
-  const total = shown.reduce((s, r) => s + r.paidCents, 0);
-  const columns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Paid', align: 'right' }];
+  const boxesOf = (r) => (all ? r.boxes : r.boxes.filter((b) => b.overThreshold));
+  const total = shown.reduce((s, r) => s + boxesOf(r).reduce((t, b) => t + b.paidCents, 0), 0);
   // Tax IDs are masked on screen and in print; the Excel and CSV exports carry them in full for users who may see them.
   const fullInCsv = shown.some((r) => r.taxId);
-  const rows = [
-    ...shown.map((r) => ({ cells: [r.vendorName, r.taxIdMasked ?? 'Missing', r.address ?? '', formatCents(r.paidCents)] })),
-    ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', formatCents(total)] }] : []),
-  ];
+  const summaryColumns = [{ label: 'Vendor' }, { label: 'Tax ID' }, { label: 'Address' }, { label: 'Box' }, { label: 'Paid', align: 'right' }];
+  const detailColumns = [{ label: 'Vendor' }, { label: 'Date' }, { label: 'Type' }, { label: 'Num' }, { label: 'Account' }, { label: 'Box' }, { label: 'Amount', align: 'right' }];
+  const boxLabel = (r, code) => r.boxes.find((b) => b.code === code)?.label ?? code;
+  const rows = detail
+    ? [
+        ...shown.flatMap((r) => [
+          ...r.details
+            .filter((d) => boxesOf(r).some((b) => b.code === d.boxCode))
+            .map((d) => ({ cells: [r.vendorName, formatDate(d.date), KIND_1099[d.kind] ?? d.kind, d.number ?? '', d.accountName, boxLabel(r, d.boxCode), formatCents(d.amountCents)] })),
+          { kind: 'total', cells: [`Total ${r.vendorName}`, '', '', '', '', '', formatCents(boxesOf(r).reduce((t, b) => t + b.paidCents, 0))] },
+        ]),
+        ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', '', '', '', formatCents(total)] }] : []),
+      ]
+    : [
+        ...shown.flatMap((r) =>
+          (boxesOf(r).length ? boxesOf(r) : [{ code: '', label: '—', paidCents: 0 }]).map((b, i) => ({
+            cells: [i === 0 ? r.vendorName : '', i === 0 ? (r.taxIdMasked ?? 'Missing') : '', i === 0 ? (r.address ?? '') : '', b.label, formatCents(b.paidCents)],
+          })),
+        ),
+        ...(shown.length ? [{ kind: 'grand', cells: ['TOTAL', '', '', '', formatCents(total)] }] : []),
+      ];
   return (
     <TableReport
-      title="1099 Summary"
+      title={detail ? '1099 Detail' : '1099 Summary'}
       subtitle={`Payments in ${year} to vendors marked “Track payments for a 1099”`}
-      columns={columns}
+      columns={detail ? detailColumns : summaryColumns}
       rows={rows}
       error={error}
       toolbar={
@@ -470,14 +501,18 @@ export function Vendors1099Report() {
           </label>
           <label className="flex items-center gap-1 self-center text-sm">
             <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
-            Include vendors under the $600 threshold
+            Include payments under the threshold ({year >= 2026 ? '$2,000' : '$600'} for most boxes in {year})
           </label>
         </>
       }
-      footer={`Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Mark vendors for 1099 tracking in Expenses › Vendors. Tax IDs are masked here${
+      footer={`Payments by check, cash or bank transfer only: card and PayPal payments are reported by the processor on a 1099-K. Boxes follow the account mapping in Preferences › Tax: 1099; mark vendors for 1099 tracking in Expenses › Vendors. Tax IDs are masked here${
         fullInCsv ? '; the Excel and CSV exports have them in full, so keep those files safe' : ''
       }.`}
-      onCsvRows={() => [...shown.map((r) => [r.vendorName, r.taxId ?? r.taxIdMasked ?? '', r.address ?? '', plainAmount(r.paidCents)]), ['TOTAL', '', '', plainAmount(total)]]}
+      onCsvRows={() =>
+        detail
+          ? [...shown.flatMap((r) => r.details.filter((d) => boxesOf(r).some((b) => b.code === d.boxCode)).map((d) => [r.vendorName, d.date, KIND_1099[d.kind] ?? d.kind, d.number ?? '', d.accountName, boxLabel(r, d.boxCode), plainAmount(d.amountCents)])), ['TOTAL', '', '', '', '', '', plainAmount(total)]]
+          : [...shown.flatMap((r) => boxesOf(r).map((b) => [r.vendorName, r.taxId ?? r.taxIdMasked ?? '', r.address ?? '', b.label, plainAmount(b.paidCents)])), ['TOTAL', '', '', '', plainAmount(total)]]
+      }
     />
   );
 }

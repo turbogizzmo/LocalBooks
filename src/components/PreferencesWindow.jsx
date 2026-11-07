@@ -9,6 +9,7 @@ import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import DesktopViewPreferences from './DesktopViewPreferences.jsx';
 import GeneralPreferences, { AccountingMyPreferences, ReportsMyPreferences } from './GeneralPreferences.jsx';
+import { CheckingCompany, CheckingMy, ItemsCompany, SalesTaxCompany, Tax1099Company, TimeExpensesCompany } from './TaxTimePreferences.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
@@ -480,6 +481,17 @@ function FinanceChargeCompany({ field, accounts }) {
           />
         ),
       })}
+      {field({
+        label: 'Calculate charges from',
+        prefKey: 'finance_charge_from',
+        hint: 'Interest runs from this date; an invoice is overdue by its due date and the grace period either way',
+        children: ({ id, value, commit, invalid }) => (
+          <select id={id} className="qb-input w-[180px]" value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+            <option value="due_date">Due date</option>
+            <option value="invoice_date">Invoice date</option>
+          </select>
+        ),
+      })}
       {field({ label: 'Charge on finance charges', prefKey: 'finance_charge_on_finance_charges', hint: 'Whether overdue finance charge invoices themselves earn finance charges', children: flag('Assess finance charges on overdue finance charges') })}
     </Group>
   );
@@ -801,9 +813,8 @@ export const CATEGORIES = [
   {
     id: 'checking',
     label: 'Checking',
-    company: ({ field }) => (
-      <Group title="Checks">{field({ label: 'Duplicate check numbers', prefKey: 'warn_duplicate_check_numbers', hint: 'Per bank account; voided checks don’t count', children: flag('Warn about duplicate check numbers') })}</Group>
-    ),
+    my: () => <CheckingMy />,
+    company: (p) => <CheckingCompany {...p} />,
     links: [
       { label: 'Expenses & Checks', view: 'expenses/expenses', hint: 'the next check number is filled in for each account' },
       { label: 'Bank Feeds', view: 'banking/feeds', hint: 'renaming rules for downloaded payees' },
@@ -834,10 +845,14 @@ export const CATEGORIES = [
   {
     id: 'items',
     label: 'Items & Inventory',
-    company: () => (
-      <Group title="Purchase orders">
-        <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
-      </Group>
+    company: (p) => (
+      <>
+        <ItemsCompany {...p} />
+        <Group title="Purchase orders">
+          <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
+        </Group>
+        <Nothing>Units of measure (selling by the each, case or pallet) are not in LocalBooks: items have one unit.</Nothing>
+      </>
     ),
     links: [
       { label: 'Products & Services', view: 'sales/products', hint: 'inventory items, reorder points and prices' },
@@ -896,6 +911,7 @@ export const CATEGORIES = [
   {
     id: 'sales-tax',
     label: 'Sales Tax',
+    company: (p) => <SalesTaxCompany {...p} />,
     links: [{ label: 'Sales Tax', view: 'sales/tax', hint: 'turn sales tax on, rates and the default rate' }],
   },
   {
@@ -911,6 +927,7 @@ export const CATEGORIES = [
   {
     id: '1099',
     label: 'Tax: 1099',
+    company: (p) => <Tax1099Company {...p} />,
     links: [
       { label: '1099 Summary', view: 'reports', data: { report: '1099' } },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'tax IDs and which vendors get a 1099' },
@@ -919,8 +936,9 @@ export const CATEGORIES = [
   {
     id: 'time',
     label: 'Time & Expenses',
-    company: () => <Nothing>Whether hours show as 1:30 or 1.50 is under General › Company Preferences.</Nothing>,
+    company: (p) => <TimeExpensesCompany {...p} />,
     links: [
+      { label: 'Bill Costs', view: 'sales/bill-costs', hint: 'invoice billable expenses' },
       { label: 'Time Tracking', view: 'employees/time' },
       { label: 'Mileage', view: 'employees/mileage' },
     ],

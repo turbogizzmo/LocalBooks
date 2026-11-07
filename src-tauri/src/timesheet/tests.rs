@@ -40,3 +40,23 @@ async fn weekly_timesheet_saves_atomically_and_caps_the_day() {
     assert!(create_time_activities(&pool, vec![no_customer]).await.unwrap_err().starts_with("TIME_BILLABLE_INCOMPLETE"));
     assert!(create_employee(&pool, "ana ortiz", None).await.unwrap_err().starts_with("EMP_DUPLICATE"));
 }
+
+/// Preferences › Time & Expenses › first day of the work week. 2026-10-07 is a Wednesday.
+#[tokio::test]
+async fn weekly_timesheets_start_on_the_chosen_day() {
+    use chrono::Weekday;
+    assert_eq!(week_of(d(7), Weekday::Mon), d(5));
+    assert_eq!(week_of(d(7), Weekday::Sun), d(4));
+    assert_eq!(week_of(d(7), Weekday::Wed), d(7), "the first day is its own week's start");
+    assert_eq!(week_of(d(7), Weekday::Thu), NaiveDate::from_ymd_opt(2026, 10, 1).unwrap());
+    assert_eq!(week_of(d(4), Weekday::Mon), NaiveDate::from_ymd_opt(2026, 9, 28).unwrap(), "Sunday belongs to the week before");
+
+    let pool = test_pool().await;
+    let week = timesheet_week(&pool, d(7)).await.unwrap();
+    assert_eq!((week.start, week.end, week.first_day.as_str(), week.billable_by_default), (d(5), d(11), "monday", false), "Monday by default, as before");
+    crate::preferences::set(&pool, "week_start_day", "sunday").await.unwrap();
+    crate::preferences::set(&pool, "time_billable_default", "true").await.unwrap();
+    let week = timesheet_week(&pool, d(7)).await.unwrap();
+    assert_eq!((week.start, week.end, week.billable_by_default), (d(4), d(10), true));
+    assert!(crate::preferences::set(&pool, "week_start_day", "funday").await.unwrap_err().starts_with("PREF_BAD_WEEK_START"));
+}

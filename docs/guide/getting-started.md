@@ -195,6 +195,59 @@ credit cards) in operating, fixed and other assets in investing, and long-term l
 equity in financing. Bank accounts are the cash itself, so they can't be moved. **Classify
 accounts…** on the report opens the list.
 
+## Sales tax, time, 1099 and inventory preferences
+
+These company preferences (Admins only) change how LocalBooks works out tax, time and stock.
+
+| Category (Company Preferences) | Option | What it does | Default |
+|---|---|---|---|
+| **Sales Tax** | **Owe sales tax** as of invoice date (accrual) or upon receipt of payment (cash) | The Sales Tax Liability report and **Pay sales tax** follow it. On cash basis an invoice counts as it is settled: in proportion to each payment, and to each credit memo applied to it, less bounced checks, on their dates. Sales receipts count when made, and credit memos on their own date on both bases (so a credit applied to an invoice nets to zero over time) | Accrual |
+| **Sales Tax** | **File returns** monthly, quarterly or yearly | The Sales Tax screen and report open on the last period that ended (the return to file now), and **Reminders › Tax dates** shows that return, due on the 20th of the next month (check your state's date) | Quarterly |
+| **Sales Tax** | **Mark taxable amounts with a "T" when printing** | Taxable lines on printed and emailed invoices, sales receipts and estimates show a T | On |
+| **Finance Charge** | **Calculate charges from** the due date or the invoice date | Where interest starts. An invoice is overdue by its due date and grace days either way | Due date |
+| **Time & Expenses** | **First day of work week** | Weekly timesheets start on it | Monday |
+| **Time & Expenses** | **Mark all time entries as billable** | New time and timesheet rows start with Billable ticked | Off |
+| **Time & Expenses** | **Mark all expenses as billable** | Expense, check and bill lines given a Customer:Job start with **Bill?** ticked | Off |
+| **Time & Expenses** | **Track reimbursed expenses as income**, the income account, **Default markup** and markup account | How **Sales › Bill Costs** invoices billable expenses (see below) | Off, 0% |
+| **Tax: 1099** | **Do you file 1099s?** | Off hides the 1099 box on vendors, the 1099 reports and the 1099 deadline | On |
+| **Tax: 1099** | **Accounts to boxes** | Which 1099-NEC or 1099-MISC box each expense account's payments go in | None mapped |
+| **Items & Inventory** | **Inventory and purchase orders are active** | Off hides Purchase Orders and **Track stock**; items already tracked keep their stock | On |
+| **Items & Inventory** | **Not enough stock**: warn, don't allow the sale, or say nothing | When an invoice or sales receipt would take a tracked item below zero | Warn |
+| **Checking** | **Print the vendor's account number in the check memo** | A check left without a memo gets "Acct #…" from the vendor's **Account no.** | Off |
+| **Checking** | **Change the check date when a check is printed** | A check waiting in **File › Print Forms › Checks** takes the date it prints | Off |
+
+**Checking › My Preferences** sets the account **Write Checks**, **Pay Bills** and **Make
+Deposits** open with, on this computer.
+
+**General › My Preferences › Automatically recall information**: once you pick a vendor you have
+paid before on a new bill, check or expense, its lines start like the last one, with the amounts
+(**Recall the last transaction**) or without (**Pre-fill the accounts used last time**). Off by
+default.
+
+### Bill billable expenses to a customer
+
+1. On a check, expense or bill, give the line a **Customer:Job** and tick **Bill?**.
+2. Open **Sales › Bill Costs**, pick the customer, tick the costs and check the **Markup %**.
+3. Click **Create invoice**. Each cost becomes a line, crediting its expense account back (or the
+   income account, if reimbursed expenses count as income), with one **Markup** line on top.
+
+Voiding that invoice puts the costs back on the list; editing it keeps them billed.
+
+### 1099 boxes and thresholds
+
+Map each expense account to a box under **Tax: 1099 › Company Preferences**, for example
+Contractors to 1099-NEC box 1 and Rent to 1099-MISC box 1. **Reports › 1099 Summary** then shows
+each vendor's total per box, and **1099 Detail** each payment's share per account; a bill payment
+is split over the bill's accounts. Accounts left as *Not reported* are left out. With nothing
+mapped, every payment counts as nonemployee compensation, as before.
+
+A box is reported once the year's payments reach its threshold, which goes by the year paid:
+$600 before 2026 and $2,000 from 2026 for nonemployee compensation, rents, other income and
+medical payments; $10 for royalties; $600 for attorneys' gross proceeds.
+
+**Units of measure** (selling by the each, case or pallet) are not in LocalBooks: each item has one
+unit.
+
 ## Sort a list
 
 Click a column heading in a list (invoices, bills, estimates, checks, customers, products, the

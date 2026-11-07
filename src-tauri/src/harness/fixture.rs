@@ -113,6 +113,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, te
                     product_service_id: None,
                     class_id: None,
                     customer_id: None,
+                    billable: None,
                 })
                 .collect(),
         },
@@ -142,7 +143,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, from: i64, date: Na
             memo: None,
             lines: lines
                 .into_iter()
-                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None, customer_id: None })
+                .map(|(account_id, amount_cents, memo)| SplitLineInput { account_id, amount_cents, memo: Some(memo.into()), class_id: None, customer_id: None, billable: None })
                 .collect(),
             currency: None,
         },

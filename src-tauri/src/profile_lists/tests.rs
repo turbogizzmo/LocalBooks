@@ -184,7 +184,7 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
         due_date: d(10, 31),
         memo: None,
         total_cents: 50_000,
-        lines: vec![BillLineInput { account_id: expense, amount_cents: 50_000, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
+        lines: vec![BillLineInput { account_id: expense, amount_cents: 50_000, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
         terms_id,
     };
     let posted = post_vendor_bill(&pool, bill(Some(two_ten.id))).await.unwrap();

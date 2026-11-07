@@ -677,7 +677,9 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
             (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details })
         })
         .collect();
-    let lines = with_form_lines(items, &detail.form_lines, &money);
+    let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
+    let mark = marks_taxable(pool, inv.tax_rate_id.is_some()).await?;
+    let lines = with_form_lines(mark_taxable(items, &taxable, mark), &detail.form_lines, &money, mark);
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
@@ -748,7 +750,12 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         customer_details: customer_details(&name, &cust),
         customer_email: cust.email,
         meta,
-        lines: with_form_lines(lines_of(pool, rows, &money).await?, &crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?, &money),
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "estimate_lines", "estimate_id", estimate_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -809,7 +816,12 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: with_form_lines(lines_of(pool, rows, &money).await?, &crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?, &money),
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "sales_receipt_lines", "sales_receipt_id", receipt_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -819,6 +831,28 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         statement: None,
         sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?),
     })
+}
+
+/// Preferences › Sales Tax › "Mark taxable amounts with a T when printing": a taxable line's amount
+/// gets a trailing T, on a document that charges tax. `taxable` is per line, in order.
+/// Whether taxable lines print a "T": the document charges tax and the preference is on.
+async fn marks_taxable(pool: &SqlitePool, charges_tax: bool) -> Result<bool, String> {
+    Ok(charges_tax && crate::preferences::flag(pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE).await?)
+}
+
+/// Marks the taxable item lines (`taxable`, in line order) when `mark` is set. Done before the
+/// subtotals and other form lines are merged in, so each flag stays with its own item line.
+fn mark_taxable(mut lines: Vec<(i64, FormLine)>, taxable: &[bool], mark: bool) -> Vec<(i64, FormLine)> {
+    if mark {
+        for ((_, line), _) in lines.iter_mut().zip(taxable).filter(|(_, t)| **t) {
+            line.amount.push_str(" T");
+        }
+    }
+    lines
+}
+
+async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) -> Result<Vec<bool>, String> {
+    sqlx::query_scalar(&format!("SELECT is_taxable FROM {table} WHERE {parent} = ?1 ORDER BY line_number")).bind(id).fetch_all(pool).await.map_err(db_err)
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
@@ -840,7 +874,10 @@ async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i6
 ///
 /// A group heading prints its description; a group set to print as one line prints its
 /// description, quantity and total instead, and its items are left off.
-fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String) -> Vec<FormLine> {
+///
+/// With `mark`, a taxable discount carries the "T" too (it lowers the taxable amount); subtotals and
+/// group headings don't.
+fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String, mark: bool) -> Vec<FormLine> {
     // Item lines a one-line group hides: the `group_line_count` item lines after its heading.
     let mut hidden: Vec<i64> = Vec::new();
     for f in form.iter().filter(|f| f.kind == "GROUP" && f.print_items == Some(false)) {
@@ -860,7 +897,11 @@ fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormL
             }
         } else {
             let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
-            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount: money(f.amount_cents), details: Vec::new() }
+            let mut amount = money(f.amount_cents);
+            if mark && f.kind == "DISCOUNT" && f.is_taxable {
+                amount.push_str(" T");
+            }
+            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount, details: Vec::new() }
         };
         numbered.push((f.line_number, line));
     }

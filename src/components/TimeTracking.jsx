@@ -6,12 +6,22 @@ import { centsToInput, formatCents, formatMinutes, parseHoursToMinutes, parseMon
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const capitalized = (day) => day.charAt(0).toUpperCase() + day.slice(1);
 
-function mondayOf(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const weekday = (new Date(y, m - 1, d).getDay() + 6) % 7;
-  return addDays(iso, -weekday);
+/** Short day names for a week starting on `firstDay` (Preferences › Time & Expenses). */
+function dayNames(firstDay) {
+  const start = Math.max(0, WEEKDAYS.indexOf(firstDay));
+  return Array.from({ length: 7 }, (_, i) => capitalized(WEEKDAYS[(start + i) % 7]).slice(0, 3));
+}
+
+/**
+ * The company's work week (first day, and whether new time starts billable), from
+ * Preferences › Time & Expenses. Monday and not billable until it loads.
+ */
+function useWorkWeek() {
+  const { data } = useLedgerQuery(() => api.getTimesheetWeek(todayIso()));
+  return data ?? { start: null, firstDay: 'monday', billableByDefault: false };
 }
 
 function EmployeePicker({ employees, value, onChange, selectRef }) {
@@ -75,11 +85,14 @@ function EmployeePicker({ employees, value, onChange, selectRef }) {
 }
 
 function SingleActivity({ employees, customers, products, onSaved }) {
+  const week = useWorkWeek();
   const [employeeId, setEmployeeId] = useState(null);
   const [date, setDate] = useState(todayIso());
   const [customerId, setCustomerId] = useState(null);
   const [serviceId, setServiceId] = useState(null);
   const [billable, setBillable] = useState(false);
+  // New time starts billable when Preferences › Time & Expenses says so.
+  useEffect(() => setBillable(week.billableByDefault), [week.billableByDefault]);
   const [rate, setRate] = useState('');
   const [hours, setHours] = useState('');
   const [description, setDescription] = useState('');
@@ -187,12 +200,14 @@ function SingleActivity({ employees, customers, products, onSaved }) {
 }
 
 let nextRow = 1;
-const blankRow = () => ({ key: nextRow++, customerId: null, serviceId: null, billable: false, rate: '', description: '', cells: Array(7).fill('') });
+const blankRow = (billable = false) => ({ key: nextRow++, customerId: null, serviceId: null, billable, rate: '', description: '', cells: Array(7).fill('') });
 
 function WeeklyTimesheet({ employees, customers, products, onSaved }) {
+  const week = useWorkWeek();
   const [employeeId, setEmployeeId] = useState(null);
-  const [weekStart, setWeekStart] = useState(mondayOf(todayIso()));
+  const [weekStart, setWeekStart] = useState(null);
   const [rows, setRows] = useState(() => [blankRow(), blankRow()]);
+  const DAY_NAMES = dayNames(week.firstDay);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const employeeRef = useRef(null);
@@ -201,13 +216,25 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
 
   useEffect(() => employeeRef.current?.focus(), []);
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = weekStart ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [];
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const setCell = (key, day, value) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, cells: r.cells.map((c, i) => (i === day ? value : c)) } : r)));
   const minutesOf = (text) => (text.trim() === '' ? 0 : parseHoursToMinutes(text));
   const rowTotal = (r) => r.cells.reduce((s, c) => s + (minutesOf(c) ?? 0), 0);
   const dayTotal = (i) => rows.reduce((s, r) => s + (minutesOf(r.cells[i]) ?? 0), 0);
   const invalidCells = rows.flatMap((r) => r.cells.filter((c) => c.trim() !== '' && minutesOf(c) === null)).length;
+  // The week starts on the company's first day of the work week (Monday unless changed).
+  useEffect(() => {
+    if (week.start) setWeekStart((current) => current ?? week.start);
+  }, [week.start]);
+  useEffect(() => setRows((rs) => rs.map((r) => (rowTotal(r) === 0 && !r.customerId ? { ...r, billable: week.billableByDefault } : r))), [week.billableByDefault]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chooseWeek = async (iso) => {
+    try {
+      setWeekStart((await api.getTimesheetWeek(iso)).start);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
 
   const save = async () => {
     if (employeeId === null) return setError('Choose an employee.');
@@ -239,7 +266,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
       const count = await api.createTimeActivities(inputs);
       const total = inputs.reduce((s, i) => s + i.minutes, 0);
       onSaved(`Saved ${count} time entr${count === 1 ? 'y' : 'ies'} (${formatMinutes(total)}) for the week of ${formatDate(weekStart)}.`);
-      setRows([blankRow(), blankRow()]);
+      setRows([blankRow(week.billableByDefault), blankRow(week.billableByDefault)]);
       setError(null);
     } catch (err) {
       setError(errorText(err));
@@ -256,8 +283,8 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           <EmployeePicker employees={employees} value={employeeId} onChange={setEmployeeId} selectRef={employeeRef} />
         </label>
         <label>
-          <span className="qb-label">Week starting (Monday)</span>
-          <input type="date" className="qb-input w-[132px]" value={weekStart} onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))} />
+          <span className="qb-label">Week starting ({capitalized(week.firstDay)})</span>
+          <input type="date" className="qb-input w-[132px]" value={weekStart ?? ''} onChange={(e) => e.target.value && chooseWeek(e.target.value)} />
         </label>
         {tracking.enabled && (
           <label>
@@ -348,7 +375,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
               ))}
               <td className="qb-grid-cell num font-semibold">{rowTotal(r) ? formatMinutes(rowTotal(r)) : ''}</td>
               <td className="qb-grid-cell cell-flush text-center">
-                <button type="button" onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((x) => x.key !== r.key) : [blankRow()]))} className="h-row w-full text-qb-ink-faint hover:text-qb-negative" aria-label="Remove row">
+                <button type="button" onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((x) => x.key !== r.key) : [blankRow(week.billableByDefault)]))} className="h-row w-full text-qb-ink-faint hover:text-qb-negative" aria-label="Remove row">
                   ×
                 </button>
               </td>
@@ -356,7 +383,7 @@ function WeeklyTimesheet({ employees, customers, products, onSaved }) {
           ))}
           <tr className="bg-qb-row-header font-semibold">
             <td className="px-2 py-0.5" colSpan={5}>
-              <button type="button" className="text-sm text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankRow()])}>
+              <button type="button" className="text-sm text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankRow(week.billableByDefault)])}>
                 ＋ Add row
               </button>
             </td>

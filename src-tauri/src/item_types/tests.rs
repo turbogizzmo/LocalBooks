@@ -640,3 +640,68 @@ async fn editing_a_part_paid_invoice_with_a_group_discount_and_subtotal_keeps_it
     assert_eq!(form, vec![(1, "GROUP", 10_000), (4, "DISCOUNT", -1_000), (5, "SUBTOTAL", 9_000)]);
     assert_posts(&pool, detail.invoice.journal_entry_id.unwrap(), ar, 12_000).await;
 }
+
+#[tokio::test]
+async fn taxable_lines_and_taxable_discounts_print_their_t_and_subtotals_do_not() {
+    let pool = test_pool().await;
+    let services = account_id(&pool, "4100").await;
+    let discounts = discounts_given(&pool).await;
+    let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 80_000, agency_name: None, liability_account_id: None })
+        .await
+        .unwrap();
+    // A group of a taxable and an untaxed item, 10% off it (taxable), a subtotal, an untaxed line.
+    let inv = create_and_post_invoice(
+        &pool,
+        invoice(
+            vec![line(services, 8_000, true), line(services, 2_000, false), line(services, 1_500, false)],
+            vec![
+                FormLineInput { description: "Kit".into(), ..FormLineInput::group(0, 2, true) },
+                FormLineInput::discount(2, discounts, Some(100_000), None, true),
+                FormLineInput::subtotal(2),
+            ],
+            Some(rate.id),
+            0,
+        ),
+    )
+    .await
+    .unwrap();
+    let doc = crate::forms::invoice_doc(&pool, inv.id, "$").await.unwrap();
+    let printed: Vec<(&str, &str)> = doc.lines.iter().map(|l| (l.description.as_str(), l.amount.as_str())).collect();
+    assert_eq!(printed, vec![("Kit", ""), ("Work", "$80.00 T"), ("Work", "$20.00"), ("Discount", "-$10.00 T"), ("Subtotal", "$90.00"), ("Work", "$15.00")]);
+    // Turned off, nothing is marked.
+    crate::preferences::set(&pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE, "false").await.unwrap();
+    let doc = crate::forms::invoice_doc(&pool, inv.id, "$").await.unwrap();
+    assert!(doc.lines.iter().all(|l| !l.amount.ends_with(" T")));
+}
+
+#[tokio::test]
+async fn a_group_s_tracked_items_go_through_the_stock_guard_each() {
+    let pool = test_pool().await;
+    let (services, equity) = (account_id(&pool, "4100").await, account_id(&pool, "3000").await);
+    let widget = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Widget".into(), description: None, rate_cents: 2_500, income_account_id: services, is_taxable: false })
+        .await
+        .unwrap();
+    let item = crate::inventory::track_product(&pool, &crate::inventory::TrackInput { product_id: widget.id, sku: None, asset_account_id: None, cogs_account_id: None }).await.unwrap();
+    crate::inventory::adjust(&pool, &crate::inventory::AdjustInput { item_id: item.id, date: d(1), qty_change_e4: 30_000, total_cost_cents: Some(3_000), offset_account_id: equity, memo: None })
+        .await
+        .unwrap();
+    // A group of 4 widgets and an hour of fitting, with a discount and a subtotal under it.
+    let sale = |widgets_e4| {
+        let mut input = invoice(
+            vec![InvoiceLineInput { product_service_id: Some(widget.id), quantity_e4: widgets_e4, rate_cents: 2_500, ..line(services, 2_500, false) }, line(services, 5_000, false)],
+            vec![FormLineInput::group(0, 2, true), FormLineInput::discount(2, services, None, Some(1_000), false), FormLineInput::subtotal(2)],
+            None,
+            0,
+        );
+        input.issue_date = d(10);
+        input
+    };
+    let codes = |w: Vec<crate::guards::Warning>| w.into_iter().map(|w| w.code).collect::<Vec<_>>();
+    assert!(codes(crate::guards::warnings_on(&pool, &crate::guards::invoice(&sale(30_000), None), d(10)).await.unwrap()).is_empty(), "3 on hand, 3 sold");
+    assert_eq!(codes(crate::guards::warnings_on(&pool, &crate::guards::invoice(&sale(40_000), None), d(10)).await.unwrap()), ["NEGATIVE_STOCK"]);
+    crate::preferences::set(&pool, crate::preferences::tax_time::NEGATIVE_STOCK, "stop").await.unwrap();
+    let err = crate::guards::check(&pool, crate::guards::invoice(&sale(40_000), None), Some(&["NEGATIVE_STOCK".to_string(), "DATE_FAR_PAST".to_string(), "DATE_FAR_FUTURE".to_string()]))
+        .await
+        .unwrap_err();
+    assert!(err.starts_with("INV_NOT_ENOUGH_STOCK"), "{err}");
+}
