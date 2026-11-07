@@ -23,7 +23,7 @@ fn txn(id: i64, date: &str, lines: &[(i64, i64)]) -> SourceTransaction {
         doc_num: Some(id.to_string()),
         name: Some("Vendor".into()),
         memo: None,
-        lines: lines.iter().map(|&(account_id, cents)| SourceLine { account_id, cents, memo: None }).collect(),
+        lines: lines.iter().map(|&(account_id, cents)| SourceLine { account_id, cents, memo: None, class: None }).collect(),
         document: None,
     }
 }
@@ -55,6 +55,7 @@ fn ledger() -> Ledger {
         items: vec![],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     }
 }
 
@@ -85,8 +86,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
         number: Some("501".into()),
         due_date: "2024-02-09".parse().ok(),
         lines: vec![
-            DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6 },
-            DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8 },
+            DocumentLine { item_id: Some(200), description: None, quantity_e4: 20_000, rate_cents: 5_000, cents: 10_000, account_id: 6, class: None },
+            DocumentLine { item_id: None, description: Some("Sales tax".into()), quantity_e4: 10_000, rate_cents: 1_000, cents: 1_000, account_id: 8, class: None },
         ],
         sales: Default::default(),
     };
@@ -151,6 +152,7 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
         }],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -228,7 +230,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
                     vendor_id: 300,
                     number: Some("B-7".into()),
                     due_date: "2024-03-10".parse().ok(),
-                    lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10 }],
+                    lines: vec![DocumentLine { item_id: None, description: Some("Paper".into()), quantity_e4: 10_000, rate_cents: 5_000, cents: -5_000, account_id: 10, class: None }],
                 },
             ),
             doc(32, "Check", "2024-02-12", &[(1, 2_500), (12, -2_500)], expense(Some("1001"))),
@@ -259,6 +261,7 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
         items: vec![],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -301,14 +304,14 @@ async fn a_full_import_recreates_bills_payments_checks_and_card_charges() {
 async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
     use crate::qbw_documents::{DocumentLine, SourceDocument};
     let pool = test_pool().await;
-    let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id };
+    let line = |item_id, cents, account_id| DocumentLine { item_id, description: None, quantity_e4: 30_000, rate_cents: 1_000, cents, account_id, class: None };
     let estimate = |customer_id| SourceDocument::Estimate {
         customer_id,
         date: "2024-04-01".parse().unwrap(),
         number: Some("77".into()),
         expires: "2024-05-01".parse().ok(),
         memo: Some("Spring work".into()),
-        lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8 }],
+        lines: vec![line(Some(200), 3_000, 6), DocumentLine { item_id: None, description: Some("Tax".into()), quantity_e4: 10_000, rate_cents: 240, cents: 240, account_id: 8, class: None }],
         sales: Default::default(),
     };
     let lineless = |id, kind, document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-04-01", &[]) };
@@ -374,6 +377,7 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
         }],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     };
     let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
     auto_map_accounts(&pool, batch).await.unwrap();
@@ -558,6 +562,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         items: vec![],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     };
     let first = stage(&pool, Path::new("/books/Books.qbw"), 1, &books()).await.unwrap();
     auto_map_accounts(&pool, first).await.unwrap();
@@ -599,6 +604,7 @@ async fn reimporting_after_a_reverse_reuses_the_accounts_it_created() {
         items: vec![],
         quality: LedgerQuality::default(),
         sales_lists: Default::default(),
+        classes: Vec::new(),
     };
     let third = stage(&pool, Path::new("/books/Other.qbw"), 1, &tools).await.unwrap();
     auto_map_accounts(&pool, third).await.unwrap();

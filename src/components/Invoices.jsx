@@ -14,7 +14,8 @@ import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAtta
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
-import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { PaymentMethodSelect, TermsSelect, usePaymentMethodChoice, useTerms } from './ProfileFields.jsx';
 import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
@@ -25,12 +26,6 @@ import NameField from './NameField.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
-const TERMS = [
-  { id: 'receipt', label: 'Due on receipt', days: 0 },
-  { id: 'net15', label: 'Net 15', days: 15 },
-  { id: 'net30', label: 'Net 30', days: 30 },
-  { id: 'net60', label: 'Net 60', days: 60 },
-];
 const INITIAL_ROWS = 4;
 
 export const depositFilter = (a) => a.accountType === 'BANK' || (a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
@@ -54,7 +49,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   const rateE6 = foreign ? parseRateE6(rate) : null;
   // The invoice's rate is only a starting point: with lookup on, the payment date's rate replaces it.
   const suggested = useSuggestedRate({ currency: foreign, date, rate, setRate, initialIsDefault: true });
-  const [method, setMethod] = useState('CHECK');
+  const method = usePaymentMethodChoice('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -73,7 +68,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
         depositAccountId: accountId,
         paymentDate: date,
         amountCents: cents,
-        paymentMethod: method,
+        ...method.payload(),
         reference: reference || null,
         exchangeRateE6: foreign ? rateE6 : null,
       });
@@ -118,11 +113,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
           )}
           <label>
             <span className="qb-label">Method</span>
-            <select className="qb-input w-[140px]" value={method} onChange={(e) => setMethod(e.target.value)}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
+            <PaymentMethodSelect value={method.id} onChange={method.set} className="qb-input w-[140px]" />
           </label>
           <label>
             <span className="qb-label">Reference no.</span>
@@ -184,7 +175,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const [accountId, setAccountId] = useState(() => defaultDepositAccount(accounts, prefs.undepositedDefault));
   const [accountTouched, setAccountTouched] = useState(false);
   const [date, setDate] = useState(todayIso());
-  const [method, setMethod] = useState('CHECK');
+  const method = usePaymentMethodChoice('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -270,7 +261,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         depositAccountId: accountId,
         paymentDate: date,
         amountCents: appliedCents(inv),
-        paymentMethod: method,
+        ...method.payload(),
         reference: reference || null,
         exchangeRateE6: currency ? rateE6 : null,
       }));
@@ -384,7 +375,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         </label>
         <div>
           <span className="qb-label">Payment method</span>
-          <PaymentMethodTiles value={method} onChange={setMethod} />
+          <PaymentMethodTiles value={method.id} onChange={method.set} />
         </div>
         <div className="ml-auto text-right">
           <div className="qb-label">Amount to apply</div>
@@ -411,7 +402,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
             <th className="qb-grid-head">Invoice</th>
             <th className="qb-grid-head">Date</th>
             <th className="qb-grid-head">Due</th>
-            <th className="qb-grid-head" />
+            <th className="qb-grid-head" title="Early-payment discount the invoice's terms offer, and the last day to take it">Discount offered</th>
             <th className="qb-grid-head text-right">Original</th>
             <th className="qb-grid-head text-right">Open balance</th>
             <th className="qb-grid-head text-right">Payment</th>
@@ -441,7 +432,9 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                 <td className="qb-grid-cell">#{inv.invoiceNumber}</td>
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
-                <td className="qb-grid-cell" />
+                <td className="qb-grid-cell text-sm" title={inv.termsName ?? undefined}>
+                  {inv.discountUntil && inv.earlyDiscountCents > 0 && (date <= inv.discountUntil ? `${money(inv.earlyDiscountCents)} by ${formatDate(inv.discountUntil)}` : <span className="text-qb-ink-faint">ended {formatDate(inv.discountUntil)}</span>)}
+                </td>
                 <td className="qb-grid-cell num">{money(inv.totalCents)}</td>
                 <td className="qb-grid-cell num">{money(inv.balanceCents)}</td>
                 <td className="qb-grid-cell-edit">
@@ -671,7 +664,10 @@ export default function Invoices({ accounts, intent }) {
   );
   const [customer, setCustomer] = useState('');
   const [issueDate, setIssueDate] = useTransactionDate();
-  const [terms, setTerms] = useState('net30');
+  const termsList = useTerms();
+  const [termsId, setTermsId] = useState(null);
+  // Set once the user picks a term, or a saved invoice is loaded: the customer's term no longer fills in.
+  const [termsTouched, setTermsTouched] = useState(false);
   const [dueDate, setDueDate] = useState(() => addDays(issueDate, 30));
   const [lines, setLines] = useState(() => Array.from({ length: INITIAL_ROWS }, () => blankLine(null)));
   const [busy, setBusy] = useState(false);
@@ -735,10 +731,23 @@ export default function Invoices({ accounts, intent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
-  const applyTerms = (termId, fromDate) => {
-    const t = TERMS.find((x) => x.id === termId);
-    if (t && fromDate) setDueDate(addDays(fromDate, t.days));
+  const applyTerms = (t, fromDate) => {
+    if (t && fromDate) setDueDate(addDays(fromDate, t.netDays));
   };
+  // The customer's term (or Net 30) fills in, and sets the due date, until the user picks one.
+  const customerRecord = (customers.data ?? []).find((c) => c.name.toLowerCase() === customer.trim().toLowerCase());
+  useEffect(() => {
+    if (termsTouched) return;
+    const t =
+      termsList.find((x) => x.isActive && x.id === customerRecord?.termsId) ??
+      termsList.find((x) => x.isActive && x.netDays === 30 && x.discountPpm === 0) ??
+      null;
+    if (t && t.id !== termsId) {
+      setTermsId(t.id);
+      applyTerms(t, issueDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerRecord?.id, customerRecord?.termsId, termsList, termsTouched, termsId]);
 
   const { filled, invalidCount, payload } = summarizeLines(lines);
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
@@ -805,7 +814,8 @@ export default function Invoices({ accounts, intent }) {
         setCustomer(invoice.customerName);
         setIssueDate(invoice.issueDate);
         setDueDate(invoice.dueDate);
-        setTerms('custom');
+        setTermsTouched(true);
+        setTermsId(details?.termsId ?? null);
         setCurrency(invoice.currencyCode ?? '');
         setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
         setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
@@ -821,7 +831,8 @@ export default function Invoices({ accounts, intent }) {
   const reset = () => {
     setCustomer('');
     setIssueDate(newTransactionDate());
-    setTerms('net30');
+    setTermsTouched(false);
+    setTermsId(null);
     setDueDate(addDays(newTransactionDate(), 30));
     setLines(Array.from({ length: INITIAL_ROWS }, () => blankLine(defaultAccountId)));
     setFromEstimate(null);
@@ -894,6 +905,7 @@ export default function Invoices({ accounts, intent }) {
         discountCents: discount,
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
         ...sales.payload(),
+        termsId,
       };
       if (mode === 'memorize') return setMemorizing(input);
       if (editing) {
@@ -1058,25 +1070,21 @@ export default function Invoices({ accounts, intent }) {
               value={issueDate}
               onChange={(e) => {
                 setIssueDate(e.target.value);
-                applyTerms(terms, e.target.value);
+                applyTerms(termsList.find((t) => t.id === termsId), e.target.value);
               }}
             />
           </label>
           <label>
             <span className="qb-label">Terms</span>
-            <select
+            <TermsSelect
               className="qb-input w-[128px]"
-              value={terms}
-              onChange={(e) => {
-                setTerms(e.target.value);
-                applyTerms(e.target.value, issueDate);
+              value={termsId}
+              onChange={(t) => {
+                setTermsTouched(true);
+                setTermsId(t?.id ?? null);
+                applyTerms(t, issueDate);
               }}
-            >
-              {TERMS.map((t) => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-              <option value="custom">Custom</option>
-            </select>
+            />
           </label>
           <label>
             <span className="qb-label">Due date</span>
@@ -1084,10 +1092,7 @@ export default function Invoices({ accounts, intent }) {
               type="date"
               className="qb-input w-[132px]"
               value={dueDate}
-              onChange={(e) => {
-                setDueDate(e.target.value);
-                setTerms('custom');
-              }}
+              onChange={(e) => setDueDate(e.target.value)}
             />
           </label>
           {sales.picker}

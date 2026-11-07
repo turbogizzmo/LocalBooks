@@ -76,6 +76,8 @@ pub struct SourceLine {
     /// Negative = debit, positive = credit.
     pub cents: i64,
     pub memo: Option<String>,
+    /// The line's class as a full `Parent:Child` path (see [`class_path`]), when it has one.
+    pub class: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,6 +253,48 @@ pub struct Ledger {
     pub unreadable: Vec<UnreadableLine>,
     pub quality: LedgerQuality,
     pub sales_lists: SourceSalesLists,
+    /// The class list: full `Parent:Child` paths with whether each is active. Classes the lines
+    /// use are on it too (see [`Ledger::add_classes_used`]).
+    pub classes: Vec<(String, bool)>,
+}
+
+/// Deepest class path LocalBooks keeps (see `classes`).
+const CLASS_LEVELS: usize = 5;
+
+/// A class name from a file as a `Parent:Child` path: each level trimmed, empty levels dropped,
+/// and levels past the fifth folded into the fifth. `None` when nothing is left.
+pub fn class_path(name: &str) -> Option<String> {
+    let mut parts: Vec<String> = name.split(':').map(str::trim).filter(|p| !p.is_empty()).map(str::to_string).collect();
+    if parts.len() > CLASS_LEVELS {
+        let rest = parts.split_off(CLASS_LEVELS - 1).join(" - ");
+        parts.push(rest);
+    }
+    (!parts.is_empty()).then(|| parts.join(":"))
+}
+
+impl Ledger {
+    /// Adds a class to the list once (names compare without case); an existing entry is kept.
+    pub fn add_class(&mut self, name: &str, active: bool) {
+        let Some(path) = class_path(name) else { return };
+        if !self.classes.iter().any(|(c, _)| c.eq_ignore_ascii_case(&path)) {
+            self.classes.push((path, active));
+        }
+    }
+
+    /// Puts every class a posting or form line uses on the class list, active, and sorts it.
+    pub fn add_classes_used(&mut self) {
+        let mut used: Vec<String> = Vec::new();
+        for t in self.transactions.iter().chain(&self.unbalanced) {
+            used.extend(t.lines.iter().filter_map(|l| l.class.clone()));
+            if let Some(doc) = &t.document {
+                used.extend(doc.lines().iter().filter_map(|l| l.class.clone()));
+            }
+        }
+        for class in used {
+            self.add_class(&class, true);
+        }
+        self.classes.sort_by_key(|(c, _)| c.to_lowercase());
+    }
 }
 
 /// Decodes the file's pages, re-solving the last sector of pages whose rows do not decode.
@@ -651,6 +695,23 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
     out
 }
 
+/// The class list from `abmc_class`: each class's `Parent:Child` path by id, and the list with
+/// whether each class is active (deleted classes are left out).
+pub(crate) fn read_classes(pages: &[LogicalPage], catalog: &Catalog) -> (HashMap<i64, String>, Vec<(String, bool)>) {
+    let rows: Vec<Row> = rows_of(pages, catalog, "abmc_class").into_iter().filter(|r| r.get("is_deleted_bool").as_int() != Some(1)).collect();
+    let names: BTreeMap<i64, (String, Option<i64>)> =
+        rows.iter().filter_map(|r| Some((r.get("class_id").as_int()?, (text(r, "name")?, r.get("parent_id").as_int())))).collect();
+    let full = paths(&names);
+    let list = rows
+        .iter()
+        .filter_map(|r| {
+            let path = full.get(&r.get("class_id").as_int()?)?;
+            Some((path.clone(), r.get("is_hidden_bool").as_int() != Some(1)))
+        })
+        .collect();
+    (full, list)
+}
+
 /// Reads the general ledger. Blocking and CPU-bound.
 pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let (pages, catalog, page_stats, refined) = read_pages(path)?;
@@ -659,6 +720,8 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     let known_accounts: HashSet<i64> = accounts.iter().map(|a| a.id).collect();
     let customers = names(&pages, &catalog, "abmc_customer_user", "customer_id");
     let vendors = names(&pages, &catalog, "abmc_vendor_user", "vendor_id");
+    let (class_paths, class_list) = read_classes(&pages, &catalog);
+    let class_of = |row: &Row| row.get("class_id").as_int().and_then(|c| class_paths.get(&c)).cloned();
     let earliest = NaiveDate::from_ymd_opt(1980, 1, 1).expect("valid date");
     let latest = chrono::Local::now().date_naive().with_year(chrono::Local::now().year() + 1).unwrap_or(NaiveDate::MAX);
 
@@ -699,7 +762,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             });
             if let (Some(tid), Some(account_id), Some(cents)) = (tid, account_id, cents) {
                 if cents != 0 && r.get("is_no_post_bool").as_int() != Some(1) {
-                    salvage.entry(tid).or_default().push(SourceLine { account_id, cents, memo: None });
+                    salvage.entry(tid).or_default().push(SourceLine { account_id, cents, memo: None, class: class_of(r) });
                 }
             }
         }
@@ -768,7 +831,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                 }
             });
             if cents != 0 {
-                txn.lines.push(SourceLine { account_id, cents, memo: text(&r, "memo") });
+                txn.lines.push(SourceLine { account_id, cents, memo: text(&r, "memo"), class: class_of(&r) });
             }
         }
     }
@@ -801,7 +864,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     unbalanced.sort_by_key(|t| (t.date, t.id));
     let arap: HashSet<i64> =
         accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
-    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a));
+    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
     for t in &mut balanced {
         t.document = documents.remove(&t.id);
     }
@@ -836,7 +899,12 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     sales_lists.reps.sort();
     sales_lists.ship_methods.sort();
     (sales_lists.price_levels, sales_lists.customer_price_levels) = read_price_levels(&pages, &catalog);
-    Ok(Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists })
+    let mut ledger = Ledger { accounts, customers, vendors, items, transactions: balanced, unbalanced, unreadable, quality, sales_lists, classes: Vec::new() };
+    for (name, active) in class_list {
+        ledger.add_class(&name, active);
+    }
+    ledger.add_classes_used();
+    Ok(ledger)
 }
 
 #[cfg(test)]

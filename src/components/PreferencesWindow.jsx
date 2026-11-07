@@ -616,13 +616,29 @@ function PaymentsCompany({ field }) {
   );
 }
 
-function BillsCompany({ field }) {
+function BillsCompany({ field, accounts }) {
   return (
     <Group title="Bills">
       {field({ label: 'Bills are due', prefKey: 'bill_due_days', hint: 'Days after the bill date, for a vendor without terms (0 = on receipt); a vendor’s own terms come first', children: days })}
       {field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}
       {field({ label: 'Vendor credits', prefKey: 'bill_auto_apply_credits', hint: 'Pay Bills uses the vendor’s open credits on the bills ticked, oldest credit first, and pays the rest', children: flag('Use vendor credits automatically') })}
-      <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">Early-payment discounts aren’t applied: vendor terms in LocalBooks are a number of days, without a discount.</p>
+      {field({ label: 'Discounts', prefKey: 'bill_auto_apply_discounts', hint: 'Pay Bills takes the early-payment discount a bill’s terms offer (such as 2% 10 Net 30) when paid by its last day', children: flag('Take early-payment discounts automatically') })}
+      {field({
+        label: 'Discount account',
+        prefKey: 'bill_discount_account_id',
+        hint: 'Discounts taken are credited here, such as Purchase Discounts or Cost of Goods Sold',
+        children: ({ id, value, commit, invalid }) => (
+          <AccountSelect
+            id={id}
+            accounts={accounts ?? []}
+            filter={(a) => a.isActive && !a.isSystem && a.classification === 'EXPENSE'}
+            value={value === '' ? null : Number(value)}
+            onChange={(next) => commit(next === null ? '' : String(next))}
+            placeholder="Choose an expense account"
+            aria-invalid={invalid}
+          />
+        ),
+      })}
     </Group>
   );
 }

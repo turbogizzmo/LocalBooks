@@ -114,7 +114,7 @@ Preferences:
 - **Payments:** how a received payment is applied, whether ticking invoices works out the amount,
   and whether payments go to Undeposited Funds.
 - **Bills:** how many days after the bill date a bill is due when the vendor has no terms, and
-  whether Pay Bills uses vendor credits.
+  whether Pay Bills uses vendor credits and takes early-payment discounts.
 - **Send Forms:** how new customers' forms are sent (Email later, Print later or neither).
 
 ## Set how typing works (General preferences)

@@ -4,7 +4,8 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   'accounting/register': {
-    help: 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction.',
+    help: 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction. In a bank or credit card register, type a check, deposit, charge or card credit into the row at the bottom and click Record.',
+    guide: 'expenses-and-checks',
   },
   'accounting/chart-of-accounts': {
     help: 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here.',
@@ -72,9 +73,18 @@ export const topics = [
   {
     id: 'register', area: 'accounting', views: ['accounting/register', 'accounting/chart-of-accounts', 'reports'],
     title: 'Open an account register',
-    body: 'Accounting › Account Registers shows every transaction in one account with a running balance; double-clicking an account in the Chart of Accounts or clicking an account on a report opens it too. Click a row to see the whole transaction, or void it from the ▾ menu.',
-    keywords: 'register account register ledger running balance transactions drill down quickreport',
+    body: 'Accounting › Account Registers shows every transaction in one account with a running balance; double-clicking an account in the Chart of Accounts or clicking an account on a report opens it too. Click a row to see the whole transaction, or void it from the ▾ menu. Go To… finds a transaction by number, payee, memo or amount; Dates shows all, this month, this year or a range; 2-line puts the account and memo on a second line.',
+    keywords: 'register account register ledger running balance transactions drill down quickreport go to find date filter one line two line view',
     go: { label: 'Go to Account Registers', view: 'accounting/register' },
+    guide: 'expenses-and-checks',
+  },
+  {
+    id: 'register-entry', area: 'accounting', views: ['accounting/register', 'expenses/expenses', 'banking/transfers'],
+    title: 'Type a check or deposit into a register',
+    body: 'A bank or credit card register ends in a blank row. Enter the date, number, payee, account and memo, type the amount under Payment or Deposit (Charge or Payment for a card), and click Record or press Enter. A bank payment is recorded as a check, a deposit as a deposit, a card charge as an expense and a card payment as a card credit. Restore clears the row; Splits… spreads it over several accounts.',
+    keywords: 'register entry type check deposit record restore checkbook enter splits split charge credit card write check in register',
+    go: { label: 'Go to Account Registers', view: 'accounting/register' },
+    guide: 'expenses-and-checks',
   },
   {
     id: 'chart-of-accounts', area: 'accounting', views: ['accounting/chart-of-accounts', 'accounting/journal', 'dashboard'],

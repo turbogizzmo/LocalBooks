@@ -89,6 +89,9 @@ pub struct PartyView {
     pub is_tax_exempt: bool,
     #[sqlx(default)]
     pub terms_days: Option<i64>,
+    /// The default term from the Terms list (its days are `terms_days`).
+    #[sqlx(default)]
+    pub terms_id: Option<i64>,
     /// Customers: the default sales rep.
     #[sqlx(default)]
     pub sales_rep_id: Option<i64>,
@@ -154,7 +157,11 @@ pub struct SalesReceiptInput {
     pub customer_name: Option<String>,
     pub receipt_date: NaiveDate,
     pub deposit_account_id: i64,
+    /// The kind of payment; taken from `payment_method_id` when that is given.
     pub payment_method: String,
+    /// The Payment Method list entry ("Visa").
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
     pub reference: Option<String>,
     pub memo: Option<String>,
     pub lines: Vec<SalesLineInput>,
@@ -210,7 +217,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
-        "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days, c.sales_rep_id,
+        "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days, c.terms_id, c.sales_rep_id,
                 c.preferred_delivery, c.job_status,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
@@ -311,7 +318,7 @@ pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<Pr
 
 /// Pure validation; returns the receipt total.
 pub fn validate_sales_receipt(input: &SalesReceiptInput) -> Result<i64, String> {
-    if !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
+    if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("SR_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
     if input.lines.is_empty() {
@@ -361,22 +368,24 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
         None => None,
     };
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "SR").await?;
 
     let (receipt_id, receipt_number): (i64, i64) = sqlx::query_as(
-        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents, discount_cents)
-         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents, discount_cents, payment_method_id)
+         VALUES ((SELECT COALESCE(MAX(receipt_number), 0) + 1 FROM sales_receipts), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          RETURNING id, receipt_number",
     )
     .bind(customer_id)
     .bind(input.receipt_date)
     .bind(input.deposit_account_id)
-    .bind(&input.payment_method)
+    .bind(method.as_deref().unwrap_or(&input.payment_method))
     .bind(clean(input.reference.as_deref()))
     .bind(clean(input.memo.as_deref()))
     .bind(total)
     .bind(tax.and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
+    .bind(method_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

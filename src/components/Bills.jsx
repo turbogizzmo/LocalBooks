@@ -11,6 +11,7 @@ import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
+import { TermsSelect, useTerms } from './ProfileFields.jsx';
 import { StatusBadge } from './Invoices.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -33,18 +34,25 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
   const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
   const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? billDate);
-  // A new bill is due after the vendor's terms, or Preferences › Bills' days for a vendor without
-  // terms, until the due date is typed.
-  const [dueTyped, setDueTyped] = useState(Boolean(editing));
+  const termsList = useTerms();
+  const [termsId, setTermsId] = useState(editing?.bill.termsId ?? null);
+  // Set once the user picks a term (or a saved bill is loaded): the vendor's term no longer fills in.
+  const [termsTouched, setTermsTouched] = useState(Boolean(editing));
+  // Without a term, the bill is due after the vendor's days, or Preferences › Bills' days (10
+  // unless an Admin changes them), as the backend works it out.
+  const applyTerms = (t, fromDate) => {
+    if (!fromDate) return;
+    if (t) setDueDate(addDays(fromDate, t.netDays));
+    else api.getBillDueDate(vendor.trim(), fromDate).then(setDueDate, () => {});
+  };
+  const vendorRecord = vendors.find((v) => v.name.toLowerCase() === vendor.trim().toLowerCase());
   useEffect(() => {
-    if (dueTyped || !billDate) return undefined;
-    let live = true;
-    const timer = setTimeout(() => api.getBillDueDate(vendor.trim(), billDate).then((d) => live && setDueDate(d), () => {}), 150);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [vendor, billDate, dueTyped]);
+    if (termsTouched) return;
+    const t = termsList.find((x) => x.isActive && x.id === vendorRecord?.termsId) ?? null;
+    setTermsId(t?.id ?? null);
+    applyTerms(t, billDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendor, vendorRecord?.termsId, termsList, termsTouched]);
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -95,7 +103,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (warning) return setError(warning);
     setBusy(true);
     try {
-      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines };
+      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
       const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
       const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
@@ -111,6 +119,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       setVendor('');
       setBillNumber('');
       setTotal('');
+      setTermsTouched(false);
+      setTermsId(null);
       setRows([blankSplit(defaultCategory)]);
       formClass.reset();
       setError(null);
@@ -182,20 +192,27 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             type="date"
             className="qb-input w-[132px]"
             value={billDate}
-            onChange={(e) => setBillDate(e.target.value)}
+            onChange={(e) => {
+              setBillDate(e.target.value);
+              applyTerms(termsList.find((t) => t.id === termsId) ?? null, e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          <span className="qb-label">Terms</span>
+          <TermsSelect
+            className="qb-input w-[128px]"
+            value={termsId}
+            onChange={(t) => {
+              setTermsTouched(true);
+              setTermsId(t?.id ?? null);
+              applyTerms(t, billDate);
+            }}
           />
         </label>
         <label>
           <span className="qb-label">Due date</span>
-          <input
-            type="date"
-            className="qb-input w-[132px]"
-            value={dueDate}
-            onChange={(e) => {
-              setDueTyped(true);
-              setDueDate(e.target.value);
-            }}
-          />
+          <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
         {formClass.header}
         <label>
@@ -323,23 +340,35 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
   };
   const picked = open.filter((b) => selected[b.id] !== undefined);
-  // Vendor credits used on the ticked bills, oldest credit first (Preferences › Bills); not with ACH.
-  const { autoCredits } = useSalesPrefs();
+  // Early-payment discounts the terms still offer, then vendor credits (oldest first), taken off the
+  // ticked bills as Preferences › Bills says; not with ACH.
+  const { autoCredits, autoDiscounts } = useSalesPrefs();
   const [credits, setCredits] = useState([]);
+  const [discounts, setDiscounts] = useState([]);
   const [typed, setTyped] = useState(() => new Set());
   const pickedKey = picked.map((b) => b.id).join(',');
   useEffect(() => {
-    if (!autoCredits || ach || pickedKey === '') return setCredits([]);
+    if (!(autoCredits || autoDiscounts) || ach || pickedKey === '' || !date) {
+      setCredits([]);
+      setDiscounts([]);
+      return undefined;
+    }
     let live = true;
-    api.listBillCredits(pickedKey.split(',').map(Number)).then(
-      (uses) => live && setCredits(uses),
+    api.getPayBillsPlan(pickedKey.split(',').map(Number), date).then(
+      (plan) => {
+        if (!live) return;
+        setCredits(plan.credits);
+        setDiscounts(plan.discounts);
+      },
       (err) => live && setError(errorText(err)),
     );
     return () => {
       live = false;
     };
-  }, [autoCredits, ach, pickedKey]);
-  const creditOn = (b) => credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
+  }, [autoCredits, autoDiscounts, ach, pickedKey, date]);
+  const discountOn = (b) => discounts.find((x) => x.billId === b.id)?.amountCents ?? 0;
+  // What comes off a bill before it is paid: its discount and the credits used on it.
+  const creditOn = (b) => discountOn(b) + credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
   // A ticked bill's payment is what the credits leave, until the person types an amount.
   useEffect(() => {
     setSelected((s) => {
@@ -356,7 +385,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
       return changed ? next : s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credits]);
+  }, [credits, discounts]);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
   const bad = picked.filter((b) => cents(b) === null || cents(b) < 0 || (cents(b) === 0 && creditOn(b) === 0) || cents(b) + creditOn(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
@@ -383,7 +412,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     try {
       const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) }));
       const used = credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
-      const count = used.length > 0 ? await api.payBillsWithCredits(payments, used) : await api.payVendorBills(payments);
+      const taken = discounts.filter((x) => picked.some((b) => b.id === x.billId));
+      const count = used.length + taken.length > 0 ? await api.payBillsWithCredits(payments, used, taken, date) : await api.payVendorBills(payments);
       const written = checks
         ? payees.map((vendorId) => {
             const theirs = paying.filter((b) => b.vendorId === vendorId);
@@ -400,7 +430,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })
         : [];
       const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
-      const creditNote = used.length > 0 ? `, after ${formatCents(creditTotal)} of vendor credits` : '';
+      const creditNote = used.length + taken.length > 0 ? `, after ${formatCents(creditTotal)} of discounts and credits` : '';
       onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks ? written : []);
     } catch (err) {
       setError(errorText(err));
@@ -491,7 +521,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         <div className="ml-auto text-right">
           <div className="qb-label">Total payment</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
-          {creditTotal > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditTotal)} of vendor credits</div>}
+          {creditTotal > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditTotal)} of discounts and credits</div>}
         </div>
       </div>
       <table className="qb-grid">
@@ -500,8 +530,9 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <col />
           <col className="w-[100px]" />
           <col className="w-[100px]" />
+          <col className="w-[150px]" />
           <col className="w-[120px]" />
-          {autoCredits && !ach && <col className="w-[110px]" />}
+          {(autoCredits || autoDiscounts) && !ach && <col className="w-[110px]" />}
           <col className="w-[130px]" />
         </colgroup>
         <thead>
@@ -510,15 +541,16 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             <th className="qb-grid-head">Vendor</th>
             <th className="qb-grid-head">Bill no.</th>
             <th className="qb-grid-head">Due date</th>
+            <th className="qb-grid-head" title="Early-payment discount the bill's terms offer, and the last day to take it">Discount offered</th>
             <th className="qb-grid-head text-right">Open balance</th>
-            {autoCredits && !ach && <th className="qb-grid-head text-right" title="Vendor credits used on this bill, oldest first">Credits used</th>}
+            {(autoCredits || autoDiscounts) && !ach && <th className="qb-grid-head text-right" title="The early-payment discount taken and vendor credits used on this bill">Discount &amp; credits</th>}
             <th className="qb-grid-head text-right">Payment</th>
           </tr>
         </thead>
         <tbody>
           {open.length === 0 && (
             <tr>
-              <td colSpan={autoCredits && !ach ? 7 : 6} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
+              <td colSpan={(autoCredits || autoDiscounts) && !ach ? 8 : 7} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
             </tr>
           )}
           {open.map((b, i) => {
@@ -535,8 +567,11 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                 </td>
                 <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
                 <td className={`qb-grid-cell ${b.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
+                <td className="qb-grid-cell text-sm" title={b.termsName ?? undefined}>
+                  {b.discountUntil && b.earlyDiscountCents > 0 && (date <= b.discountUntil ? `${formatCents(b.earlyDiscountCents)} by ${formatDate(b.discountUntil)}` : <span className="text-qb-ink-faint">ended {formatDate(b.discountUntil)}</span>)}
+                </td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
-                {autoCredits && !ach && <td className="qb-grid-cell num">{creditOn(b) > 0 ? formatCents(creditOn(b)) : ''}</td>}
+                {(autoCredits || autoDiscounts) && !ach && <td className="qb-grid-cell num">{creditOn(b) > 0 ? formatCents(creditOn(b)) : ''}</td>}
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"

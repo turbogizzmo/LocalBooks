@@ -31,6 +31,14 @@ pub struct PartyDetails {
     /// Billing address (customers) or mailing address (vendors).
     pub address: Option<String>,
     pub terms_days: Option<i64>,
+    /// The default term from the Terms list; `terms_days` follows it.
+    pub terms_id: Option<i64>,
+    /// Customers: the customer type, and for a job its job type. Vendors: the vendor type.
+    pub customer_type_id: Option<i64>,
+    pub job_type_id: Option<i64>,
+    pub vendor_type_id: Option<i64>,
+    /// Customers: this record is a job (it has a parent customer).
+    pub is_job: bool,
     pub notes: Option<String>,
     /// Vendors only: the full tax ID, when this user may see it.
     pub tax_id: Option<String>,
@@ -71,6 +79,15 @@ pub struct PartyDetailsInput {
     pub address: Option<String>,
     #[serde(default)]
     pub terms_days: Option<i64>,
+    /// The default term; when given, `terms_days` is set from it.
+    #[serde(default)]
+    pub terms_id: Option<i64>,
+    #[serde(default)]
+    pub customer_type_id: Option<i64>,
+    #[serde(default)]
+    pub job_type_id: Option<i64>,
+    #[serde(default)]
+    pub vendor_type_id: Option<i64>,
     #[serde(default)]
     pub notes: Option<String>,
     #[serde(default)]
@@ -108,11 +125,13 @@ fn clean(text: &Option<String>) -> Option<String> {
 /// A customer or vendor; a vendor's tax ID as `access` may see it.
 pub async fn get_party(pool: &SqlitePool, kind: &str, id: i64, access: Access<'_>) -> Result<PartyDetails, String> {
     let sql = match table(kind)? {
-        "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, notes,
+        "customers" => "SELECT id, name, company_name, email, phone, billing_address AS address, terms_days, terms_id,
+                               customer_type_id, job_type_id, NULL AS vendor_type_id, parent_id IS NOT NULL AS is_job, notes,
                                NULL AS tax_id, NULL AS tax_id_masked, 0 AS is_1099, is_active, tax_rate_id, is_tax_exempt, tax_exemption, form_style_id,
                                sales_rep_id, price_level_id, preferred_delivery, job_status
                         FROM customers WHERE id = ?1",
-        _ => "SELECT id, name, company_name, email, phone, address, terms_days, notes, tax_id, tax_id_masked, is_1099, is_active,
+        _ => "SELECT id, name, company_name, email, phone, address, terms_days, terms_id,
+                     NULL AS customer_type_id, NULL AS job_type_id, vendor_type_id, 0 AS is_job, notes, tax_id, tax_id_masked, is_1099, is_active,
                      NULL AS tax_rate_id, 0 AS is_tax_exempt, NULL AS tax_exemption, NULL AS form_style_id, NULL AS sales_rep_id, NULL AS price_level_id,
                      NULL AS preferred_delivery, NULL AS job_status
               FROM vendors WHERE id = ?1",
@@ -149,6 +168,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
     if input.terms_days.is_some_and(|d| !(0..=365).contains(&d)) {
         return Err("PARTY_BAD_TERMS: terms are 0 to 365 days".into());
     }
+    let profile = check_profile(pool, t, id, &input).await?;
+    let terms_days = profile.terms_days.or(input.terms_days);
     if let Some(style) = input.form_style_id.filter(|_| t == "customers") {
         let exists: Option<i64> = sqlx::query_scalar("SELECT id FROM form_styles WHERE id = ?1").bind(style).fetch_optional(pool).await.map_err(db_err)?;
         if exists.is_none() {
@@ -186,14 +207,14 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         sqlx::query(
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
                     tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14,
-                    preferred_delivery = ?15, job_status = ?16 WHERE id = ?12",
+                    terms_id = ?15, customer_type_id = ?16, job_type_id = ?17, preferred_delivery = ?18, job_status = ?19 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
         .bind(email)
         .bind(clean(&input.phone))
         .bind(clean(&input.address))
-        .bind(input.terms_days)
+        .bind(terms_days)
         .bind(clean(&input.notes))
         .bind(input.tax_rate_id)
         .bind(input.is_tax_exempt)
@@ -202,26 +223,31 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(id)
         .bind(input.sales_rep_id)
         .bind(input.price_level_id)
+        .bind(input.terms_id)
+        .bind(input.customer_type_id)
+        .bind(input.job_type_id)
         .bind(delivery)
         .bind(job_status)
     } else {
         sqlx::query(
             "UPDATE vendors SET name = ?1, company_name = ?2, email = ?3, phone = ?4, address = ?5, terms_days = ?6, notes = ?7,
                     tax_id = CASE WHEN ?11 THEN tax_id ELSE ?8 END, tax_id_masked = CASE WHEN ?11 THEN tax_id_masked ELSE ?12 END,
-                    is_1099 = ?9 WHERE id = ?10",
+                    is_1099 = ?9, terms_id = ?13, vendor_type_id = ?14 WHERE id = ?10",
         )
         .bind(name)
         .bind(clean(&input.company_name))
         .bind(email)
         .bind(clean(&input.phone))
         .bind(clean(&input.address))
-        .bind(input.terms_days)
+        .bind(terms_days)
         .bind(clean(&input.notes))
         .bind(tax_id)
         .bind(input.is_1099)
         .bind(id)
         .bind(keep_tax_id)
         .bind(tax_id_masked)
+        .bind(input.terms_id)
+        .bind(input.vendor_type_id)
     };
     let done = query.execute(pool).await.map_err(|e| {
         let msg = db_err(e);
@@ -262,6 +288,52 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         }
     }
     get_party(pool, kind, id, access).await
+}
+
+/// What the profile-list choices on a record decide.
+struct Profile {
+    /// The chosen term's days.
+    terms_days: Option<i64>,
+}
+
+/// Checks the term and types chosen for a customer or vendor: each must exist, be on the right list
+/// and be active unless the record already has it.
+async fn check_profile(pool: &SqlitePool, t: &str, id: i64, input: &PartyDetailsInput) -> Result<Profile, String> {
+    use crate::profile_lists::{check_entry, check_terms, ProfileList};
+    let mut conn = pool.acquire().await.map_err(db_err)?;
+    let current: (Option<i64>, Option<i64>, Option<i64>) = if t == "customers" {
+        sqlx::query_as("SELECT terms_id, customer_type_id, job_type_id FROM customers WHERE id = ?1")
+    } else {
+        sqlx::query_as("SELECT terms_id, vendor_type_id, NULL FROM vendors WHERE id = ?1")
+    }
+    .bind(id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(db_err)?
+    .unwrap_or_default();
+    let terms_days = match input.terms_id {
+        Some(terms) => Some(check_terms(&mut conn, terms, current.0, "PARTY").await?),
+        None => None,
+    };
+    if t == "customers" {
+        if input.vendor_type_id.is_some() {
+            return Err("PARTY_BAD_TYPE: a customer has a customer type, not a vendor type".into());
+        }
+        if let Some(kind) = input.customer_type_id {
+            check_entry(&mut conn, ProfileList::CustomerType, kind, current.1, "PARTY").await?;
+        }
+        if let Some(kind) = input.job_type_id {
+            check_entry(&mut conn, ProfileList::JobType, kind, current.2, "PARTY").await?;
+        }
+    } else {
+        if input.customer_type_id.is_some() || input.job_type_id.is_some() {
+            return Err("PARTY_BAD_TYPE: a vendor has a vendor type".into());
+        }
+        if let Some(kind) = input.vendor_type_id {
+            check_entry(&mut conn, ProfileList::VendorType, kind, current.1, "PARTY").await?;
+        }
+    }
+    Ok(Profile { terms_days })
 }
 
 pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bool, access: Access<'_>) -> Result<PartyDetails, String> {

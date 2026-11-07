@@ -32,6 +32,27 @@ Click an amount to see where it came from:
   Expenses by Vendor Detail) for that name or item and the same dates. Click a transaction there to
   open it.
 
+## QuickReport, Transaction History and Transaction Journal
+
+- **QuickReport** (**Ctrl+Q**) shows everything about the thing you have selected, as a report you
+  can customize, memorize and export like any other:
+  - in an account register, or on an account in the Chart of Accounts: the account's lines with a
+    running balance (for the register's dates);
+  - on a customer or vendor in the Customers or Vendors list: every transaction with them;
+  - on a product or service in Products & Services: every line it is on, with quantity and rate.
+
+  It is also in each row's **Actions** menu, and a **QuickReport** button sits on registers and on
+  a name's transactions panel.
+- **Transaction History** (**Ctrl+H**) lists the transactions linked to the one you clicked in a
+  register or a name's transactions panel: an invoice and the payments and credits applied to it, a
+  payment and its invoice and deposit, a deposit and the payments in it, a bill and its bill
+  payments and credits. Double-click one to open it. Checks, expenses, transfers and journal
+  entries have nothing linked.
+- **Transaction Journal** (**Ctrl+Y**) shows the debits and credits that transaction posted, in a
+  Journal report of its own.
+
+These keys use **Ctrl** on a Mac too, since ⌘Q quits and ⌘H hides the app.
+
 ## Previous year comparisons
 
 - **Profit and Loss Prev Year Comparison** shows the period you choose beside the same dates one
@@ -150,6 +171,7 @@ an account heading to open its register.
 | Report | Shows |
 |---|---|
 | **Profit & Loss Detail** | Every income and expense line in the period, by account, with a running balance |
+| **Net Income Detail** | The same lines with income positive and expenses negative (credits minus debits), so the TOTAL row is net income |
 | **Profit & Loss by Month** | Each income and expense account with a column per month and a total. Income is positive, expenses negative, and the TOTAL row is net income |
 | **Balance Sheet Detail** | Every asset, liability and equity line in the period, by account, from each account's beginning balance |
 | **A/R Aging Detail** · **A/P Aging Detail** | Open invoices and credit memos (bills and vendor credits), grouped by how far past due they are |
@@ -157,6 +179,7 @@ an account heading to open its register.
 | **Transaction List by Customer** · **Transaction List by Vendor** | One row per transaction that names a customer (or vendor), grouped by name, with its total |
 | **Customer Balance Summary** and **Detail** · **Vendor Balance Summary** and **Detail** | What makes up each customer's receivable or each vendor's payable balance, as of a date |
 | **Sales by Customer Detail** · **Sales by Product/Service Detail** | Each sale, by customer or by product or service, with quantity and rate |
+| **Sales by Rep Detail** | Each product and service line of invoices and sales receipts, by the rep on the sale; the subtotals are the Sales by Rep Summary |
 | **Income by Customer Summary** and **Detail** | Income less expenses for each customer (credits minus debits) |
 | **Expenses by Vendor Detail** | Each expense line, by vendor |
 | **Expenses by Vendor by Month** | Each vendor's expenses with a column per month; voided transactions are left out |
@@ -171,7 +194,8 @@ an account heading to open its register.
 
 The numbers agree with the other reports: account lines and balances with the General Ledger, the
 aging details with the A/R and A/P Aging Summary, the Sales by Customer and Product/Service Detail
-with their summaries, and the 1099 Detail with the 1099 Summary.
+with their summaries, the Sales by Rep Detail with its summary, the Net Income Detail with the
+Profit and Loss, and the 1099 Detail with the 1099 Summary.
 
 Things to know:
 
@@ -277,6 +301,35 @@ Purchase orders dated on or before the **As of** date that haven't been billed o
 vendor, with the expected date and amount. Purchase orders don't post to the books, so this report
 doesn't change any balance.
 
+## Lists and other reports
+
+These reports read the lists and records outside the transaction lines. They export and print like
+the others, and a click on a line opens its transaction or account where it has one.
+
+| Report | Group | Shows |
+|---|---|---|
+| **Balance Sheet Summary** | Business overview | The Balance Sheet with each group of accounts (Bank Accounts, Accounts Receivable, Fixed Assets, ...) on one line, as of a date. The totals are the Balance Sheet's |
+| **Profit & Loss YTD Comparison** | Business overview | The Profit and Loss for the report period beside the fiscal year to the period's end |
+| **Average Days to Pay Summary** | Who owes you | For each customer, the invoices paid off in the period and the average days from the invoice date to the payment or credit that paid each one off |
+| **Unpaid Bills by Job** | What you owe | Bills with a balance as of a date, under the customer or job on their lines. A bill for several jobs is split by its lines' amounts; lines with no job are under **No customer or job** |
+| **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
+| **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
+| **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
+| **Audit Trail** | Accountant & Taxes | Every record of the audit trail made in the period: when, which user, what was posted, voided or changed, and the amount. The note under it says whether the trail's chain checks out |
+| **Customer Phone List** · **Vendor Phone List** | Lists | Each active customer (jobs as *Customer:Job*) or vendor with their phone number |
+| **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
+| **Item Listing** | Lists | Each active product or service with its description, type, SKU, income account, price and quantity on hand |
+| **Account Listing** | Lists | Each active account with its type, description and, for balance sheet accounts, today's balance |
+
+These reports can't be customized or memorized.
+
+## Collapse and expand
+
+A report with headings (accounts, names, jobs, vendors, sections of the Balance Sheet Summary) has a
+▾ beside each heading. Click it to show only that heading's total; click ▸ to show its lines again.
+**Collapse all** and **Expand all** above the report do every heading at once. A report prints the
+way it is shown; Export to Excel and CSV always have every line.
+
 ## Customize a report
 
 1. Open any detail report and click **Customize…**.
@@ -307,6 +360,17 @@ Saved reports are listed under **Memorized reports** at the bottom of the report
 filters, columns, grouping and report period (such as **This month**), not the numbers, so they show
 current figures each time. To change one, open it, customize it and **Save as…** the same name; to
 remove it, click **Delete…**. Memorized reports are saved in the company file.
+
+### Process Multiple Reports
+
+To run several memorized reports together, choose **Process Multiple Reports…** at the end of
+**Memorized reports**:
+
+1. Tick the reports to run (the box in the heading ticks them all).
+2. Under **Report period**, keep **Each report's own dates** or choose one period for all of them.
+   Reports as of a date use the period's last day.
+3. Click **Display** to show them one after another, **Print** to print them in one go (each starts
+   a new page), or **Export to Excel** to save one workbook with a worksheet for each report.
 
 ## Graphs
 

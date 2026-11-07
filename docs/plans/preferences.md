@@ -57,7 +57,7 @@ as in `docs/gaps.md`.
 |---|---|---|---|
 | Bills | Bills due in N days by default | has (T3 batch 4: vendor terms first, then the company days, 10 by default) | – |
 | Bills | Warn about a bill number already used for that vendor | has (T3 batch 2) | – |
-| Bills | Apply vendor credits and discounts automatically | partial (T3 batch 4: vendor credits in Pay Bills; discounts left out, because vendor terms are days only, with no discount percent or account) | M |
+| Bills | Apply vendor credits and discounts automatically | has (T3 batch 4: vendor credits and terms discounts in Pay Bills; a discount posts as a vendor credit to the chosen discount account) | – |
 | Checking | Default account for each form (checks, pay bills, deposits, sales tax) (M) | missing | S |
 | Checking | Warn about a duplicate check number | has (T3 batch 2) | – |
 | Checking | Date checks when printed; start at the payee | missing | S |
@@ -138,5 +138,4 @@ Batches 1 and 2 are done except **recall the last transaction for a name / pre-f
 accounts**, which stays in batch 1's row above as missing.
 
 Batch 4 (sales, payments and bills defaults) is done. Left out, with the reasons in the rows above:
-early-payment discounts in Pay Bills, progress invoicing, and the sales order and Collections
-Center options.
+progress invoicing, and the sales order and Collections Center options.

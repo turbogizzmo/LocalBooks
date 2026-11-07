@@ -29,6 +29,7 @@ export function salesPrefsOf(prefs) {
     autoCalculate: p.payment_auto_calculate !== 'false',
     undepositedDefault: p.payment_undeposited_default !== 'false',
     autoCredits: p.bill_auto_apply_credits === 'true',
+    autoDiscounts: p.bill_auto_apply_discounts === 'true' && Boolean(p.bill_discount_account_id),
     jobStatus: Object.fromEntries(JOB_STATUSES.map((s) => [s.code, p[s.key] || s.label])),
   };
 }

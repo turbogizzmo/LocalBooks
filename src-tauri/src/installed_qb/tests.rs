@@ -82,19 +82,24 @@ fn journal_report() -> String {
     for t in txns {
         for cells in t {
             n += 1;
-            rows.push_str(&data_row(n, *cells));
+            let row = data_row(n, *cells);
+            // The Class column comes last here; the reader finds columns by heading.
+            rows.push_str(&match cells[6] {
+                "Construction Income:Labor" => row.replace("</DataRow>", "<ColData colID=\"10\" value=\"Remodel\" /></DataRow>"),
+                _ => row,
+            });
         }
         n += 1;
         rows.push_str(&format!("<SubtotalRow rowNumber=\"{n}\"><ColData colID=\"8\" value=\"x\" /><ColData colID=\"9\" value=\"x\" /></SubtotalRow>"));
     }
     rows.push_str("<TotalRow rowNumber=\"99\"><ColData colID=\"1\" value=\"TOTAL\" /><ColData colID=\"8\" value=\"9050.00\" /><ColData colID=\"9\" value=\"9050.00\" /></TotalRow>");
-    let cols = [("TxnNumber", "Trans #"), ("TxnType", "Type"), ("Date", "Date"), ("RefNumber", "Num"), ("Name", "Name"), ("Memo", "Memo"), ("Account", "Account"), ("Debit", "Debit"), ("Credit", "Credit")];
+    let cols = [("TxnNumber", "Trans #"), ("TxnType", "Type"), ("Date", "Date"), ("RefNumber", "Num"), ("Name", "Name"), ("Memo", "Memo"), ("Account", "Account"), ("Debit", "Debit"), ("Credit", "Credit"), ("Class", "Class")];
     let desc: String = cols
         .iter()
         .enumerate()
         .map(|(i, (ty, title))| format!("<ColDesc colID=\"{}\" dataType=\"STRTYPE\"><ColTitle titleRow=\"1\" value=\"{title}\" /><ColType>{ty}</ColType></ColDesc>", i + 1))
         .collect();
-    format!("<ReportRet><ReportTitle>Journal</ReportTitle><ReportSubtitle>All Transactions</ReportSubtitle><NumRows>{n}</NumRows><NumColumns>9</NumColumns><NumColTitleRows>1</NumColTitleRows>{desc}<ReportData>{rows}</ReportData></ReportRet>")
+    format!("<ReportRet><ReportTitle>Journal</ReportTitle><ReportSubtitle>All Transactions</ReportSubtitle><NumRows>{n}</NumRows><NumColumns>10</NumColumns><NumColTitleRows>1</NumColTitleRows>{desc}<ReportData>{rows}</ReportData></ReportRet>")
 }
 
 /// The Journal as QuickBooks for Mac's `reportAsText` is expected to return it: tab-separated,
@@ -330,10 +335,10 @@ fn records_become_the_lists_quickbooks_exports() {
     let report = records("GeneralDetailReportQueryRs", &journal_report());
     let journal = String::from_utf8(report_table(&report[0]).unwrap()).unwrap();
     let mut lines = journal.lines();
-    assert_eq!(lines.next(), Some("Trans #,Type,Date,Num,Name,Memo,Account,Debit,Credit"));
-    assert_eq!(lines.next(), Some("1,Invoice,2024-01-05,1001,Kristy Abercrombie,,Accounts Receivable,1250.00,"));
-    assert_eq!(lines.next(), Some(",,,,Kristy Abercrombie,Framing labor,Construction Income:Labor,,1250.00"));
-    assert_eq!(lines.next(), Some(",,,,,,,,"), "a subtotal row ends the transaction");
+    assert_eq!(lines.next(), Some("Trans #,Type,Date,Num,Name,Memo,Account,Debit,Credit,Class"));
+    assert_eq!(lines.next(), Some("1,Invoice,2024-01-05,1001,Kristy Abercrombie,,Accounts Receivable,1250.00,,"));
+    assert_eq!(lines.next(), Some(",,,,Kristy Abercrombie,Framing labor,Construction Income:Labor,,1250.00,Remodel"));
+    assert_eq!(lines.next(), Some(",,,,,,,,,"), "a subtotal row ends the transaction");
 }
 
 #[test]
@@ -388,7 +393,11 @@ fn windows_export_reads_into_the_ledger() {
 
     assert_eq!(export.read.sources.len(), 5);
     assert!(export.read.sources.iter().any(|s| s == "Journal (from QuickBooks).csv: QuickBooks Desktop Journal"), "{:?}", export.read.sources);
-    assert_eq!(export.notes, ["QuickBooks has 2 classes; this export does not bring classes in, so set them up under Lists › Classes"], "counts agree");
+    assert!(export.notes.is_empty(), "counts agree: {:?}", export.notes);
+    assert_eq!(ledger.classes, [("New Construction".to_string(), true), ("Remodel".to_string(), true)], "the class list comes along");
+    let invoice = ledger.transactions.iter().find(|t| t.doc_num.as_deref() == Some("1001")).unwrap();
+    let classes: Vec<Option<&str>> = invoice.lines.iter().map(|l| l.class.as_deref()).collect();
+    assert_eq!(classes, [None, Some("Remodel")], "the income line keeps its class");
 }
 
 #[test]

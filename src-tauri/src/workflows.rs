@@ -579,6 +579,7 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
         }
         let bill = BillInput {
+            terms_id: None,
             vendor_name: vendor,
             bill_number: clean(bill_number.as_deref()).map(str::to_string),
             bill_date,

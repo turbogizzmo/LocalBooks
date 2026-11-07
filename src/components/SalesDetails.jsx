@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { ProfileEntrySelect } from './ProfileFields.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 /**
- * Rep, ship date, Ship Via and the customer custom fields marked for sales forms, for the header
- * of an invoice, sales receipt or estimate. Each box shows only once its list has an entry (or the
- * document being loaded already has a value), so a company that does not use them sees nothing.
- * The rep and fields fill in from the customer until the user changes them. A new form starts
- * with the company's usual Ship Via (Preferences › Sales & Customers).
+ * Rep, ship date, Ship Via, the customer custom fields marked for sales forms and the Customer
+ * Message, for the header of an invoice, sales receipt or estimate. The rep, ship and field boxes
+ * show only once their list has an entry (or the document being loaded already has a value), so a
+ * company that does not use them sees nothing; the Customer Message box is always there, with
+ * "Add new" to start the list. The rep and fields fill in from the customer until the user changes
+ * them. A new form starts with the company's usual Ship Via (Preferences › Sales & Customers).
  */
 export function useSalesDetails(customerName, customers) {
   const reps = useLedgerQuery(api.listSalesReps).data ?? [];
@@ -18,6 +20,7 @@ export function useSalesDetails(customerName, customers) {
   const [repTouched, setRepTouched] = useState(false);
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
+  const [messageId, setMessageId] = useState(null);
   // The company defaults go on a new form once preferences load, unless a document was loaded.
   const { defaultShipMethodId, loaded: prefsLoaded } = useSalesPrefs();
   const [defaulted, setDefaulted] = useState(false);
@@ -58,8 +61,14 @@ export function useSalesDetails(customerName, customers) {
   const repOptions = reps.filter((r) => r.isActive || r.id === repId);
   const methodOptions = methods.filter((m) => m.isActive || m.id === shipMethodId);
 
-  const picker =
-    showRep || showShip || formFields.length > 0 ? (
+  const messageBox = (
+    <label>
+      <span className="qb-label">Customer message</span>
+      <ProfileEntrySelect list="CUSTOMER_MESSAGE" noun="customer message" value={messageId} onChange={setMessageId} className="qb-input w-[180px]" ariaLabel="Customer message" />
+    </label>
+  );
+
+  const picker = (
       <>
         {showRep && (
           <label>
@@ -115,8 +124,9 @@ export function useSalesDetails(customerName, customers) {
             />
           </label>
         ))}
+        {messageBox}
       </>
-    ) : null;
+  );
 
   return {
     picker,
@@ -125,6 +135,7 @@ export function useSalesDetails(customerName, customers) {
       salesRepId: repId,
       shipDate: shipDate || null,
       shipMethodId,
+      customerMessageId: messageId,
       customFields: formFields.map((f) => ({ fieldId: f.id, value: (values[f.id] ?? '').trim() })).filter((f) => f.value !== ''),
     }),
     /** Loads a saved document's details (an edit, or an estimate becoming an invoice). */
@@ -134,6 +145,7 @@ export function useSalesDetails(customerName, customers) {
       setShipDate(details?.shipDate ?? '');
       setDefaulted(true);
       setShipMethodId(details?.shipMethodId ?? null);
+      setMessageId(details?.customerMessageId ?? null);
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
       setTouched(new Set(formFields.map((f) => f.id)));
@@ -143,6 +155,7 @@ export function useSalesDetails(customerName, customers) {
       setRepId(null);
       setShipDate('');
       setShipMethodId(defaultShipMethodId);
+      setMessageId(null);
       setValues({});
       setTouched(new Set());
     },

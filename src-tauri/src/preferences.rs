@@ -44,6 +44,8 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::sales_prefs::UNDEPOSITED_DEFAULT, "true"),
     (crate::sales_prefs::BILL_DUE_DAYS, "10"),
     (crate::sales_prefs::BILL_AUTO_CREDITS, "false"),
+    (crate::sales_prefs::BILL_AUTO_DISCOUNTS, "false"),
+    (crate::sales_prefs::BILL_DISCOUNT_ACCOUNT, ""),
     (crate::sales_prefs::DEFAULT_DELIVERY, "none"),
 ];
 
@@ -227,6 +229,9 @@ pub async fn set(pool: &SqlitePool, key: &str, value: &str) -> Result<String, St
         if !matches!(account, Some((classification, true)) if classification == "INCOME") {
             return Err("PREF_BAD_FC_ACCOUNT: finance charges must be credited to an active Income account".into());
         }
+    }
+    if key == crate::sales_prefs::BILL_DISCOUNT_ACCOUNT && !normalized.is_empty() {
+        crate::sales_prefs::check_discount_account(pool, normalized.parse::<i64>().unwrap_or_default()).await?;
     }
     if key == crate::sales_prefs::DEFAULT_SHIP_METHOD && !normalized.is_empty() {
         crate::sales_prefs::check_ship_method(pool, normalized.parse::<i64>().unwrap_or_default()).await?;

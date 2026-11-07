@@ -65,8 +65,17 @@ Turn on **Use vendor credits automatically** in **Preferences › Bills › Comp
 Pay Bills uses each vendor's open credits on the bills you tick, the oldest credit first. The
 **Credits used** column shows how much each bill takes, and **Payment** fills in with what is left.
 A bill the credits pay in full needs no payment and no check. Credits aren't used when you pay by
-ACH file; apply them from **Expenses › Vendor Credits** first. Early-payment discounts aren't
-applied: vendor terms in LocalBooks are a number of days, without a discount.
+ACH file; apply them from **Expenses › Vendor Credits** first.
+
+### Take early-payment discounts
+
+A bill on terms with a discount, such as *2% 10 Net 30*, shows the discount it offers in **Discount
+offered**. To take it automatically, tick **Take early-payment discounts automatically** in
+**Preferences › Bills** and choose the **Discount account** (an expense account such as Purchase
+Discounts). Then, when the payment date is on or before the discount's last day, Pay Bills takes
+the discount off a bill nothing has been paid on yet and pays the rest. The discount is recorded
+as a vendor credit to the discount account, used on that bill, so it shows in the vendor's
+history and reports like any other credit.
 
 ## Pay bills by ACH file
 

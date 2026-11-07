@@ -35,6 +35,8 @@ pub const AUTO_CALCULATE: &str = "payment_auto_calculate";
 pub const UNDEPOSITED_DEFAULT: &str = "payment_undeposited_default";
 pub const BILL_DUE_DAYS: &str = "bill_due_days";
 pub const BILL_AUTO_CREDITS: &str = "bill_auto_apply_credits";
+pub const BILL_AUTO_DISCOUNTS: &str = "bill_auto_apply_discounts";
+pub const BILL_DISCOUNT_ACCOUNT: &str = "bill_discount_account_id";
 pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
 /// The F.O.B. text printed on a sales form, as the schema allows it.
 pub const MAX_FOB_CHARS: usize = 30;
@@ -62,7 +64,13 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         _ => Err("PREF_BAD_FLAG: use true or false".to_string()),
     };
     Some(match key {
-        PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
+        PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
+        | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
+        // An expense (or asset) account, checked in `check_discount_account`; blank means none.
+        BILL_DISCOUNT_ACCOUNT => match v {
+            "" => Ok(String::new()),
+            _ => v.parse::<i64>().map(|id| id.to_string()).map_err(|_| "PREF_BAD_DISCOUNT_ACCOUNT: choose an expense account for discounts".into()),
+        },
         // A shipping method, checked against the list in `check_ship_method`; blank means none.
         DEFAULT_SHIP_METHOD => match v {
             "" => Ok(String::new()),
@@ -112,6 +120,22 @@ pub async fn check_ship_method(pool: &SqlitePool, id: i64) -> Result<(), String>
         Some(true) => Ok(()),
         Some(false) => Err("PREF_BAD_SHIP_METHOD: that shipping method is inactive".into()),
         None => Err("PREF_BAD_SHIP_METHOD: choose a shipping method from the Ship Via list".into()),
+    }
+}
+
+/// Discounts taken are credited to this account, so it must be one a vendor credit can use: an
+/// active expense or asset category.
+pub async fn check_discount_account(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    let row: Option<(String, String, bool, bool)> = sqlx::query_as(
+        "SELECT t.classification, a.account_type, a.is_active, a.is_system FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type WHERE a.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    match row {
+        Some((class, kind, true, false)) if class == "EXPENSE" || matches!(kind.as_str(), "FIXED_ASSET" | "OTHER_ASSET" | "OTHER_CURRENT_ASSET") => Ok(()),
+        _ => Err("PREF_BAD_DISCOUNT_ACCOUNT: discounts taken go to an active expense account (such as Purchase Discounts or Cost of Goods Sold)".into()),
     }
 }
 
@@ -212,15 +236,18 @@ pub async fn payment_application(pool: &SqlitePool, customer_name: &str, currenc
 // Bills
 // ------------------------------------------------------------------------------------------------
 
-/// A new bill's due date: the vendor's terms when it has them, otherwise the company's "bills are
-/// due N days after the bill date". A vendor not yet on the list has no terms.
+/// A new bill's due date: the vendor's terms when it has them (a term from the Terms list, or a
+/// number of days), otherwise the company's "bills are due N days after the bill date". A vendor
+/// not yet on the list has no terms.
 pub async fn bill_due_date(pool: &SqlitePool, vendor_name: &str, bill_date: NaiveDate) -> Result<NaiveDate, String> {
-    let terms: Option<i64> = sqlx::query_scalar("SELECT terms_days FROM vendors WHERE name = ?1 COLLATE NOCASE")
-        .bind(vendor_name.trim())
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .flatten();
+    let terms: Option<i64> = sqlx::query_scalar(
+        "SELECT COALESCE((SELECT t.net_days FROM terms t WHERE t.id = v.terms_id), v.terms_days) FROM vendors v WHERE v.name = ?1 COLLATE NOCASE",
+    )
+    .bind(vendor_name.trim())
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .flatten();
     let days = match terms {
         Some(days) => days,
         None => preferences::get(pool, BILL_DUE_DAYS).await?.parse::<i64>().unwrap_or(0),
@@ -259,12 +286,54 @@ pub fn plan_vendor_credits(credits: &[Open], bills: &[Open]) -> Vec<CreditUse> {
     out
 }
 
-/// Pay Bills: the vendor credits to use on `bill_ids` (in the order the screen lists them), when
-/// the company applies credits automatically; empty otherwise.
-pub async fn bill_credits(pool: &SqlitePool, bill_ids: &[i64]) -> Result<Vec<CreditUse>, String> {
-    if bill_ids.is_empty() || !preferences::flag(pool, BILL_AUTO_CREDITS).await? {
-        return Ok(Vec::new());
+/// An early-payment discount taken on one bill.
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscountUse {
+    pub bill_id: i64,
+    pub amount_cents: i64,
+}
+
+/// What Pay Bills takes off the chosen bills before paying them.
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PayBillsPlan {
+    /// Early-payment discounts the bills' terms still offer on the payment date.
+    pub discounts: Vec<DiscountUse>,
+    /// Vendor credits used on what the discounts leave.
+    pub credits: Vec<CreditUse>,
+}
+
+/// The discount a bill's terms offer when paid on `payment_date`: only on a bill nothing has been
+/// paid or credited on yet, and only through the discount's last day.
+async fn offered_discount(pool: &SqlitePool, bill_id: i64, payment_date: NaiveDate) -> Result<i64, String> {
+    let row: Option<(i64, i64, i64, Option<String>)> = sqlx::query_as(
+        "SELECT b.total_cents, b.amount_paid_cents, COALESCE(tm.discount_ppm, 0),
+                CASE WHEN tm.discount_days IS NOT NULL THEN date(b.bill_date, '+' || tm.discount_days || ' days') END
+         FROM bills b LEFT JOIN terms tm ON tm.id = b.terms_id
+         WHERE b.id = ?1 AND b.is_voided = 0 AND b.status IN ('UNPAID', 'PARTIAL')",
+    )
+    .bind(bill_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let Some((total, paid, ppm, until)) = row else { return Ok(0) };
+    let until = until.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+    if paid != 0 || ppm == 0 || until.is_none_or(|u| payment_date > u) {
+        return Ok(0);
     }
+    Ok(crate::profile_lists::early_discount_cents(total, ppm).unwrap_or(0).clamp(0, total))
+}
+
+/// Pay Bills: the discounts and vendor credits to use on `bill_ids` (in the order the screen lists
+/// them) when paying on `payment_date`, as far as the company takes them automatically.
+pub async fn pay_bills_plan(pool: &SqlitePool, bill_ids: &[i64], payment_date: NaiveDate) -> Result<PayBillsPlan, String> {
+    let mut plan = PayBillsPlan::default();
+    if bill_ids.is_empty() {
+        return Ok(plan);
+    }
+    let discounts_on = preferences::flag(pool, BILL_AUTO_DISCOUNTS).await? && !preferences::get(pool, BILL_DISCOUNT_ACCOUNT).await?.is_empty();
+    let credits_on = preferences::flag(pool, BILL_AUTO_CREDITS).await?;
     let mut by_vendor: BTreeMap<i64, Vec<Open>> = BTreeMap::new();
     for &id in bill_ids {
         let bill: Option<(i64, i64)> = sqlx::query_as(
@@ -274,11 +343,16 @@ pub async fn bill_credits(pool: &SqlitePool, bill_ids: &[i64]) -> Result<Vec<Cre
         .fetch_optional(pool)
         .await
         .map_err(db_err)?;
-        if let Some((vendor, balance_cents)) = bill {
-            by_vendor.entry(vendor).or_default().push(Open { id, balance_cents });
+        let Some((vendor, balance_cents)) = bill else { continue };
+        let discount = if discounts_on { offered_discount(pool, id, payment_date).await?.min(balance_cents) } else { 0 };
+        if discount > 0 {
+            plan.discounts.push(DiscountUse { bill_id: id, amount_cents: discount });
         }
+        by_vendor.entry(vendor).or_default().push(Open { id, balance_cents: balance_cents - discount });
     }
-    let mut out = Vec::new();
+    if !credits_on {
+        return Ok(plan);
+    }
     for (vendor, bills) in by_vendor {
         let credits: Vec<(i64, i64)> = sqlx::query_as(
             "SELECT c.id, b.remaining_cents FROM vendor_credits c JOIN v_vendor_credit_balances b ON b.vendor_credit_id = c.id
@@ -289,19 +363,53 @@ pub async fn bill_credits(pool: &SqlitePool, bill_ids: &[i64]) -> Result<Vec<Cre
         .await
         .map_err(db_err)?;
         let credits: Vec<Open> = credits.into_iter().map(|(id, balance_cents)| Open { id, balance_cents }).collect();
-        out.extend(plan_vendor_credits(&credits, &bills));
+        plan.credits.extend(plan_vendor_credits(&credits, &bills));
     }
-    Ok(out)
+    Ok(plan)
 }
 
-/// Pay Bills with credits: uses each vendor credit on its bill, then records the payments, in one
-/// transaction. A bill the credits pay off in full needs no payment.
-pub async fn pay_bills_with_credits(pool: &SqlitePool, payments: Vec<crate::expenses::BillPaymentInput>, credits: Vec<crate::credits::ApplyCreditInput>) -> Result<usize, String> {
-    if payments.is_empty() && credits.is_empty() {
+/// Pay Bills with discounts and credits, in one transaction: each discount is posted as a vendor
+/// credit to the discount account (Dr Accounts Payable, Cr the account) and used on its bill, then
+/// the vendor credits are used, then the payments recorded. A bill paid off without money needs no
+/// payment. A discount must be one the bill's terms still offer on `payment_date`.
+pub async fn pay_bills_with_credits(
+    pool: &SqlitePool,
+    payments: Vec<crate::expenses::BillPaymentInput>,
+    credits: Vec<crate::credits::ApplyCreditInput>,
+    discounts: Vec<DiscountUse>,
+    payment_date: NaiveDate,
+) -> Result<usize, String> {
+    if payments.is_empty() && credits.is_empty() && discounts.is_empty() {
         return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
+    }
+    let account = preferences::get(pool, BILL_DISCOUNT_ACCOUNT).await?.parse::<i64>().ok();
+    let mut taken = Vec::with_capacity(discounts.len());
+    for d in &discounts {
+        let offered = offered_discount(pool, d.bill_id, payment_date).await?;
+        let Some(account) = account.filter(|_| offered > 0) else {
+            return Err("BILL_NO_DISCOUNT: that bill's terms offer no discount on this date, or no discount account is set in Preferences › Bills".into());
+        };
+        if !(1..=offered).contains(&d.amount_cents) {
+            return Err(format!("BILL_BAD_DISCOUNT: the discount on that bill is at most {}", crate::ledger::format_cents(offered)));
+        }
+        let (vendor, number): (String, Option<String>) =
+            sqlx::query_as("SELECT v.name, b.bill_number FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1").bind(d.bill_id).fetch_one(pool).await.map_err(db_err)?;
+        let memo = format!("Early-payment discount{}", number.map(|n| format!(" on bill {n}")).unwrap_or_default());
+        taken.push((d, crate::credits::VendorCreditInput {
+            vendor_name: vendor,
+            reference: Some("Discount".into()),
+            credit_date: payment_date,
+            memo: Some(memo.clone()),
+            lines: vec![crate::credits::VendorCreditLineInput { account_id: account, amount_cents: d.amount_cents, memo: Some(memo), class_id: None, customer_id: None }],
+        }));
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
+        for (d, credit) in &taken {
+            let credit_id = crate::credits::write_vendor_credit(&mut tx, credit).await?;
+            let apply = crate::credits::ApplyCreditInput { credit_id, document_id: d.bill_id, amount_cents: d.amount_cents, applied_date: payment_date };
+            crate::credits::apply_vendor_credit_in_tx(&mut tx, &apply).await?;
+        }
         for credit in &credits {
             crate::credits::apply_vendor_credit_in_tx(&mut tx, credit).await?;
         }
@@ -314,7 +422,8 @@ pub async fn pay_bills_with_credits(pool: &SqlitePool, payments: Vec<crate::expe
     match result {
         Ok(()) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
-            let mut bills: Vec<i64> = payments.iter().map(|p| p.bill_id).chain(credits.iter().map(|c| c.document_id)).collect();
+            let mut bills: Vec<i64> =
+                payments.iter().map(|p| p.bill_id).chain(credits.iter().map(|c| c.document_id)).chain(discounts.iter().map(|d| d.bill_id)).collect();
             bills.sort_unstable();
             bills.dedup();
             Ok(bills.len())

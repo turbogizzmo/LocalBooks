@@ -1,12 +1,12 @@
 //! Preferences batch 4: what Receive Payments, Enter Bills and Pay Bills ask the company defaults.
 
 use super::prelude::*;
-use crate::sales_prefs::{self, AppliedAmount, CreditUse};
+use crate::sales_prefs::{self, AppliedAmount, DiscountUse, PayBillsPlan};
 
 handlers![
     get_payment_application,
     get_bill_due_date,
-    list_bill_credits,
+    get_pay_bills_plan,
     pay_bills_with_credits,
     set_menu_view_enabled,
 ];
@@ -23,16 +23,24 @@ pub async fn get_bill_due_date(db: State<'_, Db>, vendor_name: String, bill_date
     sales_prefs::bill_due_date(&db.pool().await, &vendor_name, bill_date).await
 }
 
-/// The vendor credits Pay Bills uses on the chosen bills (none unless the company applies them).
+/// The discounts and vendor credits Pay Bills takes off the chosen bills (as far as the company
+/// takes them automatically).
 #[tauri::command]
-pub async fn list_bill_credits(db: State<'_, Db>, bill_ids: Vec<i64>) -> Result<Vec<CreditUse>, String> {
-    sales_prefs::bill_credits(&db.pool().await, &bill_ids).await
+pub async fn get_pay_bills_plan(db: State<'_, Db>, bill_ids: Vec<i64>, payment_date: NaiveDate) -> Result<PayBillsPlan, String> {
+    sales_prefs::pay_bills_plan(&db.pool().await, &bill_ids, payment_date).await
 }
 
-/// Pays bills after using vendor credits on them; all of it posts, or none.
+/// Pays bills after taking discounts and using vendor credits on them; all of it posts, or none.
 #[tauri::command]
-pub async fn pay_bills_with_credits(app: AppHandle, db: State<'_, Db>, inputs: Vec<crate::expenses::BillPaymentInput>, credits: Vec<ApplyCreditInput>) -> Result<usize, String> {
-    let count = sales_prefs::pay_bills_with_credits(&db.pool().await, inputs, credits).await?;
+pub async fn pay_bills_with_credits(
+    app: AppHandle,
+    db: State<'_, Db>,
+    inputs: Vec<crate::expenses::BillPaymentInput>,
+    credits: Vec<ApplyCreditInput>,
+    discounts: Vec<DiscountUse>,
+    payment_date: NaiveDate,
+) -> Result<usize, String> {
+    let count = sales_prefs::pay_bills_with_credits(&db.pool().await, inputs, credits, discounts, payment_date).await?;
     notify(&app);
     Ok(count)
 }
