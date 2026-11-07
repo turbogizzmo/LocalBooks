@@ -58,8 +58,8 @@ export const topics = [
   {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
-    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later.',
-    keywords: 'paid payment customer receive partial undeposited',
+    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), and use Auto Apply to spread the amount over the oldest invoices.',
+    keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
   },
@@ -82,8 +82,8 @@ export const topics = [
   {
     id: 'sales-receipt', area: 'sales', views: ['sales/all'],
     title: 'Record a sale paid on the spot (sales receipt)',
-    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Choose whether the money goes to a bank account or to Undeposited Funds.',
-    keywords: 'cash sale receipt point of sale paid',
+    body: 'Use New sales receipt in All Sales when the customer pays at the time of sale, so no invoice or receivable is needed. Pick the payment method from the tiles, and choose whether the money goes to a bank account or to Undeposited Funds.',
+    keywords: 'cash sale receipt point of sale paid method tile',
     go: { label: 'New sales receipt', view: 'sales/all', action: 'sales-receipt' },
     guide: 'sales-receipts-and-estimates',
   },

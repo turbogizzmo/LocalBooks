@@ -97,8 +97,8 @@ export const topics = [
   {
     id: 'backup', area: 'company', views: ['settings/data'],
     title: 'Back up, restore or open a company file',
-    body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept. Choosing a QuickBooks .qbw, .qbb or .qbm file instead starts a new company and opens the Desktop Migration Wizard on it. Hold Option or Alt while clicking Open (or choose File › Open Company Without Restoring Windows…) to open on a plain Home page with other windows closed.',
-    keywords: 'backup restore export file save localbooks open copy qbw qbb qbm quickbooks without restoring windows alt option',
+    body: 'File & Data Controls backs up your books to a .localbooks file, restores a backup (keeping a safety copy of the current books) or opens another company file; a daily backup is also taken automatically. Restoring replaces the whole company file, so anything entered after the backup was taken is not kept. Choosing a QuickBooks .qbw, .qbb or .qbm file instead starts a new company and opens the Desktop Migration Wizard on it. Hold Option or Alt while clicking Open (or choose File › Open Company Without Restoring Windows…) to open on a plain Home page with other windows closed. With no company open, the recent list shows when you last opened each file, newest first.',
+    keywords: 'backup restore export file save localbooks open copy qbw qbb qbm quickbooks without restoring windows alt option recent previous company last opened',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'backups-and-company-files',
   },
