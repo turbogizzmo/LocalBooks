@@ -85,6 +85,7 @@ features![
     preferences,
     price_levels,
     print_queue,
+    profile_lists,
     purchase_orders,
     reconcile,
     recurring,

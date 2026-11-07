@@ -294,6 +294,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
+| Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
 | Preferences | Settings › Preferences Console | Company details, logo, fiscal year, currency symbol, tax calendar; General (my) preferences such as Enter moving between fields and the date new transactions start on | [guide](docs/guide/getting-started.md#set-how-typing-works-general-preferences) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
 | Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
@@ -553,6 +554,7 @@ claude mcp add --transport http localbooks http://127.0.0.1:8321/mcp --header "A
         ├── invoices.rs, finance_charges.rs, sales.rs, item_prices.rs, estimates.rs, expenses.rs, banking.rs, bank.rs,
         ├── reconcile.rs, timesheet.rs       # business documents
         ├── sales_lists.rs, custom_fields.rs # sales reps, Ship Via, custom fields
+        ├── profile_lists.rs           # terms, payment methods, types, customer messages
         ├── simplefin.rs        # SimpleFIN bank connections (claim, link, sync)
         ├── fx_rates.rs         # opt-in ECB exchange-rate lookup (Frankfurter) and its cache
         ├── bank_pdf.rs         # PDF bank and card statements: text layout to transaction table

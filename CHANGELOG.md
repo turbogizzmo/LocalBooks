@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
+  Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
+  Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
+  and vendors get a default term and a type. On invoices and bills the Terms box fills in from the
+  customer or vendor and sets the due date; Receive Payments and Pay Bills show the discount
+  offered and its last day. A customer message picked on an invoice, sales receipt or estimate
+  prints on it. The Terms and Payment method boxes end in **＋ Add new…**.
 - **Safer Excel imports.** A damaged or deliberately malformed `.xls` report file can no longer
   crash LocalBooks or make it run out of memory while importing (the Excel reader is updated).
 - **Type checks and deposits straight into a register.** Bank and credit card registers end in a
