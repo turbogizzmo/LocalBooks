@@ -237,6 +237,8 @@ pub struct Filters {
     pub adjusting_only: bool,
     /// Only voided transactions and the entries that void them (the Voided Transactions report).
     pub voided_only: bool,
+    /// Only these journal entries (a Transaction Journal for one transaction).
+    pub entry_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -710,6 +712,9 @@ impl LineFilter<'_> {
             return false;
         }
         if f.voided_only && !(l.is_voided || l.is_reversal) {
+            return false;
+        }
+        if !f.entry_ids.is_empty() && !f.entry_ids.contains(&l.journal_entry_id) {
             return false;
         }
         true

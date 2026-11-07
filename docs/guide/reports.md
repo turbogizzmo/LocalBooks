@@ -32,6 +32,27 @@ Click an amount to see where it came from:
   Expenses by Vendor Detail) for that name or item and the same dates. Click a transaction there to
   open it.
 
+## QuickReport, Transaction History and Transaction Journal
+
+- **QuickReport** (**Ctrl+Q**) shows everything about the thing you have selected, as a report you
+  can customize, memorize and export like any other:
+  - in an account register, or on an account in the Chart of Accounts: the account's lines with a
+    running balance (for the register's dates);
+  - on a customer or vendor in the Customers or Vendors list: every transaction with them;
+  - on a product or service in Products & Services: every line it is on, with quantity and rate.
+
+  It is also in each row's **Actions** menu, and a **QuickReport** button sits on registers and on
+  a name's transactions panel.
+- **Transaction History** (**Ctrl+H**) lists the transactions linked to the one you clicked in a
+  register or a name's transactions panel: an invoice and the payments and credits applied to it, a
+  payment and its invoice and deposit, a deposit and the payments in it, a bill and its bill
+  payments and credits. Double-click one to open it. Checks, expenses, transfers and journal
+  entries have nothing linked.
+- **Transaction Journal** (**Ctrl+Y**) shows the debits and credits that transaction posted, in a
+  Journal report of its own.
+
+These keys use **Ctrl** on a Mac too, since ⌘Q quits and ⌘H hides the app.
+
 ## Previous year comparisons
 
 - **Profit and Loss Prev Year Comparison** shows the period you choose beside the same dates one
