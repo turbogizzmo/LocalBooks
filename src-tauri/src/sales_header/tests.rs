@@ -199,3 +199,45 @@ async fn the_credit_limit_warns_and_never_blocks() {
     let warning = credit_check(&pool, "acme", 1, None).await.unwrap().expect("already over");
     assert_eq!(warning.balance_cents, 110_000);
 }
+
+#[tokio::test]
+async fn a_paid_invoice_resaved_keeps_its_own_header() {
+    let pool = test_pool().await;
+    let services = services(&pool).await;
+    let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
+    let acme = customer(&pool, "Acme", PartyDetailsInput { address: Some("1 Main St".into()), shipping_address: Some("Dock 4".into()), ..Default::default() }).await;
+    let typed = SalesHeader { bill_to: Some("Attn: Payables\n1 Main St".into()), ship_to: Some("Site B".into()), po_number: Some("PO-9".into()), fob: Some("Origin".into()) };
+    let original = create_and_post_invoice(&pool, invoice("Acme", services, 10_000, typed.clone())).await.unwrap().id;
+    crate::invoices::record_payment(
+        &pool,
+        crate::invoices::PaymentInput {
+            payment_method_id: None,
+            invoice_id: original,
+            deposit_account_id: checking,
+            payment_date: d(5),
+            amount_cents: 4_000,
+            payment_method: "CHECK".into(),
+            reference: None,
+            exchange_rate_e6: None,
+        },
+    )
+    .await
+    .unwrap();
+    // The customer's record changes after the invoice was written.
+    update_party(&pool, "customer", acme, PartyDetailsInput { name: "Acme".into(), address: Some("77 New Ave".into()), ..Default::default() }, Access::OPEN).await.unwrap();
+
+    // Re-saved from the form, which loads the invoice's own copy and sends it back.
+    let loaded = invoice_detail(&pool, original).await.unwrap().details.header;
+    assert_eq!(loaded, typed);
+    let edited = crate::edits::replace_invoice(&pool, original, invoice("Acme", services, 12_000, loaded)).await.unwrap();
+    let detail = invoice_detail(&pool, edited).await.unwrap();
+    assert_eq!(detail.details.header, typed);
+    assert_eq!(detail.invoice.amount_paid_cents, 4_000, "the payment stays applied");
+
+    // Re-saved by a caller that leaves the addresses out: the edited invoice still keeps the
+    // original's copy, not the customer's new address. P.O. and FOB are sent as they are.
+    let again = crate::edits::replace_invoice(&pool, edited, invoice("Acme", services, 12_500, SalesHeader { po_number: Some("PO-9".into()), fob: Some("Origin".into()), ..Default::default() }))
+        .await
+        .unwrap();
+    assert_eq!(invoice_detail(&pool, again).await.unwrap().details.header, typed);
+}

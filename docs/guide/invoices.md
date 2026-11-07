@@ -107,8 +107,16 @@ your changes and save. LocalBooks voids the original and posts the corrected inv
 both stay in the journal and the audit trail. Bills, checks and expenses open the same way from
 their lists.
 
-An invoice can't be edited while it is voided, reconciled, in a closed period, or has payments or
-credits applied: void its payments and remove its credits first. To cancel an invoice instead,
+An invoice with payments or credits applied can be edited too. The form says how much is applied
+("This invoice has $250.00 in payments or credits applied"), and saving asks once more: the payments,
+applied credit memos and any bounced check stay applied to the corrected invoice, so its open balance
+is the new total less what was already paid. Nothing about the payments changes, including a payment
+already deposited, even in a reconciled bank deposit. Three changes are refused while payments or
+credits are applied, and the message says so: a new total below what's applied (void or remove a
+payment or credit first, or give the customer a credit memo), a different customer, and, for a
+foreign-currency invoice, a different currency or exchange rate.
+
+An invoice can't be edited while it is voided, reconciled, or in a closed period. To cancel an invoice instead,
 choose **Void Transaction** in its **Actions** menu. See
 [Journal entries and voiding](journal-entries-and-voids.md).
 

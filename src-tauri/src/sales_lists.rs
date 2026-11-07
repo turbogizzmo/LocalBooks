@@ -339,7 +339,14 @@ pub(crate) async fn write_details(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
 /// inactive or its custom field taken off sales forms, so a later list change cannot block it.
 /// Anything newly chosen is checked as for a new form.
 pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails, carried: &SalesDetails) -> Result<(), String> {
-    crate::sales_header::write(tx, doc.table(), id, &details.header).await?;
+    // Addresses left out of the input keep the carried document's own copy (an edited invoice, or an
+    // estimate becoming one) rather than refilling from the customer's current record.
+    let header = SalesHeader {
+        bill_to: details.header.bill_to.clone().or_else(|| carried.header.bill_to.clone()),
+        ship_to: details.header.ship_to.clone().or_else(|| carried.header.ship_to.clone()),
+        ..details.header.clone()
+    };
+    crate::sales_header::write(tx, doc.table(), id, &header).await?;
     if details.is_empty() {
         return Ok(());
     }
