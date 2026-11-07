@@ -108,3 +108,30 @@ fn every_page_has_a_screen_for_its_window() {
     let missing: Vec<&str> = pages.into_iter().filter(|id| !groups.contains(id) && !shown(id)).collect();
     assert!(missing.is_empty(), "these pages have no screen in Screen.jsx: {}", missing.join(", "));
 }
+
+/// The screens' own unit tests (`src/lib/*.test.js`, Node's built-in runner): exact money parsing,
+/// the decimal-point preference, hours and year display. They need only Node, which building the
+/// app needs anyway.
+#[test]
+fn screen_library_unit_tests_pass() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut tests: Vec<PathBuf> = std::fs::read_dir(root.join("src/lib"))
+        .expect("read src/lib")
+        .map(|e| e.expect("read a folder entry").path())
+        .filter(|p| p.to_string_lossy().ends_with(".test.js"))
+        .collect();
+    tests.sort();
+    assert!(!tests.is_empty(), "found the tests in src/lib");
+    let output = std::process::Command::new(if cfg!(windows) { "node.exe" } else { "node" })
+        .arg("--test")
+        .args(&tests)
+        .current_dir(&root)
+        .output()
+        .expect("run Node (install Node.js 22 or later to build and test LocalBooks)");
+    assert!(
+        output.status.success(),
+        "src/lib unit tests failed:\n{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

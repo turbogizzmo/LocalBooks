@@ -8,7 +8,7 @@ import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
-import RowMenu, { ConfirmDialog, voidItem } from './RowMenu.jsx';
+import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
@@ -82,8 +82,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [memorizing, setMemorizing] = useState(null);
   // Payments and vendor credits applied stay applied to the edited version.
   const appliedText = editing?.bill.amountPaidCents > 0 ? `This bill has ${formatCents(editing.bill.amountPaidCents)} in payments or credits applied. Saving will keep them applied to the new version.` : null;
-  const [confirmSave, setConfirmSave] = useState(null);
-  const post = async (mode, confirmed = false) => {
+  const post = async (mode) => {
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
@@ -104,17 +103,11 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
-    if (appliedText && confirmed !== true && mode !== 'memorize') {
-      return setConfirmSave({
-        confirm: { title: 'Save changes to a paid bill?', body: appliedText, confirmLabel: 'Save changes' },
-        onSelect: () => post(mode, true),
-      });
-    }
     setBusy(true);
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
-      const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
+      const bill = editing ? await api.replaceBill(editing.bill.id, input, appliedText) : await api.postVendorBill(input);
       const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
       onPosted(
         editing
@@ -261,7 +254,6 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       )}
       {appliedText && <Notice kind="info" text={appliedText} />}
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
-      {confirmSave && <ConfirmDialog item={confirmSave} onClose={() => setConfirmSave(null)} />}
       {memorizing && (
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
       )}

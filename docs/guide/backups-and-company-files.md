@@ -7,7 +7,7 @@ Controls**.
 
 - **Automatic:** a backup is taken when LocalBooks starts, at most once a day, and listed under
   **Snapshots on this computer**. Set how many to keep in **Settings › Preferences Console ›
-  Automatic backups**.
+  General › Company Preferences**, under **Automatic backups**.
 - **Right now:** click **Back up now**.
 - **To a file you choose** (a USB drive or cloud folder): click **Backup Company File…** and pick
   where to save it. It's saved as a `.localbooks` file and checked after writing.

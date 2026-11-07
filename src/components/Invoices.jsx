@@ -7,7 +7,7 @@ import { DiscountField, documentTotals, parseDiscount, useFormTax } from './Sale
 import Notice from './Notice.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
-import RowMenu, { ConfirmDialog, voidItem } from './RowMenu.jsx';
+import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
@@ -813,9 +813,8 @@ export default function Invoices({ accounts, intent }) {
   // Voided invoices are shown but not saved again.
   const locked = current && current.isVoided;
   const appliedText = editing?.applied ? `This invoice has ${editing.applied} in payments or credits applied. Saving will keep them applied to the new version.` : null;
-  const [confirmSave, setConfirmSave] = useState(null);
 
-  const save = async (mode, confirmed = false) => {
+  const save = async (mode) => {
     if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
@@ -839,12 +838,6 @@ export default function Invoices({ accounts, intent }) {
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setNotice({ kind: 'error', text: warning });
-    if (appliedText && confirmed !== true && mode !== 'memorize') {
-      return setConfirmSave({
-        confirm: { title: 'Save changes to a paid invoice?', body: appliedText, confirmLabel: 'Save changes' },
-        onSelect: () => save(mode, true),
-      });
-    }
 
     setBusy(true);
     try {
@@ -861,7 +854,7 @@ export default function Invoices({ accounts, intent }) {
       };
       if (mode === 'memorize') return setMemorizing(input);
       if (editing) {
-        await api.replaceInvoice(editing.id, input);
+        await api.replaceInvoice(editing.id, input, appliedText);
         setNotice({ kind: 'success', text: `Invoice #${editing.number} replaced: the original is voided and the edited invoice is posted.` });
         reset();
         return;
@@ -982,7 +975,6 @@ export default function Invoices({ accounts, intent }) {
           }}
         />
       )}
-      {confirmSave && <ConfirmDialog item={confirmSave} onClose={() => setConfirmSave(null)} />}
       {editing && (
         <Notice
           kind="info"

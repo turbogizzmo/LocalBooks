@@ -21,11 +21,17 @@ export function addDays(iso, days) {
   return toIso(new Date(y, m - 1, d + days));
 }
 
-/** "2026-10-13" -> "10/13/2026" (US display). */
-export function formatDate(iso) {
+// Company Preferences › General: years show with four digits, or two ("10/13/26").
+let fourDigitYears = true;
+export function setFourDigitYears(on) {
+  fourDigitYears = on !== false;
+}
+
+/** "2026-10-13" -> "10/13/2026" (US display), or "10/13/26" when years show two digits. */
+export function formatDate(iso, { fourDigits = fourDigitYears } = {}) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
-  return `${m}/${d}/${y}`;
+  return `${m}/${d}/${fourDigits ? y : y.slice(-2)}`;
 }
 
 /** "2026-10" -> "Oct" or "October 2026". */

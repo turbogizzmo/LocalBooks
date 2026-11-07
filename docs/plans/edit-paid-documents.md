@@ -131,5 +131,9 @@ For every replacement, three things are recorded, all inside the edit's transact
 
 Invoices and Bills open a paid document for editing. A banner over the form says, for example,
 "This invoice has $250.00 in payments or credits applied. Saving will keep them applied to the new
-version." and saving asks once more with the same sentence. Expenses and checks have no applied
+version." Saving asks once, with that sentence first: `api.replaceInvoice` / `replaceBill` pass it
+to `recordTransaction` (`src/lib/confirmable.js`), which uses it in place of the usual "already
+posted" question. That question can be turned off in My Preferences; this one is always asked,
+because it is about money already received or paid. The data-entry guards' "Save anyway" warnings
+and their `confirmed` codes work as for any other save. Expenses and checks have no applied
 payments and are unchanged.

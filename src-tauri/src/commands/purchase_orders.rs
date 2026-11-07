@@ -21,8 +21,10 @@ pub async fn get_purchase_order_lines(db: State<'_, Db>, id: i64) -> Result<Vec<
 }
 
 #[tauri::command]
-pub async fn create_purchase_order(app: AppHandle, db: State<'_, Db>, input: PurchaseOrderInput) -> Result<i64, String> {
-    let id = workflows::create_purchase_order(&db.pool().await, input).await?;
+pub async fn create_purchase_order(app: AppHandle, db: State<'_, Db>, input: PurchaseOrderInput, confirmed: Option<Vec<String>>) -> Result<i64, String> {
+    let pool = db.pool().await;
+    guards::check(&pool, guards::dated(input.po_date), confirmed.as_deref()).await?;
+    let id = workflows::create_purchase_order(&pool, input).await?;
     notify(&app);
     Ok(id)
 }
