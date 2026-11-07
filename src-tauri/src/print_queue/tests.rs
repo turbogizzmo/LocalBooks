@@ -173,7 +173,8 @@ async fn invoices_queue_and_leave_the_queue_when_printed() {
     let queue = queued_invoices(&pool).await.unwrap();
     assert_eq!(queue.iter().map(|i| i.id).collect::<Vec<_>>(), vec![queued.id, replaced]);
 
-    assert_eq!(mark_invoices_printed(&pool, vec![queued.id]).await.unwrap(), 1);
+    assert_eq!(mark_invoices_printed(&pool, vec![queued.id, 9_999]).await.unwrap(), 1, "only queued invoices count");
+    assert_eq!(mark_invoices_printed(&pool, vec![queued.id]).await.unwrap(), 0, "already out of the queue");
     assert_eq!(queued_invoices(&pool).await.unwrap().iter().map(|i| i.id).collect::<Vec<_>>(), vec![replaced]);
 }
 

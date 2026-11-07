@@ -53,18 +53,12 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 
 /// Checks waiting to print, oldest first; only those written from `account_id` when given.
 pub async fn queued_checks(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
-    let mut checks = crate::expenses::list_expenses(pool).await?;
-    checks.retain(|x| x.to_be_printed && !x.is_voided && account_id.is_none_or(|a| a == x.payment_account_id));
-    checks.reverse();
-    Ok(checks)
+    crate::expenses::list_to_print(pool, account_id).await
 }
 
 /// Invoices waiting to print, lowest number first.
 pub async fn queued_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
-    let mut invoices = crate::invoices::list_invoices(pool).await?;
-    invoices.retain(|i| i.to_be_printed && !i.is_voided);
-    invoices.sort_by_key(|i| i.invoice_number);
-    Ok(invoices)
+    crate::invoices::list_to_print(pool).await
 }
 
 /// Remembers the form's "Print later" choice as its default for the next new check or invoice.
@@ -209,13 +203,16 @@ pub async fn mark_checks_printed(pool: &SqlitePool, printed: Vec<PrintedCheck>) 
     .await
 }
 
-/// Takes printed invoices out of the queue.
+/// Takes printed invoices out of the queue; returns how many were waiting in it.
 pub async fn mark_invoices_printed(pool: &SqlitePool, invoice_ids: Vec<i64>) -> Result<usize, String> {
+    let ids = serde_json::to_string(&invoice_ids).map_err(|e| e.to_string())?;
     run(pool, async |tx| {
-        for id in &invoice_ids {
-            sqlx::query("UPDATE invoices SET to_be_printed = 0 WHERE id = ?1").bind(id).execute(&mut **tx).await.map_err(db_err)?;
-        }
-        Ok(invoice_ids.len())
+        let done = sqlx::query("UPDATE invoices SET to_be_printed = 0 WHERE to_be_printed = 1 AND id IN (SELECT value FROM json_each(?1))")
+            .bind(&ids)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        Ok(done.rows_affected() as usize)
     })
     .await
 }

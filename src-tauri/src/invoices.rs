@@ -221,6 +221,14 @@ pub async fn list_invoices(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, Str
         .map_err(db_err)
 }
 
+/// Invoices waiting in the print queue, lowest number first.
+pub(crate) async fn list_to_print(pool: &SqlitePool) -> Result<Vec<InvoiceSummary>, String> {
+    sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.to_be_printed = 1 AND i.is_voided = 0 ORDER BY i.invoice_number"))
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)
+}
+
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {
     sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1"))
         .bind(invoice_id)

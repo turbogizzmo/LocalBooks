@@ -645,6 +645,18 @@ pub async fn list_expenses(pool: &SqlitePool) -> Result<Vec<ExpenseView>, String
         .map_err(db_err)
 }
 
+/// Checks waiting in the print queue, oldest first; only those from `account_id` when given.
+pub(crate) async fn list_to_print(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
+    sqlx::query_as::<_, ExpenseView>(&format!(
+        "{EXPENSE_SELECT} WHERE x.to_be_printed = 1 AND x.is_voided = 0 AND (?1 IS NULL OR x.payment_account_id = ?1)
+         ORDER BY x.expense_date, x.id"
+    ))
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
 async fn system_account(tx: &mut Transaction<'_, Sqlite>, account_type: &str) -> Result<i64, String> {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = ?1 AND is_system = 1 ORDER BY id LIMIT 1")
         .bind(account_type)

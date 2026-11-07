@@ -46,6 +46,8 @@ pub async fn mark_invoices_printed(app: AppHandle, db: State<'_, Db>, invoice_id
 
 /// Remembers a form's "Print later" choice (`kind` is `CHECK` or `INVOICE`).
 #[tauri::command]
-pub async fn set_print_later_default(db: State<'_, Db>, kind: String, on: bool) -> Result<(), String> {
-    print_queue::remember_default(&db.pool().await, Form::parse(&kind)?, on).await
+pub async fn set_print_later_default(app: AppHandle, db: State<'_, Db>, kind: String, on: bool) -> Result<(), String> {
+    print_queue::remember_default(&db.pool().await, Form::parse(&kind)?, on).await?;
+    notify(&app);
+    Ok(())
 }

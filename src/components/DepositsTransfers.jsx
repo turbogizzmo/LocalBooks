@@ -9,7 +9,7 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, PAYMENT_METHODS, useLedgerQuery } from '../lib/api.js';
-import { formatCents, parseMoneyToCents } from '../lib/money.js';
+import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 
@@ -288,7 +288,7 @@ function CardPaydownForm({ accounts, onPosted, onCancel }) {
 
   useEffect(() => cardRef.current?.focus(), []);
   // The amount starts at what the card owes now, and follows the card chosen.
-  useEffect(() => setAmount(owed > 0 ? (owed / 100).toFixed(2) : ''), [cardId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setAmount(owed > 0 ? centsToInput(owed) : ''), [cardId, owed]);
   const cents = parseMoneyToCents(amount);
 
   const save = async (e) => {
