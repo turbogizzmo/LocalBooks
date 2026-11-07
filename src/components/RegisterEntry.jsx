@@ -6,6 +6,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { useDirtySince } from '../lib/windows.js';
+import DateBox from './DateBox.jsx';
 
 /** Accounts a register row can go to: not A/R or A/P (those need an invoice or bill) or Undeposited Funds. */
 const isEntryAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
@@ -169,7 +170,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
       <div className="flex flex-wrap items-end gap-1 px-2 py-1">
         <label>
           <span className="qb-label">Date</span>
-          <input ref={dateRef} type="date" className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <DateBox ref={dateRef} className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} required />
         </label>
         {isBank && (
           <label>
