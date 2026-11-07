@@ -31,6 +31,8 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   keepTypedItemDetails: 'ask',
   /** A journal entry's new lines start with the first line's memo. */
   autofillJournalMemo: true,
+  /** A report opened from the list asks for its dates (and basis) before it runs (Reports & Graphs). */
+  reportOptionsFirst: false,
 });
 
 /** Messages turned off with "Don't show this again", by key; Bring back all messages clears it. */

@@ -42,7 +42,7 @@ as in `docs/gaps.md`.
 
 | Option | Status | Effort |
 |---|---|---|
-| Show account numbers; show only the lowest subaccount | partial (numbers, no switch) | S |
+| Show account numbers; show only the lowest subaccount | has (T3 batch 3: statements, trial balance and general ledger) | – |
 | Require an account on every line | has (always: a line can't be saved without one) | – |
 | Class tracking: on, per line or per transaction, warn when missing | has | – |
 | Track expenses by customer or job | partial | M |
@@ -78,11 +78,11 @@ as in `docs/gaps.md`.
 
 | Category | Option | Status | Effort |
 |---|---|---|---|
-| Reports (M) | Show the report's options before running it | missing | S |
-| Reports | Summary reports default to accrual or cash | partial (per report) | S |
-| Reports | Age from the due date or the transaction date | missing | S |
-| Reports | Show accounts and items by name, description or both | missing | S |
-| Reports | Which accounts go in each Cash Flows section | missing | M |
+| Reports (M) | Show the report's options before running it | has (T3 batch 3: Profit and Loss, Balance Sheet, aging and sales summaries) | – |
+| Reports | Summary reports default to accrual or cash | has (T3 batch 3: Profit and Loss and the Income & Expense graph; the Balance Sheet has no cash basis) | – |
+| Reports | Age from the due date or the transaction date | has (T3 batch 3) | – |
+| Reports | Show accounts and items by name, description or both | has (T3 batch 3: items in Sales by Item, Inventory Valuation and Stock Status; accounts by number and path, above) | – |
+| Reports | Which accounts go in each Cash Flows section | has (T3 batch 3: Preferences › Reports & Graphs) | – |
 | Items | Inventory and purchase orders on or off | missing | S |
 | Items | Warn about duplicate PO numbers | has (always: PO numbers are assigned and unique) | – |
 | Items | Warn or stop when stock would go below zero | missing | M |
@@ -97,7 +97,7 @@ as in `docs/gaps.md`.
 | Reminders (M) | Show reminders when a company opens | partial | S |
 | Reminders | Per reminder type: summary, full list or off, and how many days ahead *(tour)* | has (Reminders screen) | – |
 | Send Forms | Default delivery method (email, mail, none) for new customers; a message template per form type *(tour)* | partial / missing | S |
-| Reports | Default report formatting (fonts, header and footer) *(tour)* | missing | M |
+| Reports | Default report formatting (fonts, header and footer) *(tour)* | left out: each report draws its own header and footer, and printed reports use one type style; a company-wide format needs a shared report layout first | M |
 | Desktop View (M) | Show the Home page when a company opens; color scheme *(tour)* | partial (start page, no themes) | S |
 
 ## Already covered elsewhere

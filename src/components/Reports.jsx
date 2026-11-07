@@ -17,6 +17,7 @@ import {
   InventoryValuationDetailReport,
   InventoryValuationReport,
   MissingChecksReport,
+  usePeriod,
   SalesTaxLiabilityReport,
   StockStatusReport,
   SummaryReport,
@@ -25,6 +26,8 @@ import {
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { reportBasis, useCompanyPreferences } from '../lib/companyPreferences.js';
+import { useMyPreferences } from '../lib/myPreferences.js';
 import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
@@ -78,7 +81,10 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   // '' = all lines, 'none' = lines without a class, otherwise a class id (with its subclasses).
   const [classChoice, setClassChoice] = useState('');
   const classFilter = classChoice === '' ? null : classChoice === 'none' ? { classIds: [], unclassified: true } : { classIds: [Number(classChoice)], unclassified: false };
-  const [basis, setBasis] = useState(initial?.basis ?? 'ACCRUAL');
+  // Opens on the company's default basis (Preferences › Reports & Graphs) unless a link chose one.
+  const prefs = useCompanyPreferences();
+  const [chosenBasis, setBasis] = useState(initial?.basis ?? null);
+  const basis = chosenBasis ?? reportBasis(prefs);
   const [split, setSplit] = useState('total'); // total | months | quarters
   const [compare, setCompare] = useState(initialCompare); // none | period | year
   const periodColumns = () => {
@@ -92,6 +98,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
   };
   const multi = !byClass && (split !== 'total' || compare !== 'none');
   const { data, error, reload } = useLedgerQuery(() => {
+    if (!prefs && !chosenBasis) return Promise.resolve(null); // wait for the default basis
     if (byClass) return api.getProfitAndLossByClass(start, end);
     if (!multi) return api.getProfitAndLoss(start, end, classFilter, basis);
     const columns = periodColumns();
@@ -106,7 +113,7 @@ function ProfitAndLoss({ byClass = false, initialCompare = 'none', title = null,
 
   useEffect(() => {
     if (start && end && start <= end) reload();
-  }, [start, end, classChoice, basis, split, compare, reload]);
+  }, [start, end, classChoice, basis, split, compare, reload, prefs]);
   const classSubtitle = classChoice === '' ? '' : ` · Class: ${classChoice === 'none' ? 'Unclassified' : `${classLabel(classes, Number(classChoice))} (with subclasses)`}`;
   const company = useCompany();
   const subtitle = data
@@ -438,6 +445,53 @@ const REPORT_GROUPS = [
   },
 ];
 
+/** The reports whose options can be chosen before they run, and which options they take. */
+const OPTIONS_FIRST = { pl: 'range-basis', bs: 'as-of', ar: 'as-of', ap: 'as-of', 'sales-customer': 'range', 'sales-product': 'range', 'sales-rep': 'range' };
+
+/** My Preferences › Reports & Graphs › Show the report's options before running it. */
+function ReportOptions({ kind, name, onRun }) {
+  const prefs = useCompanyPreferences();
+  const p = usePeriod('fiscalYearToDate');
+  const [asOf, setAsOf] = useState(todayIso());
+  const [basis, setBasis] = useState(null);
+  const shownBasis = basis ?? reportBasis(prefs);
+  const run = () => onRun(kind === 'as-of' ? { asOf } : { startDate: p.start, endDate: p.end, ...(kind === 'range-basis' ? { basis: shownBasis } : {}) });
+  return (
+    <section className="qb-panel" aria-label="Report options">
+      <h2 className="border-b border-qb-border bg-qb-row-header px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">{name} · Report options</h2>
+      <form
+        className="flex flex-wrap items-end gap-2 px-2 py-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run();
+        }}
+      >
+        {kind === 'as-of' ? (
+          <label>
+            <span className="qb-label">As of</span>
+            <input type="date" className="qb-input w-[132px]" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          </label>
+        ) : (
+          p.controls
+        )}
+        {kind === 'range-basis' && (
+          <label>
+            <span className="qb-label">Basis</span>
+            <select className="qb-input w-[100px]" value={shownBasis} onChange={(e) => setBasis(e.target.value)}>
+              <option value="ACCRUAL">Accrual</option>
+              <option value="CASH">Cash</option>
+            </select>
+          </label>
+        )}
+        <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={kind === 'as-of' ? !asOf : !p.valid}>
+          Run report
+        </button>
+      </form>
+      <p className="px-2 pb-1 text-2xs text-qb-ink-faint">You asked to see a report’s options first (Preferences › Reports & Graphs › My Preferences).</p>
+    </section>
+  );
+}
+
 export default function Reports({ navigate, intent }) {
   const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
   // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
@@ -466,6 +520,8 @@ export default function Reports({ navigate, intent }) {
   const { open: openChild } = useContext(WindowManagerContext);
   const chooseReport = (id) => id !== report && openFromList('reports', 'open', { report: id });
   const drill = initial ? `-${initial.at}` : '';
+  const { reportOptionsFirst } = useMyPreferences();
+  const askFirst = reportOptionsFirst && !initial && OPTIONS_FIRST[report];
   return (
     <div className="flex h-full gap-2 p-2">
       <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
@@ -497,15 +553,16 @@ export default function Reports({ navigate, intent }) {
         </div>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-auto scrollbar-thin">
-        {report === 'pl' && <ProfitAndLoss key={`pl${drill}`} navigate={navigate} initial={initial} />}
+        {askFirst && <ReportOptions key={report} kind={OPTIONS_FIRST[report]} name={reportName} onRun={(params) => openReport(report, params)} />}
+        {!askFirst && report === 'pl' && <ProfitAndLoss key={`pl${drill}`} navigate={navigate} initial={initial} />}
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
-        {report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
+        {!askFirst && report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
-        {report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
-        {report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
-        {report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
-        {report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
-        {report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
+        {!askFirst && report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
+        {!askFirst && report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
+        {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
+        {!askFirst && report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
+        {!askFirst && report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
         {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" onZoom={zoom} />}
         {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
         {report === 'sales-tax' && <SalesTaxLiabilityReport />}

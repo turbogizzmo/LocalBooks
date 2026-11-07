@@ -8,7 +8,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import DesktopViewPreferences from './DesktopViewPreferences.jsx';
-import GeneralPreferences, { AccountingMyPreferences } from './GeneralPreferences.jsx';
+import GeneralPreferences, { AccountingMyPreferences, ReportsMyPreferences } from './GeneralPreferences.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
@@ -284,6 +284,18 @@ const flag = (text) =>
     );
   };
 
+/** One of a few values, as a drop-down: `options` is `[[value, label], …]`. */
+const choice = (options, width = 'w-[260px]') =>
+  function Choice({ id, value, commit, invalid }) {
+    return (
+      <select id={id} className={`qb-input ${width}`} value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+        {options.map(([v, label]) => (
+          <option key={v} value={v}>{label}</option>
+        ))}
+      </select>
+    );
+  };
+
 /** A number of days (0 turns the warning off). */
 const days = textInput({ inputMode: 'numeric', className: 'qb-input num w-[70px]' });
 
@@ -393,6 +405,8 @@ function AccountingCompany({ field, forms }) {
             </select>
           ),
         })}
+        {field({ label: 'Account numbers', prefKey: 'show_account_numbers', hint: 'Number accounts in Chart of Accounts; reports show the number before the name', children: flag('Show account numbers in reports') })}
+        {field({ label: 'Subaccounts', prefKey: 'lowest_subaccount_only', hint: 'Electric instead of Utilities:Electric in the trial balance and general ledger', children: flag('Show lowest subaccount only') })}
         <Always label="Account on every line">Every line of every transaction needs an account before it can be saved; nothing posts to an uncategorized account.</Always>
         <Always label="Journal entry numbers">Each entry gets the next number when it is posted; numbers are never reused.</Always>
       </Group>
@@ -467,6 +481,111 @@ function FinanceChargeCompany({ field, accounts }) {
       })}
       {field({ label: 'Charge on finance charges', prefKey: 'finance_charge_on_finance_charges', hint: 'Whether overdue finance charge invoices themselves earn finance charges', children: flag('Assess finance charges on overdue finance charges') })}
     </Group>
+  );
+}
+
+const CASH_FLOW_SECTION = { OPERATING: 'Operating', INVESTING: 'Investing', FINANCING: 'Financing' };
+/** The section each type goes in unless moved (mirrors `statements::default_cash_flow_section`). */
+const DEFAULT_SECTION = {
+  ACCOUNTS_RECEIVABLE: 'OPERATING',
+  OTHER_CURRENT_ASSET: 'OPERATING',
+  ACCOUNTS_PAYABLE: 'OPERATING',
+  CREDIT_CARD: 'OPERATING',
+  OTHER_CURRENT_LIABILITY: 'OPERATING',
+  FIXED_ASSET: 'INVESTING',
+  OTHER_ASSET: 'INVESTING',
+  LONG_TERM_LIABILITY: 'FINANCING',
+  EQUITY: 'FINANCING',
+};
+
+/** Which accounts go in each Statement of Cash Flows section. */
+function CashFlowMapping({ accounts }) {
+  const { prefs } = usePrefs();
+  const [state, setState] = useState(null);
+  const overrides = (() => {
+    try {
+      return prefs.cash_flow_sections ? JSON.parse(prefs.cash_flow_sections) : {};
+    } catch {
+      return {};
+    }
+  })();
+  const [map, setMap] = useState(overrides);
+  const rows = (accounts ?? []).filter((a) => DEFAULT_SECTION[a.accountType] && (a.isActive || map[a.id]));
+  const save = async (next) => {
+    setMap(next);
+    setState({ status: 'saving' });
+    try {
+      await api.setPreference('cash_flow_sections', Object.keys(next).length ? JSON.stringify(next) : '');
+      setState({ status: 'saved' });
+    } catch (err) {
+      setState({ status: 'error', message: errorText(err) });
+    }
+  };
+  const choose = (account, section) => {
+    const next = { ...map };
+    if (section === DEFAULT_SECTION[account.accountType]) delete next[account.id];
+    else next[account.id] = section;
+    save(next);
+  };
+  return (
+    <Group title="Statement of Cash Flows" id="cash-flow-mapping">
+      <p className="px-2 py-1 text-xs text-qb-ink-muted">
+        Which section each balance sheet account’s change goes in. Bank accounts are the cash itself, and income and expense accounts are in net income.
+        {state?.status === 'saving' && <span className="ml-1">Saving…</span>}
+        {state?.status === 'saved' && <span className="ml-1 font-semibold text-qb-green-active">✓ Saved</span>}
+        {state?.status === 'error' && <span className="ml-1 text-qb-negative">{state.message}</span>}
+      </p>
+      <div className="max-h-[260px] overflow-auto scrollbar-thin">
+        <table className="qb-grid">
+          <thead>
+            <tr>
+              <th className="qb-grid-head">Account</th>
+              <th className="qb-grid-head w-[150px]">Type</th>
+              <th className="qb-grid-head w-[150px]">Section</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a) => {
+              const section = map[a.id] ?? DEFAULT_SECTION[a.accountType];
+              return (
+                <tr key={a.id} className="qb-grid-row">
+                  <td className="qb-grid-cell truncate">{a.accountNumber ? `${a.accountNumber} · ${a.fullName}` : a.fullName}</td>
+                  <td className="qb-grid-cell text-qb-ink-muted">{a.accountTypeName}</td>
+                  <td className="qb-grid-cell">
+                    <select aria-label={`Cash flow section for ${a.fullName}`} className={`qb-input w-full ${map[a.id] ? 'font-semibold' : ''}`} value={section} onChange={(e) => choose(a, e.target.value)}>
+                      {Object.entries(CASH_FLOW_SECTION).map(([v, label]) => (
+                        <option key={v} value={v}>{label}{v === DEFAULT_SECTION[a.accountType] ? ' (default)' : ''}</option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {Object.keys(map).length > 0 && (
+        <div className="border-t border-qb-border px-2 py-1">
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => save({})}>
+            Revert to defaults
+          </button>
+        </div>
+      )}
+    </Group>
+  );
+}
+
+function ReportsCompany({ field, accounts }) {
+  return (
+    <>
+      <Group title="Report defaults" id="report-defaults">
+        {field({ label: 'Summary reports basis', prefKey: 'report_basis', hint: 'Profit and Loss and the Income & Expense graph open on this basis; each report can still switch', children: choice([['accrual', 'Accrual'], ['cash', 'Cash']], 'w-[140px]') })}
+        {field({ label: 'Aging reports', prefKey: 'aging_basis', hint: 'A/R and A/P Aging count days from this date', children: choice([['due', 'Age from due date'], ['transaction', 'Age from transaction date']]) })}
+        {field({ label: 'Items', prefKey: 'report_items_show', hint: 'Sales by Item, Inventory Valuation and Stock Status', children: choice([['name', 'Name only'], ['description', 'Description only'], ['both', 'Name and description']]) })}
+        <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">Account numbers and subaccounts are under Accounting › Company Preferences. The Balance Sheet is always on the accrual basis.</p>
+      </Group>
+      <CashFlowMapping accounts={accounts} />
+    </>
   );
 }
 
@@ -624,6 +743,8 @@ export const CATEGORIES = [
   {
     id: 'reports',
     label: 'Reports & Graphs',
+    my: () => <ReportsMyPreferences />,
+    company: (p) => <ReportsCompany {...p} />,
     links: [{ label: 'Reports', view: 'reports', hint: 'each report keeps its own basis, dates and columns' }],
   },
   {
@@ -674,8 +795,8 @@ export const CATEGORIES = [
 ];
 
 /** Help shortcuts (`intent.action`) to the category that holds them. */
-const ACTION_CATEGORY = { closing: ['accounting', 'company'], 'finance-charges': ['finance-charge', 'company'], 'class-tracking': ['accounting', 'company'] };
-const ANCHORS = { closing: 'closing-date', 'class-tracking': 'class-tracking' };
+const ACTION_CATEGORY = { 'cash-flow': ['reports', 'company'], closing: ['accounting', 'company'], 'finance-charges': ['finance-charge', 'company'], 'class-tracking': ['accounting', 'company'] };
+const ANCHORS = { 'cash-flow': 'cash-flow-mapping', closing: 'closing-date', 'class-tracking': 'class-tracking' };
 const REMEMBER = 'localbooks.preferencesCategory';
 
 function remembered() {

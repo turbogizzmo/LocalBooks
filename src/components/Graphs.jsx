@@ -5,6 +5,7 @@ import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { fiscalMonthLabel, usePeriod } from './MoreReports.jsx';
 import { barPath, niceStep, useSize } from './AssetLiabilityChart.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { reportBasis, useCompanyPreferences } from '../lib/companyPreferences.js';
 import { formatCents, formatCompactCents } from '../lib/money.js';
 import { formatDate, monthLabel, todayIso } from '../lib/dates.js';
 
@@ -494,7 +495,9 @@ const usePeriodGraph = (fetch, deps) => {
 
 function IncomeExpenseGraph({ navigate, onOpenReport }) {
   const p = usePeriod('fiscalYear');
-  const [basis, setBasis] = useState('ACCRUAL');
+  const prefs = useCompanyPreferences();
+  const [chosenBasis, setBasis] = useState(null);
+  const basis = chosenBasis ?? reportBasis(prefs);
   const [pie, setPie] = useState('expense');
   const { data, error } = usePeriodGraph(() => (p.valid ? api.getIncomeExpenseGraph(p.start, p.end, basis) : Promise.resolve(null)), [p.start, p.end, basis]);
   const label = data ? monthLabeller(data.months.map((m) => m.month)) : null;
