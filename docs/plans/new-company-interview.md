@@ -16,7 +16,7 @@ installer in `research-samples/` (gitignored; mounted read-only, never run):
 | `Interview.adr` (XML) | The 33 industries, which starter chart each one uses, and each industry's default feature settings |
 | `StarterFiles.adr` (XML, 459 KB) | The starter chart for each industry: 1,684 account rows, each tagged **core** or **recommended**. Some industries also include starter items, classes, job types and terms |
 | `BusType.adr` (XML) | The equity accounts for each income tax form |
-| Help: `pgs/12b-file/ref_setupcoa.htm` | "QuickBooks suggests a default set based on your Industry selection… select or deselect… click Default to go back" |
+| Help: `pgs/12b-file/ref_setupcoa.htm` | How the starter chart is offered: a default set of accounts for the chosen industry, which the user can tick or untick and reset to the default |
 
 ## How QuickBooks does it
 
