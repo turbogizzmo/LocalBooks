@@ -290,6 +290,7 @@ async fn new_customers_take_the_send_forms_default_and_jobs_keep_a_status() {
         preferred_delivery: Some(delivery.into()),
         job_status: Some(status.into()),
         custom_fields: Vec::new(),
+        ..Default::default()
     };
     let saved = crate::parties::update_party(&pool, "customer", job.id, input("AWARDED", "PRINT"), access).await.unwrap();
     assert_eq!((saved.job_status.as_deref(), saved.preferred_delivery.as_deref()), (Some("AWARDED"), Some("PRINT")));
