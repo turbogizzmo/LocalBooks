@@ -119,6 +119,11 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setError(warning);
+    // Said before any "save anyway?" question; saving checks it again.
+    const paidCents = editing?.bill.amountPaidCents ?? 0;
+    if (paidCents > 0 && totalCents < paidCents) {
+      return setError(`This bill has ${formatCents(paidCents)} in payments and credits applied; the edited total, ${formatCents(totalCents)}, is less. Void or remove a payment or credit first.`);
+    }
     setBusy(true);
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
@@ -243,7 +248,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             onChange={(e) => setTotal(e.target.value)}
             onBlur={fillSingleSplit}
             placeholder="0.00"
-            inputMode="decimal"
+            inputMode="decimal" data-money
             aria-invalid={total.trim() !== '' && (totalCents === null || totalCents <= 0)}
           />
         </label>
@@ -606,7 +611,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                     }}
                     onFocus={() => !on && toggle(b, true)}
                     placeholder="0.00"
-                    inputMode="decimal"
+                    inputMode="decimal" data-money
                     aria-invalid={bad.includes(b)}
                     aria-label={`Payment to ${b.vendorName}`}
                   />

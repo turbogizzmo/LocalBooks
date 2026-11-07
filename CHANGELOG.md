@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.12.0]
+
 - **Bill To and Ship To on sales forms.** Invoices, sales receipts (Sold To), estimates and credit
   memos now have Bill To and Ship To boxes, filled from the customer and editable on each form, plus
   **P.O. No.** and **FOB**. Each document keeps its own copy of the addresses, so changing a
@@ -73,7 +75,8 @@ people using LocalBooks.
   Earnings. Click **Save anyway** to record it as entered. Admins change the days, or turn each
   warning off, in the Checking, Bills and Accounting company preferences.
 - **Type amounts without a decimal point.** Turn on **Automatically place a decimal point**
-  (Preferences › General › My Preferences) and `1234` becomes 12.34.
+  (Preferences › General › My Preferences) and `1234` becomes 12.34; the box shows 12.34 as soon
+  as you leave it.
 - **More General preferences.** Beep when a transaction is recorded; warn before editing a posted
   transaction or voiding one (both on, and now each can be turned off); bring back messages you
   turned off with **Don't show this message again**; and choose whether a description or price you

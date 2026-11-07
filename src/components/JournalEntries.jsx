@@ -193,10 +193,10 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
                 <AccountSelect className="" accounts={accounts} value={p.row.accountId} onChange={(accountId) => update(p.row.key, { accountId })} placeholder="Select account" aria-label={`Account ${i + 1}`} />
               </td>
               <td className="qb-grid-cell-edit">
-                <input className="num" value={p.row.debit} onChange={(e) => update(p.row.key, { debit: e.target.value, credit: e.target.value ? '' : p.row.credit })} inputMode="decimal" aria-invalid={!p.blank && !p.valid} aria-label={`Debit ${i + 1}`} />
+                <input className="num" value={p.row.debit} onChange={(e) => update(p.row.key, { debit: e.target.value, credit: e.target.value ? '' : p.row.credit })} inputMode="decimal" data-money aria-invalid={!p.blank && !p.valid} aria-label={`Debit ${i + 1}`} />
               </td>
               <td className="qb-grid-cell-edit">
-                <input className="num" value={p.row.credit} onChange={(e) => update(p.row.key, { credit: e.target.value, debit: e.target.value ? '' : p.row.debit })} inputMode="decimal" aria-invalid={!p.blank && !p.valid} aria-label={`Credit ${i + 1}`} />
+                <input className="num" value={p.row.credit} onChange={(e) => update(p.row.key, { credit: e.target.value, debit: e.target.value ? '' : p.row.debit })} inputMode="decimal" data-money aria-invalid={!p.blank && !p.valid} aria-label={`Credit ${i + 1}`} />
               </td>
               <td className="qb-grid-cell-edit">
                 <input value={p.row.memo} onChange={(e) => update(p.row.key, { memo: e.target.value })} aria-label={`Description ${i + 1}`} />

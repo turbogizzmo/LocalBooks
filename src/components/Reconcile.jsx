@@ -34,7 +34,7 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
       </label>
       <label>
         <span className="qb-label">Ending balance</span>
-        <input className="qb-input num w-[130px]" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" inputMode="decimal" aria-invalid={balance !== '' && cents === null} autoFocus />
+        <input className="qb-input num w-[130px]" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" inputMode="decimal" data-money aria-invalid={balance !== '' && cents === null} autoFocus />
       </label>
       <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad)}>
         {submitLabel}

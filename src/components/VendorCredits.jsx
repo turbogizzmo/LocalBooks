@@ -212,7 +212,7 @@ function ApplyToBills({ credit, onClose, onDone }) {
                 <td className="qb-grid-cell">{formatDate(b.dueDate)}</td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
                 <td className="qb-grid-cell-edit w-[120px]">
-                  <input className="num" value={amounts[b.id] ?? ''} onChange={(e) => setAmounts((a) => ({ ...a, [b.id]: e.target.value }))} inputMode="decimal" aria-label="Apply to bill" />
+                  <input className="num" value={amounts[b.id] ?? ''} onChange={(e) => setAmounts((a) => ({ ...a, [b.id]: e.target.value }))} inputMode="decimal" data-money aria-label="Apply to bill" />
                 </td>
               </tr>
             ))}

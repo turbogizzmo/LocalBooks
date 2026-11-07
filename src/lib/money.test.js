@@ -1,7 +1,7 @@
 // Run with `npm test` (Node's built-in runner); `cargo test` runs it too (frontend_checks.rs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { centsToInput, formatMinutes, parseMoneyToCents, setHoursFormat, setImpliedDecimal } from './money.js';
+import { centsToInput, formatMinutes, impliedDecimalText, parseMoneyToCents, setHoursFormat, setImpliedDecimal } from './money.js';
 import { formatDate, setFourDigitYears } from './dates.js';
 
 test('amounts parse exactly with a typed decimal point', () => {
@@ -38,6 +38,24 @@ test('the decimal-point preference applies to every parse until turned off', () 
     setImpliedDecimal(false);
   }
   assert.equal(parseMoneyToCents('1234'), 123_400);
+});
+
+test('a money box shows the placed decimal point once you leave it', () => {
+  const auto = { impliedDecimal: true };
+  assert.equal(impliedDecimalText('1234', auto), '12.34');
+  assert.equal(impliedDecimalText('5', auto), '0.05');
+  assert.equal(impliedDecimalText('-250', auto), '-2.50');
+  assert.equal(impliedDecimalText('$1,234', auto), '12.34');
+  // What the box shows reads back as the same amount.
+  assert.equal(parseMoneyToCents(impliedDecimalText('1234', auto), auto), 1_234);
+  // A typed point, text that isn't an amount, or the preference off: left as typed.
+  assert.equal(impliedDecimalText('12.5', auto), null);
+  assert.equal(impliedDecimalText('12.', auto), null);
+  assert.equal(impliedDecimalText('10%', auto), null);
+  assert.equal(impliedDecimalText('', auto), null);
+  assert.equal(impliedDecimalText('99999999999999999', auto), null);
+  assert.equal(impliedDecimalText('1234', { impliedDecimal: false }), null);
+  assert.equal(impliedDecimalText('1234'), null);
 });
 
 test('hours show as hours:minutes or decimal hours', () => {

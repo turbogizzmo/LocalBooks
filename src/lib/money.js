@@ -57,6 +57,19 @@ export function parseMoneyToCents(text, { impliedDecimal: implied = impliedDecim
   return match[1] ? -total : total;
 }
 
+/**
+ * With the decimal point placed automatically, what a money box should show once you leave it:
+ * "1234" -> "12.34", so the box reads the amount it will save. Null to leave the text as typed
+ * (the preference is off, a point was typed, or the text isn't a whole number).
+ */
+export function impliedDecimalText(text, { impliedDecimal: implied = impliedDecimal } = {}) {
+  if (!implied) return null;
+  const s = String(text).split(currencySymbol).join('').replace(/[$,\s]/g, '');
+  if (!/^-?\d+$/.test(s)) return null;
+  const cents = parseMoneyToCents(s, { impliedDecimal: true });
+  return cents === null ? null : centsToInput(cents);
+}
+
 /** Whole-number quantity, or null. */
 export function parseQuantity(text) {
   const s = String(text).trim();

@@ -217,7 +217,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
             <span className="qb-label">{head}</span>
             <input
               className="qb-input num w-[104px]"
-              inputMode="decimal"
+              inputMode="decimal" data-money
               value={splits ? (index === sideIndex && typedTotal ? centsToInput(typedTotal) : '') : amounts[index]}
               onChange={(e) => typeAmount(index, e.target.value)}
               readOnly={Boolean(splits)}

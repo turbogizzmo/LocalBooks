@@ -4,6 +4,33 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.12.0
+
+- **Preferences, laid out by category.** Settings › Preferences lists Accounting, Bills, Checking,
+  General, Sales & Customers, Sales Tax and the rest, each with **My Preferences** and **Company
+  Preferences**: report basis, sales tax on the cash basis, 1099 boxes, inventory switches, check
+  defaults and more. [Find your way around Preferences](getting-started.md#find-your-way-around-preferences)
+- **Warnings before saving, with Save anyway**, for a duplicate check or bill number, a date far
+  in the past or future, or a customer over their credit limit.
+  [Warnings before saving](getting-started.md#warnings-before-saving-company-preferences)
+- **Edit an invoice or bill that's already part paid.** Its payments and credits stay applied to
+  the corrected version. [Fix a mistake](invoices.md#fix-a-mistake)
+- **Bill To, Ship To, P.O. No. and FOB on sales forms**, and a fuller customer record with a credit
+  limit. [Credit limits](invoices.md#credit-limits)
+- **Subtotals, discounts, other charges and groups** on invoices, sales receipts and estimates.
+  [Subtotals, discounts, charges and groups](invoices.md#subtotals-discounts-charges-and-groups)
+- **Save & Close, Save & New and date keys** on every form: **t** for today, **+** and **-** for a
+  day. [Save a form and type faster](getting-started.md#save-a-form-and-type-faster-with-the-keyboard)
+- **Type checks and deposits straight into a register**, print checks and invoices later in a
+  batch, record a bounced check and pay down a credit card.
+  [Type a check or deposit into a register](expenses-and-checks.md#type-a-check-or-deposit-into-a-register)
+- **Terms, Payment Method and customer messages lists**, more reports (phone and contact lists,
+  Audit Trail, Process Multiple Reports) and **classes kept when you import from QuickBooks**.
+  [Terms](customers-and-products.md#terms)
+- **Two defaults changed:** sales receipts now start on Undeposited Funds, and a new bill is due
+  after the vendor's terms (10 days if the vendor has none) instead of always 30 days. Both are in
+  Preferences. [How payments are applied](customer-payments.md#how-payments-are-applied-preferences--payments)
+
 ## 0.11.0
 
 - **A toolbar on every form.** Find, New, Save, Void, Print, Email, Attach File and Memorize across

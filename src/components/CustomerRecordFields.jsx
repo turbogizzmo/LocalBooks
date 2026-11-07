@@ -76,7 +76,7 @@ export function CustomerAccountFields({ form, setForm }) {
         <span className={label}>Credit limit</span>
         <input
           className={`qb-input text-right ${bad ? 'border-qb-negative' : ''}`}
-          inputMode="decimal"
+          inputMode="decimal" data-money
           placeholder="No limit"
           value={limit}
           title="An invoice that would take the customer over this asks before saving"

@@ -102,7 +102,7 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               aria-invalid={Boolean(amountError)}
-              inputMode="decimal"
+              inputMode="decimal" data-money
               autoFocus
             />
           </label>
@@ -358,7 +358,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         </label>
         <label>
           <span className="qb-label">Amount received</span>
-          <input className="qb-input num w-[120px]" value={received} onChange={(e) => autoApply(e.target.value)} placeholder="0.00" inputMode="decimal" disabled={!customer} />
+          <input className="qb-input num w-[120px]" value={received} onChange={(e) => autoApply(e.target.value)} placeholder="0.00" inputMode="decimal" data-money disabled={!customer} />
         </label>
         <label>
           <span className="qb-label">Reference no.</span>
@@ -447,7 +447,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                     value={applied[inv.id] ?? ''}
                     onChange={(e) => setPayment(inv, e.target.value)}
                     placeholder="0.00"
-                    inputMode="decimal"
+                    inputMode="decimal" data-money
                     aria-invalid={bad}
                     aria-label={`Payment on invoice ${inv.invoiceNumber}`}
                   />
@@ -788,7 +788,7 @@ export default function Invoices({ accounts, intent }) {
         const loaded = linesFromDocument(items, storedForm, defaultAccountId);
         // Payments and credits applied stay applied to the edited version (see appliedText).
         const applied = invoice.amountPaidCents > 0 ? formatMoney(invoice.amountPaidCents, invoice.currencyCode) : null;
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, applied });
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, applied, appliedCents: invoice.amountPaidCents ?? 0 });
         // Cleared so the effect above records what was loaded, and closing the window or stepping
         // with Previous / Next asks only once something has changed.
         setBaseline(null);
@@ -874,6 +874,13 @@ export default function Invoices({ accounts, intent }) {
     );
     const warning = formClass.missing(postedLines);
     if (warning) return setNotice({ kind: 'error', text: warning });
+    // Said before any "save anyway?" question; saving checks it again.
+    if (editing?.appliedCents > 0 && total < editing.appliedCents) {
+      return setNotice({
+        kind: 'error',
+        text: `Invoice #${editing.number} has ${editing.applied} in payments and credits applied; the edited total, ${formatMoney(total, currency || null)}, is less. Void or remove a payment or credit first.`,
+      });
+    }
 
     setBusy(true);
     try {
