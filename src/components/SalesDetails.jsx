@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SalesAddresses } from './SalesAddresses.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 
@@ -24,8 +24,9 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
-  // Which address boxes the user (or a loaded document) set, so a customer change leaves them.
-  const [addressTouched, setAddressTouched] = useState({ billTo: false, shipTo: false });
+  // Which address boxes the user (or a loaded document) set, so a customer change leaves them. A
+  // ref, so defaults that arrive after the user has started typing see the latest value.
+  const addressTouched = useRef({ billTo: false, shipTo: false });
   const [refill, setRefill] = useState(0);
   const customer = (customers ?? []).find((c) => c.name.toLowerCase() === (customerName ?? '').trim().toLowerCase());
 
@@ -35,14 +36,14 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   }, [customer?.id, customer?.salesRepId]);
 
   useEffect(() => {
-    if (addressTouched.billTo && addressTouched.shipTo) return undefined;
+    if (addressTouched.current.billTo && addressTouched.current.shipTo) return undefined;
     let live = true;
     const fill = (defaults) =>
       live &&
       setHeader((h) => ({
         ...h,
-        billTo: addressTouched.billTo ? h.billTo : (defaults?.billTo ?? ''),
-        shipTo: addressTouched.shipTo ? h.shipTo : (defaults?.shipTo ?? ''),
+        billTo: addressTouched.current.billTo ? h.billTo : (defaults?.billTo ?? ''),
+        shipTo: addressTouched.current.shipTo ? h.shipTo : (defaults?.shipTo ?? ''),
       }));
     if (customer) api.customerSalesDefaults(customer.id).then(fill, () => {});
     else fill(null);
@@ -140,7 +141,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       header={header}
       billLabel={billLabel}
       onChange={(key, value) => {
-        if (key === 'billTo' || key === 'shipTo') setAddressTouched((t) => ({ ...t, [key]: true }));
+        if (key === 'billTo' || key === 'shipTo') addressTouched.current = { ...addressTouched.current, [key]: true };
         setHeader((h) => ({ ...h, [key]: value }));
       }}
     />
@@ -171,7 +172,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setTouched(new Set(formFields.map((f) => f.id)));
       // A document written before forms kept addresses has none: fill from the customer.
       const has = { billTo: details?.billTo != null, shipTo: details?.shipTo != null };
-      setAddressTouched(has);
+      addressTouched.current = has;
       setHeader({ billTo: details?.billTo ?? '', shipTo: details?.shipTo ?? '', poNumber: details?.poNumber ?? '', fob: details?.fob ?? '' });
       if (!has.billTo || !has.shipTo) setRefill((n) => n + 1);
     },
@@ -182,7 +183,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setShipMethodId(null);
       setValues({});
       setTouched(new Set());
-      setAddressTouched({ billTo: false, shipTo: false });
+      addressTouched.current = { billTo: false, shipTo: false };
       setHeader({ billTo: '', shipTo: '', poNumber: '', fob: '' });
       setRefill((n) => n + 1);
     },
