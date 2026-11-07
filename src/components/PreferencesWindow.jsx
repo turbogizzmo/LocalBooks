@@ -755,7 +755,7 @@ function PaymentsCompany({ field, accounts }) {
               filter={(a) => a.isActive && !a.isSystem && (a.classification === 'INCOME' || a.classification === 'EXPENSE')}
               value={value === '' ? null : Number(value)}
               onChange={(next) => commit(next === null ? '' : String(next))}
-              placeholder="Choose an income account"
+              placeholder="Choose an income or expense account"
               aria-invalid={invalid}
             />
           ),
