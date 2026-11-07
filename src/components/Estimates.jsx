@@ -16,6 +16,9 @@ import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
+/** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
+const ZERO_LINES = false;
+
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
   ACCEPTED: { label: '✓ Accepted', className: 'font-semibold text-qb-green-active' },
@@ -48,8 +51,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  // A line may be priced at nothing (an included extra); see Preferences › Sales & Customers.
-  const { filled, invalidCount, payload } = summarizeLines(lines, { allowZeroRate: true });
+  // A 0.00 line (an included extra) is allowed once estimate lines accept it (#151's lines).
+  const { filled, invalidCount, payload } = summarizeLines(lines, { allowZeroRate: ZERO_LINES });
   const [discountText, setDiscountText] = useState('');
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
@@ -140,7 +143,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} allowZeroRate />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} allowZeroRate={ZERO_LINES} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

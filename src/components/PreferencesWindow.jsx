@@ -549,7 +549,7 @@ function SalesCompany({ field }) {
     <>
       <Group title="Sales forms">
         {field({ label: 'Usual shipping method', prefKey: 'default_ship_method_id', hint: 'Filled in as Ship Via on new invoices, sales receipts and estimates (add methods in Reps, Ship Via & Fields)', children: ShipMethodChoice })}
-        {field({ label: 'Usual F.O.B.', prefKey: 'default_fob', hint: 'Where goods become the customer’s; filled in on new sales forms and printed with the shipping details', children: textInput({ maxLength: 30, className: 'qb-input w-[220px]' }) })}
+        {/* Usual F.O.B. (`default_fob`) goes here once the F.O.B. box (#158) is on sales forms. */}
         {field({
           label: 'Default markup',
           prefKey: 'default_markup_percent',
@@ -569,9 +569,7 @@ function SalesCompany({ field }) {
       <Group title="Warnings">
         {field({ label: 'Overdue customers', prefKey: 'warn_customer_overdue', hint: 'Asks before saving a new invoice or sales receipt for a customer (or job) with invoices past due', children: flag('Warn before selling to a customer with overdue invoices') })}
       </Group>
-      <Group title="Estimates to invoices">
-        {field({ label: 'Zero-amount lines', prefKey: 'estimate_drop_zero_lines', hint: 'Off brings them onto the invoice, where each needs a price before it can be saved', children: flag('Leave lines with no amount off the invoice') })}
-      </Group>
+      {/* Estimates to invoices › Zero-amount lines (`estimate_drop_zero_lines`) shows once estimates take 0.00 lines (#151). */}
       <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
     </>
   );

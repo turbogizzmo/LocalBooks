@@ -107,9 +107,9 @@ category you used last.
 The defaults for selling, getting paid and paying bills are in these categories' Company
 Preferences:
 
-- **Sales & Customers:** the usual Ship Via and F.O.B. on new sales forms, the default markup for
-  pricing from cost, price levels on or off, a warning before selling to a customer with overdue
-  invoices, and whether an estimate's zero-amount lines stay off its invoice.
+- **Sales & Customers:** the usual Ship Via on new sales forms, the default markup for
+  pricing from cost, price levels on or off, and a warning before selling to a customer with
+  overdue invoices.
 - **Jobs & Estimates:** estimates on or off, and the names of the five job statuses.
 - **Payments:** how a received payment is applied, whether ticking invoices works out the amount,
   and whether payments go to Undeposited Funds.

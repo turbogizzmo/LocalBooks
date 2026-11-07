@@ -248,12 +248,10 @@ An inactive rep stays on the forms that already have it and isn't offered for ne
 
 Add the carriers and services you ship with, such as `UPS Ground` or `Local delivery`, under
 **Ship Via**. Once the list has an entry, invoices, sales receipts and estimates get a **Ship
-date**, a **Ship via** and an **F.O.B.** box (where the goods become the customer's, such as
-`Origin` or `Our dock`). All three print with the shipping details.
+date** and a **Ship via** box.
 
-To fill in the same carrier and F.O.B. on every new form, choose them as **Usual shipping
-method** and **Usual F.O.B.** in **Preferences › Sales & Customers**. You can still change them on
-each form.
+To fill in the same carrier on every new form, choose it as **Usual shipping method** in
+**Preferences › Sales & Customers**. You can still change it on each form.
 
 ### Custom fields
 

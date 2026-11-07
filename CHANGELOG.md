@@ -18,11 +18,8 @@ people using LocalBooks.
     terms.**
   - Pay Bills can use each vendor's open credits on the bills you tick, oldest credit first, and
     take the early-payment discount a bill's terms offer when paid in time, then pay only the rest.
-  - The usual Ship Via and a new **F.O.B.** box fill in on new invoices, sales receipts and
-    estimates, and F.O.B. prints with the shipping details.
+  - Your usual Ship Via fills in on new invoices, sales receipts and estimates.
   - A warning before selling to a customer with overdue invoices (off until you turn it on).
-  - Estimate lines can be priced at 0.00; they stay off the invoice the estimate becomes, unless
-    you choose to price them there.
   - Turn off estimates or price levels if you don't use them, rename the five job statuses, and
     give jobs a status on the customer's Edit….
   - Each customer has a **Preferred delivery** (Email, Print or None) that ticks Email later or

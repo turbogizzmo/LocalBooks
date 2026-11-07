@@ -65,13 +65,13 @@ as in `docs/gaps.md`.
 | Checking | Bank feed: how renaming rules apply to downloaded payees *(tour)* | partial (rules, no switch) | S |
 | Payments | Apply a payment to open invoices automatically; work out the amount from the invoices ticked | has (T3 batch 4: exact match else oldest, oldest, or off; auto-calculate) | – |
 | Payments | Deposit to Undeposited Funds by default | has (T3 batch 4: payments and sales receipts) | – |
-| Sales | Default shipping method, FOB and markup | has (T3 batch 4: F.O.B. is a new field on sales forms; the markup is where Change Item Prices starts from cost, as items have no purchase cost field) | – |
+| Sales | Default shipping method, FOB and markup | partial (T3 batch 4: shipping method, and the markup is where Change Item Prices starts from cost, as items have no purchase cost field; the F.O.B. default waits on the F.O.B. box from #158) | S |
 | Sales | Warn about a duplicate invoice number | has (always: invoice numbers are assigned and unique) | – |
 | Sales | Price levels on or off | has (T3 batch 4) | – |
 | Sales | Warn before selling to a customer with overdue invoices | has (T3 batch 4: new invoices and sales receipts, the customer and its jobs) | – |
 | Sales | Billable time and costs: ask, add, or don't add | missing | M |
 | Sales | Sales orders on or off, with their own duplicate-number warning and packing-slip template *(tour)* | left out (LocalBooks has no sales orders; the option comes with them) | L |
-| Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | has (T3 batch 4: estimates may have zero lines, left off the invoice; off brings them over to price, since invoice lines need an amount) | – |
+| Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | in progress (T3 batch 4: the rule and its preference are built; estimates accepting 0.00 lines waits on #151's changes to estimate lines) | S |
 | Sales | Collections Center on or off *(tour)* | left out (no Collections Center; the overdue warning and A/R aging cover the same ground) | M |
 
 ## Reports, items, jobs, time, tax

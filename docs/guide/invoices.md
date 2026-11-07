@@ -22,8 +22,8 @@ Receivable** (what customers owe you) and to the income account on each line.
    - Check the **Income account** for each line.
    - Press **Enter** to move to the next line, or click **Add line**.
 5. If you use sales reps, shipping methods or customer custom fields, fill in **Rep**, **Ship
-   date**, **Ship via**, **F.O.B.** and the custom fields at the top. The rep and custom fields
-   fill in from the customer, and Ship via and F.O.B. from **Preferences › Sales & Customers**. These boxes appear only once their lists have entries (see
+   date**, **Ship via** and the custom fields at the top. The rep and custom fields fill in from
+   the customer, and Ship via from **Preferences › Sales & Customers**. These boxes appear only once their lists have entries (see
    [Sales reps, Ship Via and custom fields](customers-and-products.md#sales-reps-ship-via-and-custom-fields)).
 6. Check **Balance due** at the top right, then click **Save & Post to Ledger**.
 
