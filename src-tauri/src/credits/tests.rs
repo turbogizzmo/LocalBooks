@@ -41,7 +41,7 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
     let inv = invoice(&pool, "Acme", services, 50_000).await;
     let other = invoice(&pool, "Other Co", services, 10_000).await;
 
-    let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 20_000)], tax_rate_id: None })
+    let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 20_000)], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap();
     assert_eq!((memo.customer_name.as_str(), memo.remaining_cents), ("Acme", 20_000));
@@ -95,7 +95,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     let pool = test_pool().await;
     let (checking, ar, services) = (account(&pool, "1010").await, account(&pool, "1200").await, account(&pool, "4100").await);
     let inv = invoice(&pool, "Acme", services, 30_000).await;
-    let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "Acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 30_000)], tax_rate_id: None })
+    let memo = create_credit_memo(&pool, CreditMemoInput { customer_name: "Acme".into(), credit_date: d(5), memo: None, refund_account_id: None, lines: vec![line(services, 30_000)], tax_rate_id: None, header: Default::default() })
         .await
         .unwrap();
     apply_customer_credit(&pool, ApplyCreditInput { credit_id: memo.id, document_id: inv, amount_cents: 30_000, applied_date: d(6) }).await.unwrap();
@@ -109,7 +109,7 @@ async fn removing_a_credit_reopens_the_invoice_and_refund_receipts_credit_the_ba
     let before = balance(&pool, checking).await;
     let receipt = create_credit_memo(
         &pool,
-        CreditMemoInput { customer_name: "Walk-in".into(), credit_date: d(9), memo: None, refund_account_id: Some(checking), lines: vec![line(services, 4_500)], tax_rate_id: None },
+        CreditMemoInput { customer_name: "Walk-in".into(), credit_date: d(9), memo: None, refund_account_id: Some(checking), lines: vec![line(services, 4_500)], tax_rate_id: None, header: Default::default() },
     )
     .await
     .unwrap();

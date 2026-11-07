@@ -93,7 +93,10 @@ async fn an_invoice_keeps_its_rep_shipping_and_printed_fields() {
     assert_eq!(detail.ship_date.as_deref(), Some("2026-10-03"));
     assert_eq!(detail.ship_method_name.as_deref(), Some("UPS"));
     assert_eq!(detail.custom_fields.iter().map(|f| (f.label.as_str(), f.value.as_str())).collect::<Vec<_>>(), [("PO number", "4471")]);
-    assert_eq!(detail.to_input(), SalesDetails { custom_fields: vec![FieldValue { field_id: po.id, value: "4471".into() }], ..details.clone() });
+    assert_eq!(
+        detail.to_input(),
+        SalesDetails { custom_fields: vec![FieldValue { field_id: po.id, value: "4471".into() }], header: detail.header.clone(), ..details.clone() }
+    );
     assert!(list_sales_reps(&pool).await.unwrap()[0].is_used);
 
     // Inactive reps and methods cannot be chosen again; fields not on forms cannot be printed.
@@ -218,6 +221,8 @@ async fn carried_details_survive_later_list_changes() {
         ship_date: Some(d(3)),
         ship_method_id: Some(ups.id),
         custom_fields: vec![FieldValue { field_id: po.id, value: "77".into() }],
+        // The customer has no addresses, so the stored copies are blank.
+        header: crate::sales_header::SalesHeader { bill_to: Some(String::new()), ship_to: Some(String::new()), ..Default::default() },
         ..Default::default()
     };
     let estimate_input = || crate::estimates::EstimateInput {

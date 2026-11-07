@@ -33,6 +33,13 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   autofillJournalMemo: true,
   /** A report opened from the list asks for its dates (and basis) before it runs (Reports & Graphs). */
   reportOptionsFirst: false,
+  // batch 5
+  /** A new bill or check for a known vendor starts like its last one: `off`, `last` (accounts and amounts) or `accounts` (accounts only). */
+  recallVendorTransaction: 'off',
+  /** Preferences › Checking: the account Write Checks, Pay Bills and Make Deposits open with (0 = the first one). */
+  checkAccountId: 0,
+  payBillsAccountId: 0,
+  depositAccountId: 0,
 });
 
 /** Messages turned off with "Don't show this again", by key; Bring back all messages clears it. */

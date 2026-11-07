@@ -83,6 +83,11 @@ export default function App() {
   setCurrencySymbol(prefs.data?.currency_symbol);
   setFourDigitYears(prefs.data?.four_digit_years !== 'false');
   setHoursFormat(prefs.data?.hours_format);
+  // Customers › Create Estimates greys out while this company has estimates turned off.
+  const estimatesOn = prefs.data ? prefs.data.estimates_enabled !== 'false' : null;
+  useEffect(() => {
+    if (estimatesOn !== null) api.setMenuViewEnabled('sales/estimates', estimatesOn).catch(() => {});
+  }, [estimatesOn]);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
   // Which company is open, as the window title shows it: its name, or the file's name until it is named.
   const openCompany = storage.data?.companyName ?? null;

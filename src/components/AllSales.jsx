@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { attachPicked, PendingAttachments, useAttachmentRows } from './Attachments.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
@@ -22,6 +23,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
@@ -29,7 +31,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
-  const defaultDeposit = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
+  // Undeposited Funds, or the first bank account, as Preferences › Payments says.
+  const { undepositedDefault, loaded: prefsLoaded } = useSalesPrefs();
+  const defaultDeposit = useMemo(() => (prefsLoaded ? defaultDepositAccount(accounts, undepositedDefault) : null), [accounts, undepositedDefault, prefsLoaded]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useTransactionDate();
   const method = usePaymentMethodChoice('CASH');
@@ -44,7 +48,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
-  const sales = useSalesDetails(customer, customers.data);
+  const sales = useSalesDetails(customer, customers.data, { billLabel: 'Sold To' });
 
   useEffect(() => {
     if (depositId === null && defaultDeposit !== null) setDepositId(defaultDeposit);
@@ -54,15 +58,16 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
   const [discountText, setDiscountText] = useState('');
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
   const save = async (mode) => {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (depositId === null) return setError('Choose where the money was deposited.');
+    if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     const postedLines = formClass.apply(payload);
     const warning = formClass.missing(postedLines);
@@ -80,6 +85,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         ...sales.payload(),
+        formLines,
       });
       const attachError = files.length > 0 ? await attachPicked(receipt.journalEntryId, files) : null;
       if (mode === 'print') forms.print('SALES_RECEIPT', receipt.id);
@@ -150,7 +156,8 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
+      {sales.addresses}
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

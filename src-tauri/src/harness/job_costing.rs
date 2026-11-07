@@ -85,6 +85,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         product_service_id: None,
         class_id: None,
         customer_id: job,
+        billable: None,
     };
 
     // Twenty oak panels into stock at $150.
@@ -158,7 +159,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .await
     .expect("job bill");
 
-    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job) };
+    let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job), billable: None };
     let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput {
         payment_method_id: None,
         kind: kind.into(),
@@ -190,7 +191,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .expect("vendor credit");
     crate::credits::create_credit_memo(
         p,
-        CreditMemoInput { customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None },
+        CreditMemoInput { customer_name: LAKEVIEW.into(), credit_date: d(2025, 11, 28), memo: None, refund_account_id: None, lines: vec![sale(labor, "Billing correction", 2, 8_500, services)], tax_rate_id: None, header: Default::default() },
     )
     .await
     .expect("credit memo");

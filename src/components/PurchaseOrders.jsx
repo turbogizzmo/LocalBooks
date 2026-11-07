@@ -241,8 +241,10 @@ export default function PurchaseOrders({ accounts, intent }) {
     }
   };
 
+  const inventoryOn = useLedgerQuery(api.getPreferences).data?.inventory_enabled !== 'false';
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
       {printing && (
         <PrintPortal>
           <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} accounts={accounts} />

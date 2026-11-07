@@ -13,6 +13,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::custom_fields::{self, FieldValue};
 use crate::ledger::db_err;
+use crate::sales_header::SalesHeader;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -236,7 +237,7 @@ pub enum SalesDoc {
 }
 
 impl SalesDoc {
-    fn table(self) -> &'static str {
+    pub(crate) fn table(self) -> &'static str {
         match self {
             SalesDoc::Invoice => "invoices",
             SalesDoc::SalesReceipt => "sales_receipts",
@@ -272,13 +273,20 @@ pub struct SalesDetails {
     /// Customer fields shown on sales forms, as entered on this document. Fields left out or blank
     /// are not printed.
     pub custom_fields: Vec<FieldValue>,
+    /// Bill To, Ship To, P.O. number and FOB (see `sales_header`).
+    #[serde(flatten)]
+    pub header: SalesHeader,
     /// Invoices only: the term the invoice was issued with (its due date is entered with it).
     pub terms_id: Option<i64>,
     /// The Customer Message printed at the foot of the form.
     pub customer_message_id: Option<i64>,
+    /// Subtotals and other non-item lines, placed among the item lines (`item_types`). Written by
+    /// the document's writer, not by [`write_details`].
+    pub form_lines: Vec<crate::item_types::FormLineInput>,
 }
 
 impl SalesDetails {
+    /// No rep, shipping or custom fields (the header is written either way).
     pub fn is_empty(&self) -> bool {
         self.sales_rep_id.is_none()
             && self.ship_date.is_none()
@@ -301,6 +309,9 @@ pub struct SalesDetailsView {
     pub ship_method_name: Option<String>,
     /// Customer fields printed on this document, in the list's order, with their labels.
     pub custom_fields: Vec<custom_fields::LabeledValue>,
+    /// The document's own Bill To, Ship To, P.O. number and FOB.
+    #[serde(flatten)]
+    pub header: SalesHeader,
     pub terms_id: Option<i64>,
     pub terms_name: Option<String>,
     pub customer_message_id: Option<i64>,
@@ -331,6 +342,14 @@ pub(crate) async fn write_details(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
 /// inactive or its custom field taken off sales forms, so a later list change cannot block it.
 /// Anything newly chosen is checked as for a new form.
 pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails, carried: &SalesDetails) -> Result<(), String> {
+    // Addresses left out of the input keep the carried document's own copy (an edited invoice, or an
+    // estimate becoming one) rather than refilling from the customer's current record.
+    let header = SalesHeader {
+        bill_to: details.header.bill_to.clone().or_else(|| carried.header.bill_to.clone()),
+        ship_to: details.header.ship_to.clone().or_else(|| carried.header.ship_to.clone()),
+        ..details.header.clone()
+    };
+    crate::sales_header::write(tx, doc.table(), id, &header).await?;
     if details.is_empty() {
         return Ok(());
     }
@@ -357,6 +376,7 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
 
 /// An imported document's rep and shipping details, without the checks a new form gets: history
 /// keeps the rep it was sold by even when that rep is inactive now.
+/// Imported documents keep no address copy, so they print the customer's address as imported.
 pub(crate) async fn write_imported(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64, details: &SalesDetails) -> Result<(), String> {
     write_columns(tx, doc, id, details).await
 }
@@ -405,6 +425,7 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
     let Some((sales_rep_id, sales_rep_initials, sales_rep_name, ship_date, ship_method_id, ship_method_name, terms_id, terms_name, customer_message_id, customer_message)) = row else {
         return Ok(SalesDetailsView::default());
     };
+    let header = crate::sales_header::read(pool, doc.table(), id).await?;
     Ok(SalesDetailsView {
         sales_rep_id,
         sales_rep_initials,
@@ -413,6 +434,7 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
         ship_method_id,
         ship_method_name,
         custom_fields: custom_fields::document_fields(pool, doc, id).await?,
+        header,
         terms_id,
         terms_name,
         customer_message_id,
@@ -439,8 +461,10 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         ship_date,
         ship_method_id,
         custom_fields: custom_fields.into_iter().map(|(field_id, value)| FieldValue { field_id, value }).collect(),
+        header: crate::sales_header::read(&mut **tx, doc.table(), id).await?,
         terms_id,
         customer_message_id,
+        form_lines: Vec::new(),
     })
 }
 
@@ -452,8 +476,10 @@ impl SalesDetailsView {
             ship_date: self.ship_date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
             ship_method_id: self.ship_method_id,
             custom_fields: self.custom_fields.iter().map(|f| FieldValue { field_id: f.field_id, value: f.value.clone() }).collect(),
+            header: self.header.clone(),
             terms_id: self.terms_id,
             customer_message_id: self.customer_message_id,
+            form_lines: Vec::new(),
         }
     }
 }

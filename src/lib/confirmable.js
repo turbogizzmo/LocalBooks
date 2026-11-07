@@ -46,15 +46,17 @@ export function beep() {
 
 /**
  * Saves a transaction with `command`. `editing` marks a change to a posted transaction, which
- * asks first when My Preferences say so. Warnings from the guards are asked with "Save anyway";
- * declining throws {@link NOT_SAVED}.
+ * asks first when My Preferences say so. `applied` (an edited invoice or bill with payments or
+ * credits applied) is a sentence saying so: then the edit always asks, once, with that sentence
+ * first. Warnings from the guards are asked with "Save anyway"; declining throws {@link NOT_SAVED}.
  */
-export async function recordTransaction(command, args, { editing = false } = {}) {
-  if (editing && myPreferences().warnBeforeEditing) {
-    const ok = await askConfirm(
-      'This transaction is already posted. Saving your changes voids the original and posts the edited one in its place; both stay in the audit log.',
-      { confirmLabel: 'Save changes', hideKey: 'edit-posted-transaction' },
-    );
+export async function recordTransaction(command, args, { editing = false, applied = null } = {}) {
+  const posted = 'Saving your changes voids the original and posts the edited one in its place; both stay in the audit log.';
+  if (editing && applied) {
+    const ok = await askConfirm(`${applied} ${posted}`, { confirmLabel: 'Save changes' });
+    if (!ok) throw NOT_SAVED;
+  } else if (editing && myPreferences().warnBeforeEditing) {
+    const ok = await askConfirm(`This transaction is already posted. ${posted}`, { confirmLabel: 'Save changes', hideKey: 'edit-posted-transaction' });
     if (!ok) throw NOT_SAVED;
   }
   let confirmed = [];

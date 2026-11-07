@@ -3,7 +3,8 @@
 //! The tax on a document is round_half_up(taxable subtotal × rate) and is credited to the rate's
 //! liability account (debited on a credit memo). Paying the agency debits that account and credits
 //! the bank. The liability report shows, per rate, the taxable and non-taxable sales and the tax for
-//! a period, with what was paid and what is still owed.
+//! a period, with what was paid and what is still owed, on the accrual or cash basis chosen in
+//! Preferences › Sales Tax; the filing frequency there sets the report's default period.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -379,6 +380,8 @@ pub struct TaxLiabilityRow {
 pub struct TaxLiabilityReport {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
+    /// Accrual or cash, from Preferences › Sales Tax.
+    pub basis: Basis,
     pub rows: Vec<TaxLiabilityRow>,
     pub tax_collected_cents: i64,
     pub paid_cents: i64,
@@ -386,38 +389,162 @@ pub struct TaxLiabilityReport {
     pub owed_cents: i64,
 }
 
-/// Sales and tax per rate for the period (invoices and sales receipts less credit memos, by
-/// document date; sales with no rate are non-taxable), tax paid in the period, and what is owed.
+/// When sales tax is owed: as of the invoice (accrual) or as of the payment (cash).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Basis {
+    Accrual,
+    Cash,
+}
+
+impl Basis {
+    pub fn parse(text: &str) -> Self {
+        if text == "cash" { Self::Cash } else { Self::Accrual }
+    }
+}
+
+/// The company's basis (Preferences › Sales Tax).
+pub async fn basis(pool: &SqlitePool) -> Result<Basis, String> {
+    Ok(Basis::parse(&crate::preferences::get(pool, crate::preferences::tax_time::SALES_TAX_BASIS).await?))
+}
+
+/// The liability report on the company's basis (Preferences › Sales Tax).
 pub async fn tax_liability(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<TaxLiabilityReport, String> {
-    let rows: Vec<TaxLiabilityRow> = sqlx::query_as(
-        "WITH docs (rate_id, sign, tax, taxable, other) AS (
-            SELECT i.tax_rate_id, 1, i.tax_cents,
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1),
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
-            FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.issue_date BETWEEN ?1 AND ?2
-            UNION ALL
-            SELECT r.tax_rate_id, 1, r.tax_cents,
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1),
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
-            FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
-            UNION ALL
-            SELECT m.tax_rate_id, -1, m.tax_cents,
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1),
-                   (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 0)
-            FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2
-         )
-         SELECT d.rate_id AS tax_rate_id, COALESCE(t.name, 'No tax rate') AS name, t.rate_ppm,
-                SUM(d.sign * CASE WHEN d.rate_id IS NULL THEN 0 ELSE d.taxable END) AS taxable_sales_cents,
-                SUM(d.sign * (d.other + CASE WHEN d.rate_id IS NULL THEN d.taxable ELSE 0 END)) AS non_taxable_sales_cents,
-                SUM(d.sign * d.tax) AS tax_collected_cents
-         FROM docs d LEFT JOIN tax_rates t ON t.id = d.rate_id
-         GROUP BY d.rate_id ORDER BY d.rate_id IS NULL, t.name COLLATE NOCASE",
+    tax_liability_on(pool, start_date, end_date, basis(pool).await?).await
+}
+
+/// Per rate: (taxable, non-taxable, tax) — summed into report rows.
+type Sums = std::collections::BTreeMap<Option<i64>, (i64, i64, i64)>;
+
+fn add(sums: &mut Sums, rate_id: Option<i64>, sign: i64, tax: i64, taxable: i64, other: i64) -> Result<(), String> {
+    let overflow = || "TAX_OVERFLOW: the sales tax report is out of range".to_string();
+    let entry = sums.entry(rate_id).or_default();
+    // Sales with no rate are non-taxable, whatever their lines say.
+    let (taxable, other) = if rate_id.is_none() { (0, taxable.checked_add(other).ok_or_else(overflow)?) } else { (taxable, other) };
+    entry.0 = taxable.checked_mul(sign).and_then(|v| entry.0.checked_add(v)).ok_or_else(overflow)?;
+    entry.1 = other.checked_mul(sign).and_then(|v| entry.1.checked_add(v)).ok_or_else(overflow)?;
+    entry.2 = tax.checked_mul(sign).and_then(|v| entry.2.checked_add(v)).ok_or_else(overflow)?;
+    Ok(())
+}
+
+/// The part of `amount` that `settled` of `total` covers, rounded half away from zero.
+fn share(amount: i64, settled: i64, total: i64) -> Result<i64, String> {
+    if total == 0 {
+        return Ok(0);
+    }
+    mul_div_round(amount, settled, total).ok_or_else(|| "TAX_OVERFLOW: the sales tax report is out of range".to_string())
+}
+
+/// An invoice and how much of it was settled (paid or credited, less bounced checks) in a window.
+type InvoiceRow = (Option<i64>, i64, i64, i64, i64, i64);
+
+/// Home-currency posted invoices with their tax, taxable and non-taxable amounts, total, and the
+/// amount settled between `from` and `to`: payments and credits applied, less checks that bounced.
+async fn invoices_settled(pool: &SqlitePool, from: NaiveDate, to: NaiveDate) -> Result<Vec<InvoiceRow>, String> {
+    sqlx::query_as(
+        "SELECT i.tax_rate_id, i.tax_cents,
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0),
+                i.total_cents,
+                COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
+              + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
+              - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0)
+         FROM invoices i
+         WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.total_cents > 0 AND i.issue_date <= ?2",
+    )
+    .bind(from)
+    .bind(to)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// Sales and tax per rate for the period, tax paid in the period, and what is owed at its end.
+///
+/// - **Accrual:** invoices and sales receipts less credit memos, by document date.
+/// - **Cash:** sales receipts and credit memos by their date, as on accrual (a receipt is paid when
+///   it is made); an invoice counts in proportion to what was paid on it, or settled with a credit,
+///   in the period, less checks that bounced, by the date of each. What is owed leaves out the tax
+///   on the unpaid part of invoices, which the ledger already carries in the liability account.
+///
+/// Sales with no rate are non-taxable. Foreign-currency invoices are left out, as before.
+pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate, basis: Basis) -> Result<TaxLiabilityReport, String> {
+    type DocRow = (Option<i64>, i64, i64, i64, i64);
+    let others: Vec<DocRow> = sqlx::query_as(
+        "SELECT r.tax_rate_id, 1, r.tax_cents,
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0)
+         FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
+         UNION ALL
+         SELECT m.tax_rate_id, -1, m.tax_cents,
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 0)
+         FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2",
     )
     .bind(start_date)
     .bind(end_date)
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    let mut sums = Sums::new();
+    for (rate_id, sign, tax, taxable, other) in others {
+        add(&mut sums, rate_id, sign, tax, taxable, other)?;
+    }
+    match basis {
+        Basis::Accrual => {
+            let invoices: Vec<(Option<i64>, i64, i64, i64)> = sqlx::query_as(
+                "SELECT i.tax_rate_id, i.tax_cents,
+                        (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1),
+                        (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0)
+                 FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.issue_date BETWEEN ?1 AND ?2",
+            )
+            .bind(start_date)
+            .bind(end_date)
+            .fetch_all(pool)
+            .await
+            .map_err(db_err)?;
+            for (rate_id, tax, taxable, other) in invoices {
+                add(&mut sums, rate_id, 1, tax, taxable, other)?;
+            }
+        }
+        Basis::Cash => {
+            for (rate_id, tax, taxable, other, total, settled) in invoices_settled(pool, start_date, end_date).await? {
+                if settled != 0 {
+                    add(&mut sums, rate_id, 1, share(tax, settled, total)?, share(taxable, settled, total)?, share(other, settled, total)?)?;
+                }
+            }
+        }
+    }
+
+    let names: std::collections::BTreeMap<i64, (String, i64)> = sqlx::query_as::<_, (i64, String, i64)>("SELECT id, name, rate_ppm FROM tax_rates")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .map(|(id, name, ppm)| (id, (name, ppm)))
+        .collect();
+    let mut rows: Vec<TaxLiabilityRow> = sums
+        .into_iter()
+        .map(|(rate_id, (taxable, other, tax))| {
+            let named = rate_id.and_then(|id| names.get(&id));
+            TaxLiabilityRow {
+                tax_rate_id: rate_id,
+                name: named.map_or_else(|| "No tax rate".to_string(), |(n, _)| n.clone()),
+                rate_ppm: named.map(|(_, p)| *p),
+                taxable_sales_cents: taxable,
+                non_taxable_sales_cents: other,
+                tax_collected_cents: tax,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| (a.tax_rate_id.is_none(), a.name.to_lowercase()).cmp(&(b.tax_rate_id.is_none(), b.name.to_lowercase())));
+
     let paid: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(p.amount_cents), 0) FROM sales_tax_payments p JOIN journal_entries e ON e.id = p.journal_entry_id
          WHERE e.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2",
@@ -427,7 +554,7 @@ pub async fn tax_liability(pool: &SqlitePool, start_date: NaiveDate, end_date: N
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    let owed: i64 = sqlx::query_scalar(
+    let mut owed: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(credit_cents - debit_cents), 0) FROM v_posted_lines
          WHERE entry_date <= ?1 AND account_id IN (SELECT liability_account_id FROM tax_rates
                                                    UNION SELECT liability_account_id FROM sales_tax_payments)",
@@ -436,7 +563,91 @@ pub async fn tax_liability(pool: &SqlitePool, start_date: NaiveDate, end_date: N
     .fetch_one(pool)
     .await
     .map_err(db_err)?;
-    Ok(TaxLiabilityReport { start_date, end_date, tax_collected_cents: rows.iter().map(|r| r.tax_collected_cents).sum(), rows, paid_cents: paid, owed_cents: owed })
+    if basis == Basis::Cash {
+        // The ledger credits the tax when an invoice is made; on cash basis the unpaid part isn't owed yet.
+        let since_ever = NaiveDate::from_ymd_opt(1, 1, 1).expect("valid date");
+        for (rate_id, tax, _, _, total, settled) in invoices_settled(pool, since_ever, end_date).await? {
+            if rate_id.is_some() && tax != 0 {
+                let unpaid = share(tax, total - settled, total)?;
+                owed = owed.checked_sub(unpaid).ok_or("TAX_OVERFLOW: the sales tax report is out of range")?;
+            }
+        }
+    }
+    let collected = rows.iter().try_fold(0i64, |sum, r| sum.checked_add(r.tax_collected_cents)).ok_or("TAX_OVERFLOW: the sales tax report is out of range")?;
+    Ok(TaxLiabilityReport { start_date, end_date, basis, tax_collected_cents: collected, rows, paid_cents: paid, owed_cents: owed })
+}
+
+// ------------------------------------------------------------------------------------------------
+// Filing periods
+// ------------------------------------------------------------------------------------------------
+
+/// How often the company files its sales tax return (Preferences › Sales Tax).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Frequency {
+    Monthly,
+    Quarterly,
+    Yearly,
+}
+
+impl Frequency {
+    pub fn parse(text: &str) -> Self {
+        match text {
+            "monthly" => Self::Monthly,
+            "yearly" => Self::Yearly,
+            _ => Self::Quarterly,
+        }
+    }
+
+    fn months(self) -> u32 {
+        match self {
+            Self::Monthly => 1,
+            Self::Quarterly => 3,
+            Self::Yearly => 12,
+        }
+    }
+}
+
+/// The filing periods around a date: the one it falls in, the last one that has ended (the return
+/// to file now), and that return's usual due date.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilingPeriods {
+    pub frequency: Frequency,
+    pub basis: Basis,
+    pub current: crate::preferences::DateRange,
+    pub last: crate::preferences::DateRange,
+    /// The 20th of the month after the last period ends: the most common state due date. Your
+    /// state's may differ; the date is a reminder, not a rule.
+    pub last_due: NaiveDate,
+}
+
+/// Day of the month after a period ends that the return reminder uses.
+pub const RETURN_DUE_DAY: u32 = 20;
+
+/// Calendar periods (months, quarters from January, years) around `as_of`.
+pub fn filing_periods(as_of: NaiveDate, frequency: Frequency, basis: Basis) -> FilingPeriods {
+    use chrono::{Datelike, Months};
+    let months = frequency.months();
+    let first_month = (as_of.month0() / months) * months + 1;
+    let start = NaiveDate::from_ymd_opt(as_of.year(), first_month, 1).expect("first of month");
+    let end = start + Months::new(months) - chrono::Duration::days(1);
+    let last_start = start - Months::new(months);
+    let last_end = start - chrono::Duration::days(1);
+    let after = last_end + chrono::Duration::days(1);
+    FilingPeriods {
+        frequency,
+        basis,
+        current: crate::preferences::DateRange { start, end },
+        last: crate::preferences::DateRange { start: last_start, end: last_end },
+        last_due: NaiveDate::from_ymd_opt(after.year(), after.month(), RETURN_DUE_DAY).expect("20th exists"),
+    }
+}
+
+/// The company's filing periods as of `as_of`.
+pub async fn company_filing_periods(pool: &SqlitePool, as_of: NaiveDate) -> Result<FilingPeriods, String> {
+    let frequency = Frequency::parse(&crate::preferences::get(pool, crate::preferences::tax_time::SALES_TAX_FREQUENCY).await?);
+    Ok(filing_periods(as_of, frequency, basis(pool).await?))
 }
 
 #[cfg(test)]

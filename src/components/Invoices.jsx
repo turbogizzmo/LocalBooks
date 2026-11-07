@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, isFormLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
@@ -16,16 +17,18 @@ import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { PaymentMethodSelect, TermsSelect, usePaymentMethodChoice, useTerms } from './ProfileFields.jsx';
-import { centsToInput, formatCents, formatMoney, formatQuantity, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatRate, parseMoneyToCents, parseRateE6, toHomeCents } from '../lib/money.js';
 import { foreignPaymentEffect } from '../lib/fx.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { useSuggestedRate } from './RateSuggestion.jsx';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useUnsavedChanges, useWindowContent } from '../lib/windows.js';
 import NameField from './NameField.jsx';
+import { askConfirm } from '../lib/dialogs.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const INITIAL_ROWS = 4;
 
@@ -40,8 +43,8 @@ export function StatusBadge({ status, overdue, voided }) {
 }
 
 function PaymentRow({ invoice, accounts, onDone, colSpan }) {
-  const undeposited = accounts.find((a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
-  const [accountId, setAccountId] = useState(undeposited?.id ?? null);
+  const { undepositedDefault } = useSalesPrefs();
+  const [accountId, setAccountId] = useState(() => defaultDepositAccount(accounts, undepositedDefault));
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(invoice.balanceCents));
   const foreign = invoice.currencyCode;
@@ -157,25 +160,36 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
   );
 }
 
-/** Receive Payment: one customer payment applied across that customer's open invoices, oldest first. */
+/**
+ * Receive Payment: one customer payment applied across that customer's open invoices. How a typed
+ * amount is spread (an exact match, else oldest first; oldest first; or not at all), whether ticking
+ * invoices works out the amount, and where it is deposited follow Preferences › Payments.
+ */
 function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const { homeCurrency } = useCompany();
+  const prefs = useSalesPrefs();
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
-  const undeposited = accounts.find((a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
   const [customer, setCustomer] = useState('');
   // One payment is in one currency; the customer's open invoices are filtered to it.
   const [currency, setCurrency] = useState('');
   const [rate, setRate] = useState('');
   const [received, setReceived] = useState('');
   const [applied, setApplied] = useState({});
-  const [accountId, setAccountId] = useState(undeposited?.id ?? null);
+  const [accountId, setAccountId] = useState(() => defaultDepositAccount(accounts, prefs.undepositedDefault));
+  const [accountTouched, setAccountTouched] = useState(false);
   const [date, setDate] = useState(todayIso());
   const method = usePaymentMethodChoice('CHECK');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
+  const applySeq = useRef(0);
+
+  // The deposit account follows the preference once it loads, until the person picks one.
+  useEffect(() => {
+    if (!accountTouched) setAccountId(defaultDepositAccount(accounts, prefs.undepositedDefault));
+  }, [accounts, prefs.undepositedDefault, accountTouched]);
 
   useEffect(() => customerRef.current?.focus(), []);
 
@@ -204,17 +218,32 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c > inv.balanceCents);
   });
 
-  // Typing the amount received auto-applies it to the oldest invoices first.
-  const autoApply = (text) => {
+  // Typing the amount received applies it as the company prefers (the backend decides, so the
+  // rule is the same everywhere); the Auto Apply button applies even when that is off.
+  const autoApply = (text, mode = null) => {
     setReceived(text);
-    let remaining = parseMoneyToCents(text) ?? 0;
-    const next = {};
-    for (const inv of rows) {
-      const take = Math.max(0, Math.min(remaining, inv.balanceCents));
-      next[inv.id] = take > 0 ? centsToInput(take) : '';
-      remaining -= take;
-    }
+    if (mode === null && prefs.autoApply === 'off') return;
+    const cents = parseMoneyToCents(text) ?? 0;
+    const seq = ++applySeq.current;
+    if (cents <= 0) return setApplied({});
+    api.getPaymentApplication(customer, currency, cents, mode).then(
+      (plan) => {
+        if (seq !== applySeq.current) return;
+        const byId = new Map(plan.map((p) => [p.documentId, p.amountCents]));
+        setApplied(Object.fromEntries(rows.map((inv) => [inv.id, byId.has(inv.id) ? centsToInput(byId.get(inv.id)) : ''])));
+      },
+      (err) => seq === applySeq.current && setError(errorText(err)),
+    );
+  };
+  // A payment typed or ticked on an invoice: with auto-calculate on, the amount received follows.
+  const setPayment = (inv, text) => {
+    applySeq.current += 1;
+    const next = { ...applied, [inv.id]: text };
     setApplied(next);
+    if (prefs.autoCalculate) {
+      const sum = rows.reduce((s, r) => s + Math.max(0, parseMoneyToCents(next[r.id] ?? '') ?? 0), 0);
+      setReceived(sum > 0 ? centsToInput(sum) : '');
+    }
   };
 
   const customerBalance = customerInvoices.filter((i) => (i.currencyCode ?? '') === currency).reduce((s, i) => s + i.balanceCents, 0);
@@ -271,7 +300,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
               icon: 'ReceivePayment',
               hint: 'Apply the amount received to the oldest invoices first',
               disabled: !customer || receivedCents === null || received.trim() === '',
-              onClick: () => autoApply(received),
+              onClick: () => autoApply(received, prefs.autoApply === 'oldest' ? 'oldest' : 'exact'),
             },
           ],
         ]}
@@ -337,7 +366,16 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         </label>
         <label>
           <span className="qb-label">Deposit to</span>
-          <AccountSelect accounts={accounts} filter={depositFilter} value={accountId} onChange={setAccountId} className="qb-input w-[190px]" />
+          <AccountSelect
+            accounts={accounts}
+            filter={depositFilter}
+            value={accountId}
+            onChange={(id) => {
+              setAccountTouched(true);
+              setAccountId(id);
+            }}
+            className="qb-input w-[190px]"
+          />
         </label>
         <div>
           <span className="qb-label">Payment method</span>
@@ -353,6 +391,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
       </div>
       <table className="qb-grid">
         <colgroup>
+          <col className="w-[28px]" />
           <col className="w-[80px]" />
           <col className="w-[100px]" />
           <col className="w-[100px]" />
@@ -363,6 +402,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         </colgroup>
         <thead>
           <tr>
+            <th className="qb-grid-head" aria-label="Pay" />
             <th className="qb-grid-head">Invoice</th>
             <th className="qb-grid-head">Date</th>
             <th className="qb-grid-head">Due</th>
@@ -375,7 +415,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         <tbody>
           {!customer && (
             <tr>
-              <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">
+              <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">
                 {customers.length ? 'Choose a customer to see their open invoices.' : 'There are no open invoices to receive payment against.'}
               </td>
             </tr>
@@ -384,6 +424,15 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
             const bad = badRows.includes(inv);
             return (
               <tr key={inv.id} className="qb-grid-row">
+                <td className="qb-grid-cell text-center">
+                  <input
+                    type="checkbox"
+                    className="accent-qb-green"
+                    checked={appliedCents(inv) > 0}
+                    onChange={(e) => setPayment(inv, e.target.checked ? centsToInput(inv.balanceCents) : '')}
+                    aria-label={`Pay invoice ${inv.invoiceNumber}`}
+                  />
+                </td>
                 <td className="qb-grid-cell">#{inv.invoiceNumber}</td>
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
@@ -396,7 +445,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                   <input
                     className="num"
                     value={applied[inv.id] ?? ''}
-                    onChange={(e) => setApplied((a) => ({ ...a, [inv.id]: e.target.value }))}
+                    onChange={(e) => setPayment(inv, e.target.value)}
                     placeholder="0.00"
                     inputMode="decimal"
                     aria-invalid={bad}
@@ -519,9 +568,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                     onDoubleClick={() =>
                       inv.isVoided
                         ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} is voided, so it can't be edited.` })
-                        : inv.amountPaidCents > 0
-                          ? onNotice({ kind: 'info', text: `Invoice #${inv.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
-                          : onEdit(inv)
+                        : onEdit(inv)
                     }
                     title={open ? 'Click to receive a payment, double-click to edit' : 'Double-click to edit'}
                   >
@@ -568,8 +615,8 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                           attachments.menuItem(inv.journalEntryId),
                           {
                             label: 'Edit…',
-                            disabled: inv.isVoided || inv.amountPaidCents > 0,
-                            hint: inv.amountPaidCents > 0 ? 'Remove its payments and credits first' : undefined,
+                            disabled: inv.isVoided,
+                            hint: inv.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                             onSelect: () => onEdit(inv),
                           },
                           voidItem({
@@ -637,6 +684,7 @@ export default function Invoices({ accounts, intent }) {
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
+  const { dropZeroLines } = useSalesPrefs();
 
   // Accounts arrive asynchronously; give untouched lines the default income account once known.
   useEffect(() => {
@@ -656,21 +704,13 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
-        ({ estimate, lines: estimateLines, details }) => {
+        ({ estimate, lines: estimateLines, details, formLines: estimateForm }) => {
           setCustomer(estimate.customerName);
           sales.set(details);
-          setLines([
-            ...estimateLines.map((l) => ({
-              ...blankLine(l.incomeAccountId),
-              productId: l.productServiceId,
-              classId: l.classId ?? null,
-              isTaxable: Boolean(l.isTaxable),
-              description: l.description,
-              qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
-              rate: centsToInput(l.rateCents),
-            })),
-            blankLine(defaultAccountId),
-          ]);
+          // Zero-amount lines stay on the estimate unless the company brings them over to price.
+          const all = linesFromDocument(estimateLines, estimateForm, defaultAccountId);
+          const dropZero = dropZeroLines && estimateLines.some((l) => l.rateCents > 0);
+          setLines(dropZero ? all.filter((l) => isFormLine(l) || l.rate.trim() === '' || parseMoneyToCents(l.rate) !== 0) : all);
           setFromEstimate({ id: estimate.id, number: estimate.estimateNumber });
           tax.set(estimate.taxRateId ?? null);
           setNotice(null);
@@ -701,17 +741,18 @@ export default function Invoices({ accounts, intent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerRecord?.id, customerRecord?.termsId, termsList, termsTouched, termsId]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
   // Every field the invoice saves, so changing any of them (dates, terms, currency, rate, discount,
-  // tax, rep, ship and custom fields, class, lines) counts as unsaved.
+  // tax, rep, ship and custom fields, class, lines and subtotals, discounts, charges, groups) counts as unsaved.
   const snapshot = JSON.stringify({
     customer: customer.trim(),
     issueDate,
     dueDate,
     payload,
+    formLines,
     taxRateId: tax.rateId,
     discount: discountText.trim(),
     currency,
@@ -726,7 +767,7 @@ export default function Invoices({ accounts, intent }) {
   // A new invoice counts as changed once it has a customer, a line or a discount.
   const dirty = editing
     ? baseline !== null && snapshot !== baseline
-    : customer.trim() !== '' || payload.length > 0 || discountText.trim() !== '';
+    : customer.trim() !== '' || payload.length > 0 || formLines.length > 0 || discountText.trim() !== '';
   useUnsavedChanges('invoice', dirty);
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
@@ -737,29 +778,17 @@ export default function Invoices({ accounts, intent }) {
   // stopping at it.
   const loadForEdit = (inv, focusCustomer = true, viewLocked = false) => {
     api.getInvoiceDetail(inv.id).then(
-      ({ invoice, items, details }) => {
+      ({ invoice, items, details, formLines: storedForm }) => {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
         if (!viewLocked && invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
-        if (!viewLocked && invoice.amountPaidCents > 0) {
-          return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
-        }
         setReceiving(false);
         sales.set(details);
         setFromEstimate(null);
-        const loaded = [
-          ...items.map((l) => ({
-            ...blankLine(l.incomeAccountId),
-            productId: l.productServiceId,
-            classId: l.classId ?? null,
-            isTaxable: Boolean(l.isTaxable),
-            description: l.description,
-            qty: formatQuantity(l.quantityE4).replace(/,/g, ''),
-            rate: centsToInput(l.rateCents),
-          })),
-          blankLine(defaultAccountId),
-        ];
-        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName });
+        const loaded = linesFromDocument(items, storedForm, defaultAccountId);
+        // Payments and credits applied stay applied to the edited version (see appliedText).
+        const applied = invoice.amountPaidCents > 0 ? formatMoney(invoice.amountPaidCents, invoice.currencyCode) : null;
+        setEditing({ id: invoice.id, number: invoice.invoiceNumber, customer: invoice.customerName, applied });
         // Cleared so the effect above records what was loaded, and closing the window or stepping
         // with Previous / Next asks only once something has changed.
         setBaseline(null);
@@ -801,6 +830,7 @@ export default function Invoices({ accounts, intent }) {
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
   const printLater = usePrintLater('INVOICE', !editing);
+  useCustomerDelivery(customer, customers.data, { enabled: !editing, setEmailLater, printLater });
   // Files picked for an invoice not posted yet; attached once it posts.
   const [files, setFiles] = useState([]);
   const [showAttachments, setShowAttachments] = useState(false);
@@ -815,13 +845,12 @@ export default function Invoices({ accounts, intent }) {
     setFiles([]);
     loadForEdit(inv, false, true);
   };
-  // Saved invoices with payments, and voided ones, are shown but not saved again.
-  const locked = current && (current.isVoided || current.amountPaidCents > 0);
+  // Voided invoices are shown but not saved again.
+  const locked = current && current.isVoided;
+  const appliedText = editing?.applied ? `This invoice has ${editing.applied} in payments or credits applied. Saving will keep them applied to the new version.` : null;
 
   const save = async (mode) => {
-    if (locked) {
-      return setNotice({ kind: 'error', text: current.isVoided ? 'This invoice is voided.' : 'Remove its payments and credits before editing this invoice.' });
-    }
+    if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
     if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
     if (invalidCount > 0) {
@@ -829,6 +858,7 @@ export default function Invoices({ accounts, intent }) {
     }
     if (dueDate < issueDate) return setNotice({ kind: 'error', text: 'Due date cannot be before the invoice date.' });
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
+    if (layoutError) return setNotice({ kind: 'error', text: layoutMessage(layoutError) });
     if (discountCents === null) return setNotice({ kind: 'error', text: 'Enter the discount as an amount or a percentage such as 10%.' });
     // The product travels with each line: tracked stock records its cost of goods sold.
     const postedLines = formClass.apply(
@@ -857,10 +887,23 @@ export default function Invoices({ accounts, intent }) {
         currency: currency ? { code: currency, exchangeRateE6: parseRateE6(rate) } : null,
         ...sales.payload(),
         termsId,
+        formLines,
       };
       if (mode === 'memorize') return setMemorizing(input);
+      // A credit limit warns; it never stops the sale.
+      const homeTotal = currency ? toHomeCents(total, parseRateE6(rate)) : total;
+      const over = await api.checkCreditLimit(input.customerName, homeTotal, editing?.id ?? null);
+      if (
+        over &&
+        !(await askConfirm(
+          `This invoice takes ${over.customerName} over their credit limit of ${formatCents(over.creditLimitCents)}: they owe ${formatCents(over.balanceCents)} now and would owe ${formatCents(over.newBalanceCents)}. Save it anyway?`,
+          { confirmLabel: 'Save anyway' },
+        ))
+      ) {
+        return;
+      }
       if (editing) {
-        await api.replaceInvoice(editing.id, input);
+        await api.replaceInvoice(editing.id, input, appliedText);
         setNotice({ kind: 'success', text: `Invoice #${editing.number} replaced: the original is voided and the edited invoice is posted.` });
         reset();
         return true;
@@ -988,7 +1031,7 @@ export default function Invoices({ accounts, intent }) {
       {editing && (
         <Notice
           kind="info"
-          text={`Editing invoice #${editing.number}. Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
+          text={`Editing invoice #${editing.number}. ${appliedText ? `${appliedText} ` : ''}Saving voids the original and posts this version under a new number; both stay in the audit trail.`}
           onDismiss={reset}
         />
       )}
@@ -1004,7 +1047,7 @@ export default function Invoices({ accounts, intent }) {
         {locked && (
           <Notice
             kind="info"
-            text={current.isVoided ? `Invoice #${current.invoiceNumber} is voided. It stays in the books for the record.` : `Invoice #${current.invoiceNumber} has payments or credits applied, so it is shown read-only. Remove them to edit it.`}
+            text={`Invoice #${current.invoiceNumber} is voided. It stays in the books for the record.`}
           />
         )}
         {showAttachments && current?.journalEntryId && (
@@ -1069,7 +1112,8 @@ export default function Invoices({ accounts, intent }) {
           </div>
         </div>
 
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} />
+        {sales.addresses}
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>

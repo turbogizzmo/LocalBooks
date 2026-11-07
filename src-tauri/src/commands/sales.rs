@@ -34,8 +34,8 @@ pub async fn list_products(db: State<'_, Db>) -> Result<Vec<ProductView>, String
 }
 
 #[tauri::command]
-pub async fn create_product(app: AppHandle, db: State<'_, Db>, input: ProductInput) -> Result<ProductView, String> {
-    let product = sales::create_product(&db.pool().await, input).await?;
+pub async fn create_product(app: AppHandle, db: State<'_, Db>, input: ProductInput, kind: Option<sales::ItemKind>) -> Result<ProductView, String> {
+    let product = sales::create_item(&db.pool().await, input, kind.unwrap_or_default()).await?;
     notify(&app);
     Ok(product)
 }
@@ -48,7 +48,7 @@ pub async fn post_sales_receipt(
     confirmed: Option<Vec<String>>,
 ) -> Result<SalesReceiptSummary, String> {
     let pool = db.pool().await;
-    guards::check(&pool, guards::dated(input.receipt_date), confirmed.as_deref()).await?;
+    guards::check(&pool, guards::sales_receipt(&input), confirmed.as_deref()).await?;
     let receipt = sales::post_sales_receipt(&pool, input).await?;
     notify(&app);
     Ok(receipt)

@@ -71,6 +71,9 @@ pub struct CreditMemoInput {
     /// Sales tax given back on the taxable lines.
     #[serde(default)]
     pub tax_rate_id: Option<i64>,
+    /// Bill To, Ship To, P.O. number and FOB (see `sales_header`).
+    #[serde(flatten)]
+    pub header: crate::sales_header::SalesHeader,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -219,6 +222,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     lines.push(JournalLine::credit(credit_account, total));
     let kind = if input.refund_account_id.is_some() { "Refund receipt" } else { "Credit memo" };
     let entry = JournalEntry { id: None, date: input.credit_date, description: format!("{kind} #{number} - {customer}"), lines, currency: None };
+    crate::sales_header::write(tx, "credit_memos", memo_id, &input.header).await?;
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::CreditMemo(memo_id)).await?;
     sqlx::query("UPDATE credit_memos SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(memo_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(memo_id)
@@ -457,7 +461,7 @@ pub async fn create_vendor_credit(pool: &SqlitePool, input: VendorCreditInput) -
     vendor_credit(pool, id).await
 }
 
-async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCreditInput) -> Result<i64, String> {
+pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input: &VendorCreditInput) -> Result<i64, String> {
     if input.lines.is_empty() {
         return Err("VC_NO_ITEMS: add at least one line".into());
     }

@@ -6,7 +6,9 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, memo: '', amount: '', qty: '', rate: '' });
+// `billable` is null until the row's Billable box is touched: the company default then decides
+// (Preferences › Time & Expenses › "Mark all expenses as billable").
+export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, billable: null, memo: '', amount: '', qty: '', rate: '' });
 
 /** Split rows for a posted bill's or expense's lines, to edit it. */
 export const splitRowsFrom = (lines) =>
@@ -15,6 +17,7 @@ export const splitRowsFrom = (lines) =>
     productId: l.productServiceId ?? null,
     classId: l.classId ?? null,
     customerId: l.customerId ?? null,
+    billable: l.customerId ? Boolean(l.billable) : null,
     memo: l.memo ?? '',
     amount: l.quantityE4 ? '' : centsToInput(l.amountCents),
     qty: l.quantityE4 ? formatQuantity(l.quantityE4).replace(/,/g, '') : '',
@@ -59,6 +62,8 @@ export function summarizeSplits(rows) {
       productServiceId: row.productId ?? null,
       classId: row.classId ?? null,
       customerId: row.customerId ?? null,
+      // Only a cost for a customer can be billed; left null, the company default applies.
+      billable: row.customerId ? row.billable : null,
       ...(priced ? { quantityE4, rateCents } : {}),
     });
   }
@@ -77,6 +82,8 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
   const withClasses = classesAllowed && showsClassColumn(tracking, rows);
   const customers = useLedgerQuery(api.listCustomers).data ?? [];
   const withJobs = jobsAllowed && (customers.length > 0 || rows.some((r) => r.customerId));
+  const prefs = useLedgerQuery(api.getPreferences).data;
+  const billableByDefault = prefs?.expenses_billable_default === 'true';
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
   const withStock = withPricing && stockItems.length > 0;
   const pickItem = (key, productId) => {
@@ -103,6 +110,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         <col className="w-[260px]" />
         <col />
         {withJobs && <col className="w-[170px]" />}
+        {withJobs && <col className="w-[34px]" />}
         {withClasses && <col className="w-[150px]" />}
         {withPricing && <col className="w-[70px]" />}
         {withPricing && <col className="w-[96px]" />}
@@ -116,6 +124,11 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
           {withJobs && <th className="qb-grid-head" title="The customer or job this cost is for (job costing)">Customer:Job</th>}
+          {withJobs && (
+            <th className="qb-grid-head text-center" title="Billable: invoice this cost to the customer from Sales › Bill Costs">
+              Bill?
+            </th>
+          )}
           {withClasses && <th className="qb-grid-head">Class</th>}
           {withPricing && <th className="qb-grid-head text-right">Qty</th>}
           {withPricing && <th className="qb-grid-head text-right">Rate</th>}
@@ -161,6 +174,20 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
                   </select>
                 </td>
               )}
+              {withJobs && (
+                <td className="qb-grid-cell text-center">
+                  {row.customerId ? (
+                    <input
+                      type="checkbox"
+                      className="accent-qb-green"
+                      checked={row.billable ?? billableByDefault}
+                      onChange={(e) => update(row.key, { billable: e.target.checked })}
+                      aria-label={`Billable ${i + 1}`}
+                      title="Invoice this cost to the customer from Sales › Bill Costs"
+                    />
+                  ) : null}
+                </td>
+              )}
               {withClasses && (
                 <td className="qb-grid-cell-edit">
                   <ClassSelect className="" classes={classes} value={row.classId ?? null} onChange={(classId) => update(row.key, { classId })} aria-label={`Class ${i + 1}`} />
@@ -195,7 +222,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 1 : 0)}>
+          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 2 : 0)}>
             <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
               ＋ Add split row
             </button>

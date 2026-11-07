@@ -83,7 +83,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
             due_date: date + chrono::Days::new(30),
             memo: None,
             total_cents: cents,
-            lines: vec![BillLineInput { account_id, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None }],
+            lines: vec![BillLineInput { account_id, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
         },
     )
     .await
@@ -107,7 +107,7 @@ async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, dat
             check_number: (kind == "CHECK").then(|| "1001".into()),
             payment_method: None,
             memo: None,
-            lines: vec![SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: None }],
+            lines: vec![SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: None, billable: None }],
             currency: None,
         },
     )
@@ -139,7 +139,10 @@ async fn vendor_tax_id(pool: &SqlitePool, name: &str, tax_id: &str, access: Acce
         form_style_id: None,
         sales_rep_id: None,
         price_level_id: None,
+        preferred_delivery: None,
+        job_status: None,
         custom_fields: Vec::new(),
+        ..Default::default()
     };
     parties::update_party(pool, "vendor", id, input, access).await.expect("set the tax ID");
 }
@@ -210,6 +213,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
             refund_account_id: None,
             lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false }],
             tax_rate_id: None,
+            header: Default::default(),
         },
     )
     .await

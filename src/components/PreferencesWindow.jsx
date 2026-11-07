@@ -9,10 +9,12 @@ import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import DesktopViewPreferences from './DesktopViewPreferences.jsx';
 import GeneralPreferences, { AccountingMyPreferences, ReportsMyPreferences } from './GeneralPreferences.jsx';
+import { CheckingCompany, CheckingMy, ItemsCompany, SalesTaxCompany, Tax1099Company, TimeExpensesCompany } from './TaxTimePreferences.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
 import DateBox from './DateBox.jsx';
+import { JOB_STATUSES } from '../lib/salesPrefs.js';
 
 /** One preference field that commits to the database as soon as the user leaves it or picks a value. */
 export function PrefField({ label, prefKey, prefs, hint, children }) {
@@ -480,6 +482,17 @@ function FinanceChargeCompany({ field, accounts }) {
           />
         ),
       })}
+      {field({
+        label: 'Calculate charges from',
+        prefKey: 'finance_charge_from',
+        hint: 'Interest runs from this date; an invoice is overdue by its due date and the grace period either way',
+        children: ({ id, value, commit, invalid }) => (
+          <select id={id} className="qb-input w-[180px]" value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+            <option value="due_date">Due date</option>
+            <option value="invoice_date">Invoice date</option>
+          </select>
+        ),
+      })}
       {field({ label: 'Charge on finance charges', prefKey: 'finance_charge_on_finance_charges', hint: 'Whether overdue finance charge invoices themselves earn finance charges', children: flag('Assess finance charges on overdue finance charges') })}
     </Group>
   );
@@ -639,6 +652,138 @@ function CurrenciesCompany({ field }) {
 }
 
 // ------------------------------------------------------------------------------------------------
+// Batch 4: Sales & Customers, Jobs & Estimates, Payments, Bills, Send Forms
+// ------------------------------------------------------------------------------------------------
+
+function ShipMethodChoice({ id, value, commit, invalid }) {
+  const methods = useLedgerQuery(api.listShipMethods).data ?? [];
+  return (
+    <select id={id} className="qb-input w-[220px]" value={value} onChange={(e) => commit(e.target.value)} aria-invalid={invalid}>
+      <option value="">None</option>
+      {methods
+        .filter((m) => m.isActive || String(m.id) === value)
+        .map((m) => (
+          <option key={m.id} value={String(m.id)}>{m.name}</option>
+        ))}
+    </select>
+  );
+}
+
+function SalesCompany({ field }) {
+  return (
+    <>
+      <Group title="Sales forms">
+        {field({ label: 'Usual shipping method', prefKey: 'default_ship_method_id', hint: 'Filled in as Ship Via on new invoices, sales receipts and estimates (add methods in Reps, Ship Via & Fields)', children: ShipMethodChoice })}
+        {/* Usual F.O.B. (`default_fob`) goes here once the F.O.B. box (#158) is on sales forms. */}
+        {field({
+          label: 'Default markup',
+          prefKey: 'default_markup_percent',
+          hint: 'The markup Change Item Prices starts with when new prices are worked out from cost',
+          children: ({ id, value, setValue, commit, invalid }) => (
+            <span className="flex items-center gap-1">
+              <input id={id} className="qb-input num w-[80px]" value={value} inputMode="decimal" onChange={(e) => setValue(e.target.value)} onBlur={() => commit()} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} aria-invalid={invalid} />
+              <span className="text-sm">%</span>
+            </span>
+          ),
+        })}
+        <Always label="Invoice numbers">Each invoice gets the next number, so no two share one.</Always>
+      </Group>
+      <Group title="Pricing">
+        {field({ label: 'Price levels', prefKey: 'price_levels_enabled', hint: 'Off hides price levels on customers and forms, and every form uses standard prices; levels you made are kept', children: flag('Use price levels') })}
+      </Group>
+      <Group title="Warnings">
+        {field({ label: 'Overdue customers', prefKey: 'warn_customer_overdue', hint: 'Asks before saving a new invoice or sales receipt for a customer (or job) with invoices past due', children: flag('Warn before selling to a customer with overdue invoices') })}
+      </Group>
+      {/* Estimates to invoices › Zero-amount lines (`estimate_drop_zero_lines`) shows once estimates take 0.00 lines (#151). */}
+      <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
+    </>
+  );
+}
+
+function JobsCompany({ field }) {
+  return (
+    <>
+      <Group title="Estimates">
+        {field({ label: 'Estimates', prefKey: 'estimates_enabled', hint: 'Off hides Estimates from the menus, the side bar and New; estimates already saved are kept', children: flag('Create estimates') })}
+        <Always label="Estimate numbers">Each estimate gets the next number, so no two share one.</Always>
+      </Group>
+      <Group title="Job status names">
+        {JOB_STATUSES.map((st) =>
+          field({ key: st.key, label: st.label, prefKey: st.key, hint: st.code === 'PENDING' ? 'How each status reads on jobs and in the customer list' : undefined, children: textInput({ maxLength: 30, className: 'qb-input w-[220px]' }) }),
+        )}
+      </Group>
+      <Nothing>
+        Progress invoicing (invoicing an estimate in parts) is not available yet: an estimate becomes one invoice, which you can change in Create
+        Invoices before saving it.
+      </Nothing>
+    </>
+  );
+}
+
+function PaymentsCompany({ field }) {
+  return (
+    <Group title="Receive Payments">
+      {field({
+        label: 'Apply payments',
+        prefKey: 'payment_auto_apply',
+        hint: 'How an amount received is spread over the customer’s open invoices; Auto Apply on the form always applies',
+        children: choice([
+          ['exact', 'Automatically: an exact match, else oldest first'],
+          ['oldest', 'Automatically: oldest invoices first'],
+          ['off', 'Not automatically: I tick the invoices'],
+        ]),
+      })}
+      {field({ label: 'Calculate the amount', prefKey: 'payment_auto_calculate', hint: 'The amount received becomes the total of the invoices ticked or paid', children: flag('Work out the payment amount from the invoices ticked') })}
+      {field({ label: 'Deposit to', prefKey: 'payment_undeposited_default', hint: 'Off: payments and sales receipts go to the first bank account unless you choose another', children: flag('Use Undeposited Funds as the usual deposit account') })}
+    </Group>
+  );
+}
+
+function BillsCompany({ field, accounts }) {
+  return (
+    <Group title="Bills">
+      {field({ label: 'Bills are due', prefKey: 'bill_due_days', hint: 'Days after the bill date, for a vendor without terms (0 = on receipt); a vendor’s own terms come first', children: days })}
+      {field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}
+      {field({ label: 'Vendor credits', prefKey: 'bill_auto_apply_credits', hint: 'Pay Bills uses the vendor’s open credits on the bills ticked, oldest credit first, and pays the rest', children: flag('Use vendor credits automatically') })}
+      {field({ label: 'Discounts', prefKey: 'bill_auto_apply_discounts', hint: 'Pay Bills takes the early-payment discount a bill’s terms offer (such as 2% 10 Net 30) when paid by its last day', children: flag('Take early-payment discounts automatically') })}
+      {field({
+        label: 'Discount account',
+        prefKey: 'bill_discount_account_id',
+        hint: 'Discounts taken are credited here, such as Purchase Discounts or Cost of Goods Sold',
+        children: ({ id, value, commit, invalid }) => (
+          <AccountSelect
+            id={id}
+            accounts={accounts ?? []}
+            filter={(a) => a.isActive && !a.isSystem && a.classification === 'EXPENSE'}
+            value={value === '' ? null : Number(value)}
+            onChange={(next) => commit(next === null ? '' : String(next))}
+            placeholder="Choose an expense account"
+            aria-invalid={invalid}
+          />
+        ),
+      })}
+    </Group>
+  );
+}
+
+function SendFormsCompany({ field }) {
+  return (
+    <Group title="Sending forms">
+      {field({
+        label: 'New customers',
+        prefKey: 'default_delivery_method',
+        hint: 'A new customer’s preferred delivery, which ticks Email later or Print later on their new forms; change it on each customer',
+        children: choice([
+          ['none', 'None'],
+          ['email', 'Email (marked Email later)'],
+          ['print', 'Print (marked Print later)'],
+        ]),
+      })}
+    </Group>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------
 // The categories
 // ------------------------------------------------------------------------------------------------
 
@@ -660,9 +805,7 @@ export const CATEGORIES = [
   {
     id: 'bills',
     label: 'Bills',
-    company: ({ field }) => (
-      <Group title="Bills">{field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}</Group>
-    ),
+    company: (p) => <BillsCompany {...p} />,
     links: [
       { label: 'Bills', view: 'expenses/bills' },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'each vendor’s terms' },
@@ -671,9 +814,8 @@ export const CATEGORIES = [
   {
     id: 'checking',
     label: 'Checking',
-    company: ({ field }) => (
-      <Group title="Checks">{field({ label: 'Duplicate check numbers', prefKey: 'warn_duplicate_check_numbers', hint: 'Per bank account; voided checks don’t count', children: flag('Warn about duplicate check numbers') })}</Group>
-    ),
+    my: () => <CheckingMy />,
+    company: (p) => <CheckingCompany {...p} />,
     links: [
       { label: 'Expenses & Checks', view: 'expenses/expenses', hint: 'the next check number is filled in for each account' },
       { label: 'Bank Feeds', view: 'banking/feeds', hint: 'renaming rules for downloaded payees' },
@@ -704,10 +846,14 @@ export const CATEGORIES = [
   {
     id: 'items',
     label: 'Items & Inventory',
-    company: () => (
-      <Group title="Purchase orders">
-        <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
-      </Group>
+    company: (p) => (
+      <>
+        <ItemsCompany {...p} />
+        <Group title="Purchase orders">
+          <Always label="Purchase order numbers">Each purchase order gets the next number, so no two share one.</Always>
+        </Group>
+        <Nothing>Units of measure (selling by the each, case or pallet) are not in LocalBooks: items have one unit.</Nothing>
+      </>
     ),
     links: [
       { label: 'Products & Services', view: 'sales/products', hint: 'inventory items, reorder points and prices' },
@@ -717,12 +863,11 @@ export const CATEGORIES = [
   {
     id: 'jobs',
     label: 'Jobs & Estimates',
-    company: () => (
-      <Group title="Estimates">
-        <Always label="Estimate numbers">Each estimate gets the next number, so no two share one.</Always>
-      </Group>
-    ),
-    links: [{ label: 'Estimates', view: 'sales/estimates' }],
+    company: (p) => <JobsCompany {...p} />,
+    links: [
+      { label: 'Estimates', view: 'sales/estimates' },
+      { label: 'Customers', view: 'sales/customers', hint: 'each job’s status' },
+    ],
   },
   {
     id: 'currencies',
@@ -733,6 +878,7 @@ export const CATEGORIES = [
   {
     id: 'payments',
     label: 'Payments',
+    company: (p) => <PaymentsCompany {...p} />,
     links: [
       { label: 'Invoices', view: 'sales/invoices', hint: 'Receive Payments applies a payment to open invoices' },
       { label: 'Deposits & Transfers', view: 'banking/transfers', hint: 'payments wait in Undeposited Funds until deposited' },
@@ -756,11 +902,7 @@ export const CATEGORIES = [
   {
     id: 'sales',
     label: 'Sales & Customers',
-    company: () => (
-      <Group title="Invoices">
-        <Always label="Invoice numbers">Each invoice gets the next number, so no two share one.</Always>
-      </Group>
-    ),
+    company: (p) => <SalesCompany {...p} />,
     links: [
       { label: 'Products & Services', view: 'sales/products', hint: 'price levels' },
       { label: 'Reps, Ship Via & Fields', view: 'sales/lists' },
@@ -770,20 +912,23 @@ export const CATEGORIES = [
   {
     id: 'sales-tax',
     label: 'Sales Tax',
+    company: (p) => <SalesTaxCompany {...p} />,
     links: [{ label: 'Sales Tax', view: 'sales/tax', hint: 'turn sales tax on, rates and the default rate' }],
   },
   {
     id: 'send-forms',
     label: 'Send Forms',
+    company: (p) => <SendFormsCompany {...p} />,
     links: [
       { label: 'Email', view: 'settings/email', hint: 'how forms are sent' },
-      { label: 'Custom Forms', view: 'settings/forms', hint: 'how invoices and estimates look' },
+      { label: 'Custom Forms', view: 'settings/forms', hint: 'how forms look, and each form’s email subject and message' },
       { label: 'Send Forms', view: 'sales/send-forms', hint: 'forms waiting to be sent' },
     ],
   },
   {
     id: '1099',
     label: 'Tax: 1099',
+    company: (p) => <Tax1099Company {...p} />,
     links: [
       { label: '1099 Summary', view: 'reports', data: { report: '1099' } },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'tax IDs and which vendors get a 1099' },
@@ -792,8 +937,9 @@ export const CATEGORIES = [
   {
     id: 'time',
     label: 'Time & Expenses',
-    company: () => <Nothing>Whether hours show as 1:30 or 1.50 is under General › Company Preferences.</Nothing>,
+    company: (p) => <TimeExpensesCompany {...p} />,
     links: [
+      { label: 'Bill Costs', view: 'sales/bill-costs', hint: 'invoice billable expenses' },
       { label: 'Time Tracking', view: 'employees/time' },
       { label: 'Mileage', view: 'employees/mileage' },
     ],
@@ -821,7 +967,7 @@ function CompanyTab({ category, navigate }) {
   const { prefs, error, forms, accounts } = usePrefs();
   if (error) return <Notice kind="error" text={error} />;
   if (!prefs) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
-  const field = (props) => <PrefField prefs={prefs} {...props} />;
+  const field = ({ key, ...props }) => <PrefField key={key ?? props.prefKey} prefs={prefs} {...props} />;
   return (
     <>
       {category.company ? category.company({ field, forms, accounts }) : <Nothing>{category.label} has no company preferences here.</Nothing>}

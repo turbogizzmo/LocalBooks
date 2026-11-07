@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useTransactionDate } from '../lib/myPreferences.js';
+import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
+import { useVendorRecall } from '../lib/recall.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
@@ -21,6 +22,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 import DateBox, { CheckNumberBox } from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -34,27 +36,26 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
   const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
-  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? billDate);
   const termsList = useTerms();
   const [termsId, setTermsId] = useState(editing?.bill.termsId ?? null);
   // Set once the user picks a term (or a saved bill is loaded): the vendor's term no longer fills in.
   const [termsTouched, setTermsTouched] = useState(Boolean(editing));
+  // Without a term, the bill is due after the vendor's days, or Preferences › Bills' days (10
+  // unless an Admin changes them), as the backend works it out.
   const applyTerms = (t, fromDate) => {
-    if (t && fromDate) setDueDate(addDays(fromDate, t.netDays));
+    if (!fromDate) return;
+    if (t) setDueDate(addDays(fromDate, t.netDays));
+    else api.getBillDueDate(vendor.trim(), fromDate).then(setDueDate, () => {});
   };
   const vendorRecord = vendors.find((v) => v.name.toLowerCase() === vendor.trim().toLowerCase());
   useEffect(() => {
     if (termsTouched) return;
-    const t =
-      termsList.find((x) => x.isActive && x.id === vendorRecord?.termsId) ??
-      termsList.find((x) => x.isActive && x.netDays === 30 && x.discountPpm === 0) ??
-      null;
-    if (t && t.id !== termsId) {
-      setTermsId(t.id);
-      applyTerms(t, billDate);
-    }
+    const t = termsList.find((x) => x.isActive && x.id === vendorRecord?.termsId) ?? null;
+    setTermsId(t?.id ?? null);
+    applyTerms(t, billDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorRecord?.id, vendorRecord?.termsId, termsList, termsTouched, termsId]);
+  }, [vendor, vendorRecord?.termsId, termsList, termsTouched]);
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -70,6 +71,19 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     setRows((rs) => rs.map((r) => (r.accountId === null ? { ...r, accountId: defaultCategory } : r)));
   }, [defaultCategory]);
 
+  // My Preferences › General › recall: a known vendor's last bill fills the rows (and total).
+  useVendorRecall({
+    vendor,
+    vendors,
+    rows,
+    enabled: !editing,
+    kind: 'bill',
+    onRecalled: (recalled, recalledRows) => {
+      setRows(recalledRows);
+      if (recalledRows.some((r) => r.amount || r.rate)) setTotal((t) => t || centsToInput(recalled.totalCents));
+    },
+  });
+
   const totalCents = parseMoneyToCents(total);
   const { lines, invalid, total: allocated } = summarizeSplits(rows);
   const unallocated = totalCents === null ? null : totalCents - allocated;
@@ -82,6 +96,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   };
 
   const [memorizing, setMemorizing] = useState(null);
+  // Payments and vendor credits applied stay applied to the edited version.
+  const appliedText = editing?.bill.amountPaidCents > 0 ? `This bill has ${formatCents(editing.bill.amountPaidCents)} in payments or credits applied. Saving will keep them applied to the new version.` : null;
   const post = async (mode) => {
     if (!vendor.trim()) return setError('Enter a vendor.');
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
@@ -107,7 +123,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
-      const bill = editing ? await api.replaceBill(editing.bill.id, input) : await api.postVendorBill(input);
+      const bill = editing ? await api.replaceBill(editing.bill.id, input, appliedText) : await api.postVendorBill(input);
       const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
       onPosted(
         editing
@@ -198,7 +214,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             value={billDate}
             onChange={(e) => {
               setBillDate(e.target.value);
-              applyTerms(termsList.find((t) => t.id === termsId) ?? { netDays: 30 }, e.target.value);
+              applyTerms(termsList.find((t) => t.id === termsId) ?? null, e.target.value);
             }}
           />
         </label>
@@ -252,6 +268,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : "Attach the vendor's invoice…"} />
         </div>
       )}
+      {appliedText && <Notice kind="info" text={appliedText} />}
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
       {memorizing && (
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
@@ -264,7 +281,12 @@ const newRequestId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-
 
 function PayBills({ bills, accounts, onDone, onCancel }) {
   const open = bills.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const defaultAccount = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
+  // Pay Bills opens on the account chosen in Preferences › Checking (My Preferences), else the first bank.
+  const { payBillsAccountId } = useMyPreferences();
+  const defaultAccount = useMemo(
+    () => accounts.find((a) => a.id === payBillsAccountId && a.isActive && isPaymentAccount(a))?.id ?? accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null,
+    [accounts, payBillsAccountId],
+  );
   const [accountId, setAccountId] = useState(defaultAccount);
   const [date, setDate] = useState(todayIso());
   const [selected, setSelected] = useState({});
@@ -333,12 +355,68 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     if (next === 'ACH' && account?.accountType !== 'BANK') setAccountId(defaultAccount);
   };
 
-  const toggle = (bill, on) => setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
+  const toggle = (bill, on) => {
+    setTyped((t) => {
+      const next = new Set(t);
+      next.delete(bill.id);
+      return next;
+    });
+    setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
+  };
   const picked = open.filter((b) => selected[b.id] !== undefined);
+  // Early-payment discounts the terms still offer, then vendor credits (oldest first), taken off the
+  // ticked bills as Preferences › Bills says; not with ACH.
+  const { autoCredits, autoDiscounts } = useSalesPrefs();
+  const [credits, setCredits] = useState([]);
+  const [discounts, setDiscounts] = useState([]);
+  const [typed, setTyped] = useState(() => new Set());
+  const pickedKey = picked.map((b) => b.id).join(',');
+  useEffect(() => {
+    if (!(autoCredits || autoDiscounts) || ach || pickedKey === '' || !date) {
+      setCredits([]);
+      setDiscounts([]);
+      return undefined;
+    }
+    let live = true;
+    api.getPayBillsPlan(pickedKey.split(',').map(Number), date).then(
+      (plan) => {
+        if (!live) return;
+        setCredits(plan.credits);
+        setDiscounts(plan.discounts);
+      },
+      (err) => live && setError(errorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [autoCredits, autoDiscounts, ach, pickedKey, date]);
+  const discountOn = (b) => discounts.find((x) => x.billId === b.id)?.amountCents ?? 0;
+  // What comes off a bill before it is paid: its discount and the credits used on it.
+  const creditOn = (b) => discountOn(b) + credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
+  // A ticked bill's payment is what the credits leave, until the person types an amount.
+  useEffect(() => {
+    setSelected((s) => {
+      let changed = false;
+      const next = { ...s };
+      for (const b of open) {
+        if (s[b.id] === undefined || typed.has(b.id)) continue;
+        const left = centsToInput(b.balanceCents - creditOn(b));
+        if (next[b.id] !== left) {
+          next[b.id] = left;
+          changed = true;
+        }
+      }
+      return changed ? next : s;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credits, discounts]);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
-  const bad = picked.filter((b) => cents(b) === null || cents(b) <= 0 || cents(b) > b.balanceCents);
+  const bad = picked.filter((b) => cents(b) === null || cents(b) < 0 || (cents(b) === 0 && creditOn(b) === 0) || cents(b) + creditOn(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
-  const payees = [...new Set(picked.map((b) => b.vendorId))];
+  const creditTotal = picked.reduce((s, b) => s + creditOn(b), 0);
+  // Only bills with something left to pay get a payment (and a check).
+  const paying = picked.filter((b) => (cents(b) ?? 0) > 0);
+  const payees = [...new Set(paying.map((b) => b.vendorId))];
   const firstCheck = checkNo.trim();
   const numbered = /^\d+$/.test(firstCheck);
   const checkNumber = (vendorId) => {
@@ -351,17 +429,18 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
 
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
-    if (bad.length > 0) return setError('Each payment must be above zero and no more than the open balance.');
+    if (bad.length > 0) return setError('Each payment must be above zero (unless credits cover the bill) and, with its credits, no more than the open balance.');
     if (ach) return payByAch();
     if (checks && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
     try {
-      const count = await api.payVendorBills(
-        picked.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) })),
-      );
+      const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) }));
+      const used = credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
+      const taken = discounts.filter((x) => picked.some((b) => b.id === x.billId));
+      const count = used.length + taken.length > 0 ? await api.payBillsWithCredits(payments, used, taken, date) : await api.payVendorBills(payments);
       const written = checks
         ? payees.map((vendorId) => {
-            const theirs = picked.filter((b) => b.vendorId === vendorId);
+            const theirs = paying.filter((b) => b.vendorId === vendorId);
             const numbers = theirs.map((b) => b.billNumber).filter(Boolean);
             return {
               payeeName: theirs[0].vendorName,
@@ -375,7 +454,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })
         : [];
       const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${range}.`, 'success', printChecks ? written : []);
+      const creditNote = used.length + taken.length > 0 ? `, after ${formatCents(creditTotal)} of discounts and credits` : '';
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks ? written : []);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -465,6 +545,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         <div className="ml-auto text-right">
           <div className="qb-label">Total payment</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          {creditTotal > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditTotal)} of discounts and credits</div>}
         </div>
       </div>
       <table className="qb-grid">
@@ -475,6 +556,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <col className="w-[100px]" />
           <col className="w-[150px]" />
           <col className="w-[120px]" />
+          {(autoCredits || autoDiscounts) && !ach && <col className="w-[110px]" />}
           <col className="w-[130px]" />
         </colgroup>
         <thead>
@@ -485,13 +567,14 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             <th className="qb-grid-head">Due date</th>
             <th className="qb-grid-head" title="Early-payment discount the bill's terms offer, and the last day to take it">Discount offered</th>
             <th className="qb-grid-head text-right">Open balance</th>
+            {(autoCredits || autoDiscounts) && !ach && <th className="qb-grid-head text-right" title="The early-payment discount taken and vendor credits used on this bill">Discount &amp; credits</th>}
             <th className="qb-grid-head text-right">Payment</th>
           </tr>
         </thead>
         <tbody>
           {open.length === 0 && (
             <tr>
-              <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
+              <td colSpan={(autoCredits || autoDiscounts) && !ach ? 8 : 7} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
             </tr>
           )}
           {open.map((b, i) => {
@@ -512,11 +595,15 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                   {b.discountUntil && b.earlyDiscountCents > 0 && (date <= b.discountUntil ? `${formatCents(b.earlyDiscountCents)} by ${formatDate(b.discountUntil)}` : <span className="text-qb-ink-faint">ended {formatDate(b.discountUntil)}</span>)}
                 </td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
+                {(autoCredits || autoDiscounts) && !ach && <td className="qb-grid-cell num">{creditOn(b) > 0 ? formatCents(creditOn(b)) : ''}</td>}
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"
                     value={selected[b.id] ?? ''}
-                    onChange={(e) => setSelected((s) => ({ ...s, [b.id]: e.target.value }))}
+                    onChange={(e) => {
+                      setTyped((t) => new Set(t).add(b.id));
+                      setSelected((s) => ({ ...s, [b.id]: e.target.value }));
+                    }}
                     onFocus={() => !on && toggle(b, true)}
                     placeholder="0.00"
                     inputMode="decimal"
@@ -587,9 +674,6 @@ export default function Bills({ accounts, intent }) {
   // rules the save would: a voided bill, or one with payments or credits, can't be replaced.
   const startEdit = (bill) => {
     if (bill.isVoided) return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} is voided, so it can't be edited.` });
-    if (bill.amountPaidCents > 0) {
-      return setNotice({ kind: 'info', text: `That bill from ${bill.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` });
-    }
     return api.getDocumentLines('bill', bill.id).then(
       (lines) => {
         setPaying(false);
@@ -751,8 +835,8 @@ export default function Bills({ accounts, intent }) {
                   attachments.menuItem(b.journalEntryId),
                   {
                     label: 'Edit…',
-                    disabled: b.isVoided || b.amountPaidCents > 0,
-                    hint: b.amountPaidCents > 0 ? 'Void its payments and remove its credits first' : undefined,
+                    disabled: b.isVoided,
+                    hint: b.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                     onSelect: () => openBill(b),
                   },
                   voidItem({
@@ -779,9 +863,7 @@ export default function Bills({ accounts, intent }) {
                       onDoubleClick={() =>
                         b.isVoided
                           ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} is voided, so it can't be edited.` })
-                          : b.amountPaidCents > 0
-                            ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} has payments or credits applied. To edit it, void its payments and remove its credits first.` })
-                            : openBill(b)
+                          : openBill(b)
                       }
                       title="Double-click to edit"
                     >

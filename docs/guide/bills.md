@@ -6,8 +6,10 @@ pay it.
 ## Enter a bill
 
 1. Go to **Expenses › Bills** and click **New bill** (or **+ New › Bill**).
-2. Choose the **Vendor**, then enter **Bill no.**, **Bill date**, **Due date** and the **Bill
-   total** from the vendor's invoice.
+2. Choose the **Vendor**, then enter **Bill no.**, **Bill date** and the **Bill total** from the
+   vendor's invoice. The **Due date** fills in from the vendor's terms, or for a vendor without
+   terms from **Preferences › Bills › Bills are due** (10 days unless an Admin changes it). Type
+   another due date if the bill says so.
 3. Split the bill across expense accounts, one line per category. A line can be an amount, or a
    quantity × rate (for example 2.5 hours at 40.00).
 4. The lines must add up to the bill total. When they do, the split shows as fully allocated.
@@ -33,6 +35,18 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Fix a mistake on a bill
+
+Double-click the bill in the list (or choose **Edit…** in its **Actions** menu), make your changes
+and click **Save changes**. LocalBooks voids the original and posts the corrected bill in its place;
+both stay in the journal and the audit trail.
+
+A bill you've already paid part of, or applied a vendor credit to, opens the same way. The form says
+how much is applied, and saving asks once more: the payments and vendor credits stay applied to the
+corrected bill, and the checks or ACH payments themselves don't change. The edit is refused if the
+new total is less than what's applied (void a payment or remove a credit first) or if the vendor
+changes. A voided bill, or one in a closed period, can't be edited.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is
@@ -56,6 +70,24 @@ numbers each one pays. The check numbers show in the **Num** column of reports a
 
 > **Tip:** A bill with payments can't be voided until those payments are voided. Void a payment
 > from its **Actions** menu.
+
+### Use vendor credits when paying
+
+Turn on **Use vendor credits automatically** in **Preferences › Bills › Company Preferences** and
+Pay Bills uses each vendor's open credits on the bills you tick, the oldest credit first. The
+**Credits used** column shows how much each bill takes, and **Payment** fills in with what is left.
+A bill the credits pay in full needs no payment and no check. Credits aren't used when you pay by
+ACH file; apply them from **Expenses › Vendor Credits** first.
+
+### Take early-payment discounts
+
+A bill on terms with a discount, such as *2% 10 Net 30*, shows the discount it offers in **Discount
+offered**. To take it automatically, tick **Take early-payment discounts automatically** in
+**Preferences › Bills** and choose the **Discount account** (an expense account such as Purchase
+Discounts). Then, when the payment date is on or before the discount's last day, Pay Bills takes
+the discount off a bill nothing has been paid on yet and pays the rest. The discount is recorded
+as a vendor credit to the discount account, used on that bill, so it shows in the vendor's
+history and reports like any other credit.
 
 ## Pay bills by ACH file
 

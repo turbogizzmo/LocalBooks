@@ -59,7 +59,7 @@ pub async fn get_estimate_detail(db: State<'_, Db>, estimate_id: i64) -> Result<
 #[tauri::command]
 pub async fn invoice_from_estimate(app: AppHandle, db: State<'_, Db>, estimate_id: i64, input: InvoiceInput, confirmed: Option<Vec<String>>) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
-    guards::check(&pool, guards::dated(input.issue_date), confirmed.as_deref()).await?;
+    guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
     let invoice = estimates::invoice_from_estimate(&pool, estimate_id, input).await?;
     notify(&app);
     Ok(invoice)

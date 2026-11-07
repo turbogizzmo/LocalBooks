@@ -17,6 +17,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { useSalesDetails } from './SalesDetails.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 
@@ -38,6 +39,8 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
+  // Only its Bill To / Ship To / P.O. No. / FOB row is used here.
+  const sales = useSalesDetails(customer, customers.data);
 
   useEffect(() => {
     if (defaultIncome !== null) setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
@@ -57,6 +60,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
     setFiles([]);
     formClass.reset();
     tax.reset();
+    sales.reset();
     setError(null);
   };
 
@@ -77,6 +81,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
         refundAccountId: refund ? refundFrom : null,
         lines: postedLines,
         taxRateId: tax.rateId,
+        ...(({ billTo, shipTo, poNumber, fob }) => ({ billTo, shipTo, poNumber, fob }))(sales.payload()),
       });
       const attachError = files.length > 0 ? await attachPicked(memoRow.journalEntryId, files) : null;
       onPosted(
@@ -134,6 +139,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
           {taxCents > 0 && <div className="text-xs text-qb-ink-muted">incl. {formatCents(taxCents)} sales tax</div>}
         </div>
       </div>
+      {sales.addresses}
       <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={(products.data ?? []).filter((p) => p.qtyOnHandE4 == null)} defaultAccountId={defaultIncome} withTax={tax.enabled} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>

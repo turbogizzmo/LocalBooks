@@ -32,7 +32,8 @@ accounts.
 Sell it on an invoice or sales receipt as usual, choosing the product on the line (the list shows
 how many are on hand). Posting also records the cost of the units sold in **Cost of Goods Sold**.
 
-- You can sell before the bill is entered. Stock then shows below zero (in red), and the units are
+- You can sell before the bill is entered (LocalBooks warns first; an Admin can make it stop the
+  sale, or say nothing, in **Preferences › Items & Inventory**). Stock then shows below zero (in red), and the units are
   costed at the last purchase cost per unit (or nothing, if never bought yet). When the bill
   arrives, the difference between that provisional cost and the real cost goes to **Cost of Goods
   Sold** automatically (shown as **Cost true-up** in the stock history).

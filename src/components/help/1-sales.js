@@ -33,6 +33,10 @@ export const screens = {
     help: 'Charge interest on overdue invoices. Pick the assessment date, check or change each customer’s charge, and assess: each becomes an invoice that shows in A/R aging and on statements. Set the rate, minimum, grace days and account in Settings.',
     guide: 'customer-payments',
   },
+  'sales/bill-costs': {
+    help: 'Invoice billable expenses: costs on checks, expenses and bills given a Customer:Job with Bill? ticked. Pick the customer, tick the costs, check the markup, and create the invoice. Voiding it puts the costs back here.',
+    guide: 'getting-started',
+  },
   'sales/statements': {
     help: 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or open one to save it as PDF or email it.',
   },
@@ -90,7 +94,7 @@ export const topics = [
   {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
-    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), and use Auto Apply to spread the amount over the oldest invoices.',
+    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), Typing the amount received applies it to an invoice with exactly that balance, or else the oldest first (Preferences › Payments sets this, and whether ticking invoices works out the amount); Auto Apply spreads it again.',
     keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
@@ -136,12 +140,36 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'bill-ship-to', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'sales/customers'],
+    title: 'Bill To, Ship To, P.O. No. and FOB on sales forms',
+    body: 'Invoices, sales receipts, estimates and credit memos fill their Bill To and Ship To from the customer’s billing and shipping addresses (a job without its own uses its customer’s); change them on the form, and Copy Bill To puts the billing address in Ship To. Each document keeps its own copy and prints it, with the P.O. No. and FOB, so changing the customer later leaves saved documents as they were.',
+    keywords: 'bill to ship to shipping address billing address sold to po number purchase order fob free on board header address block',
+    go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
+    id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
+    title: 'Customer credit limits',
+    body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',
+    keywords: 'credit limit over limit customer balance warning account number contact fax website resale number tax id alternate contact',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'invoices',
+  },
+  {
     id: 'products', area: 'sales', views: ['sales/products', 'sales/invoices'],
     title: 'Set up products and services',
     body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list.',
     keywords: 'item service product price rate catalog add new item quick add',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'customers-and-products',
+  },
+  {
+    id: 'item-types', area: 'sales', views: ['sales/products', 'sales/invoices', 'sales/all', 'sales/estimates'],
+    title: 'Subtotals, discounts, other charges and groups',
+    body: 'In the Product/Service list on an invoice, sales receipt or estimate, choose Subtotal to add up the lines above it. A Discount item takes an amount or a percentage (type 10%) off the line above: an item, a group or a subtotal. An Other charge can be an amount or a percentage of the line above. Choosing Group: … fills in a line for each of its items; tick Print as one line to print it with just its total. Set the Type on Products & Services, and make groups with Groups….',
+    keywords: 'subtotal discount item other charge shipping handling fee percent group bundle kit item type print as one line',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+    guide: 'invoices',
   },
 
   {
@@ -151,6 +179,14 @@ export const topics = [
     keywords: 'finance charge late fee interest overdue past due assess penalty',
     go: { label: 'Assess finance charges', view: 'sales/finance-charges' },
     guide: 'customer-payments',
+  },
+  {
+    id: 'bill-costs', area: 'sales', views: ['sales/bill-costs', 'expenses/expenses', 'expenses/bills'],
+    title: 'Bill expenses to a customer',
+    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you.',
+    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses',
+    go: { label: 'Go to Bill Costs', view: 'sales/bill-costs' },
+    guide: 'getting-started',
   },
   {
     id: 'change-prices', area: 'sales', views: ['sales/products'],
@@ -237,7 +273,7 @@ export const topics = [
   {
     id: 'edit-transaction', area: 'accounting', views: ['sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
     title: 'Edit a posted transaction',
-    body: 'Choose Edit… on an invoice, bill, expense, check or manual journal entry: the form opens with its details and Save changes replaces it. The original is voided and the edited version posted in one step, so both stay in the audit trail; remove payments or credits first.',
+    body: 'Choose Edit… on an invoice, bill, expense, check or manual journal entry: the form opens with its details and Save changes replaces it. The original is voided and the edited version posted in one step, so both stay in the audit trail. An invoice or bill with payments or credits applied can be edited too: they stay applied to the new version, as long as the total still covers them and the customer or vendor is the same.',
     keywords: 'edit change correct fix modify posted transaction',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
@@ -252,7 +288,7 @@ export const topics = [
   {
     id: '1099', area: 'expenses', views: ['expenses/vendors', 'reports'],
     title: 'Prepare 1099s',
-    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer and flags those over $600.',
+    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties).',
     keywords: '1099 1099-nec contractor tax id ein ssn year end vendor',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
   },

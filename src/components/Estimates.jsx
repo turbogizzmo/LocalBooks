@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -16,6 +17,10 @@ import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
+
+/** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
+const ZERO_LINES = false;
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -41,6 +46,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
+  useCustomerDelivery(customer, customers.data, { setEmailLater });
 
   useEffect(() => customerRef.current?.focus(), []);
   useEffect(() => {
@@ -48,10 +54,11 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
+  // A 0.00 line (an included extra) is allowed once estimate lines accept it.
+  const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines, { allowZeroRate: ZERO_LINES });
   const [discountText, setDiscountText] = useState('');
-  const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
+  const discountCents = parseDiscount(discountText, linesTotal);
+  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
   const clear = () => {
     setCustomer('');
@@ -70,6 +77,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
     if (expires && expires < date) return setError('The expiration date is before the estimate date.');
+    if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
     setBusy(true);
     try {
@@ -83,6 +91,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
         taxRateId: tax.rateId,
         discountCents: discount,
         ...sales.payload(),
+        formLines,
       });
       const queued = emailLater && (await api.setEmailLater('ESTIMATE', estimate.id, true).then(() => true, () => false));
       onSaved(`Estimate #${estimate.estimateNumber} for ${estimate.customerName} saved (${formatCents(estimate.totalCents)}). Estimates do not post to the ledger.${queued ? ' Marked Email later.' : ''}`);
@@ -142,7 +151,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
+      {sales.addresses}
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes allowZeroRate={ZERO_LINES} />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line
@@ -164,7 +174,19 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   );
 }
 
-export default function Estimates({ accounts, intent, navigate }) {
+export default function Estimates(props) {
+  const { estimates, loaded } = useSalesPrefs();
+  if (loaded && !estimates) {
+    return (
+      <div className="p-2">
+        <Notice kind="info" text="Estimates are turned off for this company. An Admin can turn them on in Preferences › Jobs & Estimates; estimates already saved are kept." />
+      </div>
+    );
+  }
+  return <EstimateList {...props} />;
+}
+
+function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);

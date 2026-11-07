@@ -88,17 +88,28 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let mut total: i64 = 0;
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?;
+        // A line may be priced at nothing (an included extra); the estimate as a whole may not.
+        let amount = match line.rate_cents {
+            0 if (1..=crate::invoices::MAX_QUANTITY_E4).contains(&line.quantity_e4) => 0,
+            _ => validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?,
+        };
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
             .ok_or_else(|| format!("EST_AMOUNT_TOO_LARGE: estimate total exceeds {}", format_cents(MAX_LINE_CENTS)))?;
         amounts.push(amount);
     }
+    let form = &input.details.form_lines;
+    let laid: Vec<crate::item_types::ItemAmount> =
+        input.lines.iter().zip(&amounts).map(|(l, a)| crate::item_types::ItemAmount { amount_cents: *a, is_taxable: l.is_taxable }).collect();
+    let layout = crate::item_types::lay_out(&laid, form, "EST")?;
+    crate::item_types::check_form_lines(tx, form, &layout, "EST").await?;
+    let numbers = layout.item_numbers();
+    let total = layout.lines_cents;
     if input.discount_cents < 0 || input.discount_cents > total {
         return Err("EST_BAD_DISCOUNT: a discount is between zero and the subtotal".into());
     }
-    let taxable: i64 = input.lines.iter().zip(&amounts).filter(|(l, _)| l.is_taxable).map(|(_, a)| a).sum();
+    let taxable = layout.taxable_cents;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, total);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "EST").await?;
     let tax_cents = tax.map_or(0, |t| t.cents);
@@ -141,7 +152,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(estimate_id)
-        .bind(idx as i64 + 1)
+        .bind(numbers[idx])
         .bind(line.product_service_id)
         .bind(line.description.trim())
         .bind(line.quantity_e4)
@@ -154,6 +165,8 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
         .await
         .map_err(db_err)?;
     }
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &crate::item_types::charge_rows(form, &layout), tax.is_some()).await?;
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id, &input.details).await?;
     Ok(estimate_id)
 }
@@ -182,27 +195,52 @@ pub async fn convert_to_invoice(
     issue_date: NaiveDate,
     due_date: NaiveDate,
 ) -> Result<EstimateSummary, String> {
+    // Zero-amount lines (headings, optional extras priced at nothing) can stay off the invoice.
+    let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
         let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
             sqlx::query_as("SELECT tax_rate_id, discount_cents FROM estimates WHERE id = ?1").bind(estimate_id).fetch_one(&mut *tx).await.map_err(db_err)?;
-        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable
+        type Row = (String, i64, i64, i64, Option<i64>, Option<i64>, bool, i64, Option<i64>, i64);
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, line_number, percent_ppm, amount_cents
              FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
+        // Subtotals, discounts and percent charges come over in their places; a percent charge is
+        // worked out again on the invoice.
+        let (charges, lines): (Vec<Row>, Vec<Row>) = rows.into_iter().partition(|r| r.8.is_some());
+        let numbers: Vec<i64> = lines.iter().map(|l| l.7).collect();
+        let stored = crate::item_types::form_lines_of(&mut *tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+        let mut placed: Vec<(i64, crate::item_types::FormLineInput)> =
+            stored.iter().map(|v| v.line_number).zip(crate::item_types::inputs_of(&stored, &numbers)).collect();
+        placed.extend(charges.iter().map(|c| (c.7, crate::item_types::charge_input(c.7, &c.0, c.8.unwrap_or(0), c.3, c.4, c.5, c.6, &numbers))));
+        placed.sort_by_key(|(n, _)| *n);
+        let form = placed.into_iter().map(|(_, f)| f).collect();
+        // Zero-amount lines the company leaves off; the form lines keep their places among the rest.
+        let kept = crate::item_types::kept_lines(&lines.iter().map(|l| l.9).collect::<Vec<_>>(), drop_zero);
+        let form = crate::item_types::without_items(form, &kept);
+        let lines: Vec<Row> = lines.into_iter().zip(&kept).filter(|(_, k)| **k).map(|(l, _)| l).collect();
+        if let Some(n) = lines.iter().position(|l| l.9 == 0) {
+            return Err(format!(
+                "EST_ZERO_LINE: line {} has no amount, and an invoice line needs one. Open the estimate in Create Invoices to price it, or turn on leaving zero-amount lines off in Preferences › Sales & Customers",
+                n + 1
+            ));
+        }
+        let mut details = carried.clone();
+        details.form_lines = form;
         let invoice = InvoiceInput {
             customer_name,
             issue_date,
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable)| InvoiceLineInput {
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _, _, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
                     rate_cents,
@@ -215,7 +253,7 @@ pub async fn convert_to_invoice(
             currency: None,
             tax_rate_id,
             discount_cents,
-            details: carried.clone(),
+            details,
         };
         // The estimate's rep, shipping and printed fields carry over to its invoice as they are.
         let invoice_id = crate::invoices::write_invoice_carrying(&mut tx, &invoice, &carried).await?;
@@ -241,6 +279,9 @@ pub async fn convert_to_invoice(
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateLineView {
+    pub line_number: i64,
+    /// Set on a percent charge: its percent of the line above.
+    pub percent_ppm: Option<i64>,
     pub product_service_id: Option<i64>,
     pub description: String,
     pub quantity_e4: i64,
@@ -256,12 +297,14 @@ pub struct EstimateDetail {
     pub estimate: EstimateSummary,
     pub lines: Vec<EstimateLineView>,
     pub details: crate::sales_lists::SalesDetailsView,
+    /// Subtotals and other non-item lines, numbered with `lines`.
+    pub form_lines: Vec<crate::item_types::FormLineView>,
 }
 
 pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<EstimateDetail, String> {
     let estimate = get_estimate(pool, estimate_id).await?;
     let lines = sqlx::query_as(
-        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
+        "SELECT line_number, percent_ppm, product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable
          FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
     )
     .bind(estimate_id)
@@ -269,7 +312,8 @@ pub async fn estimate_detail(pool: &SqlitePool, estimate_id: i64) -> Result<Esti
     .await
     .map_err(db_err)?;
     let details = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
-    Ok(EstimateDetail { estimate, lines, details })
+    let form_lines = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    Ok(EstimateDetail { estimate, lines, details, form_lines })
 }
 
 /// Refuses converting an estimate that is already invoiced or was rejected.
@@ -292,7 +336,14 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
 /// Posts an invoice that was started from an estimate (and possibly edited in the invoice form), and
 /// marks the estimate converted, in one transaction: the estimate is never marked converted for an
 /// invoice that did not post.
-pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
+pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, mut input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
+    let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
+    // Zero-amount lines the company leaves off; subtotals and the other form lines keep their places.
+    let amounts: Vec<i64> = input.lines.iter().map(|l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents).unwrap_or(1)).collect();
+    let kept = crate::item_types::kept_lines(&amounts, drop_zero);
+    input.details.form_lines = crate::item_types::without_items(std::mem::take(&mut input.details.form_lines), &kept);
+    let lines = std::mem::take(&mut input.lines);
+    input.lines = lines.into_iter().zip(&kept).filter(|(_, k)| **k).map(|(l, _)| l).collect();
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;

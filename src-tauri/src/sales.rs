@@ -95,6 +95,13 @@ pub struct PartyView {
     /// Customers: the default sales rep.
     #[sqlx(default)]
     pub sales_rep_id: Option<i64>,
+    /// Customers: how their forms are sent (`EMAIL`, `PRINT`, `NONE`), which ticks Email later or
+    /// Print later on their new forms.
+    #[sqlx(default)]
+    pub preferred_delivery: Option<String>,
+    /// Jobs: the job's status code.
+    #[sqlx(default)]
+    pub job_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -110,6 +117,45 @@ pub struct ProductView {
     /// Set for products whose stock is tracked: quantity on hand (scaled by 10,000).
     #[sqlx(default)]
     pub qty_on_hand_e4: Option<i64>,
+    /// ITEM (a service or part), OTHER_CHARGE or DISCOUNT (`item_types`).
+    #[sqlx(default)]
+    pub item_type: String,
+    /// Set when the charge or discount is a percentage of the line above (parts per million).
+    #[sqlx(default)]
+    pub percent_ppm: Option<i64>,
+}
+
+/// What kind of item a product is, given alongside its `ProductInput` (left out, an item).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ItemKind {
+    /// ITEM, OTHER_CHARGE or DISCOUNT.
+    pub item_type: String,
+    /// A charge or discount that is a percentage of the line above, in parts per million.
+    pub percent_ppm: Option<i64>,
+}
+
+impl Default for ItemKind {
+    fn default() -> Self {
+        ItemKind { item_type: "ITEM".into(), percent_ppm: None }
+    }
+}
+
+impl ItemKind {
+    pub fn discount(percent_ppm: Option<i64>) -> Self {
+        ItemKind { item_type: "DISCOUNT".into(), percent_ppm }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        if !matches!(self.item_type.as_str(), "ITEM" | "OTHER_CHARGE" | "DISCOUNT") {
+            return Err(format!("ITEM_BAD_TYPE: '{}' is not an item type", self.item_type));
+        }
+        match self.percent_ppm {
+            Some(_) if self.item_type == "ITEM" => Err("ITEM_BAD_PERCENT: only a charge or a discount can be a percentage".into()),
+            Some(p) if !(1..=1_000_000).contains(&p) => Err("ITEM_BAD_PERCENT: a percentage is from 0.0001% to 100%".into()),
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -211,6 +257,7 @@ fn clean(text: Option<&str>) -> Option<&str> {
 pub async fn list_customers(pool: &SqlitePool) -> Result<Vec<PartyView>, String> {
     sqlx::query_as::<_, PartyView>(
         "SELECT c.id, c.name, c.email, c.is_active, c.tax_rate_id, c.is_tax_exempt, c.terms_days, c.terms_id, c.sales_rep_id,
+                c.preferred_delivery, c.job_status,
                 COALESCE((SELECT SUM(b.home_open_cents) FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
                           WHERE i.customer_id = c.id AND i.status IN ('UNPAID', 'PARTIAL') AND i.is_voided = 0), 0)
                 - COALESCE((SELECT SUM(remaining_cents) FROM v_credit_memo_balances WHERE customer_id = c.id), 0) AS open_balance_cents
@@ -270,7 +317,7 @@ fn party_err(e: sqlx::Error, name: &str) -> String {
 
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
-        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4
+        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm
          FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
          ORDER BY p.name COLLATE NOCASE",
     )
@@ -280,6 +327,12 @@ pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String
 }
 
 pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<ProductView, String> {
+    create_item(pool, input, ItemKind::default()).await
+}
+
+/// Adds an item of any kind: a service or part, an other charge or a discount.
+pub async fn create_item(pool: &SqlitePool, input: ProductInput, kind: ItemKind) -> Result<ProductView, String> {
+    kind.validate()?;
     let name = input.name.trim();
     if name.is_empty() {
         return Err("PRODUCT_NO_NAME: enter a product or service name".into());
@@ -288,14 +341,16 @@ pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<Pr
         return Err("PRODUCT_BAD_RATE: rate must be zero or more".into());
     }
     sqlx::query_as::<_, ProductView>(
-        "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable) VALUES (?1, ?2, ?3, ?4, ?5)
-         RETURNING id, name, description, rate_cents, income_account_id, is_active, is_taxable",
+        "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, item_type, percent_ppm) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         RETURNING id, name, description, rate_cents, income_account_id, is_active, is_taxable, item_type, percent_ppm",
     )
     .bind(name)
     .bind(clean(input.description.as_deref()))
     .bind(input.rate_cents)
     .bind(input.income_account_id)
     .bind(input.is_taxable)
+    .bind(&kind.item_type)
+    .bind(kind.percent_ppm)
     .fetch_one(pool)
     .await
     .map_err(|e| match e {
@@ -346,11 +401,18 @@ pub async fn post_sales_receipt(pool: &SqlitePool, input: SalesReceiptInput) -> 
 }
 
 async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesReceiptInput) -> Result<i64, String> {
-    let subtotal = validate_sales_receipt(input)?;
-    let mut taxable = 0;
-    for line in input.lines.iter().filter(|l| l.is_taxable) {
-        taxable += line_amount(line.quantity_e4, line.rate_cents)?;
-    }
+    validate_sales_receipt(input)?;
+    let amounts = input
+        .lines
+        .iter()
+        .map(|l| Ok(crate::item_types::ItemAmount { amount_cents: line_amount(l.quantity_e4, l.rate_cents)?, is_taxable: l.is_taxable }))
+        .collect::<Result<Vec<_>, String>>()?;
+    let form = &input.details.form_lines;
+    let layout = crate::item_types::lay_out(&amounts, form, "SR")?;
+    crate::item_types::check_form_lines(tx, form, &layout, "SR").await?;
+    let charges = crate::item_types::charge_rows(form, &layout);
+    let numbers = layout.item_numbers();
+    let (subtotal, taxable) = (layout.lines_cents, layout.taxable_cents);
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
@@ -405,7 +467,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(receipt_id)
-        .bind(n as i64)
+        .bind(numbers[idx])
         .bind(line.product_service_id)
         .bind(line.description.trim())
         .bind(line.quantity_e4)
@@ -423,11 +485,21 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
             None => credits.push((key, amount)),
         }
     }
+    for c in &charges {
+        let key = (c.account_id, c.class_id);
+        match credits.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, sum)) => *sum += c.amount_cents,
+            None => credits.push((key, c.amount_cents)),
+        }
+    }
 
+    crate::item_types::write_charges(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &charges, tax.is_some()).await?;
+    crate::item_types::write_form_lines(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, form, &layout, tax.is_some()).await?;
     crate::sales_lists::write_details(tx, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id, &input.details).await?;
 
     let mut lines = vec![JournalLine::debit(input.deposit_account_id, total)];
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
+    lines.extend(crate::item_types::discount_debits(form, &layout));
     lines.extend(discount.and_then(|d| d.line()));
     lines.extend(tax.and_then(|t| t.line(false)));
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.

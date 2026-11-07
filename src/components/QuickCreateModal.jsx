@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Icon } from '../lib/icons.js';
+import { hiddenViews, useSalesPrefs } from '../lib/salesPrefs.js';
 
 /** The classic Accountant "+ New" matrix: each item routes to a view and opens its entry form. */
 export const QUICK_CREATE = [
@@ -53,6 +54,7 @@ export const QUICK_CREATE = [
 
 export default function QuickCreateModal({ onClose, onCreate }) {
   const panelRef = useRef(null);
+  const hidden = hiddenViews(useSalesPrefs());
 
   useEffect(() => {
     const buttons = () => [...panelRef.current.querySelectorAll('button[data-item]')];
@@ -106,7 +108,7 @@ export default function QuickCreateModal({ onClose, onCreate }) {
                 {col.heading}
               </h3>
               <ul>
-                {col.items.map((item) => (
+                {col.items.filter((item) => !hidden.has(item.view)).map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"

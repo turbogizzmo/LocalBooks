@@ -55,6 +55,7 @@ const OPEN: &[&str] = &[
     "take_desktop",
     "set_desktop_view",
     "set_window_preferences",
+    "set_menu_view_enabled",
 ];
 
 const ADMIN: &[&str] = &[
@@ -140,6 +141,9 @@ const READ: &[&str] = &[
     "attachment_counts",
     "next_check_number",
     "backup_now",
+    // Sales forms: a customer's Bill To / Ship To defaults and the credit-limit warning.
+    "customer_sales_defaults",
+    "check_credit_limit",
     // Personal: the signed-in user's own reminder settings, and ticking off to-dos (a View-only user
     // only their own, which `reminders::set_done` checks).
     "save_reminder_settings",

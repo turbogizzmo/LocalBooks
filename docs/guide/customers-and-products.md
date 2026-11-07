@@ -31,9 +31,35 @@ its [Transaction History](reports.md#quickreport-transaction-history-and-transac
 **Ctrl+Y** for its Transaction Journal; **QuickReport** (or **Ctrl+Q** on the name) opens the same
 transactions as a report.
 
-To add a company name, billing address, phone, payment terms, a customer or vendor type or notes,
-open the customer's **Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
-and estimates, and the email address is filled in when you choose **Email…** on one of them.
+To add a company name, address, phone, payment terms, a customer or vendor type or notes, open
+the customer's **Actions** menu and choose **Edit…**. A customer's record also holds:
+
+- **Billing address (Bill To)** and **Shipping address (Ship To)**. **Copy billing** puts the
+  billing address in the shipping box. New invoices, sales receipts, estimates and credit memos
+  fill their Bill To and Ship To from these. A job (a name like `Acme:Kitchen`) whose boxes are
+  blank uses its customer's addresses.
+- **Contact** and **Alt. contact**, **Alt. phone**, **Fax** and **Website**. The contact prints in
+  the address blocks, under the company name.
+- **Account no.**, the customer's account number.
+- **Credit limit**. An invoice that would take the customer over it asks before saving (see
+  [Credit limits](invoices.md#credit-limits)). Leave it blank for no limit.
+- **Resale no. / tax ID**, for a resale certificate or the customer's tax ID.
+
+The email address is filled in when you choose **Email…** on one of their forms. Changing a
+customer's address doesn't change documents already saved; each keeps the address it was saved
+with.
+
+### Preferred delivery and job status
+
+A customer's **Preferred delivery** (on **Edit…**) decides how their new invoices and estimates
+start: **Email** ticks **Email later** (when the customer has an email address), **Print** ticks **Print later** (invoices), **None** leaves
+both unticked. A new customer takes the choice in **Preferences › Send Forms › Company
+Preferences**, however it is added.
+
+A job (a name such as `Acme:Kitchen`) can also have a **Job status**: Pending, Awarded, In
+progress, Closed or Not awarded. The status shows next to the job in the Customers list. An Admin
+can rename the five statuses in **Preferences › Jobs & Estimates**, for example *Awarded* to
+*Won*.
 
 ## Add a product or service
 
@@ -49,6 +75,26 @@ account. You can still change them on the form.
 
 To keep count of a product you stock, see [Track inventory](inventory.md).
 
+## Discounts, other charges and groups
+
+Besides services and parts, an item can be a **Discount** or an **Other charge**, and items can be
+put together in a **Group**. Choose the **Type** in the first row of Products & Services (or in an
+item's **Edit…** window).
+
+- **Discount**: enter an amount (`5.00`) or a percentage (`10%`) as its rate. On a sales form it
+  comes off the line above it: an item, a group or a subtotal. Its account is the one the discount
+  is debited to; *Discounts Given* is the usual choice. Tick **Tax** if the discount lowers the
+  taxable amount.
+- **Other charge**: shipping, handling, a rush fee. An amount works like any item; a percentage
+  (`3%`) is worked out on the line above it.
+- **Group**: click **Groups…**, then **New group…**. Give it a name, a description for sales forms
+  and its items with their quantities. Tick **Print as one line** to print the group as a single
+  line with its total instead of each item. A group holds services, parts and fixed charges, not
+  discounts or percent charges, and can't share a name with an item.
+
+Discounts can't be tracked in stock or given price-level prices. How each one works on a form is in
+[Create and send an invoice](invoices.md#subtotals-discounts-charges-and-groups).
+
 ## Change many prices at once
 
 **Change prices…** sets new sales prices for a group of products and services in one step, for
@@ -62,6 +108,8 @@ example to raise everything 5% at the start of the year.
    - **Raise by** or **Lower by**, and an amount: a percentage (such as `5` or `2.5`) or a
      **fixed amount** (such as `1.00`).
    - **Based on** the **Current price**, or the **Unit cost** (to set prices as a markup on cost).
+     Choosing **Unit cost** fills in the **Default markup** from **Preferences › Sales &
+     Customers** when you haven't typed an amount yet.
    - **Round**: leave prices to the cent, round them to the nearest step (5¢, 10¢, 25¢, 50¢, $1,
      $5 or $10; halves go up), always **up** or **down** to a step, or **up to a price ending in
      .99**.
@@ -89,6 +137,10 @@ under **Earlier price changes** on the same screen.
 A **price level** is a named set of prices for some of your customers, such as *Wholesale* (10%
 off everything) or *Contractor* (special prices on a few items). Give a customer a level, and
 their new invoices, sales receipts and estimates fill in its prices.
+
+A business that doesn't use them can untick **Use price levels** in **Preferences › Sales &
+Customers**. Levels then disappear from customers and forms, and every form uses standard prices;
+the levels you made are kept for when you turn them back on.
 
 ### Set up a price level
 
@@ -231,6 +283,9 @@ An inactive rep stays on the forms that already have it and isn't offered for ne
 Add the carriers and services you ship with, such as `UPS Ground` or `Local delivery`, under
 **Ship Via**. Once the list has an entry, invoices, sales receipts and estimates get a **Ship
 date** and a **Ship via** box.
+
+To fill in the same carrier on every new form, choose it as **Usual shipping method** in
+**Preferences › Sales & Customers**. You can still change it on each form.
 
 ### Custom fields
 

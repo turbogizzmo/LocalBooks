@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -7,6 +7,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, mulDivRound, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
+import { layOut } from '../lib/itemTypes.js';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
 export function useSalesTax() {
@@ -46,13 +47,16 @@ export function parseDiscount(text, subtotal) {
 }
 
 /**
- * A sales document's totals exactly as the ledger posts them: the discount comes off the subtotal
- * before tax, reducing the taxable amount in proportion.
+ * A sales document's totals exactly as the ledger posts them: the lines laid out with their
+ * subtotals (`formLines`, see `lib/itemTypes.js`), then the discount off the subtotal before tax,
+ * reducing the taxable amount in proportion.
  */
-export function documentTotals(payload, rate, discountCents = 0) {
-  const subtotal = payload.reduce((s, l) => s + (l.amountCents ?? 0), 0);
+export function documentTotals(payload, rate, discountCents = 0, formLines = []) {
+  const laid = layOut(payload, formLines);
+  const plain = laid.error !== undefined;
+  const subtotal = plain ? payload.reduce((s, l) => s + (l.amountCents ?? 0), 0) : laid.linesCents;
   const discount = Math.max(0, Math.min(discountCents ?? 0, subtotal));
-  let taxable = payload.filter((l) => l.isTaxable).reduce((s, l) => s + (l.amountCents ?? 0), 0);
+  let taxable = plain ? payload.filter((l) => l.isTaxable).reduce((s, l) => s + (l.amountCents ?? 0), 0) : laid.taxableCents;
   if (discount > 0 && subtotal > 0) taxable -= mulDivRound(discount, taxable, subtotal) ?? 0;
   const tax = rate ? (mulDivRound(taxable, rate.ratePpm, 1_000_000) ?? 0) : 0;
   return { subtotal, discount, tax, total: subtotal - discount + tax };
@@ -261,7 +265,18 @@ export default function SalesTax({ accounts }) {
   const prefs = useLedgerQuery(api.getPreferences).data;
   const { data: rates, error } = useLedgerQuery(api.listTaxRates);
   const payments = useLedgerQuery(api.listSalesTaxPayments);
-  const [[start, end], setRange] = useState(() => periodRange('thisQuarter'));
+  const [[start, end], chooseRange] = useState(() => periodRange('thisQuarter'));
+  // The liability opens on the last filing period that ended, the return to file now
+  // (Preferences › Sales Tax › filing frequency), until a date is changed here.
+  const touched = useRef(false);
+  const setRange = (range) => {
+    touched.current = true;
+    chooseRange(range);
+  };
+  const filing = useLedgerQuery(() => api.getSalesTaxPeriods(todayIso())).data;
+  useEffect(() => {
+    if (filing && !touched.current) chooseRange([filing.last.start, filing.last.end]);
+  }, [filing]);
   const liability = useLedgerQuery(() => api.getTaxLiability(start, end));
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -407,6 +422,12 @@ export default function SalesTax({ accounts }) {
                 )}
               </tbody>
             </table>
+            {report && (
+              <p className="px-2 py-0.5 text-2xs text-qb-ink-faint">
+                {report.basis === 'cash' ? 'Cash basis: invoices count as they are paid.' : 'Accrual basis: invoices count on their date.'}
+                {filing ? ` Filing ${filing.frequency}; the last return (${formatDate(filing.last.start)} – ${formatDate(filing.last.end)}) is usually due ${formatDate(filing.lastDue)}.` : ''} Change these in Preferences › Sales Tax.
+              </p>
+            )}
             <div className="border-t border-qb-border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Payments</div>
             <table className="qb-grid">
               <tbody>

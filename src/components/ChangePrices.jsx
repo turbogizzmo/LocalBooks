@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 
 const TYPES = [
@@ -50,6 +51,16 @@ export default function ChangePrices({ onClose }) {
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const { defaultMarkup } = useSalesPrefs();
+  // Pricing from cost starts at the company's default markup (Preferences › Sales & Customers).
+  const chooseBasis = (next) => {
+    setBasis(next);
+    if (next === 'COST' && size.trim() === '' && defaultMarkup !== '0') {
+      setKind('PERCENT');
+      setDirection(1);
+      setSize(defaultMarkup);
+    }
+  };
 
   const shown = useMemo(
     () =>
@@ -161,7 +172,7 @@ export default function ChangePrices({ onClose }) {
         </label>
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="font-semibold text-qb-ink-muted">Based on</span>
-          <select className="qb-input" value={basis} onChange={(e) => setBasis(e.target.value)}>
+          <select className="qb-input" value={basis} onChange={(e) => chooseBasis(e.target.value)}>
             <option value="CURRENT_PRICE">Current price</option>
             <option value="COST">Unit cost</option>
           </select>

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useTransactionDate } from '../lib/myPreferences.js';
+import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
@@ -23,7 +23,12 @@ const isOtherFunds = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE', 'BANK']
 
 function DepositForm({ accounts, onPosted, onCancel }) {
   const { data: waiting, error: waitingError } = useLedgerQuery(api.listUndeposited);
-  const defaultBank = useMemo(() => accounts.find((a) => a.isActive && isBank(a))?.id ?? null, [accounts]);
+  // Deposits open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
+  const { depositAccountId } = useMyPreferences();
+  const defaultBank = useMemo(
+    () => accounts.find((a) => a.id === depositAccountId && a.isActive && isBank(a))?.id ?? accounts.find((a) => a.isActive && isBank(a))?.id ?? null,
+    [accounts, depositAccountId],
+  );
   const [bankId, setBankId] = useState(defaultBank);
   const [date, setDate] = useTransactionDate();
   const [memo, setMemo] = useState('');

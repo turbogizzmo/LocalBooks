@@ -165,14 +165,18 @@ pub struct FormTemplate {
     pub show_aging: bool,
     /// Sales forms: the rep, when the document has one.
     pub show_sales_rep: bool,
-    /// Sales forms: the ship date and shipping method, when the document has them.
+    /// Sales forms: the ship date, shipping method and FOB point, when the document has them.
     pub show_shipping: bool,
+    /// Sales forms: a Ship To block beside Bill To, when the document has a ship-to address.
+    pub show_ship_to: bool,
+    /// Sales forms: the customer's P.O. number, when the document has one.
+    pub show_po_number: bool,
     /// Sales forms: customer custom fields marked for sales forms, when filled in.
     pub show_custom_fields: bool,
     /// Sales forms: item custom fields marked for sales forms, under each line.
     pub show_item_fields: bool,
     /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company},
-    /// {rep}, {ship_date}, {ship_via}.
+    /// {rep}, {ship_date}, {ship_via}, {po_number}.
     pub message: String,
     /// Payment instructions or terms and conditions, below the message.
     pub terms: String,
@@ -210,6 +214,8 @@ impl Default for FormTemplate {
             show_aging: true,
             show_sales_rep: true,
             show_shipping: true,
+            show_ship_to: true,
+            show_po_number: true,
             show_custom_fields: true,
             show_item_fields: true,
             message: String::new(),
@@ -479,6 +485,10 @@ pub struct FormSales {
     pub ship_via: Option<String>,
     /// (label, value) of the customer fields printed on this document.
     pub fields: Vec<(String, String)>,
+    pub po_number: Option<String>,
+    pub fob: Option<String>,
+    /// The Ship To block's lines; empty when there is none.
+    pub ship_to: Vec<String>,
     /// The Customer Message chosen on the form, printed below the totals.
     pub message: Option<String>,
 }
@@ -490,6 +500,9 @@ impl FormSales {
             ship_date: view.ship_date.as_deref().map(format_date),
             ship_via: view.ship_method_name.clone(),
             fields: view.custom_fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect(),
+            po_number: view.header.po_number.clone(),
+            fob: view.header.fob.clone(),
+            ship_to: address_lines(view.header.ship_to.as_deref()),
             message: view.customer_message.clone(),
         }
     }
@@ -497,12 +510,16 @@ impl FormSales {
     /// The rows it adds beside the customer block, as the template allows.
     fn meta(&self, tpl: &FormTemplate) -> Vec<(String, String, bool)> {
         let mut rows = Vec::new();
+        if tpl.show_po_number {
+            rows.extend(self.po_number.iter().map(|p| ("P.O. No.".to_string(), p.clone(), false)));
+        }
         if tpl.show_sales_rep {
             rows.extend(self.rep.iter().map(|r| ("Rep".to_string(), r.clone(), false)));
         }
         if tpl.show_shipping {
             rows.extend(self.ship_date.iter().map(|d| ("Ship date".to_string(), d.clone(), false)));
             rows.extend(self.ship_via.iter().map(|v| ("Ship via".to_string(), v.clone(), false)));
+            rows.extend(self.fob.iter().map(|v| ("FOB".to_string(), v.clone(), false)));
         }
         if tpl.show_custom_fields {
             rows.extend(self.fields.iter().map(|(l, v)| (l.clone(), v.clone(), false)));
@@ -616,6 +633,19 @@ async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str) -> Result<Cust
     Ok(Customer { company_name, billing_address, email })
 }
 
+fn address_lines(text: Option<&str>) -> Vec<String> {
+    text.unwrap_or_default().lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect()
+}
+
+/// The Bill To lines under the customer's name: the document's own copy, or (for a document
+/// written before documents kept one) the customer's current company name and billing address.
+fn bill_to_details(name: &str, header: &crate::sales_header::SalesHeader, c: &Customer) -> Vec<String> {
+    match header.bill_to.as_deref() {
+        Some(own) => address_lines(Some(own)),
+        None => customer_details(name, c),
+    }
+}
+
 fn customer_details(name: &str, c: &Customer) -> Vec<String> {
     let mut details = Vec::new();
     if let Some(company) = c.company_name.as_deref().map(str::trim).filter(|s| !s.is_empty() && *s != name) {
@@ -668,12 +698,18 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         meta.push(("Currency".into(), code.into(), false));
     }
     let details = item_details(pool, &detail.items.iter().map(|i| i.product_service_id).collect::<Vec<_>>()).await?;
-    let lines = detail
+    let items = detail
         .items
         .iter()
         .zip(details)
-        .map(|(i, details)| FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate: money(i.rate_cents), amount: money(i.amount_cents), details })
+        .map(|(i, details)| {
+            let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
+            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details })
+        })
         .collect();
+    let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
+    let mark = marks_taxable(pool, inv.tax_rate_id.is_some()).await?;
+    let lines = with_form_lines(mark_taxable(items, &taxable, mark), &detail.form_lines, &money, mark);
     let mut totals = Vec::new();
     breakdown(&mut totals, inv.total_cents, inv.tax_cents, inv.discount_cents, inv.tax_rate_name.as_deref(), &money);
     totals.push(TotalRow { label: "Total".into(), value: money(inv.total_cents), grand: false, payment: false });
@@ -691,7 +727,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         voided: inv.is_voided,
         customer_id: inv.customer_id,
         customer_name: inv.customer_name.clone(),
-        customer_details: customer_details(&inv.customer_name, &cust),
+        customer_details: bill_to_details(&inv.customer_name, &detail.details.header, &cust),
         customer_email: cust.email,
         meta,
         lines,
@@ -718,14 +754,15 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
     let money = |cents: i64| format_money(cents, None, symbol);
     let cust = customer(pool, Some(customer_id), &name).await?;
+    let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
     let mut meta = vec![("Estimate date".to_string(), format_date(&date), false)];
     if let Some(expires) = &expires {
         meta.push(("Expires".into(), format_date(expires), false));
@@ -741,10 +778,15 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         voided: false,
         customer_id: Some(customer_id),
         customer_name: name.clone(),
-        customer_details: customer_details(&name, &cust),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "estimate_lines", "estimate_id", estimate_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: memo.filter(|m| !m.trim().is_empty()),
         date: format_date(&date),
@@ -752,7 +794,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         total: money(total),
         balance: money(total),
         statement: None,
-        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?),
+        sales: FormSales::of(&sales),
     })
 }
 
@@ -773,8 +815,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -782,6 +824,7 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     let money = |cents: i64| format_money(cents, None, symbol);
     // A walk-in sale has no customer.
     let name = name.unwrap_or_else(|| "Cash customer".into());
+    let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
     let cust = match customer_id {
         Some(id) => customer(pool, Some(id), &name).await?,
         None => Customer { company_name: None, billing_address: None, email: None },
@@ -801,11 +844,16 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         subtitle: None,
         voided,
         customer_id,
-        customer_details: customer_details(&name, &cust),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
         customer_name: name,
         customer_email: cust.email,
         meta,
-        lines: lines_of(pool, rows, &money).await?,
+        lines: {
+            let mark = marks_taxable(pool, tax_name.is_some()).await?;
+            let taxable = taxable_flags(pool, "sales_receipt_lines", "sales_receipt_id", receipt_id).await?;
+            let form = crate::item_types::form_lines_of(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
+            with_form_lines(mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark), &form, &money, mark)
+        },
         totals,
         memo: if voided { Some("This sales receipt has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
         date: format_date(&date),
@@ -813,18 +861,84 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         total: money(total),
         balance: money(0),
         statement: None,
-        sales: FormSales::of(&crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?),
+        sales: FormSales::of(&sales),
     })
 }
 
+/// Preferences › Sales Tax › "Mark taxable amounts with a T when printing": a taxable line's amount
+/// gets a trailing T, on a document that charges tax. `taxable` is per line, in order.
+/// Whether taxable lines print a "T": the document charges tax and the preference is on.
+async fn marks_taxable(pool: &SqlitePool, charges_tax: bool) -> Result<bool, String> {
+    Ok(charges_tax && crate::preferences::flag(pool, crate::preferences::tax_time::SALES_TAX_MARK_TAXABLE).await?)
+}
+
+/// Marks the taxable item lines (`taxable`, in line order) when `mark` is set. Done before the
+/// subtotals and other form lines are merged in, so each flag stays with its own item line.
+fn mark_taxable(mut lines: Vec<(i64, FormLine)>, taxable: &[bool], mark: bool) -> Vec<(i64, FormLine)> {
+    if mark {
+        for ((_, line), _) in lines.iter_mut().zip(taxable).filter(|(_, t)| **t) {
+            line.amount.push_str(" T");
+        }
+    }
+    lines
+}
+
+async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) -> Result<Vec<bool>, String> {
+    sqlx::query_scalar(&format!("SELECT is_taxable FROM {table} WHERE {parent} = ?1 ORDER BY line_number")).bind(id).fetch_all(pool).await.map_err(db_err)
+}
+
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
-async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<FormLine>, String> {
+async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
     let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
     Ok(rows
         .into_iter()
         .zip(details)
-        .map(|((description, qty, rate, amount, _), details)| FormLine { description, quantity: format_quantity(qty), rate: money(rate), amount: money(amount), details })
+        .map(|((description, qty, rate, amount, _, number, percent), details)| {
+            // A percent charge shows its percent in the rate column.
+            let rate = percent.map_or_else(|| money(rate), crate::item_types::percent_text);
+            (number, FormLine { description, quantity: format_quantity(qty), rate, amount: money(amount), details })
+        })
         .collect())
+}
+
+/// Item lines (by line number) and the document's subtotals and other form lines, in line order,
+/// as the printed form shows them.
+///
+/// A group heading prints its description; a group set to print as one line prints its
+/// description, quantity and total instead, and its items are left off.
+///
+/// With `mark`, a taxable discount carries the "T" too (it lowers the taxable amount); subtotals and
+/// group headings don't.
+fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormLineView], money: &dyn Fn(i64) -> String, mark: bool) -> Vec<FormLine> {
+    // Item lines a one-line group hides: the `group_line_count` item lines after its heading.
+    let mut hidden: Vec<i64> = Vec::new();
+    for f in form.iter().filter(|f| f.kind == "GROUP" && f.print_items == Some(false)) {
+        let count = f.group_line_count.unwrap_or(0) as usize;
+        hidden.extend(items.iter().map(|(n, _)| *n).filter(|n| *n > f.line_number).take(count));
+    }
+    let mut numbered: Vec<(i64, FormLine)> = items.into_iter().filter(|(n, _)| !hidden.contains(n)).collect();
+    for f in form {
+        let line = if f.kind == "GROUP" {
+            let one_line = f.print_items == Some(false);
+            FormLine {
+                description: f.description.clone(),
+                quantity: if one_line { f.group_quantity_e4.map(format_quantity).unwrap_or_default() } else { String::new() },
+                rate: String::new(),
+                amount: if one_line { money(f.amount_cents) } else { String::new() },
+                details: Vec::new(),
+            }
+        } else {
+            let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
+            let mut amount = money(f.amount_cents);
+            if mark && f.kind == "DISCOUNT" && f.is_taxable {
+                amount.push_str(" T");
+            }
+            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount, details: Vec::new() }
+        };
+        numbered.push((f.line_number, line));
+    }
+    numbered.sort_by_key(|(n, _)| *n);
+    numbered.into_iter().map(|(_, l)| l).collect()
 }
 
 fn statement_label(source_type: &str) -> &'static str {
@@ -970,6 +1084,9 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
                 ship_date: Some("10/02/2026".into()),
                 ship_via: Some("UPS Ground".into()),
                 fields: Vec::new(),
+                po_number: Some("PO-4471".into()),
+                fob: Some("Springfield".into()),
+                ship_to: vec!["Sample Company LLC".into(), "Receiving dock 4".into(), "200 Mill Road".into(), "Springfield, IL 62702".into()],
                 message: Some("Thank you for your business.".into()),
             }
         },
@@ -992,6 +1109,7 @@ fn fill_placeholders(text: &str, doc: &FormDoc, company: &Company) -> String {
         ("{rep}", doc.sales.rep.as_deref().unwrap_or_default()),
         ("{ship_date}", doc.sales.ship_date.as_deref().unwrap_or_default()),
         ("{ship_via}", doc.sales.ship_via.as_deref().unwrap_or_default()),
+        ("{po_number}", doc.sales.po_number.as_deref().unwrap_or_default()),
     ]
     .iter()
     .fold(text.to_string(), |acc, (key, value)| acc.replace(key, value))
@@ -1286,16 +1404,32 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     let mut py = start;
     let party_w = meta_x - MARGIN - 20.0;
     let party_size = m.body + 0.5;
+    // With a Ship To block, Bill To and Ship To share the customer column side by side.
+    let ship_to = if tpl.show_ship_to && doc.kind != FormKind::Statement { doc.sales.ship_to.as_slice() } else { &[] };
+    let column_gap = 14.0;
+    let bill_w = if ship_to.is_empty() { party_w } else { (party_w - column_gap) / 2.0 };
     let mut party: Vec<(String, bool)> = vec![(doc.customer_name.clone(), true)];
     party.extend(doc.customer_details.iter().map(|d| (d.clone(), false)));
     if tpl.show_customer_email {
         party.extend(doc.customer_email.iter().map(|e| (e.clone(), false)));
     }
     for (text, bold) in &party {
-        for line in l.wrap(text, *bold, party_size, party_w) {
+        for line in l.wrap(text, *bold, party_size, bill_w) {
             py += party_size + 3.5;
             l.text(MARGIN, py, &line, *bold, party_size, INK, Align::Left);
         }
+    }
+    if !ship_to.is_empty() {
+        let ship_x = MARGIN + bill_w + column_gap;
+        l.text(ship_x, start, "SHIP TO", true, 7.5, label_color, Align::Left);
+        let mut sy = start;
+        for text in ship_to {
+            for line in l.wrap(text, false, party_size, bill_w) {
+                sy += party_size + 3.5;
+                l.text(ship_x, sy, &line, false, party_size, INK, Align::Left);
+            }
+        }
+        py = py.max(sy);
     }
     let mut my = start - 4.0;
     let meta_lead = m.small + 6.0;

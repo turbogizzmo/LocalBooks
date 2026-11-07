@@ -6,6 +6,52 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Bill To and Ship To on sales forms.** Invoices, sales receipts (Sold To), estimates and credit
+  memos now have Bill To and Ship To boxes, filled from the customer and editable on each form, plus
+  **P.O. No.** and **FOB**. Each document keeps its own copy of the addresses, so changing a
+  customer's address later leaves saved documents as they were. They print and email with the
+  form; the form designer can turn Ship To and P.O. No. off.
+- **A fuller customer record.** Customers now have a shipping address next to the billing
+  address, a contact and an alternate contact, alternate phone, fax, website, account number,
+  credit limit and resale number. A job without its own addresses uses its customer's.
+- **Credit limit warning.** When an invoice would take a customer over their credit limit,
+  LocalBooks shows what they owe now and would owe, and asks before saving. It never blocks the
+  sale.
+- **Row menus stay on screen.** A row's ▾ actions menu near the bottom of the window now opens
+  upward instead of running off the edge.
+- **Subtotals, discounts, other charges and groups on sales forms.** On invoices, sales receipts
+  and estimates, choose **Subtotal** in the Product/Service list to add up the lines above it. A
+  new item type, **Discount**, takes an amount or a percentage off the line above (an item, a group
+  or a subtotal) and can lower the taxable amount. **Other charge** items add shipping, handling or
+  a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
+  print as a single line. They print in place, come back when you edit, and carry from an estimate
+  to its invoice; discount items show in Sales by Product/Service.
+- **Edit an invoice or bill that's already part paid.** An invoice with payments or credit memos
+  applied, or a bill with payments or vendor credits applied, now opens for editing instead of
+  asking you to void the payments first. The form tells you how much is applied, and saving keeps
+  it all applied to the corrected version, so the open balance is the new total less what was
+  paid. Deposits and reconciliations aren't affected. The edit is refused, with a message saying
+  why, if the new total would be less than what's applied or the customer or vendor changes.
+- **Defaults for selling, getting paid and paying bills.** New Company Preferences in Sales &
+  Customers, Jobs & Estimates, Payments, Bills and Send Forms:
+  - Receive Payments applies an amount to the invoice with exactly that balance, or else the
+    oldest invoices first. You can choose oldest first only, or tick invoices yourself, and ticking
+    invoices now works out the amount received. A tick column is new on the form.
+  - Payments and sales receipts go to Undeposited Funds unless you turn that off. **Sales receipts
+    used to start on your first bank account; they now start on Undeposited Funds.**
+  - A new bill is due after the vendor's terms. For a vendor without terms, it is due 10 days after
+    the bill date, or the days you set. **Bills used to be due in 30 days whatever the vendor's
+    terms.**
+  - Pay Bills can use each vendor's open credits on the bills you tick, oldest credit first, and
+    take the early-payment discount a bill's terms offer when paid in time, then pay only the rest.
+  - Your usual Ship Via fills in on new invoices, sales receipts and estimates.
+  - A warning before selling to a customer with overdue invoices (off until you turn it on).
+  - Turn off estimates or price levels if you don't use them, rename the five job statuses, and
+    give jobs a status on the customer's Edit….
+  - Each customer has a **Preferred delivery** (Email, Print or None) that ticks Email later or
+    Print later on their new forms; new customers take the Send Forms default.
+  - Change Item Prices starts from the default markup when you price from cost.
+
 - **No more "database is locked" when several things save at once.** On a slow disk, a save
   that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
@@ -36,6 +82,28 @@ people using LocalBooks.
   (Preferences › Accounting › My Preferences).
 - **Two-digit years and decimal hours.** Company Preferences › General can show dates as 10/13/26
   and hours as 1.50 instead of 1:30.
+- **Sales tax on the cash basis, and your filing period.** In Preferences › Sales Tax, choose
+  whether you owe sales tax when you invoice or when you are paid, and whether you file monthly,
+  quarterly or yearly. The Sales Tax report and Pay sales tax follow the basis (on cash, an invoice
+  counts as it is paid), open on your filing period, and Reminders shows the next return. Printed
+  invoices, sales receipts and estimates can mark taxable lines with a **T**.
+- **Bill expenses to customers.** Tick **Bill?** on a check, expense or bill line for a customer,
+  then invoice those costs from **Sales › Bill Costs**, with a markup. Preferences › Time &
+  Expenses can tick Bill? for you, count reimbursements as income and set the default markup.
+- **1099 boxes.** Map expense accounts to 1099-NEC and 1099-MISC boxes in Preferences › Tax: 1099;
+  the 1099 Summary and Detail now show each box. Payments made from 2026 use the new $2,000
+  threshold ($600 before). Don't file 1099s? Turn them off and the 1099 fields and reports go away.
+- **Work week, billable time and finance charges.** Weekly timesheets can start on any day, new
+  time can start billable, and finance charges can run from the invoice date instead of the due
+  date.
+- **Inventory switches.** Warn, stop or say nothing when a sale would take stock below zero, and
+  turn inventory and purchase orders off if you don't use them (Preferences › Items & Inventory).
+- **Checking preferences.** Put the vendor's account number (a new **Account no.** on the vendor)
+  in check memos, re-date checks to the day they print, and choose the account Write Checks, Pay
+  Bills and Make Deposits open with.
+- **Recall a vendor's last bill or check.** Turn on **Automatically recall information**
+  (Preferences › General › My Preferences) and a new bill or check for a vendor you have paid before
+  starts with the same accounts, and amounts if you like.
 - **Terms, Payment Method, types and customer messages lists.** Lists › Customer & Vendor Profile
   Lists now has a Terms list (with early-payment discounts such as *2% 10 Net 30*), a Payment
   Method list (*Visa*, *Check*…), Customer, Vendor and Job Types, and Customer Messages. Customers
