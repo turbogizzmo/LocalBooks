@@ -12,6 +12,8 @@ people using LocalBooks.
   it all applied to the corrected version, so the open balance is the new total less what was
   paid. Deposits and reconciliations aren't affected. The edit is refused, with a message saying
   why, if the new total would be less than what's applied or the customer or vendor changes.
+- **No more "database is locked" when several things save at once.** On a slow disk, a save
+  that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
   the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
   date, and whether items show by name, description or both. Accounting › Company Preferences can
