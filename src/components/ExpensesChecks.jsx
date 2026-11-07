@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useTransactionDate } from '../lib/myPreferences.js';
+import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
+import { useVendorRecall } from '../lib/recall.js';
 import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
@@ -34,10 +35,12 @@ const PAY_FROM = {
 function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, editing = null }) {
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
-  const defaultPayFrom = useMemo(
-    () => accounts.find((a) => a.isActive && a.accountType === (kind === 'CARD_CREDIT' ? 'CREDIT_CARD' : 'BANK'))?.id ?? null,
-    [accounts, kind],
-  );
+  // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
+  const { checkAccountId } = useMyPreferences();
+  const defaultPayFrom = useMemo(() => {
+    const chosen = kind === 'CHECK' && accounts.find((a) => a.id === checkAccountId && a.isActive && a.accountType === 'BANK');
+    return chosen ? chosen.id : (accounts.find((a) => a.isActive && a.accountType === (kind === 'CARD_CREDIT' ? 'CREDIT_CARD' : 'BANK'))?.id ?? null);
+  }, [accounts, kind, checkAccountId]);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
 
   const was = editing?.expense;
@@ -64,6 +67,18 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
+  // My Preferences › General › recall: a known payee's last check or expense fills the rows.
+  useVendorRecall({
+    vendor: payee,
+    vendors,
+    rows,
+    enabled: !editing && !isCredit,
+    kind: 'expense',
+    onRecalled: (recalled, recalledRows) => {
+      setRows(recalledRows);
+      setMemo((m) => m || (recalled.memo ?? ''));
+    },
+  });
   // The next number for the bank account, after its checks and bill payment checks; again after each one is posted.
   useEffect(() => {
     if (editing || kind !== 'CHECK' || accountId === null) return undefined;

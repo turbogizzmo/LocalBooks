@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Icon } from '../lib/icons.js';
+import { api, useLedgerQuery } from '../lib/api.js';
 
 /** Navigation tree: top-level links and accordion groups, in a classic accounting-software layout. */
 export const NAV = [
@@ -20,6 +21,7 @@ export const NAV = [
       { id: 'sales/tax', label: 'Sales Tax' },
       { id: 'sales/statements', label: 'Customer Statements' },
       { id: 'sales/finance-charges', label: 'Assess Finance Charges' },
+      { id: 'sales/bill-costs', label: 'Bill Costs' },
       { id: 'sales/send-forms', label: 'Send Forms' },
       { id: 'sales/print-invoices', label: 'Print Invoices' },
     ],
@@ -31,7 +33,8 @@ export const NAV = [
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
-      { id: 'expenses/purchase-orders', label: 'Purchase Orders' },
+      // `whenOn`: shown only while that company preference is on (Preferences › Items & Inventory).
+      { id: 'expenses/purchase-orders', label: 'Purchase Orders', whenOn: 'inventory_enabled' },
       { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/vendors', label: 'Vendors' },
       { id: 'expenses/print-checks', label: 'Print Checks' },
@@ -137,6 +140,8 @@ const STORAGE_TAG = { LOCAL: 'local', NETWORK: 'network', SYNCED: 'cloud' };
 
 export default function Sidebar({ current, onSelect, onNew, companyName, storage, isAdmin = true }) {
   const [open, setOpen] = useState(() => new Set(NAV.filter((n) => n.children).map((n) => n.id)));
+  const prefs = useLedgerQuery(api.getPreferences).data;
+  const switchedOn = (child) => !child.whenOn || prefs?.[child.whenOn] !== 'false';
   const toggle = (id) =>
     setOpen((s) => {
       const next = new Set(s);
@@ -180,7 +185,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
               </button>
               {open.has(item.id) && (
                 <ul>
-                  {item.children.filter((child) => canOpen(child.id, isAdmin)).map((child) => (
+                  {item.children.filter((child) => canOpen(child.id, isAdmin) && switchedOn(child)).map((child) => (
                     <li key={child.id}>
                       <button
                         type="button"

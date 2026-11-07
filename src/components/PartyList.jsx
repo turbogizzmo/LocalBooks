@@ -169,8 +169,15 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   const [fields, setFields] = useState([]);
   // Vendors' bank details: `view` as stored, `draft` while being changed (undefined = unchanged).
   const [bank, setBank] = useState({ view: null, draft: undefined });
+  // Preferences › Tax: 1099 › "Do you file 1099s?" off hides the 1099 box.
+  const files1099 = useLedgerQuery(api.getPreferences).data?.tax_1099_enabled !== 'false';
+  // The account number this vendor knows the company by (Preferences › Checking puts it in check memos).
+  const [accountNumber, setAccountNumber] = useState({ stored: null, draft: '' });
 
   useEffect(() => {
+    if (kind === 'vendor') {
+      api.getVendorAccountNumber(id).then((n) => setAccountNumber({ stored: n, draft: n ?? '' }), () => {});
+    }
     api.getParty(kind, id).then(
       (p) => setForm({ ...p, termsDays: p.termsDays ?? '', originalTaxId: p.taxId }),
       (err) => setError(errorText(err)),
@@ -207,6 +214,9 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         priceLevelId: form.priceLevelId ?? null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
+      if (kind === 'vendor' && accountNumber.draft.trim() !== (accountNumber.stored ?? '')) {
+        await api.setVendorAccountNumber(id, accountNumber.draft);
+      }
       if (kind === 'vendor' && bank.draft !== undefined) {
         const view = await api.setVendorBank(id, bank.draft);
         setBank({ view, draft: undefined });
@@ -244,6 +254,18 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             {kind === 'vendor' && <TaxIdField form={form} setForm={setForm} />}
             {kind === 'vendor' && <BankDetailsFields bank={bank} setBank={setBank} />}
             {kind === 'vendor' && (
+              <label className="flex flex-col gap-0.5">
+                <span className="font-semibold text-qb-ink-muted">Account no.</span>
+                <input
+                  className="qb-input"
+                  value={accountNumber.draft}
+                  maxLength={40}
+                  onChange={(e) => setAccountNumber((a) => ({ ...a, draft: e.target.value }))}
+                  placeholder="Your account with this vendor"
+                />
+              </label>
+            )}
+            {kind === 'vendor' && files1099 && (
               <label className="col-span-2 flex items-center gap-1.5 text-sm">
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
                 Track payments for a 1099

@@ -456,7 +456,9 @@ export default function Reports({ navigate, intent }) {
   useEffect(() => {
     if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]);
-  const groups = withCustomReports(REPORT_GROUPS, custom);
+  // Preferences › Tax: 1099 › "Do you file 1099s?" off hides the 1099 reports.
+  const files1099 = useLedgerQuery(api.getPreferences).data?.tax_1099_enabled !== 'false';
+  const groups = withCustomReports(REPORT_GROUPS, custom).map((g) => (files1099 ? g : { ...g, reports: g.reports.filter(([id]) => !id.startsWith('1099')) }));
   const reportName = groups.flatMap((g) => g.reports).find(([id]) => id === report)?.[1] ?? null;
   // The window is named after its report, and reopens on it with the desktop.
   useWindowContent(reportName ? { name: reportName, action: 'open', data: { report } } : null);
@@ -519,12 +521,13 @@ export default function Reports({ navigate, intent }) {
         {report === 'stock-status' && <StockStatusReport />}
         {report === 'item-price-list' && <ItemPriceListReport />}
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
-        {report === '1099' && <Vendors1099Report />}
+        {report === '1099' && <Vendors1099Report key="1099" />}
+        {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
         {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
-        {isCustomReport(report) && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
+        {isCustomReport(report) && report !== '1099-detail' && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>
   );
