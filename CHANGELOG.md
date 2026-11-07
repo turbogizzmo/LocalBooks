@@ -13,6 +13,13 @@ people using LocalBooks.
   customers' early-payment discounts automatically** to have it filled in. The payment and the
   discount post together and close the invoice; voiding the payment reverses both. This matches
   what Pay Bills already does for vendor discounts.
+- **A customer's or vendor's transactions add up correctly.** The panel below the Customers and
+  Vendors lists used to add invoices and payments into one total, which meant nothing. Choose one
+  type, such as Invoices, to see its total; with All types the panel counts the transactions.
+- **The "Saved customer" note goes away** when you pick or open another customer or vendor, instead
+  of staying above the list.
+- **A damaged encryption key slot no longer stops LocalBooks.** It reports a damaged key slot instead
+  of closing, and the recovery key still opens the file.
 
 ## [0.12.0]
 
