@@ -88,7 +88,11 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let mut total: i64 = 0;
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, line) in input.lines.iter().enumerate() {
-        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?;
+        // A line may be priced at nothing (an included extra); the estimate as a whole may not.
+        let amount = match line.rate_cents {
+            0 if (1..=crate::invoices::MAX_QUANTITY_E4).contains(&line.quantity_e4) => 0,
+            _ => validate_line(line.quantity_e4, line.rate_cents, idx + 1, "EST")?,
+        };
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -182,27 +186,36 @@ pub async fn convert_to_invoice(
     issue_date: NaiveDate,
     due_date: NaiveDate,
 ) -> Result<EstimateSummary, String> {
+    // Zero-amount lines (headings, optional extras priced at nothing) can stay off the invoice.
+    let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let customer_name = check_convertible(&mut tx, estimate_id).await?;
         let carried = crate::sales_lists::details_in_tx(&mut tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
         let (tax_rate_id, discount_cents): (Option<i64>, i64) =
             sqlx::query_as("SELECT tax_rate_id, discount_cents FROM estimates WHERE id = ?1").bind(estimate_id).fetch_one(&mut *tx).await.map_err(db_err)?;
-        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool)> = sqlx::query_as(
-            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable
+        let lines: Vec<(String, i64, i64, i64, Option<i64>, Option<i64>, bool, i64)> = sqlx::query_as(
+            "SELECT description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, amount_cents
              FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
         )
         .bind(estimate_id)
         .fetch_all(&mut *tx)
         .await
         .map_err(db_err)?;
+        let lines = crate::sales_prefs::without_zero_lines(lines, drop_zero, |l| l.7);
+        if let Some(n) = lines.iter().position(|l| l.7 == 0) {
+            return Err(format!(
+                "EST_ZERO_LINE: line {} has no amount, and an invoice line needs one. Open the estimate in Create Invoices to price it, or turn on leaving zero-amount lines off in Preferences › Sales & Customers",
+                n + 1
+            ));
+        }
         let invoice = InvoiceInput {
             customer_name,
             issue_date,
             due_date,
             lines: lines
                 .into_iter()
-                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable)| InvoiceLineInput {
+                .map(|(description, quantity_e4, rate_cents, income_account_id, product_service_id, class_id, is_taxable, _)| InvoiceLineInput {
                     description,
                     quantity_e4,
                     rate_cents,
@@ -292,7 +305,10 @@ async fn check_convertible(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64) -
 /// Posts an invoice that was started from an estimate (and possibly edited in the invoice form), and
 /// marks the estimate converted, in one transaction: the estimate is never marked converted for an
 /// invoice that did not post.
-pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
+pub async fn invoice_from_estimate(pool: &SqlitePool, estimate_id: i64, mut input: InvoiceInput) -> Result<crate::invoices::InvoiceSummary, String> {
+    let drop_zero = crate::sales_prefs::drop_zero_lines(pool).await?;
+    let lines = std::mem::take(&mut input.lines);
+    input.lines = crate::sales_prefs::without_zero_lines(lines, drop_zero, |l| crate::ledger::quantity_amount(l.quantity_e4, l.rate_cents).unwrap_or(1));
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         check_convertible(&mut tx, estimate_id).await?;

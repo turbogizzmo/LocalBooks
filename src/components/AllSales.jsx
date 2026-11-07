@@ -20,6 +20,7 @@ import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
@@ -27,7 +28,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
-  const defaultDeposit = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
+  // Undeposited Funds, or the first bank account, as Preferences › Payments says.
+  const { undepositedDefault, loaded: prefsLoaded } = useSalesPrefs();
+  const defaultDeposit = useMemo(() => (prefsLoaded ? defaultDepositAccount(accounts, undepositedDefault) : null), [accounts, undepositedDefault, prefsLoaded]);
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useTransactionDate();
   const method = usePaymentMethodChoice('CASH');

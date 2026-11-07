@@ -24,6 +24,7 @@ pub const WARN_DUPLICATE_BILLS: &str = "warn_duplicate_bill_numbers";
 pub const WARN_PAST_DAYS: &str = "warn_date_past_days";
 pub const WARN_FUTURE_DAYS: &str = "warn_date_future_days";
 pub const WARN_RETAINED_EARNINGS: &str = "warn_retained_earnings";
+pub const WARN_OVERDUE_CUSTOMER: &str = "warn_customer_overdue";
 /// About ten years; 0 turns the warning off.
 pub const MAX_WARN_DAYS: u32 = 3650;
 
@@ -167,6 +168,42 @@ pub async fn retained_earnings_warning(pool: &SqlitePool, account_ids: &[i64]) -
     }))
 }
 
+/// Selling to a customer (or one of its jobs, or the customer a job belongs to) that has invoices
+/// past their due date as of `today`. Only an existing customer can have any.
+pub async fn overdue_customer_warning(pool: &SqlitePool, customer_name: &str, today: NaiveDate) -> Result<Option<Warning>, String> {
+    let name = customer_name.trim();
+    if name.is_empty() || !preferences::flag(pool, WARN_OVERDUE_CUSTOMER).await? {
+        return Ok(None);
+    }
+    let overdue: (i64, Option<i64>, Option<String>) = sqlx::query_as(
+        "WITH me AS (SELECT id, parent_id FROM customers WHERE name = ?1 COLLATE NOCASE),
+              family AS (SELECT id FROM me UNION SELECT parent_id FROM me WHERE parent_id IS NOT NULL
+                         UNION SELECT c.id FROM customers c JOIN me ON c.parent_id = me.id)
+         SELECT COUNT(*), SUM(b.home_open_cents), MIN(i.due_date)
+         FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
+         WHERE i.customer_id IN (SELECT id FROM family) AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL')
+           AND b.home_open_cents > 0 AND i.due_date < ?2",
+    )
+    .bind(name)
+    .bind(today)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    let (count, open, oldest) = overdue;
+    if count == 0 {
+        return Ok(None);
+    }
+    let oldest = oldest.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok()).map(|d| d.format("%m/%d/%Y").to_string()).unwrap_or_default();
+    let invoices = if count == 1 { "1 overdue invoice".to_string() } else { format!("{count} overdue invoices") };
+    Ok(Some(Warning::new(
+        "CUSTOMER_OVERDUE",
+        format!(
+            "{name} has {invoices} with {} still open (the oldest was due {oldest}).",
+            crate::ledger::format_cents(open.unwrap_or_default())
+        ),
+    )))
+}
+
 /// What a save is about to post, for the guards to look at.
 #[derive(Debug, Default)]
 pub struct Posting<'a> {
@@ -176,6 +213,8 @@ pub struct Posting<'a> {
     pub check: Option<(i64, Option<&'a str>, Option<i64>)>,
     /// `(vendor name, bill number, bill being replaced)`.
     pub bill: Option<(&'a str, Option<&'a str>, Option<i64>)>,
+    /// The customer a new sale is to (an invoice or sales receipt; not an edit).
+    pub customer: Option<&'a str>,
 }
 
 /// Every warning for `posting`, as of `today`.
@@ -191,6 +230,9 @@ pub async fn warnings_on(pool: &SqlitePool, posting: &Posting<'_>, today: NaiveD
         out.extend(duplicate_bill_warning(pool, vendor, number, except).await?);
     }
     out.extend(retained_earnings_warning(pool, &posting.account_ids).await?);
+    if let Some(customer) = posting.customer {
+        out.extend(overdue_customer_warning(pool, customer, today).await?);
+    }
     Ok(out)
 }
 
@@ -208,7 +250,7 @@ pub fn expense(input: &crate::expenses::ExpenseInput, replacing: Option<i64>) ->
         date: Some(input.expense_date),
         account_ids: input.lines.iter().map(|l| l.account_id).collect(),
         check: (input.kind == "CHECK").then_some((input.payment_account_id, input.check_number.as_deref(), replacing)),
-        bill: None,
+        ..Default::default()
     }
 }
 
@@ -218,12 +260,18 @@ pub fn bill(input: &crate::expenses::BillInput, replacing: Option<i64>) -> Posti
         account_ids: input.lines.iter().map(|l| l.account_id).collect(),
         check: None,
         bill: Some((input.vendor_name.as_str(), input.bill_number.as_deref(), replacing)),
+        ..Default::default()
     }
 }
 
-/// Sales documents, estimates and purchase orders: only the date is guarded.
+/// Estimates, purchase orders and edits of sales documents: only the date is guarded.
 pub fn dated(date: NaiveDate) -> Posting<'static> {
     Posting { date: Some(date), ..Default::default() }
+}
+
+/// A new invoice or sales receipt: its date, and whether the customer has overdue invoices.
+pub fn sale(date: NaiveDate, customer_name: &str) -> Posting<'_> {
+    Posting { date: Some(date), customer: Some(customer_name), ..Default::default() }
 }
 
 #[cfg(test)]

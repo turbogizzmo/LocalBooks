@@ -5,24 +5,29 @@ const PREF = { CHECK: 'print_checks_later', INVOICE: 'print_invoices_later' };
 
 /**
  * The "Print later" choice on a new check or invoice. It starts from the last choice saved on that
- * form, and `remember(on)` keeps a changed choice as the new default.
+ * form, and `remember(on)` keeps a changed choice as the new default. `follow(on)` sets it for the
+ * customer's preferred delivery: it isn't remembered, and a box the person ticked is left alone.
  */
 export function usePrintLater(kind, enabled = true) {
   const prefs = useLedgerQuery(api.getPreferences).data;
   const saved = prefs?.[PREF[kind]] === 'true';
   const [on, setOn] = useState(false);
   const [touched, setTouched] = useState(false);
+  const [followed, setFollowed] = useState(null);
   useEffect(() => {
-    if (!touched) setOn(saved);
-  }, [saved, touched]);
+    if (!touched) setOn(followed ?? saved);
+  }, [saved, touched, followed]);
   const set = (value) => {
     setTouched(true);
     setOn(value);
   };
+  const follow = (value) => setFollowed(value);
   const remember = (value) => {
-    if (value !== saved) api.setPrintLaterDefault(kind, value).catch(() => {});
+    if (touched && value !== saved) api.setPrintLaterDefault(kind, value).catch(() => {});
+    setTouched(false);
+    setFollowed(null);
   };
-  return { on: enabled && on, set, remember };
+  return { on: enabled && on, set, follow, remember };
 }
 
 /** The checkbox itself. */
