@@ -92,3 +92,14 @@ fn tax_calendar_rolls_weekends_and_follows_entity_rules() {
     assert_eq!(returns, vec![ymd(2026, 5, 15), ymd(2027, 5, 15)]);
     assert!(np.iter().all(|d| !d.form.contains("ES") && !d.form.contains("1120-W")));
 }
+
+#[test]
+fn account_and_item_names_follow_the_report_preferences() {
+    let both = AccountNames { numbers: true, lowest_only: false };
+    assert_eq!(both.label(Some("6300"), "Utilities:Electric"), "6300 Utilities:Electric");
+    assert_eq!(AccountNames { numbers: false, lowest_only: true }.label(Some("6300"), "Utilities:Electric"), "Electric");
+    assert_eq!(both.label(None, "Rent"), "Rent");
+    assert_eq!(ItemNames::Description.label("WIDGET", Some("Blue widget")), "Blue widget");
+    assert_eq!(ItemNames::Both.label("WIDGET", Some("Blue widget")), "WIDGET – Blue widget");
+    assert_eq!(ItemNames::Description.label("WIDGET", Some("  ")), "WIDGET", "no description falls back to the name");
+}
