@@ -42,6 +42,38 @@ An Admin chooses, in **Preferences › Payments › Company Preferences**:
   tick or type a payment on.
 - **Deposit to:** when on, payments and sales receipts go to **Undeposited Funds** unless you
   choose another account; when off, they start on your first bank account.
+- **Early-payment discounts:** see [Take a customer's early-payment discount](#take-a-customers-early-payment-discount).
+
+### Take a customer's early-payment discount
+
+An invoice on terms with a discount, such as *2% 10 Net 30*, shows the discount it offers and its
+last day in **Discount offered**. To let Receive Payments take it:
+
+1. Create an income account for the discounts, such as **Sales Discounts** (an income account
+   with a debit balance reduces your sales on the Profit & Loss). Some companies use an expense
+   account instead; either works.
+2. In **Preferences › Payments › Company Preferences**, choose it as the **Discount account**. To
+   have the discount taken without typing it, also tick **Take customers' early-payment discounts
+   automatically**.
+
+Receive Payments then shows a **Discount** column. When the payment date is on or before the
+discount's last day and nothing has been paid or credited on the invoice yet:
+
+- With the automatic option on, ticking the invoice (or **Auto Apply**, when the money pays the
+  rest of it in full) fills in the discount and sets the **Payment** to what is left. A customer
+  who pays 490.00 on a 500.00 invoice on *2% 10 Net 30* closes it.
+- You can change the discount, up to what the terms offer, or clear it to take none. With the
+  automatic option off, type the discount yourself.
+
+The payment posts one entry: the money to **Deposit to**, the discount to the discount account,
+and the two together off Accounts Receivable, so the invoice shows as **Paid** and the customer's
+statement shows the payment and discount on one line. Only the money goes to Undeposited Funds and
+into the bank deposit. Voiding the payment reverses the discount with it, and the invoice offers
+the discount again while its date allows.
+
+Not covered: an invoice that is already part-paid gets no discount (the terms' discount is for
+paying the whole invoice early), invoices in another currency take their discount with a credit
+memo, and a payment that took a discount can't be recorded as a bounced check (void it instead).
 
 ## Payments in another currency
 

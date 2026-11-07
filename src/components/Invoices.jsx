@@ -163,7 +163,8 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
 /**
  * Receive Payment: one customer payment applied across that customer's open invoices. How a typed
  * amount is spread (an exact match, else oldest first; oldest first; or not at all), whether ticking
- * invoices works out the amount, and where it is deposited follow Preferences › Payments.
+ * invoices works out the amount, where it is deposited, and whether early-payment discounts are
+ * taken follow Preferences › Payments.
  */
 function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const { homeCurrency } = useCompany();
@@ -176,6 +177,9 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const [rate, setRate] = useState('');
   const [received, setReceived] = useState('');
   const [applied, setApplied] = useState({});
+  // Early-payment discounts taken, by invoice, and what each invoice's terms offer on the date.
+  const [discounts, setDiscounts] = useState({});
+  const [offer, setOffer] = useState({ available: false, automatic: false, offered: [] });
   const [accountId, setAccountId] = useState(() => defaultDepositAccount(accounts, prefs.undepositedDefault));
   const [accountTouched, setAccountTouched] = useState(false);
   const [date, setDate] = useState(todayIso());
@@ -208,14 +212,40 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     setCurrency(code);
     suggested.adopt(first?.currencyCode ? formatRate(first.exchangeRateE6) : '');
     setApplied({});
+    setDiscounts({});
     setReceived('');
   };
+  // The engine says which invoices' terms still offer a discount on the payment date (home
+  // currency only, nothing paid on them yet, through the discount's last day).
+  const rowKey = currency ? '' : rows.map((inv) => inv.id).join(',');
+  useEffect(() => {
+    if (rowKey === '' || !date) {
+      setOffer((o) => (o.offered.length ? { ...o, offered: [] } : o));
+      return undefined;
+    }
+    let live = true;
+    api.getPaymentDiscounts(rowKey.split(',').map(Number), date).then(
+      (next) => live && setOffer(next),
+      (err) => live && setError(errorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [rowKey, date]);
   const appliedCents = (inv) => parseMoneyToCents(applied[inv.id] ?? '') ?? 0;
+  const offeredOn = (inv) => offer.offered.find((o) => o.invoiceId === inv.id)?.amountCents ?? 0;
+  const discountCents = (inv) => parseMoneyToCents(discounts[inv.id] ?? '') ?? 0;
+  const totalDiscount = rows.reduce((s, inv) => s + Math.max(0, discountCents(inv)), 0);
+  const badDiscounts = rows.filter((inv) => {
+    const text = (discounts[inv.id] ?? '').trim();
+    const c = parseMoneyToCents(text);
+    return text !== '' && (c === null || c < 0 || c > offeredOn(inv) || (c > 0 && appliedCents(inv) <= 0));
+  });
   const totalApplied = rows.reduce((s, inv) => s + Math.max(0, appliedCents(inv)), 0);
   const receivedCents = parseMoneyToCents(received);
   const badRows = rows.filter((inv) => {
     const c = parseMoneyToCents(applied[inv.id] ?? '');
-    return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c > inv.balanceCents);
+    return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c + Math.max(0, discountCents(inv)) > inv.balanceCents);
   });
 
   // Typing the amount received applies it as the company prefers (the backend decides, so the
@@ -225,21 +255,41 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     if (mode === null && prefs.autoApply === 'off') return;
     const cents = parseMoneyToCents(text) ?? 0;
     const seq = ++applySeq.current;
-    if (cents <= 0) return setApplied({});
-    api.getPaymentApplication(customer, currency, cents, mode).then(
+    if (cents <= 0) {
+      setDiscounts({});
+      return setApplied({});
+    }
+    api.getPaymentApplication(customer, currency, cents, mode, date).then(
       (plan) => {
         if (seq !== applySeq.current) return;
-        const byId = new Map(plan.map((p) => [p.documentId, p.amountCents]));
-        setApplied(Object.fromEntries(rows.map((inv) => [inv.id, byId.has(inv.id) ? centsToInput(byId.get(inv.id)) : ''])));
+        const byId = new Map(plan.map((p) => [p.documentId, p]));
+        setApplied(Object.fromEntries(rows.map((inv) => [inv.id, byId.has(inv.id) ? centsToInput(byId.get(inv.id).amountCents) : ''])));
+        setDiscounts(Object.fromEntries(rows.map((inv) => [inv.id, byId.get(inv.id)?.discountCents > 0 ? centsToInput(byId.get(inv.id).discountCents) : ''])));
       },
       (err) => seq === applySeq.current && setError(errorText(err)),
     );
   };
+  // Ticking pays the invoice in full: with discounts taken automatically, the money is what the
+  // discount leaves.
+  const tick = (inv, on) => {
+    if (!on) return setPayment(inv, '', '');
+    const discount = offer.automatic ? offeredOn(inv) : 0;
+    setPayment(inv, centsToInput(inv.balanceCents - discount), discount > 0 ? centsToInput(discount) : '');
+  };
+  // A discount typed (or removed) keeps a ticked invoice paid in full.
+  const setDiscount = (inv, text) => {
+    const c = text.trim() === '' ? 0 : parseMoneyToCents(text);
+    const paidInFull = appliedCents(inv) + discountCents(inv) === inv.balanceCents;
+    if (paidInFull && c !== null && c >= 0 && c < inv.balanceCents) setPayment(inv, centsToInput(inv.balanceCents - c), text);
+    else setDiscounts((d) => ({ ...d, [inv.id]: text }));
+  };
   // A payment typed or ticked on an invoice: with auto-calculate on, the amount received follows.
-  const setPayment = (inv, text) => {
+  const setPayment = (inv, text, discountText = undefined) => {
     applySeq.current += 1;
     const next = { ...applied, [inv.id]: text };
     setApplied(next);
+    // Clearing a payment drops its discount; a discount needs money with it.
+    if (discountText !== undefined || text.trim() === '') setDiscounts((d) => ({ ...d, [inv.id]: discountText ?? '' }));
     if (prefs.autoCalculate) {
       const sum = rows.reduce((s, r) => s + Math.max(0, parseMoneyToCents(next[r.id] ?? '') ?? 0), 0);
       setReceived(sum > 0 ? centsToInput(sum) : '');
@@ -251,6 +301,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     setCustomer('');
     setCurrency('');
     setApplied({});
+    setDiscounts({});
     setReceived('');
     setReference('');
     setError(null);
@@ -268,17 +319,20 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         ...method.payload(),
         reference: reference || null,
         exchangeRateE6: currency ? rateE6 : null,
+        discountCents: Math.max(0, discountCents(inv)),
       }));
     if (inputs.length === 0) return setError('Enter a payment amount for at least one invoice.');
     if (currency && rateE6 === null) return setError('Enter the exchange rate for this payment.');
-    if (badRows.length > 0) return setError('A payment amount is more than that invoice\'s open balance.');
+    if (badDiscounts.length > 0) return setError('A discount is more than that invoice\'s terms offer on this date, or has no payment with it.');
+    if (badRows.length > 0) return setError('A payment amount (with its discount) is more than that invoice\'s open balance.');
     if (receivedCents !== null && received.trim() !== '' && receivedCents !== totalApplied) {
       return setError(`Amount received ${money(receivedCents)} does not match the ${money(totalApplied)} applied to invoices.`);
     }
     setBusy(true);
     try {
       await api.recordInvoicePayments(inputs);
-      onDone(`Received ${money(totalApplied)} from ${customer} across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}.`);
+      const discountNote = totalDiscount > 0 ? `, with ${money(totalDiscount)} of early-payment discounts` : '';
+      onDone(`Received ${money(totalApplied)} from ${customer} across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}${discountNote}.`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -387,6 +441,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
           {currency && rateE6 !== null && totalApplied > 0 && (
             <div className="text-xs text-qb-ink-muted">≈ {formatCents(toHomeCents(totalApplied, rateE6))} received</div>
           )}
+          {totalDiscount > 0 && <div className="text-xs text-qb-ink-muted">plus {money(totalDiscount)} of discounts</div>}
         </div>
       </div>
       <table className="qb-grid">
@@ -398,6 +453,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
           <col />
           <col className="w-[120px]" />
           <col className="w-[120px]" />
+          {offer.available && <col className="w-[110px]" />}
           <col className="w-[130px]" />
         </colgroup>
         <thead>
@@ -409,13 +465,18 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
             <th className="qb-grid-head" title="Early-payment discount the invoice's terms offer, and the last day to take it">Discount offered</th>
             <th className="qb-grid-head text-right">Original</th>
             <th className="qb-grid-head text-right">Open balance</th>
+            {offer.available && (
+              <th className="qb-grid-head text-right" title="Early-payment discount taken with this payment; it goes to the discount account in Preferences › Payments">
+                Discount
+              </th>
+            )}
             <th className="qb-grid-head text-right">Payment</th>
           </tr>
         </thead>
         <tbody>
           {!customer && (
             <tr>
-              <td colSpan={8} className="qb-grid-cell text-qb-ink-muted">
+              <td colSpan={offer.available ? 9 : 8} className="qb-grid-cell text-qb-ink-muted">
                 {customers.length ? 'Choose a customer to see their open invoices.' : 'There are no open invoices to receive payment against.'}
               </td>
             </tr>
@@ -429,7 +490,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                     type="checkbox"
                     className="accent-qb-green"
                     checked={appliedCents(inv) > 0}
-                    onChange={(e) => setPayment(inv, e.target.checked ? centsToInput(inv.balanceCents) : '')}
+                    onChange={(e) => tick(inv, e.target.checked)}
                     aria-label={`Pay invoice ${inv.invoiceNumber}`}
                   />
                 </td>
@@ -441,6 +502,21 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                 </td>
                 <td className="qb-grid-cell num">{money(inv.totalCents)}</td>
                 <td className="qb-grid-cell num">{money(inv.balanceCents)}</td>
+                {offer.available && (
+                  <td className={offeredOn(inv) > 0 || discounts[inv.id] ? 'qb-grid-cell-edit' : 'qb-grid-cell'}>
+                    {(offeredOn(inv) > 0 || discounts[inv.id]) && (
+                      <input
+                        className="num"
+                        value={discounts[inv.id] ?? ''}
+                        onChange={(e) => setDiscount(inv, e.target.value)}
+                        placeholder={centsToInput(offeredOn(inv))}
+                        inputMode="decimal" data-money
+                        aria-invalid={badDiscounts.includes(inv)}
+                        aria-label={`Discount on invoice ${inv.invoiceNumber}`}
+                      />
+                    )}
+                  </td>
+                )}
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"

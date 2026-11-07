@@ -140,6 +140,7 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
     let (checking, undeposited, services) = (account(pool, "1010").await, account(pool, "1300").await, account(pool, "4100").await);
     let inv = invoice(pool, "Acme", "2026-03-01", "2026-03-31", 12_000).await;
     let pay = crate::invoices::PaymentInput {
+        discount_cents: 0,
         payment_method_id: None,
         invoice_id: inv,
         deposit_account_id: undeposited,
@@ -258,7 +259,7 @@ async fn old_invoices_are_written_off_with_applied_credit_memos() {
     let checking = account(&pool, "1010").await;
     crate::invoices::record_payment(
         &pool,
-        crate::invoices::PaymentInput { payment_method_id: None, invoice_id: small, deposit_account_id: checking, payment_date: d("2025-07-01"), amount_cents: 49_750, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        crate::invoices::PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: small, deposit_account_id: checking, payment_date: d("2025-07-01"), amount_cents: 49_750, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();

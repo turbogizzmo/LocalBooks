@@ -62,7 +62,7 @@ export const topics = [
   {
     id: 'terms-list', area: 'sales', views: ['sales/profile-lists', 'sales/invoices', 'expenses/bills', 'sales/customers', 'expenses/vendors'],
     title: 'Set up payment terms',
-    body: 'Lists › Customer & Vendor Profile Lists › Terms List holds terms such as Net 30 or 2% 10 Net 30 (2 percent off if paid within 10 days). Give each customer and vendor a default term; on invoices and bills the Terms box sets the due date, and Receive Payments and Pay Bills show the discount offered and its last day.',
+    body: 'Lists › Customer & Vendor Profile Lists › Terms List holds terms such as Net 30 or 2% 10 Net 30 (2 percent off if paid within 10 days). Give each customer and vendor a default term; on invoices and bills the Terms box sets the due date, and Receive Payments and Pay Bills show the discount offered and its last day, and take it when Preferences › Payments or Bills names a discount account.',
     keywords: 'terms net 30 net 15 due on receipt discount early payment 2% 10 net 30 due date payment terms',
     go: { label: 'Terms List', view: 'sales/profile-lists', action: 'terms' },
     guide: 'customers-and-products',
@@ -96,6 +96,14 @@ export const topics = [
     title: 'Record a customer payment',
     body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), Typing the amount received applies it to an invoice with exactly that balance, or else the oldest first (Preferences › Payments sets this, and whether ticking invoices works out the amount); Auto Apply spreads it again.',
     keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
+    go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
+    guide: 'customer-payments',
+  },
+  {
+    id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
+    title: 'Take a customer’s early-payment discount',
+    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day, with nothing paid on it yet, takes the discount and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment reverses both.',
+    keywords: 'discount early payment terms 2% 10 net 30 sales discounts receive payments customer took discount',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
   },
