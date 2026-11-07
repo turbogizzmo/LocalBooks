@@ -13,6 +13,8 @@ people using LocalBooks.
   a percentage fee. **Groups** (Products & Services › Groups…) fill in several items at once and can
   print as a single line. They print in place, come back when you edit, and carry from an estimate
   to its invoice; discount items show in Sales by Product/Service.
+- **No more "database is locked" when several things save at once.** On a slow disk, a save
+  that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
   the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
   date, and whether items show by name, description or both. Accounting › Company Preferences can
