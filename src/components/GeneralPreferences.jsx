@@ -121,3 +121,15 @@ export function AccountingMyPreferences() {
     </Panel>
   );
 }
+
+/** Preferences › Reports & Graphs, the My Preferences part. */
+export function ReportsMyPreferences() {
+  const { check } = useControls();
+  return (
+    <Panel id="reports-my-preferences" title="Reports & Graphs · My Preferences" footer="For you on this computer.">
+      <div className="py-1">
+        {check('reportOptionsFirst', 'Show the report’s options before running it', 'A report you open from the list first asks for its dates (and basis, for Profit and Loss); click Run report to see it. Reports opened from a graph or a link run at once.')}
+      </div>
+    </Panel>
+  );
+}

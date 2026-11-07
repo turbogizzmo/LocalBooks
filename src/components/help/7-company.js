@@ -223,6 +223,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'report-preferences', area: 'company', views: ['settings/preferences', 'reports'],
+    title: 'Choose report defaults: cash or accrual, aging, names and Cash Flows',
+    body: 'Preferences › Reports & Graphs › Company Preferences sets the basis Profit and Loss opens on, whether aging counts from the due date or the transaction date, whether items show by name, description or both, and which section of the Statement of Cash Flows each balance sheet account goes in (Classify accounts… on the report opens it). Accounting › Company Preferences turns account numbers in reports on or off and can show only a subaccount’s own name. Reports & Graphs › My Preferences can ask for a report’s dates before it runs.',
+    keywords: 'report basis cash accrual default aging due date transaction date item name description cash flow classify operating investing financing account numbers subaccount report options before running',
+    go: { label: 'Go to report preferences', view: 'settings/preferences', action: 'cash-flow' },
+    guide: 'getting-started',
+  },
+  {
     id: 'register-open', area: 'company', views: ['accounting/register'],
     title: 'Open a transaction from a register',
     body: 'In an account register, click a row to see its lines and double-click it to open the bill, check, expense or invoice itself. Other entries open in the journal.',
