@@ -13,7 +13,7 @@ describe('A taxed invoice edited with sales tax turned off', () => {
     await click($('//*[@role="tab"][normalize-space()="Company Preferences"]'));
     await type(field('Current passcode'), seedNote(/closing passcode: (\S+)/));
     await click(button('Reopen all periods'));
-    await $('//*[contains(normalize-space(), "No closing date")]').waitForDisplayed();
+    await $('//*[contains(normalize-space(), "No closing date")][not(.//*[contains(normalize-space(), "No closing date")])]').waitForDisplayed();
   });
 
   it('keeps the tax when the invoice is saved again unchanged', async () => {
