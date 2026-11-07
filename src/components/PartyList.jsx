@@ -428,6 +428,16 @@ export default function PartyList({ kind, navigate }) {
   const [editing, setEditing] = useState(null);
   // The customer or vendor whose transactions show below the list (a click picks one).
   const [selected, setSelected] = useState(null);
+  // Picking or opening another name clears the last "Saved…" or "Added…" note, which was about a different one.
+  const dropSuccess = () => setNotice((n) => (n?.kind === 'success' ? null : n));
+  const showTransactions = (id) => {
+    dropSuccess();
+    setSelected(id);
+  };
+  const openRecord = (id) => {
+    dropSuccess();
+    setEditing(id);
+  };
 
   const setActive = async (p, active) => {
     try {
@@ -578,8 +588,8 @@ export default function PartyList({ kind, navigate }) {
                     key={p.id}
                     className={`qb-grid-row cursor-pointer ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
-                    onClick={() => setSelected(p.id)}
-                    onDoubleClick={() => setEditing(p.id)}
+                    onClick={() => showTransactions(p.id)}
+                    onDoubleClick={() => openRecord(p.id)}
                     title="Click to see transactions, double-click to edit"
                   >
                     <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
@@ -596,8 +606,8 @@ export default function PartyList({ kind, navigate }) {
                       <RowMenu
                         label={`Actions for ${p.name}`}
                         items={[
-                          { label: 'Edit…', onSelect: () => setEditing(p.id) },
-                          { label: 'Show transactions', onSelect: () => setSelected(p.id) },
+                          { label: 'Edit…', onSelect: () => openRecord(p.id) },
+                          { label: 'Show transactions', onSelect: () => showTransactions(p.id) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),

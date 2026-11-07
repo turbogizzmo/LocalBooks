@@ -13,6 +13,7 @@
 //! As with sales reps, an entry that is used can be renamed or made inactive but not deleted; an
 //! inactive entry stays on whatever has it and cannot be chosen again.
 
+#[cfg(test)]
 use chrono::{Days, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::{SqliteConnection, SqlitePool};
@@ -77,6 +78,7 @@ const TERMS_USED: &str = "EXISTS (SELECT 1 FROM customers WHERE terms_id = t.id)
     OR EXISTS (SELECT 1 FROM invoices WHERE terms_id = t.id) OR EXISTS (SELECT 1 FROM bills WHERE terms_id = t.id)";
 
 /// The due date for a document dated `date` under a term of `net_days`.
+#[cfg(test)]
 pub fn due_date(date: NaiveDate, net_days: i64) -> Result<NaiveDate, String> {
     let days = u64::try_from(net_days).map_err(|_| "TERMS_BAD_DAYS: terms are 0 to 365 days".to_string())?;
     date.checked_add_days(Days::new(days)).ok_or_else(|| "TERMS_BAD_DAYS: that due date is out of range".to_string())
@@ -89,6 +91,7 @@ pub fn early_discount_cents(total_cents: i64, discount_ppm: i64) -> Option<i64> 
 
 impl TermsView {
     /// The document's due date and, with a discount, the last day it may be taken.
+    #[cfg(test)]
     pub fn dates(&self, date: NaiveDate) -> Result<(NaiveDate, Option<NaiveDate>), String> {
         let until = self.discount_days.map(|d| due_date(date, d)).transpose()?;
         Ok((due_date(date, self.net_days)?, until))

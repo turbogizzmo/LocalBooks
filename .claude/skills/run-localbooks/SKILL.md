@@ -22,7 +22,7 @@ a **debug build on test company files**, never the user's real books.
   build's own config folder), so **a Keychain password prompt during a test run is a bug**: stop
   and report it. See `store_kind` in `src-tauri/src/secrets.rs`.
 - Do not change `HOME` to isolate the app: `dev-builds` is already isolated.
-- Quit only the app you started (match `target/debug/localbooks`), never another LocalBooks.
+- Quit only the app you started, by the process ID saved when you launched it. Other sessions run their own debug builds from other checkouts, and a name match such as `pkill -f target/debug/localbooks` quits theirs too.
 
 ## 1. Prerequisites
 
@@ -57,6 +57,7 @@ Pass the file as the only argument; the app opens it in place:
 
 ```bash
 src-tauri/target/debug/localbooks "$HOME/Library/Application Support/com.localbooks.desktop/dev-builds/test-companies/Edge Cases.localbooks" > /tmp/localbooks-run.log 2>&1 &
+echo $! > src-tauri/target/localbooks-run.pid
 ```
 
 Run it in the background. It is ready when `dev-builds/config.json` lists the file first under
@@ -85,7 +86,7 @@ Run it in the background. It is ready when `dev-builds/config.json` lists the fi
 ## 6. Stop
 
 ```bash
-pkill -f "target/debug/localbooks"
+kill "$(cat src-tauri/target/localbooks-run.pid)" && rm src-tauri/target/localbooks-run.pid
 ```
 
 ## What to report
