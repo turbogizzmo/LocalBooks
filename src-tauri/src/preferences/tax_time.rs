@@ -15,7 +15,7 @@ use crate::ledger::db_err;
 pub const SALES_TAX_BASIS: &str = "sales_tax_basis";
 /// `monthly`, `quarterly` or `yearly`: the Sales Tax report's default period and the return reminder.
 pub const SALES_TAX_FREQUENCY: &str = "sales_tax_frequency";
-/// Print a T beside taxable lines on invoices, sales receipts, credit memos and estimates (`pdf`).
+/// Print a T beside taxable lines on printed invoices, sales receipts and estimates (`forms`).
 pub const SALES_TAX_MARK_TAXABLE: &str = "sales_tax_mark_taxable";
 /// `due_date` or `invoice_date`: where finance charge interest starts (`finance_charges`).
 pub const FINANCE_CHARGE_FROM: &str = "finance_charge_from";

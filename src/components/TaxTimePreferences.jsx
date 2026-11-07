@@ -70,7 +70,7 @@ export function SalesTaxCompany({ field }) {
           ['yearly', 'Yearly'],
         ]),
       })}
-      {field({ label: 'Taxable lines', prefKey: 'sales_tax_mark_taxable', hint: 'On printed and emailed invoices, sales receipts, credit memos and estimates', children: flag('Mark taxable amounts with a “T” when printing') })}
+      {field({ label: 'Taxable lines', prefKey: 'sales_tax_mark_taxable', hint: 'On printed and emailed invoices, sales receipts and estimates', children: flag('Mark taxable amounts with a “T” when printing') })}
     </Group>
   );
 }
