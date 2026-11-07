@@ -182,6 +182,7 @@ impl Model {
         model
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.rows.len()
     }
@@ -262,6 +263,7 @@ impl Model {
             .collect()
     }
 
+    #[cfg(test)]
     pub fn predict(&self, q: &Query) -> Option<Prediction> {
         self.predict_batch(std::slice::from_ref(q), &[None]).pop().flatten()
     }

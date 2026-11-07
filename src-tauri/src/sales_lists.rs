@@ -470,6 +470,7 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
 
 impl SalesDetailsView {
     /// The same details as an input, to carry them onto another document.
+    #[cfg(test)]
     pub fn to_input(&self) -> SalesDetails {
         SalesDetails {
             sales_rep_id: self.sales_rep_id,

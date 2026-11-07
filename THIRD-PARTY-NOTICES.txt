@@ -371,7 +371,7 @@ regex 1.13.1  [MIT OR Apache-2.0]  https://github.com/rust-lang/regex
 regex-automata 0.4.18  [MIT OR Apache-2.0]  https://github.com/rust-lang/regex
 regex-syntax 0.8.11  [MIT OR Apache-2.0]  https://github.com/rust-lang/regex
 reqwest 0.13.5  [MIT OR Apache-2.0]  https://github.com/seanmonstar/reqwest
-rfd 0.16.0  [MIT]  https://github.com/PolyMeilex/rfd
+rfd 0.17.2  [MIT]  https://github.com/PolyMeilex/rfd
 rsa 0.9.10  [MIT OR Apache-2.0]  https://github.com/RustCrypto/RSA
 rust_xlsxwriter 0.101.0  [MIT OR Apache-2.0]  https://github.com/jmcnamara/rust_xlsxwriter
 rustc-hash 2.1.3  [Apache-2.0 OR MIT]  https://github.com/rust-lang/rustc-hash
@@ -446,10 +446,10 @@ tar 0.4.46  [MIT OR Apache-2.0]  https://github.com/composefs/tar-rs
 tauri 2.12.5  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
 tauri-codegen 2.7.4  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
 tauri-macros 2.7.4  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
-tauri-plugin-dialog 2.8.3  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
+tauri-plugin-dialog 2.8.4  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
 tauri-plugin-fs 2.7.1  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
 tauri-plugin-process 2.4.0  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
-tauri-plugin-updater 2.14.0  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
+tauri-plugin-updater 2.14.1  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/plugins-workspace
 tauri-runtime 2.12.2  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
 tauri-runtime-wry 2.12.3  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
 tauri-utils 2.10.2  [Apache-2.0 OR MIT]  https://github.com/tauri-apps/tauri
@@ -587,7 +587,7 @@ zeroize 1.9.1  [Apache-2.0 OR MIT]  https://github.com/RustCrypto/utils
 zerotrie 0.2.5  [Unicode-3.0]  https://github.com/unicode-org/icu4x
 zerovec 0.11.8  [Unicode-3.0]  https://github.com/unicode-org/icu4x
 zerovec-derive 0.11.6  [Unicode-3.0]  https://github.com/unicode-org/icu4x
-zip 9.1.0  [MIT]  https://github.com/zip-rs/zip2
+zip 9.2.0  [MIT]  https://github.com/zip-rs/zip2
 zlib-rs 0.6.8  [Zlib]  https://github.com/trifectatechfoundation/zlib-rs
 zmij 1.0.23  [MIT]  https://github.com/dtolnay/zmij
 zopfli 0.8.4  [Apache-2.0]  https://github.com/zopfli-rs/zopfli
@@ -599,9 +599,9 @@ npm packages (10)
 ==============================================================================
 
 @tauri-apps/api 2.12.4  [Apache-2.0 OR MIT]  git+https://github.com/tauri-apps/tauri.git
-@tauri-apps/plugin-dialog 2.8.3  [MIT OR Apache-2.0]  https://github.com/tauri-apps/plugins-workspace
+@tauri-apps/plugin-dialog 2.8.4  [MIT OR Apache-2.0]  https://github.com/tauri-apps/plugins-workspace
 @tauri-apps/plugin-process 2.4.0  [MIT OR Apache-2.0]  https://github.com/tauri-apps/plugins-workspace
-@tauri-apps/plugin-updater 2.14.0  [MIT OR Apache-2.0]  https://github.com/tauri-apps/plugins-workspace
+@tauri-apps/plugin-updater 2.14.1  [MIT OR Apache-2.0]  https://github.com/tauri-apps/plugins-workspace
 js-tokens 4.0.0  [MIT]  lydell/js-tokens
 loose-envify 1.4.0  [MIT]  git://github.com/zertosh/loose-envify.git
 lucide-react 1.49.0  [ISC]  https://github.com/lucide-icons/lucide.git
@@ -7535,7 +7535,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
------ Used by: fdeflate 0.3.7 (LICENSE-APACHE), field-offset 0.3.6 (LICENSE-APACHE), image 0.25.10 (LICENSE-APACHE), image-webp 0.2.4 (LICENSE-APACHE), miniz_oxide 0.8.9 (LICENSE-APACHE.md), miniz_oxide 0.9.1 (LICENSE-APACHE.md), num-conv 0.2.2 (LICENSE-Apache), pin-project-lite 0.2.17 (LICENSE-APACHE), portable-atomic 1.15.0 (LICENSE-APACHE), portable-atomic-util 0.2.8 (LICENSE-APACHE), raw-window-handle 0.6.2 (LICENSE-APACHE.md), simdutf8 0.1.5 (LICENSE-Apache), sync_wrapper 1.0.2 (LICENSE), tauri 2.12.5 (LICENSE-APACHE-2.0), tauri-codegen 2.7.4 (LICENSE-APACHE-2.0), tauri-macros 2.7.4 (LICENSE-APACHE-2.0), tauri-plugin-dialog 2.8.3 (LICENSE_APACHE-2.0), tauri-plugin-fs 2.7.1 (LICENSE_APACHE-2.0), tauri-plugin-process 2.4.0 (LICENSE_APACHE-2.0), tauri-plugin-updater 2.14.0 (LICENSE_APACHE-2.0), tauri-runtime 2.12.2 (LICENSE-APACHE-2.0), tauri-runtime-wry 2.12.3 (LICENSE-APACHE-2.0), tauri-utils 2.10.2 (LICENSE-APACHE-2.0), time 0.3.55 (LICENSE-Apache), time-core 0.1.9 (LICENSE-Apache), time-macros 0.2.32 (LICENSE-Apache), @tauri-apps/api 2.12.4 (LICENSE-APACHE-2.0) -----
+----- Used by: fdeflate 0.3.7 (LICENSE-APACHE), field-offset 0.3.6 (LICENSE-APACHE), image 0.25.10 (LICENSE-APACHE), image-webp 0.2.4 (LICENSE-APACHE), miniz_oxide 0.8.9 (LICENSE-APACHE.md), miniz_oxide 0.9.1 (LICENSE-APACHE.md), num-conv 0.2.2 (LICENSE-Apache), pin-project-lite 0.2.17 (LICENSE-APACHE), portable-atomic 1.15.0 (LICENSE-APACHE), portable-atomic-util 0.2.8 (LICENSE-APACHE), raw-window-handle 0.6.2 (LICENSE-APACHE.md), simdutf8 0.1.5 (LICENSE-Apache), sync_wrapper 1.0.2 (LICENSE), tauri 2.12.5 (LICENSE-APACHE-2.0), tauri-codegen 2.7.4 (LICENSE-APACHE-2.0), tauri-macros 2.7.4 (LICENSE-APACHE-2.0), tauri-plugin-dialog 2.8.4 (LICENSE_APACHE-2.0), tauri-plugin-fs 2.7.1 (LICENSE_APACHE-2.0), tauri-plugin-process 2.4.0 (LICENSE_APACHE-2.0), tauri-plugin-updater 2.14.1 (LICENSE_APACHE-2.0), tauri-runtime 2.12.2 (LICENSE-APACHE-2.0), tauri-runtime-wry 2.12.3 (LICENSE-APACHE-2.0), tauri-utils 2.10.2 (LICENSE-APACHE-2.0), time 0.3.55 (LICENSE-Apache), time-core 0.1.9 (LICENSE-Apache), time-macros 0.2.32 (LICENSE-Apache), @tauri-apps/api 2.12.4 (LICENSE-APACHE-2.0) -----
 
 Apache License
                            Version 2.0, January 2004
@@ -14566,7 +14566,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
------ Used by: rfd 0.16.0 (LICENSE) -----
+----- Used by: rfd 0.17.2 (LICENSE) -----
 
 MIT License
 
@@ -15839,7 +15839,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
------ Used by: spin 0.9.9 (LICENSE), zip 9.1.0 (LICENSE) -----
+----- Used by: spin 0.9.9 (LICENSE), zip 9.2.0 (LICENSE) -----
 
 The MIT License (MIT)
 
@@ -16562,7 +16562,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
------ Used by: tauri 2.12.5 (LICENSE-MIT), tauri-codegen 2.7.4 (LICENSE-MIT), tauri-macros 2.7.4 (LICENSE-MIT), tauri-plugin-dialog 2.8.3 (LICENSE_MIT), tauri-plugin-fs 2.7.1 (LICENSE_MIT), tauri-plugin-process 2.4.0 (LICENSE_MIT), tauri-plugin-updater 2.14.0 (LICENSE_MIT), tauri-runtime 2.12.2 (LICENSE-MIT), tauri-runtime-wry 2.12.3 (LICENSE-MIT), tauri-utils 2.10.2 (LICENSE-MIT), @tauri-apps/api 2.12.4 (LICENSE-MIT) -----
+----- Used by: tauri 2.12.5 (LICENSE-MIT), tauri-codegen 2.7.4 (LICENSE-MIT), tauri-macros 2.7.4 (LICENSE-MIT), tauri-plugin-dialog 2.8.4 (LICENSE_MIT), tauri-plugin-fs 2.7.1 (LICENSE_MIT), tauri-plugin-process 2.4.0 (LICENSE_MIT), tauri-plugin-updater 2.14.1 (LICENSE_MIT), tauri-runtime 2.12.2 (LICENSE-MIT), tauri-runtime-wry 2.12.3 (LICENSE-MIT), tauri-utils 2.10.2 (LICENSE-MIT), @tauri-apps/api 2.12.4 (LICENSE-MIT) -----
 
 MIT License
 
@@ -16586,7 +16586,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
------ Used by: tauri-plugin-dialog 2.8.3 (LICENSE.spdx), tauri-plugin-fs 2.7.1 (LICENSE.spdx), tauri-plugin-process 2.4.0 (LICENSE.spdx), tauri-plugin-updater 2.14.0 (LICENSE.spdx), @tauri-apps/plugin-dialog 2.8.3 (LICENSE.spdx), @tauri-apps/plugin-process 2.4.0 (LICENSE.spdx), @tauri-apps/plugin-updater 2.14.0 (LICENSE.spdx) -----
+----- Used by: tauri-plugin-dialog 2.8.4 (LICENSE.spdx), tauri-plugin-fs 2.7.1 (LICENSE.spdx), tauri-plugin-process 2.4.0 (LICENSE.spdx), tauri-plugin-updater 2.14.1 (LICENSE.spdx), @tauri-apps/plugin-dialog 2.8.4 (LICENSE.spdx), @tauri-apps/plugin-process 2.4.0 (LICENSE.spdx), @tauri-apps/plugin-updater 2.14.1 (LICENSE.spdx) -----
 
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0

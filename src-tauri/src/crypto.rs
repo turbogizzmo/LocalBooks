@@ -81,7 +81,7 @@ impl DataKey {
         let aad = field_aad(&self.key_id, table, column, row_id);
         let sealed = self
             .cipher()
-            .encrypt(Nonce::from_slice(&nonce), Payload { msg: plain.as_bytes(), aad: &aad })
+            .encrypt(&Nonce::from(nonce), Payload { msg: plain.as_bytes(), aad: &aad })
             .map_err(|_| "CRYPTO_ENCRYPT: could not encrypt the value".to_string())?;
         let mut raw = nonce.to_vec();
         raw.extend_from_slice(&sealed);
@@ -99,7 +99,7 @@ impl DataKey {
         let (nonce, sealed) = raw.split_at(NONCE_LEN);
         let aad = field_aad(&self.key_id, table, column, row_id);
         let plain = Zeroizing::new(
-            self.cipher().decrypt(Nonce::from_slice(nonce), Payload { msg: sealed, aad: &aad }).map_err(|_| unreadable())?,
+            self.cipher().decrypt(&Nonce::try_from(nonce).map_err(|_| unreadable())?, Payload { msg: sealed, aad: &aad }).map_err(|_| unreadable())?,
         );
         String::from_utf8(plain.to_vec()).map_err(|_| unreadable())
     }
@@ -297,7 +297,7 @@ async fn add_slot(conn: &mut SqliteConnection, key: &DataKey, kind: &str, user_i
     let aad = slot_aad(&key.key_id, kind, user_id);
     let wrapped = Aes256Gcm::new_from_slice(&slot_key[..])
         .expect("a 32-byte key")
-        .encrypt(Nonce::from_slice(&nonce), Payload { msg: &key.key[..], aad: &aad })
+        .encrypt(&Nonce::from(nonce), Payload { msg: &key.key[..], aad: &aad })
         .map_err(|_| "CRYPTO_ENCRYPT: could not protect the data key".to_string())?;
     sqlx::query(
         "INSERT INTO key_slots (kind, user_id, memory_kib, iterations, parallelism, salt, nonce, wrapped_key)
@@ -334,9 +334,10 @@ async fn open_slot(key_id: String, kind: &str, user_id: Option<i64>, slot: Slot,
     let salt: [u8; SALT_LEN] = slot.salt.as_slice().try_into().map_err(|_| "CRYPTO_SLOT: damaged key slot".to_string())?;
     let slot_key = derive(secret, salt, cost).await?;
     let aad = slot_aad(&key_id, kind, user_id);
+    let nonce = Nonce::try_from(slot.nonce.as_slice()).map_err(|_| "CRYPTO_SLOT: damaged key slot".to_string())?;
     let Ok(plain) = Aes256Gcm::new_from_slice(&slot_key[..])
         .expect("a 32-byte key")
-        .decrypt(Nonce::from_slice(&slot.nonce), Payload { msg: &slot.wrapped_key, aad: &aad })
+        .decrypt(&nonce, Payload { msg: &slot.wrapped_key, aad: &aad })
     else {
         return Ok(None);
     };
