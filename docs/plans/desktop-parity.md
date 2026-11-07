@@ -1,16 +1,16 @@
-# QuickBooks Desktop parity: what testers will look for next
+# Desktop parity: what testers will look for next
 
-Testers moving from QuickBooks Desktop keep running into pieces LocalBooks doesn't have yet ("no
+Testers moving to LocalBooks from QuickBooks Desktop keep running into pieces LocalBooks doesn't have yet ("no
 Add new vendor", "can't double-click an invoice", "where are classes?"). This note surveys the rest
 of the desktop product, area by area, so we fix them before testers find them. It covers menus,
 transaction forms, centers and lists, registers, reports and keyboard shortcuts. Preferences have
 their own note, [preferences.md](preferences.md). Rows `T4`–`T9` in `docs/gaps.md` track the
 batches below.
 
-**Sources** (November 2026): list, transaction and report names read from the QuickBooks Desktop
-Pro 2021 installer's program files (kept outside the repo in `research-samples/`, never committed,
-never run). Form fields, behaviours, register details and keyboard shortcuts come from public
-product knowledge. Everything is described in our own words.
+**Sources** (November 2026): the list, transaction and report names of the desktop software
+LocalBooks replaces, as a user sees them, and public product knowledge for form fields,
+behaviours, register details and keyboard shortcuts. Nothing from that software is in this repo;
+everything is described in our own words.
 
 **Already done** (#146, #147): the form toolbar (Find, Previous/Next, New, Save, Void, Print,
 Email, Attach, Memorize), payment-method tiles, Add new vendor, a vendor's or customer's
