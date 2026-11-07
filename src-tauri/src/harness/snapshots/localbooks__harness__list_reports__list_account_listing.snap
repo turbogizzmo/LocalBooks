@@ -1,0 +1,50 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Account Listing, all dates to 2025-12-31
+
+Account                        Type                      Balance Total Description
+1010 · Checking                Bank                           3,313.22 Primary operating accoun
+1020 · Savings                 Bank                          15,000.00 Reserve account
+1200 · Accounts Receivab       Accounts Receivable           14,458.81 Unpaid customer invoices
+1300 · Undeposited Funds       Other Current Asset           12,047.67 Customer payments receiv
+1400 · Inventory Asset         Other Current Asset              108.00 Cost of products on hand
+1500 · Equipment               Fixed Asset                   20,250.00 Computers, machinery, fu
+2000 · Accounts Payable        Accounts Payable               2,481.90 Unpaid vendor bills
+2100 · Credit Card             Credit Card                      375.00 Business credit card
+2200 · Sales Tax Payable       Other Current Liability          146.18 Sales tax collected, not
+2300 · Payroll Liabiliti       Other Current Liability        2,001.37
+2500 · Loan Payable            Long Term Liability                0.00 Long-term business loans
+3000 · Opening Balance E       Equity                             0.00 Offset for opening balan
+3100 · Owner's Investmen       Equity                        51,500.00 Capital contributed by o
+3200 · Owner's Draw            Equity                       -10,000.00 Withdrawals by owners
+3900 · Retained Earnings       Equity                             0.00 Accumulated net income f
+4000 · Sales                   Income                                  Product sales
+4100 · Services                Income                                  Service revenue
+4900 · Uncategorized Inc       Income                                  Deposits awaiting classi
+5000 · Cost of Goods Sol       Cost of Goods Sold                      Direct cost of products
+6000 · Advertising & Mar       Expense
+6050 · Bank Charges & Fe       Expense
+6100 · Fuel & Auto             Expense
+6150 · Insurance               Expense
+6200 · Meals & Entertain       Expense
+6250 · Office Supplies         Expense
+6300 · Rent & Lease            Expense
+6350 · Software & Cloud        Expense
+6400 · Contractors             Expense
+6450 · Travel                  Expense
+6500 · Utilities               Expense
+6550 · Telephone & Inter       Expense
+6600 · Shipping & Postag       Expense
+6700 · Wages                   Expense
+6710 · Payroll Taxes           Expense
+6900 · Uncategorized Exp       Expense                                 Payments awaiting classi
+7000 · Interest Income         Other Income
+8000 · Interest Expense        Other Expense
+8100 · Exchange Gain or        Other Expense                           Realized gains (credits)
+8110 · Unrealized Exchan       Other Expense                           Period-end revaluation o
+
+39 lines
+
+39 active accounts; balances of balance sheet accounts as of 2025-12-31.

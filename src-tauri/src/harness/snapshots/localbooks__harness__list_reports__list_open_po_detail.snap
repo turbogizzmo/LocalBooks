@@ -1,0 +1,16 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Open Purchase Orders Detail, all dates to 2025-12-31
+
+                               Date          Num                       Item                      Description                         Qty          Rate Expected             Amount
+Riverside Print Shop
+                               2025-12-05    1                         Poster Prints             Poster stock                        100          0.80 2025-12-19            80.00
+                               2025-12-05    1                                                   Rush delivery                                         2025-12-19            15.00
+Total Riverside Print Sh                                                                                                                                                     95.00
+TOTAL                                                                                                                                                                        95.00
+
+2 lines
+
+1 purchase order open as of 2025-12-31. Purchase orders do not post to the books.

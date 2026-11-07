@@ -1,0 +1,26 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Unpaid Bills by Job, all dates to 2025-12-31
+
+                               Type                      Date          Num                       Vendor                    Due Date              Aging  Open Balance
+Brightwater Cafe
+                               Bill                      2025-12-02    LC-310                    Lakeside Ceramics         2025-12-17               14         20.51
+Total Brightwater Cafe                                                                                                                                         20.51
+Brightwater Cafe:Patio M
+                               Bill                      2025-12-02    LC-310                    Lakeside Ceramics         2025-12-17               14         13.67
+Total Brightwater Cafe:P                                                                                                                                       13.67
+No customer or job
+                               Bill                      2025-09-05    PC-4410                   Pinecrest Office Supply   2025-10-05               87        542.50
+                               Bill                      2025-11-10    RP-77                     Riverside Print Shop      2025-12-10               21        425.00
+                               Bill                      2025-12-01    LM-88                     Lumen Media               2025-12-16               15      1,125.00
+                               Bill                      2025-12-02    LC-310                    Lakeside Ceramics         2025-12-17               14         73.82
+                               Bill                      2025-11-20    PC-4521                   Pinecrest Office Supply   2025-12-20               11        187.40
+                               Bill                      2025-12-03    NW-12                     Northwind Software        2026-01-02                0        129.00
+Total No customer or job                                                                                                                                    2,482.72
+TOTAL                                                                                                                                                       2,516.90
+
+6 lines
+
+6 bills with a balance as of 2025-12-31. A bill for several jobs is split by its lines' amounts.

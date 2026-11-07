@@ -1,0 +1,14 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Item Listing, all dates to 2025-12-31
+
+Item                           Description               Type                      SKU                       Income Account                    Price       On Hand
+Gift Mugs                      Logo mugs                 Inventory                 MUG-12                    Sales                             18.00            12
+Logo Package                                             Service or non-stock                                Sales                          1,200.00
+Poster Prints                                            Service or non-stock                                Sales                             25.00
+
+3 lines
+
+3 active items; On Hand is today's quantity of tracked items.

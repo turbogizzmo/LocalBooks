@@ -6,6 +6,21 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Type checks and deposits straight into a register.** Bank and credit card registers end in a
+  blank row: enter the date, number, payee, account, memo and an amount, then click **Record** (or
+  press Enter). A bank payment becomes a check, a deposit a deposit, a card charge an expense and a
+  card payment a card credit, just as their forms would make them. **Restore** clears the row and
+  **Splits…** spreads it over several accounts.
+- **Find and filter in a register.** **Go To…** finds a transaction by number, payee, memo or
+  amount; **Dates** shows all, this month, this year or your own range; **2-line** puts the account
+  and memo on a second line. The **No.** column now shows each check's, invoice's or bill's own
+  number.
+- **QuickReport, Transaction History and Transaction Journal.** Press **Ctrl+Q** in a register, or
+  on an account, customer, vendor or item in its list, for a report of its transactions. Click a
+  transaction and press **Ctrl+H** to see what is linked to it (an invoice's payments, a payment's
+  deposit, a bill's payments) or **Ctrl+Y** for the debits and credits it posted.
+- **Filter a customer's or vendor's transactions.** The transactions panel under the Customers and
+  Vendors lists can show one transaction type and a date range.
 - **Print checks and invoices later, in a batch.** Tick **Print later** on Write Checks or on an
   invoice and it waits in **File › Print Forms › Checks…** or **Invoices…**, marked *To print* in
   the list. Print the batch from there: checks take numbers in order from the first number on your
@@ -17,6 +32,18 @@ people using LocalBooks.
   customer goes on a new invoice. Voiding the bounced check puts it all back.
 - **Pay down a credit card.** **Banking › Pay Down Credit Card…** pays a card from a bank account,
   starting at what the card owes. It posts as a transfer.
+- **Phone lists, contact lists and more reports.** A new **Lists** group in the report list has the
+  **Customer** and **Vendor Phone Lists** and **Contact Lists**, the **Item Listing** and the
+  **Account Listing**. Also new: **Balance Sheet Summary**, **Profit & Loss YTD Comparison**, **Net
+  Income Detail**, **Sales by Rep Detail**, **Average Days to Pay Summary**, **Unpaid Bills by Job**,
+  **Open Purchase Orders Detail**, **Time by Job Summary** and **Detail**, **Time by Name**, **Time by
+  Item**, the **Physical Inventory Worksheet** (print it and write in the counts) and the **Audit
+  Trail**, showing who posted, voided or changed what and when.
+- **Collapse and expand report headings.** Click ▾ beside a heading to show only its total, or
+  **Collapse all** to see just the totals. Reports print the way they're shown.
+- **Process Multiple Reports.** Under **Memorized reports**, tick several reports and display them
+  together, print them in one go (each on a new page), or save them as one Excel workbook with a
+  worksheet per report.
 - **Imports keep your classes.** Books moved from QuickBooks now arrive with their class list,
   subclasses included, and every transaction line keeps its class, so Profit & Loss by Class
   matches the original. This works for QuickBooks Desktop company files and backups (`.qbw`,

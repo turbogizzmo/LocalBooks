@@ -1,0 +1,16 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Customer Phone List, all dates to 2025-12-31
+
+Customer                       Phone
+Alder & Finch LLP
+Bonn Studio GmbH
+Brightwater Cafe               555-0142
+Brightwater Cafe:Patio M       555-0143
+Cobalt Outfitters
+
+5 lines
+
+5 active customers.
