@@ -219,6 +219,7 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
 /// Replaces a manual journal entry. Entries made by another screen (documents, reclassifications,
 /// refunds, tax payments) are edited from that screen. The replacement keeps the original's
 /// adjusting-entry mark.
+#[cfg(test)]
 pub async fn replace_journal_entry(pool: &SqlitePool, journal_entry_id: i64, entry: JournalEntry) -> Result<i64, String> {
     replace_journal_entry_flagged(pool, journal_entry_id, entry, None).await
 }

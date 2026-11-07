@@ -179,10 +179,13 @@ export default function PartyTransactions({ kind, party, onClose }) {
           {data && data.rows.length > 0 && (
             <tfoot>
               <tr>
+                {/* Invoices and payments move a balance in opposite directions, so only one type at a time adds up. */}
                 <td className="qb-grid-cell font-semibold" colSpan={5}>
-                  Total
+                  {type ? `Total ${(SOURCE_LABEL[type] ?? type).toLowerCase()}` : `${data.matchCount} ${data.matchCount === 1 ? 'transaction' : 'transactions'}`}
                 </td>
-                <td className="qb-grid-cell num font-semibold">{formatCents(data.totalCents)}</td>
+                <td className="qb-grid-cell num font-semibold" title={type ? undefined : 'Choose one type to see its total'}>
+                  {type ? formatCents(data.totalCents) : ''}
+                </td>
               </tr>
             </tfoot>
           )}

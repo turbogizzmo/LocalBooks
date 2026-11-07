@@ -142,6 +142,7 @@ impl Default for ItemKind {
 }
 
 impl ItemKind {
+    #[cfg(test)]
     pub fn discount(percent_ppm: Option<i64>) -> Self {
         ItemKind { item_type: "DISCOUNT".into(), percent_ppm }
     }
@@ -326,6 +327,7 @@ pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String
     .map_err(db_err)
 }
 
+#[cfg(test)]
 pub async fn create_product(pool: &SqlitePool, input: ProductInput) -> Result<ProductView, String> {
     create_item(pool, input, ItemKind::default()).await
 }
