@@ -44,9 +44,11 @@ pub async fn general_ledger(pool: &SqlitePool, start_date: NaiveDate, end_date: 
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
     let (fiscal_start, _) = fiscal_year_bounds(start_date, fiscal_start_month(pool).await?);
-    let accounts: Vec<(i64, bool, bool)> = sqlx::query_as(
+    let names = crate::preferences::AccountNames::load(pool).await?;
+    let accounts: Vec<(i64, bool, bool, Option<String>, String)> = sqlx::query_as(
         "SELECT c.id, c.is_balance_sheet,
-                EXISTS (SELECT 1 FROM v_posted_lines l WHERE l.account_id = c.id AND l.entry_date <= ?1)
+                EXISTS (SELECT 1 FROM v_posted_lines l WHERE l.account_id = c.id AND l.entry_date <= ?1),
+                c.account_number, c.full_name
          FROM v_chart_of_accounts c ORDER BY c.type_sort_order, COALESCE(c.account_number, ''), c.full_name",
     )
     .bind(end_date)
@@ -54,7 +56,7 @@ pub async fn general_ledger(pool: &SqlitePool, start_date: NaiveDate, end_date: 
     .await
     .map_err(db_err)?;
     let mut out = Vec::new();
-    for (id, is_balance_sheet, any) in accounts {
+    for (id, is_balance_sheet, any, number, full_name) in accounts {
         if !any {
             continue;
         }
@@ -85,7 +87,7 @@ pub async fn general_ledger(pool: &SqlitePool, start_date: NaiveDate, end_date: 
             account_id: id,
             total_debit_cents: reg.rows.iter().map(|r| r.debit_cents).sum(),
             total_credit_cents: reg.rows.iter().map(|r| r.credit_cents).sum(),
-            account_name: reg.account_name,
+            account_name: names.label(number.as_deref(), &full_name),
             account_type_name: reg.account_type_name,
             opening_balance_cents: reg.opening_balance_cents,
             ending_balance_cents: reg.ending_balance_cents,
@@ -131,6 +133,8 @@ pub struct AgingReport {
     /// `RECEIVABLE` or `PAYABLE`.
     pub kind: String,
     pub as_of: NaiveDate,
+    /// What the columns count from: `DUE` (the due date) or `TRANSACTION` (the document's date).
+    pub basis: String,
     pub bucket_labels: [&'static str; 5],
     pub rows: Vec<AgingRow>,
     pub totals_cents: [i64; 5],
@@ -138,6 +142,10 @@ pub struct AgingReport {
     /// Every open item, oldest due first within each name.
     pub items: Vec<AgingItem>,
 }
+
+/// Company preference: aging reports count days from the `due` date (the default) or the
+/// `transaction` date.
+pub const AGING_BASIS: &str = "aging_basis";
 
 /// The aging column (index into [`AGING_LABELS`]) for an item this many days past due.
 pub(crate) fn aging_bucket(days_past_due: i64) -> usize {
@@ -151,9 +159,11 @@ pub(crate) fn aging_bucket(days_past_due: i64) -> usize {
 }
 
 /// What customers owed (`receivable`) or what was owed to vendors (`payable`) as of a date: each
-/// document's balance after the payments and credits dated on or before it, aged by due date.
-/// Credit not yet used shows as a negative amount aged from its date.
+/// document's balance after the payments and credits dated on or before it, aged by due date or,
+/// when Preferences › Reports & Graphs says so ([`AGING_BASIS`] = `transaction`), by the
+/// document's own date. Credit not yet used shows as a negative amount aged from its date.
 pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result<AgingReport, String> {
+    let from_transaction_date = crate::preferences::get(pool, AGING_BASIS).await? == "transaction";
     let sql = if payable {
         "SELECT * FROM (
             SELECT v.name AS party_name, 'Bill' AS kind, b.bill_number AS number, b.bill_date AS date, b.due_date,
@@ -197,7 +207,8 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
     let mut rows: Vec<AgingRow> = Vec::new();
     let mut totals = [0i64; 5];
     for item in &mut items {
-        item.days_past_due = (as_of - item.due_date).num_days();
+        let aged_from = if from_transaction_date { item.date } else { item.due_date };
+        item.days_past_due = (as_of - aged_from).num_days();
         let b = aging_bucket(item.days_past_due);
         if rows.last().map(|r| r.party_name.as_str()) != Some(item.party_name.as_str()) {
             rows.push(AgingRow { party_name: item.party_name.clone(), buckets_cents: [0; 5], total_cents: 0 });
@@ -210,6 +221,7 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
     Ok(AgingReport {
         kind: if payable { "PAYABLE" } else { "RECEIVABLE" }.into(),
         as_of,
+        basis: if from_transaction_date { "TRANSACTION" } else { "DUE" }.into(),
         bucket_labels: AGING_LABELS,
         total_cents: totals.iter().sum(),
         rows,
@@ -274,8 +286,9 @@ pub async fn by_party(pool: &SqlitePool, expenses: bool, start_date: NaiveDate, 
 /// Quantity and amount sold per product or service, from invoices and sales receipts less credit
 /// memos, by document date. Voided documents are left out.
 pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date: NaiveDate) -> Result<SummaryReport, String> {
-    let rows: Vec<(Option<String>, i64, i64)> = sqlx::query_as(
-        "SELECT p.name, SUM(x.qty), SUM(x.amount) FROM (
+    let items = crate::preferences::ItemNames::load(pool).await?;
+    let rows: Vec<(Option<String>, Option<String>, i64, i64)> = sqlx::query_as(
+        "SELECT p.name, p.description, SUM(x.qty), SUM(x.amount) FROM (
             SELECT it.product_service_id AS product, it.quantity_e4 AS qty,
                    it.amount_cents * COALESCE(i.home_total_cents, i.total_cents) / i.total_cents AS amount
             FROM invoice_items it JOIN invoices i ON i.id = it.invoice_id
@@ -302,7 +315,11 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
         start_date,
         end_date,
         rows.into_iter()
-            .map(|(name, qty, cents)| SummaryRow { label: name.unwrap_or_else(|| "No product/service".into()), quantity_e4: Some(qty), amount_cents: cents })
+            .map(|(name, description, qty, cents)| SummaryRow {
+                label: name.map_or_else(|| "No product/service".into(), |n| items.label(&n, description.as_deref())),
+                quantity_e4: Some(qty),
+                amount_cents: cents,
+            })
             .collect(),
     ))
 }
@@ -345,6 +362,7 @@ pub struct InventoryValuation {
 /// dated on or before it, so the total agrees with the inventory asset accounts on that date.
 /// Inactive items are left out unless they still have stock or value.
 pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<InventoryValuation, String> {
+    let names = crate::preferences::ItemNames::load(pool).await?;
     let items: Vec<(i64, String, Option<String>, Option<String>, i64, bool, i64, i64)> = sqlx::query_as(
         "SELECT i.id, p.name, i.sku, p.description, p.rate_cents, p.is_active,
                 COALESCE(SUM(s.qty_change_e4), 0), COALESCE(SUM(s.value_change_cents), 0)
@@ -364,7 +382,7 @@ pub async fn inventory_valuation(pool: &SqlitePool, as_of: NaiveDate) -> Result<
         let retail_value_cents = mul_div_round(sales_price_cents, qty, QUANTITY_SCALE).ok_or("RPT_OVERFLOW: amount out of range")?;
         rows.push(InventoryValuationRow {
             item_id,
-            name,
+            name: names.label(&name, description.as_deref()),
             sku,
             description,
             qty_on_hand_e4: qty,
@@ -505,6 +523,7 @@ pub async fn stock_status(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
     if end_date < start_date {
         return Err("RPT_BAD_RANGE: the end date is before the start date".into());
     }
+    let names = crate::preferences::ItemNames::load(pool).await?;
     let items: Vec<(i64, String, Option<String>, Option<String>, bool, i64, i64, Option<NaiveDate>, i64)> = sqlx::query_as(
         "SELECT i.id, p.name, i.sku, p.description, p.is_active,
                 COALESCE((SELECT SUM(s.qty_change_e4) FROM stock_ledger_entries s WHERE s.item_id = i.id AND s.movement_date <= ?2), 0),
@@ -530,7 +549,7 @@ pub async fn stock_status(pool: &SqlitePool, start_date: NaiveDate, end_date: Na
             continue;
         }
         let sales_per_week_e4 = mul_div_round(sold, 7, days).ok_or("RPT_OVERFLOW: quantity out of range")?;
-        rows.push(StockStatusRow { item_id, name, sku, description, qty_on_hand_e4: on_hand, qty_on_order_e4: on_order, next_delivery, qty_sold_e4: sold, sales_per_week_e4 });
+        rows.push(StockStatusRow { item_id, name: names.label(&name, description.as_deref()), sku, description, qty_on_hand_e4: on_hand, qty_on_order_e4: on_order, next_delivery, qty_sold_e4: sold, sales_per_week_e4 });
     }
     Ok(StockStatus { start_date, end_date, rows })
 }

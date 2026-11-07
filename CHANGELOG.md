@@ -6,6 +6,15 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
+  the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
+  date, and whether items show by name, description or both. Accounting › Company Preferences can
+  hide account numbers in reports or show only a subaccount's own name.
+- **Choose where accounts go on the Statement of Cash Flows.** Preferences › Reports & Graphs lists
+  each balance sheet account with its section (operating, investing or financing); move one and the
+  statement follows.
+- **See a report's options first.** Turn on **Show the report's options before running it**
+  (Reports & Graphs › My Preferences) and a report asks for its dates before it runs.
 - **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
   the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
   Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings
