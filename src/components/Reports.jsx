@@ -442,7 +442,8 @@ const REPORT_GROUPS = [
 export default function Reports({ navigate, intent }) {
   const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
   // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
-  const [initial, setInitial] = useState(null);
+  // A QuickReport or Transaction Journal opens with its `zoom`.
+  const [initial, setInitial] = useState(() => (intent?.data?.zoom ? { zoom: intent.data.zoom, at: Date.now() } : null));
   const setReport = (id) => {
     setReportId(id);
     setInitial(null);
@@ -455,12 +456,15 @@ export default function Reports({ navigate, intent }) {
   const zoom = (presetId, z) => openReport(`preset:${presetId}`, { zoom: z });
   const custom = useCustomReports();
   useEffect(() => {
-    if (intent?.data?.report) setReport(intent.data.report);
-  }, [intent]);
+    if (intent?.data?.zoom) openReport(intent.data.report, { zoom: intent.data.zoom });
+    else if (intent?.data?.report) setReport(intent.data.report);
+  }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
   const groups = withCustomReports(REPORT_GROUPS, custom);
   const reportName = groups.flatMap((g) => g.reports).find(([id]) => id === report)?.[1] ?? null;
   // The window is named after its report, and reopens on it with the desktop.
-  useWindowContent(reportName ? { name: reportName, action: 'open', data: { report } } : null);
+  // A QuickReport is named after what it reports on, and reopens narrowed the same way.
+  const zoomed = initial?.zoom && isCustomReport(report) ? initial.zoom : null;
+  useWindowContent(reportName ? { name: zoomed?.title ?? reportName, action: 'open', data: zoomed ? { report, zoom: zoomed } : { report } } : null);
   // A report chosen in the list opens in a window of its own (or brings forward the window that
   // already shows it), as reports do in QuickBooks; the Report Center stays where it is.
   const openFromList = useOpenFromList();
