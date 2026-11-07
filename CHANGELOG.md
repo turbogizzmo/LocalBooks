@@ -26,6 +26,8 @@ people using LocalBooks.
     Print later on their new forms; new customers take the Send Forms default.
   - Change Item Prices starts from the default markup when you price from cost.
 
+- **No more "database is locked" when several things save at once.** On a slow disk, a save
+  that had to wait for another one could give up after five seconds; it now waits its turn.
 - **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
   the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
   date, and whether items show by name, description or both. Accounting › Company Preferences can
