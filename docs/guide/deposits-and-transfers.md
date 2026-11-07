@@ -26,7 +26,19 @@ straight into the bank account's register: see
    optional **Memo**.
 3. Click **Save & Post Transfer**.
 
-A transfer isn't income or an expense, so it doesn't appear on the Profit and Loss. Use one to pay
-down a credit card from your bank account too.
+A transfer isn't income or an expense, so it doesn't appear on the Profit and Loss.
+
+## Pay down a credit card
+
+1. Choose **Banking › Pay Down Credit Card…**, or click **Pay down card** on this screen.
+2. Choose the **Credit card**; **Amount** starts at what it owes. Choose the bank account to **Pay
+   from**, and change the amount for a partial payment.
+3. Click **Save & Pay**.
+
+It posts as a transfer: the card's balance and the bank both go down. It appears in this list and
+in both accounts' registers, ready to match on each statement when you reconcile.
+
+To record a customer's check the bank returned, see
+[Record a bounced check](customer-payments.md#record-a-bounced-check).
 
 > **Tip:** Voiding a deposit returns its customer payments to Undeposited Funds.

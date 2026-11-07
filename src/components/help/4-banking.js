@@ -11,6 +11,10 @@ export const screens = {
     help: 'Bank deposits (including customer payments held in Undeposited Funds) and transfers between your own accounts.',
     guide: 'deposits-and-transfers',
   },
+  'banking/bounced-checks': {
+    help: 'Record a customer’s check that the bank returned: the invoice it paid opens again, the amount and any bank fee come out of the bank, and a returned-check fee can be charged to the customer on a new invoice.',
+    guide: 'customer-payments',
+  },
   'banking/reconcile': {
     help: 'Match your books to a bank or card statement and lock the matched transactions so the reconciled balance can never change.',
     guide: 'reconciling',
@@ -46,6 +50,22 @@ export const topics = [
     keywords: 'transfer move savings checking credit card',
     go: { label: 'New transfer', view: 'banking/transfers', action: 'transfer' },
     guide: 'deposits-and-transfers',
+  },
+  {
+    id: 'pay-down-card', area: 'banking', views: ['banking/transfers', 'expenses/expenses'],
+    title: 'Pay down a credit card',
+    body: 'Banking › Pay Down Credit Card… pays a card from a bank account: choose the card, and the amount starts at what the card owes. It posts as a transfer (the card goes down, the bank goes down), so it shows in both registers and reconciles against both statements.',
+    keywords: 'pay credit card balance payment paydown pay off card bill',
+    go: { label: 'Pay down a card', view: 'banking/transfers', action: 'pay-card' },
+    guide: 'deposits-and-transfers',
+  },
+  {
+    id: 'bounced-check', area: 'banking', views: ['banking/bounced-checks', 'sales/invoices', 'banking/transfers'],
+    title: 'Record a bounced check',
+    body: 'When the bank returns a customer’s check, choose it in Banking › Record Bounced Check… and enter the bank’s fee and any fee you charge the customer. The invoice it paid opens again, the bank goes down by the check and the fee, and your fee goes on a new invoice; voiding the bounced check puts it all back.',
+    keywords: 'bounced check nsf returned insufficient funds rubber check fee',
+    go: { label: 'Record a bounced check', view: 'banking/bounced-checks' },
+    guide: 'customer-payments',
   },
   {
     id: 'reconcile', area: 'banking', views: ['banking/reconcile', 'banking/feeds'],
