@@ -365,3 +365,34 @@ async fn balance_sheet_budget_vs_actual_compares_month_end_balances() {
     assert_eq!(row(&pl.lines, "4100 Services"), [Some(80_000), Some(100_000), Some(-20_000), Some(8_000)]);
     assert!(balance_sheet_budget_vs_actual(&pool, budget.id, 13).await.unwrap_err().starts_with("RPT_BAD_RANGE"));
 }
+
+#[tokio::test]
+async fn cash_flow_sections_follow_the_company_mapping() {
+    let pool = test_pool().await;
+    let (checking, equipment, loan) = (account_id(&pool, "1010").await, account_id(&pool, "1500").await, account_id(&pool, "2500").await);
+    // Borrow 5,000 and spend 2,000 of it on equipment.
+    post(&pool, ymd(2026, 3, 1), checking, loan, 500_000).await;
+    post(&pool, ymd(2026, 3, 2), equipment, checking, 200_000).await;
+    let by_type = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
+    assert_eq!(find(&by_type.lines, "Net cash provided by investing activities").amount_cents, Some(-200_000));
+    assert_eq!(find(&by_type.lines, "Net cash provided by financing activities").amount_cents, Some(500_000));
+    assert_eq!(find(&by_type.lines, "1500 Equipment").amount_cents, Some(-200_000));
+
+    // Moving the loan to operating moves its line, and the statement still ties to the bank.
+    crate::preferences::set(&pool, CASH_FLOW_SECTIONS, &format!(r#"{{"{loan}":"OPERATING"}}"#)).await.unwrap();
+    let moved = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
+    assert!(!moved.lines.iter().any(|l| l.label == "FINANCING ACTIVITIES"), "nothing left in financing");
+    assert_eq!(find(&moved.lines, "Net cash provided by operating activities").amount_cents, Some(500_000));
+    assert_eq!(moved.net_change_cents, 300_000);
+
+    // Only balance sheet accounts other than cash can move, and only to a real section.
+    let rent = account_id(&pool, "6300").await;
+    for bad in [format!(r#"{{"{checking}":"INVESTING"}}"#), format!(r#"{{"{rent}":"OPERATING"}}"#), format!(r#"{{"{loan}":"SIDEWAYS"}}"#), "[1]".to_string()] {
+        assert!(crate::preferences::set(&pool, CASH_FLOW_SECTIONS, &bad).await.unwrap_err().starts_with("PREF_BAD_CASH_FLOW"), "{bad}");
+    }
+
+    // Account numbers can be turned off in reports.
+    crate::preferences::set(&pool, crate::preferences::SHOW_ACCOUNT_NUMBERS, "false").await.unwrap();
+    let plain = cash_flow(&pool, ymd(2026, 1, 1), ymd(2026, 12, 31)).await.unwrap();
+    assert_eq!(find(&plain.lines, "Equipment").amount_cents, Some(-200_000));
+}

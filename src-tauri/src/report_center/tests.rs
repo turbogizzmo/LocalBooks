@@ -220,3 +220,23 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     assert_eq!((s.qty_on_hand_e4, s.qty_on_order_e4, s.next_delivery), (90_000, 120_000, Some(d(4, 15))));
     assert_eq!((s.qty_sold_e4, s.sales_per_week_e4), (60_000, 15_000), "6 sold over four weeks (the voided sale does not count)");
 }
+
+#[tokio::test]
+async fn aging_counts_from_the_due_date_or_the_transaction_date() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "issueDate": "2026-01-01", "dueDate": "2026-03-02",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services }]
+    }))
+    .unwrap();
+    crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
+
+    // On April 1, 30 days past the due date but 90 days after the invoice date.
+    let by_due = aging(&pool, false, d(4, 1)).await.unwrap();
+    assert_eq!((by_due.basis.as_str(), by_due.rows[0].buckets_cents), ("DUE", [0, 10_000, 0, 0, 0]));
+    crate::preferences::set(&pool, AGING_BASIS, "transaction").await.unwrap();
+    let by_date = aging(&pool, false, d(4, 1)).await.unwrap();
+    assert_eq!((by_date.basis.as_str(), by_date.rows[0].buckets_cents, by_date.items[0].days_past_due), ("TRANSACTION", [0, 0, 0, 10_000, 0], 90));
+    assert!(crate::preferences::set(&pool, AGING_BASIS, "invoice").await.unwrap_err().starts_with("PREF_BAD_AGING"));
+}

@@ -585,6 +585,13 @@ pub(crate) async fn close_pool(pool: &SqlitePool) {
     }
 }
 
+/// How long a write waits for another connection's write to finish. Every write takes the lock up
+/// front (`ledger::begin_write`) and holds it through sealing the audit chain and a full-sync
+/// commit, so writers queue behind each other; on a slow disk (seen on Windows CI with 24 posts at
+/// once) five seconds was not enough and a write failed with "database is locked" instead of
+/// waiting its turn. Waiting longer is the intended behaviour: nothing is lost by it.
+const WRITE_LOCK_WAIT: Duration = Duration::from_secs(30);
+
 /// Folds a closed company file's write-ahead log into it and switches it to a rollback journal,
 /// which makes SQLite remove its `-wal` and `-shm` files. SQLite changes the journal mode only for
 /// a connection that has the file to itself, so this also proves nothing else has it open. The
@@ -792,7 +799,7 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) ->
         // A company file can come from anyone: views and triggers stored in it may not call SQL
         // functions with side effects or virtual tables that are not marked innocuous.
         .pragma("trusted_schema", "OFF")
-        .busy_timeout(Duration::from_secs(5));
+        .busy_timeout(WRITE_LOCK_WAIT);
     let (options, connections) = if storage.is_shared() {
         (base.journal_mode(SqliteJournalMode::Delete).locking_mode(SqliteLockingMode::Exclusive), 1)
     } else {

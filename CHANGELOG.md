@@ -19,6 +19,17 @@ people using LocalBooks.
   sale.
 - **Row menus stay on screen.** A row's ▾ actions menu near the bottom of the window now opens
   upward instead of running off the edge.
+- **No more "database is locked" when several things save at once.** On a slow disk, a save
+  that had to wait for another one could give up after five seconds; it now waits its turn.
+- **Report preferences.** Preferences › Reports & Graphs now sets whether Profit and Loss opens on
+  the accrual or cash basis, whether A/R and A/P Aging count from the due date or the transaction
+  date, and whether items show by name, description or both. Accounting › Company Preferences can
+  hide account numbers in reports or show only a subaccount's own name.
+- **Choose where accounts go on the Statement of Cash Flows.** Preferences › Reports & Graphs lists
+  each balance sheet account with its section (operating, investing or financing); move one and the
+  statement follows.
+- **See a report's options first.** Turn on **Show the report's options before running it**
+  (Reports & Graphs › My Preferences) and a report asks for its dates before it runs.
 - **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
   the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
   Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings
