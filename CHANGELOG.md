@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,
+  A/R and A/P Aging Detail, Open Invoices, Unpaid Bills, customer and vendor balances, purchases,
+  check and deposit detail, the journal, adjusting entries and more) and the list reports (phone and
+  contact lists, Item and Account Listings) now have menu entries, not only the Report Center. A
+  **List** submenu gathers the list reports, and **Memorized Reports** opens Process Multiple
+  Reports.
+- **Lists › Vehicle List, Vendors › Sales Tax › Pay Sales Tax… and Help › Check for Updates…** open
+  those screens directly.
+- **More form shortcuts.** On an open form, **Ctrl+N** starts a new one, **Ctrl+P** prints it, and
+  **Page Up** / **Page Down** open the previous and next, as the toolbar buttons do.
+
 - **A customer's or vendor's transactions add up correctly.** The panel below the Customers and
   Vendors lists used to add invoices and payments into one total, which meant nothing. Choose one
   type, such as Invoices, to see its total; with All types the panel counts the transactions.
