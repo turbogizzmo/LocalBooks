@@ -304,6 +304,26 @@ pub fn install(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Enables or greys out every item that opens `view`, for a feature the company turned off in
+/// Preferences (Customers › Create Estimates when estimates are off). The menu bar is the app's,
+/// so it follows the company in the window that changed it last.
+pub fn set_view_enabled(app: &AppHandle, view: &str, enabled: bool) -> tauri::Result<()> {
+    fn walk(items: Vec<MenuItemKind<Wry>>, prefix: &str, enabled: bool) -> tauri::Result<()> {
+        for item in items {
+            match &item {
+                MenuItemKind::MenuItem(i) if i.id().as_ref().starts_with(prefix) => i.set_enabled(enabled)?,
+                MenuItemKind::Submenu(sub) => walk(sub.items()?, prefix, enabled)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    match app.menu() {
+        Some(menu) => walk(menu.items()?, &format!("{GO_PREFIX}{view}|"), enabled),
+        None => Ok(()),
+    }
+}
+
 /// The page a navigation item opens, as `{ view, action, data }`.
 fn navigation(id: &str) -> Option<serde_json::Value> {
     let mut parts = id.strip_prefix(GO_PREFIX)?.split('|');

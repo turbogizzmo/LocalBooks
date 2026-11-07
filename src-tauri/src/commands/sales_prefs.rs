@@ -8,12 +8,13 @@ handlers![
     get_bill_due_date,
     list_bill_credits,
     pay_bills_with_credits,
+    set_menu_view_enabled,
 ];
 
 /// How an amount received from a customer is spread over their open invoices.
 #[tauri::command]
-pub async fn get_payment_application(db: State<'_, Db>, customer_name: String, currency_code: Option<String>, amount_cents: i64) -> Result<Vec<AppliedAmount>, String> {
-    sales_prefs::payment_application(&db.pool().await, &customer_name, currency_code.as_deref(), amount_cents).await
+pub async fn get_payment_application(db: State<'_, Db>, customer_name: String, currency_code: Option<String>, amount_cents: i64, mode: Option<String>) -> Result<Vec<AppliedAmount>, String> {
+    sales_prefs::payment_application(&db.pool().await, &customer_name, currency_code.as_deref(), amount_cents, mode.as_deref()).await
 }
 
 /// A new bill's due date: the vendor's terms, or the company's default days.
@@ -34,4 +35,10 @@ pub async fn pay_bills_with_credits(app: AppHandle, db: State<'_, Db>, inputs: V
     let count = sales_prefs::pay_bills_with_credits(&db.pool().await, inputs, credits).await?;
     notify(&app);
     Ok(count)
+}
+
+/// Greys out (or brings back) the menu items for a feature the company turned off.
+#[tauri::command]
+pub fn set_menu_view_enabled(app: AppHandle, view: String, enabled: bool) -> Result<(), String> {
+    crate::app_menu::set_view_enabled(&app, &view, enabled).map_err(|e| format!("MENU: {e}"))
 }

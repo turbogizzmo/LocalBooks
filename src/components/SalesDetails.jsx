@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, useLedgerQuery } from '../lib/api.js';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 /**
  * Rep, ship date, Ship Via and the customer custom fields marked for sales forms, for the header
  * of an invoice, sales receipt or estimate. Each box shows only once its list has an entry (or the
  * document being loaded already has a value), so a company that does not use them sees nothing.
- * The rep and fields fill in from the customer until the user changes them.
+ * The rep and fields fill in from the customer until the user changes them. A new form starts
+ * with the company's default Ship Via and F.O.B. (Preferences › Sales & Customers).
  */
 export function useSalesDetails(customerName, customers) {
   const reps = useLedgerQuery(api.listSalesReps).data ?? [];
@@ -16,6 +18,16 @@ export function useSalesDetails(customerName, customers) {
   const [repTouched, setRepTouched] = useState(false);
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
+  const [fob, setFob] = useState('');
+  // The company defaults go on a new form once preferences load, unless a document was loaded.
+  const { defaultShipMethodId, defaultFob, loaded: prefsLoaded } = useSalesPrefs();
+  const [defaulted, setDefaulted] = useState(false);
+  useEffect(() => {
+    if (!prefsLoaded || defaulted) return;
+    setDefaulted(true);
+    setShipMethodId(defaultShipMethodId);
+    setFob(defaultFob);
+  }, [prefsLoaded, defaulted, defaultShipMethodId, defaultFob]);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const customer = (customers ?? []).find((c) => c.name.toLowerCase() === (customerName ?? '').trim().toLowerCase());
@@ -45,11 +57,12 @@ export function useSalesDetails(customerName, customers) {
 
   const showRep = reps.some((r) => r.isActive) || repId != null;
   const showShip = methods.some((m) => m.isActive) || shipMethodId != null || shipDate !== '';
+  const showFob = showShip || fob !== '' || defaultFob !== '';
   const repOptions = reps.filter((r) => r.isActive || r.id === repId);
   const methodOptions = methods.filter((m) => m.isActive || m.id === shipMethodId);
 
   const picker =
-    showRep || showShip || formFields.length > 0 ? (
+    showRep || showShip || showFob || formFields.length > 0 ? (
       <>
         {showRep && (
           <label>
@@ -91,6 +104,12 @@ export function useSalesDetails(customerName, customers) {
             </label>
           </>
         )}
+        {showFob && (
+          <label>
+            <span className="qb-label" title="Free on board: where the goods become the customer's">F.O.B.</span>
+            <input className="qb-input w-[96px]" value={fob} maxLength={30} onChange={(e) => setFob(e.target.value)} />
+          </label>
+        )}
         {formFields.map((f) => (
           <label key={f.id}>
             <span className="qb-label">{f.label}</span>
@@ -115,6 +134,7 @@ export function useSalesDetails(customerName, customers) {
       salesRepId: repId,
       shipDate: shipDate || null,
       shipMethodId,
+      fob: fob.trim() || null,
       customFields: formFields.map((f) => ({ fieldId: f.id, value: (values[f.id] ?? '').trim() })).filter((f) => f.value !== ''),
     }),
     /** Loads a saved document's details (an edit, or an estimate becoming an invoice). */
@@ -122,7 +142,9 @@ export function useSalesDetails(customerName, customers) {
       setRepTouched(true);
       setRepId(details?.salesRepId ?? null);
       setShipDate(details?.shipDate ?? '');
+      setDefaulted(true);
       setShipMethodId(details?.shipMethodId ?? null);
+      setFob(details?.fob ?? '');
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
       setTouched(new Set(formFields.map((f) => f.id)));
@@ -131,7 +153,8 @@ export function useSalesDetails(customerName, customers) {
       setRepTouched(false);
       setRepId(null);
       setShipDate('');
-      setShipMethodId(null);
+      setShipMethodId(defaultShipMethodId);
+      setFob(defaultFob);
       setValues({});
       setTouched(new Set());
     },

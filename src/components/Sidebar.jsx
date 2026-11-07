@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Icon } from '../lib/icons.js';
+import { hiddenViews, useSalesPrefs } from '../lib/salesPrefs.js';
 
 /** Navigation tree: top-level links and accordion groups, in a classic accounting-software layout. */
 export const NAV = [
@@ -137,6 +138,8 @@ const STORAGE_TAG = { LOCAL: 'local', NETWORK: 'network', SYNCED: 'cloud' };
 
 export default function Sidebar({ current, onSelect, onNew, companyName, storage, isAdmin = true }) {
   const [open, setOpen] = useState(() => new Set(NAV.filter((n) => n.children).map((n) => n.id)));
+  // Estimates turned off (Preferences › Jobs & Estimates) leave the list.
+  const hidden = hiddenViews(useSalesPrefs());
   const toggle = (id) =>
     setOpen((s) => {
       const next = new Set(s);
@@ -180,7 +183,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
               </button>
               {open.has(item.id) && (
                 <ul>
-                  {item.children.filter((child) => canOpen(child.id, isAdmin)).map((child) => (
+                  {item.children.filter((child) => canOpen(child.id, isAdmin) && !hidden.has(child.id)).map((child) => (
                     <li key={child.id}>
                       <button
                         type="button"

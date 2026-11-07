@@ -14,6 +14,7 @@ import { formatCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
+import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -39,6 +40,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
+  useCustomerDelivery(customer, customers.data, { setEmailLater });
 
   useEffect(() => customerRef.current?.focus(), []);
   useEffect(() => {
@@ -46,7 +48,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { filled, invalidCount, payload } = summarizeLines(lines);
+  // A line may be priced at nothing (an included extra); see Preferences › Sales & Customers.
+  const { filled, invalidCount, payload } = summarizeLines(lines, { allowZeroRate: true });
   const [discountText, setDiscountText] = useState('');
   const discountCents = parseDiscount(discountText, payload.reduce((s, l) => s + (l.amountCents ?? 0), 0));
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0);
@@ -137,7 +140,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
           )}
         </div>
       </div>
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} allowZeroRate />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line
@@ -161,7 +164,19 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   );
 }
 
-export default function Estimates({ accounts, intent, navigate }) {
+export default function Estimates(props) {
+  const { estimates, loaded } = useSalesPrefs();
+  if (loaded && !estimates) {
+    return (
+      <div className="p-2">
+        <Notice kind="info" text="Estimates are turned off for this company. An Admin can turn them on in Preferences › Jobs & Estimates; estimates already saved are kept." />
+      </div>
+    );
+  }
+  return <EstimateList {...props} />;
+}
+
+function EstimateList({ accounts, intent, navigate }) {
   const { data, error } = useLedgerQuery(api.listEstimates);
   const [composing, setComposing] = useState(intent?.action === 'estimate');
   const [notice, setNotice] = useState(null);

@@ -74,13 +74,14 @@ async fn receive_payments_applies_by_the_company_preference() {
     let applied = |id, cents| AppliedAmount { document_id: id, amount_cents: cents };
 
     assert_eq!(preferences::get(&pool, AUTO_APPLY).await.unwrap(), "exact", "on, with exact matches first, by default");
-    assert_eq!(payment_application(&pool, "acme", None, 4_000).await.unwrap(), vec![applied(newer, 4_000)]);
-    assert_eq!(payment_application(&pool, "Acme", None, 12_000).await.unwrap(), vec![applied(older, 10_000), applied(newer, 2_000)]);
+    assert_eq!(payment_application(&pool, "acme", None, 4_000, None).await.unwrap(), vec![applied(newer, 4_000)]);
+    assert_eq!(payment_application(&pool, "Acme", None, 12_000, None).await.unwrap(), vec![applied(older, 10_000), applied(newer, 2_000)]);
     preferences::set(&pool, AUTO_APPLY, "oldest").await.unwrap();
-    assert_eq!(payment_application(&pool, "Acme", None, 4_000).await.unwrap(), vec![applied(older, 4_000)]);
+    assert_eq!(payment_application(&pool, "Acme", None, 4_000, None).await.unwrap(), vec![applied(older, 4_000)]);
     preferences::set(&pool, AUTO_APPLY, "off").await.unwrap();
-    assert!(payment_application(&pool, "Acme", None, 4_000).await.unwrap().is_empty());
-    assert!(payment_application(&pool, "Acme", Some("EUR"), 4_000).await.unwrap().is_empty(), "only invoices in the payment's currency");
+    assert!(payment_application(&pool, "Acme", None, 4_000, None).await.unwrap().is_empty());
+    assert_eq!(payment_application(&pool, "Acme", None, 4_000, Some("exact")).await.unwrap(), vec![applied(newer, 4_000)], "the Auto Apply button still applies");
+    assert!(payment_application(&pool, "Acme", Some("EUR"), 4_000, None).await.unwrap().is_empty(), "only invoices in the payment's currency");
     assert!(preferences::set(&pool, AUTO_APPLY, "newest").await.unwrap_err().starts_with("PREF_BAD_AUTO_APPLY"));
 }
 

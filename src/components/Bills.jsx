@@ -18,6 +18,7 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -31,7 +32,19 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
   const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
-  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? addDays(billDate, 30));
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? billDate);
+  // A new bill is due after the vendor's terms, or Preferences › Bills' days for a vendor without
+  // terms, until the due date is typed.
+  const [dueTyped, setDueTyped] = useState(Boolean(editing));
+  useEffect(() => {
+    if (dueTyped || !billDate) return undefined;
+    let live = true;
+    const timer = setTimeout(() => api.getBillDueDate(vendor.trim(), billDate).then((d) => live && setDueDate(d), () => {}), 150);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [vendor, billDate, dueTyped]);
   const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
   const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
@@ -169,15 +182,20 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             type="date"
             className="qb-input w-[132px]"
             value={billDate}
-            onChange={(e) => {
-              setBillDate(e.target.value);
-              setDueDate(addDays(e.target.value, 30));
-            }}
+            onChange={(e) => setBillDate(e.target.value)}
           />
         </label>
         <label>
           <span className="qb-label">Due date</span>
-          <input type="date" className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <input
+            type="date"
+            className="qb-input w-[132px]"
+            value={dueDate}
+            onChange={(e) => {
+              setDueTyped(true);
+              setDueDate(e.target.value);
+            }}
+          />
         </label>
         {formClass.header}
         <label>
@@ -296,12 +314,56 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     if (next === 'ACH' && account?.accountType !== 'BANK') setAccountId(defaultAccount);
   };
 
-  const toggle = (bill, on) => setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
+  const toggle = (bill, on) => {
+    setTyped((t) => {
+      const next = new Set(t);
+      next.delete(bill.id);
+      return next;
+    });
+    setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
+  };
   const picked = open.filter((b) => selected[b.id] !== undefined);
+  // Vendor credits used on the ticked bills, oldest credit first (Preferences › Bills); not with ACH.
+  const { autoCredits } = useSalesPrefs();
+  const [credits, setCredits] = useState([]);
+  const [typed, setTyped] = useState(() => new Set());
+  const pickedKey = picked.map((b) => b.id).join(',');
+  useEffect(() => {
+    if (!autoCredits || ach || pickedKey === '') return setCredits([]);
+    let live = true;
+    api.listBillCredits(pickedKey.split(',').map(Number)).then(
+      (uses) => live && setCredits(uses),
+      (err) => live && setError(errorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [autoCredits, ach, pickedKey]);
+  const creditOn = (b) => credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
+  // A ticked bill's payment is what the credits leave, until the person types an amount.
+  useEffect(() => {
+    setSelected((s) => {
+      let changed = false;
+      const next = { ...s };
+      for (const b of open) {
+        if (s[b.id] === undefined || typed.has(b.id)) continue;
+        const left = centsToInput(b.balanceCents - creditOn(b));
+        if (next[b.id] !== left) {
+          next[b.id] = left;
+          changed = true;
+        }
+      }
+      return changed ? next : s;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credits]);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
-  const bad = picked.filter((b) => cents(b) === null || cents(b) <= 0 || cents(b) > b.balanceCents);
+  const bad = picked.filter((b) => cents(b) === null || cents(b) < 0 || (cents(b) === 0 && creditOn(b) === 0) || cents(b) + creditOn(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
-  const payees = [...new Set(picked.map((b) => b.vendorId))];
+  const creditTotal = picked.reduce((s, b) => s + creditOn(b), 0);
+  // Only bills with something left to pay get a payment (and a check).
+  const paying = picked.filter((b) => (cents(b) ?? 0) > 0);
+  const payees = [...new Set(paying.map((b) => b.vendorId))];
   const firstCheck = checkNo.trim();
   const numbered = /^\d+$/.test(firstCheck);
   const checkNumber = (vendorId) => {
@@ -314,17 +376,17 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
 
   const pay = async () => {
     if (picked.length === 0) return setError('Select at least one bill.');
-    if (bad.length > 0) return setError('Each payment must be above zero and no more than the open balance.');
+    if (bad.length > 0) return setError('Each payment must be above zero (unless credits cover the bill) and, with its credits, no more than the open balance.');
     if (ach) return payByAch();
     if (checks && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
     try {
-      const count = await api.payVendorBills(
-        picked.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) })),
-      );
+      const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) }));
+      const used = credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
+      const count = used.length > 0 ? await api.payBillsWithCredits(payments, used) : await api.payVendorBills(payments);
       const written = checks
         ? payees.map((vendorId) => {
-            const theirs = picked.filter((b) => b.vendorId === vendorId);
+            const theirs = paying.filter((b) => b.vendorId === vendorId);
             const numbers = theirs.map((b) => b.billNumber).filter(Boolean);
             return {
               payeeName: theirs[0].vendorName,
@@ -338,7 +400,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })
         : [];
       const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${range}.`, 'success', printChecks ? written : []);
+      const creditNote = used.length > 0 ? `, after ${formatCents(creditTotal)} of vendor credits` : '';
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks ? written : []);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -428,6 +491,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
         <div className="ml-auto text-right">
           <div className="qb-label">Total payment</div>
           <div className="num text-3xl font-semibold leading-none">{formatCents(total)}</div>
+          {creditTotal > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditTotal)} of vendor credits</div>}
         </div>
       </div>
       <table className="qb-grid">
@@ -437,6 +501,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <col className="w-[100px]" />
           <col className="w-[100px]" />
           <col className="w-[120px]" />
+          {autoCredits && !ach && <col className="w-[110px]" />}
           <col className="w-[130px]" />
         </colgroup>
         <thead>
@@ -446,13 +511,14 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             <th className="qb-grid-head">Bill no.</th>
             <th className="qb-grid-head">Due date</th>
             <th className="qb-grid-head text-right">Open balance</th>
+            {autoCredits && !ach && <th className="qb-grid-head text-right" title="Vendor credits used on this bill, oldest first">Credits used</th>}
             <th className="qb-grid-head text-right">Payment</th>
           </tr>
         </thead>
         <tbody>
           {open.length === 0 && (
             <tr>
-              <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
+              <td colSpan={autoCredits && !ach ? 7 : 6} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
             </tr>
           )}
           {open.map((b, i) => {
@@ -470,11 +536,15 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
                 <td className="qb-grid-cell">{b.billNumber ?? ''}</td>
                 <td className={`qb-grid-cell ${b.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(b.dueDate)}</td>
                 <td className="qb-grid-cell num">{formatCents(b.balanceCents)}</td>
+                {autoCredits && !ach && <td className="qb-grid-cell num">{creditOn(b) > 0 ? formatCents(creditOn(b)) : ''}</td>}
                 <td className="qb-grid-cell-edit">
                   <input
                     className="num"
                     value={selected[b.id] ?? ''}
-                    onChange={(e) => setSelected((s) => ({ ...s, [b.id]: e.target.value }))}
+                    onChange={(e) => {
+                      setTyped((t) => new Set(t).add(b.id));
+                      setSelected((s) => ({ ...s, [b.id]: e.target.value }));
+                    }}
                     onFocus={() => !on && toggle(b, true)}
                     placeholder="0.00"
                     inputMode="decimal"

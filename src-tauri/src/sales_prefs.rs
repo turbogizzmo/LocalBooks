@@ -197,9 +197,13 @@ pub async fn open_invoices(pool: &SqlitePool, customer_name: &str, currency: Opt
     Ok(rows.into_iter().map(|(id, balance_cents)| Open { id, balance_cents }).collect())
 }
 
-/// Receive Payments: how `amount_cents` from the customer is applied under the company preference.
-pub async fn payment_application(pool: &SqlitePool, customer_name: &str, currency: Option<&str>, amount_cents: i64) -> Result<Vec<AppliedAmount>, String> {
-    let mode = AutoApply::parse(&preferences::get(pool, AUTO_APPLY).await?);
+/// Receive Payments: how `amount_cents` from the customer is applied under the company preference,
+/// or under `mode` (the Auto Apply button applies even when the preference is off).
+pub async fn payment_application(pool: &SqlitePool, customer_name: &str, currency: Option<&str>, amount_cents: i64, mode: Option<&str>) -> Result<Vec<AppliedAmount>, String> {
+    let mode = AutoApply::parse(&match mode {
+        Some(mode) => mode.to_string(),
+        None => preferences::get(pool, AUTO_APPLY).await?,
+    });
     let open = open_invoices(pool, customer_name, currency).await?;
     Ok(apply_payment(&open, amount_cents, mode).into_iter().map(|(document_id, amount_cents)| AppliedAmount { document_id, amount_cents }).collect())
 }
