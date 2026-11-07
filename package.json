@@ -8,10 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test \"src/lib/**/*.test.js\"",
+    "test": "node --test \"src/**/*.test.js\"",
     "tauri": "tauri",
-    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build",
-    "test": "node --test \"src/**/*.test.js\""
+    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
@@ -24,11 +23,11 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.6.2",
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.14",
-    "vite": "^6.4.5"
+    "vite": "^7.3.7"
   },
   "overrides": {
     "postcss-selector-parser": "^7.1.6"
