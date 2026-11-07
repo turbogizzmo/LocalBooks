@@ -24,6 +24,8 @@ An estimate doesn't affect your books until it becomes an invoice.
 
 1. Go to **Sales › Estimates** and click **New estimate** (or **+ New › Estimate**).
 2. Enter the **Customer**, **Estimate date** and **Expiration date**, then add the line items.
+   A line can be priced at 0.00, for something included at no charge; the estimate as a whole
+   needs an amount.
 3. Click **Save Estimate**.
 4. To send it, open the estimate's menu and choose **Email…**, **Print…** or **Save as PDF…**. Estimates have
    their own form design: see [Design your invoices and estimates](custom-forms.md).
@@ -39,3 +41,16 @@ An estimate doesn't affect your books until it becomes an invoice.
 The estimate shows **Converted** with the invoice number once the invoice posts. If you leave the
 form without posting, it stays open. **Convert to invoice now** skips the form: it posts the
 estimate unchanged, dated today and due in 30 days. See [Create and send an invoice](invoices.md).
+
+Lines priced at 0.00 stay off the invoice, unless an Admin turns off **Leave lines with no amount
+off the invoice** in **Preferences › Sales & Customers**. Then they come onto the invoice, where
+each needs a price before it can be saved (so use **Edit as invoice…**).
+
+Invoicing an estimate in parts (progress invoicing) isn't available yet: an estimate becomes one
+invoice.
+
+### Turn estimates off
+
+A business that never quotes can untick **Create estimates** in **Preferences › Jobs & Estimates ›
+Company Preferences**. Estimates then leave the side bar and **+ New**, and **Customers › Create
+Estimates** is greyed out. Estimates already saved are kept; turn the option back on to see them.

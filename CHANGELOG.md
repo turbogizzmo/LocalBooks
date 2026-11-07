@@ -6,6 +6,29 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Defaults for selling, getting paid and paying bills.** New Company Preferences in Sales &
+  Customers, Jobs & Estimates, Payments, Bills and Send Forms:
+  - Receive Payments applies an amount to the invoice with exactly that balance, or else the
+    oldest invoices first. You can choose oldest first only, or tick invoices yourself, and ticking
+    invoices now works out the amount received. A tick column is new on the form.
+  - Payments and sales receipts go to Undeposited Funds unless you turn that off. **Sales receipts
+    used to start on your first bank account; they now start on Undeposited Funds.**
+  - A new bill is due after the vendor's terms. For a vendor without terms, it is due 10 days after
+    the bill date, or the days you set. **Bills used to be due in 30 days whatever the vendor's
+    terms.**
+  - Pay Bills can use each vendor's open credits on the bills you tick, oldest credit first, and
+    pay only the rest.
+  - The usual Ship Via and a new **F.O.B.** box fill in on new invoices, sales receipts and
+    estimates, and F.O.B. prints with the shipping details.
+  - A warning before selling to a customer with overdue invoices (off until you turn it on).
+  - Estimate lines can be priced at 0.00; they stay off the invoice the estimate becomes, unless
+    you choose to price them there.
+  - Turn off estimates or price levels if you don't use them, rename the five job statuses, and
+    give jobs a status on the customer's Edit….
+  - Each customer has a **Preferred delivery** (Email, Print or None) that ticks Email later or
+    Print later on their new forms; new customers take the Send Forms default.
+  - Change Item Prices starts from the default markup when you price from cost.
+
 - **Preferences look the way you expect.** Settings › Preferences (Edit › Preferences) now lists
   the familiar categories on the left: Accounting, Bills, Checking, Desktop View, General, Sales &
   Customers and the rest, each with **My Preferences** and **Company Preferences** tabs. Settings

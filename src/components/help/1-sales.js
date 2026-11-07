@@ -70,7 +70,7 @@ export const topics = [
   {
     id: 'receive-payment', area: 'sales', views: ['sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Record a customer payment',
-    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), and use Auto Apply to spread the amount over the oldest invoices.',
+    body: 'Receive Payment applies money to one or several open invoices, in full or in part, and the invoice status updates to Partial or Paid. Deposit it straight to a bank account, or to Undeposited Funds to combine several payments into one bank deposit later. Pick how you were paid from the tiles (Cash, Check, Card, Bank / ACH, or More), Typing the amount received applies it to an invoice with exactly that balance, or else the oldest first (Preferences › Payments sets this, and whether ticking invoices works out the amount); Auto Apply spreads it again.',
     keywords: 'paid payment customer receive partial undeposited method tile cash check card ach wire auto apply',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',

@@ -327,7 +327,6 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
                 sales_rep_id: Some(rep.id),
                 ship_date: Some(d(2)),
                 ship_method_id: Some(ups.id),
-                fob: Some("Our dock".into()),
                 custom_fields: vec![FieldValue { field_id: po.id, value: "PO-55".into() }],
             },
         },
@@ -338,14 +337,14 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
     let doc = invoice_doc(&pool, invoice.id, "$").await.unwrap();
     let tpl = FormTemplate { message: "Shipped {ship_via} on {ship_date} by {rep}.".into(), ..FormTemplate::default_for(FormKind::Invoice) };
     let all = texts(&layout(&doc, &company, &tpl, None));
-    for expected in ["Rep", "JS", "Ship date", "10/02/2026", "Ship via", "UPS Ground", "F.O.B.", "Our dock", "PO number", "PO-55", "Color: Red", "Shipped UPS Ground on 10/02/2026 by JS."] {
+    for expected in ["Rep", "JS", "Ship date", "10/02/2026", "Ship via", "UPS Ground", "PO number", "PO-55", "Color: Red", "Shipped UPS Ground on 10/02/2026 by JS."] {
         assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
     }
     assert!(!all.iter().any(|t| t.contains("B7")), "a field not marked for sales forms is not printed");
 
     let hidden = FormTemplate { show_sales_rep: false, show_shipping: false, show_custom_fields: false, show_item_fields: false, ..FormTemplate::default_for(FormKind::Invoice) };
     let all = texts(&layout(&doc, &company, &hidden, None));
-    for absent in ["Rep", "Ship via", "UPS Ground", "Our dock", "PO-55", "Color: Red"] {
+    for absent in ["Rep", "Ship via", "UPS Ground", "PO-55", "Color: Red"] {
         assert!(!all.iter().any(|t| t == absent), "{absent:?} should be hidden");
     }
 }

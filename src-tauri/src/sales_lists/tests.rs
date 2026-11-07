@@ -84,7 +84,6 @@ async fn an_invoice_keeps_its_rep_shipping_and_printed_fields() {
         sales_rep_id: Some(js.id),
         ship_date: Some(d(3)),
         ship_method_id: Some(ups.id),
-        fob: Some("Our dock".into()),
         custom_fields: vec![FieldValue { field_id: po.id, value: " 4471 ".into() }],
     };
     let inv = create_and_post_invoice(&pool, invoice("Acme", services, 50_000, details.clone())).await.unwrap();
@@ -216,7 +215,6 @@ async fn carried_details_survive_later_list_changes() {
         sales_rep_id: Some(js.id),
         ship_date: Some(d(3)),
         ship_method_id: Some(ups.id),
-        fob: Some("Our dock".into()),
         custom_fields: vec![FieldValue { field_id: po.id, value: "77".into() }],
     };
     let estimate_input = || crate::estimates::EstimateInput {

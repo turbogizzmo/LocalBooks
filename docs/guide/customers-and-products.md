@@ -28,6 +28,18 @@ To add a company name, billing address, phone, payment terms or notes, open the 
 **Actions** menu and choose **Edit…**. The billing address prints under **Bill to** on invoices
 and estimates, and the email address is filled in when you choose **Email…** on one of them.
 
+### Preferred delivery and job status
+
+A customer's **Preferred delivery** (on **Edit…**) decides how their new invoices and estimates
+start: **Email** ticks **Email later**, **Print** ticks **Print later** (invoices), **None** leaves
+both unticked. A new customer takes the choice in **Preferences › Send Forms › Company
+Preferences**, however it is added.
+
+A job (a name such as `Acme:Kitchen`) can also have a **Job status**: Pending, Awarded, In
+progress, Closed or Not awarded. The status shows next to the job in the Customers list. An Admin
+can rename the five statuses in **Preferences › Jobs & Estimates**, for example *Awarded* to
+*Won*.
+
 ## Add a product or service
 
 Products and services make invoices and sales receipts quicker to fill in.
@@ -55,6 +67,8 @@ example to raise everything 5% at the start of the year.
    - **Raise by** or **Lower by**, and an amount: a percentage (such as `5` or `2.5`) or a
      **fixed amount** (such as `1.00`).
    - **Based on** the **Current price**, or the **Unit cost** (to set prices as a markup on cost).
+     Choosing **Unit cost** fills in the **Default markup** from **Preferences › Sales &
+     Customers** when you haven't typed an amount yet.
    - **Round**: leave prices to the cent, round them to the nearest step (5¢, 10¢, 25¢, 50¢, $1,
      $5 or $10; halves go up), always **up** or **down** to a step, or **up to a price ending in
      .99**.
@@ -82,6 +96,10 @@ under **Earlier price changes** on the same screen.
 A **price level** is a named set of prices for some of your customers, such as *Wholesale* (10%
 off everything) or *Contractor* (special prices on a few items). Give a customer a level, and
 their new invoices, sales receipts and estimates fill in its prices.
+
+A business that doesn't use them can untick **Use price levels** in **Preferences › Sales &
+Customers**. Levels then disappear from customers and forms, and every form uses standard prices;
+the levels you made are kept for when you turn them back on.
 
 ### Set up a price level
 
@@ -164,7 +182,12 @@ An inactive rep stays on the forms that already have it and isn't offered for ne
 
 Add the carriers and services you ship with, such as `UPS Ground` or `Local delivery`, under
 **Ship Via**. Once the list has an entry, invoices, sales receipts and estimates get a **Ship
-date** and a **Ship via** box.
+date**, a **Ship via** and an **F.O.B.** box (where the goods become the customer's, such as
+`Origin` or `Our dock`). All three print with the shipping details.
+
+To fill in the same carrier and F.O.B. on every new form, choose them as **Usual shipping
+method** and **Usual F.O.B.** in **Preferences › Sales & Customers**. You can still change them on
+each form.
 
 ### Custom fields
 

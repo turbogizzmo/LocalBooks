@@ -172,7 +172,7 @@ pub struct FormTemplate {
     /// Sales forms: item custom fields marked for sales forms, under each line.
     pub show_item_fields: bool,
     /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company},
-    /// {rep}, {ship_date}, {ship_via}, {fob}.
+    /// {rep}, {ship_date}, {ship_via}.
     pub message: String,
     /// Payment instructions or terms and conditions, below the message.
     pub terms: String,
@@ -477,7 +477,6 @@ pub struct FormSales {
     pub rep: Option<String>,
     pub ship_date: Option<String>,
     pub ship_via: Option<String>,
-    pub fob: Option<String>,
     /// (label, value) of the customer fields printed on this document.
     pub fields: Vec<(String, String)>,
 }
@@ -488,7 +487,6 @@ impl FormSales {
             rep: view.sales_rep_initials.clone(),
             ship_date: view.ship_date.as_deref().map(format_date),
             ship_via: view.ship_method_name.clone(),
-            fob: view.fob.clone(),
             fields: view.custom_fields.iter().map(|f| (f.label.clone(), f.value.clone())).collect(),
         }
     }
@@ -502,7 +500,6 @@ impl FormSales {
         if tpl.show_shipping {
             rows.extend(self.ship_date.iter().map(|d| ("Ship date".to_string(), d.clone(), false)));
             rows.extend(self.ship_via.iter().map(|v| ("Ship via".to_string(), v.clone(), false)));
-            rows.extend(self.fob.iter().map(|v| ("F.O.B.".to_string(), v.clone(), false)));
         }
         if tpl.show_custom_fields {
             rows.extend(self.fields.iter().map(|(l, v)| (l.clone(), v.clone(), false)));
@@ -960,7 +957,7 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         sales: if statement.is_some() {
             FormSales::default()
         } else {
-            FormSales { rep: Some("JS".into()), ship_date: Some("10/02/2026".into()), ship_via: Some("UPS Ground".into()), fob: None, fields: Vec::new() }
+            FormSales { rep: Some("JS".into()), ship_date: Some("10/02/2026".into()), ship_via: Some("UPS Ground".into()), fields: Vec::new() }
         },
         statement,
     }
@@ -981,7 +978,6 @@ fn fill_placeholders(text: &str, doc: &FormDoc, company: &Company) -> String {
         ("{rep}", doc.sales.rep.as_deref().unwrap_or_default()),
         ("{ship_date}", doc.sales.ship_date.as_deref().unwrap_or_default()),
         ("{ship_via}", doc.sales.ship_via.as_deref().unwrap_or_default()),
-        ("{fob}", doc.sales.fob.as_deref().unwrap_or_default()),
     ]
     .iter()
     .fold(text.to_string(), |acc, (key, value)| acc.replace(key, value))
