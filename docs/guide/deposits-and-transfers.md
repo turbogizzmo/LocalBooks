@@ -11,7 +11,10 @@ same single amount as your bank statement.
 3. Tick the payments waiting in Undeposited Funds that are part of this deposit.
 4. To include other money (for example a refund), use **Add funds to this deposit** with an
    account and amount.
-5. Check **Total deposit** against your deposit slip, then click **Save & Post Deposit**.
+5. If you kept some of it as cash (for petty cash, say), fill in **Cash back goes to** (the account
+   the cash goes to), a memo, and the **Cash back amount**. The bank gets the subtotal less the
+   cash back; the cash back must be less than the subtotal.
+6. Check **Total deposit** against your deposit slip, then click **Save & Post Deposit**.
 
 ## Type a deposit into the register
 

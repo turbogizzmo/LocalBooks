@@ -516,6 +516,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
                         .iter()
                         .map(|(account_id, amount_cents)| DepositOtherLine { account_id: *account_id, amount_cents: *amount_cents, memo: None, class_id: None })
                         .collect(),
+                        cash_back: None,
                 },
             )
             .await;

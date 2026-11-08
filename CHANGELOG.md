@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
+  it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
+  printed voucher shows it.
 - **Open saved sales receipts, estimates, credits, purchase orders and deposits.** Double-click one
   in its list (or choose **Open**), or press **Previous** on its form, to see it where the form
   goes, shown as it prints. **Previous** and **Next** step through the others, and its toolbar has

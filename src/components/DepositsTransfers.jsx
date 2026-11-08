@@ -40,7 +40,11 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
   // Opening a saved deposit (Previous) asks for the entries to be saved or cleared first.
-  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]) });
+  // Cash back: part of the deposit kept as cash (petty cash, say) instead of banked.
+  const [cashAccountId, setCashAccountId] = useState(null);
+  const [cashMemo, setCashMemo] = useState('');
+  const [cashAmount, setCashAmount] = useState('');
+  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]), cashAmount, cashMemo });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
@@ -53,7 +57,9 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const key = (i) => `${i.kind}-${i.id}`;
   const selectedTotal = items.filter((i) => picked.has(key(i))).reduce((s, i) => s + i.amountCents, 0);
   const other = summarizeSplits(rows);
-  const total = selectedTotal + other.total;
+  const subtotal = selectedTotal + other.total;
+  const cashCents = cashAmount.trim() === '' ? 0 : parseMoneyToCents(cashAmount);
+  const total = subtotal - (cashCents ?? 0);
 
   const toggle = (item) =>
     setPicked((p) => {
@@ -67,6 +73,9 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
     setPicked(new Set());
     setRows([blankSplit(null)]);
     setMemo('');
+    setCashAccountId(null);
+    setCashMemo('');
+    setCashAmount('');
     formClass.reset();
     setError(null);
     bankRef.current?.focus();
@@ -76,6 +85,9 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
     if (bankId === null) return setError('Choose the bank account to deposit into.');
     if (other.invalid > 0) return setError(`${other.invalid} other-funds row(s) need an account and an amount above zero.`);
     if (picked.size === 0 && other.lines.length === 0) return setError('Select payments to deposit or add other funds.');
+    if (cashCents === null || cashCents < 0) return setError('Enter the cash back as an amount, such as 50.00.');
+    if (cashCents > 0 && cashAccountId === null) return setError('Choose the account the cash back goes to, such as Petty Cash.');
+    if (cashCents > 0 && cashCents >= subtotal) return setError(`Cash back must be less than the deposit subtotal, ${formatCents(subtotal)}.`);
     const otherLines = formClass.apply(other.lines);
     const warning = formClass.missing(otherLines);
     if (warning) return setError(warning);
@@ -87,8 +99,9 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
         memo: memo.trim() || null,
         items: items.filter((i) => picked.has(key(i))).map((i) => ({ kind: i.kind, id: i.id })),
         otherLines,
+        cashBack: cashCents > 0 ? { accountId: cashAccountId, amountCents: cashCents, memo: cashMemo.trim() || null } : null,
       });
-      onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}.`);
+      onPosted(`Deposited ${formatCents(total)} into ${accountLabel(accounts, bankId)}${cashCents > 0 ? `, with ${formatCents(cashCents)} cash back to ${accountLabel(accounts, cashAccountId)}` : ''}.`);
       clear();
       return true;
     } catch (err) {
@@ -182,6 +195,30 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
       </table>
       <div className="border-y border-qb-border bg-qb-canvas px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Add funds to this deposit</div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses />
+      <div className="flex flex-wrap items-end gap-2 border-t border-qb-border px-2 py-1">
+        <label>
+          <span className="qb-label">Cash back goes to</span>
+          <AccountSelect accounts={accounts} filter={(a) => a.id !== bankId} value={cashAccountId} onChange={setCashAccountId} className="qb-input w-[200px]" placeholder="No cash back" />
+        </label>
+        <label>
+          <span className="qb-label">Cash back memo</span>
+          <input className="qb-input w-[200px]" value={cashMemo} onChange={(e) => setCashMemo(e.target.value)} />
+        </label>
+        <label>
+          <span className="qb-label">Cash back amount</span>
+          <input className="qb-input num w-[110px]" inputMode="decimal" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} aria-invalid={cashCents === null || undefined} />
+        </label>
+        <div className="ml-auto text-right text-sm">
+          <div>
+            Deposit subtotal <span className="num inline-block w-[110px]">{formatCents(subtotal)}</span>
+          </div>
+          {cashCents > 0 && (
+            <div>
+              Less cash back <span className="num inline-block w-[110px]">−{formatCents(cashCents)}</span>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">

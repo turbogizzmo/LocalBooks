@@ -128,7 +128,7 @@ async fn transaction_history_links_an_invoice_its_payment_and_the_deposit() {
     let payment_id = waiting[0].id;
     crate::banking::post_bank_deposit(
         &pool,
-        DepositInput { bank_account_id: checking, deposit_date: d("2026-03-11"), memo: None, items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment_id }], other_lines: vec![] },
+        DepositInput { bank_account_id: checking, deposit_date: d("2026-03-11"), memo: None, items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment_id }], other_lines: vec![], cash_back: None },
     )
     .await
     .unwrap();

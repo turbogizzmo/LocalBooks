@@ -57,6 +57,18 @@ pub struct DepositInput {
     pub memo: Option<String>,
     pub items: Vec<DepositItemRef>,
     pub other_lines: Vec<DepositOtherLine>,
+    /// Part of the deposit kept as cash rather than banked.
+    #[serde(default)]
+    pub cash_back: Option<CashBack>,
+}
+
+/// Cash back on a deposit: posted to `account_id` (petty cash, say), out of what the bank gets.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CashBack {
+    pub account_id: i64,
+    pub amount_cents: i64,
+    pub memo: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -172,13 +184,32 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
             .ok_or_else(|| format!("DEP_AMOUNT_TOO_LARGE: deposit exceeds {}", format_cents(MAX_LINE_CENTS)))?;
     }
 
+    // Cash back comes out of what the bank gets, which must stay above zero.
+    let cash_back = match &input.cash_back {
+        Some(c) if c.amount_cents != 0 => {
+            if c.amount_cents < 0 || c.amount_cents >= total {
+                return Err(format!("DEP_BAD_CASH_BACK: cash back must be more than zero and less than the deposit total, {}", format_cents(total)));
+            }
+            if c.account_id == input.bank_account_id {
+                return Err("DEP_CASH_BACK_ACCOUNT: choose an account for the cash back other than the bank it is deposited to".into());
+            }
+            Some(c)
+        }
+        _ => None,
+    };
+    let cash_back_cents = cash_back.map_or(0, |c| c.amount_cents);
+
     let deposit_id: i64 = sqlx::query_scalar(
-        "INSERT INTO deposits (bank_account_id, deposit_date, memo, total_cents) VALUES (?1, ?2, ?3, ?4) RETURNING id",
+        "INSERT INTO deposits (bank_account_id, deposit_date, memo, total_cents, cash_back_account_id, cash_back_cents, cash_back_memo)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
     )
     .bind(input.bank_account_id)
     .bind(input.deposit_date)
     .bind(clean(input.memo.as_deref()))
     .bind(total)
+    .bind(cash_back.map(|c| c.account_id))
+    .bind(cash_back_cents)
+    .bind(cash_back.and_then(|c| clean(c.memo.as_deref())))
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -223,7 +254,10 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
 
-    let mut lines = vec![JournalLine::debit(input.bank_account_id, total)];
+    let mut lines = vec![JournalLine::debit(input.bank_account_id, total - cash_back_cents)];
+    if let Some(c) = cash_back {
+        lines.push(JournalLine::debit(c.account_id, c.amount_cents).with_memo(Some(clean(c.memo.as_deref()).unwrap_or("Cash back"))));
+    }
     lines.extend(credits);
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));
     let entry = JournalEntry { id: None, date: input.deposit_date, description, lines, currency: None };
@@ -293,7 +327,7 @@ pub async fn list_banking_activity(pool: &SqlitePool) -> Result<Vec<BankingActiv
         "SELECT 'DEPOSIT' AS kind, d.id, d.deposit_date AS date, d.bank_account_id AS account_id,
                 NULL AS other_account_id, d.memo,
                 (SELECT COUNT(*) FROM deposit_lines WHERE deposit_id = d.id) AS line_count,
-                d.total_cents AS amount_cents, d.journal_entry_id, d.is_voided
+                d.total_cents - d.cash_back_cents AS amount_cents, d.journal_entry_id, d.is_voided
          FROM deposits d
          UNION ALL
          SELECT 'TRANSFER', t.id, t.transfer_date, t.from_account_id, t.to_account_id, t.memo, 1,
