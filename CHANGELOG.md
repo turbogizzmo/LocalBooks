@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Open saved sales receipts, estimates, credits, purchase orders and deposits.** Double-click one
+  in its list (or choose **Open**), or press **Previous** on its form, to see it where the form
+  goes, shown as it prints. **Previous** and **Next** step through the others, and its toolbar has
+  **Void**, **Print**, **Email** and **Attach File**, plus **Apply** and **Refund** on credits,
+  **Create Invoice** on an estimate and **Create Bill** or **Close PO** on a purchase order.
+  Credit memos, refund receipts, vendor credits, deposits and transfers now print, as a voucher of
+  the accounts they posted to.
 - **Previous, Next, Print and Attach on bills, checks and journal entries.** The form toolbar's
   **Previous** and **Next** now step through saved bills, checks, expenses, card credits and
   journal entries (by date, then number), as they already did on invoices. **Print** prints the

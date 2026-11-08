@@ -7,7 +7,9 @@ import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -29,7 +31,7 @@ const STATUS = {
   CONVERTED: { label: '● Converted · invoice', className: 'text-qb-info' },
 };
 
-function EstimateForm({ accounts, onSaved, onCancel, forms }) {
+function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
@@ -57,6 +59,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
   // A 0.00 line (an included extra) is allowed once estimate lines accept it.
   const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines, { allowZeroRate: ZERO_LINES });
   const [discountText, setDiscountText] = useState('');
+  // Opening a saved estimate (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('estimate', { customer, memo, discountText, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
@@ -113,7 +117,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms }) {
       <FormToolbar
         label="Estimate"
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...savedStep(busy || dirty) }),
           fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [
             { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] },
@@ -224,11 +228,45 @@ function EstimateList({ accounts, intent, navigate }) {
     { storageKey: 'estimates' },
   );
   const shown = sorter.sorted;
+  // Saved estimates open read-only in the form's place; Previous / Next step through them.
+  const ordered = useMemo(() => byDateThenNumber(rows, (e) => e.estimateDate, (e) => e.estimateNumber), [rows]);
+  const saved = useSavedDoc(ordered);
+  const viewing = saved.current;
+  const openFromList = useOpenFromList();
+  const openEstimate = (e) => {
+    saved.open(e);
+    setComposing(true);
+  };
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {printPortal}
-      {composing && <EstimateForm accounts={accounts} forms={forms} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />}
+      {composing && viewing && (
+        <SavedDocView
+          label="Estimate"
+          title={`Estimate #${viewing.estimateNumber} · ${viewing.customerName} · ${STATUS[viewing.status].label}${viewing.status === 'CONVERTED' && viewing.invoiceNumber ? ` #${viewing.invoiceNumber}` : ''}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          form={{ kind: 'ESTIMATE', id: viewing.id }}
+          onNotice={setNotice}
+          extra={[
+            [
+              {
+                id: 'to-invoice',
+                label: 'Create Invoice',
+                icon: 'HomeInvoice',
+                hint: viewing.status === 'CONVERTED' ? 'Already turned into an invoice' : viewing.status === 'REJECTED' ? 'Mark it pending or accepted first' : 'Load its lines into the invoice form to review before posting',
+                disabled: viewing.status === 'CONVERTED' || viewing.status === 'REJECTED',
+                onClick: () => navigate('sales/invoices', 'from-estimate', { estimateId: viewing.id }),
+              },
+            ],
+          ]}
+        />
+      )}
+      {composing && !viewing && (
+        <EstimateForm accounts={accounts} forms={forms} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(false)} onSaved={(text) => setNotice({ kind: 'success', text })} />
+      )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load estimates: ${error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
@@ -282,7 +320,7 @@ function EstimateList({ accounts, intent, navigate }) {
                 const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
                 const open = e.status !== 'CONVERTED';
                 return (
-                  <tr key={e.id} className="qb-grid-row">
+                  <tr key={e.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openEstimate(e)}>
                     <td className="qb-grid-cell">
                       {e.estimateNumber}
                       <EmailMarks status={emailed.get(e.id)} />
@@ -299,6 +337,7 @@ function EstimateList({ accounts, intent, navigate }) {
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         items={[
+                          { label: 'Open', onSelect: () => openEstimate(e) },
                           ...formMenuItems('ESTIMATE', e.id, forms, emailed.get(e.id)),
                           {
                             label: 'Edit as invoice…',

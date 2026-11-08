@@ -6,7 +6,9 @@ import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { attachPicked, PendingAttachments } from './Attachments.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { RefundDialog } from './CreditMemos.jsx';
@@ -21,7 +23,7 @@ import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 const isCategory = (a) =>
   !a.isSystem && (a.classification === 'EXPENSE' || ['FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_ASSET'].includes(a.accountType));
 
-function VendorCreditForm({ accounts, onPosted, onCancel }) {
+function VendorCreditForm({ accounts, onPosted, onCancel, savedStep }) {
   const vendors = useLedgerQuery(api.listVendors);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
   const [vendor, setVendor] = useState('');
@@ -77,13 +79,15 @@ function VendorCreditForm({ accounts, onPosted, onCancel }) {
   };
 
   const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
+  // Opening a saved credit (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('vendor-credit', { vendor, reference, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Vendor credit"
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...savedStep(busy || dirty) }),
           fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [attachLaterButton({ setFiles, busy, what: 'this credit' })],
         ]}
@@ -262,10 +266,63 @@ export default function VendorCredits({ accounts, intent }) {
     setDialog(null);
     setNotice({ kind: 'success', text });
   };
+  // Saved vendor credits open read-only in the form's place; Previous / Next step through them.
+  const ordered = useMemo(() => byDateThenNumber(data ?? [], (c) => c.creditDate, (c) => c.reference), [data]);
+  const saved = useSavedDoc(ordered);
+  const viewing = saved.current;
+  const openFromList = useOpenFromList();
+  const openCredit = (c) => {
+    saved.open(c);
+    setComposing(true);
+  };
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      {composing && <VendorCreditForm accounts={accounts} onCancel={() => setComposing(false)} onPosted={(text) => setNotice({ kind: 'success', text })} />}
+      {composing && viewing && (
+        <SavedDocView
+          label="Vendor credit"
+          title={`Vendor credit${viewing.reference ? ` ${viewing.reference}` : ''} · ${viewing.vendorName}${viewing.isVoided ? ' (voided)' : ''}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          entryId={viewing.journalEntryId}
+          voucher={{
+            entryId: viewing.journalEntryId,
+            title: 'Vendor Credit',
+            number: viewing.reference,
+            date: viewing.creditDate,
+            name: viewing.vendorName,
+            nameLabel: 'Vendor',
+            memo: viewing.memo,
+            amountCents: viewing.totalCents,
+            voided: viewing.isVoided,
+            footer: viewing.isVoided ? null : `Credit remaining: ${formatCents(viewing.remainingCents)}`,
+          }}
+          notes={[!viewing.isVoided && { text: `${formatCents(viewing.remainingCents)} of ${formatCents(viewing.totalCents)} is left to apply.` }]}
+          onNotice={setNotice}
+          void={{
+            onVoid: async () => {
+              await api.voidTransaction(viewing.journalEntryId);
+              setNotice({ kind: 'success', text: `Voided the ${viewing.vendorName} credit.` });
+            },
+            disabled: viewing.isVoided || !viewing.journalEntryId,
+            confirm: {
+              title: 'Void this transaction?',
+              body: `Vendor credit from ${viewing.vendorName} (${formatCents(viewing.totalCents)}). A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+              confirmLabel: 'Yes, void it',
+            },
+          }}
+          extra={[
+            [
+              { id: 'apply', label: 'Apply', icon: 'HomePayBills', hint: 'Apply the credit to open bills', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'apply', credit: viewing }) },
+              { id: 'refund', label: 'Refund', icon: 'HomeRefund', hint: 'Record a refund from the vendor', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'refund', credit: viewing }) },
+            ],
+          ]}
+        />
+      )}
+      {composing && !viewing && (
+        <VendorCreditForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(false)} onPosted={(text) => setNotice({ kind: 'success', text })} />
+      )}
       {dialog?.mode === 'apply' && <ApplyToBills credit={dialog.credit} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.mode === 'refund' && (
         <RefundDialog
@@ -321,7 +378,7 @@ export default function VendorCredits({ accounts, intent }) {
                 </tr>
               )}
               {sorter.sorted.map((c) => (
-                <tr key={c.id} className={`qb-grid-row ${c.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <tr key={c.id} className={`qb-grid-row cursor-pointer ${c.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openCredit(c)}>
                   <td className="qb-grid-cell">{formatDate(c.creditDate)}</td>
                   <td className="qb-grid-cell font-semibold">{c.vendorName}</td>
                   <td className="qb-grid-cell">{c.reference ?? ''}</td>
@@ -332,6 +389,7 @@ export default function VendorCredits({ accounts, intent }) {
                     <RowMenu
                       label={`Actions for the ${c.vendorName} credit`}
                       items={[
+                        { label: 'Open', onSelect: () => openCredit(c) },
                         { label: 'Apply to bills…', disabled: c.isVoided || c.remainingCents === 0, onSelect: () => setDialog({ mode: 'apply', credit: c }) },
                         { label: 'Record vendor refund…', disabled: c.isVoided || c.remainingCents === 0, onSelect: () => setDialog({ mode: 'refund', credit: c }) },
                         voidItem({
