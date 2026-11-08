@@ -160,6 +160,7 @@ function PurchaseOrderPreview({ company, order, accounts }) {
   useEffect(() => {
     let live = true;
     setLines(null);
+    setError(null);
     api.getPurchaseOrderLines(order.id).then(
       (l) => live && setLines(l),
       (err) => live && setError(errorText(err)),

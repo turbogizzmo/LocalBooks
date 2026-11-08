@@ -35,6 +35,7 @@ export function FormPreview({ kind, id }) {
   useEffect(() => {
     let live = true;
     setForm(null);
+    setError(null);
     api.renderForm(kind, id, null).then(
       (f) => live && setForm(f),
       (err) => live && setError(errorText(err)),
@@ -62,6 +63,7 @@ export function VoucherPreview({ doc }) {
   useEffect(() => {
     let live = true;
     setLines(null);
+    setError(null);
     if (!doc.entryId) return undefined;
     api.getJournalEntryLines(doc.entryId).then(
       (l) => live && setLines(l),
