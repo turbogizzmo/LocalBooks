@@ -145,6 +145,7 @@ async fn duplicate_copies_a_customer_or_vendor_under_a_new_name() {
     // A job's copy stays under its customer.
     let job = crate::sales::create_customer(&pool, "Acme:Kitchen", None).await.unwrap();
     assert!(duplicate_party(&pool, "customer", job.id, "Bathroom", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUP_JOB"));
+    assert!(duplicate_party(&pool, "customer", job.id, "Acmé:Stalls", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUP_JOB"), "a multi-byte name is refused, not a panic");
     let bath = duplicate_party(&pool, "customer", job.id, "Acme : Bathroom", Access::OPEN).await.unwrap();
     let parent: Option<i64> = sqlx::query_scalar("SELECT parent_id FROM customers WHERE id = ?1").bind(bath.id).fetch_one(&pool).await.unwrap();
     assert_eq!((bath.name.as_str(), parent), ("Acme:Bathroom", Some(acme.id)));

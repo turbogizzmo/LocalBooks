@@ -431,7 +431,10 @@ pub async fn duplicate_party(pool: &SqlitePool, kind: &str, id: i64, name: &str,
         return Err(crate::ledger::rollback(tx, "PARTY_DUP_JOB: a copy of a customer is a customer; use Add job… to make a job".into()).await);
     }
     if let Some(parent) = parent {
-        let under = name.len() > parent.len() + 1 && name[..parent.len()].eq_ignore_ascii_case(&parent) && name.as_bytes()[parent.len()] == b':';
+        // `get` keeps a multi-byte name from being cut mid-character.
+        let under = name.len() > parent.len() + 1
+            && name.get(..parent.len()).is_some_and(|head| head.eq_ignore_ascii_case(&parent))
+            && name.as_bytes()[parent.len()] == b':';
         if !under {
             return Err(crate::ledger::rollback(tx, format!("PARTY_DUP_JOB: a copy of a job stays under {parent}: name it {parent}:…")).await);
         }
