@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.13.0]
+
 - **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,
   A/R and A/P Aging Detail, Open Invoices, Unpaid Bills, customer and vendor balances, purchases,
   check and deposit detail, the journal, adjusting entries and more) and the list reports (phone and

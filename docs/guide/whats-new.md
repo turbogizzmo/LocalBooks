@@ -4,6 +4,20 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.13.0
+
+- **Take a customer's early-payment discount on Receive Payments.** An invoice on terms such as
+  *2% 10 Net 30* that's paid by the discount's last day shows the discount it offers, and ticking it
+  takes the discount along with the payment. Choose the discount account in Preferences › Payments.
+  [Take a customer's early-payment discount](customer-payments.md#take-a-customers-early-payment-discount)
+- **Every report is in the Reports menu**, with a **List** submenu for the list reports and
+  **Memorized Reports** for Process Multiple Reports. [Reports](reports.md)
+- **Ctrl+N, Ctrl+P and Page Up / Page Down on forms** start a new form, print it, or open the
+  previous and next one. [Save a form and type faster](getting-started.md#save-a-form-and-type-faster-with-the-keyboard)
+- **Fixes:** a customer's or vendor's transactions panel totals one type at a time, the "Saved
+  customer" note clears when you move on, and a damaged company file no longer closes LocalBooks
+  while unlocking.
+
 ## 0.12.0
 
 - **Preferences, laid out by category.** Settings › Preferences lists Accounting, Bills, Checking,
