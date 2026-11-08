@@ -164,6 +164,14 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'invoice-available-credits', area: 'sales', views: ['sales/invoices', 'sales/credits'],
+    title: 'Use a customer’s credits on a new invoice',
+    body: 'When the customer has credit memos with credit left, the invoice shows Available credits under Balance due. Saving the invoice asks whether to apply them now: Apply credits uses them oldest first, up to the invoice total, as applying them from Credit Memos & Refunds would. Home-currency invoices only.',
+    keywords: 'available credits apply credit memo invoice unused credit open credits',
+    go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
     id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
     title: 'Customer credit limits',
     body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',

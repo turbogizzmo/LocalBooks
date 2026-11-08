@@ -6,6 +6,7 @@ handlers![
     list_credit_memos,
     create_credit_memo,
     apply_customer_credit,
+    apply_open_credits_to_invoice,
     list_customer_credit_applications,
     remove_customer_credit,
     refund_customer_credit,
@@ -34,6 +35,13 @@ pub async fn apply_customer_credit(app: AppHandle, db: State<'_, Db>, input: App
     let memo = credits::apply_customer_credit(&db.pool().await, input).await?;
     notify(&app);
     Ok(memo)
+}
+
+#[tauri::command]
+pub async fn apply_open_credits_to_invoice(app: AppHandle, db: State<'_, Db>, invoice_id: i64, applied_date: NaiveDate) -> Result<AppliedCredits, String> {
+    let used = credits::apply_open_credits_to_invoice(&db.pool().await, invoice_id, applied_date).await?;
+    notify(&app);
+    Ok(used)
 }
 
 #[tauri::command]

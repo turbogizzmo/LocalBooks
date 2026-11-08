@@ -50,6 +50,16 @@ invoice, and asks before saving. Click **Save anyway** to post it, or **Cancel**
 form. The limit is a warning only; it never stops a sale. What a customer owes includes their
 jobs' invoices, less any unused credits. A job without a limit of its own uses its customer's.
 
+### Use the customer's credits
+
+When the customer has credit memos with credit left, the invoice says so under **Balance due**
+("Available credits: $150.00 (2 credit memos)"). Hover over it to see each credit memo. When you save
+the invoice, LocalBooks asks whether to apply the credits to it now. Click **Apply credits** to use
+them, oldest first, up to the invoice's total, or **Cancel** to leave them for later. Applying a
+credit posts nothing, because the credit memo already reduced Accounts Receivable; it counts toward
+what's paid on the invoice, the same as applying it from **Sales › Credit Memos & Refunds**. Credits
+are in the home currency, so an invoice in another currency doesn't offer them.
+
 ### Addresses on sales receipts, estimates and credit memos
 
 Sales receipts (**Sold To**), estimates and credit memos have the same address, P.O. No. and FOB

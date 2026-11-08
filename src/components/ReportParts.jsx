@@ -3,6 +3,7 @@ import { PrintPortal, StatementDocument, useCompany } from './PrintDocuments.jsx
 import { api, errorText, printDocument } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { periodRange } from '../lib/dates.js';
+import { reportMatcher, stepMatch } from '../lib/reportSearch.js';
 
 /** Building blocks shared by every report: period presets, the Export menu, and statement layout. */
 
@@ -29,6 +30,102 @@ export function resolvePeriod(id, fiscal) {
  * as PDF). The Excel choice shows when the report passes `onXlsx`, and a PNG picture when it passes
  * `onPng` (graphs); screens with nothing to print (registers, lists) pass `printable={false}`.
  */
+/** Cells the report search looks in: table cells, and the rows of a statement. */
+const SEARCHED = 'td, th';
+
+/**
+ * The report's own content: the nearest ancestor of the toolbar that holds a table. The printed
+ * copy (PrintPortal) lives elsewhere in the page, so it is never searched or marked.
+ */
+function reportArea(from) {
+  let el = from?.parentElement ?? null;
+  while (el && !el.querySelector('table')) el = el.parentElement;
+  return el;
+}
+
+/**
+ * Search inside the open report: every cell that matches is marked, Enter (or the arrows) steps
+ * through them and scrolls each into view, Shift+Enter steps back, Escape clears. Says when
+ * nothing matches. Follows the report as it reruns.
+ */
+export function ReportSearch() {
+  const ref = useRef(null);
+  const [query, setQuery] = useState('');
+  const [found, setFound] = useState({ count: 0, at: -1 });
+  const cells = useRef([]);
+
+  const clear = () => {
+    for (const cell of cells.current) cell.classList.remove('lb-find-match', 'lb-find-current');
+    cells.current = [];
+  };
+
+  useEffect(() => {
+    const area = reportArea(ref.current);
+    if (!area) return undefined;
+    const mark = () => {
+      clear();
+      const matches = reportMatcher(query);
+      if (!matches) return setFound({ count: 0, at: -1 });
+      cells.current = [...area.querySelectorAll(SEARCHED)].filter((cell) => !cell.querySelector(SEARCHED) && matches(cell.textContent));
+      for (const cell of cells.current) cell.classList.add('lb-find-match');
+      setFound({ count: cells.current.length, at: -1 });
+    };
+    mark();
+    // The report reruns (new dates, options): look again once it has redrawn.
+    let timer = null;
+    const observer = new MutationObserver((records) => {
+      // Marking only changes classes, which isn't observed; the box's own status text is ignored.
+      if (records.every((r) => ref.current?.contains(r.target))) return;
+      clearTimeout(timer);
+      timer = setTimeout(mark, 150);
+    });
+    observer.observe(area, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+      clear();
+    };
+  }, [query]);
+
+  const step = (backwards) => {
+    const count = cells.current.length;
+    const at = stepMatch(found.at, count, backwards);
+    cells.current[found.at]?.classList.remove('lb-find-current');
+    const cell = cells.current[at];
+    if (cell) {
+      cell.classList.add('lb-find-current');
+      cell.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
+    setFound({ count, at });
+  };
+
+  const status = !query.trim() ? '' : found.count === 0 ? 'No matches' : found.at < 0 ? `${found.count} found` : `${found.at + 1} of ${found.count}`;
+  return (
+    <div ref={ref} className="flex items-center gap-1 self-center" role="search">
+      <input
+        type="search"
+        className={`qb-input h-row w-[160px] ${query.trim() && found.count === 0 ? 'border-qb-negative' : ''}`}
+        placeholder="Find in report"
+        aria-label="Find in report"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            step(e.shiftKey || e.key === 'ArrowUp');
+          } else if (e.key === 'Escape' && query) {
+            e.stopPropagation();
+            setQuery('');
+          }
+        }}
+      />
+      <span className="min-w-[72px] text-xs text-qb-ink-muted" aria-live="polite">
+        {status}
+      </span>
+    </div>
+  );
+}
+
 export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -55,6 +152,8 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
   const print = printDocument;
 
   return (
+    <>
+    {printable && <ReportSearch />}
     <div ref={ref} className="relative self-center">
       <button type="button" className="qb-btn qb-btn-secondary h-row" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         Export ▾
@@ -82,6 +181,7 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
         </div>
       )}
     </div>
+    </>
   );
 }
 
