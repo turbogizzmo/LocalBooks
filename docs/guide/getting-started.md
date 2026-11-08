@@ -394,13 +394,13 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 | Button | What it does |
 |---|---|
 | **Find** | Opens **Find Transactions**. |
-| **Previous** / **Next** | On an invoice, opens the invoice before or after the one on the form (by number). With nothing open, **Previous** opens the latest invoice. Save or clear your changes first. A voided or paid invoice opens locked: you can print or email it, but not save changes. |
+| **Previous** / **Next** | On invoices, bills, checks, expenses, card credits and journal entries, opens the one before or after the one on the form: invoices by number, the others by date and then number. With nothing open, **Previous** opens the latest one. Save or clear your changes first. A voided or paid invoice opens locked: you can print or email it, but not save changes. Voided bills, checks, expenses and journal entries are skipped, since they can't be edited. Checks step through checks only, expenses through expenses. |
 | **New** | Clears the form for a new one. While you're editing a saved transaction, it closes the edit instead. |
 | **Save** | Saves and posts, then clears the form for the next one (the same as **Save & New**). |
 | **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. **Ctrl+D** presses it. |
-| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. |
+| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit or journal entry, it prints a voucher: the header and the accounts it posted to, with debits and credits. |
 | **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. |
-| **Attach File** | On a new form, picks files to attach when it posts. On a saved invoice, shows its attachments. |
+| **Attach File** | On a new form, picks files to attach when it posts. On a saved invoice, bill, check, expense or journal entry, shows its attachments, where you can add more. |
 | **Memorize** | Saves the form as a recurring transaction. **Ctrl+M** presses it. |
 
 Press **Tab** to move through the buttons, or the **Left** and **Right** arrow keys to move along the

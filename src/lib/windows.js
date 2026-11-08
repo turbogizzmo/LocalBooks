@@ -188,11 +188,14 @@ export function useUnsavedChanges(id, dirty) {
 /**
  * `useUnsavedChanges` for a form whose entries start as `values` when it mounts: it has unsaved
  * entries once they differ. Pass only what the person types (not defaults filled in later).
+ * Returns whether it has.
  */
 export function useDirtySince(id, values) {
   const now = JSON.stringify(values);
   const [baseline] = useState(now);
-  useUnsavedChanges(id, now !== baseline);
+  const dirty = now !== baseline;
+  useUnsavedChanges(id, dirty);
+  return dirty;
 }
 
 /** Asks before a window with unsaved form entries closes; resolves whether to close it. */
