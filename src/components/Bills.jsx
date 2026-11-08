@@ -4,7 +4,8 @@ import NameField from './NameField.jsx';
 import { useVendorRecall } from '../lib/recall.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
-import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
+import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
+import { useVoucherPrinter } from './VoucherPrint.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
@@ -23,6 +24,7 @@ import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from 
 import DateBox, { CheckNumberBox } from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
+import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -31,7 +33,7 @@ const isPaymentAccount = (a) => a.accountType === 'BANK' || a.accountType === 'C
 const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PARTIAL');
 
 /** A new bill, or (with `editing` = { bill, lines }) a posted bill being edited. */
-function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit }) {
+function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit, saved = [], onOpenSaved }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
@@ -62,9 +64,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const [error, setError] = useState(null);
   // Files to attach once the bill posts, such as the vendor's invoice.
   const [files, setFiles] = useState([]);
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
   const formClass = useFormClass(accounts);
-  // Closing the window asks first while the bill has entries not yet saved.
-  useDirtySince('bill', { vendor, billNumber, billDate, dueDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  // Closing the window (or stepping to another bill) asks first while the bill has entries not
+  // yet saved. The due date is left out: it fills in by itself from the date and terms.
+  const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -180,7 +185,10 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     <FormToolbar
       label="Bill"
       groups={[
-        navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+        navButtons({
+          onFind: () => openFromList('accounting/find', 'find', { text: '' }),
+          ...stepButtons(saved, editing?.bill.id ?? null, onOpenSaved, { blocked: busy || dirty }),
+        }),
         fileButtons({
           onNew: clear,
           onSave: flow.saveAndNew,
@@ -193,7 +201,36 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
             confirmLabel: 'Yes, void it',
           },
         }),
-        [{ ...attachLaterButton({ setFiles, busy, what: 'this bill' }), hidden: Boolean(editing) }],
+        [
+          {
+            id: 'print',
+            label: 'Print',
+            icon: 'Print',
+            hint: editing ? 'Print this bill as a voucher with the accounts it posted to' : 'Save the bill first, then print it',
+            disabled: !editing?.bill.journalEntryId,
+            onClick: () =>
+              printVoucher({
+                entryId: editing.bill.journalEntryId,
+                title: 'Bill',
+                number: editing.bill.billNumber,
+                date: editing.bill.billDate,
+                dueDate: editing.bill.dueDate,
+                name: editing.bill.vendorName,
+                nameLabel: 'Vendor',
+                amountCents: editing.bill.totalCents,
+              }),
+          },
+          editing
+            ? {
+                id: 'attach',
+                label: 'Attach File',
+                icon: 'Attach',
+                hint: 'Show and add files attached to this bill',
+                disabled: busy || !editing.bill.journalEntryId,
+                onClick: () => setShowAttachments((v) => !v),
+              }
+            : attachLaterButton({ setFiles, busy, what: 'this bill' }),
+        ],
         [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring bill', disabled: busy, onClick: () => post('memorize') }],
       ]}
     />
@@ -201,7 +238,13 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+      {voucherPortal}
       {toolbar}
+      {showAttachments && editing?.bill.journalEntryId && (
+        <div className="border-b border-qb-border bg-qb-canvas">
+          <Attachments entryId={editing.bill.journalEntryId} />
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? 'Edit bill' : 'New bill'}</h2>
         <label>
@@ -703,6 +746,8 @@ export default function Bills({ accounts, intent }) {
   }, [intent]);
 
   const bills = data ?? [];
+  // Previous / Next on the form step through the bills it can open (voided ones can't be edited).
+  const savedBills = useMemo(() => byDateThenNumber(bills.filter((b) => !b.isVoided), (b) => b.billDate, (b) => b.billNumber), [bills]);
   const sorter = useSort(bills, {
     vendor: (b) => b.vendorName,
     number: (b) => b.billNumber,
@@ -780,6 +825,8 @@ export default function Bills({ accounts, intent }) {
           editing={editing}
           onCancelEdit={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
+          saved={savedBills}
+          onOpenSaved={startEdit}
         />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}

@@ -42,7 +42,7 @@ export const topics = [
   {
     id: 'form-toolbar', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
     title: 'Use the toolbar on a form',
-    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
+    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. On invoices, bills, checks, expenses and journal entries, Previous and Next open the saved one before or after, and Print prints the saved one (bills, expenses and journal entries as a voucher of the accounts posted). Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
     keywords: 'toolbar ribbon buttons print email attach void find previous next payment method cash check card tiles',
     guide: 'getting-started',
   },

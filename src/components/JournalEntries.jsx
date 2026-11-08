@@ -1,10 +1,12 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { myPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import Attachments from './Attachments.jsx';
@@ -25,7 +27,7 @@ let nextKey = 1;
 const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit: '', credit: '', memo: '' });
 
 /** A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited. */
-function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
+function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, saved = [], onOpenSaved }) {
   const [date, setDate] = useTransactionDate(editing?.entry.entryDate);
   const [memo, setMemo] = useState(editing?.entry.memo ?? '');
   const [adjusting, setAdjusting] = useState(editing?.entry.isAdjusting ?? false);
@@ -36,6 +38,10 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Closing the window (or stepping to another entry) asks first while there are entries not saved.
+  const dirty = useDirtySince('journal', { date, memo, adjusting, rows: rows.map((r) => [r.accountId, r.debit, r.credit, r.memo]) });
   const dateRef = useRef(null);
   const formClass = useFormClass(accounts);
   const { classes } = formClass;
@@ -132,7 +138,10 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
       <FormToolbar
         label="Journal entry"
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({
+            onFind: () => openFromList('accounting/find', 'find', { text: '' }),
+            ...stepButtons(saved, editing?.entry.id ?? null, onOpenSaved, { blocked: busy || dirty }),
+          }),
           fileButtons({
             onNew: clear,
             onSave: flow.saveAndNew,
@@ -145,9 +154,34 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null }) {
               confirmLabel: 'Yes, void it',
             },
           }),
+          [
+            {
+              id: 'print',
+              label: 'Print',
+              icon: 'Print',
+              hint: editing ? 'Print this journal entry' : 'Save the entry first, then print it',
+              disabled: !editing,
+              onClick: () =>
+                printVoucher({ entryId: editing.entry.id, title: 'Journal Entry', number: String(editing.entry.entryNumber), date: editing.entry.entryDate, memo: editing.entry.memo, voided: editing.entry.isVoided }),
+            },
+            {
+              id: 'attach',
+              label: 'Attach File',
+              icon: 'Attach',
+              hint: editing ? 'Show and add files attached to this entry' : 'Save the entry first, then attach files to it',
+              disabled: busy || !editing,
+              onClick: () => setShowAttachments((v) => !v),
+            },
+          ],
           [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy || !ready, onClick: () => save('memorize') }],
         ]}
       />
+      {voucherPortal}
+      {showAttachments && editing && (
+        <div className="border-b border-qb-border bg-qb-canvas">
+          <Attachments entryId={editing.entry.id} />
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">{editing ? `Edit journal entry #${editing.entry.entryNumber}` : 'Journal entry'}</h2>
         <label>
@@ -306,6 +340,11 @@ export default function JournalEntries({ accounts, intent }) {
     await api.voidTransaction(journalEntryId);
     setNotice({ kind: 'success', text: 'Voided: a reversing journal entry now offsets it.' });
   };
+  // Previous / Next on the form step through the manual entries it can open (not voided ones).
+  const savedEntries = useMemo(
+    () => byDateThenNumber((data ?? []).filter((e) => e.sourceType === 'JOURNAL' && !e.isVoided && e.reversesEntryId === null), (e) => e.entryDate, (e) => e.entryNumber),
+    [data],
+  );
   const filtered = (data ?? []).filter((e) => filter === 'ALL' || (filter === 'MANUAL' ? e.sourceType === 'JOURNAL' : filter === 'VOIDS' ? e.isVoided || e.reversesEntryId !== null : filter === 'ADJUSTING' ? e.isAdjusting : true));
   const sorter = useSort(filtered, {
     date: (e) => e.entryDate,
@@ -330,6 +369,8 @@ export default function JournalEntries({ accounts, intent }) {
           }}
           onNew={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
+          saved={savedEntries}
+          onOpenSaved={startEdit}
         />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}

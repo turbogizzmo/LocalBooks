@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Previous, Next, Print and Attach on bills, checks and journal entries.** The form toolbar's
+  **Previous** and **Next** now step through saved bills, checks, expenses, card credits and
+  journal entries (by date, then number), as they already did on invoices. **Print** prints the
+  saved check, or a voucher of a bill, expense or journal entry showing the accounts it posted to,
+  and **Attach File** shows and adds files on a saved one. A blank new bill no longer counts as
+  having unsaved changes, and closing a journal entry with entries not saved now asks first.
 - **A Home page that maps the work.** The Dashboard now opens on **Home**: estimates, invoices,
   payments and deposits, and purchase orders, bills, bill payments and checks, drawn in the order
   the work goes, each one click away, with a red count where work is waiting (overdue invoices,

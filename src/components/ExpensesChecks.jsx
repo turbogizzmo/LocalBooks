@@ -15,7 +15,9 @@ import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
-import { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
+import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
+import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
@@ -35,7 +37,7 @@ const PAY_FROM = {
 };
 
 /** A new expense, check or card credit, or (with `editing` = { expense, lines }) a posted one being edited. */
-function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null }) {
+function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, onOpenSaved, onPrintCheck }) {
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -62,12 +64,19 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   // Files to attach once it posts, such as the receipt.
   const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Previous / Next step through the saved ones of this kind that can be opened (not voided).
+  const saved = useMemo(
+    () => byDateThenNumber((expenses ?? []).filter((x) => x.kind === kind && !x.isVoided), (x) => x.expenseDate, (x) => x.checkNumber),
+    [expenses, kind],
+  );
   const payeeRef = useRef(null);
   const formClass = useFormClass(accounts);
   // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
   const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
-  useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   // My Preferences › General › recall: a known payee's last check or expense fills the rows.
@@ -186,7 +195,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     <FormToolbar
       label={EXPENSE_KINDS[kind]}
       groups={[
-        navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+        navButtons({
+          onFind: () => openFromList('accounting/find', 'find', { text: '' }),
+          ...stepButtons(saved, was?.id ?? null, onOpenSaved, { blocked: busy || dirty }),
+        }),
         fileButtons({
           onNew: clear,
           onSave: flow.saveAndNew,
@@ -199,7 +211,42 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
             confirmLabel: 'Yes, void it',
           },
         }),
-        [{ ...attachLaterButton({ setFiles, busy, what: 'it' }), hidden: Boolean(editing) }],
+        [
+          {
+            id: 'print',
+            label: 'Print',
+            icon: 'Print',
+            hint: !was
+              ? `Save the ${EXPENSE_KINDS[kind].toLowerCase()} first, then print it`
+              : kind === 'CHECK'
+                ? 'Print this check'
+                : `Print this ${EXPENSE_KINDS[kind].toLowerCase()} as a voucher with the accounts it posted to`,
+            disabled: !was?.journalEntryId,
+            onClick: () =>
+              kind === 'CHECK'
+                ? onPrintCheck(was)
+                : printVoucher({
+                    entryId: was.journalEntryId,
+                    title: EXPENSE_KINDS[kind],
+                    date: was.expenseDate,
+                    name: was.payeeName,
+                    nameLabel: 'Payee',
+                    memo: was.memo,
+                    amountCents: was.totalCents,
+                    currencyCode: was.currencyCode,
+                  }),
+          },
+          was
+            ? {
+                id: 'attach',
+                label: 'Attach File',
+                icon: 'Attach',
+                hint: 'Show and add files attached to it',
+                disabled: busy || !was.journalEntryId,
+                onClick: () => setShowAttachments((v) => !v),
+              }
+            : attachLaterButton({ setFiles, busy, what: 'it' }),
+        ],
         [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring transaction', disabled: busy, onClick: () => save('memorize') }],
       ]}
     />
@@ -207,7 +254,13 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+      {voucherPortal}
       {toolbar}
+      {showAttachments && was?.journalEntryId && (
+        <div className="border-b border-qb-border bg-qb-canvas">
+          <Attachments entryId={was.journalEntryId} />
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <div className="mr-1 flex self-center overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Type">
           {Object.entries(EXPENSE_KINDS).map(([id, label]) => (
@@ -373,6 +426,8 @@ export default function ExpensesChecks({ accounts, intent }) {
           }}
           onNew={() => setEditing(null)}
           onPosted={(text) => setNotice({ kind: 'success', text })}
+          onOpenSaved={startEdit}
+          onPrintCheck={printCheck}
         />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
