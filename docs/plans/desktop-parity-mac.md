@@ -12,8 +12,9 @@ track. Rows `T53`–`T65` in [`docs/gaps.md`](../gaps.md) track it.
 groups in the Mac desktop software LocalBooks replaces (QuickBooks for Mac 2024, compared with
 2021, with 2012 skimmed for features since dropped), as a user sees them, and public product
 knowledge for behaviour. Nothing from that software is in this repo; everything here is described
-in our own words. Each gap was checked against the code (`src/components/`, `app_menu.rs`,
-`custom_reports.rs`, `list_reports.rs`, the migrations) before being called missing.
+in our own words. Each gap was checked against the code (`src/components/`,
+`src-tauri/src/app_menu.rs`, `src-tauri/src/custom_reports.rs`, `src-tauri/src/list_reports.rs`,
+`src-tauri/migrations/`) before being called missing.
 
 **What the Mac release has, in short.** The menus match the Windows product closely, so most of
 it is already tracked. What is its own: the information panel on the customer, vendor, item and
