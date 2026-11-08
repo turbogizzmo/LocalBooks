@@ -562,10 +562,16 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     // The bank account is debited with what arrived; other debits are fees or cash back taken out
     // of the deposit. LocalBooks deposit lines are the money put in, so the deposit's total is
     // the gross amount and its entry (the file's own lines) carries the deductions.
-    let banks: Vec<&Line> = t.lines.iter().filter(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")).collect();
-    let [&(bank, _, _, _)] = banks.as_slice() else {
-        return Err("it was not deposited into exactly one bank account".into());
-    };
+    // A deposit split between accounts goes to the one that got the most; the others' shares are
+    // taken out of it, like a fee or cash back, so the payments it banked still leave Undeposited
+    // Funds. Ties go to the first line, as the file lists them.
+    let bank = t
+        .lines
+        .iter()
+        .filter(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD"))
+        .reduce(|most, l| if l.1 < most.1 { l } else { most })
+        .map(|l| l.0)
+        .ok_or("it was not deposited into a bank account")?;
     let total: i64 = t.lines.iter().filter(|l| l.1 > 0).map(|l| l.1).sum();
     let deducted: i64 = -t.lines.iter().filter(|l| l.1 < 0 && l.0 != bank).map(|l| l.1).sum::<i64>();
     if t.lines.iter().any(|l| l.1 < 0 && l.0 != bank && books.is_undeposited(l.0)) {

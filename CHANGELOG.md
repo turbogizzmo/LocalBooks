@@ -9,6 +9,11 @@ people using LocalBooks.
 - **Invoices offer the customer's credits.** When a customer has credit memos with credit left, the
   invoice shows the available credits under Balance due, and saving it asks whether to apply them
   now, oldest first. Before, a credit could only be applied from the credit memo.
+- **Moving from QuickBooks: deposits split between accounts.** A deposit that went partly into one
+  bank account and partly into another used to come in as a journal entry, which left its payments
+  listed in Make Deposits as still waiting to be deposited. It now comes in as a deposit into the
+  account that got the most, with the rest shown as taken out of it, and its payments are marked
+  deposited. The books were right either way.
 
 ## [0.13.0]
 
