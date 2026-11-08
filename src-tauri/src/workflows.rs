@@ -74,7 +74,8 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
         .map_err(db_err)?;
     let mut rows: Vec<StatementRow> = sqlx::query_as(&format!(
         "SELECT l.entry_date AS date,
-                CASE WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
+                CASE WHEN EXISTS (SELECT 1 FROM journal_entries v WHERE v.id = l.journal_entry_id AND v.reverses_entry_id IS NOT NULL) THEN 'VOID'
+                     WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
                      THEN 'FINANCE_CHARGE' ELSE l.source_type END AS source_type,
                 p.party_name,
                 CASE l.source_type

@@ -63,13 +63,14 @@ Harbor Power & Light
                                Expense                   2025-05-12                              Electricity               Utilities                       -191.50       -980.50
                                Expense                   2025-06-12                              Electricity               Utilities                       -203.00     -1,183.50
                                Expense                   2025-06-13                              Duplicate entry           Utilities                       -191.50     -1,375.00
-                               Expense                   2025-07-12                              Electricity               Utilities                       -214.50     -1,589.50
-                               Expense                   2025-08-12                              Electricity               Utilities                       -180.00     -1,769.50
-                               Expense                   2025-09-12                              Electricity               Utilities                       -191.50     -1,961.00
-                               Expense                   2025-10-12                              Electricity               Utilities                       -203.00     -2,164.00
-                               Expense                   2025-11-12                              Electricity               Utilities                       -214.50     -2,378.50
-                               Expense                   2025-12-12                              Electricity               Utilities                       -180.00     -2,558.50
-Total Harbor Power & Lig                                                                                                                                 -2,558.50     -2,558.50
+                               Void                      2025-06-13    166                       Duplicate entry           Utilities                        191.50     -1,183.50
+                               Expense                   2025-07-12                              Electricity               Utilities                       -214.50     -1,398.00
+                               Expense                   2025-08-12                              Electricity               Utilities                       -180.00     -1,578.00
+                               Expense                   2025-09-12                              Electricity               Utilities                       -191.50     -1,769.50
+                               Expense                   2025-10-12                              Electricity               Utilities                       -203.00     -1,972.50
+                               Expense                   2025-11-12                              Electricity               Utilities                       -214.50     -2,187.00
+                               Expense                   2025-12-12                              Electricity               Utilities                       -180.00     -2,367.00
+Total Harbor Power & Lig                                                                                                                                 -2,367.00     -2,367.00
 Jordan Reyes
                                Check                     2025-02-18    1004                      Illustration              Contractors                     -950.00       -950.00
                                Check                     2025-04-18    1007                      Illustration              Contractors                     -950.00     -1,900.00
@@ -137,31 +138,30 @@ No name
                                Journal Entry             2025-05-25    65                        Loan payment              Interest Expense                 -80.00    -26,185.12
                                Journal Entry             2025-05-31    63                        Payroll 05/2025           Wages                         -6,250.00    -32,435.12
                                Journal Entry             2025-05-31    63                        Payroll 05/2025           Payroll Taxes                   -478.12    -32,913.24
-                               Void                      2025-06-13    166                       Duplicate entry           Utilities                        191.50    -32,721.74
-                               Journal Entry             2025-06-25    77                        Loan payment              Interest Expense                 -70.00    -32,791.74
-                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Wages                         -6,250.00    -39,041.74
-                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Payroll Taxes                   -478.12    -39,519.86
-                               Journal Entry             2025-07-25    90                        Loan payment              Interest Expense                 -60.00    -39,579.86
-                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Wages                         -6,250.00    -45,829.86
-                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Payroll Taxes                   -478.12    -46,307.98
-                               Sales Receipt             2025-08-20    3                         Sales Receipt #3          Sales                            210.00    -46,097.98
-                               Journal Entry             2025-08-25    104                       Loan payment              Interest Expense                 -50.00    -46,147.98
-                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Wages                         -6,500.00    -52,647.98
-                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Payroll Taxes                   -497.25    -53,145.23
-                               Journal Entry             2025-09-25    118                       Loan payment              Interest Expense                 -40.00    -53,185.23
-                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Wages                         -6,500.00    -59,685.23
-                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Payroll Taxes                   -497.25    -60,182.48
-                               Journal Entry             2025-10-25    130                       Loan payment              Interest Expense                 -30.00    -60,212.48
-                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Wages                         -6,500.00    -66,712.48
-                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Payroll Taxes                   -497.25    -67,209.73
-                               Sales Receipt             2025-11-20    4                         Sales Receipt #4          Sales                            210.00    -66,999.73
-                               Journal Entry             2025-11-25    145                       Loan payment              Interest Expense                 -20.00    -67,019.73
-                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Wages                         -6,500.00    -73,519.73
-                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Payroll Taxes                   -497.25    -74,016.98
-                               Journal Entry             2025-12-25    154                       Loan payment              Interest Expense                 -10.00    -74,026.98
-                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Wages                         -6,750.00    -80,776.98
-                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Payroll Taxes                   -516.37    -81,293.35
-Total No name                                                                                                                                           -81,293.35    -81,293.35
+                               Journal Entry             2025-06-25    77                        Loan payment              Interest Expense                 -70.00    -32,983.24
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Wages                         -6,250.00    -39,233.24
+                               Journal Entry             2025-06-30    75                        Payroll 06/2025           Payroll Taxes                   -478.12    -39,711.36
+                               Journal Entry             2025-07-25    90                        Loan payment              Interest Expense                 -60.00    -39,771.36
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Wages                         -6,250.00    -46,021.36
+                               Journal Entry             2025-07-31    88                        Payroll 07/2025           Payroll Taxes                   -478.12    -46,499.48
+                               Sales Receipt             2025-08-20    3                         Sales Receipt #3          Sales                            210.00    -46,289.48
+                               Journal Entry             2025-08-25    104                       Loan payment              Interest Expense                 -50.00    -46,339.48
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Wages                         -6,500.00    -52,839.48
+                               Journal Entry             2025-08-31    102                       Payroll 08/2025           Payroll Taxes                   -497.25    -53,336.73
+                               Journal Entry             2025-09-25    118                       Loan payment              Interest Expense                 -40.00    -53,376.73
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Wages                         -6,500.00    -59,876.73
+                               Journal Entry             2025-09-30    116                       Payroll 09/2025           Payroll Taxes                   -497.25    -60,373.98
+                               Journal Entry             2025-10-25    130                       Loan payment              Interest Expense                 -30.00    -60,403.98
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Wages                         -6,500.00    -66,903.98
+                               Journal Entry             2025-10-31    128                       Payroll 10/2025           Payroll Taxes                   -497.25    -67,401.23
+                               Sales Receipt             2025-11-20    4                         Sales Receipt #4          Sales                            210.00    -67,191.23
+                               Journal Entry             2025-11-25    145                       Loan payment              Interest Expense                 -20.00    -67,211.23
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Wages                         -6,500.00    -73,711.23
+                               Journal Entry             2025-11-30    143                       Payroll 11/2025           Payroll Taxes                   -497.25    -74,208.48
+                               Journal Entry             2025-12-25    154                       Loan payment              Interest Expense                 -10.00    -74,218.48
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Wages                         -6,750.00    -80,968.48
+                               Journal Entry             2025-12-31    153                       Payroll 12/2025           Payroll Taxes                   -516.37    -81,484.85
+Total No name                                                                                                                                           -81,484.85    -81,484.85
 TOTAL                                                                                                                                                    18,723.25
 
 131 lines
