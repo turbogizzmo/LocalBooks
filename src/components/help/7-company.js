@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   dashboard: {
-    help: 'Your books at a glance: assets and liabilities over the last 12 months, open receivables by age, a live trial balance that always shows whether debits equal credits, and Reminders of what needs attention today.',
+    help: 'Home maps the everyday work (estimates to invoices to payments to deposits; purchase orders to bills to payments) with a count where work is waiting, shortcuts to banking and company lists, and your account balances. Insights has assets and liabilities over 12 months, receivables by age, the trial balance and Reminders.',
     guide: 'getting-started',
   },
   settings: {
@@ -23,6 +23,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'home-page', area: 'company', views: ['dashboard'],
+    title: 'Start from the Home page',
+    body: 'The Dashboard’s Home tab shows the forms in the order the work goes, joined by arrows; click a step to open it, and a red number shows how many invoices are overdue, bills due, payments waiting to be deposited or to-dos due. Steps for features that are off are left out, and Balances lists your bank, card, receivable and payable accounts, each opening its register.',
+    keywords: 'home page workflow map flow chart icons shortcuts dashboard balances insights start',
+    go: { label: 'Go to the Dashboard', view: 'dashboard' },
+    guide: 'getting-started',
+  },
   {
     id: 'new-company', area: 'company', views: ['settings/data'],
     title: 'Create a new company with a suggested chart of accounts',

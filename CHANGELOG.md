@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **A Home page that maps the work.** The Dashboard now opens on **Home**: estimates, invoices,
+  payments and deposits, and purchase orders, bills, bill payments and checks, drawn in the order
+  the work goes, each one click away, with a red count where work is waiting (overdue invoices,
+  bills due, payments to deposit, to-dos). Banking and company shortcuts and your bank, card,
+  receivable and payable balances sit beside it. The totals, chart, trial balance and Reminders
+  moved to the **Insights** tab.
 - **Duplicate customers, vendors and accounts.** **Duplicate…** on a row of the Customers, Vendors
   or Chart of Accounts list makes a new record filled in from that one, to save under a new name.
   A customer or vendor copy leaves out its account and resale numbers, tax ID and history.

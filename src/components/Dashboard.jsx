@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import ArAgingWidget from './ArAgingWidget.jsx';
 import AssetLiabilityChart from './AssetLiabilityChart.jsx';
+import HomeFlow from './HomeFlow.jsx';
 import Notice from './Notice.jsx';
 import RemindersPanel from './Reminders.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
@@ -77,14 +79,29 @@ function TrialBalance({ tb }) {
   );
 }
 
-export default function Dashboard({ navigate }) {
+const TAB_KEY = 'localbooks.dashboardTab';
+const TABS = [
+  ['home', 'Home'],
+  ['insights', 'Insights'],
+];
+
+function savedTab() {
+  try {
+    return localStorage.getItem(TAB_KEY) === 'insights' ? 'insights' : 'home';
+  } catch {
+    return 'home';
+  }
+}
+
+/** The Insights tab: totals, the assets and liabilities chart, the trial balance and reminders. */
+function Insights({ navigate }) {
   const { data, error } = useLedgerQuery(api.getDashboard);
 
   if (error) return <Notice kind="error" text={`Could not load dashboard: ${error}`} />;
   if (!data) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
+    <>
       <div className="grid flex-none grid-cols-5 gap-2">
         <StatTile label="Total assets" cents={data.totalAssetsCents} />
         <StatTile label="Total liabilities" cents={data.totalLiabilitiesCents} />
@@ -96,6 +113,32 @@ export default function Dashboard({ navigate }) {
         <TrialBalance tb={data.trialBalance} />
         <RemindersPanel navigate={navigate} />
       </div>
+    </>
+  );
+}
+
+/** The Dashboard: the Home map of the day-to-day work, and Insights. The tab chosen is remembered. */
+export default function Dashboard({ accounts, navigate }) {
+  const [tab, setTab] = useState(savedTab);
+  const choose = (id) => {
+    setTab(id);
+    try {
+      localStorage.setItem(TAB_KEY, id);
+    } catch {
+      // Only a convenience.
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col gap-2 p-2">
+      <div className="flex flex-none overflow-hidden self-start rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Dashboard">
+        {TABS.map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => choose(id)} className={`px-2.5 py-0.5 font-semibold ${tab === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'home' ? <HomeFlow accounts={accounts} navigate={navigate} /> : <Insights navigate={navigate} />}
     </div>
   );
 }

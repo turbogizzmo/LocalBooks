@@ -8,7 +8,7 @@ notifications.
 
 ## See your reminders
 
-The **Reminders** panel is on the right of the **Dashboard** (also **Company › Reminders**). Each
+The **Reminders** panel is on the right of the Dashboard's **Insights** tab (also **Company › Reminders**). Each
 line is a category with the number of items in it, and a total for invoices and bills.
 
 - Click a category to expand it and see its items. Click an invoice, bill or to-do with a posted

@@ -360,6 +360,30 @@ Also in **Edit › Preferences › Desktop View**, for this computer:
 **Start on** takes effect the next time a company opens. Holding **Alt** (**Option** on a Mac) while
 clicking **Open** still opens with no windows, whatever you chose.
 
+## Start from the Home page
+
+The **Dashboard** opens on its **Home** tab: a map of the everyday work, so you can see what comes
+next and open it with one click.
+
+- **Customers**, **Vendors** and **Employees** each show their forms joined by arrows in the order
+  the work goes: an estimate becomes an invoice, the invoice is paid, the payment is deposited; a
+  purchase order becomes a bill, the bill is paid, the check is printed.
+- Click a step to open its form or list (**Invoices** opens a new invoice, **Pay Bills** opens Pay
+  Bills). Tab moves between the steps and Enter opens one.
+- A red number on a step says how much is waiting there: invoices overdue, bills coming due,
+  payments not yet deposited and to-dos due. They are the same counts as in
+  [Reminders](reminders-and-todos.md#see-your-reminders).
+- Steps for features you have turned off are left out: Estimates when estimates are off, Purchase
+  Orders when inventory is off (Preferences).
+- **Banking** and **Company** on the right are shortcuts to checks, transfers, bank feeds,
+  reconciling, registers, the chart of accounts, items, journal entries, the To Do list and
+  reports.
+- **Balances** lists your bank, credit card, receivable and payable accounts with their balances.
+  Click one to open its register.
+
+The **Insights** tab has the totals, the assets and liabilities chart, the trial balance and
+Reminders. LocalBooks remembers which tab you last chose.
+
 ## Use the toolbar on a form
 
 Invoices, sales receipts, estimates, credit memos, bills, checks and expenses, vendor credits,

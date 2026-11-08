@@ -172,7 +172,7 @@ export const topics = [
   {
     id: 'trial-balance', area: 'reports', views: ['dashboard'],
     title: 'Read the trial balance',
-    body: 'The Dashboard’s trial balance lists every account with a balance and shows ✓ In balance when total debits equal total credits. Because every entry must balance to post, it always should.',
+    body: 'The trial balance on the Dashboard’s Insights tab lists every account with a balance and shows ✓ In balance when total debits equal total credits. Because every entry must balance to post, it always should.',
     keywords: 'trial balance dashboard debits credits in balance',
     go: { label: 'Go to the Dashboard', view: 'dashboard' },
     guide: 'reports',
