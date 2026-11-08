@@ -328,6 +328,7 @@ pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, a
                 .await
                 .map_err(db_err)?;
         let (customer, total, paid) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
+        let customer = customer.ok_or("CM_OTHER_CUSTOMER: that invoice has no customer to take credits from")?;
         let credits: Vec<(i64, i64)> = sqlx::query_as(
             "SELECT m.id, b.remaining_cents FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
              WHERE m.customer_id = ?1 AND m.is_voided = 0 AND m.refund_account_id IS NULL AND b.remaining_cents > 0
