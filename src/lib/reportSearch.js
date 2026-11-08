@@ -24,8 +24,10 @@ export function reportMatcher(query) {
     if (!/^\d*\.?\d+$/.test(cell)) return false;
     if (cell === amount) return true;
     // 1250 finds 1,250.00; 1,250.5 finds 1,250.50. Compared in cents, never as floats.
-    const want = parseMoneyToCents(amount);
-    return want !== null && parseMoneyToCents(cell) === want;
+    // Typed amounts read as written: the "add the decimal point" preference is for entry boxes.
+    const exact = { impliedDecimal: false };
+    const want = parseMoneyToCents(amount, exact);
+    return want !== null && parseMoneyToCents(cell, exact) === want;
   };
 }
 

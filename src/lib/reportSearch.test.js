@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reportMatcher, stepMatch } from './reportSearch.js';
+import { setImpliedDecimal } from './money.js';
 
 test('words match anywhere in a cell, ignoring case and spacing', () => {
   const m = reportMatcher('  office   SUPPLIES ');
@@ -27,4 +28,14 @@ test('stepping wraps at both ends', () => {
   assert.equal(stepMatch(0, 3, true), 2);
   assert.equal(stepMatch(-1, 3, true), 2);
   assert.equal(stepMatch(0, 0), -1);
+});
+
+test('the automatic decimal point preference does not change what an amount finds', () => {
+  setImpliedDecimal(true);
+  try {
+    assert.equal(reportMatcher('1250')('1,250.00'), true);
+    assert.equal(reportMatcher('1250')('12.50'), false);
+  } finally {
+    setImpliedDecimal(false);
+  }
 });
