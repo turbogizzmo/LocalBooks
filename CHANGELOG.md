@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Invoices offer the customer's credits.** When a customer has credit memos with credit left, the
+  invoice shows the available credits under Balance due, and saving it asks whether to apply them
+  now, oldest first. Before, a credit could only be applied from the credit memo.
+
 ## [0.13.0]
 
 - **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,

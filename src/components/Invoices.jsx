@@ -172,6 +172,15 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
   const [customer, setCustomer] = useState('');
+  // The customer's credit memos with credit left to use (refund receipts paid the money back).
+  const openCredits = useMemo(() => {
+    const name = customer.trim().toLowerCase();
+    if (!name) return [];
+    return (creditMemos.data ?? []).filter(
+      (m) => m.customerName.toLowerCase() === name && !m.isVoided && m.refundAccountId == null && m.remainingCents > 0,
+    );
+  }, [creditMemos.data, customer]);
+  const openCreditCents = openCredits.reduce((sum, m) => sum + m.remainingCents, 0);
   // One payment is in one currency; the customer's open invoices are filtered to it.
   const [currency, setCurrency] = useState('');
   const [rate, setRate] = useState('');
@@ -736,6 +745,7 @@ export default function Invoices({ accounts, intent }) {
   const customerRef = useRef(null);
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
+  const creditMemos = useLedgerQuery(api.listCreditMemos);
   const defaultAccountId = useMemo(
     () => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null,
     [accounts],
@@ -996,6 +1006,25 @@ export default function Invoices({ accounts, intent }) {
       printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
       const attachError = files.length > 0 ? await attachPicked(inv.journalEntryId, files) : null;
+      // Credits apply to home-currency invoices only; the offer comes before printing or emailing,
+      // so the form shows the balance after them.
+      let creditNote = '';
+      if (!inv.currencyCode && openCreditCents > 0) {
+        const use = Math.min(openCreditCents, inv.totalCents);
+        if (
+          await askConfirm(
+            `${inv.customerName} has ${formatCents(openCreditCents)} in available credits. Apply ${formatCents(use)} to invoice #${inv.invoiceNumber} now?`,
+            { confirmLabel: 'Apply credits' },
+          )
+        ) {
+          try {
+            const used = await api.applyOpenCreditsToInvoice(inv.id, issueDate);
+            if (used.count > 0) creditNote = ` ${formatCents(used.appliedCents)} in credits applied.`;
+          } catch (err) {
+            creditNote = ` The credits were not applied: ${errorText(err)}`;
+          }
+        }
+      }
       if (mode === 'print') forms.print('INVOICE', inv.id);
       if (mode === 'email') forms.email('INVOICE', inv.id);
       setNotice({
@@ -1004,6 +1033,7 @@ export default function Invoices({ accounts, intent }) {
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
+            creditNote +
             (queued ? ' Marked Email later.' : '') +
             (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : '') +
             (attachError ? ` ${attachError}` : ''),
@@ -1187,6 +1217,11 @@ export default function Invoices({ accounts, intent }) {
                 {discount > 0 && `less ${formatMoney(discount, currency || null)} discount`}
                 {discount > 0 && taxCents > 0 && ' · '}
                 {taxCents > 0 && `incl. ${formatMoney(taxCents, currency || null)} sales tax`}
+              </div>
+            )}
+            {!editing && !currency && openCreditCents > 0 && (
+              <div className="text-xs text-qb-ink-muted" title={openCredits.map((m) => `Credit #${m.creditNumber}: ${formatCents(m.remainingCents)}`).join('\n')}>
+                Available credits: {formatCents(openCreditCents)} ({openCredits.length === 1 ? '1 credit memo' : `${openCredits.length} credit memos`}), offered on save
               </div>
             )}
             {currency && parseRateE6(rate) !== null && total > 0 && (
