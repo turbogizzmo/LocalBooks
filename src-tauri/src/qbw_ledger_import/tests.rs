@@ -192,6 +192,84 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
     assert!(err.starts_with("QBW_FULL_USE_START_OVER"), "{err}");
 }
 
+/// A deposit split between two bank accounts is still a deposit: into the one that got the
+/// most, with the other's share taken out of it, so its payments leave Undeposited Funds.
+#[tokio::test]
+async fn a_deposit_split_between_banks_still_banks_its_payments() {
+    use crate::qbw_documents::{Applied, DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let doc = |id: i64, kind: &'static str, date: &str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+        kind,
+        document: Some(document),
+        ..txn(id, date, lines)
+    };
+    let payment = |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
+    let mut ledger = ledger();
+    ledger.accounts = vec![
+        account(1, "Riverside Bank", "BANK", None),
+        account(2, "Savings", "BANK", None),
+        account(4, "Accounts Receivable", "ACCOUNTS_RECEIVABLE", None),
+        account(6, "Consulting Income", "INCOME", None),
+        account(7, "Undeposited Funds", "OTHER_CURRENT_ASSET", None),
+    ];
+    ledger.unbalanced = vec![];
+    ledger.unreadable = vec![];
+    ledger.transactions = vec![
+        doc(
+            20,
+            "Invoice",
+            "2024-01-10",
+            &[(4, -9_000), (6, 9_000)],
+            SourceDocument::Invoice {
+                customer_id: 100,
+                number: Some("7".into()),
+                due_date: None,
+                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }],
+                sales: Default::default(),
+            },
+        ),
+        doc(21, "Payment", "2024-01-12", &[(7, -6_000), (4, 6_000)], payment(6_000)),
+        doc(22, "Payment", "2024-01-13", &[(7, -3_000), (4, 3_000)], payment(3_000)),
+        doc(
+            23,
+            "Deposit",
+            "2024-01-14",
+            &[(1, -2_000), (2, -7_000), (7, 6_000), (7, 3_000)],
+            SourceDocument::Deposit { payments: vec![Applied { transaction_id: 21, cents: 6_000 }, Applied { transaction_id: 22, cents: 3_000 }] },
+        ),
+    ];
+    ledger.customers = vec![SourceParty {
+        id: 100,
+        name: "Acme Hosting".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: Some(0),
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.deposits, full.fell_back), (1, 0), "{full:?}");
+    assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty(), "both payments were banked");
+
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+    let (bank, total): (i64, i64) = sqlx::query_as("SELECT bank_account_id, total_cents FROM deposits").fetch_one(&pool).await.unwrap();
+    assert_eq!((bank, total), (mapped("Savings"), 9_000), "the deposit goes to the account that got the most, gross");
+    assert_eq!(balance(&pool, mapped("Savings")).await, 7_000);
+    assert_eq!(balance(&pool, mapped("Riverside Bank")).await, 2_000);
+    assert_eq!(balance(&pool, mapped("Undeposited Funds")).await, 0);
+}
+
 /// The purchase side of a full import: a bill paid by a bill payment dated before it, a check,
 /// a card charge, a card credit, and a refund into a bank account (no LocalBooks form, so a
 /// journal entry).
