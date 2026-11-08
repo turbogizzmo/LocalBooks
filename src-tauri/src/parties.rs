@@ -395,6 +395,75 @@ pub async fn set_party_active(pool: &SqlitePool, kind: &str, id: i64, active: bo
     get_party(pool, kind, id, access).await
 }
 
+/// What a copy of a customer takes from the original: everything but the name, the account and
+/// resale numbers (each customer's own) and the history.
+const CUSTOMER_COPIED: &str = "email, company_name, phone, billing_address, terms_days, notes, tax_rate_id, is_tax_exempt, \
+     tax_exemption, parent_id, form_style_id, sales_rep_id, price_level_id, terms_id, customer_type_id, job_type_id, \
+     shipping_address, contact_name, alt_contact_name, alt_phone, fax, website, credit_limit_cents, preferred_delivery, job_status";
+/// A copy of a vendor leaves out the tax ID and the account number we have with them.
+const VENDOR_COPIED: &str = "email, company_name, phone, address, terms_days, is_1099, notes, terms_id, vendor_type_id";
+
+/// Duplicate on the Customer and Vendor lists: a new, active record named `name`, filled from
+/// `id` (contact details, terms, types, tax settings, custom fields), with no transactions. A
+/// copy of a job stays a job of the same customer, so its name must start with that customer's.
+pub async fn duplicate_party(pool: &SqlitePool, kind: &str, id: i64, name: &str, access: Access<'_>) -> Result<PartyDetails, String> {
+    let t = table(kind)?;
+    // "Acme : Kitchen" is the job "Acme:Kitchen", as when a job is typed on a form.
+    let name = if kind == "customer" { name.split(':').map(str::trim).collect::<Vec<_>>().join(":") } else { name.trim().to_string() };
+    let name = name.as_str();
+    if name.is_empty() || (kind == "customer" && name.split(':').any(str::is_empty)) {
+        return Err("PARTY_NO_NAME: enter a name for the copy".into());
+    }
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
+    let parent: Option<Option<String>> = if kind == "customer" {
+        sqlx::query_scalar("SELECT p.name FROM customers c LEFT JOIN customers p ON p.id = c.parent_id WHERE c.id = ?1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_err)?
+    } else {
+        sqlx::query_scalar("SELECT NULL FROM vendors WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?
+    };
+    let Some(parent) = parent else {
+        return Err(crate::ledger::rollback(tx, format!("PARTY_NOT_FOUND: that {kind} does not exist")).await);
+    };
+    if kind == "customer" && parent.is_none() && name.contains(':') {
+        return Err(crate::ledger::rollback(tx, "PARTY_DUP_JOB: a copy of a customer is a customer; use Add job… to make a job".into()).await);
+    }
+    if let Some(parent) = parent {
+        let under = name.len() > parent.len() + 1 && name[..parent.len()].eq_ignore_ascii_case(&parent) && name.as_bytes()[parent.len()] == b':';
+        if !under {
+            return Err(crate::ledger::rollback(tx, format!("PARTY_DUP_JOB: a copy of a job stays under {parent}: name it {parent}:…")).await);
+        }
+    }
+    let copied = if kind == "customer" { CUSTOMER_COPIED } else { VENDOR_COPIED };
+    let inserted = sqlx::query_scalar::<_, i64>(&format!("INSERT INTO {t} (name, {copied}) SELECT ?1, {copied} FROM {t} WHERE id = ?2 RETURNING id"))
+        .bind(name)
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await;
+    let new_id = match inserted {
+        Ok(new_id) => new_id,
+        Err(err) if err.as_database_error().is_some_and(|e| e.is_unique_violation()) => {
+            return Err(crate::ledger::rollback(tx, format!("PARTY_DUPLICATE: there is already a {kind} named '{name}'")).await);
+        }
+        Err(err) => return Err(crate::ledger::rollback(tx, db_err(err)).await),
+    };
+    sqlx::query(
+        "INSERT INTO custom_field_values (field_id, record_id, value)
+         SELECT v.field_id, ?1, v.value FROM custom_field_values v JOIN custom_fields f ON f.id = v.field_id
+         WHERE v.record_id = ?2 AND f.list = ?3",
+    )
+    .bind(new_id)
+    .bind(id)
+    .bind(kind.to_uppercase())
+    .execute(&mut *tx)
+    .await
+    .map_err(db_err)?;
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
+    get_party(pool, kind, new_id, access).await
+}
+
 /// Changes a product's name, description, default rate and income account. Documents already
 /// posted keep what they were posted with.
 #[cfg(test)]

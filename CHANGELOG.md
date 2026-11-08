@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Duplicate customers, vendors and accounts.** **Duplicate…** on a row of the Customers, Vendors
+  or Chart of Accounts list makes a new record filled in from that one, to save under a new name.
+  A customer or vendor copy leaves out its account and resale numbers, tax ID and history.
+
 ## [0.13.0]
 
 - **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,

@@ -16,6 +16,7 @@ import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
+import { askText } from '../lib/dialogs.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -439,6 +440,19 @@ export default function PartyList({ kind, navigate }) {
     setEditing(id);
   };
 
+  // Duplicate: a new record filled from this one, under a name the user gives, opened for editing.
+  const duplicate = async (p) => {
+    const name = await askText(`Name for the copy of ${p.name}:`, `${p.name} (copy)`);
+    if (!name?.trim()) return;
+    try {
+      const copy = await api.duplicateParty(kind, p.id, name);
+      setNotice({ kind: 'success', text: `Added ${copy.name}, a copy of ${p.name}. Change what differs and save.` });
+      setEditing(copy.id);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+
   const setActive = async (p, active) => {
     try {
       await api.setPartyActive(kind, p.id, active);
@@ -607,6 +621,7 @@ export default function PartyList({ kind, navigate }) {
                         label={`Actions for ${p.name}`}
                         items={[
                           { label: 'Edit…', onSelect: () => openRecord(p.id) },
+                          { label: 'Duplicate…', onSelect: () => duplicate(p) },
                           { label: 'Show transactions', onSelect: () => showTransactions(p.id) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
