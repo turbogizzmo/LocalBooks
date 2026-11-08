@@ -72,7 +72,7 @@ describe('Tax IDs in a company with users', () => {
     await click(button('Desktop Migration Wizard…'));
     await waitForPage('Import & Migration');
     await expect($('//main//h2[normalize-space()="Desktop Migration Wizard"]')).toBeDisplayed();
-    await expect($('//*[@role="tab"][@aria-selected="true"]')).toHaveText('Import & Migration');
+    await expect($('//*[@role="tablist"][@aria-label="Settings"]//*[@role="tab"][@aria-selected="true"]')).toHaveText('Import & Migration');
   });
 
   it('never shows a Standard user Admin settings, even when a link leads there', async () => {

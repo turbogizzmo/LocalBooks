@@ -48,7 +48,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
   const props = { accounts: list, intent, navigate };
   return (
     <>
-      {view === 'dashboard' && <Dashboard navigate={navigate} />}
+      {view === 'dashboard' && <Dashboard accounts={list} navigate={navigate} />}
       {view === 'sales/all' && <AllSales {...props} />}
       {view === 'sales/invoices' && <Invoices {...props} />}
       {view === 'sales/estimates' && <Estimates {...props} />}
