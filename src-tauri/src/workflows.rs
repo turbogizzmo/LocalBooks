@@ -65,7 +65,8 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
     let mine = "(p.party_name = ?1 OR substr(p.party_name, 1, length(?1) + 1) = ?1 || ':')";
     let ar_lines = "FROM v_posted_lines l
          JOIN v_chart_of_accounts a ON a.id = l.account_id AND a.account_type = 'ACCOUNTS_RECEIVABLE'
-         JOIN v_entry_party p ON p.journal_entry_id = l.journal_entry_id";
+         JOIN v_entry_party p ON p.journal_entry_id = l.journal_entry_id
+         JOIN journal_entries je ON je.id = l.journal_entry_id";
     let opening: i64 = sqlx::query_scalar(&format!("SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) {ar_lines} WHERE {mine} AND l.entry_date < ?2"))
         .bind(&name)
         .bind(start_date)
@@ -74,7 +75,7 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
         .map_err(db_err)?;
     let mut rows: Vec<StatementRow> = sqlx::query_as(&format!(
         "SELECT l.entry_date AS date,
-                CASE WHEN EXISTS (SELECT 1 FROM journal_entries v WHERE v.id = l.journal_entry_id AND v.reverses_entry_id IS NOT NULL) THEN 'VOID'
+                CASE WHEN je.reverses_entry_id IS NOT NULL THEN 'VOID'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
                      THEN 'FINANCE_CHARGE' ELSE l.source_type END AS source_type,
                 p.party_name,
