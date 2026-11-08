@@ -172,15 +172,6 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
   const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
   const [customer, setCustomer] = useState('');
-  // The customer's credit memos with credit left to use (refund receipts paid the money back).
-  const openCredits = useMemo(() => {
-    const name = customer.trim().toLowerCase();
-    if (!name) return [];
-    return (creditMemos.data ?? []).filter(
-      (m) => m.customerName.toLowerCase() === name && !m.isVoided && m.refundAccountId == null && m.remainingCents > 0,
-    );
-  }, [creditMemos.data, customer]);
-  const openCreditCents = openCredits.reduce((sum, m) => sum + m.remainingCents, 0);
   // One payment is in one currency; the customer's open invoices are filtered to it.
   const [currency, setCurrency] = useState('');
   const [rate, setRate] = useState('');
@@ -751,6 +742,15 @@ export default function Invoices({ accounts, intent }) {
     [accounts],
   );
   const [customer, setCustomer] = useState('');
+  // The customer's credit memos with credit left to use (refund receipts paid the money back).
+  const openCredits = useMemo(() => {
+    const name = customer.trim().toLowerCase();
+    if (!name) return [];
+    return (creditMemos.data ?? []).filter(
+      (m) => m.customerName.toLowerCase() === name && !m.isVoided && m.refundAccountId == null && m.remainingCents > 0,
+    );
+  }, [creditMemos.data, customer]);
+  const openCreditCents = openCredits.reduce((sum, m) => sum + m.remainingCents, 0);
   const [issueDate, setIssueDate] = useTransactionDate();
   const termsList = useTerms();
   const [termsId, setTermsId] = useState(null);
