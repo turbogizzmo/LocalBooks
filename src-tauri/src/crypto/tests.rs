@@ -193,6 +193,8 @@ async fn a_damaged_slot_is_reported_and_the_other_slots_still_open() {
     set_password(&mut conn, &key, 8, "another one").await.unwrap();
     // The schema refuses a nonce of the wrong length, so only damage below SQLite's checks makes one.
     sqlx::query("PRAGMA ignore_check_constraints = ON").execute(&mut *conn).await.unwrap();
+    let ignoring: i64 = sqlx::query_scalar("PRAGMA ignore_check_constraints").fetch_one(&mut *conn).await.unwrap();
+    assert_eq!(ignoring, 1, "this SQLite build cannot skip CHECK constraints");
     sqlx::query("UPDATE key_slots SET nonce = zeroblob(5) WHERE user_id = 7").execute(&mut *conn).await.unwrap();
     sqlx::query("PRAGMA ignore_check_constraints = OFF").execute(&mut *conn).await.unwrap();
 
