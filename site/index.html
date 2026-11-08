@@ -328,14 +328,15 @@
         <h2>Updates</h2>
         <div class="panel-body">
           <p>LocalBooks checks for a new version a few seconds after it starts. When one is ready you’ll see a blue bar at the top:</p>
-          <div class="notice notice-info"><strong>LocalBooks 0.7.0</strong> is available (you have 0.6.0). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span></div>
+          <div class="notice notice-info"><strong>LocalBooks <span id="update-new">(new version)</span></strong> is available (you have <span id="update-old">yours</span>). &nbsp;<span class="btn btn-primary" style="min-height:24px;padding:0 10px;font-size:12px">Install and restart</span> <span class="btn" style="min-height:24px;padding:0 10px;font-size:12px">Later</span></div>
           <ol class="steps">
-            <li>Read <strong>What’s new</strong> if you like, then click <strong>Install and restart</strong>.</li>
+            <li>Open <strong>What’s new in …</strong> under the bar to read the release notes if you like, then click <strong>Install and restart</strong>. <strong>Later</strong> hides the bar until LocalBooks next starts.</li>
             <li>LocalBooks downloads the update, checks its digital signature, installs it and reopens.</li>
             <li>The first time the new version opens your company file, it saves a copy first (Settings › File &amp; Data Controls, listed as <em>Before upgrade</em>).</li>
+            <li>On a Mac, the first start after an update may ask you to let LocalBooks use its saved passwords in your Keychain, once for each one (until LocalBooks is signed with an Apple Developer ID). Click <strong>Always Allow</strong>.</li>
           </ol>
           <p class="small muted">To check yourself, or to turn off automatic checks, go to <strong>Settings › Updates</strong>. Checking sends nothing about your books.</p>
-          <p class="small muted">Previews (marked <em>preview</em> above) are early versions that are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
+          <p class="small muted">Previews (shown as <em>preview</em> beside the version at the top of this page) are early versions that are not offered as automatic updates. Download and install them from this page; your company file and settings carry over.</p>
         </div>
       </section>
 
@@ -603,6 +604,13 @@
           var release = (releases || []).filter(function (r) { return !r.draft; })[0];
           if (!release) throw new Error('no release');
           versionEl.textContent = (release.tag_name || release.name || 'Latest') + (release.prerelease ? ' (preview)' : '');
+          // The Updates section's example bar shows the two newest full releases.
+          var full = (releases || []).filter(function (r) { return !r.draft && !r.prerelease; });
+          var bare = function (r) { return String(r.tag_name || r.name || '').replace(/^v/, ''); };
+          if (full[0] && full[1]) {
+            document.getElementById('update-new').textContent = bare(full[0]);
+            document.getElementById('update-old').textContent = bare(full[1]);
+          }
           var found = KINDS.map(function (k) {
             var asset = (release.assets || []).filter(function (a) { return k.test.test(a.name); })[0];
             return asset ? { kind: k, asset: asset } : null;
