@@ -306,6 +306,56 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
     recompute_paid(tx, "invoices", "invoice_payments", "invoice_id", input.document_id).await
 }
 
+/// What [`apply_open_credits_to_invoice`] used.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedCredits {
+    /// How many credit memos were used.
+    pub count: i64,
+    pub applied_cents: i64,
+}
+
+/// Uses the customer's open credit memos, oldest first, against one invoice until either the
+/// credits or the invoice balance run out: what the invoice form offers on save. Each use is the
+/// same as applying that credit memo from its own side ([`apply_customer_credit`]), and all of
+/// them are one transaction.
+pub async fn apply_open_credits_to_invoice(pool: &SqlitePool, invoice_id: i64, applied_date: NaiveDate) -> Result<AppliedCredits, String> {
+    run(pool, async |tx| {
+        let invoice: Option<(Option<i64>, i64, i64)> =
+            sqlx::query_as("SELECT customer_id, total_cents, amount_paid_cents FROM invoices WHERE id = ?1")
+                .bind(invoice_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(db_err)?;
+        let (customer, total, paid) = invoice.ok_or("CM_INVOICE_NOT_FOUND: that invoice does not exist")?;
+        let customer = customer.ok_or("CM_OTHER_CUSTOMER: that invoice has no customer to take credits from")?;
+        let credits: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT m.id, b.remaining_cents FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
+             WHERE m.customer_id = ?1 AND m.is_voided = 0 AND m.refund_account_id IS NULL AND b.remaining_cents > 0
+             ORDER BY m.credit_date, m.credit_number",
+        )
+        .bind(customer)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_err)?;
+        let mut open = total.checked_sub(paid).ok_or("CM_BAD_AMOUNT: the invoice balance is out of range")?;
+        let mut used = AppliedCredits { count: 0, applied_cents: 0 };
+        for (credit_id, remaining) in credits {
+            if open <= 0 {
+                break;
+            }
+            let amount_cents = remaining.min(open);
+            // The single-credit path checks the customer, the invoice's state and currency.
+            apply_customer_credit_in_tx(tx, &ApplyCreditInput { credit_id, document_id: invoice_id, amount_cents, applied_date }).await?;
+            open -= amount_cents;
+            used.count += 1;
+            used.applied_cents = used.applied_cents.checked_add(amount_cents).ok_or("CM_BAD_AMOUNT: too much credit")?;
+        }
+        Ok(used)
+    })
+    .await
+}
+
 pub async fn list_customer_credit_applications(pool: &SqlitePool, credit_memo_id: i64) -> Result<Vec<CreditApplicationView>, String> {
     sqlx::query_as::<_, CreditApplicationView>(
         "SELECT a.id, a.credit_memo_id AS credit_id, a.invoice_id AS document_id, 'Invoice #' || i.invoice_number AS document_label,
