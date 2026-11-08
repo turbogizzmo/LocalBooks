@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Find in a report.** Every report has a **Find in report** box beside Export: matching cells are
+  shaded, Enter steps through them, and an amount matches however it is written (`1250` finds
+  `1,250.00`).
 - **Invoices offer the customer's credits.** When a customer has credit memos with credit left, the
   invoice shows the available credits under Balance due, and saving it asks whether to apply them
   now, oldest first. Before, a credit could only be applied from the credit memo.

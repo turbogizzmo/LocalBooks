@@ -330,6 +330,15 @@ A report with headings (accounts, names, jobs, vendors, sections of the Balance 
 **Collapse all** and **Expand all** above the report do every heading at once. A report prints the
 way it is shown; Export to Excel and CSV always have every line.
 
+## Find in a report
+
+Type a word, a name or an amount in **Find in report**, beside **Export** above the report. Every
+cell that matches is shaded, and the box says how many there are. Press **Enter** (or ↓) to go to
+the next one, which is shaded darker and scrolled into view; **Shift+Enter** (or ↑) goes back, and
+**Esc** clears the search. An amount matches however the report writes it: `1250` finds
+`1,250.00` and `(1,250.00)`. When nothing matches, the box says **No matches**. The shading
+follows the report when you change its dates or options, and it is never printed.
+
 ## Customize a report
 
 1. Open any detail report and click **Customize…**.

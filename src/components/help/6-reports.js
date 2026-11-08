@@ -23,6 +23,13 @@ export const topics = [
     guide: 'reports',
   },
   {
+    id: 'find-in-report', area: 'reports', views: ['reports'],
+    title: 'Find a word or amount in a report',
+    body: 'Type in Find in report, beside Export: every matching cell is shaded and the count is shown. Enter steps to the next match and scrolls to it, Shift+Enter goes back, Esc clears. 1250 finds 1,250.00 and (1,250.00).',
+    keywords: 'find search in report look for highlight match amount name word next previous',
+    guide: 'reports',
+  },
+  {
     id: 'quickreport', area: 'reports', views: ['reports', 'accounting/register', 'accounting/chart-of-accounts', 'sales/customers', 'expenses/vendors', 'sales/products'],
     title: 'QuickReport, Transaction History and Transaction Journal',
     body: 'Press Ctrl+Q in a register, or on an account, customer, vendor or item in its list, for a report of its transactions. Click a transaction in a register or a name’s transactions and press Ctrl+H for the transactions linked to it (an invoice’s payments, a payment’s deposit) or Ctrl+Y for the debits and credits it posted; Ctrl is used on a Mac too.',
