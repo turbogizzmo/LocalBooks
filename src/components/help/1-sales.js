@@ -140,6 +140,14 @@ export const topics = [
     guide: 'sales-receipts-and-estimates',
   },
   {
+    id: 'duplicate-name', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'accounting/chart-of-accounts'],
+    title: 'Copy a customer, vendor or account (Duplicate)',
+    body: 'Choose Duplicate… in a row’s ▾ menu on the Customers, Vendors or Chart of Accounts list. A customer or vendor copy takes everything but the name, account and resale numbers, tax ID and history, and opens for editing; an account copy opens New account filled in from the original.',
+    keywords: 'duplicate copy customer vendor account clone second location new from existing',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'customers', area: 'sales', views: ['sales/customers'],
     title: 'Add and review customers',
     body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer.',

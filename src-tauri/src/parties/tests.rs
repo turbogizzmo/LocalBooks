@@ -114,3 +114,52 @@ async fn customers_vendors_and_products_can_be_edited_and_inactivated() {
     assert!(err.starts_with("PRODUCT_NOT_INCOME_ACCOUNT"), "{err}");
     assert!(!set_product_active(&pool, widget.id, false).await.unwrap().is_active);
 }
+
+#[tokio::test]
+async fn duplicate_copies_a_customer_or_vendor_under_a_new_name() {
+    use crate::custom_fields::{create_custom_field, record_fields, save_record_values, CustomFieldInput, FieldList, FieldValue};
+    let pool = test_pool().await;
+    let acme = crate::sales::create_customer(&pool, "Acme", Some("ap@acme.test")).await.unwrap();
+    sqlx::query("UPDATE customers SET phone = '555-0100', terms_days = 15, credit_limit_cents = 500000, account_number = 'A-1', resale_number = 'R-9' WHERE id = ?1")
+        .bind(acme.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let field = create_custom_field(&pool, FieldList::Customer, CustomFieldInput { label: "Region".into(), on_sales_forms: false }).await.unwrap();
+    save_record_values(&pool, FieldList::Customer, acme.id, &[FieldValue { field_id: field.id, value: "West".into() }]).await.unwrap();
+
+    let copy = duplicate_party(&pool, "customer", acme.id, " Acme West ", Access::OPEN).await.unwrap();
+    assert_ne!(copy.id, acme.id);
+    assert_eq!((copy.name.as_str(), copy.email.as_deref(), copy.phone.as_deref(), copy.terms_days), ("Acme West", Some("ap@acme.test"), Some("555-0100"), Some(15)));
+    assert!(copy.is_active);
+    let (limit, account, resale): (Option<i64>, Option<String>, Option<String>) =
+        sqlx::query_as("SELECT credit_limit_cents, account_number, resale_number FROM customers WHERE id = ?1").bind(copy.id).fetch_one(&pool).await.unwrap();
+    assert_eq!((limit, account, resale), (Some(500_000), None, None), "each customer's own numbers are not copied");
+    let values = record_fields(&pool, FieldList::Customer, copy.id).await.unwrap();
+    assert_eq!(values.iter().find(|f| f.field_id == field.id).map(|f| f.value.as_str()), Some("West"));
+
+    assert!(duplicate_party(&pool, "customer", acme.id, "acme west", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUPLICATE"));
+    assert!(duplicate_party(&pool, "customer", acme.id, "  ", Access::OPEN).await.unwrap_err().starts_with("PARTY_NO_NAME"));
+    assert!(duplicate_party(&pool, "customer", acme.id, "Other:Job", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUP_JOB"));
+
+    // A job's copy stays under its customer.
+    let job = crate::sales::create_customer(&pool, "Acme:Kitchen", None).await.unwrap();
+    assert!(duplicate_party(&pool, "customer", job.id, "Bathroom", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUP_JOB"));
+    assert!(duplicate_party(&pool, "customer", job.id, "Acmé:Stalls", Access::OPEN).await.unwrap_err().starts_with("PARTY_DUP_JOB"), "a multi-byte name is refused, not a panic");
+    let bath = duplicate_party(&pool, "customer", job.id, "Acme : Bathroom", Access::OPEN).await.unwrap();
+    let parent: Option<i64> = sqlx::query_scalar("SELECT parent_id FROM customers WHERE id = ?1").bind(bath.id).fetch_one(&pool).await.unwrap();
+    assert_eq!((bath.name.as_str(), parent), ("Acme:Bathroom", Some(acme.id)));
+
+    // A vendor's copy leaves the tax ID and account number behind.
+    let staples = crate::expenses::create_vendor(&pool, "Staples", None).await.unwrap();
+    sqlx::query("UPDATE vendors SET tax_id = '12-3456789', tax_id_masked = '**-***6789', is_1099 = 1, account_number = 'S-77', terms_days = 30 WHERE id = ?1")
+        .bind(staples.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let copy = duplicate_party(&pool, "vendor", staples.id, "Staples: Downtown", Access::OPEN).await.unwrap();
+    assert_eq!((copy.name.as_str(), copy.is_1099, copy.terms_days, copy.tax_id.as_deref()), ("Staples: Downtown", true, Some(30), None));
+    let account: Option<String> = sqlx::query_scalar("SELECT account_number FROM vendors WHERE id = ?1").bind(copy.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(account, None);
+    assert!(duplicate_party(&pool, "vendor", 9_999, "Ghost", Access::OPEN).await.unwrap_err().starts_with("PARTY_NOT_FOUND"));
+}

@@ -44,13 +44,16 @@ function buildTree(accounts) {
   return { ordered, rolled, hasChildren: (id) => (children.get(id) ?? []).length > 0 };
 }
 
-function AccountDialog({ account, accounts, types, onClose, onSaved }) {
+/** Edits `account`, or adds a new one; `template` (Duplicate) fills the new one from an existing account. */
+function AccountDialog({ account, template = null, accounts, types, onClose, onSaved }) {
   const editing = Boolean(account);
-  const [type, setType] = useState(account?.accountType ?? 'EXPENSE');
-  const [name, setName] = useState(account?.name ?? '');
+  const from = account ?? template;
+  const [type, setType] = useState(from?.accountType ?? 'EXPENSE');
+  // A copy needs its own name and number (both are unique); the rest is the original's.
+  const [name, setName] = useState(account?.name ?? (template ? `${template.name} (copy)` : ''));
   const [number, setNumber] = useState(account?.accountNumber ?? '');
-  const [parentId, setParentId] = useState(account?.parentId ?? null);
-  const [description, setDescription] = useState(account?.description ?? '');
+  const [parentId, setParentId] = useState(from?.parentId ?? null);
+  const [description, setDescription] = useState(from?.description ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -73,7 +76,7 @@ function AccountDialog({ account, accounts, types, onClose, onSaved }) {
   };
 
   return (
-    <Dialog title={editing ? `Edit ${account.fullName}` : 'New account'} onClose={onClose}>
+    <Dialog title={editing ? `Edit ${account.fullName}` : template ? `New account from ${template.fullName}` : 'New account'} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-2 px-3 py-2 text-xs">
         {account?.isSystem && (
           <p className="text-qb-ink-muted">LocalBooks posts to this account automatically, so its type stays fixed and it cannot be a subaccount. You can rename it or change its number.</p>
@@ -205,6 +208,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
       {dialog && (
         <AccountDialog
           account={dialog.account}
+          template={dialog.template ?? null}
           accounts={accounts}
           types={types}
           onClose={() => setDialog(null)}
@@ -286,6 +290,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                             { label: 'Open register', onSelect: () => navigate('accounting/register', 'open', { accountId: a.id }) },
                             { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(a) },
                             { label: 'Edit…', onSelect: () => setDialog({ account: a }) },
+                            { label: 'Duplicate…', onSelect: () => setDialog({ account: null, template: a }) },
                             a.isActive
                               ? { label: 'Make inactive', disabled: a.isSystem, hint: a.isSystem ? 'LocalBooks posts to this account automatically' : undefined, onSelect: () => setActive(a, false) }
                               : { label: 'Make active', onSelect: () => setActive(a, true) },

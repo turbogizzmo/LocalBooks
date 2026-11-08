@@ -17,6 +17,21 @@ purchase order or vendor credit, type the name. If nobody matches, the list offe
 **＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
 adds the name and opens its record for the address, terms and (for vendors) 1099 status.
 
+### Copy a customer or vendor
+
+To add a name that shares most of another's details (a second location, a sister company), open
+the row menu (▾) on its line in the Customers or Vendors list and choose **Duplicate…**. Type a name for the
+copy, which starts as "… (copy)", and click **OK**. LocalBooks adds the copy and opens it so you can
+change what differs. The copy has the original's contact details, addresses, terms, types, sales
+rep, price level, tax settings, credit limit and custom fields, and no transactions. It leaves out
+what belongs to one name only: the account and resale numbers, and a vendor's tax ID. A copy of a
+job stays a job of the same customer, so its name starts with the customer's
+(`Acme:Bathroom`).
+
+To copy an account, choose **Duplicate…** on its row in the Chart of Accounts. The **New account**
+window opens with its type, parent and description filled in; give it a name and number and click
+**Add account**.
+
 ### See a customer's or vendor's transactions
 
 Click a name in the Customers or Vendors list. Its transactions (invoices, payments, bills, checks

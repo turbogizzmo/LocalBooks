@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Duplicate customers, vendors and accounts.** **Duplicate…** on a row of the Customers, Vendors
+  or Chart of Accounts list makes a new record filled in from that one, to save under a new name.
+  A customer or vendor copy leaves out its account and resale numbers, tax ID and history.
 - **Find in a report.** Every report has a **Find in report** box beside Export: matching cells are
   shaded, Enter steps through them, and an amount matches however it is written (`1250` finds
   `1,250.00`).

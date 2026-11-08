@@ -7,6 +7,7 @@ handlers![
     get_party,
     update_party,
     set_party_active,
+    duplicate_party,
     update_product,
     set_product_active,
 ];
@@ -40,6 +41,14 @@ pub async fn update_party(app: AppHandle, db: State<'_, Db>, kind: String, id: i
 pub async fn set_party_active(app: AppHandle, db: State<'_, Db>, kind: String, id: i64, active: bool) -> Result<PartyDetails, String> {
     let (pool, session) = signed_in(&db).await?;
     let party = parties::set_party_active(&pool, &kind, id, active, sensitive_access(&pool, &session).await?).await?;
+    notify(&app);
+    Ok(party)
+}
+
+#[tauri::command]
+pub async fn duplicate_party(app: AppHandle, db: State<'_, Db>, kind: String, id: i64, name: String) -> Result<PartyDetails, String> {
+    let (pool, session) = signed_in(&db).await?;
+    let party = parties::duplicate_party(&pool, &kind, id, &name, sensitive_access(&pool, &session).await?).await?;
     notify(&app);
     Ok(party)
 }
