@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.js\"",
     "tauri": "tauri",
-    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build"
+    "build:mac": "CI=true TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/localbooks-updater.key\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"$(security find-generic-password -a localbooks-updater -s 'LocalBooks updater signing key password' -w)\" tauri build",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
@@ -25,6 +26,10 @@
     "@tauri-apps/cli": "^2.12.4",
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.6.2",
+    "eslint": "9.39.5",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.14",
     "vite": "^7.3.7"
