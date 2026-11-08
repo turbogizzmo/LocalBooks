@@ -105,6 +105,7 @@ re-check one against the code before you start it.
 | T63 | open | S | No text size control on lists, registers, forms and reports, and no color per bank account register | Larger / Smaller and Cmd/Ctrl + and − change the text size of the window's kind and it is remembered per user; a register can be given a color |
 | T64 | open | M | No statement charges: a charge can't be entered in a customer's register and billed on the next statement without an invoice | Enter Statement Charges posts to A/R for the customer; the charge shows on the next statement and in the aging, and a payment applies to it |
 | T65 | open | S | No envelope printing, and lists can't be put in a custom order or switched between flat and tree views | Print Envelope works from a form and a center row with a layout from Custom Forms; the chart of accounts, items and customers can be dragged into an order that is kept, and shown flat or as a tree with Expand / Collapse all |
+| T66 | open | S | Full import of a company file leaves payments waiting to be deposited when the file's deposit moved Undeposited Funds into a non-bank account (for example, an expense written off against receipts); seen on a real backup: 3 such deposits, 6 payments, $234 | The import posts such a deposit as a transfer out of Undeposited Funds to that account, clearing its payments; the trial balance still matches the file and nothing is left waiting |
 
 ## Engineering (from the 2026-10-26 audit)
 
