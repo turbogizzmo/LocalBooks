@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **A warning before paying around open bills or invoices.** Writing a check or entering an
+  expense to a vendor with unpaid bills now asks first, since it doesn't pay those bills (Pay Bills
+  does). A sales receipt from a customer with open invoices asks too, since Receive Payments is
+  what pays an invoice. **Save anyway** goes ahead; each warning can be turned off in Preferences ›
+  Bills and Preferences › Sales & Customers.
 - **Open saved sales receipts, estimates, credits, purchase orders and deposits.** Double-click one
   in its list (or choose **Open**), or press **Previous** on its form, to see it where the form
   goes, shown as it prints. **Previous** and **Next** step through the others, and its toolbar has

@@ -25,6 +25,8 @@ pub const WARN_PAST_DAYS: &str = "warn_date_past_days";
 pub const WARN_FUTURE_DAYS: &str = "warn_date_future_days";
 pub const WARN_RETAINED_EARNINGS: &str = "warn_retained_earnings";
 pub const WARN_OVERDUE_CUSTOMER: &str = "warn_customer_overdue";
+pub const WARN_VENDOR_OPEN_BILLS: &str = "warn_vendor_open_bills";
+pub const WARN_CUSTOMER_OPEN_INVOICES: &str = "warn_customer_open_invoices";
 /// About ten years; 0 turns the warning off.
 pub const MAX_WARN_DAYS: u32 = 3650;
 
@@ -255,6 +257,71 @@ pub async fn overdue_customer_warning(pool: &SqlitePool, customer_name: &str, to
     )))
 }
 
+fn count_text(count: i64, one: &str, many: &str) -> String {
+    if count == 1 { format!("1 {one}") } else { format!("{count} {many}") }
+}
+
+/// Paying a vendor directly (a check or expense) while the vendor has unpaid bills: the payment
+/// won't mark them paid, so the bills stay open and the money is often counted twice.
+pub async fn vendor_open_bills_warning(pool: &SqlitePool, vendor_name: &str) -> Result<Option<Warning>, String> {
+    let name = vendor_name.trim();
+    if name.is_empty() || !preferences::flag(pool, WARN_VENDOR_OPEN_BILLS).await? {
+        return Ok(None);
+    }
+    let (count, open): (i64, Option<i64>) = sqlx::query_as(
+        "SELECT COUNT(*), SUM(b.total_cents - b.amount_paid_cents)
+         FROM bills b JOIN vendors v ON v.id = b.vendor_id
+         WHERE v.name = ?1 COLLATE NOCASE AND b.is_voided = 0 AND b.status IN ('UNPAID', 'PARTIAL') AND b.total_cents > b.amount_paid_cents",
+    )
+    .bind(name)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    if count == 0 {
+        return Ok(None);
+    }
+    Ok(Some(Warning::new(
+        "VENDOR_OPEN_BILLS",
+        format!(
+            "{name} has {} with {} still to pay. A check or expense here doesn't pay them; to pay a bill, use Pay Bills.",
+            count_text(count, "open bill", "open bills"),
+            crate::ledger::format_cents(open.unwrap_or_default())
+        ),
+    )))
+}
+
+/// Taking money in a sales receipt from a customer (or one of its jobs) that has open invoices: the
+/// receipt won't pay them, so they stay open.
+pub async fn customer_open_invoices_warning(pool: &SqlitePool, customer_name: &str) -> Result<Option<Warning>, String> {
+    let name = customer_name.trim();
+    if name.is_empty() || !preferences::flag(pool, WARN_CUSTOMER_OPEN_INVOICES).await? {
+        return Ok(None);
+    }
+    let (count, open): (i64, Option<i64>) = sqlx::query_as(
+        "WITH me AS (SELECT id, parent_id FROM customers WHERE name = ?1 COLLATE NOCASE),
+              family AS (SELECT id FROM me UNION SELECT parent_id FROM me WHERE parent_id IS NOT NULL
+                         UNION SELECT c.id FROM customers c JOIN me ON c.parent_id = me.id)
+         SELECT COUNT(*), SUM(b.home_open_cents)
+         FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id
+         WHERE i.customer_id IN (SELECT id FROM family) AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL') AND b.home_open_cents > 0",
+    )
+    .bind(name)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)?;
+    if count == 0 {
+        return Ok(None);
+    }
+    Ok(Some(Warning::new(
+        "CUSTOMER_OPEN_INVOICES",
+        format!(
+            "{name} has {} with {} still owed. A sales receipt doesn't pay them; to record a payment on an invoice, use Receive Payments.",
+            count_text(count, "open invoice", "open invoices"),
+            crate::ledger::format_cents(open.unwrap_or_default())
+        ),
+    )))
+}
+
 /// What a save is about to post, for the guards to look at.
 #[derive(Debug, Default)]
 pub struct Posting<'a> {
@@ -269,6 +336,10 @@ pub struct Posting<'a> {
     pub stock_returned_by: Option<i64>,
     /// The customer a new sale is to (an invoice or sales receipt; not an edit).
     pub customer: Option<&'a str>,
+    /// The vendor a new check or expense pays directly (not an edit, not a card credit).
+    pub paid_vendor: Option<&'a str>,
+    /// The customer a new sales receipt takes money from.
+    pub receipt_customer: Option<&'a str>,
 }
 
 /// Every warning for `posting`, as of `today`.
@@ -288,6 +359,12 @@ pub async fn warnings_on(pool: &SqlitePool, posting: &Posting<'_>, today: NaiveD
     if let Some(customer) = posting.customer {
         out.extend(overdue_customer_warning(pool, customer, today).await?);
     }
+    if let Some(vendor) = posting.paid_vendor {
+        out.extend(vendor_open_bills_warning(pool, vendor).await?);
+    }
+    if let Some(customer) = posting.receipt_customer {
+        out.extend(customer_open_invoices_warning(pool, customer).await?);
+    }
     Ok(out)
 }
 
@@ -305,6 +382,7 @@ pub fn expense(input: &crate::expenses::ExpenseInput, replacing: Option<i64>) ->
         date: Some(input.expense_date),
         account_ids: input.lines.iter().map(|l| l.account_id).collect(),
         check: (input.kind == "CHECK").then_some((input.payment_account_id, input.check_number.as_deref(), replacing)),
+        paid_vendor: if replacing.is_none() && input.kind != "CARD_CREDIT" { input.payee_name.as_deref() } else { None },
         ..Default::default()
     }
 }
@@ -337,6 +415,7 @@ pub fn invoice(input: &crate::invoices::InvoiceInput, replacing: Option<i64>) ->
 pub fn sales_receipt(input: &crate::sales::SalesReceiptInput) -> Posting<'_> {
     Posting {
         customer: input.customer_name.as_deref(),
+        receipt_customer: input.customer_name.as_deref(),
         ..stock_sale(input.receipt_date, input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4)), None)
     }
 }
