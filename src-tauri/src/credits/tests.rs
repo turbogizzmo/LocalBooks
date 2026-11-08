@@ -156,3 +156,29 @@ async fn vendor_credits_reduce_payables_and_apply_to_bills() {
     let paid: i64 = sqlx::query_scalar("SELECT amount_paid_cents FROM bills WHERE id = ?1").bind(bill).fetch_one(&pool).await.unwrap();
     assert_eq!(paid, 0);
 }
+
+#[tokio::test]
+async fn an_invoice_takes_the_customers_open_credits_oldest_first() {
+    let pool = test_pool().await;
+    let (ar, services) = (account(&pool, "1200").await, account(&pool, "4100").await);
+    let memo = |day, cents| create_credit_memo(&pool, CreditMemoInput { customer_name: "Acme".into(), credit_date: d(day), memo: None, refund_account_id: None, lines: vec![line(services, cents)], tax_rate_id: None, header: Default::default() });
+    let newer = memo(4, 30_000).await.unwrap();
+    let older = memo(2, 10_000).await.unwrap();
+    // Another customer's credit and a refund receipt are never used.
+    create_credit_memo(&pool, CreditMemoInput { customer_name: "Other Co".into(), credit_date: d(1), memo: None, refund_account_id: None, lines: vec![line(services, 5_000)], tax_rate_id: None, header: Default::default() }).await.unwrap();
+    let ar_before = balance(&pool, ar).await;
+
+    let inv = invoice(&pool, "Acme", services, 25_000).await;
+    let used = apply_open_credits_to_invoice(&pool, inv, d(6)).await.unwrap();
+    assert_eq!((used.count, used.applied_cents), (2, 25_000));
+    assert_eq!(invoice_state(&pool, inv).await, (25_000, "PAID".into(), 0));
+    assert_eq!(credit_memo(&pool, older.id).await.unwrap().remaining_cents, 0, "the oldest credit goes first");
+    assert_eq!(credit_memo(&pool, newer.id).await.unwrap().remaining_cents, 15_000);
+    assert_eq!(balance(&pool, ar).await, ar_before + 25_000, "applying credits posts nothing");
+
+    // Nothing left to pay, or no credit left: nothing is applied.
+    assert_eq!(apply_open_credits_to_invoice(&pool, inv, d(6)).await.unwrap().count, 0);
+    let second = invoice(&pool, "Other Co", services, 1_000).await;
+    let used = apply_open_credits_to_invoice(&pool, second, d(6)).await.unwrap();
+    assert_eq!((used.count, used.applied_cents), (1, 1_000));
+}

@@ -14,7 +14,7 @@ pub(super) use crate::classes::{self, ClassInput, ClassView, ReclassLine, Reclas
 pub(super) use crate::custom_fields::{self, CustomFieldInput, CustomFieldView, FieldValue, RecordField};
 pub(super) use crate::sales_lists::{self, SalesRepInput, SalesRepView, ShipMethodView};
 pub(super) use crate::closing::{self, ClosingInput, ClosingStatus};
-pub(super) use crate::credits::{self, ApplyCreditInput, CreditApplicationView, CreditMemoInput, CreditMemoSummary, RefundCreditInput, VendorCreditInput, VendorCreditSummary};
+pub(super) use crate::credits::{self, AppliedCredits, ApplyCreditInput, CreditApplicationView, CreditMemoInput, CreditMemoSummary, RefundCreditInput, VendorCreditInput, VendorCreditSummary};
 pub(super) use crate::parties::{self, PartyDetails, PartyDetailsInput};
 pub(super) use crate::registers::{self, Register};
 pub(super) use crate::edits::{self, DocumentLineView};
