@@ -3,6 +3,8 @@ import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import { attachPicked, PendingAttachments, useAttachmentRows } from './Attachments.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import AccountSelect from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
@@ -16,7 +18,7 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { usePaymentMethodChoice } from './ProfileFields.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
 import { formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -27,7 +29,7 @@ import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
-function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
+function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedStep }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
@@ -47,6 +49,8 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
   const [files, setFiles] = useState([]);
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
+  // Opening a saved receipt (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('sales-receipt', { customer, reference, memo, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data, { billLabel: 'Sold To' });
 
@@ -109,7 +113,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms }) {
       <FormToolbar
         label="Sales receipt"
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...savedStep(busy || dirty) }),
           fileButtons({ onNew, onSave: flow.saveAndNew, busy }),
           [
             { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Post and print…', disabled: busy, onSelect: () => save('print') }] },
@@ -215,6 +219,15 @@ export default function AllSales({ accounts, intent }) {
     status: (r) => (r.isVoided ? 'VOIDED' : r.kind === 'INVOICE' ? r.status : r.kind === 'PAYMENT' ? 'Closed' : 'Paid'),
   }, { storageKey: 'all-sales' });
   const visible = sorter.sorted;
+  // Saved sales receipts open read-only in the form's place; Previous / Next step through them.
+  const receipts = useMemo(() => byDateThenNumber(rows.filter((r) => r.kind === 'SALES_RECEIPT'), (r) => r.date, (r) => r.number), [rows]);
+  const saved = useSavedDoc(receipts);
+  const openFromList = useOpenFromList();
+  const viewing = saved.current;
+  const openReceipt = (r) => {
+    saved.open(r);
+    setComposing(true);
+  };
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -227,8 +240,30 @@ export default function AllSales({ accounts, intent }) {
         ]}
       />
 
-      {composing ? (
+      {composing && viewing ? (
+        <SavedDocView
+          label="Sales receipt"
+          title={`Sales receipt #${viewing.number}${viewing.customerName ? ` · ${viewing.customerName}` : ''}${viewing.isVoided ? ' (voided)' : ''}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          form={{ kind: 'SALES_RECEIPT', id: viewing.id }}
+          entryId={viewing.journalEntryId}
+          onNotice={setNotice}
+          void={{
+            onVoid: () => voidRow(viewing.journalEntryId),
+            disabled: viewing.isVoided || !viewing.journalEntryId,
+            hint: viewing.isVoided ? 'It is already voided' : undefined,
+            confirm: {
+              title: 'Void this transaction?',
+              body: `Sales receipt #${viewing.number} (${formatMoney(viewing.totalCents, viewing.currencyCode)}). A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+              confirmLabel: 'Yes, void it',
+            },
+          }}
+        />
+      ) : composing ? (
         <SalesReceiptForm
+          savedStep={(blocked) => saved.fromNew(blocked)}
           key={formKey}
           accounts={accounts}
           forms={forms}
@@ -296,7 +331,7 @@ export default function AllSales({ accounts, intent }) {
                 const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatMoney(r.totalCents, r.currencyCode)}).`;
                 return (
                   <Fragment key={`${r.kind}-${r.id}`}>
-                  <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                  <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''} ${r.kind === 'SALES_RECEIPT' ? 'cursor-pointer' : ''}`} onDoubleClick={r.kind === 'SALES_RECEIPT' ? () => openReceipt(r) : undefined}>
                     <td className="qb-grid-cell">{formatDate(r.date)}</td>
                     <td className="qb-grid-cell">{KIND_LABEL[r.kind]}</td>
                     <td className="qb-grid-cell">
@@ -322,7 +357,7 @@ export default function AllSales({ accounts, intent }) {
                       <RowMenu
                         items={[
                           ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms, emailed.get(r.id)) : []),
-                          ...(r.kind === 'SALES_RECEIPT' ? formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id)) : []),
+                          ...(r.kind === 'SALES_RECEIPT' ? [{ label: 'Open', onSelect: () => openReceipt(r) }, ...formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id))] : []),
                           attachments.menuItem(r.journalEntryId),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}

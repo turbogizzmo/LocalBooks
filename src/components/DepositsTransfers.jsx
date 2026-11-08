@@ -4,7 +4,9 @@ import { useAttachmentRows } from './Attachments.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -21,7 +23,7 @@ const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRE
 const isTransferable = (a) => !a.isSystem && TRANSFERABLE.includes(a.accountType);
 const isOtherFunds = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE', 'BANK'].includes(a.accountType);
 
-function DepositForm({ accounts, onPosted, onCancel }) {
+function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const { data: waiting, error: waitingError } = useLedgerQuery(api.listUndeposited);
   // Deposits open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
   const { depositAccountId } = useMyPreferences();
@@ -37,6 +39,8 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
+  // Opening a saved deposit (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]) });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
@@ -100,7 +104,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Bank deposit"
-        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...(savedStep ? savedStep(busy || dirty) : {}) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
       />
       <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
         <h2 className="mr-2 self-center text-md font-semibold">Bank deposit</h2>
@@ -191,7 +195,7 @@ function DepositForm({ accounts, onPosted, onCancel }) {
   );
 }
 
-function TransferForm({ accounts, onPosted, onCancel }) {
+function TransferForm({ accounts, onPosted, onCancel, savedStep }) {
   const [fromId, setFromId] = useState(null);
   const [toId, setToId] = useState(null);
   const [date, setDate] = useTransactionDate();
@@ -200,6 +204,8 @@ function TransferForm({ accounts, onPosted, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const fromRef = useRef(null);
+  // Opening a saved transfer (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('transfer', { fromId, toId, amount, memo });
   const openFromList = useOpenFromList();
 
   useEffect(() => fromRef.current?.focus(), []);
@@ -240,7 +246,7 @@ function TransferForm({ accounts, onPosted, onCancel }) {
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Transfer"
-        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
+        groups={[navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...(savedStep ? savedStep(busy || dirty) : {}) }), fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy })]}
       />
       <form
         className="flex flex-wrap items-end gap-2 px-2 py-1"
@@ -402,11 +408,56 @@ export default function DepositsTransfers({ accounts, intent }) {
     amount: (r) => r.amountCents,
   }, { storageKey: 'deposits' });
   const posted = (text) => setNotice({ kind: 'success', text });
+  // Saved deposits (or transfers, on that form) open read-only in the form's place.
+  const viewKind = mode === 'transfer' ? 'TRANSFER' : 'DEPOSIT';
+  const ordered = useMemo(() => byDateThenNumber(rows.filter((r) => r.kind === viewKind), (r) => r.date, () => null), [rows, viewKind]);
+  const saved = useSavedDoc(ordered);
+  const viewing = mode === 'deposit' || mode === 'transfer' ? saved.current : null;
+  const openFromList = useOpenFromList();
+  const openRow = (r) => {
+    setMode(r.kind === 'TRANSFER' ? 'transfer' : 'deposit');
+    saved.open(r);
+  };
+  const viewLabel = viewing?.kind === 'TRANSFER' ? 'Transfer' : 'Deposit';
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      {mode === 'deposit' && <DepositForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
-      {mode === 'transfer' && <TransferForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
+      {viewing && (
+        <SavedDocView
+          label={viewLabel}
+          title={`${viewLabel} of ${formatCents(viewing.amountCents)} · ${formatDate(viewing.date)} · ${accountLabel(accounts, viewing.kind === 'TRANSFER' ? viewing.otherAccountId : viewing.accountId)}${viewing.isVoided ? ' (voided)' : ''}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          entryId={viewing.journalEntryId}
+          voucher={{
+            entryId: viewing.journalEntryId,
+            title: viewLabel,
+            date: viewing.date,
+            name: accountLabel(accounts, viewing.kind === 'TRANSFER' ? viewing.otherAccountId : viewing.accountId),
+            nameLabel: viewing.kind === 'TRANSFER' ? 'To' : 'Deposited to',
+            memo: viewing.memo,
+            amountCents: viewing.amountCents,
+            voided: viewing.isVoided,
+            footer: viewing.kind === 'TRANSFER' ? `From ${accountLabel(accounts, viewing.accountId)}` : null,
+          }}
+          onNotice={setNotice}
+          void={{
+            onVoid: () => voidEntry(viewing.journalEntryId),
+            disabled: viewing.isVoided || !viewing.journalEntryId,
+            confirm: {
+              title: 'Void this transaction?',
+              body:
+                viewing.kind === 'DEPOSIT'
+                  ? `Deposit of ${formatCents(viewing.amountCents)} on ${formatDate(viewing.date)}. Any customer payments in it return to Undeposited Funds. This cannot be undone.`
+                  : `Transfer of ${formatCents(viewing.amountCents)} on ${formatDate(viewing.date)}. This cannot be undone.`,
+              confirmLabel: 'Yes, void it',
+            },
+          }}
+        />
+      )}
+      {mode === 'deposit' && !viewing && <DepositForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={posted} onCancel={() => setMode(null)} />}
+      {mode === 'transfer' && !viewing && <TransferForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={posted} onCancel={() => setMode(null)} />}
       {mode === 'pay-card' && <CardPaydownForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load activity: ${error}`} />}
@@ -455,7 +506,7 @@ export default function DepositsTransfers({ accounts, intent }) {
               )}
               {sorter.sorted.map((r) => (
                 <Fragment key={`${r.kind}-${r.id}`}>
-                <tr className={`qb-grid-row ${r.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <tr className={`qb-grid-row cursor-pointer ${r.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openRow(r)}>
                   <td className="qb-grid-cell">{formatDate(r.date)}</td>
                   <td className="qb-grid-cell">
                     {r.kind === 'DEPOSIT' ? 'Deposit' : 'Transfer'}
@@ -470,6 +521,7 @@ export default function DepositsTransfers({ accounts, intent }) {
                   <td className="qb-grid-cell cell-tight text-center">
                     <RowMenu
                       items={[
+                        { label: 'Open', onSelect: () => openRow(r) },
                         attachments.menuItem(r.journalEntryId),
                         voidItem({
                           journalEntryId: r.journalEntryId,

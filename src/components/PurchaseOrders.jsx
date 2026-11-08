@@ -3,7 +3,9 @@ import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js'
 import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
 import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -63,7 +65,7 @@ function PurchaseOrderDocument({ company, order, lines, accounts }) {
   );
 }
 
-function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel }) {
+function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel, savedStep }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const [vendor, setVendor] = useState('');
   const [poDate, setPoDate] = useTransactionDate();
@@ -105,13 +107,15 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   };
 
   const flow = useFormFlow({ save: () => save('save'), clear, onClose: onCancel, busy });
+  // Opening a saved order (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince('purchase-order', { vendor, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label="Purchase order"
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...savedStep(busy || dirty) }),
           fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [{ id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Save and print…', disabled: busy, onSelect: () => save('print') }] }],
         ]}
@@ -146,6 +150,31 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         </div>
       </div>
     </section>
+  );
+}
+
+/** A saved purchase order drawn as it prints. */
+function PurchaseOrderPreview({ company, order, accounts }) {
+  const [lines, setLines] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setLines(null);
+    setError(null);
+    api.getPurchaseOrderLines(order.id).then(
+      (l) => live && setLines(l),
+      (err) => live && setError(errorText(err)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [order.id]);
+  if (error) return <Notice kind="error" text={error} />;
+  if (!lines) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
+  return (
+    <div className="mx-auto max-w-[820px] bg-white p-6 shadow-md">
+      <PurchaseOrderDocument company={company} order={order} lines={lines} accounts={accounts} />
+    </div>
   );
 }
 
@@ -242,6 +271,15 @@ export default function PurchaseOrders({ accounts, intent }) {
   };
 
   const inventoryOn = useLedgerQuery(api.getPreferences).data?.inventory_enabled !== 'false';
+  // Saved purchase orders open read-only in the form's place; Previous / Next step through them.
+  const ordered = useMemo(() => byDateThenNumber(data ?? [], (o) => o.poDate, (o) => o.poNumber), [data]);
+  const saved = useSavedDoc(ordered);
+  const viewing = saved.current;
+  const openFromList = useOpenFromList();
+  const openOrder = (o) => {
+    saved.open(o);
+    setComposing(true);
+  };
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
@@ -250,8 +288,29 @@ export default function PurchaseOrders({ accounts, intent }) {
           <PurchaseOrderDocument company={company} order={printing.order} lines={printing.lines} accounts={accounts} />
         </PrintPortal>
       )}
-      {composing ? (
+      {composing && viewing ? (
+        <SavedDocView
+          label="Purchase order"
+          title={`PO #${viewing.poNumber} · ${viewing.vendorName} · ${STATUS[viewing.status] ?? viewing.status}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          onPrint={() => print(viewing)}
+          onNotice={setNotice}
+          extra={[
+            [
+              { id: 'bill', label: 'Create Bill', icon: 'HomeBill', hint: viewing.status === 'OPEN' ? 'Turn this purchase order into a bill' : 'Only an open purchase order can be billed', disabled: viewing.status !== 'OPEN', onClick: () => setBilling(viewing) },
+              viewing.status === 'CLOSED'
+                ? { id: 'reopen', label: 'Reopen', icon: 'ReopenDoc', hint: 'Reopen this purchase order', onClick: () => setClosed(viewing, false) }
+                : { id: 'close-po', label: 'Close PO', icon: 'CloseDoc', hint: viewing.status === 'OPEN' ? 'Close it without billing' : 'Only an open purchase order can be closed', disabled: viewing.status !== 'OPEN', onClick: () => setClosed(viewing, true) },
+            ],
+          ]}
+        >
+          <PurchaseOrderPreview company={company} order={viewing} accounts={accounts} />
+        </SavedDocView>
+      ) : composing ? (
         <NewPurchaseOrder
+          savedStep={(blocked) => saved.fromNew(blocked)}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
@@ -312,7 +371,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                 </tr>
               )}
               {list.map((o) => (
-                <tr key={o.id} className="qb-grid-row">
+                <tr key={o.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openOrder(o)}>
                   <td className="qb-grid-cell font-semibold">{o.poNumber}</td>
                   <td className="qb-grid-cell">{formatDate(o.poDate)}</td>
                   <td className="qb-grid-cell">{o.vendorName}</td>
@@ -324,6 +383,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                     <RowMenu
                       label={`Actions for PO ${o.poNumber}`}
                       items={[
+                        { label: 'Open', onSelect: () => openOrder(o) },
                         { label: 'Create bill…', disabled: o.status !== 'OPEN', onSelect: () => setBilling(o) },
                         { label: 'Print or save as PDF', onSelect: () => print(o) },
                         o.status === 'CLOSED'

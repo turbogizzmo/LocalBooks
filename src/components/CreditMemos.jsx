@@ -5,7 +5,9 @@ import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { attachPicked, PendingAttachments } from './Attachments.jsx';
-import { useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
+import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -22,7 +24,7 @@ import { useSalesDetails } from './SalesDetails.jsx';
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 
 /** Credit memo (credit kept for the customer) or refund receipt (money paid back now). */
-function CreditForm({ accounts, refund, onPosted, onCancel }) {
+function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
@@ -100,13 +102,15 @@ function CreditForm({ accounts, refund, onPosted, onCancel }) {
   };
 
   const flow = useFormFlow({ save, clear, onClose: onCancel, busy });
+  // Opening a saved one (Previous) asks for the entries to be saved or cleared first.
+  const dirty = useDirtySince(refund ? 'refund-receipt' : 'credit-memo', { customer, memo, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       <FormToolbar
         label={refund ? 'Refund receipt' : 'Credit memo'}
         groups={[
-          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }) }),
+          navButtons({ onFind: () => openFromList('accounting/find', 'find', { text: '' }), ...savedStep(busy || dirty) }),
           fileButtons({ onNew: clear, onSave: flow.saveAndNew, busy }),
           [attachLaterButton({ setFiles, busy, what: refund ? 'this refund' : 'this credit memo' })],
         ]}
@@ -358,11 +362,71 @@ export default function CreditMemos({ accounts, intent }) {
     setDialog(null);
     setNotice({ kind: 'success', text });
   };
+  // Saved credit memos (or refund receipts, on that form) open read-only in the form's place.
+  const ordered = useMemo(
+    () => byDateThenNumber((data ?? []).filter((m) => (m.refundAccountId !== null) === (composing === 'refund')), (m) => m.creditDate, (m) => m.creditNumber),
+    [data, composing],
+  );
+  const saved = useSavedDoc(ordered);
+  const viewing = saved.current;
+  const openFromList = useOpenFromList();
+  const openMemo = (m) => {
+    setComposing(m.refundAccountId !== null ? 'refund' : 'credit');
+    saved.open(m);
+  };
+  const viewingRefund = viewing?.refundAccountId !== null;
+  const viewingLabel = viewingRefund ? 'Refund receipt' : 'Credit memo';
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
-      {composing && (
-        <CreditForm key={composing} accounts={accounts} refund={composing === 'refund'} onCancel={() => setComposing(null)} onPosted={(text) => setNotice({ kind: 'success', text })} />
+      {composing && viewing && (
+        <SavedDocView
+          label={viewingLabel}
+          title={`${viewingLabel} #${viewing.creditNumber} · ${viewing.customerName}${viewing.isVoided ? ' (voided)' : ''}`}
+          step={saved.step}
+          onFind={() => openFromList('accounting/find', 'find', { text: '' })}
+          onNew={saved.close}
+          entryId={viewing.journalEntryId}
+          voucher={{
+            entryId: viewing.journalEntryId,
+            title: viewingRefund ? 'Refund Receipt' : 'Credit Memo',
+            number: String(viewing.creditNumber),
+            date: viewing.creditDate,
+            name: viewing.customerName,
+            nameLabel: 'Customer',
+            memo: viewing.memo,
+            amountCents: viewing.totalCents,
+            voided: viewing.isVoided,
+            footer: viewingRefund || viewing.isVoided ? null : `Credit remaining: ${formatCents(viewing.remainingCents)}`,
+          }}
+          notes={[!viewingRefund && !viewing.isVoided && { text: `${formatCents(viewing.remainingCents)} of ${formatCents(viewing.totalCents)} is left to apply.` }]}
+          onNotice={setNotice}
+          void={{
+            onVoid: async () => {
+              await api.voidTransaction(viewing.journalEntryId);
+              setNotice({ kind: 'success', text: `Voided #${viewing.creditNumber}.` });
+            },
+            disabled: viewing.isVoided || !viewing.journalEntryId,
+            confirm: {
+              title: 'Void this transaction?',
+              body: `${viewingLabel} #${viewing.creditNumber} for ${viewing.customerName} (${formatCents(viewing.totalCents)}). A reversing journal entry dated the same day will zero out its effect. The original stays in the books and the audit log. This cannot be undone.`,
+              confirmLabel: 'Yes, void it',
+            },
+          }}
+          extra={
+            viewingRefund
+              ? []
+              : [
+                  [
+                    { id: 'apply', label: 'Apply', icon: 'ReceivePayment', hint: 'Apply the credit to open invoices', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'apply', memo: viewing }) },
+                    { id: 'refund', label: 'Refund', icon: 'HomeRefund', hint: 'Pay the credit back to the customer', disabled: viewing.isVoided || viewing.remainingCents === 0, onClick: () => setDialog({ mode: 'refund', memo: viewing }) },
+                  ],
+                ]
+          }
+        />
+      )}
+      {composing && !viewing && (
+        <CreditForm key={composing} accounts={accounts} refund={composing === 'refund'} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(null)} onPosted={(text) => setNotice({ kind: 'success', text })} />
       )}
       {dialog?.mode === 'apply' && <ApplyDialog memo={dialog.memo} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.mode === 'refund' && (
@@ -427,7 +491,7 @@ export default function CreditMemos({ accounts, intent }) {
                 const refund = m.refundAccountId !== null;
                 const status = m.isVoided ? 'Voided' : refund ? 'Refunded' : m.remainingCents === 0 ? 'Used' : m.remainingCents < m.totalCents ? 'Partly used' : 'Open';
                 return (
-                  <tr key={m.id} className={`qb-grid-row ${m.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                  <tr key={m.id} className={`qb-grid-row cursor-pointer ${m.isVoided ? 'text-qb-ink-faint' : ''}`} onDoubleClick={() => openMemo(m)}>
                     <td className="qb-grid-cell">{m.creditNumber}</td>
                     <td className="qb-grid-cell">{formatDate(m.creditDate)}</td>
                     <td className="qb-grid-cell font-semibold">{m.customerName}</td>
@@ -439,6 +503,7 @@ export default function CreditMemos({ accounts, intent }) {
                       <RowMenu
                         label={`Actions for credit ${m.creditNumber}`}
                         items={[
+                          { label: 'Open', onSelect: () => openMemo(m) },
                           { label: 'Apply to invoices…', disabled: refund || m.isVoided, onSelect: () => setDialog({ mode: 'apply', memo: m }) },
                           { label: 'Refund credit…', disabled: refund || m.isVoided || m.remainingCents === 0, onSelect: () => setDialog({ mode: 'refund', memo: m }) },
                           voidItem({

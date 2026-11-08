@@ -121,6 +121,9 @@ export const ICONS = {
   HomeAccounts: FolderTree,
   HomeItems: Package,
   HomeTodo: ListTodo,
+  // Saved-document views (SavedDocView.jsx).
+  CloseDoc: Lock,
+  ReopenDoc: Undo2,
 };
 
 /** The single size and stroke weight for every icon: compact, thin-line, high-density. */
