@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Find in a report.** Every report has a **Find in report** box beside Export: matching cells are
+  shaded, Enter steps through them, and an amount matches however it is written (`1250` finds
+  `1,250.00`).
+
 ## [0.13.0]
 
 - **Every report is in the Reports menu.** The detail reports (P&L Detail, Balance Sheet Detail,

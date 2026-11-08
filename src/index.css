@@ -41,3 +41,20 @@ select.qb-input {
     animation: none;
   }
 }
+
+/* Find in report (ReportSearch): every match, and the one stepped to. Not printed. */
+.lb-find-match {
+  background-color: #fff4bf;
+}
+.lb-find-current {
+  background-color: #ffd84d;
+  outline: 2px solid #c99700;
+  outline-offset: -2px;
+}
+@media print {
+  .lb-find-match,
+  .lb-find-current {
+    background-color: transparent;
+    outline: none;
+  }
+}
