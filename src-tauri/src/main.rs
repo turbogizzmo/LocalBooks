@@ -117,6 +117,7 @@ mod simplefin;
 mod smtp;
 mod statements;
 mod storage;
+mod wal_guard;
 mod text_import;
 mod timesheet;
 mod users;
