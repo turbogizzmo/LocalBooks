@@ -4,8 +4,12 @@ Reconciling checks your books against a bank or credit card statement. Once it b
 LocalBooks locks the matched transactions so the reconciled balance can't change.
 
 1. Go to **Banking › Reconcile** and choose the **Account**.
-2. From your statement, enter the **Statement ending date** and **Ending balance**, then click
-   **Start reconciling**.
+2. From your statement, enter the **Statement ending date** and **Ending balance**. If the
+   statement shows a **Service charge** (a bank or card fee) or **Interest earned**, enter each
+   one's amount, date and account (an expense account for the charge, an income account for the
+   interest), and a class if you track classes. Then click **Start reconciling**. LocalBooks posts
+   each as a journal entry ("Service charge" or "Interest earned") and ticks it as cleared, so you
+   don't have to record it separately. Its date must be on or before the statement ending date.
 3. Tick each transaction that appears on the statement. Only transactions up to the statement date
    are listed.
 4. Watch **Difference**. When it reaches $0.00 it reads **✓ Balanced. You can finish now.**

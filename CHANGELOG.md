@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Service charge and interest earned when you reconcile.** Starting a reconciliation now takes
+  the statement's service charge and interest earned (amount, date, account and class). Each posts
+  as a journal entry and is already ticked as cleared.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

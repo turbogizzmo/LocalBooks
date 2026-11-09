@@ -6,6 +6,8 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
+import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
+import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
 
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
@@ -15,17 +17,28 @@ const SOURCE_LABEL = {
   CHECK: 'Check', EXPENSE: 'Expense', CARD_CREDIT: 'Credit Card Credit', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Bal.',
 };
 
-function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel }) {
+/**
+ * The statement's ending date and balance. When starting (`accounts` given), also the service
+ * charge and interest earned from the statement: each posts with the reconciliation (Dr expense /
+ * Cr the account for a charge, the other way for interest) and is cleared at once.
+ */
+function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel, accounts = null }) {
   const [date, setDate] = useState(initial?.date ?? todayIso());
   const [balance, setBalance] = useState(initial?.balance ?? '');
+  const [rows, setRows] = useState(() => CHARGE_KINDS.map(({ kind }) => ({ kind, amount: '', date: '', accountId: null, classId: null })));
+  const tracking = useClassTracking();
   const cents = parseMoneyToCents(balance);
   const dateBad = lastDate && date <= lastDate;
+  // A charge's date follows the statement date until it is typed.
+  const withDates = rows.map((r) => ({ ...r, date: r.date || date }));
+  const charges = accounts ? reconcileCharges(withDates, date) : { charges: [] };
+  const update = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <form
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (cents !== null && !dateBad) onSubmit(date, cents);
+        if (cents !== null && !dateBad && !charges.error) onSubmit(date, cents, charges.charges);
       }}
     >
       <label>
@@ -36,7 +49,41 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
         <span className="qb-label">Ending balance</span>
         <input className="qb-input num w-[130px]" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" inputMode="decimal" data-money aria-invalid={balance !== '' && cents === null} autoFocus />
       </label>
-      <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad)}>
+      {accounts && (
+        <div className="flex w-full flex-col gap-1">
+          {CHARGE_KINDS.map(({ kind, label, accountHint }, i) => (
+            <div key={kind} className="flex flex-wrap items-end gap-2">
+              <label>
+                <span className="qb-label">{label}</span>
+                <input className="qb-input num w-[110px]" value={rows[i].amount} onChange={(e) => update(i, { amount: e.target.value })} placeholder="0.00" inputMode="decimal" data-money />
+              </label>
+              <label>
+                <span className="qb-label">Date</span>
+                <DateBox className="qb-input w-[132px]" value={withDates[i].date} onChange={(e) => update(i, { date: e.target.value })} />
+              </label>
+              <label>
+                <span className="qb-label">{accountHint}</span>
+                <AccountSelect
+                  accounts={accounts}
+                  filter={(a) => !a.isSystem && (kind === 'SERVICE_CHARGE' ? a.classification === 'EXPENSE' : a.classification === 'INCOME')}
+                  value={rows[i].accountId}
+                  onChange={(accountId) => update(i, { accountId })}
+                  placeholder="Choose…"
+                  className="qb-input w-[220px]"
+                />
+              </label>
+              {tracking.enabled && (
+                <label>
+                  <span className="qb-label">Class</span>
+                  <ClassSelect classes={tracking.classes} value={rows[i].classId} onChange={(classId) => update(i, { classId })} className="qb-input w-[150px]" />
+                </label>
+              )}
+            </div>
+          ))}
+          {charges.error && <span className="text-sm text-qb-negative">{charges.error}</span>}
+        </div>
+      )}
+      <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad) || Boolean(charges.error)}>
         {submitLabel}
       </button>
       {onCancel && (
@@ -132,10 +179,13 @@ export default function Reconcile({ accounts }) {
   const clearedBalance = rec ? rec.beginningBalanceCents + incSum - decSum : 0;
   const difference = rec ? rec.statementEndingBalanceCents - clearedBalance : 0;
 
-  const start = async (date, cents) => {
+  const start = async (date, cents, charges = []) => {
     setBusy(true);
     try {
-      await api.startReconciliation(accountId, date, cents);
+      await api.startReconciliation(accountId, date, cents, charges);
+      if (charges.length > 0) {
+        setNotice({ kind: 'success', text: `${charges.length === 1 ? 'The charge is' : 'The service charge and interest are'} posted and already cleared below.` });
+      }
       setEditing(false);
       await load(accountId);
     } catch (err) {
@@ -211,7 +261,7 @@ export default function Reconcile({ accounts }) {
         )}
         {state && !rec && (
           <div className="ml-auto">
-            <StatementForm lastDate={state.lastStatementEndDate} onSubmit={start} busy={busy} submitLabel="Start reconciling" />
+            <StatementForm lastDate={state.lastStatementEndDate} onSubmit={start} busy={busy} submitLabel="Start reconciling" accounts={accounts} />
           </div>
         )}
         {rec && !editing && (

@@ -1,6 +1,7 @@
 //! Reconciliation.
 
 use super::prelude::*;
+use crate::reconcile::ReconcileCharge;
 
 handlers![
     get_reconcile_state,
@@ -33,8 +34,9 @@ pub async fn start_reconciliation(
     account_id: i64,
     statement_end_date: NaiveDate,
     statement_ending_balance_cents: i64,
+    charges: Option<Vec<ReconcileCharge>>,
 ) -> Result<Reconciliation, String> {
-    reconcile::start(&db.pool().await, account_id, statement_end_date, statement_ending_balance_cents).await
+    reconcile::start_with_charges(&db.pool().await, account_id, statement_end_date, statement_ending_balance_cents, &charges.unwrap_or_default()).await
 }
 
 #[tauri::command]

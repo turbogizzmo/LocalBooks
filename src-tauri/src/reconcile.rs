@@ -5,10 +5,10 @@
 //! which the schema freezes those lines and blocks voiding their entries.
 
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, format_cents, rollback, DISPLAY_SOURCE_TYPE};
+use crate::ledger::{db_err, format_cents, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +55,30 @@ pub struct UnreconciledLine {
 pub struct ReconcileProgress {
     pub cleared_balance_cents: i64,
     pub difference_cents: i64,
+}
+
+/// What a charge entered at the start of a reconciliation is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ChargeKind {
+    /// A bank or card fee: the reconciled account goes down by it (a card owes more).
+    ServiceCharge,
+    /// Interest the account earned: the reconciled account goes up by it (a card owes less).
+    InterestEarned,
+}
+
+/// A service charge or interest earned from the statement, entered when the reconciliation starts.
+/// It posts as a journal entry between the reconciled account and `account_id` (an expense for a
+/// charge, income for interest), and its line on the reconciled account is cleared at once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileCharge {
+    pub kind: ChargeKind,
+    pub amount_cents: i64,
+    pub date: NaiveDate,
+    pub account_id: i64,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 const NORMAL_SIGNED: &str = "CASE t.normal_balance WHEN 'DEBIT' THEN l.debit_cents - l.credit_cents
@@ -163,6 +187,20 @@ pub async fn start(
     statement_end_date: NaiveDate,
     statement_ending_balance_cents: i64,
 ) -> Result<Reconciliation, String> {
+    start_with_charges(pool, account_id, statement_end_date, statement_ending_balance_cents, &[]).await
+}
+
+/// [`start`], posting the statement's service charge and interest earned (`charges`) in the same
+/// transaction: each is a journal entry through the ledger, dated on or before the statement end,
+/// and its line on the reconciled account is cleared into this reconciliation. Nothing posts if
+/// any of it fails.
+pub async fn start_with_charges(
+    pool: &SqlitePool,
+    account_id: i64,
+    statement_end_date: NaiveDate,
+    statement_ending_balance_cents: i64,
+    charges: &[ReconcileCharge],
+) -> Result<Reconciliation, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
         let existing: Option<i64> =
@@ -199,6 +237,9 @@ pub async fn start(
                 .map_err(db_err)?
             }
         };
+        for charge in charges {
+            post_charge(&mut tx, id, account_id, statement_end_date, charge).await?;
+        }
         sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1")
             .bind(id)
             .fetch_one(&mut *tx)
@@ -213,6 +254,55 @@ pub async fn start(
         }
         Err(err) => Err(rollback(tx, err).await),
     }
+}
+
+/// Posts one charge (see [`ReconcileCharge`]) and clears its line on the reconciled account.
+async fn post_charge(
+    tx: &mut Transaction<'_, Sqlite>,
+    reconciliation_id: i64,
+    account_id: i64,
+    statement_end_date: NaiveDate,
+    charge: &ReconcileCharge,
+) -> Result<(), String> {
+    let label = match charge.kind {
+        ChargeKind::ServiceCharge => "Service charge",
+        ChargeKind::InterestEarned => "Interest earned",
+    };
+    if charge.amount_cents <= 0 {
+        return Err(format!("REC_CHARGE_AMOUNT: the {} must be more than zero", label.to_lowercase()));
+    }
+    if charge.date > statement_end_date {
+        return Err(format!("REC_CHARGE_DATE: the {} must be dated on or before the statement end date", label.to_lowercase()));
+    }
+    if charge.account_id == account_id {
+        return Err(format!("REC_CHARGE_ACCOUNT: choose an account other than the one being reconciled for the {}", label.to_lowercase()));
+    }
+    let amount = charge.amount_cents;
+    // A charge lowers what an asset account holds (credit) and raises what a card owes (also a
+    // credit); interest is the other way round.
+    let (reconciled, other) = match charge.kind {
+        ChargeKind::ServiceCharge => (JournalLine::credit(account_id, amount), JournalLine::debit(charge.account_id, amount)),
+        ChargeKind::InterestEarned => (JournalLine::debit(account_id, amount), JournalLine::credit(charge.account_id, amount)),
+    };
+    let entry = JournalEntry {
+        id: None,
+        date: charge.date,
+        description: label.to_string(),
+        lines: vec![
+            JournalLine { memo: Some(label.to_string()), ..reconciled },
+            JournalLine { memo: Some(label.to_string()), class_id: charge.class_id, ..other },
+        ],
+        currency: None,
+    };
+    let entry_id = crate::ledger::post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
+    let line_id: i64 = sqlx::query_scalar("SELECT id FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
+        .bind(entry_id)
+        .bind(account_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    write_cleared(tx, reconciliation_id, &[line_id], true).await?;
+    Ok(())
 }
 
 /// Ticks (`cleared = true`) or unticks lines in an in-progress reconciliation.

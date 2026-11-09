@@ -119,3 +119,53 @@ async fn rejects_accounts_that_cannot_be_reconciled() {
     let err = start(&pool, ar, d(9, 30), 0).await.expect_err("A/R is not reconcilable");
     assert!(err.starts_with("REC_ACCOUNT_TYPE"), "{err}");
 }
+
+#[tokio::test]
+async fn service_charge_and_interest_post_with_the_reconciliation_and_balance() {
+    let pool = test_pool().await;
+    let (checking, owner, rent, sales) = (
+        account_id(&pool, "1010").await,
+        account_id(&pool, "3100").await,
+        account_id(&pool, "6300").await,
+        account_id(&pool, "4000").await,
+    );
+    post(&pool, d(9, 2), checking, owner, 500_000).await;
+    // The statement: 5,000.00 in, a 12.50 fee and 1.25 interest, so it ends at 4,988.75.
+    let charges = [
+        ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 1_250, date: d(9, 30), account_id: rent, class_id: None },
+        ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: 125, date: d(9, 30), account_id: sales, class_id: None },
+    ];
+    let rec = start_with_charges(&pool, checking, d(9, 30), 498_875, &charges).await.expect("starts with charges");
+
+    // Both posted through the ledger, their bank lines already cleared into this reconciliation.
+    let lines = unreconciled_lines(&pool, checking).await.unwrap();
+    let cleared: Vec<i64> = lines.iter().filter(|l| l.reconciliation_id == Some(rec.id)).map(|l| l.amount_cents).collect();
+    assert_eq!(cleared, vec![-1_250, 125]);
+    assert!(lines.iter().filter(|l| l.amount_cents != 500_000).all(|l| l.memo.as_deref().is_some_and(|m| m == "Service charge" || m == "Interest earned")));
+    let fee_on_rent: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE account_id = ?1").bind(rent).fetch_one(&pool).await.unwrap();
+    assert_eq!(fee_on_rent, 1_250);
+
+    // Tick the deposit and it balances.
+    let deposit = lines.iter().find(|l| l.amount_cents == 500_000).unwrap().line_id;
+    let progress = set_lines_cleared(&pool, rec.id, &[deposit], true).await.unwrap();
+    assert_eq!(progress.difference_cents, 0);
+    lock(&pool, rec.id).await.expect("locks");
+}
+
+#[tokio::test]
+async fn a_bad_charge_posts_nothing() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await);
+    let entries = || async { sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM journal_entries").fetch_one(&pool).await.unwrap() };
+    let before = entries().await;
+    let late = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 500, date: d(10, 1), account_id: rent, class_id: None };
+    let err = start_with_charges(&pool, checking, d(9, 30), 0, &[late]).await.expect_err("after the statement");
+    assert!(err.starts_with("REC_CHARGE_DATE"), "{err}");
+    let zero = ReconcileCharge { kind: ChargeKind::InterestEarned, amount_cents: 0, date: d(9, 30), account_id: rent, class_id: None };
+    assert!(start_with_charges(&pool, checking, d(9, 30), 0, &[zero]).await.expect_err("zero").starts_with("REC_CHARGE_AMOUNT"));
+    let same = ReconcileCharge { kind: ChargeKind::ServiceCharge, amount_cents: 500, date: d(9, 30), account_id: checking, class_id: None };
+    assert!(start_with_charges(&pool, checking, d(9, 30), 0, &[same]).await.expect_err("same account").starts_with("REC_CHARGE_ACCOUNT"));
+    // Nothing posted and no reconciliation was left started.
+    assert_eq!(entries().await, before);
+    assert!(account_state(&pool, checking).await.unwrap().in_progress.is_none());
+}
