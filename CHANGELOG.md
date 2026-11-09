@@ -50,6 +50,15 @@ people using LocalBooks.
 - **A report center that's easier to search.** Type to find a report by name or by what it shows,
   star reports into Favorites, see your Recent reports, read a line about each report, and choose
   the dates reports open on before you run them.
+- **Renaming rules for downloaded payees.** When a downloaded description begins with, contains or
+  ends with some text, a renaming rule names its payee. LocalBooks offers a rule when you change a
+  payee, and **Rules…** in Bank Feeds lists them to search, edit and remove, along with the category
+  rules learned from your approvals.
+- **Downloaded bank transactions match what you already entered.** A downloaded line that agrees
+  with a check, deposit, bill payment or transfer already in the books (amount, date, check
+  number) is matched to it on import instead of waiting to be added twice. Lines entered later
+  show a suggested match; **Find a match…** matches by hand, **Show matched** lists matched lines
+  with **Unmatch**, and ticked lines can be added several at once.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
