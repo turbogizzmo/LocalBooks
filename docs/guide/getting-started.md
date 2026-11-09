@@ -262,6 +262,27 @@ Registers and Reconcile start, and go back to, date order (oldest first). While 
 sorted by anything else, its **Balance** column is dimmed, because it is still the running balance
 in date order.
 
+## Make the text larger or smaller
+
+Each kind of window keeps its own text size: lists (customers, items, the chart of accounts and the
+like), registers, forms (invoices, bills, checks, journal entries and the other entry forms) and
+reports. With one open in front:
+
+- Click **A↑** or **A↓** at the right of the toolbar, choose **View › Larger Text** or
+  **View › Smaller Text**, or press **Cmd +** and **Cmd −** on a Mac (**Ctrl +** and **Ctrl −** on
+  Windows and Linux).
+- The size shows beside the buttons when it isn't the normal one; click it, choose
+  **View › Actual Text Size**, or press **Cmd 0** (**Ctrl 0**) to go back.
+
+Every window of that kind takes the new size at once, and LocalBooks keeps it on this computer for
+next time. The Home page and Settings keep the normal size.
+
+## Give a register a color
+
+In an account register, choose a **Color** (blue, green, yellow, orange, pink, purple or gray) to
+tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
+color is kept on this computer for that account in that company file; **Default** takes it away.
+
 ## Open a transaction from a register
 
 In an account register, click a row to see all of the transaction's lines underneath it.

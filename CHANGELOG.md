@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
+  Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
+  own, and LocalBooks remembers it. An account register can also be given a color.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -83,7 +83,16 @@ const EDIT: &[Entry] = &[
     form("Preferences…", "settings", "preferences"),
 ];
 
-const VIEW: &[Entry] = &[Entry::Cmd { label: "Show or Hide Left Icon Bar", command: "sidebar", accel: None }];
+/// Larger and Smaller Text change the active window's kind (lists, registers, forms or reports); their
+/// keys, Cmd/Ctrl with + and −, are handled by the page (App.jsx), so typing them in a box still works
+/// the same on every platform.
+const VIEW: &[Entry] = &[
+    Entry::Cmd { label: "Show or Hide Left Icon Bar", command: "sidebar", accel: None },
+    Entry::Sep,
+    Entry::Cmd { label: "Larger Text", command: "text-larger", accel: None },
+    Entry::Cmd { label: "Smaller Text", command: "text-smaller", accel: None },
+    Entry::Cmd { label: "Actual Text Size", command: "text-actual", accel: None },
+];
 
 const LISTS: &[Entry] = &[
     CHART_OF_ACCOUNTS,
@@ -557,6 +566,17 @@ mod tests {
             }
         }
         assert_eq!(found, 4);
+    }
+
+    /// View's commands are handled by the page (App.jsx).
+    #[test]
+    fn view_menu_commands_exist_in_the_page() {
+        let app = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/App.jsx")).unwrap();
+        for entry in VIEW {
+            if let Entry::Cmd { command, .. } = entry {
+                assert!(app.contains(&format!("'{command}'")), "App.jsx doesn't handle the View command {command}");
+            }
+        }
     }
 
     #[test]
