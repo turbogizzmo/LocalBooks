@@ -486,3 +486,37 @@ async fn seed_condense_demo() {
     crate::db::compact(&pool).await.unwrap();
     crate::db::close_pool(&pool).await;
 }
+
+#[tokio::test]
+async fn a_file_on_a_purchase_order_keeps_it() {
+    let tmp = TempDir::new("po-file");
+    let db = harbor_lane(&tmp).await;
+    let cutoff = d(2025, 3, 31);
+    let pool = db.pool().await;
+    let vendor: String = sqlx::query_scalar("SELECT name FROM vendors ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let expense = account(&pool, "6300").await;
+    let line = crate::workflows::PurchaseOrderLineInput { account_id: expense, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: 4_000, class_id: None };
+    let po = crate::workflows::create_purchase_order(&pool, crate::workflows::PurchaseOrderInput { vendor_name: vendor, po_date: d(2025, 2, 3), expected_date: None, memo: None, lines: vec![line] })
+        .await
+        .unwrap();
+    // Billed by a bill paid in the condensed months: the order goes with that bill's group.
+    let removed = |p: &CondensePreview| p.rows_removed.get("purchase_orders").copied().unwrap_or(0);
+    let paid: Vec<i64> = sqlx::query_scalar("SELECT id FROM bills WHERE bill_date <= '2025-03-31' AND amount_paid_cents = total_cents ORDER BY id").fetch_all(&pool).await.unwrap();
+    let mut without = 0;
+    for bill in paid {
+        sqlx::query("UPDATE purchase_orders SET bill_id = ?1, status = 'BILLED' WHERE id = ?2").bind(bill).bind(po).execute(&pool).await.unwrap();
+        without = removed(&preview(&pool, cutoff).await.unwrap());
+        if without == 1 {
+            break;
+        }
+    }
+    assert_eq!(without, 1, "a purchase order billed by a paid bill in the condensed months is summarized away");
+    // A file on it (record_attachments names it by kind and id, with no foreign key) keeps it.
+    let file = crate::attachments_library::add_record_file(&pool, "PURCHASE_ORDER", po, "quote.pdf", b"%PDF").await.unwrap();
+    assert_eq!(removed(&preview(&pool, cutoff).await.unwrap()), without - 1);
+    let result = condense_live_on(&db, cutoff, today()).await.unwrap();
+    assert!(result.verification.passed, "{:?}", result.verification);
+    let pool = db.pool().await;
+    assert_eq!(count(&pool, &format!("SELECT COUNT(*) FROM purchase_orders WHERE id = {po}")).await, 1);
+    assert_eq!(count(&pool, &format!("SELECT COUNT(*) FROM record_attachments WHERE id = {} AND record_id = {po}", file.id)).await, 1);
+}

@@ -19,6 +19,7 @@ import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 
 const isCategory = (a) =>
   !a.isSystem && (a.classification === 'EXPENSE' || ['FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_ASSET'].includes(a.accountType));
@@ -83,7 +84,8 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep }) {
   const dirty = useDirtySince('vendor-credit', { vendor, reference, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       <FormToolbar
         label="Vendor credit"
         groups={[
@@ -128,6 +130,9 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep }) {
         </div>
       </div>
     </section>
+    {/* The chosen vendor's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="vendor" name={vendor} names={vendors.data} />
+    </div>
   );
 }
 
