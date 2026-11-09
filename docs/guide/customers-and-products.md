@@ -54,8 +54,8 @@ record) to read and change: **Date Stamp** starts a new first line with today's 
 keeps them. For a customer, **Emails** lists every form emailed to them, newest first: invoices,
 estimates, sales receipts and statements, with the date, who it went to and the subject.
 
-Invoices, bills, checks and expenses show the same panel beside the form once you choose a
-customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
+Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and
+purchase orders show the same panel beside the form once you choose a customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
 (or the slim **Info** strip beside a form) to bring it back; LocalBooks remembers the choice for
 each list and for forms.
 

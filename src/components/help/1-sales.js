@@ -60,9 +60,9 @@ export const screens = {
  */
 export const topics = [
   {
-    id: 'info-panel', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'sales/invoices', 'expenses/bills', 'expenses/expenses'],
+    id: 'info-panel', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders'],
     title: 'The information panel',
-    body: 'Click a customer, vendor or item to see its panel beside the list: open balance, active estimates and unbilled costs (customers), open purchase orders (vendors), phone, email, notes and recent transactions; for items, price, on hand, on order, average cost and value. The figures match the aging, Open Purchase Orders, Inventory Valuation and Stock Status reports. Invoices, bills, checks and expenses show it for the chosen name. Its Notes tab edits the notes, with Date Stamp for today’s date; a customer’s Emails tab lists every invoice, estimate, sales receipt and statement emailed to them. Hide info (or ×) hides it; Show info brings it back.',
+    body: 'Click a customer, vendor or item to see its panel beside the list: open balance, active estimates and unbilled costs (customers), open purchase orders (vendors), phone, email, notes and recent transactions; for items, price, on hand, on order, average cost and value. The figures match the aging, Open Purchase Orders, Inventory Valuation and Stock Status reports. Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and purchase orders show it for the chosen name. Its Notes tab edits the notes, with Date Stamp for today’s date; a customer’s Emails tab lists every invoice, estimate, sales receipt and statement emailed to them. Hide info (or ×) hides it; Show info brings it back.',
     keywords: 'information panel summary balance phone email notes recent transactions on hand on order average cost side panel',
     guide: 'customers-and-products',
   },

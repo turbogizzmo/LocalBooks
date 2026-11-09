@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **The information panel on more forms.** Sales receipts, estimates, credit memos, vendor credits
+  and purchase orders now show the chosen customer's or vendor's panel too.
 - **Notes and Emails on the information panel.** A customer's or vendor's notes can be edited from
   its panel, with **Date Stamp** to start a dated line, and a customer's **Emails** tab lists every
   invoice, estimate, sales receipt and statement emailed to them.
