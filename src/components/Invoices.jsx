@@ -12,7 +12,8 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
-import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import { duplicateDates } from '../lib/formStep.js';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -548,7 +549,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   );
 }
 
-function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
+function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
@@ -695,6 +696,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                             hint: inv.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                             onSelect: () => onEdit(inv),
                           },
+                          { label: 'Duplicate', hint: 'A new invoice copied from this one, dated today', onSelect: () => onDuplicate(inv) },
                           voidItem({
                             journalEntryId: inv.journalEntryId,
                             voided: inv.isVoided,
@@ -787,6 +789,9 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'edit' && intent.data?.invoiceId) {
       // Opened in a window of its own from the list, or reopened with the desktop.
       loadForEdit({ id: intent.data.invoiceId }, false);
+    } else if (intent?.action === 'duplicate' && intent.data?.invoiceId) {
+      // Duplicate on a row of the invoice list.
+      loadForEdit({ id: intent.data.invoiceId }, false, true, true);
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
@@ -862,11 +867,27 @@ export default function Invoices({ accounts, intent }) {
   // customer suggestions before anyone has touched it. `viewLocked` is for the toolbar's Previous
   // and Next, which show a voided or paid invoice locked (Save off, a notice saying why) instead of
   // stopping at it.
-  const loadForEdit = (inv, focusCustomer = true, viewLocked = false) => {
+  // `asCopy` loads it as a new invoice copied from it (Duplicate).
+  const loadForEdit = (inv, focusCustomer = true, viewLocked = false, asCopy = false) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details, formLines: storedForm }) => {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
+        if (asCopy) {
+          setReceiving(false);
+          sales.set(details);
+          setFromEstimate(null);
+          setTermsTouched(true);
+          setTermsId(details?.termsId ?? null);
+          setCurrency(invoice.currencyCode ?? '');
+          setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
+          setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
+          tax.set(invoice.taxRateId ?? null);
+          setLines(linesFromDocument(items, storedForm, defaultAccountId));
+          setCustomer(invoice.customerName);
+          startCopy(invoice.invoiceNumber, invoice.issueDate, invoice.dueDate);
+          return;
+        }
         if (!viewLocked && invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
         setReceiving(false);
         sales.set(details);
@@ -894,6 +915,20 @@ export default function Invoices({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   };
+
+  // Duplicate: the invoice on the form becomes a new one, dated today and due as many days later as
+  // it was; it gets the next number when it posts.
+  const startCopy = (number, fromIssue, fromDue) => {
+    const { date, due } = duplicateDates(fromIssue, fromDue, todayIso());
+    setEditing(null);
+    setBaseline(null);
+    setIssueDate(date);
+    setDueDate(due ?? date);
+    setFiles([]);
+    setShowAttachments(false);
+    setNotice({ kind: 'info', text: `A copy of invoice #${number}, dated today: it gets the next invoice number when you save it.` });
+  };
+  const duplicateInvoice = () => editing && startCopy(editing.number, issueDate, dueDate);
 
   const reset = () => {
     setCustomer('');
@@ -1122,6 +1157,7 @@ export default function Invoices({ accounts, intent }) {
     ],
     [
       { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring invoice', disabled: busy, onClick: () => save('memorize') },
+      duplicateButton({ onDuplicate: duplicateInvoice, saved: Boolean(editing), dirty, busy, what: 'invoice' }),
       { id: 'receive', label: 'Receive Payments', icon: 'ReceivePayment', hint: 'Record a customer payment against open invoices', disabled: receiving, onClick: () => setReceiving(true) },
     ],
   ];
@@ -1273,7 +1309,9 @@ export default function Invoices({ accounts, intent }) {
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       </section>
 
-      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })} />
+      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })}
+        onDuplicate={(inv) => openFromList('sales/invoices', 'duplicate', { invoiceId: inv.id })}
+      />
     </div>
   );
 }

@@ -474,11 +474,26 @@ While a form is open:
 | **Ctrl+Alt+Y** | Copy Line: copy the line you're on. |
 | **Ctrl+Alt+V** | Paste Line: insert a copy of the copied line above the line you're on (at the end from outside the lines). A line copied from an item grid pastes into item grids, an expense line into expense grids and a journal line into journal entries. |
 | **Ctrl+G** | Go To Transfer: on a saved transfer, open the other account's register at the transfer. |
+| **Ctrl+O** | Duplicate Transaction: on a saved invoice, bill, check, expense or journal entry, start a new one copied from it (see below). |
 
-Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line and Go To Transfer are also
-in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
-Delete (Fn+Delete is Delete); **⌘M**, **⌘N**, **⌘P**, **⌘E**, **⌘G** and **⌘L** stay the system's, so
-use **Control** with those letters (**Control+Option** for Copy Line and Paste Line).
+Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line, Go To Transfer and
+Duplicate Transaction are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
+Delete (Fn+Delete is Delete); **⌘M**, **⌘N**, **⌘P**, **⌘E**, **⌘G**, **⌘L** and **⌘O** stay the system's (⌘O opens
+a company), so use **Control** with those letters (**Control+Option** for Copy Line and Paste Line).
+
+### Duplicate a transaction
+
+To enter one much like one you already have, open the saved one and press **Duplicate** on the
+form's toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or choose **Duplicate** on its row
+in the list. The form then holds a new, unsaved copy: the same name, lines, memo and terms, dated
+today. An invoice and a journal entry get the next number when you save; a check takes the next
+check number; a bill's own number is left blank for the vendor's, and its due date is as many days
+after today as the original's was after its date. Change what you need and save it. The original
+isn't changed. Duplicate is off while the form has changes you haven't saved.
+
+Duplicate works on invoices, bills, checks, expenses, card credits and journal entries. Sales
+receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open
+read-only, so they don't offer it yet.
 
 In a register, click a transaction, then press **Ctrl+E** to open it on its form to edit, or
 **Ctrl+G** to go to the other side of it: the register of the one other account it posted to (a

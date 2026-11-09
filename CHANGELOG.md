@@ -12,6 +12,12 @@ people using LocalBooks.
 - **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
   Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
   own, and LocalBooks remembers it. An account register can also be given a color.
+- **Duplicate a transaction.** On a saved invoice, bill, check, expense, card credit or journal
+  entry, **Duplicate** on the toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or on its
+  row in the list, starts a new unsaved copy dated today: an invoice or journal entry gets the next
+  number when saved, a check the next check number, and a bill keeps its terms with its number left
+  blank. On Windows and Linux, Ctrl+O now duplicates and **File › Open or Restore Company…** moves to
+  **Ctrl+Shift+O**; on a Mac ⌘O still opens a company and Control+O duplicates.
 - **More desktop shortcuts.** On forms, **Ctrl+L** opens the list of the box you're in, and
   **Ctrl+Alt+Y** / **Ctrl+Alt+V** copy a line and paste it above the line you're on (also Edit ›
   Copy Line and Paste Line). In a register, **Ctrl+E** opens the selected transaction to edit and

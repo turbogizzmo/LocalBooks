@@ -10,13 +10,14 @@ const SCROLLS = 'textarea, select, [role="listbox"], [role="grid"], [contentedit
 /**
  * The command a key press asks of a form, or null:
  *   Alt+S save-close · Alt+N save-new · Ctrl+D delete · Ctrl+M memorize · Ctrl+N new ·
- *   Ctrl+P print · Ctrl+E edit · Ctrl+G goto-transfer · Ctrl+L open-list ·
+ *   Ctrl+P print · Ctrl+E edit · Ctrl+G goto-transfer · Ctrl+L open-list · Ctrl+O duplicate ·
  *   Ctrl+Insert insert-line · Ctrl+Delete delete-line ·
  *   Ctrl+Alt+Y copy-line · Ctrl+Alt+V paste-line ·
  *   Page Up previous · Page Down next (not while a list or text box would scroll)
  * Letters are read from the physical key, so Option+S on a Mac (which types ß) still saves.
  * On a Mac, Cmd also works for D, Insert and Delete; Cmd+M, Cmd+N, Cmd+P, Cmd+E, Cmd+G and Cmd+L
- * stay the system's (minimize, new, print, find selection, find next, and so on).
+ * stay the system's (minimize, new, print, find selection, find next, and so on), and Cmd+O opens a
+ * company.
  * `isMac` is for tests; it defaults to this computer.
  */
 export function formKeyCommand(e, isMac = IS_MAC) {
@@ -48,6 +49,7 @@ export function formKeyCommand(e, isMac = IS_MAC) {
   if (plainCtrl && letter('e')) return 'edit';
   if (plainCtrl && letter('g')) return 'goto-transfer';
   if (plainCtrl && letter('l')) return 'open-list';
+  if (plainCtrl && letter('o')) return 'duplicate';
   if (ctrl && e.key === 'Insert') return 'insert-line';
   if (ctrl && e.key === 'Delete') return 'delete-line';
   return null;
@@ -67,6 +69,7 @@ export const FORM_KEYS = {
   edit: 'Ctrl+E',
   'goto-transfer': 'Ctrl+G',
   'open-list': 'Ctrl+L',
+  duplicate: 'Ctrl+O',
   previous: 'Page Up',
   next: 'Page Down',
   'insert-line': IS_MAC ? '⌘Insert' : 'Ctrl+Insert',

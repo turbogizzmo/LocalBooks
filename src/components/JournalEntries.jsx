@@ -3,7 +3,7 @@ import { myPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
-import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { useDirtySince, useOpenFromList } from '../lib/windows.js';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
@@ -14,7 +14,7 @@ import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
-import { formatDate } from '../lib/dates.js';
+import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 
@@ -27,14 +27,19 @@ export const SOURCE_LABEL = {
 let nextKey = 1;
 const blankRow = () => ({ key: nextKey++, accountId: null, classId: null, debit: '', credit: '', memo: '' });
 
-/** A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited. */
-function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, saved = [], onOpenSaved }) {
-  const [date, setDate] = useTransactionDate(editing?.entry.entryDate);
-  const [memo, setMemo] = useState(editing?.entry.memo ?? '');
-  const [adjusting, setAdjusting] = useState(editing?.entry.isAdjusting ?? false);
+/**
+ * A new journal entry, or (with `editing` = { entry, lines }) a posted manual entry being edited,
+ * or (with `copyOf`, the same shape) a new entry copied from a saved one by Duplicate: dated today,
+ * and numbered when it posts.
+ */
+function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copyOf = null, onDuplicate, saved = [], onOpenSaved }) {
+  const source = editing ?? copyOf;
+  const [date, setDate] = useTransactionDate(editing?.entry.entryDate ?? (copyOf ? todayIso() : undefined));
+  const [memo, setMemo] = useState(source?.entry.memo ?? '');
+  const [adjusting, setAdjusting] = useState(source?.entry.isAdjusting ?? false);
   const [rows, setRows] = useState(() =>
-    editing
-      ? editing.lines.map((l) => ({ ...blankRow(), accountId: l.accountId, classId: l.classId ?? null, debit: l.debitCents ? centsToInput(l.debitCents) : '', credit: l.creditCents ? centsToInput(l.creditCents) : '', memo: l.memo ?? '' }))
+    source
+      ? source.lines.map((l) => ({ ...blankRow(), accountId: l.accountId, classId: l.classId ?? null, debit: l.debitCents ? centsToInput(l.debitCents) : '', credit: l.creditCents ? centsToInput(l.creditCents) : '', memo: l.memo ?? '' }))
       : [blankRow(), blankRow(), blankRow(), blankRow()],
   );
   const [busy, setBusy] = useState(false);
@@ -42,7 +47,7 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, save
   const [showAttachments, setShowAttachments] = useState(false);
   const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
   // Closing the window (or stepping to another entry) asks first while there are entries not saved.
-  const dirty = useDirtySince('journal', { date, memo, adjusting, rows: rows.map((r) => [r.accountId, r.debit, r.credit, r.memo]) });
+  const dirty = useDirtySince('journal', { date, memo, adjusting, rows: rows.map((r) => [r.accountId, r.debit, r.credit, r.memo]) }, Boolean(copyOf));
   const dateRef = useRef(null);
   const formClass = useFormClass(accounts);
   const { classes } = formClass;
@@ -178,7 +183,10 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, save
               onClick: () => setShowAttachments((v) => !v),
             },
           ],
-          [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy || !ready, onClick: () => save('memorize') }],
+          [
+            { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy || !ready, onClick: () => save('memorize') },
+            duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: 'journal entry' }),
+          ],
         ]}
       />
       {voucherPortal}
@@ -323,9 +331,23 @@ export default function JournalEntries({ accounts, intent }) {
   const [filter, setFilter] = useState('ALL');
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { entry, lines }
+  // Duplicate: the saved entry the new one on the form was copied from ({ entry, lines, n }).
+  const [copy, setCopy] = useState(null);
+  const duplicate = (from) => {
+    setEditing(null);
+    setCopy({ ...from, n: Date.now() });
+    setComposing(true);
+    setNotice({ kind: 'info', text: `A copy of journal entry #${from.entry.entryNumber}, dated today: it gets its own number when you save it.` });
+  };
+  const duplicateRow = (entry) =>
+    api.getJournalEntryLines(entry.id).then(
+      (lines) => duplicate({ entry, lines }),
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const startEdit = (entry) =>
     api.getJournalEntryLines(entry.id).then(
       (lines) => {
+        setCopy(null);
         setEditing({ entry, lines });
         setComposing(true);
       },
@@ -365,14 +387,20 @@ export default function JournalEntries({ accounts, intent }) {
     <div className="flex h-full flex-col gap-2 p-2">
       {composing && (
         <JournalForm
-          key={editing ? `edit-${editing.entry.id}` : 'new'}
+          key={editing ? `edit-${editing.entry.id}` : copy ? `copy-${copy.n}` : 'new'}
           editing={editing}
+          copyOf={copy}
+          onDuplicate={duplicate}
           accounts={accounts}
           onCancel={() => {
             setComposing(false);
             setEditing(null);
+            setCopy(null);
           }}
-          onNew={() => setEditing(null)}
+          onNew={() => {
+            setEditing(null);
+            setCopy(null);
+          }}
           onPosted={(text) => setNotice({ kind: 'success', text })}
           saved={savedEntries}
           onOpenSaved={startEdit}
@@ -446,7 +474,12 @@ export default function JournalEntries({ accounts, intent }) {
                       {e.reversesEntryId === null && (
                         <RowMenu
                           items={[
-                            ...(e.sourceType === 'JOURNAL' ? [{ label: 'Edit…', disabled: e.isVoided, onSelect: () => startEdit(e) }] : []),
+                            ...(e.sourceType === 'JOURNAL'
+                              ? [
+                                  { label: 'Edit…', disabled: e.isVoided, onSelect: () => startEdit(e) },
+                                  { label: 'Duplicate', hint: 'A new journal entry copied from this one, dated today', onSelect: () => duplicateRow(e) },
+                                ]
+                              : []),
                             voidItem({
                               journalEntryId: e.id,
                               voided: e.isVoided,
