@@ -17,6 +17,20 @@ import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import Attachments from './Attachments.jsx';
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
+
+/** Customize Columns: the item list's columns in their usual order. */
+const ITEM_COLUMNS = [
+  { id: 'name', label: 'Name', required: true },
+  { id: 'description', label: 'Description' },
+  { id: 'rate', label: 'Rate' },
+  { id: 'income', label: 'Income account' },
+  { id: 'onHand', label: 'On hand' },
+  { id: 'avgCost', label: 'Avg cost' },
+  { id: 'value', label: 'Stock value' },
+];
+const ITEM_COLUMN_WIDTH = { name: 'w-[220px]', rate: 'w-[112px]', income: 'w-[220px]', onHand: 'w-[90px]', avgCost: 'w-[100px]', value: 'w-[110px]' };
+const RIGHT_ITEM_COLUMNS = new Set(['rate', 'onHand', 'avgCost', 'value']);
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
 
@@ -152,6 +166,45 @@ export default function Products({ accounts, intent }) {
     avgCost: (p) => items.get(p.id)?.averageCostCents,
     value: (p) => items.get(p.id)?.valueCents,
   }, { storageKey: 'products' });
+  const cols = useColumns('items', ITEM_COLUMNS);
+  // One cell of an item's row, by column.
+  const itemCell = (c, p, item) => {
+    const stock = items.get(p.id);
+    switch (c.id) {
+      case 'name':
+        return (
+          <td key={c.id} className="qb-grid-cell font-semibold" style={customOrder && listOrder.tree ? { paddingLeft: 8 + item.depth * 16 } : undefined}>
+            {customOrder && <TreeToggle ctl={listOrder} item={{ id: p.id, ...item }} />}
+            {customOrder && listOrder.tree ? p.name.slice(p.name.lastIndexOf(':') + 1) : p.name}
+            {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
+            {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
+          </td>
+        );
+      case 'description':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>;
+      case 'rate':
+        return <td key={c.id} className="qb-grid-cell num">{rateLabel(p)}</td>;
+      case 'income':
+        return (
+          <td key={c.id} className="qb-grid-cell">
+            {accountLabel(accounts, p.incomeAccountId)}
+            {p.isTaxable && <span className="ml-1 text-2xs font-semibold uppercase text-qb-ink-muted" title="Taxable">Tax</span>}
+          </td>
+        );
+      case 'onHand':
+        return stock ? (
+          <td key={c.id} className={`qb-grid-cell num ${stock.qtyOnHandE4 < 0 ? 'font-semibold text-qb-negative' : ''}`} title={stock.qtyOnHandE4 < 0 ? 'Sold before it was bought: the cost is trued up when the bill is entered' : undefined}>
+            {formatQuantity(stock.qtyOnHandE4)}
+          </td>
+        ) : (
+          <td key={c.id} className="qb-grid-cell text-qb-ink-faint">{(p.itemType ?? 'ITEM') === 'ITEM' ? 'Not tracked' : ''}</td>
+        );
+      case 'avgCost':
+        return <td key={c.id} className="qb-grid-cell num">{stock ? (stock.averageCostCents !== null ? formatCents(stock.averageCostCents) : '—') : ''}</td>;
+      default:
+        return <td key={c.id} className="qb-grid-cell num">{stock ? formatCents(stock.valueCents) : ''}</td>;
+    }
+  };
   // { mode: 'track', product }, { mode: 'adjust', item } or { mode: 'edit', product }
   const [dialog, setDialog] = useState(null);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && incomeOnly(a))?.id ?? null, [accounts]);
@@ -324,6 +377,7 @@ export default function Products({ accounts, intent }) {
           <div className="ml-2 flex-none">
             <ExportMenu printable={false} onNotice={setNotice} {...exports} />
           </div>
+          <ColumnsMenu cols={cols} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
@@ -331,50 +385,59 @@ export default function Products({ accounts, intent }) {
           <form onSubmit={add}>
             <table className="qb-grid">
               <colgroup>
-                <col className="w-[220px]" />
-                <col />
-                <col className="w-[112px]" />
-                <col className="w-[220px]" />
-                <col className="w-[90px]" />
-                <col className="w-[100px]" />
-                <col className="w-[110px]" />
+                {cols.columns.map((c) => (
+                  <col key={c.id} className={ITEM_COLUMN_WIDTH[c.id]} />
+                ))}
                 <col className="w-[120px]" />
                 <col className="w-[30px]" />
               </colgroup>
               <thead>
                 <tr>
-                  <SortTh sorter={sorter} col="name">Name</SortTh>
-                  <SortTh sorter={sorter} col="description">Description</SortTh>
-                  <SortTh sorter={sorter} col="rate" className="text-right">Rate</SortTh>
-                  <SortTh sorter={sorter} col="income">Income account</SortTh>
-                  <SortTh sorter={sorter} col="onHand" className="text-right">On hand</SortTh>
-                  <SortTh sorter={sorter} col="avgCost" className="text-right">Avg cost</SortTh>
-                  <SortTh sorter={sorter} col="value" className="text-right">Stock value</SortTh>
+                  {cols.columns.map((c) => (
+                    <SortTh key={c.id} sorter={sorter} col={c.id} className={RIGHT_ITEM_COLUMNS.has(c.id) ? 'text-right' : ''}>
+                      {c.label}
+                    </SortTh>
+                  ))}
                   <th className="qb-grid-head" aria-label="Stock" />
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 <tr className="bg-qb-row-selected">
+                  {cols.columns.map((c) => {
+                    if (c.id === 'name')
+                      return (
+                        <td key={c.id} className="qb-grid-cell-edit">
+                          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New product or service" aria-label="Name" />
+                        </td>
+                      );
+                    if (c.id === 'description')
+                      return (
+                        <td key={c.id} className="qb-grid-cell-edit">
+                          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description on sales forms" aria-label="Description" />
+                        </td>
+                      );
+                    if (c.id === 'rate')
+                      return (
+                        <td key={c.id} className="qb-grid-cell-edit">
+                          <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={newType === 'ITEM' ? '0.00' : '0.00 or %'} inputMode="decimal" aria-label="Rate" aria-invalid={Boolean(read.error)} />
+                        </td>
+                      );
+                    if (c.id === 'income')
+                      return (
+                        <td key={c.id} className="qb-grid-cell-edit">
+                          <span className="flex items-center gap-1">
+                            <AccountSelect className="min-w-0 flex-1" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
+                            <label className="flex flex-none items-center gap-0.5 pr-1 text-xs" title="Charge sales tax when sold">
+                              <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
+                              Tax
+                            </label>
+                          </span>
+                        </td>
+                      );
+                    return <td key={c.id} className="qb-grid-cell" />;
+                  })}
                   <td className="qb-grid-cell-edit">
-                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New product or service" aria-label="Name" />
-                  </td>
-                  <td className="qb-grid-cell-edit">
-                    <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description on sales forms" aria-label="Description" />
-                  </td>
-                  <td className="qb-grid-cell-edit">
-                    <input className="num" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={newType === 'ITEM' ? '0.00' : '0.00 or %'} inputMode="decimal" aria-label="Rate" aria-invalid={Boolean(read.error)} />
-                  </td>
-                  <td className="qb-grid-cell-edit">
-                    <span className="flex items-center gap-1">
-                      <AccountSelect className="min-w-0 flex-1" accounts={accounts} filter={incomeOnly} value={chosenAccount} onChange={setAccountId} aria-label="Income account" />
-                      <label className="flex flex-none items-center gap-0.5 pr-1 text-xs" title="Charge sales tax when sold">
-                        <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
-                        Tax
-                      </label>
-                    </span>
-                  </td>
-                  <td className="qb-grid-cell-edit" colSpan={3}>
                     <select value={newType} onChange={(e) => setNewType(e.target.value)} aria-label="Type">
                       {ITEM_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>{t.label}</option>
@@ -386,11 +449,10 @@ export default function Products({ accounts, intent }) {
                       Add
                     </button>
                   </td>
-                  <td className="qb-grid-cell" />
                 </tr>
                 {data && data.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
+                    <td colSpan={cols.columns.length + 2} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
                   </tr>
                 )}
                 {shownItems.map(({ row: p, ...item }) => (
@@ -402,46 +464,20 @@ export default function Products({ accounts, intent }) {
                     onClick={() => setSelected(p.id)}
                     onDoubleClick={() => setDialog({ mode: 'edit', product: p })}
                   >
-                    <td className="qb-grid-cell font-semibold" style={customOrder && listOrder.tree ? { paddingLeft: 8 + item.depth * 16 } : undefined}>
-                      {customOrder && <TreeToggle ctl={listOrder} item={{ id: p.id, ...item }} />}
-                      {customOrder && listOrder.tree ? p.name.slice(p.name.lastIndexOf(':') + 1) : p.name}
-                      {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
-                      {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
-                    </td>
-                    <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
-                    <td className="qb-grid-cell num">{rateLabel(p)}</td>
-                    <td className="qb-grid-cell">
-                      {accountLabel(accounts, p.incomeAccountId)}
-                      {p.isTaxable && <span className="ml-1 text-2xs font-semibold uppercase text-qb-ink-muted" title="Taxable">Tax</span>}
-                    </td>
-                    {items.has(p.id) ? (
-                      <>
-                        <td
-                          className={`qb-grid-cell num ${items.get(p.id).qtyOnHandE4 < 0 ? 'font-semibold text-qb-negative' : ''}`}
-                          title={items.get(p.id).qtyOnHandE4 < 0 ? 'Sold before it was bought: the cost is trued up when the bill is entered' : undefined}
-                        >
-                          {formatQuantity(items.get(p.id).qtyOnHandE4)}
-                        </td>
-                        <td className="qb-grid-cell num">{items.get(p.id).averageCostCents !== null ? formatCents(items.get(p.id).averageCostCents) : '—'}</td>
-                        <td className="qb-grid-cell num">{formatCents(items.get(p.id).valueCents)}</td>
-                        <td className="qb-grid-cell cell-tight">
-                          <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'adjust', item: items.get(p.id) })}>
-                            Adjust stock…
+                    {cols.columns.map((c) => itemCell(c, p, item))}
+                    <td className="qb-grid-cell cell-tight">
+                      {items.has(p.id) ? (
+                        <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'adjust', item: items.get(p.id) })}>
+                          Adjust stock…
+                        </button>
+                      ) : (
+                        inventoryOn && (p.itemType ?? 'ITEM') === 'ITEM' && (
+                          <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
+                            Track stock…
                           </button>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="qb-grid-cell text-qb-ink-faint" colSpan={3}>{(p.itemType ?? 'ITEM') === 'ITEM' ? 'Not tracked' : ''}</td>
-                        <td className="qb-grid-cell cell-tight">
-                          {inventoryOn && (p.itemType ?? 'ITEM') === 'ITEM' && (
-                            <button type="button" className="qb-btn qb-btn-secondary h-[20px] w-full text-xs" onClick={() => setDialog({ mode: 'track', product: p })}>
-                              Track stock…
-                            </button>
-                          )}
-                        </td>
-                      </>
-                    )}
+                        )
+                      )}
+                    </td>
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         label={`Actions for ${p.name}`}
