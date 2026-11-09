@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -61,7 +62,7 @@ export default function Attachments({ entryId }) {
           onClick={() =>
             run(async () => {
               const result = await api.saveAllAttachments(entryId);
-              setSaved(result ? `Saved ${result[1]} files to ${result[0]}` : null);
+              setSaved(result ? savedCopyText(result[0], `${result[1]} files`) : null);
             })
           }
         >

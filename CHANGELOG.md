@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Fewer plain copies outside the company file.** PDFs staged for your mail app are deleted after
+  an hour (they were kept for a day), and staged copies and unpacked QuickBooks backups left by an
+  earlier run are cleared when LocalBooks starts and quits. Saving a report, form, voucher or
+  attachments now says the file is a plain copy the company password doesn't protect.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

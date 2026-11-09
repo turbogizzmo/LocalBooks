@@ -9,6 +9,7 @@ import { reportBasis, useCompanyPreferencesState } from '../lib/companyPreferenc
 import { formatCents, formatCompactCents } from '../lib/money.js';
 import { formatDate, monthLabel, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 /**
  * The graph reports (`graphs.rs`) in the Reports menu's Graphs group: Income and Expense, Net
@@ -440,7 +441,7 @@ function GraphFrame({ title, subtitle, controls, error, empty, charts, tables, f
               onPng={async () => {
                 if (view !== 'chart') throw new Error('GRAPH_EMPTY: switch to the chart view to save a picture');
                 const path = await savePicture(sheet.current, title, subtitle, `${filename}.png`);
-                if (path) setNotice({ kind: 'success', text: `Saved ${path}` });
+                if (path) setNotice({ kind: 'success', text: savedCopyText(path) });
               }}
             />
           )}

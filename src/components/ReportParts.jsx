@@ -5,6 +5,7 @@ import { api, errorText, printDocument } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { periodRange } from '../lib/dates.js';
 import { reportMatcher, stepMatch } from '../lib/reportSearch.js';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 /** Building blocks shared by every report: period presets, the Export menu, and statement layout. */
 
@@ -161,7 +162,7 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
   const savePdf = () =>
     asPdf(async (sheet) => {
       const path = await api.saveReportPdf(sheet);
-      if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+      if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
     });
   const print = printDocument;
 
@@ -238,7 +239,7 @@ export function captureSheet(onXlsx) {
 export async function saveCsv(report, params, filename, onNotice) {
   const csv = await api.reportCsv(report, params);
   const path = await api.saveReportToDisk(csv, filename);
-  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+  if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
 }
 
 /** Saves a financial statement the Rust side renders (as `saveCsv` does) as an Excel workbook. */
@@ -248,14 +249,14 @@ export async function saveReportXlsx(report, params, filename, onNotice) {
     return take(await api.reportSheet(report, params));
   }
   const path = await api.saveReportXlsx(report, params, filename);
-  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+  if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
 }
 
 /** Saves a sheet (see `statementSheet` and `tableSheet`) as an Excel workbook. */
 export async function saveXlsx(sheet, filename, onNotice) {
   if (capturing) return capturing(sheet);
   const path = await api.saveXlsx(sheet, filename);
-  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+  if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
 }
 
 /** `Report-Name.csv` → `Report-Name.xlsx`. */
@@ -476,5 +477,5 @@ export const plainAmount = (cents) => (cents === null || cents === undefined ? '
 
 export async function saveText(text, filename, onNotice) {
   const path = await api.saveReportToDisk(text, filename);
-  if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+  if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
 }
