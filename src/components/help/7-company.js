@@ -184,9 +184,9 @@ export const topics = [
   },
   {
     id: 'sheet-import', area: 'company', views: ['settings/import'],
-    title: 'Import customers, vendors or invoices from a spreadsheet',
-    body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose whether the sheet holds customers, vendors or invoices, and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same invoice number become one invoice, a line per row, crediting the income account each row names.',
-    keywords: 'spreadsheet excel csv xlsx import customers vendors invoices columns map mapping template rows',
+    title: 'Import from a spreadsheet: lists, transactions or journal entries',
+    body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose what the sheet holds (customers, vendors, invoices, sales receipts, credit memos, deposits, bills, bill credits, checks, credit card charges or credits, or journal entries), and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same number become one transaction, a line per row; a journal entry\'s debits must equal its credits.',
+    keywords: 'spreadsheet excel csv xlsx import customers vendors invoices sales receipts credit memos deposits bills checks credit card journal entries columns map mapping template rows',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },

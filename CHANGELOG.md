@@ -6,11 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
-- **Import customers, vendors or invoices from your own spreadsheet.** In the Desktop Migration
-  Wizard, choose a .csv or Excel file (or download a template), match its columns to LocalBooks'
-  fields, and check it: every row that would fail is listed with its row number before anything is
-  staged. Then review and post it like any other import; invoices become real invoices, owed by
-  their customers.
+- **Import from your own spreadsheet.** In the Desktop Migration Wizard, choose a .csv or Excel
+  file of customers, vendors, invoices, sales receipts, credit memos, deposits, bills, bill credits,
+  checks, credit card charges or credits, or journal entries (or download a template), match its
+  columns to LocalBooks' fields, and check it: every row that would fail is listed with its row
+  number before anything is staged. Then review and post it like any other import; each becomes
+  the real LocalBooks document, and a journal entry must balance first.
 
 - **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
   list into the order you want; it's kept in the company file. Each can be shown as a tree (with
