@@ -123,6 +123,13 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'safeguards-rule', area: 'company', views: ['settings/users'],
+    title: 'The FTC Safeguards Rule (tax preparers and bookkeepers)',
+    body: 'Tax preparers and many bookkeepers must keep a written security program under the FTC Safeguards Rule. The step-by-step guide goes through each duty and says what LocalBooks does (users and roles, encrypted tax IDs and bank details, encrypted offsite backups, the hash-chained audit trail) and what stays your job: multi-factor sign-in, which LocalBooks does not have, full-disk encryption for the rest of the company file and its backups, training, testing and breach notices. It is a map, not legal advice.',
+    keywords: 'ftc safeguards rule glba gramm leach bliley compliance wisp written information security plan tax preparer bookkeeper cpa irs publication 4557 mfa multi-factor encryption breach notification qualified individual risk assessment',
+    guide: 'safeguards-rule',
+  },
+  {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
     body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',

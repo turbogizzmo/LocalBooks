@@ -309,6 +309,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
 | Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
+| FTC Safeguards Rule map | Help › The FTC Safeguards Rule | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
 | Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
 ### `+ New` quick-create matrix
