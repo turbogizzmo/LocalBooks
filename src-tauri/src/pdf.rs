@@ -365,14 +365,29 @@ fn literal(text: &str) -> String {
     out
 }
 
-/// A PDF text string for the document information dictionary (UTF-16BE with a byte-order mark).
-fn info_string(text: &str) -> String {
-    let mut out = String::from("<FEFF");
+/// A PDF text string's bytes for the document information dictionary (UTF-16BE with a byte-order
+/// mark).
+fn info_bytes(text: &str) -> Vec<u8> {
+    let mut out = vec![0xFE, 0xFF];
     for unit in text.encode_utf16() {
-        let _ = write!(out, "{unit:04X}");
+        out.extend_from_slice(&unit.to_be_bytes());
     }
-    out.push('>');
     out
+}
+
+/// A string object: hex, encrypted when the file is password-protected.
+fn string_object(bytes: &[u8], protection: Option<&Protection>) -> String {
+    match protection {
+        Some(p) => p.string(bytes),
+        None => {
+            let mut out = String::from("<");
+            for b in bytes {
+                let _ = write!(out, "{b:02X}");
+            }
+            out.push('>');
+            out
+        }
+    }
 }
 
 fn deflate(data: &[u8]) -> Vec<u8> {
@@ -381,12 +396,14 @@ fn deflate(data: &[u8]) -> Vec<u8> {
     encoder.finish().expect("writing to memory cannot fail")
 }
 
-struct Writer {
+struct Writer<'a> {
     out: Vec<u8>,
     offsets: Vec<usize>,
+    /// Set for a password-protected file: every stream is encrypted.
+    protection: Option<&'a Protection>,
 }
 
-impl Writer {
+impl Writer<'_> {
     /// Reserves an object number; objects may be written in any order.
     fn reserve(&mut self) -> usize {
         self.offsets.push(0);
@@ -399,6 +416,14 @@ impl Writer {
     }
 
     fn stream(&mut self, id: usize, dict: &str, data: &[u8]) {
+        let encrypted;
+        let data = match self.protection {
+            Some(p) => {
+                encrypted = p.encrypt(data);
+                &encrypted[..]
+            }
+            None => data,
+        };
         self.offsets[id - 1] = self.out.len();
         self.out.extend_from_slice(format!("{id} 0 obj\n<< {dict} /Length {} >>\nstream\n", data.len()).as_bytes());
         self.out.extend_from_slice(data);
@@ -408,7 +433,21 @@ impl Writer {
 
 /// Serializes laid-out pages to a PDF file. `image` is what `Op::Image` draws.
 pub fn write_pdf(pages: &[Page], image: Option<&PdfImage>, title: &str) -> Vec<u8> {
-    let mut w = Writer { out: b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec(), offsets: Vec::new() };
+    write(pages, image, title, None)
+}
+
+/// As [`write_pdf`], and when `password` is given the file opens only with it (AES-256).
+pub fn write_protected_pdf(pages: &[Page], image: Option<&PdfImage>, title: &str, password: Option<&str>) -> Result<Vec<u8>, String> {
+    match password {
+        Some(password) => Ok(write(pages, image, title, Some(&Protection::new(password)?))),
+        None => Ok(write(pages, image, title, None)),
+    }
+}
+
+fn write(pages: &[Page], image: Option<&PdfImage>, title: &str, protection: Option<&Protection>) -> Vec<u8> {
+    // AES-256 needs PDF 2.0's security handler (readers since PDF 1.7 extension level 3 open it).
+    let header: &[u8] = if protection.is_some() { b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n" } else { b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n" };
+    let mut w = Writer { out: header.to_vec(), offsets: Vec::new(), protection };
     let catalog = w.reserve();
     let pages_id = w.reserve();
     let info = w.reserve();
@@ -525,17 +564,27 @@ pub fn write_pdf(pages: &[Page], image: Option<&PdfImage>, title: &str) -> Vec<u
 
     w.object(pages_id, &format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), kids.len()));
     w.object(catalog, &format!("<< /Type /Catalog /Pages {pages_id} 0 R >>"));
-    w.object(info, &format!("<< /Title {} /Producer (LocalBooks) /Creator (LocalBooks) >>", info_string(title)));
+    let producer = string_object(b"LocalBooks", protection);
+    w.object(info, &format!("<< /Title {} /Producer {producer} /Creator {producer} >>", string_object(&info_bytes(title), protection)));
+    let encrypt = protection.map(|p| {
+        let id = w.reserve();
+        w.object(id, &p.dictionary);
+        (id, p.id.clone())
+    });
 
     let xref = w.out.len();
     let mut tail = format!("xref\n0 {}\n0000000000 65535 f \n", w.offsets.len() + 1);
     for offset in &w.offsets {
         let _ = writeln!(tail, "{offset:010} 00000 n ");
     }
-    let _ = write!(tail, "trailer\n<< /Size {} /Root {catalog} 0 R /Info {info} 0 R >>\nstartxref\n{xref}\n%%EOF\n", w.offsets.len() + 1);
+    let secured = encrypt.map(|(id, file_id)| format!(" /Encrypt {id} 0 R /ID [{file_id} {file_id}]")).unwrap_or_default();
+    let _ = write!(tail, "trailer\n<< /Size {} /Root {catalog} 0 R /Info {info} 0 R{secured} >>\nstartxref\n{xref}\n%%EOF\n", w.offsets.len() + 1);
     w.out.extend_from_slice(tail.as_bytes());
     w.out
 }
+
+mod protect;
+pub use protect::{Protection, MAX_PASSWORD_BYTES};
 
 #[cfg(test)]
 mod tests;

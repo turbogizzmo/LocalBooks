@@ -73,7 +73,7 @@ function ScheduleDialog({ schedule, onClose, onSaved }) {
     setBusy(true);
     setError(null);
     try {
-      const saved = await api.saveReportSchedule({ ...draft, endDate: draft.endDate || null }, schedule?.id ?? null);
+      const saved = await api.saveReportSchedule({ ...draft, endDate: draft.endDate || null, pdfPassword: draft.pdfPassword || null }, schedule?.id ?? null);
       onSaved(`“${saved.name}” saved. ${saved.nextRun ? `It next runs on ${formatDate(saved.nextRun)}.` : 'It has no more runs.'}`);
     } catch (err) {
       setError(errorText(err));
@@ -171,6 +171,27 @@ function ScheduleDialog({ schedule, onClose, onSaved }) {
               <option value="XLSX">Excel spreadsheet</option>
             </select>
           </label>
+          {draft.format === 'PDF' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={!!draft.protectPdf} onChange={(e) => set('protectPdf')(e.target.checked)} />
+                Password-protect the PDFs
+              </label>
+              {draft.protectPdf && (
+                <input
+                  type="password"
+                  className="qb-input w-[200px]"
+                  aria-label="PDF password"
+                  placeholder={schedule?.protectPdf ? 'Keep the saved password' : 'Password to open them'}
+                  autoComplete="new-password"
+                  maxLength={127}
+                  value={draft.pdfPassword ?? ''}
+                  onChange={(e) => set('pdfPassword')(e.target.value)}
+                />
+              )}
+              {draft.protectPdf && <p className="w-full text-2xs text-qb-ink-faint">The password is kept in this computer’s credential store, not in the company file. Tell recipients the password another way.</p>}
+            </div>
+          )}
         </fieldset>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={draft.isActive} onChange={(e) => set('isActive')(e.target.checked)} />

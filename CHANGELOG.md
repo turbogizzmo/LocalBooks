@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Password-protected report PDFs.** A report emailed as a PDF, and the PDFs a scheduled report
+  sends or saves, can open only with a password (256-bit AES). A schedule's password is kept in
+  this computer's credential store, not in the company file.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
