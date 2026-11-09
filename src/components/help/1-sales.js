@@ -60,6 +60,13 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'info-panel', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders'],
+    title: 'The information panel',
+    body: 'Click a customer, vendor or item to see its panel beside the list: open balance, active estimates and unbilled costs (customers), open purchase orders (vendors), phone, email, notes and recent transactions; for items, price, on hand, on order, average cost, value, reorder point and preferred vendor (set both on the item’s record). The figures match the aging, Open Purchase Orders, Inventory Valuation and Stock Status reports. Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and purchase orders show it for the chosen name. Its Notes tab edits the notes, with Date Stamp for today’s date; a customer’s Emails tab lists every invoice, estimate, sales receipt and statement emailed to them. Hide info (or ×) hides it; Show info brings it back.',
+    keywords: 'information panel summary balance phone email notes recent transactions on hand on order average cost side panel',
+    guide: 'customers-and-products',
+  },
+  {
     id: 'terms-list', area: 'sales', views: ['sales/profile-lists', 'sales/invoices', 'expenses/bills', 'sales/customers', 'expenses/vendors'],
     title: 'Set up payment terms',
     body: 'Lists › Customer & Vendor Profile Lists › Terms List holds terms such as Net 30 or 2% 10 Net 30 (2 percent off if paid within 10 days). Give each customer and vendor a default term; on invoices and bills the Terms box sets the due date, and Receive Payments and Pay Bills show the discount offered and its last day, and take it when Preferences › Payments or Bills names a discount account.',
@@ -334,9 +341,9 @@ export const topics = [
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {
-    id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
+    id: 'attachments', area: 'accounting', views: ['accounting/attachments', 'accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
-    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it.',
+    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it. Customers, vendors, items, accounts, estimates and purchase orders take files too. Accounting › Attachments Library lists every file: search, preview, keywords, Send with the form when it is emailed, and Delete, which can be restored (Show deleted).',
     guide: 'attachments',
     keywords: 'attachment attach receipt document file scan photo pdf paperclip save all zip export every attachment',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },

@@ -148,6 +148,7 @@ const COMPANY: &[Entry] = &[
     page("Reclassify Transactions…", "accounting/reclassify"),
     page("Clean Up Books…", "accounting/clean-up"),
     page("Audit Log", "accounting/audit"),
+    page("Attachments Library", "accounting/attachments"),
     Entry::Sub("Manage Currency", &[page("Home Currency Adjustment…", "accounting/fx-revaluation")]),
 ];
 
