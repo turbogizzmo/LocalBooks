@@ -263,8 +263,9 @@ pub async fn purge(pool: &SqlitePool, file: FileRef) -> Result<(), String> {
 /// over 25 MB, and the form's PDF and the encoding add to it.
 pub const MAX_SENT_WITH_FORM_BYTES: i64 = 20 * 1024 * 1024;
 
-/// A file to send with an emailed form: its name, media type and bytes.
-pub type SentFile = (String, String, Vec<u8>);
+/// A file to send with an emailed form, as `smtp::Outgoing::more` takes it: name, bytes, media type
+/// (from the file name, as when it was attached).
+pub type SentFile = (String, Vec<u8>, &'static str);
 
 /// The files marked Send with the form for the form `kind` / `document_id`, oldest first: those on
 /// an invoice's or sales receipt's transaction, an estimate's own, and for a statement the
@@ -274,24 +275,31 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
     use crate::forms::FormKind;
     let sql = match kind {
         FormKind::Invoice => {
-            "SELECT a.file_name, a.media_type, a.content FROM attachments a JOIN invoices i ON i.journal_entry_id = a.journal_entry_id
+            "SELECT a.file_name, a.content FROM attachments a JOIN invoices i ON i.journal_entry_id = a.journal_entry_id
              WHERE i.id = ?1 AND a.send_with_form = 1 AND a.deleted_at IS NULL ORDER BY a.id"
         }
         FormKind::SalesReceipt => {
-            "SELECT a.file_name, a.media_type, a.content FROM attachments a JOIN sales_receipts r ON r.journal_entry_id = a.journal_entry_id
+            "SELECT a.file_name, a.content FROM attachments a JOIN sales_receipts r ON r.journal_entry_id = a.journal_entry_id
              WHERE r.id = ?1 AND a.send_with_form = 1 AND a.deleted_at IS NULL ORDER BY a.id"
         }
         FormKind::Estimate => {
-            "SELECT file_name, media_type, content FROM record_attachments
+            "SELECT file_name, content FROM record_attachments
              WHERE record_kind = 'ESTIMATE' AND record_id = ?1 AND send_with_form = 1 AND deleted_at IS NULL ORDER BY id"
         }
         FormKind::Statement => {
-            "SELECT file_name, media_type, content FROM record_attachments
+            "SELECT file_name, content FROM record_attachments
              WHERE record_kind = 'CUSTOMER' AND record_id = ?1 AND send_with_form = 1 AND deleted_at IS NULL ORDER BY id"
         }
     };
-    let files: Vec<SentFile> = sqlx::query_as(sql).bind(document_id).fetch_all(pool).await.map_err(db_err)?;
-    let total: i64 = files.iter().map(|f| f.2.len() as i64).sum();
+    let rows: Vec<(String, Vec<u8>)> = sqlx::query_as(sql).bind(document_id).fetch_all(pool).await.map_err(db_err)?;
+    let files: Vec<SentFile> = rows
+        .into_iter()
+        .map(|(name, bytes)| {
+            let media_type = crate::workflows::media_type(&name);
+            (name, bytes, media_type)
+        })
+        .collect();
+    let total: i64 = files.iter().map(|f| f.1.len() as i64).sum();
     if total > MAX_SENT_WITH_FORM_BYTES {
         return Err(format!(
             "MAIL_ATTACHMENTS_TOO_LARGE: the files marked to send with this form add up to {} MB; keep them under 20 MB (untick some in the Attachments Library)",

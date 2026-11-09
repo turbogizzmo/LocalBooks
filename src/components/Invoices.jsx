@@ -218,9 +218,9 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     setDiscounts({});
     setReceived('');
   };
-  // The engine says which invoices' terms still offer a discount on the payment date (home
-  // currency only, nothing paid on them yet, through the discount's last day).
-  const rowKey = currency ? '' : rows.map((inv) => inv.id).join(',');
+  // The engine says which invoices' terms still offer a discount on the payment date (on what is
+  // left of each, once, through the discount's last day), in the invoices' currency.
+  const rowKey = rows.map((inv) => inv.id).join(',');
   useEffect(() => {
     if (rowKey === '' || !date) {
       setOffer((o) => (o.offered.length ? { ...o, offered: [] } : o));
@@ -496,10 +496,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                     className="accent-qb-green"
                     checked={appliedCents(inv) > 0}
                     onChange={(e) => tick(inv, e.target.checked)}
-                    aria-label={`Pay invoice ${inv.invoiceNumber}`}
+                    aria-label={inv.isStatementCharge ? `Pay statement charge of ${formatDate(inv.issueDate)}` : `Pay invoice ${inv.invoiceNumber}`}
                   />
                 </td>
-                <td className="qb-grid-cell">#{inv.invoiceNumber}</td>
+                <td className="qb-grid-cell">{inv.isStatementCharge ? 'Statement charge' : `#${inv.invoiceNumber}`}</td>
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
                 <td className="qb-grid-cell text-sm" title={inv.termsName ?? undefined}>
@@ -687,6 +687,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
                       {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
+                      {inv.isStatementCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Statement charge: billed on the customer's statement, not printed as an invoice">SC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
                       {inv.toBePrinted && !inv.isVoided && (
                         <span className="ml-1 rounded-xs bg-qb-green-tint px-1 text-2xs font-semibold text-qb-green-active" title="Waiting in File › Print Forms › Invoices">
@@ -1161,6 +1162,7 @@ export default function Invoices({ accounts, intent }) {
         menu: [
           { label: 'Print…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.print(saved.kind, saved.id) },
           { label: 'Save as PDF…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.savePdf(saved.kind, saved.id) },
+          { label: 'Print Envelope…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.envelope(saved.kind, saved.id) },
           !editing && { label: 'Post and print…', disabled: busy, onSelect: () => save('print') },
         ],
       },
@@ -1308,7 +1310,7 @@ export default function Invoices({ accounts, intent }) {
         </div>
 
         {sales.addresses}
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes serviceDates />
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>

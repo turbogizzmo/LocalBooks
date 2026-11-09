@@ -25,7 +25,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDat
         customer_name: customer.into(),
         issue_date: issued,
         due_date: due,
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,
@@ -174,7 +174,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
     );
 
     let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: d(10, 9) }).collect();
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None };
+    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None, to_be_printed: false };
     // The first bill is paid off by the credit alone; the second needs 20.00 more.
     let too_much = pay_bills_with_credits(&pool, vec![pay(second, 3_000)], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();
     assert!(too_much.starts_with("BILL_OVERPAYMENT"), "{too_much}");
@@ -190,7 +190,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
 async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;
-    let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false };
+    let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
     let estimate = |lines| EstimateInput { customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)])).await.expect("a zero line is allowed");
     assert_eq!(est.total_cents, 75_000);
@@ -214,7 +214,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
         due_date: d(11, 5),
         lines: [("Design", 50_000), ("Extra", 0)]
             .into_iter()
-            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false })
+            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -318,7 +318,7 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
     assert_eq!(plan.discounts, vec![DiscountUse { bill_id: on_terms, amount_cents: 1_000 }], "2% of 500.00, on the 10th day; none on a bill without a discount");
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 12)).await.unwrap().discounts.is_empty(), "the discount has ended");
 
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None };
+    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None, to_be_printed: false };
     let late = pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts.clone(), d(10, 12)).await.unwrap_err();
     assert!(late.starts_with("BILL_NO_DISCOUNT"), "{late}");
     assert_eq!(pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts, d(10, 11)).await.unwrap(), 1);
@@ -335,7 +335,7 @@ async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued:
         customer_name: customer.into(),
         issue_date: issued,
         due_date: issued + Duration::days(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,
@@ -416,7 +416,11 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     // Within the date, with nothing paid yet: 2% of 500.00 through the 10th day (Oct 11).
     let offered = payment_discounts(&pool, &ids, d(10, 11)).await.unwrap();
     assert!(offered.available && offered.automatic);
-    assert_eq!(offered.offered, vec![OfferedDiscount { invoice_id: early, amount_cents: 1_000 }], "none after the date, on a part-paid invoice or without terms");
+    assert_eq!(
+        offered.offered,
+        vec![OfferedDiscount { invoice_id: early, amount_cents: 1_000 }, OfferedDiscount { invoice_id: part_paid, amount_cents: 300 }],
+        "none after the date or without terms; a part-paid invoice's is on what is left (2% of 150.00)"
+    );
     assert!(payment_discounts(&pool, &ids, d(10, 12)).await.unwrap().offered.is_empty(), "the discount has ended");
     // Auto Apply: 490.00 received pays the early invoice in full with its discount.
     let plan = payment_application(&pool, "Acme", None, 49_000, Some("exact"), Some(d(10, 11))).await.unwrap();
@@ -424,11 +428,11 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     let partial = payment_application(&pool, "Acme", None, 20_000, Some("oldest"), Some(d(10, 11))).await.unwrap();
     assert!(partial.iter().all(|a| a.discount_cents == 0), "money that doesn't pay the rest in full takes no discount: {partial:?}");
 
-    // Refused: after the date, on a part-paid invoice, more than offered, more than owed.
+    // Refused: after the date, more than offered (on a part-paid invoice, on what is left), more than owed.
     for (input, code) in [
         (pay(late, 29_400, 600, 11), "INV_NO_DISCOUNT"),
         (pay(early, 49_000, 1_000, 12), "INV_NO_DISCOUNT"),
-        (pay(part_paid, 14_700, 300, 11), "INV_NO_DISCOUNT"),
+        (pay(part_paid, 14_600, 400, 11), "INV_BAD_DISCOUNT"),
         (pay(early, 48_900, 1_100, 11), "INV_BAD_DISCOUNT"),
         (pay(early, 49_001, 1_000, 11), "INV_OVERPAYMENT"),
     ] {

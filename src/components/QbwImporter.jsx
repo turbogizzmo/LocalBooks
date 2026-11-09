@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import AccountSelect from './AccountSelect.jsx';
 import InstalledQuickBooks from './InstalledQuickBooks.jsx';
+import SheetImport from './SheetImport.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
@@ -27,6 +28,7 @@ const FORMAT_NAMES = {
   REPORT: 'QuickBooks report export',
   GNUCASH: 'GnuCash book',
   QBXML: 'export from your installed QuickBooks',
+  SHEET: 'spreadsheet',
 };
 /** A file chosen inside a QuickBooks for Mac bundle (`Company.qb2016/…`) counts as that company file. */
 const extensionOf = (path) => (/\.(qb\d{4})(?:[\\/]|$)/i.exec(path)?.[1] ?? path.split('.').pop())?.toLowerCase();
@@ -152,7 +154,8 @@ function ChooseFile({ busy, onFile }) {
 }
 
 /** What an import was read from, by its file's extension. */
-function sourceLabel(fileName) {
+function sourceLabel(fileName, format) {
+  if (format === 'SHEET') return 'Spreadsheet';
   const ext = extensionOf(fileName);
   if (REPORT_EXTENSIONS.includes(ext)) return 'Report export';
   if (ext === 'iif' || ext === 'qif') return `${ext.toUpperCase()} export`;
@@ -204,7 +207,7 @@ function ImportsTable({ batches, openKey, busy, onOpen, onReverse, onStartOver, 
                     ? 'Invoice lines'
                     : b.listsOnly
                       ? 'Lists only'
-                      : `${sourceLabel(b.fileName)}${b.liveEntryCount === 0 ? '' : b.mode === 'FULL' ? ' · full import' : ' · journal import'}`}
+                      : `${sourceLabel(b.fileName, b.sourceFormat)}${b.liveEntryCount === 0 ? '' : b.mode === 'FULL' ? ' · full import' : ' · journal import'}`}
                 </div>
               </td>
               <td className="qb-grid-cell text-qb-ink-muted">{STAMP.format(new Date(b.importedAt))}</td>
@@ -1007,6 +1010,14 @@ export default function QbwImporter({ accounts }) {
     follow(reading);
   }, [follow]);
 
+  const stageSheet = useCallback(
+    (path, stage) => {
+      reading = startReading([path], 'sheet', stage);
+      follow(reading);
+    },
+    [follow],
+  );
+
   // Open or Restore Company was given a QuickBooks file: read it as soon as the wizard opens.
   useEffect(() => {
     const path = takePendingMigration();
@@ -1198,6 +1209,7 @@ export default function QbwImporter({ accounts }) {
           !summary && (
             <>
               <ChooseFile busy={busy} onFile={ingest} />
+              <SheetImport busy={busy} onStage={stageSheet} />
               <InstalledQuickBooks busy={busy} onExport={exportInstalled} />
             </>
           )

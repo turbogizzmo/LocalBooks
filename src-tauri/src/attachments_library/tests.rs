@@ -90,7 +90,7 @@ async fn files_marked_to_send_go_with_their_form() {
 
     set_details(&pool, FileRef { source: Source::Entry, id: signed.id }, None, true).await.unwrap();
     let sent = files_to_send(&pool, FormKind::Invoice, invoice).await.unwrap();
-    assert_eq!(sent, vec![("signed.png".to_string(), "image/png".to_string(), b"png".to_vec())]);
+    assert_eq!(sent, vec![("signed.png".to_string(), b"png".to_vec(), "image/png")]);
 
     // A deleted file isn't sent; a customer's marked file goes with their statement.
     delete(&pool, FileRef { source: Source::Entry, id: signed.id }).await.unwrap();
@@ -98,4 +98,16 @@ async fn files_marked_to_send_go_with_their_form() {
     let terms = add_record_file(&pool, "CUSTOMER", customer, "terms.pdf", b"%PDF").await.unwrap();
     set_details(&pool, FileRef { source: Source::Record, id: terms.id }, Some("terms"), true).await.unwrap();
     assert_eq!(files_to_send(&pool, FormKind::Statement, customer).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn save_all_attachments_leaves_deleted_files_out() {
+    let pool = crate::harness::fixture::harbor_lane().await;
+    let entry: i64 = first(&pool, "SELECT journal_entry_id FROM invoices WHERE journal_entry_id IS NOT NULL ORDER BY id LIMIT 1").await;
+    crate::workflows::add_attachment(&pool, entry, "keep.pdf", b"%PDF").await.unwrap();
+    let gone = crate::workflows::add_attachment(&pool, entry, "gone.pdf", b"%PDF").await.unwrap();
+    crate::workflows::delete_attachment(&pool, gone.id).await.unwrap();
+    assert_eq!(crate::attachment_export::count(&pool, Some(entry)).await.unwrap(), 1);
+    let (files, _) = crate::attachment_export::write_zip(&pool, None, std::io::Cursor::new(Vec::new())).await.unwrap();
+    assert_eq!(files, 1);
 }

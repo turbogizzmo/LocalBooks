@@ -14,6 +14,7 @@ const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${
 export default function Attachments({ entryId, record = null, what = record ? 'this record' : 'this transaction' }) {
   const [list, setList] = useState(null);
   const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(null);
   const source = record ? 'RECORD' : 'ENTRY';
   const load = () =>
     (record ? api.listRecordAttachments(record.kind, record.id) : api.listAttachments(entryId)).then(setList, (err) => setError(errorText(err)));
@@ -66,6 +67,22 @@ export default function Attachments({ entryId, record = null, what = record ? 't
       <button type="button" className="text-qb-link hover:underline" onClick={attach}>
         Attach file…
       </button>
+      {!record && list?.length > 1 && (
+        <button
+          type="button"
+          className="text-qb-link hover:underline"
+          title="Save all of this transaction's attachments in one zip file"
+          onClick={() =>
+            run(async () => {
+              const result = await api.saveAllAttachments(entryId);
+              setSaved(result ? `Saved ${result[1]} files to ${result[0]}` : null);
+            })
+          }
+        >
+          Save all…
+        </button>
+      )}
+      {saved && <span className="text-qb-ink-muted">{saved}</span>}
       {error && <span className="text-qb-negative">{error}</span>}
     </div>
   );

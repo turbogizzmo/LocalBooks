@@ -477,7 +477,7 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let from = *from.get(&a.pay_from);
             let result = crate::expenses::pay_vendor_bill(
                 pool,
-                BillPaymentInput { bill_id, payment_account_id: from, payment_date: date(day), amount_cents: amount, reference: None },
+                BillPaymentInput { bill_id, payment_account_id: from, payment_date: date(day), amount_cents: amount, reference: None, to_be_printed: false },
             )
             .await
             .map(|_| ());
@@ -706,7 +706,7 @@ async fn post_invoice(
                 income_account_id: income,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             })
             .collect(),
         currency: fx_rate.map(|rate| ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),

@@ -7,6 +7,7 @@ mod accountant_reports;
 mod accounts;
 mod app_menu;
 mod ach;
+mod attachment_export;
 mod attachments_library;
 mod audit_chain;
 mod backup;
@@ -29,6 +30,7 @@ mod db;
 mod desktop;
 mod edits;
 mod email_log;
+mod envelopes;
 mod estimates;
 mod expenses;
 mod forensic;
@@ -54,6 +56,7 @@ mod item_prices;
 mod item_types;
 mod job_reports;
 mod ledger;
+mod list_order;
 mod list_reports;
 mod money;
 mod mail_app;
@@ -101,12 +104,17 @@ mod storage;
 mod text_import;
 mod timesheet;
 mod users;
+mod vouchers;
 mod windows;
 mod workflows;
 mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod report_pdf;
+mod report_schedules;
+mod statement_charges;
+mod sheet_import;
 
 use tauri::Manager;
 
@@ -215,6 +223,17 @@ fn main() {
             windows::restore_on_next_load(app.handle(), true);
             let title_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { commands::company_changed(&title_handle).await });
+
+            // Scheduled reports: due ones run soon after launch (catching up on runs missed while
+            // LocalBooks was closed), then every few minutes while it stays open.
+            let schedules = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                loop {
+                    commands::run_due_schedules(&schedules).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
+                }
+            });
 
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();

@@ -17,6 +17,8 @@ import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import Attachments from './Attachments.jsx';
+import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
+import { parentByName } from '../lib/listOrder.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
 
@@ -166,6 +168,14 @@ export default function Products({ accounts, intent }) {
   const [pricingLevels, setPricingLevels] = useState(false);
   const [grouping, setGrouping] = useState(false);
   const { priceLevels: levelsOn, loaded } = useSalesPrefs();
+  // Without a sorted column, the custom order (drag a row) as a tree of sub-items ("Parent:Child") or flat.
+  const parentOfItem = useMemo(() => {
+    const byName = new Map((data ?? []).map((p) => [p.name.toLowerCase(), p.id]));
+    return (p) => parentByName(p.name, byName);
+  }, [data]);
+  const customOrder = !sorter.sort;
+  const listOrder = useListOrder('ITEMS', data, { parentOf: parentOfItem, dragEnabled: customOrder, onNotice: setNotice, defaultView: 'flat' });
+  const shownItems = (customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: 0, hasChildren: false }))).filter((x) => showInactive || x.row.isActive);
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
@@ -310,6 +320,7 @@ export default function Products({ accounts, intent }) {
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive
           </label>
+          {customOrder && <ListViewControls ctl={listOrder} label="items" />}
           <div className="ml-2 flex-none">
             <ExportMenu printable={false} onNotice={setNotice} {...exports} />
           </div>
@@ -382,16 +393,18 @@ export default function Products({ accounts, intent }) {
                     <td colSpan={9} className="qb-grid-cell text-qb-ink-muted">No products or services yet.</td>
                   </tr>
                 )}
-                {sorter.sorted.filter((p) => showInactive || p.isActive).map((p) => (
+                {shownItems.map(({ row: p, ...item }) => (
                   <tr
                     key={p.id}
+                    {...listOrder.rowProps(p.id)}
                     className={`qb-grid-row ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => setSelected(p.id)}
                     onDoubleClick={() => setDialog({ mode: 'edit', product: p })}
                   >
-                    <td className="qb-grid-cell font-semibold">
-                      {p.name}
+                    <td className="qb-grid-cell font-semibold" style={customOrder && listOrder.tree ? { paddingLeft: 8 + item.depth * 16 } : undefined}>
+                      {customOrder && <TreeToggle ctl={listOrder} item={{ id: p.id, ...item }} />}
+                      {customOrder && listOrder.tree ? p.name.slice(p.name.lastIndexOf(':') + 1) : p.name}
                       {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
                     </td>

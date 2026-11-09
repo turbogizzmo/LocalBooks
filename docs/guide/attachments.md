@@ -45,6 +45,7 @@ A 📎 after the number marks a transaction with files (📎3 means three). Clic
 - Click **×** next to a file to delete it. LocalBooks asks first. Deleting is reversible: the file
   is kept, and **Accounting › Attachments Library** can restore it (see below).
 - Click **Attach file…** in the strip to add more.
+- With two or more files, **Save all…** saves them together in one zip file.
 
 Click the 📎 again to close the strip.
 
@@ -77,6 +78,14 @@ its size.
 Many tax authorities expect you to keep the records behind your books (receipts, invoices, bank
 statements) for several years, often six or seven; check what applies to you. LocalBooks never
 removes a file unless an Admin removes a deleted one for good, and the files are in every backup.
+
+## Save every attachment at once
+
+**Settings › File & Data › Save All Attachments…** saves every file attached to any transaction
+in one zip file, for your accountant or an auditor, or to keep outside LocalBooks. Inside the zip
+each transaction has its own folder, named by its date, its kind and its number, such as
+`2026-10-01 Bill 118 (entry 42)`; two files with the same name in one transaction are kept as
+`receipt.pdf` and `receipt (2).pdf`. Nothing in the company file changes.
 
 ## When you edit or void a transaction
 

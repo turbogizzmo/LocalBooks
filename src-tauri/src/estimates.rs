@@ -247,7 +247,7 @@ pub async fn convert_to_invoice(
                     income_account_id,
                     product_service_id,
                     class_id,
-                    is_taxable,
+                    is_taxable, service_date: None,
                 })
                 .collect(),
             currency: None,

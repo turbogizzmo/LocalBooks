@@ -297,7 +297,7 @@ async fn inventory_is_carried_at_quantity_and_cost() {
             }))
             .unwrap();
             let bill = crate::expenses::post_vendor_bill(&pool, input).await.unwrap();
-            let paid = crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(), amount_cents: qty * rate, reference: None };
+            let paid = crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap(), amount_cents: qty * rate, reference: None, to_be_printed: false };
             crate::expenses::pay_vendor_bill(&pool, paid).await.unwrap();
         }
     };
