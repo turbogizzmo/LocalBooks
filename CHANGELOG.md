@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
+  list into the order you want; it's kept in the company file. Each can be shown as a tree (with
+  Expand all and Collapse all) or flat with full names.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

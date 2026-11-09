@@ -207,6 +207,14 @@ export const topics = [
     guide: 'whats-new',
   },
   {
+    id: 'list-order', area: 'company', views: ['accounting/chart-of-accounts', 'sales/products', 'sales/customers'],
+    title: 'Put a list in your own order, flat or as a tree',
+    body: 'Drag a row in the chart of accounts, the item list or the customer list to put it where you want among the rows beside it; its subaccounts, jobs or sub-items move with it, and the order is kept in the company file (Usual order forgets it). Tree shows them indented under their parent with Expand all and Collapse all, and Flat lists every row with its full name.',
+    keywords: 'order reorder drag drop move up down arrange custom order tree flat hierarchy indent expand collapse subaccount job sub-item chart of accounts item list customer list',
+    go: { label: 'Go to the Chart of Accounts', view: 'accounting/chart-of-accounts' },
+    guide: 'getting-started',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers, the journal, an account register or Reconcile to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first (registers and Reconcile in date order), and each list remembers the order you choose.',

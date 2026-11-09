@@ -136,6 +136,7 @@ const READ: &[&str] = &[
     "print_report",
     "finish_printing",
     "render_form",
+    "get_list_order",
     "save_form_pdf",
     "save_attachment",
     "attachment_counts",
