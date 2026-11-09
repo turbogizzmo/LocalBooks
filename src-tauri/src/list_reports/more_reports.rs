@@ -68,7 +68,13 @@ pub(super) async fn budget_overview(pool: &SqlitePool, as_of: NaiveDate) -> Resu
                 by_month[(amounts[i].3 - 1) as usize] = amounts[i].4;
                 i += 1;
             }
-            let sign = if class == "INCOME" { 1 } else { -1 };
+            // Net income counts income and expenses only; a balance-sheet account's budget is listed but
+            // left out of it.
+            let sign = match class.as_str() {
+                "INCOME" => 1,
+                "EXPENSE" => -1,
+                _ => 0,
+            };
             for (n, v) in net.iter_mut().zip(by_month) {
                 *n = v.checked_mul(sign).and_then(|v| n.checked_add(v)).ok_or("RPT_OVERFLOW: amount out of range")?;
             }
@@ -283,7 +289,7 @@ pub(super) async fn sales_by_ship_to(pool: &SqlitePool, start: NaiveDate, end: N
 pub(super) async fn currency_gains(pool: &SqlitePool, start: NaiveDate, end: NaiveDate, unrealized: bool) -> Result<AccountantReport, String> {
     let account = if unrealized { "Unrealized Exchange Gain or Loss" } else { "Exchange Gain or Loss" };
     let lines: Vec<(i64, String, String, i64, Option<String>, Option<String>, i64)> = sqlx::query_as(&format!(
-        "SELECT e.id, {DISPLAY_SOURCE_TYPE}, e.entry_date, e.entry_number, p.party_name, COALESCE(l.memo, e.memo),
+        "SELECT e.id, {DISPLAY_SOURCE_TYPE}, e.entry_date, e.entry_number, MAX(p.party_name), COALESCE(MAX(l.memo), e.memo),
                 SUM(l.credit_cents - l.debit_cents)
          FROM journal_lines l
          JOIN journal_entries e ON e.id = l.journal_entry_id
