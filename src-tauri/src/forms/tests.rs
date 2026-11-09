@@ -202,8 +202,13 @@ fn statements_print_transactions_and_aging() {
     for expected in ["Statement", "10/01/2026 – 10/31/2026", "STATEMENT FOR", "Balance forward", "Invoice #1001", "Payment #2045", "Amount due", "Over 90 days"] {
         assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
     }
-    let all = texts(&layout(&doc, &company, &FormTemplate { show_aging: false, ..tpl }, None));
+    let all = texts(&layout(&doc, &company, &FormTemplate { show_aging: false, ..tpl.clone() }, None));
     assert!(!all.iter().any(|t| t == "Over 90 days"));
+    // The P.O. No. column is off unless the template turns it on.
+    assert!(!texts(&layout(&doc, &company, &tpl, None)).iter().any(|t| t == "PO-4471"));
+    let with_po = texts(&layout(&doc, &company, &FormTemplate { show_statement_po: true, ..tpl }, None));
+    assert!(with_po.iter().any(|t| t == "PO-4471"), "{with_po:?}");
+    assert!(with_po.iter().any(|t| t.eq_ignore_ascii_case("P.O. No.")), "{with_po:?}");
 }
 
 #[tokio::test]

@@ -6,6 +6,13 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
+import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
+import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
+import { pickAttachments } from './Attachments.jsx';
+
+/** The longest undo reason the Audit Log keeps (`reconciliation_undos.reason`, migration 0085). */
+const REASON_MAX = 500;
 
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
@@ -15,17 +22,28 @@ const SOURCE_LABEL = {
   CHECK: 'Check', EXPENSE: 'Expense', CARD_CREDIT: 'Credit Card Credit', DEPOSIT: 'Deposit', TRANSFER: 'Transfer', OPENING_BALANCE: 'Opening Bal.',
 };
 
-function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel }) {
+/**
+ * The statement's ending date and balance. When starting (`accounts` given), also the service
+ * charge and interest earned from the statement: each posts with the reconciliation (Dr expense /
+ * Cr the account for a charge, the other way for interest) and is cleared at once.
+ */
+function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel, accounts = null }) {
   const [date, setDate] = useState(initial?.date ?? todayIso());
   const [balance, setBalance] = useState(initial?.balance ?? '');
+  const [rows, setRows] = useState(() => CHARGE_KINDS.map(({ kind }) => ({ kind, amount: '', date: '', accountId: null, classId: null })));
+  const tracking = useClassTracking();
   const cents = parseMoneyToCents(balance);
   const dateBad = lastDate && date <= lastDate;
+  // A charge's date follows the statement date until it is typed.
+  const withDates = rows.map((r) => ({ ...r, date: r.date || date }));
+  const charges = accounts ? reconcileCharges(withDates, date) : { charges: [] };
+  const update = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <form
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (cents !== null && !dateBad) onSubmit(date, cents);
+        if (cents !== null && !dateBad && !charges.error) onSubmit(date, cents, charges.charges);
       }}
     >
       <label>
@@ -36,7 +54,53 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
         <span className="qb-label">Ending balance</span>
         <input className="qb-input num w-[130px]" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0.00" inputMode="decimal" data-money aria-invalid={balance !== '' && cents === null} autoFocus />
       </label>
-      <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad)}>
+      {accounts && (
+        <div className="flex w-full flex-col gap-1">
+          {CHARGE_KINDS.map(({ kind, label, accountHint }, i) => (
+            <div key={kind} className="flex flex-wrap items-end gap-2">
+              <label>
+                <span className="qb-label">{label}</span>
+                <input
+                  className="qb-input num w-[110px]"
+                  value={rows[i].amount}
+                  onChange={(e) => update(i, { amount: e.target.value })}
+                  placeholder="0.00"
+                  inputMode="decimal"
+                  data-money
+                  aria-describedby={charges.error ? 'reconcile-charge-error' : undefined}
+                />
+              </label>
+              <label>
+                <span className="qb-label">Date</span>
+                <DateBox className="qb-input w-[132px]" value={withDates[i].date} onChange={(e) => update(i, { date: e.target.value })} />
+              </label>
+              <label>
+                <span className="qb-label">{accountHint}</span>
+                <AccountSelect
+                  accounts={accounts}
+                  filter={(a) => !a.isSystem && (kind === 'SERVICE_CHARGE' ? a.classification === 'EXPENSE' : a.classification === 'INCOME')}
+                  value={rows[i].accountId}
+                  onChange={(accountId) => update(i, { accountId })}
+                  placeholder="Choose…"
+                  className="qb-input w-[220px]"
+                />
+              </label>
+              {tracking.enabled && (
+                <label>
+                  <span className="qb-label">Class</span>
+                  <ClassSelect classes={tracking.classes} value={rows[i].classId} onChange={(classId) => update(i, { classId })} className="qb-input w-[150px]" />
+                </label>
+              )}
+            </div>
+          ))}
+          {charges.error && (
+            <span id="reconcile-charge-error" role="alert" className="text-sm text-qb-negative">
+              {charges.error}
+            </span>
+          )}
+        </div>
+      )}
+      <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad) || Boolean(charges.error)}>
         {submitLabel}
       </button>
       {onCancel && (
@@ -46,6 +110,60 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
       )}
       {dateBad && <span className="self-center text-sm text-qb-negative">Must be after {formatDate(lastDate)}, the last reconciled statement.</span>}
     </form>
+  );
+}
+
+/**
+ * The bank or card statement kept with a reconciliation, in progress or finished: each file with
+ * Save a copy and ×, and Attach statement… to add one (a PDF or a picture, up to 25 MB).
+ */
+function StatementFiles({ reconciliationId, onNotice, compact = false }) {
+  const [files, setFiles] = useState([]);
+  const load = useCallback(() => {
+    api.listReconciliationStatements(reconciliationId).then(setFiles, (err) => onNotice({ kind: 'error', text: errorText(err) }));
+  }, [reconciliationId, onNotice]);
+  useEffect(() => load(), [load]);
+  const attach = async () => {
+    try {
+      for (const path of await pickAttachments()) await api.attachReconciliationStatement(reconciliationId, path);
+    } catch (err) {
+      onNotice({ kind: 'error', text: errorText(err) });
+    }
+    load();
+  };
+  const run = async (action) => {
+    try {
+      await action();
+    } catch (err) {
+      onNotice({ kind: 'error', text: errorText(err) });
+    }
+    load();
+  };
+  return (
+    <span className="flex flex-wrap items-center gap-1 text-sm">
+      {!compact && <span className="text-qb-ink-muted">Statement:</span>}
+      {files.map((f) => (
+        <span key={f.id} className="flex items-center gap-0.5 rounded-sm border border-qb-border bg-white px-1">
+          <button type="button" className="text-qb-link hover:underline" title="Save a copy" onClick={() => run(() => api.saveReconciliationStatement(f.id))}>
+            📎 {f.fileName}
+          </button>
+          <button
+            type="button"
+            className="px-0.5 text-qb-ink-faint hover:text-qb-negative"
+            aria-label={`Remove ${f.fileName}`}
+            title="Remove this file"
+            onClick={async () => {
+              if (await askConfirm(`Remove ${f.fileName} from this reconciliation?`, { confirmLabel: 'Remove', danger: true })) run(() => api.removeReconciliationStatement(f.id));
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={attach}>
+        {files.length ? 'Attach another…' : 'Attach statement…'}
+      </button>
+    </span>
   );
 }
 
@@ -132,10 +250,14 @@ export default function Reconcile({ accounts }) {
   const clearedBalance = rec ? rec.beginningBalanceCents + incSum - decSum : 0;
   const difference = rec ? rec.statementEndingBalanceCents - clearedBalance : 0;
 
-  const start = async (date, cents) => {
+  const start = async (date, cents, charges = []) => {
     setBusy(true);
     try {
-      await api.startReconciliation(accountId, date, cents);
+      await api.startReconciliation(accountId, date, cents, charges);
+      if (charges.length > 0) {
+        const what = CHARGE_KINDS.filter((k) => charges.some((c) => c.kind === k.kind)).map((k) => k.label.toLowerCase());
+        setNotice({ kind: 'success', text: `The ${what.join(' and ')} ${what.length === 1 ? 'is' : 'are'} posted and already cleared below.` });
+      }
       setEditing(false);
       await load(accountId);
     } catch (err) {
@@ -159,6 +281,32 @@ export default function Reconcile({ accounts }) {
     } catch (err) {
       setCleared(previous);
       setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+
+  // Undo Last Reconciliation (docs/plans/undo-reconciliation.md): the reconciliation stays on
+  // record, an audited undo releases its transactions to be cleared again.
+  const undoLast = async (h) => {
+    const ok = await askConfirm(
+      `Undo the reconciliation of ${account?.fullName ?? 'this account'} through ${formatDate(h.statementEndDate)}? Its transactions become uncleared, so you can reconcile that statement again. The undo is recorded in the Audit Log and can't itself be undone. Service charges and interest posted with it stay posted.`,
+      { confirmLabel: 'Undo reconciliation', danger: true },
+    );
+    if (!ok) return;
+    const reason = await askText('Why are you undoing it? (optional, up to 500 characters, kept in the Audit Log)');
+    if (reason === null) return;
+    if (reason.trim().length > REASON_MAX) {
+      setNotice({ kind: 'error', text: `Keep the reason to ${REASON_MAX} characters (it has ${reason.trim().length}); nothing was undone.` });
+      return;
+    }
+    setBusy(true);
+    try {
+      const released = await api.undoLastReconciliation(h.id, reason.trim() || null);
+      setNotice({ kind: 'success', text: `Reconciliation through ${formatDate(h.statementEndDate)} undone: ${released} transaction${released === 1 ? ' is' : 's are'} uncleared again.` });
+      await load(accountId);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -211,13 +359,16 @@ export default function Reconcile({ accounts }) {
         )}
         {state && !rec && (
           <div className="ml-auto">
-            <StatementForm lastDate={state.lastStatementEndDate} onSubmit={start} busy={busy} submitLabel="Start reconciling" />
+            <StatementForm lastDate={state.lastStatementEndDate} onSubmit={start} busy={busy} submitLabel="Start reconciling" accounts={accounts} />
           </div>
         )}
         {rec && !editing && (
-          <button type="button" className="qb-btn qb-btn-secondary ml-auto" onClick={() => setEditing(true)}>
-            Edit statement info
-          </button>
+          <span className="ml-auto flex items-center gap-2">
+            <StatementFiles reconciliationId={rec.id} onNotice={setNotice} />
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setEditing(true)}>
+              Edit statement info
+            </button>
+          </span>
         )}
         {rec && editing && (
           <div className="ml-auto">
@@ -382,20 +533,35 @@ export default function Reconcile({ accounts }) {
                   <th className="qb-grid-head text-right">Beginning balance</th>
                   <th className="qb-grid-head text-right">Ending balance</th>
                   <th className="qb-grid-head">Completed</th>
+                  <th className="qb-grid-head">Statement</th>
+                  <th className="qb-grid-head">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
+                    <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
                   </tr>
                 )}
-                {history.map((h) => (
+                {history.map((h, i) => (
                   <tr key={h.id} className="qb-grid-row">
                     <td className="qb-grid-cell">{formatDate(h.statementEndDate)}</td>
                     <td className="qb-grid-cell num">{formatCents(h.beginningBalanceCents)}</td>
                     <td className="qb-grid-cell num">{formatCents(h.statementEndingBalanceCents)}</td>
                     <td className="qb-grid-cell text-qb-ink-muted">🔒 {formatDate(h.lockedAt?.slice(0, 10))}</td>
+                    <td className="qb-grid-cell">
+                      <StatementFiles reconciliationId={h.id} onNotice={setNotice} compact />
+                    </td>
+                    <td className="qb-grid-cell cell-tight text-right">
+                      {/* Newest first: only the last reconciliation can be undone. */}
+                      {i === 0 && (
+                        <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => undoLast(h)} disabled={busy}>
+                          Undo Last Reconciliation…
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

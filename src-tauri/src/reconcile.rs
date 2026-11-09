@@ -5,10 +5,10 @@
 //! which the schema freezes those lines and blocks voiding their entries.
 
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, format_cents, rollback, DISPLAY_SOURCE_TYPE};
+use crate::ledger::{db_err, format_cents, rollback, EntrySource, JournalEntry, JournalLine, DISPLAY_SOURCE_TYPE};
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +55,30 @@ pub struct UnreconciledLine {
 pub struct ReconcileProgress {
     pub cleared_balance_cents: i64,
     pub difference_cents: i64,
+}
+
+/// What a charge entered at the start of a reconciliation is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ChargeKind {
+    /// A bank or card fee: the reconciled account goes down by it (a card owes more).
+    ServiceCharge,
+    /// Interest the account earned: the reconciled account goes up by it (a card owes less).
+    InterestEarned,
+}
+
+/// A service charge or interest earned from the statement, entered when the reconciliation starts.
+/// It posts as a journal entry between the reconciled account and `account_id` (an expense for a
+/// charge, income for interest), and its line on the reconciled account is cleared at once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileCharge {
+    pub kind: ChargeKind,
+    pub amount_cents: i64,
+    pub date: NaiveDate,
+    pub account_id: i64,
+    #[serde(default)]
+    pub class_id: Option<i64>,
 }
 
 const NORMAL_SIGNED: &str = "CASE t.normal_balance WHEN 'DEBIT' THEN l.debit_cents - l.credit_cents
@@ -108,7 +132,7 @@ pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<Reconci
     let normal_balance = normal_balance(pool, account_id).await?;
     let reconciled_balance_cents = reconciled_balance(pool, account_id).await?;
     let last_statement_end_date: Option<String> = sqlx::query_scalar(
-        "SELECT MAX(statement_end_date) FROM reconciliations WHERE account_id = ?1 AND is_locked = 1",
+        "SELECT MAX(statement_end_date) FROM reconciliations r WHERE account_id = ?1 AND is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)",
     )
     .bind(account_id)
     .fetch_one(pool)
@@ -126,7 +150,9 @@ pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<Reconci
 
 pub async fn list_reconciliations(pool: &SqlitePool, account_id: i64) -> Result<Vec<Reconciliation>, String> {
     sqlx::query_as::<_, Reconciliation>(
-        "SELECT * FROM reconciliations WHERE account_id = ?1 AND is_locked = 1 ORDER BY statement_end_date DESC",
+        "SELECT * FROM reconciliations r WHERE account_id = ?1 AND is_locked = 1
+           AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)
+         ORDER BY statement_end_date DESC",
     )
     .bind(account_id)
     .fetch_all(pool)
@@ -162,6 +188,20 @@ pub async fn start(
     account_id: i64,
     statement_end_date: NaiveDate,
     statement_ending_balance_cents: i64,
+) -> Result<Reconciliation, String> {
+    start_with_charges(pool, account_id, statement_end_date, statement_ending_balance_cents, &[]).await
+}
+
+/// [`start`], posting the statement's service charge and interest earned (`charges`) in the same
+/// transaction: each is a journal entry through the ledger, dated on or before the statement end,
+/// and its line on the reconciled account is cleared into this reconciliation. Nothing posts if
+/// any of it fails.
+pub async fn start_with_charges(
+    pool: &SqlitePool,
+    account_id: i64,
+    statement_end_date: NaiveDate,
+    statement_ending_balance_cents: i64,
+    charges: &[ReconcileCharge],
 ) -> Result<Reconciliation, String> {
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let result = async {
@@ -199,6 +239,9 @@ pub async fn start(
                 .map_err(db_err)?
             }
         };
+        for charge in charges {
+            post_charge(&mut tx, id, account_id, statement_end_date, charge).await?;
+        }
         sqlx::query_as::<_, Reconciliation>("SELECT * FROM reconciliations WHERE id = ?1")
             .bind(id)
             .fetch_one(&mut *tx)
@@ -213,6 +256,55 @@ pub async fn start(
         }
         Err(err) => Err(rollback(tx, err).await),
     }
+}
+
+/// Posts one charge (see [`ReconcileCharge`]) and clears its line on the reconciled account.
+async fn post_charge(
+    tx: &mut Transaction<'_, Sqlite>,
+    reconciliation_id: i64,
+    account_id: i64,
+    statement_end_date: NaiveDate,
+    charge: &ReconcileCharge,
+) -> Result<(), String> {
+    let label = match charge.kind {
+        ChargeKind::ServiceCharge => "Service charge",
+        ChargeKind::InterestEarned => "Interest earned",
+    };
+    if charge.amount_cents <= 0 {
+        return Err(format!("REC_CHARGE_AMOUNT: the {} must be more than zero", label.to_lowercase()));
+    }
+    if charge.date > statement_end_date {
+        return Err(format!("REC_CHARGE_DATE: the {} must be dated on or before the statement end date", label.to_lowercase()));
+    }
+    if charge.account_id == account_id {
+        return Err(format!("REC_CHARGE_ACCOUNT: choose an account other than the one being reconciled for the {}", label.to_lowercase()));
+    }
+    let amount = charge.amount_cents;
+    // A charge lowers what an asset account holds (credit) and raises what a card owes (also a
+    // credit); interest is the other way round.
+    let (reconciled, other) = match charge.kind {
+        ChargeKind::ServiceCharge => (JournalLine::credit(account_id, amount), JournalLine::debit(charge.account_id, amount)),
+        ChargeKind::InterestEarned => (JournalLine::debit(account_id, amount), JournalLine::credit(charge.account_id, amount)),
+    };
+    let entry = JournalEntry {
+        id: None,
+        date: charge.date,
+        description: label.to_string(),
+        lines: vec![
+            JournalLine { memo: Some(label.to_string()), ..reconciled },
+            JournalLine { memo: Some(label.to_string()), class_id: charge.class_id, ..other },
+        ],
+        currency: None,
+    };
+    let entry_id = crate::ledger::post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
+    let line_id: i64 = sqlx::query_scalar("SELECT id FROM journal_lines WHERE journal_entry_id = ?1 AND account_id = ?2")
+        .bind(entry_id)
+        .bind(account_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    write_cleared(tx, reconciliation_id, &[line_id], true).await?;
+    Ok(())
 }
 
 /// Ticks (`cleared = true`) or unticks lines in an in-progress reconciliation.
@@ -303,6 +395,75 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
     }
 }
 
+/// Undo Last Reconciliation (docs/plans/undo-reconciliation.md): the locked reconciliation is left
+/// as it was; an append-only `reconciliation_undos` row records the undo (its trigger refuses all
+/// but the account's last reconciliation, or one while another is in progress, and writes the Audit
+/// Log row), then the lines it cleared are released, and a sealed record goes on the ledger audit
+/// trail. Nothing is posted. Returns how many lines were released.
+pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option<&str>) -> Result<i64, String> {
+    let reason = reason.map(str::trim).filter(|r| !r.is_empty());
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = async {
+        let (account_id, account_name, statement_end_date): (i64, String, String) = sqlx::query_as(
+            "SELECT r.account_id, a.name, r.statement_end_date FROM reconciliations r JOIN chart_of_accounts a ON a.id = r.account_id WHERE r.id = ?1",
+        )
+        .bind(reconciliation_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist"))?;
+        let (count, total): (i64, i64) = sqlx::query_as(&format!(
+            "SELECT COUNT(*), COALESCE(SUM({NORMAL_SIGNED}), 0)
+             FROM journal_lines l
+             JOIN chart_of_accounts a ON a.id = l.account_id
+             JOIN account_types t ON t.code = a.account_type
+             WHERE l.reconciliation_id = ?1"
+        ))
+        .bind(reconciliation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
+        sqlx::query("INSERT INTO reconciliation_undos (reconciliation_id, released_count, released_total_cents, reason) VALUES (?1, ?2, ?3, ?4)")
+            .bind(reconciliation_id)
+            .bind(count)
+            .bind(total)
+            .bind(reason)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE reconciliation_id = ?1")
+            .bind(reconciliation_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        let payload = serde_json::json!({
+            "kind": "UNDO_RECONCILIATION",
+            "reconciliationId": reconciliation_id,
+            "accountId": account_id,
+            "statementEndDate": statement_end_date,
+            "releasedCount": count,
+            "amountCents": total,
+            "detail": format!("Undid the reconciliation of {account_name} through {statement_end_date}"),
+            "reason": reason,
+        });
+        sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('EDIT', ?1, ?2)")
+            .bind(reconciliation_id)
+            .bind(payload.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        Ok(count)
+    }
+    .await;
+    match result {
+        Ok(count) => {
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            Ok(count)
+        }
+        Err(err) => Err(rollback(tx, err).await),
+    }
+}
+
 /// Abandons an in-progress reconciliation; its ticks are released (the FK sets them to NULL).
 pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), String> {
     let result = sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0")
@@ -314,6 +475,79 @@ pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), Str
         return Err(format!("REC_NOT_OPEN: reconciliation {reconciliation_id} is not in progress"));
     }
     Ok(())
+}
+
+/// A statement file attached to a reconciliation (without its bytes).
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementFile {
+    pub id: i64,
+    pub reconciliation_id: i64,
+    pub file_name: String,
+    pub media_type: String,
+    pub size_bytes: i64,
+    pub created_at: String,
+}
+
+/// Keeps a copy of the bank or card statement (a PDF, a picture) with a reconciliation, in progress
+/// or finished. Up to 25 MB, as other attachments.
+pub async fn attach_statement(pool: &SqlitePool, reconciliation_id: i64, file_name: &str, content: &[u8]) -> Result<StatementFile, String> {
+    if content.is_empty() {
+        return Err("ATTACH_EMPTY: that file is empty".into());
+    }
+    if content.len() > crate::workflows::MAX_ATTACHMENT_BYTES {
+        return Err("ATTACH_SIZE: attach files of up to 25 MB".into());
+    }
+    let undone: Option<bool> = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id) FROM reconciliations r WHERE r.id = ?1",
+    )
+    .bind(reconciliation_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    match undone {
+        None => return Err(format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist")),
+        Some(true) => return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into()),
+        Some(false) => {}
+    }
+    let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("statement");
+    sqlx::query_as(
+        "INSERT INTO reconciliation_statements (reconciliation_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5)
+         RETURNING id, reconciliation_id, file_name, media_type, size_bytes, created_at",
+    )
+    .bind(reconciliation_id)
+    .bind(name)
+    .bind(crate::workflows::media_type(name))
+    .bind(content.len() as i64)
+    .bind(content)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// The statement files of a reconciliation, oldest first.
+pub async fn statement_files(pool: &SqlitePool, reconciliation_id: i64) -> Result<Vec<StatementFile>, String> {
+    sqlx::query_as(
+        "SELECT id, reconciliation_id, file_name, media_type, size_bytes, created_at FROM reconciliation_statements WHERE reconciliation_id = ?1 ORDER BY id",
+    )
+    .bind(reconciliation_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
+/// A statement file's name and bytes, to save a copy.
+pub async fn statement_content(pool: &SqlitePool, id: i64) -> Result<(String, Vec<u8>), String> {
+    sqlx::query_as("SELECT file_name, content FROM reconciliation_statements WHERE id = ?1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| "ATTACH_NOT_FOUND: that statement file does not exist".into())
+}
+
+pub async fn remove_statement(pool: &SqlitePool, id: i64) -> Result<(), String> {
+    sqlx::query("DELETE FROM reconciliation_statements WHERE id = ?1").bind(id).execute(pool).await.map(|_| ()).map_err(db_err)
 }
 
 #[cfg(test)]

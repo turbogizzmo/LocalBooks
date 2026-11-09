@@ -42,7 +42,7 @@ export const topics = [
   {
     id: 'form-toolbar', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
     title: 'Use the toolbar on a form',
-    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. Previous and Next open the saved one before or after on every form: invoices, bills, checks and journal entries open to edit, and sales receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open read-only with their own Void, Print, Email and Attach File. Print prints the saved one as its form, or as a voucher of the accounts it posted. Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
+    body: 'Transaction forms have a row of large buttons across the top: Find, Previous and Next, New, Save, Void, Print, Email, Attach File and Memorize, showing only what that form can do. Previous and Next open the saved one before or after on every form: invoices, bills, checks and journal entries open to edit, and sales receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open read-only with their own Void, Print, Email and Attach File. Print prints the saved one as its form, or as a voucher of the accounts it posted; a voucher can also be saved as a PDF, and Email sends that PDF to the vendor or customer named on it. Receive Payment and sales receipts also have tiles for how you were paid: Cash, Check, Card, Bank / ACH and More.',
     keywords: 'toolbar ribbon buttons print email attach void find previous next payment method cash check card tiles',
     guide: 'getting-started',
   },
@@ -67,6 +67,14 @@ export const topics = [
     title: 'Design your forms: invoices, estimates, sales receipts and statements',
     body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts and customer statements, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style.',
     keywords: 'form designer template style layout classic modern compact customize logo color font pdf print invoice estimate sales receipt statement',
+    go: { label: 'Go to Custom Forms', view: 'settings/forms' },
+    guide: 'custom-forms',
+  },
+  {
+    id: 'print-envelope', area: 'company', views: ['settings/forms', 'sales/invoices', 'sales/customers', 'expenses/vendors'],
+    title: 'Print an envelope for a customer or vendor',
+    body: 'Print Envelope… on an invoice’s or sales receipt’s Print menu, on a form’s row in a list, or on a customer’s or vendor’s row prints an envelope with the company’s return address in the corner and the Bill To, billing address or vendor address in the middle. Settings › Custom Forms › Envelope sets the size (#10, #9, Monarch, DL or C5), font, whether to print the return address, and how far to move the address to suit your printer.',
+    keywords: 'envelope print address mailing return address #10 business envelope dl c5 monarch window customer vendor letter mail',
     go: { label: 'Go to Custom Forms', view: 'settings/forms' },
     guide: 'custom-forms',
   },
@@ -205,6 +213,14 @@ export const topics = [
     keywords: 'new whats new what’s new release notes changes changelog latest version update features',
     go: null,
     guide: 'whats-new',
+  },
+  {
+    id: 'list-order', area: 'company', views: ['accounting/chart-of-accounts', 'sales/products', 'sales/customers'],
+    title: 'Put a list in your own order, flat or as a tree',
+    body: 'Drag a row in the chart of accounts, the item list or the customer list to put it where you want among the rows beside it; its subaccounts, jobs or sub-items move with it, and the order is kept in the company file (Usual order forgets it). Tree shows them indented under their parent with Expand all and Collapse all, and Flat lists every row with its full name.',
+    keywords: 'order reorder drag drop move up down arrange custom order tree flat hierarchy indent expand collapse subaccount job sub-item chart of accounts item list customer list',
+    go: { label: 'Go to the Chart of Accounts', view: 'accounting/chart-of-accounts' },
+    guide: 'getting-started',
   },
   {
     id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],

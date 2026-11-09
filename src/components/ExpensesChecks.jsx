@@ -17,7 +17,7 @@ import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
-import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { useVoucherActions } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -72,7 +72,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [files, setFiles] = useState([]);
   const [error, setError] = useState(null);
   const [showAttachments, setShowAttachments] = useState(false);
-  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
+  const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
   // Previous / Next step through the saved ones of this kind that can be opened (not voided).
   const saved = useMemo(
     () => byDateThenNumber((expenses ?? []).filter((x) => x.kind === kind && !x.isVoided), (x) => x.expenseDate, (x) => x.checkNumber),
@@ -221,30 +222,23 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           },
         }),
         [
-          {
-            id: 'print',
-            label: 'Print',
-            icon: 'Print',
-            hint: !was
-              ? `Save the ${EXPENSE_KINDS[kind].toLowerCase()} first, then print it`
-              : kind === 'CHECK'
-                ? 'Print this check'
-                : `Print this ${EXPENSE_KINDS[kind].toLowerCase()} as a voucher with the accounts it posted to`,
-            disabled: !was?.journalEntryId,
-            onClick: () =>
-              kind === 'CHECK'
-                ? onPrintCheck(was)
-                : printVoucher({
-                    entryId: was.journalEntryId,
-                    title: EXPENSE_KINDS[kind],
-                    date: was.expenseDate,
-                    name: was.payeeName,
-                    nameLabel: 'Payee',
-                    memo: was.memo,
-                    amountCents: was.totalCents,
-                    currencyCode: was.currencyCode,
-                  }),
-          },
+          // A check prints on check stock; saved as a PDF or emailed, it is its voucher.
+          ...voucherItems(
+            was?.journalEntryId
+              ? {
+                  entryId: was.journalEntryId,
+                  title: EXPENSE_KINDS[kind],
+                  number: kind === 'CHECK' ? was.checkNumber : null,
+                  date: was.expenseDate,
+                  name: was.payeeName,
+                  nameLabel: 'Payee',
+                  memo: was.memo,
+                  amountCents: was.totalCents,
+                  currencyCode: was.currencyCode,
+                }
+              : null,
+            { hint: `Save the ${EXPENSE_KINDS[kind].toLowerCase()} first, then print it`, print: kind === 'CHECK' ? () => onPrintCheck(was) : null },
+          ),
           was
             ? {
                 id: 'attach',
@@ -267,7 +261,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
-      {voucherPortal}
+      {voucherElements}
       {reports.panel}
       {toolbar}
       {showAttachments && was?.journalEntryId && (

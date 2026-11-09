@@ -20,7 +20,7 @@ async fn discounts_statements_and_1099s() {
     let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "10%".into(), rate_ppm: 100_000, agency_name: None, liability_account_id: None }).await.unwrap();
     // 200.00 taxable + 100.00 not, less a 30.00 discount: tax on 200 - 20 = 180 is 18.00.
     let invoice: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme:Kitchen", "issueDate": "2026-03-01", "dueDate": "2026-03-31",
-        "taxRateId": rate.id, "discountCents": 3_000,
+        "taxRateId": rate.id, "poNumber": "PO-77", "discountCents": 3_000,
         "lines": [{ "description": "Parts", "quantityE4": 10_000, "rateCents": 20_000, "incomeAccountId": services, "isTaxable": true },
                   { "description": "Labor", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap();
     let inv = crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
@@ -33,6 +33,7 @@ async fn discounts_statements_and_1099s() {
     let acme: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Acme'").fetch_one(&pool).await.unwrap();
     let statement = customer_statement(&pool, acme, d(3, 1), d(4, 30)).await.unwrap();
     assert_eq!(statement.rows.len(), 2, "the job's invoice and payment appear on the customer's statement");
+    assert_eq!((statement.rows[0].po_number.as_deref(), statement.rows[1].po_number.as_deref()), (Some("PO-77"), None), "the invoice's P.O. number");
     assert_eq!((statement.opening_balance_cents, statement.closing_balance_cents), (0, 18_800));
     assert_eq!(statement.aging_cents, [0, 18_800, 0, 0, 0]);
     assert_eq!(balance(&pool, ar).await, 18_800);
@@ -154,7 +155,7 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
     let bill: BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Lee Builder", "billNumber": "B-1", "billDate": "2026-04-01", "dueDate": "2026-05-01", "memo": null, "totalCents": 200_000,
         "lines": [{ "accountId": rent, "amountCents": 100_000, "memo": null }, { "accountId": contractors, "amountCents": 100_000, "memo": null }] })).unwrap();
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
-    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(4, 15), amount_cents: 100_000, reference: Some("102".into()) }).await.unwrap();
+    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(4, 15), amount_cents: 100_000, reference: Some("102".into()), to_be_printed: false }).await.unwrap();
 
     // No mapping yet: everything paid from the bank is nonemployee compensation, as before.
     let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();

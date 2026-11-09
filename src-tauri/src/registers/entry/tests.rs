@@ -238,3 +238,48 @@ async fn a_transaction_journal_report_shows_only_that_entry() {
     let entries: std::collections::BTreeSet<i64> = report.rows.iter().filter_map(|r| r.journal_entry_id).collect();
     assert_eq!(entries.into_iter().collect::<Vec<_>>(), [check.journal_entry_id]);
 }
+
+#[tokio::test]
+async fn another_bank_account_in_the_entry_row_records_a_transfer() {
+    let pool = test_pool().await;
+    let checking = account(&pool, "1010").await;
+    let savings: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Reserve Savings', 'BANK') RETURNING id").fetch_one(&pool).await.unwrap();
+    let out = post_register_entry(&pool, row(checking, RegisterSide::Payment, None, Some("1001"), vec![split(savings, 25_000)])).await.unwrap();
+    assert_eq!(out.source_type, "TRANSFER");
+    let back = post_register_entry(&pool, row(checking, RegisterSide::Deposit, None, None, vec![split(savings, 5_000)])).await.unwrap();
+    assert_eq!(back.source_type, "TRANSFER");
+    let (from, to, cents): (i64, i64, i64) =
+        sqlx::query_as("SELECT from_account_id, to_account_id, amount_cents FROM transfers WHERE id = ?1").bind(out.source_id).fetch_one(&pool).await.unwrap();
+    assert_eq!((from, to, cents), (checking, savings, 25_000));
+    assert_eq!(account_register(&pool, checking, None, None, false).await.unwrap().ending_balance_cents, -20_000);
+    assert_eq!(account_register(&pool, savings, None, None, false).await.unwrap().ending_balance_cents, 20_000);
+    // No check was written, so the number stays free.
+    assert_eq!(crate::expenses::next_check_number(&pool, checking).await.unwrap(), "1001");
+}
+
+#[tokio::test]
+async fn an_undeposited_funds_deposit_in_the_entry_row_banks_the_waiting_payments() {
+    let pool = test_pool().await;
+    let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
+    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let receipt = |cents: i64| -> crate::sales::SalesReceiptInput {
+        serde_json::from_value(serde_json::json!({ "customerName": "Walk-in", "receiptDate": "2026-03-01", "depositAccountId": undeposited, "paymentMethod": "CASH",
+            "lines": [{ "description": "Sale", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": sales, "isTaxable": false }] }))
+        .unwrap()
+    };
+    for cents in [4_000, 6_000, 2_500] {
+        crate::sales::post_sales_receipt(&pool, receipt(cents)).await.unwrap();
+    }
+    // One payment that is the amount.
+    let one = post_register_entry(&pool, row(checking, RegisterSide::Deposit, None, None, vec![split(undeposited, 6_000)])).await.unwrap();
+    assert_eq!(one.source_type, "DEPOSIT");
+    assert_eq!(crate::banking::list_undeposited(&pool).await.unwrap().len(), 2);
+    // No single payment or the whole lot: refused, nothing posted.
+    let err = post_register_entry(&pool, row(checking, RegisterSide::Deposit, None, None, vec![split(undeposited, 4_100)])).await.unwrap_err();
+    assert!(err.starts_with("REG_ENTRY_UNDEPOSITED_NO_MATCH"), "{err}");
+    // All that is left, together.
+    post_register_entry(&pool, row(checking, RegisterSide::Deposit, None, None, vec![split(undeposited, 6_500)])).await.unwrap();
+    assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty());
+    let reg = account_register(&pool, checking, None, None, false).await.unwrap();
+    assert_eq!(reg.ending_balance_cents, 12_500);
+}
