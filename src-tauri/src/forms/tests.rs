@@ -454,3 +454,54 @@ async fn a_saved_credit_memo_prints_with_its_bill_to_and_po_number() {
     save_template(&pool, None, FormKind::CreditMemo, FormTemplate { title: "Credit Note".into(), ..FormTemplate::default_for(FormKind::CreditMemo) }).await.unwrap();
     assert!(render(&pool, FormKind::CreditMemo, Some(memo.id), None, None, false).await.unwrap().form.title.starts_with("Credit Note "));
 }
+
+#[tokio::test]
+async fn a_bill_payment_prints_and_emails_its_stub_with_every_bill_on_the_check() {
+    let pool = test_pool().await;
+    let (checking, rent): (i64, i64) = (
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap(),
+        sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '6300'").fetch_one(&pool).await.unwrap(),
+    );
+    crate::expenses::create_vendor(&pool, "Paper Supply Co", Some("ap@paper.example")).await.unwrap();
+    let mut bills = Vec::new();
+    for (number, cents) in [("INV-778", 50_000), ("INV-781", 20_000), ("INV-790", 9_000)] {
+        let input: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Paper Supply Co", "billNumber": number, "billDate": "2026-10-01", "dueDate": "2026-10-31",
+            "totalCents": cents, "lines": [{ "accountId": rent, "amountCents": cents }] }))
+        .unwrap();
+        bills.push(crate::expenses::post_vendor_bill(&pool, input).await.unwrap().id);
+    }
+    // Pay Bills: two bills on check 1001 (one part paid), the third separately on 1002.
+    let pay = |bill_id: i64, cents: i64, check: &str| crate::expenses::BillPaymentInput {
+        bill_id,
+        payment_account_id: checking,
+        payment_date: NaiveDate::from_ymd_opt(2026, 10, 15).unwrap(),
+        amount_cents: cents,
+        reference: Some(check.into()),
+        to_be_printed: false,
+    };
+    crate::expenses::pay_vendor_bills(&pool, vec![pay(bills[0], 50_000, "1001"), pay(bills[1], 15_000, "1001"), pay(bills[2], 9_000, "1002")]).await.unwrap();
+    let first: i64 = sqlx::query_scalar("SELECT id FROM bill_payments WHERE bill_id = ?1").bind(bills[1]).fetch_one(&pool).await.unwrap();
+
+    let doc = bill_payment_doc(&pool, first, "$").await.unwrap();
+    assert_eq!((doc.number.as_str(), doc.customer_name.as_str(), doc.customer_email.as_deref()), ("1001", "Paper Supply Co", Some("ap@paper.example")));
+    assert_eq!(doc.lines.iter().map(|l| (l.rate.as_str(), l.amount.as_str())).collect::<Vec<_>>(), [("$500.00", "$500.00"), ("$200.00", "$150.00")], "only check 1001's bills");
+    assert!(doc.lines[0].description.starts_with("Bill INV-778"));
+    assert_eq!(doc.total, "$650.00");
+
+    let rendered = render(&pool, FormKind::BillPayment, Some(first), None, None, false).await.unwrap();
+    let all = texts(&rendered.form.pages);
+    for expected in ["PAID TO", "Paper Supply Co", "Bill amount", "Paid", "Total paid", "$650.00"] {
+        assert!(all.iter().any(|t| t.contains(expected)), "{expected}: {all:?}");
+    }
+    let draft = email_draft(&pool, FormKind::BillPayment, first, None).await.unwrap();
+    assert_eq!(draft.to, "ap@paper.example");
+    assert!(draft.body.contains("$650.00"), "{}", draft.body);
+    let (file, pdf) = pdf_file_for(&pool, FormKind::BillPayment, first, None).await.unwrap();
+    assert!(file.starts_with("Bill Payment 1001") && pdf.starts_with(b"%PDF-"));
+    // The stub's layout is a template like the others, and Email later and the sent history take it.
+    let tpl = get_template(&pool, None, FormKind::BillPayment).await.unwrap();
+    assert!(!tpl.show_quantity && tpl.rate_label == "Bill amount");
+    save_template(&pool, None, FormKind::BillPayment, FormTemplate { title: "Remittance".into(), ..tpl }).await.unwrap();
+    crate::email_log::set_queued(&pool, FormKind::BillPayment, first, true).await.unwrap();
+    crate::email_log::record(&pool, FormKind::BillPayment, first, &["ap@paper.example".to_string()], crate::email_log::Method::Smtp, "Payment").await.unwrap();
+}

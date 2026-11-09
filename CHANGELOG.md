@@ -6,6 +6,39 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
+  LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
+  kept, so its history and balances show under one name. An account's balance moves with one
+  journal entry, and its items, settings and subaccounts follow. Posted amounts never change, and
+  each merge is in the audit trail.
+- **Bill time, and send reimbursements where they belong.** Sales › Bill Costs now lists billable
+  time from the timesheet, so it goes on the customer's invoice at its hours and rate. And when
+  reimbursed expenses count as income, each expense account can name the income account its
+  reimbursements go to.
+- **More forms in File › Print Forms.** Sales receipts, credit memos, bill payment stubs and
+  purchase orders print in batches from a date range, and Mailing Labels prints customer or vendor
+  addresses 30 to a Letter sheet.
+- **Bill payment stubs.** A bill payment now has a form of its own listing every bill it pays.
+  Print it, save it as a PDF or email it to the vendor right after Pay Bills, or later from the
+  bill's Actions menu, and change its look in Settings › Custom Forms › Bill payment stub.
+- **W-9s and 1099-NEC forms.** W-9… on a vendor keeps their W-9: legal name, tax classification,
+  TIN and its type (checked for numbers the IRS never issues), and the date it came in. Reports ›
+  1099-NEC and 1096 lists the year's forms with anything still missing, and prints a filer's
+  worksheet with the 1096 totals and each recipient's Copy B.
+- **Document Inbox for receipts and bills.** Drop receipts and vendor bills in **Expenses ›
+  Document Inbox** (or click **Add files…**) to keep them until you enter them, with a preview of
+  each. **Enter as bill**, **Expense** or **Check** opens that form filled in from the total, date
+  and name read from a PDF's text, and the file is attached when it posts. Everything stays in the
+  company file; there's no OCR service.
+- **Encrypted offsite backups.** Settings › File & Data Controls › Offsite backup saves a copy of
+  your books, encrypted on this computer with a key from a password you choose (or your recovery
+  key), to a folder you pick, such as a synced cloud folder or a USB drive, once a day while
+  LocalBooks is open. Test restore checks a copy without touching your books; Restore brings one
+  back.
+- **Fewer plain copies outside the company file.** PDFs staged for your mail app are deleted after
+  an hour (they were kept for a day), and staged copies and unpacked QuickBooks backups left by an
+  earlier run are cleared when LocalBooks starts and quits. Saving a report, form, voucher or
+  attachments now says the file is a plain copy the company password doesn't protect.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
@@ -20,6 +53,9 @@ people using LocalBooks.
   recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
   checks and expenses show it for the chosen name. It can be hidden, and its figures match the
   reports.
+- **Reconciliation statements in the Attachments Library.** Statement files kept with a
+  reconciliation are now attachments like any other: they appear in Accounting › Attachments
+  Library, and deleting one there or on the Reconcile screen can be undone.
 - **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
   attached file with its date, keywords and what it's attached to; search, preview pictures and
   text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders

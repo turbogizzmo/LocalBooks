@@ -18,6 +18,10 @@ export const screens = {
     help: 'Everyone you buy from, with what you still owe each of them.',
     guide: 'customers-and-products',
   },
+  'expenses/inbox': {
+    help: 'Receipts and bills waiting to be entered. Drop files on the window or click Add files…; each shows a preview, and Enter as bill, Expense or Check opens that form filled in from what could be read from the file, with the file attached when it posts.',
+    guide: 'attachments',
+  },
   'expenses/print-checks': {
     help: 'Checks marked Print later, waiting to print. Choose the bank account, enter the number on the first check in the printer, and print: the checks take numbers in order, and only the ones you confirm printed keep them.',
     guide: 'expenses-and-checks',
@@ -33,6 +37,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'document-inbox', area: 'expenses', views: ['expenses/inbox', 'expenses/bills', 'expenses/expenses'],
+    title: 'Enter receipts and bills from the Document Inbox',
+    body: 'Expenses › Document Inbox keeps receipts and vendor bills until you enter them: drop files on the window or click Add files…. Each shows a preview, and for a PDF with text LocalBooks reads the total, the date and the name at the top. Enter as bill, Expense or Check opens that form filled in, and the file is attached to the transaction when it posts. Files stay in the company file; nothing is sent anywhere, and scans are not read (no OCR).',
+    keywords: 'document inbox receipt bill upload review scan pdf photo drop attach enter receipts receipt management',
+    go: { label: 'Go to Document Inbox', view: 'expenses/inbox' },
+    guide: 'attachments',
+  },
   {
     id: 'print-checks-later', area: 'expenses', views: ['expenses/expenses', 'expenses/print-checks'],
     title: 'Print checks later, in a batch',
@@ -68,8 +80,8 @@ export const topics = [
   {
     id: 'pay-bills', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Pay bills',
-    body: 'Pay bills lists every open bill (Filter by a vendor, Sort by due date, discount date, vendor or amount; click one for its details and Go to Bill) so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them.',
-    keywords: 'pay vendor payable ap batch partial',
+    body: 'Pay bills lists every open bill (Filter by a vendor, Sort by due date, discount date, vendor or amount; click one for its details and Go to Bill) so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them. Afterwards, Payment stubs lists each vendor paid: print, save or email them a stub of the bills the payment covers. A paid bill\'s Actions menu has the same stub actions later.',
+    keywords: 'pay vendor payable ap batch partial stub remittance',
     go: { label: 'Pay bills', view: 'expenses/bills', action: 'pay-bills' },
     guide: 'bills',
   },
