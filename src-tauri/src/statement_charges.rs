@@ -95,21 +95,18 @@ pub struct StatementCharge {
 
 /// A customer's statement charges (with their jobs'), oldest first: the customer's register.
 pub async fn list(pool: &SqlitePool, customer_id: i64) -> Result<Vec<StatementCharge>, String> {
-    let rows: Vec<(i64, String)> = sqlx::query_as(
-        "SELECT i.id, COALESCE((SELECT description FROM invoice_items WHERE invoice_id = i.id ORDER BY line_number LIMIT 1), '')
-         FROM statement_charge_invoices s JOIN invoices i ON i.id = s.invoice_id
-         WHERE i.customer_id = ?1 OR i.customer_id IN (SELECT id FROM customers WHERE parent_id = ?1)
-         ORDER BY i.issue_date, i.id",
+    // The charges in one query, and each one's description (its first line) in another.
+    let charges = invoices::statement_charge_summaries(pool, customer_id).await?;
+    let descriptions: std::collections::HashMap<i64, String> = sqlx::query_as::<_, (i64, String)>(
+        "SELECT it.invoice_id, it.description FROM invoice_items it JOIN statement_charge_invoices s ON s.invoice_id = it.invoice_id
+         WHERE it.line_number = (SELECT MIN(line_number) FROM invoice_items WHERE invoice_id = it.invoice_id)",
     )
-    .bind(customer_id)
     .fetch_all(pool)
     .await
-    .map_err(db_err)?;
-    let mut out = Vec::with_capacity(rows.len());
-    for (id, description) in rows {
-        out.push(StatementCharge { invoice: invoices::get_summary(pool, id).await?, description });
-    }
-    Ok(out)
+    .map_err(db_err)?
+    .into_iter()
+    .collect();
+    Ok(charges.into_iter().map(|invoice| StatementCharge { description: descriptions.get(&invoice.id).cloned().unwrap_or_default(), invoice }).collect())
 }
 
 #[cfg(test)]

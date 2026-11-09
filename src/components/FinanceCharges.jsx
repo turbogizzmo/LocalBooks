@@ -157,7 +157,7 @@ export default function FinanceCharges({ accounts, navigate }) {
                         <tr key={i.invoiceId} className="text-xs text-qb-ink-muted">
                           <td className="qb-grid-cell" />
                           <td className="qb-grid-cell pl-5">
-                            {i.isFinanceCharge ? 'Finance charge' : i.isStatementCharge ? 'Statement charge' : 'Invoice'} #{i.invoiceNumber}, due {formatDate(i.dueDate)}
+                            {i.isStatementCharge ? 'Statement charge' : `${i.isFinanceCharge ? 'Finance charge' : 'Invoice'} #${i.invoiceNumber}`}, due {formatDate(i.dueDate)}
                           </td>
                           <td className="qb-grid-cell">from {formatDate(i.fromDate)}</td>
                           <td className="qb-grid-cell num">{formatCents(i.balanceCents)}</td>

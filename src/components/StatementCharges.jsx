@@ -1,7 +1,7 @@
 // Customers › Enter Statement Charges: a customer's own register of charges billed on their next
 // statement instead of on an invoice (statement_charges.rs). Each posts to Accounts Receivable for
 // the customer, ages like an invoice, and takes payments in Receive Payments.
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import DateBox from './DateBox.jsx';
 import Notice from './Notice.jsx';
@@ -23,6 +23,10 @@ export default function StatementCharges({ customer, onClose }) {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (key) => (value) => setEntry((e) => ({ ...e, [key]: value }));
+  // The accounts load after the dialog opens: the first income account fills in once they do.
+  useEffect(() => {
+    if (defaultIncome !== null) setEntry((e) => (e.accountId === null ? { ...e, accountId: defaultIncome } : e));
+  }, [defaultIncome]);
 
   const qtyE4 = parseQuantityE4(entry.qty);
   const rateCents = parseMoneyToCents(entry.rate);

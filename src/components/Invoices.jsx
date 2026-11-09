@@ -491,7 +491,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                     className="accent-qb-green"
                     checked={appliedCents(inv) > 0}
                     onChange={(e) => tick(inv, e.target.checked)}
-                    aria-label={`Pay invoice ${inv.invoiceNumber}`}
+                    aria-label={inv.isStatementCharge ? `Pay statement charge of ${formatDate(inv.issueDate)}` : `Pay invoice ${inv.invoiceNumber}`}
                   />
                 </td>
                 <td className="qb-grid-cell">{inv.isStatementCharge ? 'Statement charge' : `#${inv.invoiceNumber}`}</td>
