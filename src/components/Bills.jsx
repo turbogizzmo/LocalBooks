@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import { useVendorRecall } from '../lib/recall.js';
-import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
@@ -25,7 +25,7 @@ import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from 
 import DateBox, { CheckNumberBox } from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
-import { byDateThenNumber, duplicateDates, stepButtons } from '../lib/formStep.js';
+import { byDateThenNumber, discountDate, duplicateDates, stepButtons } from '../lib/formStep.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -57,6 +57,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (t) setDueDate(addDays(fromDate, t.netDays));
     else api.getBillDueDate(vendor.trim(), fromDate).then(setDueDate, () => {});
   };
+  // Discount Date, beside Terms and the due date, when the term offers an early-payment discount.
+  const billDiscountDate = discountDate(termsList.find((t) => t.id === termsId) ?? null, billDate);
   const vendorRecord = vendors.find((v) => v.name.toLowerCase() === vendor.trim().toLowerCase());
   useEffect(() => {
     if (termsTouched) return;
@@ -296,6 +298,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           <span className="qb-label">Due date</span>
           <DateBox className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
+        {billDiscountDate && (
+          <div title="Pay by this date to take the term's early-payment discount in Pay Bills">
+            <span className="qb-label">Discount date</span>
+            <div className="flex h-input items-center text-sm">{formatDate(billDiscountDate)}</div>
+          </div>
+        )}
         {formClass.header}
         <label>
           <span className="qb-label">Bill total</span>
@@ -577,6 +585,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             className="qb-input w-[200px]"
           />
         </label>
+        <EndingBalance accounts={accounts} accountId={accountId} />
         <label>
           <span className="qb-label">Payment date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />

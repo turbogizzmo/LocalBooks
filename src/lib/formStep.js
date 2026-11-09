@@ -61,3 +61,15 @@ export function duplicateDates(originalDate, originalDue, today) {
   const due = new Date(Date.UTC(ty, tm - 1, td + days));
   return { date: today, due: due.toISOString().slice(0, 10) };
 }
+
+/**
+ * Enter Bills' Discount Date: the last day the term's early-payment discount applies, `discountDays`
+ * after the bill date (as Pay Bills reckons it, `discount_until` in expenses.rs). Null without a
+ * discount term or a valid date.
+ */
+export function discountDate(term, billDate) {
+  if (!term || !(term.discountPpm > 0) || term.discountDays === null || term.discountDays === undefined) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate ?? '')) return null;
+  const [y, m, d] = billDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + term.discountDays)).toISOString().slice(0, 10);
+}

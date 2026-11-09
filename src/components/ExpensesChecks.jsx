@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useVendorRecall } from '../lib/recall.js';
 import NameField from './NameField.jsx';
-import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
@@ -298,6 +298,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>
           <AccountSelect accounts={accounts} filter={payFrom} value={accountId} onChange={setAccountId} className="qb-input w-[200px]" />
         </label>
+        <EndingBalance accounts={accounts} accountId={accountId} />
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Check date' : isCredit ? 'Credit date' : 'Payment date'}</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />

@@ -12,6 +12,10 @@ people using LocalBooks.
 - **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
   Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
   own, and LocalBooks remembers it. An account register can also be given a color.
+- **Ending balance and discount date on forms.** Write Checks, card charges and credits, Make
+  Deposits and Pay Bills show the chosen account's ending balance beside the account box, and
+  Enter Bills shows a **Discount date** next to the due date when the terms offer an early-payment
+  discount.
 - **The menu bar reaches more screens.** Lists › Currency List, Company › Email Setup, AI Access
   (MCP) and Audit Log, Customers › Invoice for Time & Expenses, Reports › Memorized Reports ›
   Memorized Report List, and Reports › Transaction History / Transaction Journal for the

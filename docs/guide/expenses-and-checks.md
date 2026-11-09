@@ -25,6 +25,9 @@ choose a customer or job to count that line as the job's cost in the
    if you need to.
 3. Add the category lines and click **Save & Post Check**.
 
+Beside the bank account (or the card, on a card charge or credit), **Ending balance** shows the
+account's balance now, with everything posted to it so far; it updates after each save.
+
 To keep the receipt with an expense or check, click **Attach a receipt…** before you post, or
 choose **Attach file…** in a posted row's **Actions** menu. See
 [Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
