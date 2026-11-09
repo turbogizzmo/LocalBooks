@@ -142,6 +142,10 @@ export const topics = [
     title: 'Comment on a report figure',
     body: 'Click Comment at the top of a report, then click a figure and type. The first comment keeps a copy of the report as shown under Reports › Accountant & Taxes › Commented Reports; each commented figure gets a number, and the report prints with its comments listed by number. Open a commented report to add or remove comments, print it or delete it. The copy keeps the figures as they were when commented on.',
     keywords: 'comment comments note annotate annotation explain figure number report accountant review commented reports print',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'company-snapshot', area: 'reports', views: ['reports'],
     title: 'See the business at a glance (Company Snapshot)',
     body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, and top customers, items and vendors. Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
