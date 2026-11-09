@@ -112,6 +112,7 @@ mod xlsx_export;
 mod harness;
 mod report_pdf;
 mod report_schedules;
+mod statement_charges;
 
 use tauri::Manager;
 

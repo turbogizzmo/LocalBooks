@@ -1027,6 +1027,7 @@ fn statement_label(source_type: &str) -> &'static str {
     match source_type {
         "INVOICE" => "Invoice",
         "FINANCE_CHARGE" => "Finance Charge",
+        "STATEMENT_CHARGE" => "Statement Charge",
         "RECEIVE_PAYMENT" => "Payment",
         "CREDIT_MEMO" => "Credit Memo",
         "SALES_RECEIPT" => "Sales Receipt",

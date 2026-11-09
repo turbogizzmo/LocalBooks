@@ -95,6 +95,8 @@ pub struct InvoiceSummary {
     pub credits_applied_cents: i64,
     /// Written by Assess Finance Charges.
     pub is_finance_charge: bool,
+    /// Entered as a statement charge (billed on the next statement, never printed on its own).
+    pub is_statement_charge: bool,
     /// The rep's initials, when the invoice has one.
     pub sales_rep: Option<String>,
     /// Waiting in File › Print Forms › Invoices.
@@ -116,6 +118,7 @@ const SUMMARY_SELECT: &str = "
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
            EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge,
+           EXISTS (SELECT 1 FROM statement_charge_invoices s WHERE s.invoice_id = i.id) AS is_statement_charge,
            (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep,
            i.to_be_printed,
            tm.id AS terms_id, tm.name AS terms_name, COALESCE(tm.discount_ppm, 0) AS discount_ppm,
@@ -255,6 +258,20 @@ pub(crate) async fn list_to_print(pool: &SqlitePool) -> Result<Vec<InvoiceSummar
         .await
         .map(|all| all.into_iter().map(with_discount).collect())
         .map_err(db_err)
+}
+
+/// A customer's (and their jobs') statement charges, oldest first, in one query.
+pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i64) -> Result<Vec<InvoiceSummary>, String> {
+    sqlx::query_as::<_, InvoiceSummary>(&format!(
+        "{SUMMARY_SELECT} WHERE i.id IN (SELECT invoice_id FROM statement_charge_invoices)
+           AND (i.customer_id = ?1 OR i.customer_id IN (SELECT id FROM customers WHERE parent_id = ?1))
+         ORDER BY i.issue_date, i.id"
+    ))
+    .bind(customer_id)
+    .fetch_all(pool)
+    .await
+    .map(|all| all.into_iter().map(with_discount).collect())
+    .map_err(db_err)
 }
 
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {

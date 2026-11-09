@@ -496,10 +496,10 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
                     className="accent-qb-green"
                     checked={appliedCents(inv) > 0}
                     onChange={(e) => tick(inv, e.target.checked)}
-                    aria-label={`Pay invoice ${inv.invoiceNumber}`}
+                    aria-label={inv.isStatementCharge ? `Pay statement charge of ${formatDate(inv.issueDate)}` : `Pay invoice ${inv.invoiceNumber}`}
                   />
                 </td>
-                <td className="qb-grid-cell">#{inv.invoiceNumber}</td>
+                <td className="qb-grid-cell">{inv.isStatementCharge ? 'Statement charge' : `#${inv.invoiceNumber}`}</td>
                 <td className="qb-grid-cell">{formatDate(inv.issueDate)}</td>
                 <td className={`qb-grid-cell ${inv.dueDate < todayIso() ? 'font-semibold text-qb-negative' : ''}`}>{formatDate(inv.dueDate)}</td>
                 <td className="qb-grid-cell text-sm" title={inv.termsName ?? undefined}>
@@ -687,6 +687,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
                     <td className="qb-grid-cell">
                       {inv.invoiceNumber}
                       {inv.isFinanceCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Finance charge">FC</span>}
+                      {inv.isStatementCharge && <span className="ml-1 text-2xs text-qb-ink-faint" title="Statement charge: billed on the customer's statement, not printed as an invoice">SC</span>}
                       <EmailMarks status={emailed.get(inv.id)} />
                       {inv.toBePrinted && !inv.isVoided && (
                         <span className="ml-1 rounded-xs bg-qb-green-tint px-1 text-2xs font-semibold text-qb-green-active" title="Waiting in File › Print Forms › Invoices">

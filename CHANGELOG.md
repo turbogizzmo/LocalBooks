@@ -14,6 +14,9 @@ people using LocalBooks.
   list) can be emailed or saved as a PDF from its Export menu. Reports › Scheduled Reports… sends
   chosen reports every day, week, month or quarter by email, or saves them to a folder as PDF or
   Excel, while LocalBooks is open; a run missed while it was closed happens when it next opens.
+- **Statement charges.** Enter statement charges… on a customer's row keeps a register of charges
+  billed on the customer's next statement instead of an invoice. Each posts to Accounts
+  Receivable, shows in the aging, and is paid in Receive Payments like an invoice.
 
 - **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
   list into the order you want; it's kept in the company file. Each can be shown as a tree (with
