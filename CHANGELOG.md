@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
+  quantity box and a small tape shows each number and the running total; Enter puts the answer in
+  the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

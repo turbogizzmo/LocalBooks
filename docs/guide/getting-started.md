@@ -150,6 +150,21 @@ choices back.
 **Preferences › Accounting › My Preferences** has **Autofill memo in journal entries**: a line you
 start below the first one takes the first line's memo, which you can still change. On by default.
 
+## Do arithmetic in an amount or quantity box
+
+Every amount, rate and quantity box on a form works as a calculator. Type a number, then `+`, `-`,
+`*` or `/` and the next number: a small tape opens under the box with each number you typed and the
+running total. Press **Enter** (or leave the box) to put the answer in it; **Esc** closes the tape
+and leaves what you typed.
+
+- `100+25.50*2` gives **151.00**: multiplying and dividing come first, as on paper, then adding and
+  subtracting from left to right.
+- The arithmetic is exact until the end, then rounded once to the cent, half away from zero:
+  `10/3` is 3.33 and `0.05/2` is 0.03. A quantity box keeps four decimals: `10/3` is 3.3333.
+- Numbers in the arithmetic are taken as typed, even with **Automatically place a decimal point**
+  on: `12*3` is 36.00.
+- `-` in front of the first number is a minus sign, so `-12` is just a negative amount.
+
 ## Warnings before saving (company preferences)
 
 These ask before a transaction is saved. Click **Save anyway** to record it as you entered it, or

@@ -535,6 +535,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         <input
                           data-col="qty"
                           inputMode="decimal"
+                          data-quantity
                           className="num"
                           value={line.qty}
                           onChange={(e) => update(i, { qty: e.target.value })}
