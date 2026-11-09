@@ -109,7 +109,7 @@ Utilities
                                Expense                   2025-05-12                              Harbor Power & Light      Electricity               Credit Card                     -191.50       -980.50
                                Expense                   2025-06-12                              Harbor Power & Light      Electricity               Credit Card                     -203.00     -1,183.50
                                Expense                   2025-06-13                              Harbor Power & Light      Duplicate entry           Credit Card                     -191.50     -1,375.00
-                               Void                      2025-06-13    166                                                 Duplicate entry           Credit Card                      191.50     -1,183.50
+                               Void                      2025-06-13    166                       Harbor Power & Light      Duplicate entry           Credit Card                      191.50     -1,183.50
                                Expense                   2025-07-12                              Harbor Power & Light      Electricity               Credit Card                     -214.50     -1,398.00
                                Expense                   2025-08-12                              Harbor Power & Light      Electricity               Credit Card                     -180.00     -1,578.00
                                Expense                   2025-09-12                              Harbor Power & Light      Electricity               Credit Card                     -191.50     -1,769.50

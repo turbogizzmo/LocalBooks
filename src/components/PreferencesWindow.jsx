@@ -693,6 +693,7 @@ function SalesCompany({ field }) {
       </Group>
       <Group title="Warnings">
         {field({ label: 'Overdue customers', prefKey: 'warn_customer_overdue', hint: 'Asks before saving a new invoice or sales receipt for a customer (or job) with invoices past due', children: flag('Warn before selling to a customer with overdue invoices') })}
+        {field({ label: 'Open invoices', prefKey: 'warn_customer_open_invoices', hint: 'Asks before saving a new sales receipt for a customer (or job) with invoices still open: a receipt doesn’t pay them, Receive Payments does', children: flag('Warn before a sales receipt from a customer with open invoices') })}
       </Group>
       {/* Estimates to invoices › Zero-amount lines (`estimate_drop_zero_lines`) shows once estimates take 0.00 lines (#151). */}
       <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
@@ -770,6 +771,7 @@ function BillsCompany({ field, accounts }) {
     <Group title="Bills">
       {field({ label: 'Bills are due', prefKey: 'bill_due_days', hint: 'Days after the bill date, for a vendor without terms (0 = on receipt); a vendor’s own terms come first', children: days })}
       {field({ label: 'Duplicate bill numbers', prefKey: 'warn_duplicate_bill_numbers', hint: 'Per vendor: two vendors may use the same number', children: flag('Warn about duplicate bill numbers from the same vendor') })}
+      {field({ label: 'Open bills', prefKey: 'warn_vendor_open_bills', hint: 'Asks before saving a new check or expense to a vendor with unpaid bills: it doesn’t pay them, Pay Bills does', children: flag('Warn before paying a vendor directly while it has open bills') })}
       {field({ label: 'Vendor credits', prefKey: 'bill_auto_apply_credits', hint: 'Pay Bills uses the vendor’s open credits on the bills ticked, oldest credit first, and pays the rest', children: flag('Use vendor credits automatically') })}
       {field({ label: 'Discounts', prefKey: 'bill_auto_apply_discounts', hint: 'Pay Bills takes the early-payment discount a bill’s terms offer (such as 2% 10 Net 30) when paid by its last day', children: flag('Take early-payment discounts automatically') })}
       {field({

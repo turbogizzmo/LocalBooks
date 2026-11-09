@@ -9,6 +9,17 @@ people using LocalBooks.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
+- **A warning before paying around open bills or invoices.** Writing a check or entering an
+  expense to a vendor with unpaid bills now asks first, since it doesn't pay those bills (Pay Bills
+  does). A sales receipt from a customer with open invoices asks too, since Receive Payments is
+  what pays an invoice. **Save anyway** goes ahead; each warning can be turned off in Preferences ›
+  Bills and Preferences › Sales & Customers.
+- **A voided payment comes off the customer's statement.** Voiding a customer payment left it on
+  the statement with nothing taking it back, so the statement's balance was short by the payment
+  (A/R, aging and the invoice were right). The void now shows as its own **Void** line under the
+  customer. Voids of any transaction now carry their customer's or vendor's name in registers and
+  in reports by name, so a voided bill nets to zero under its vendor instead of leaving a line
+  under "No name".
 - **Open saved sales receipts, estimates, credits, purchase orders and deposits.** Double-click one
   in its list (or choose **Open**), or press **Previous** on its form, to see it where the form
   goes, shown as it prints. **Previous** and **Next** step through the others, and its toolbar has

@@ -237,3 +237,43 @@ async fn inventory_can_be_turned_off() {
     crate::preferences::set(&pool, "inventory_enabled", "true").await.unwrap();
     crate::inventory::track_product(&pool, &track).await.unwrap();
 }
+
+#[tokio::test]
+async fn paying_a_vendor_or_customer_around_open_bills_and_invoices_warns() {
+    let pool = test_pool().await;
+    let (checking, supplies, services) = (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "4100").await);
+    let today = d(2026, 5, 1);
+    let mut pay = check(checking, supplies, "501", today);
+    pay.payee_name = Some("Cedar Lumber".into());
+    assert!(warnings_on(&pool, &expense(&pay, None), today).await.unwrap().is_empty(), "no bills yet");
+
+    post_vendor_bill(&pool, bill("Cedar Lumber", "C-1", supplies, today)).await.unwrap();
+    let warnings = warnings_on(&pool, &expense(&pay, None), today).await.unwrap();
+    assert_eq!(codes(&warnings), ["VENDOR_OPEN_BILLS"]);
+    assert!(warnings[0].message.contains("1 open bill with $25.00"), "{}", warnings[0].message);
+    // An expense paid by card too; not a card credit, and not an edit of a saved check.
+    pay.kind = "EXPENSE".into();
+    assert_eq!(codes(&warnings_on(&pool, &expense(&pay, None), today).await.unwrap()), ["VENDOR_OPEN_BILLS"]);
+    pay.kind = "CARD_CREDIT".into();
+    assert!(warnings_on(&pool, &expense(&pay, None), today).await.unwrap().is_empty());
+    pay.kind = "CHECK".into();
+    assert!(warnings_on(&pool, &expense(&pay, Some(1)), today).await.unwrap().is_empty());
+    crate::preferences::set(&pool, WARN_VENDOR_OPEN_BILLS, "false").await.unwrap();
+    assert!(warnings_on(&pool, &expense(&pay, None), today).await.unwrap().is_empty());
+
+    let receipt = |customer: &str| -> crate::sales::SalesReceiptInput {
+        serde_json::from_value(serde_json::json!({ "customerName": customer, "receiptDate": "2026-05-01", "depositAccountId": checking, "paymentMethod": "CASH",
+            "lines": [{ "description": "Mulch", "quantityE4": 10_000, "rateCents": 4_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap()
+    };
+    assert!(warnings_on(&pool, &sales_receipt(&receipt("Elm Street")), today).await.unwrap().is_empty());
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Elm Street:Front Yard", "issueDate": "2026-05-01", "dueDate": "2026-05-31",
+        "lines": [{ "description": "Pruning", "quantityE4": 10_000, "rateCents": 30_000, "incomeAccountId": services, "isTaxable": false }] })).unwrap();
+    crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+    // The customer's job's invoice counts, and so does the job's own.
+    assert_eq!(codes(&warnings_on(&pool, &sales_receipt(&receipt("Elm Street:Front Yard")), today).await.unwrap()), ["CUSTOMER_OPEN_INVOICES"]);
+    let warnings = warnings_on(&pool, &sales_receipt(&receipt("Elm Street")), today).await.unwrap();
+    assert_eq!(codes(&warnings), ["CUSTOMER_OPEN_INVOICES"]);
+    assert!(warnings[0].message.contains("1 open invoice with $300.00"), "{}", warnings[0].message);
+    crate::preferences::set(&pool, WARN_CUSTOMER_OPEN_INVOICES, "false").await.unwrap();
+    assert!(warnings_on(&pool, &sales_receipt(&receipt("Elm Street")), today).await.unwrap().is_empty());
+}

@@ -40,6 +40,8 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (crate::sales_prefs::DEFAULT_FOB, ""),
     (crate::sales_prefs::DEFAULT_MARKUP, "0"),
     (crate::guards::WARN_OVERDUE_CUSTOMER, "false"),
+    (crate::guards::WARN_VENDOR_OPEN_BILLS, "true"),
+    (crate::guards::WARN_CUSTOMER_OPEN_INVOICES, "true"),
     (crate::sales_prefs::DROP_ZERO_LINES, "true"),
     ("job_status_pending", "Pending"),
     ("job_status_awarded", "Awarded"),
@@ -198,6 +200,8 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
         },
         crate::guards::WARN_DUPLICATE_CHECKS
         | crate::guards::WARN_DUPLICATE_BILLS
+        | crate::guards::WARN_VENDOR_OPEN_BILLS
+        | crate::guards::WARN_CUSTOMER_OPEN_INVOICES
         | crate::guards::WARN_RETAINED_EARNINGS
         | "four_digit_years"
         | "class_tracking"
