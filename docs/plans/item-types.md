@@ -244,9 +244,8 @@ in either is relaxed.
 ## Out of scope (later work)
 
 - **Payment item** (a payment taken on the invoice itself). It mixes a receipt into an invoice; in
-  LocalBooks a payment is its own record linked to the invoice, so it is better done as "Receive a
-  payment when saving" on the invoice form, writing an `invoice_payments` row in the same
-  transaction. A later row in `docs/gaps.md`.
+  LocalBooks a payment is its own record linked to the invoice, so it is done as **Payment received**
+  on the invoice form, writing an `invoice_payments` row in the same transaction (T21, built).
 - **Sales Tax Item and Tax Group**: with R11, as above.
 - Discounts and charges on credit memos, bills, checks and purchase orders.
 - Expense accounts on other charges (reimbursable costs) and charges that are a percent of the

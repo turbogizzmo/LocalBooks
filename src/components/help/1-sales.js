@@ -91,6 +91,13 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'invoice-paid-now', area: 'sales', views: ['sales/invoices'],
+    title: 'Take a payment with the invoice',
+    body: 'Tick Payment received next to Save & Post to Ledger when the customer pays as you write the invoice. Enter the amount, method, reference and deposit account; the payment is saved with the invoice, dated the invoice date, and the invoice comes back Paid or Partial. It is an ordinary payment: it shows in Receive Payments and is voided from there.',
+    keywords: 'payment received paid now deposit on invoice payment item cash on delivery partial payment',
+    guide: 'invoices',
+  },
+  {
     id: 'invoice', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/customers'],
     title: 'Create an invoice',
     body: 'Fill in the invoice form at the top of Sales › Invoices: type the customer, then add lines with a quantity, rate and income account (decimals such as 1.5 hours are fine). Posting records the amount in Accounts Receivable and income, and the invoice can be printed or saved as a PDF with your form design.',

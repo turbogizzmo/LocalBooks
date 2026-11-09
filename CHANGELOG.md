@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Take a payment with the invoice.** Tick **Payment received** on a new invoice to record the money
+  the customer paid as you wrote it. It's saved with the invoice in one step, and the invoice comes
+  back Paid or Partial.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
