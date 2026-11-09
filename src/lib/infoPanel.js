@@ -1,3 +1,4 @@
+import { parseQuantityE4 } from './money.js';
 // The information panel (InfoPanel.jsx): which summary lines show for a customer, vendor or item,
 // and whether the panel is hidden. The line choice is pure, so it is tested with node --test
 // (infoPanel.test.js).
@@ -51,4 +52,16 @@ export function setInfoPanelHidden(place, hidden, storage = globalThis.localStor
 export function stampNotes(notes, stamp) {
   const rest = (notes ?? '').replace(/^\s+/, '');
   return rest ? `${stamp}: \n${rest}` : `${stamp}: `;
+}
+
+/**
+ * The reorder point box on an item's record: blank clears it, 0 is allowed (reorder when none is
+ * left), otherwise a quantity (× 10,000). Returns `{ e4 }` (null to clear) or `{ error }`.
+ */
+export function readReorderPoint(text) {
+  const t = String(text ?? '').trim();
+  if (t === '') return { e4: null };
+  if (/^0*(\.0*)?$/.test(t)) return { e4: 0 };
+  const e4 = parseQuantityE4(t);
+  return e4 === null ? { error: 'Enter the reorder point as a quantity, such as 10 or 2.5.' } : { e4 };
 }

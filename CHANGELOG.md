@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
+  and, for tracked stock, a reorder point. Both show on the item's information panel, which says
+  when it's time to reorder.
 - **The information panel on more forms.** Sales receipts, estimates, credit memos, vendor credits
   and purchase orders now show the chosen customer's or vendor's panel too.
 - **Notes and Emails on the information panel.** A customer's or vendor's notes can be edited from

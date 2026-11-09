@@ -282,8 +282,10 @@ export function ItemInfoPanel({ product, onHide }) {
               ['On order', formatQuantity(data.qtyOnOrderE4), data.nextDelivery ? `next ${formatDate(data.nextDelivery)}` : null],
               ['Average cost', data.averageCostCents === null ? '—' : formatCents(data.averageCostCents), null],
               ['Value', formatCents(data.assetValueCents), null],
+              ['Reorder point', data.reorderPointE4 === null ? 'None' : formatQuantity(data.reorderPointE4), data.atReorderPoint ? 'time to reorder' : null],
             ]
           : []),
+        ['Preferred vendor', data.preferredVendorName ?? 'None', null],
       ]
     : [];
   return (

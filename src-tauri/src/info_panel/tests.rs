@@ -86,6 +86,8 @@ async fn item_figures_match_inventory_valuation_and_stock_status() {
     let service: (i64, i64) = sqlx::query_as("SELECT p.id, p.rate_cents FROM products_services p WHERE NOT EXISTS (SELECT 1 FROM inventory_items i WHERE i.product_id = p.id) LIMIT 1").fetch_one(&pool).await.unwrap();
     let plain = item_summary(&pool, service.0, today).await.unwrap();
     assert_eq!(plain, ItemSummary { sales_price_cents: service.1, ..ItemSummary::default() });
+    // A service can't take a reorder point, but can name a preferred vendor.
+    assert!(set_item_purchasing(&pool, service.0, Some(10_000), None).await.unwrap_err().starts_with("ITEM_REORDER_UNTRACKED"));
 }
 
 #[tokio::test]
@@ -125,5 +127,30 @@ async fn notes_save_from_the_panel_and_are_audited() {
     assert_eq!(notes, None);
     assert!(set_notes(&pool, "vendor", 99_999, "x").await.unwrap_err().starts_with("PARTY_NOT_FOUND"));
     assert!(set_notes(&pool, "item", vendor.id, "x").await.unwrap_err().starts_with("PARTY_KIND"));
+    assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
+}
+
+#[tokio::test]
+async fn reorder_point_and_preferred_vendor_save_and_show() {
+    let pool = crate::harness::job_costing::company().await;
+    let oak: i64 = sqlx::query_scalar("SELECT id FROM products_services WHERE name = 'Oak Panels'").fetch_one(&pool).await.unwrap();
+    let vendor = crate::expenses::list_vendors(&pool).await.unwrap().into_iter().find(|v| v.is_active).unwrap();
+    let today = later();
+    let on_hand = item_summary(&pool, oak, today).await.unwrap().qty_on_hand_e4;
+
+    set_item_purchasing(&pool, oak, Some(on_hand + 10_000), Some(vendor.id)).await.unwrap();
+    let s = item_summary(&pool, oak, today).await.unwrap();
+    assert_eq!((s.reorder_point_e4, s.at_reorder_point), (Some(on_hand + 10_000), true));
+    assert_eq!((s.preferred_vendor_id, s.preferred_vendor_name.as_deref()), (Some(vendor.id), Some(vendor.name.as_str())));
+
+    set_item_purchasing(&pool, oak, Some(on_hand - 10_000), Some(vendor.id)).await.unwrap();
+    assert!(!item_summary(&pool, oak, today).await.unwrap().at_reorder_point, "above the point");
+    set_item_purchasing(&pool, oak, None, None).await.unwrap();
+    let cleared = item_summary(&pool, oak, today).await.unwrap();
+    assert_eq!((cleared.reorder_point_e4, cleared.preferred_vendor_id, cleared.at_reorder_point), (None, None, false));
+
+    assert!(set_item_purchasing(&pool, oak, Some(-1), None).await.unwrap_err().starts_with("ITEM_REORDER_NEGATIVE"));
+    assert!(set_item_purchasing(&pool, oak, None, Some(99_999)).await.unwrap_err().starts_with("PARTY_NOT_FOUND"));
+    assert!(set_item_purchasing(&pool, 99_999, None, None).await.unwrap_err().starts_with("ITEM_NOT_FOUND"));
     assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
 }

@@ -87,29 +87,81 @@ pub struct ItemSummary {
     pub average_cost_cents: Option<i64>,
     pub asset_value_cents: i64,
     pub sales_price_cents: i64,
+    /// The quantity at which to order more (× 10,000), when one is set.
+    pub reorder_point_e4: Option<i64>,
+    /// On hand is at or below the reorder point.
+    pub at_reorder_point: bool,
+    pub preferred_vendor_id: Option<i64>,
+    pub preferred_vendor_name: Option<String>,
 }
 
 /// The summary for product or service `product_id`, as of `today`.
 pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) -> Result<ItemSummary, String> {
     let item: Option<i64> = sqlx::query_scalar("SELECT id FROM inventory_items WHERE product_id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
-    let price: Option<i64> = sqlx::query_scalar("SELECT rate_cents FROM products_services WHERE id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
-    let price = price.ok_or_else(|| format!("ITEM_NOT_FOUND: product or service {product_id} does not exist"))?;
+    let record: Option<(i64, Option<i64>, Option<i64>, Option<String>)> = sqlx::query_as(
+        "SELECT p.rate_cents, p.reorder_point_e4, p.preferred_vendor_id, v.name
+         FROM products_services p LEFT JOIN vendors v ON v.id = p.preferred_vendor_id WHERE p.id = ?1",
+    )
+    .bind(product_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (price, reorder_point_e4, preferred_vendor_id, preferred_vendor_name) =
+        record.ok_or_else(|| format!("ITEM_NOT_FOUND: product or service {product_id} does not exist"))?;
+    let base = ItemSummary { sales_price_cents: price, reorder_point_e4, preferred_vendor_id, preferred_vendor_name, ..ItemSummary::default() };
     let Some(item_id) = item else {
-        return Ok(ItemSummary { sales_price_cents: price, ..ItemSummary::default() });
+        return Ok(base);
     };
     let valuation = crate::report_center::inventory_valuation(pool, today).await?;
     let status = crate::report_center::stock_status(pool, today, today).await?;
     let value = valuation.rows.iter().find(|r| r.item_id == item_id);
     let stock = status.rows.iter().find(|r| r.item_id == item_id);
+    let qty_on_hand_e4 = value.map_or(0, |r| r.qty_on_hand_e4);
     Ok(ItemSummary {
         tracked: true,
-        qty_on_hand_e4: value.map_or(0, |r| r.qty_on_hand_e4),
+        qty_on_hand_e4,
         qty_on_order_e4: stock.map_or(0, |r| r.qty_on_order_e4),
         next_delivery: stock.and_then(|r| r.next_delivery),
         average_cost_cents: value.and_then(|r| r.average_cost_cents),
         asset_value_cents: value.map_or(0, |r| r.asset_value_cents),
-        sales_price_cents: price,
+        at_reorder_point: reorder_point_e4.is_some_and(|point| qty_on_hand_e4 <= point),
+        ..base
     })
+}
+
+/// Sets an item's reorder point (× 10,000; tracked items only) and preferred vendor, from its
+/// record. `None` clears either.
+pub async fn set_item_purchasing(pool: &SqlitePool, product_id: i64, reorder_point_e4: Option<i64>, preferred_vendor_id: Option<i64>) -> Result<(), String> {
+    if reorder_point_e4.is_some_and(|q| q < 0) {
+        return Err("ITEM_REORDER_NEGATIVE: a reorder point can't be below zero".into());
+    }
+    if reorder_point_e4.is_some() {
+        let tracked: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM inventory_items WHERE product_id = ?1)").bind(product_id).fetch_one(pool).await.map_err(db_err)?;
+        if !tracked {
+            return Err("ITEM_REORDER_UNTRACKED: track this item's stock first; a reorder point compares with the quantity on hand".into());
+        }
+    }
+    if let Some(vendor) = preferred_vendor_id {
+        let active: Option<bool> = sqlx::query_scalar("SELECT is_active FROM vendors WHERE id = ?1").bind(vendor).fetch_optional(pool).await.map_err(db_err)?;
+        match active {
+            None => return Err(format!("PARTY_NOT_FOUND: vendor {vendor} does not exist")),
+            Some(false) => return Err("ITEM_VENDOR_INACTIVE: choose an active vendor".into()),
+            Some(true) => {}
+        }
+    }
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = sqlx::query("UPDATE products_services SET reorder_point_e4 = ?1, preferred_vendor_id = ?2 WHERE id = ?3")
+        .bind(reorder_point_e4)
+        .bind(preferred_vendor_id)
+        .bind(product_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err);
+    match result {
+        Ok(done) if done.rows_affected() == 1 => crate::ledger::commit_write(tx).await.map_err(db_err),
+        Ok(_) => Err(crate::ledger::rollback(tx, format!("ITEM_NOT_FOUND: product or service {product_id} does not exist")).await),
+        Err(err) => Err(crate::ledger::rollback(tx, err).await),
+    }
 }
 
 /// The longest note a customer or vendor keeps.

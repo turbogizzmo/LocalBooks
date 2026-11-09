@@ -42,8 +42,10 @@ information panel opens beside the list:
   transactions (click one to open it).
 - **Vendors:** the balance you owe, open purchase orders, phone, email, notes and recent
   transactions.
-- **Items:** the sales price and, for an item whose stock is tracked, on hand, on order (with the
-  next expected delivery), average cost and value.
+- **Items:** the sales price and preferred vendor and, for an item whose stock is tracked, on hand,
+  on order (with the next expected delivery), average cost, value and reorder point (marked
+  **time to reorder** when on hand is at or below it). Set the reorder point and preferred vendor on
+  the item's record (see [Reorder point and preferred vendor](inventory.md#reorder-point-and-preferred-vendor)).
 
 The figures are the reports' own: the open balance matches A/R or A/P Aging and the balance
 reports, open purchase orders the Open Purchase Orders report, unbilled costs Sales › Bill Costs,
