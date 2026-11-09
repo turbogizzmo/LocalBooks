@@ -12,6 +12,10 @@ people using LocalBooks.
 - **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
   Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
   own, and LocalBooks remembers it. An account register can also be given a color.
+- **Transaction History and Journal on forms.** A saved invoice, bill, check, expense, journal
+  entry, sales receipt, credit, deposit or transfer has **History** and **Journal** on its toolbar,
+  with **Ctrl+H** and **Ctrl+Y**, as registers already did; in the journal they act on the entry
+  you clicked.
 - **Duplicate a transaction.** On a saved invoice, bill, check, expense, card credit or journal
   entry, **Duplicate** on the toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or on its
   row in the list, starts a new unsaved copy dated today: an invoice or journal entry gets the next

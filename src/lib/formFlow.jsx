@@ -138,6 +138,8 @@ const TOOLBAR_IDS = {
   edit: ['edit'],
   'goto-transfer': ['goto-transfer'],
   duplicate: ['duplicate'],
+  history: ['history'],
+  journal: ['journal'],
 };
 const TOOLBAR_COMMANDS = Object.keys(TOOLBAR_IDS);
 

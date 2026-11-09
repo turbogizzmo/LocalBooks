@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { myPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useFormClass } from './ClassSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList, WindowManagerContext } from '../lib/windows.js';
+import { reportShortcut, transactionJournal } from '../lib/quickReport.js';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
@@ -12,6 +13,7 @@ import { pasteLineAt } from '../lib/formKeys.js';
 import { MemorizeDialog } from './Recurring.jsx';
 import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import TransactionHistory, { useTransactionReports } from './TransactionHistory.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
@@ -142,6 +144,8 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
       onCancel();
     });
   const flow = useFormFlow({ save: () => save('post'), clear, onClose: onCancel, afterNew: editing ? onNew : undefined, busy });
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the entry on the form.
+  const reports = useTransactionReports();
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
@@ -187,9 +191,11 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
             { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring journal entry', disabled: busy || !ready, onClick: () => save('memorize') },
             duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: 'journal entry' }),
           ],
+          reports.buttons({ journalEntryId: editing?.entry.id, label: editing ? `Journal Entry #${editing.entry.entryNumber}` : '' }),
         ]}
       />
       {voucherPortal}
+      {reports.panel}
       {showAttachments && editing && (
         <div className="border-b border-qb-border bg-qb-canvas">
           <Attachments entryId={editing.entry.id} />
@@ -382,6 +388,19 @@ export default function JournalEntries({ accounts, intent }) {
     amount: (e) => e.totalCents,
   }, { storageKey: 'journal' });
   const rows = sorter.sorted;
+  // Ctrl+H (Transaction History) and Ctrl+Y (Transaction Journal) on the row clicked last.
+  const [history, setHistory] = useState(null);
+  const { open: openWindow } = useContext(WindowManagerContext);
+  const onListKey = (ev) => {
+    const key = reportShortcut(ev);
+    if (key !== 'history' && key !== 'journal') return;
+    ev.preventDefault();
+    const entry = (data ?? []).find((e) => e.id === expanded);
+    if (!entry) return setNotice({ kind: 'info', text: 'Click an entry in the journal first.' });
+    if (key === 'history') return setHistory(entry.id);
+    const [view, action, target] = transactionJournal({ journalEntryId: entry.id, label: `${SOURCE_LABEL[entry.sourceType] ?? 'Entry'} #${entry.entryNumber}` });
+    return openWindow(view, action, target, { forceNew: true });
+  };
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -408,7 +427,8 @@ export default function JournalEntries({ accounts, intent }) {
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load the journal: ${error}`} />}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col">
+      {history !== null && <TransactionHistory journalEntryId={history} onClose={() => setHistory(null)} onOpen={openWindow} />}
+      <section className="qb-panel flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onListKey}>
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Journal</h2>
           <select className="qb-input h-row w-[170px] text-sm" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Show">
@@ -417,7 +437,7 @@ export default function JournalEntries({ accounts, intent }) {
             <option value="VOIDS">Voids and reversals</option>
             <option value="ADJUSTING">Adjusting entries</option>
           </select>
-          <span className="text-xs text-qb-ink-muted">Click a row to see its lines</span>
+          <span className="text-xs text-qb-ink-muted">Click a row to see its lines · Ctrl+H history · Ctrl+Y journal</span>
           {!composing && (
             <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setComposing(true)}>
               New journal entry

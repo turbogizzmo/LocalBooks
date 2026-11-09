@@ -11,6 +11,7 @@ import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
@@ -185,6 +186,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       onPosted(`Bill from ${editing.bill.vendorName} voided: a reversing entry now offsets it.`);
       onCancelEdit();
     });
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the bill on the form.
+  const reports = useTransactionReports();
   // A bill being edited closes back to a new one; a new bill's window closes (formFlow.jsx).
   const flow = useFormFlow({ save: () => post('post'), clear, onClose: editing ? onCancelEdit : undefined, afterNew: editing ? onCancelEdit : undefined, busy });
   const toolbar = (
@@ -241,12 +244,14 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring bill', disabled: busy, onClick: () => post('memorize') },
           duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: 'bill' }),
         ],
+        reports.buttons({ journalEntryId: editing?.bill.journalEntryId, label: `Bill${editing?.bill.billNumber ? ` #${editing.bill.billNumber}` : ''}` }),
       ]}
     />
   );
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+      {reports.panel}
       {voucherPortal}
       {toolbar}
       {showAttachments && editing?.bill.journalEntryId && (
