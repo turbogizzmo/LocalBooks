@@ -97,6 +97,7 @@ features![
     payroll_import,
     preferences,
     price_levels,
+    print_batches,
     print_queue,
     profile_lists,
     purchase_orders,

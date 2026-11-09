@@ -156,6 +156,7 @@ const READ: &[&str] = &[
     "save_form_pdf",
     "get_envelope_layout",
     "render_envelope",
+    "render_mailing_labels",
     "save_attachment",
     "save_library_attachment",
     "save_all_attachments",
