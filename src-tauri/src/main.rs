@@ -52,6 +52,7 @@ mod file_dentist;
 mod file_menu;
 mod finance_charges;
 mod instance;
+mod info_panel;
 mod inventory;
 mod invoices;
 mod item_prices;

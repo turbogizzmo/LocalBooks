@@ -78,6 +78,7 @@ features![
     forms,
     graphs,
     installed_quickbooks,
+    info_panel,
     inventory,
     invoices,
     item_groups,
