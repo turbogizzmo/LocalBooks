@@ -59,6 +59,8 @@ const OPEN: &[&str] = &[
 ];
 
 const ADMIN: &[&str] = &[
+    // Removing an attachment for good (deleting one is reversible and open to Standard users).
+    "purge_attachment",
     // Users and the recovery key.
     "list_users",
     "add_user",
@@ -115,6 +117,7 @@ const ADMIN: &[&str] = &[
     "auto_map_ledger_accounts",
     "import_ledger_lists",
     "post_ledger_batch",
+    "post_payroll_import",
     "reverse_ledger_batch",
     "discard_ledger_batch",
     "start_over_ledger_batch",
@@ -132,6 +135,7 @@ const READ: &[&str] = &[
     "simplefin_suggested_start",
     "report_csv",
     "save_report_to_disk",
+    "save_txf_export",
     "save_xlsx",
     "read_import_sheet",
     "check_import_sheet",
@@ -142,6 +146,8 @@ const READ: &[&str] = &[
     "print_report",
     "finish_printing",
     "render_form",
+    "list_customer_groups",
+    "group_overdue_invoices",
     "list_report_schedules",
     "save_report_pdf",
     "report_sheet",
@@ -151,6 +157,7 @@ const READ: &[&str] = &[
     "get_envelope_layout",
     "render_envelope",
     "save_attachment",
+    "save_library_attachment",
     "save_all_attachments",
     "attachment_counts",
     "next_check_number",
