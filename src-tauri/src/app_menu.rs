@@ -178,7 +178,7 @@ const VENDORS: &[Entry] = &[
     Entry::Sep,
     form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
     Entry::Sep,
-    Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099")]),
+    Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099"), report("1099-NEC and 1096", "1099-nec")]),
     ITEM_LIST,
 ];
 
@@ -317,6 +317,7 @@ const REPORTS: &[Entry] = &[
             Entry::Sep,
             report("1099 Summary", "1099"),
             report("1099 Detail", "preset:1099-detail"),
+            report("1099-NEC and 1096", "1099-nec"),
             Entry::Sep,
             report("Transaction List by Vendor", "preset:transaction-list-vendor"),
             report("Vendor Phone List", "list:vendor-phone"),
