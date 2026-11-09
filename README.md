@@ -256,6 +256,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
+| Approvals | Expenses › Approvals | Rules hold bills and purchase orders over an amount or from a vendor until an Admin approves them; rejections are kept with a note | [guide](docs/guide/bills.md#approvals-for-bills-and-purchase-orders) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
 | Backups & company files | Settings › File & Data Controls | Backups and restore, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |

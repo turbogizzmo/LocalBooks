@@ -93,6 +93,11 @@ const ADMIN: &[&str] = &[
     "update_database_directory",
     "export_company_file",
     "import_company_file",
+    // Approvals: who may approve or reject held bills and purchase orders, and change the rules.
+    "approve_request",
+    "reject_request",
+    "add_approval_rule",
+    "delete_approval_rule",
     "file_dentist_rebuild",
     "condense_company_file",
     "apply_forensic_correction",

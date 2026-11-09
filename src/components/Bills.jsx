@@ -18,6 +18,7 @@ import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGr
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
 import { StatusBadge } from './Invoices.jsx';
+import { isHeldForApproval } from '../lib/approvals.js';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
@@ -146,7 +147,26 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     try {
       const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
-      const bill = editing ? await api.replaceBill(editing.bill.id, input, appliedText) : await api.postVendorBill(input);
+      let bill;
+      try {
+        bill = editing ? await api.replaceBill(editing.bill.id, input, appliedText) : await api.postVendorBill(input);
+      } catch (err) {
+        // An approval rule holds this bill: it waits under Expenses › Approvals instead of posting.
+        if (editing || !isHeldForApproval(err)) throw err;
+        await api.submitForApproval('BILL', input);
+        onPosted(`Bill from ${input.vendorName} sent for approval: ${formatCents(totalCents)}. It isn't posted, and isn't in Pay Bills, until it is approved under Expenses › Approvals.${files.length ? ' Attach the files once it is approved.' : ''}`);
+        setFiles([]);
+        setVendor('');
+        setBillNumber('');
+        setTotal('');
+        setTermsTouched(false);
+        setTermsId(null);
+        setRows([blankSplit(defaultCategory)]);
+        formClass.reset();
+        setError(null);
+        vendorRef.current?.focus();
+        return true;
+      }
       const attachError = !editing && files.length > 0 ? await attachPicked(bill.journalEntryId, files) : null;
       onPosted(
         editing
