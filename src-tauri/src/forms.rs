@@ -29,11 +29,14 @@ pub enum FormKind {
     Statement,
     /// A credit memo (or refund receipt) for a customer.
     CreditMemo,
+    /// A bill payment's stub (remittance advice) for the vendor; its document id is one of the
+    /// payment's bill payments, and the stub lists every bill paid on the same check.
+    BillPayment,
 }
 
 impl FormKind {
     #[cfg(test)]
-    pub const ALL: [FormKind; 5] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo];
+    pub const ALL: [FormKind; 6] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo, FormKind::BillPayment];
 
     pub(crate) fn key(self) -> &'static str {
         match self {
@@ -42,6 +45,7 @@ impl FormKind {
             FormKind::SalesReceipt => "SALES_RECEIPT",
             FormKind::Statement => "STATEMENT",
             FormKind::CreditMemo => "CREDIT_MEMO",
+            FormKind::BillPayment => "BILL_PAYMENT",
         }
     }
 
@@ -52,6 +56,7 @@ impl FormKind {
             FormKind::SalesReceipt => "Sales Receipt",
             FormKind::Statement => "Statement",
             FormKind::CreditMemo => "Credit Memo",
+            FormKind::BillPayment => "Bill Payment",
         }
     }
 }
@@ -245,6 +250,7 @@ impl FormTemplate {
             FormKind::SalesReceipt => "Thank you for your business.",
             FormKind::Statement => "Please contact us with any questions about your account.",
             FormKind::CreditMemo => "This credit can be applied to an open invoice or refunded. Please keep it for your records.",
+            FormKind::BillPayment => "This payment covers the bills listed. Please contact us with any questions.",
         };
         let (subject, body) = match kind {
             FormKind::Invoice => (
@@ -255,13 +261,26 @@ impl FormTemplate {
             FormKind::SalesReceipt => ("Sales receipt {number} from {company}", "Dear {customer},\n\nPlease find attached your receipt {number} for {total}.\n\nThank you for your business.\n{company}"),
             FormKind::Statement => ("Statement from {company}", "Dear {customer},\n\nPlease find attached your statement as of {date}. The amount due is {balance}.\n\n{company}"),
             FormKind::CreditMemo => ("Credit memo {number} from {company}", "Dear {customer},\n\nPlease find attached credit memo {number} for {total}.\n\n{company}"),
+            FormKind::BillPayment => ("Payment from {company}", "Dear {customer},\n\nPlease find attached the details of our payment of {total} on {date}, and the bills it pays.\n\n{company}"),
         };
-        FormTemplate {
+        let template = FormTemplate {
             title: kind.default_title().into(),
             message: message.into(),
             email_subject: subject.into(),
             email_body: body.into(),
             ..FormTemplate::default()
+        };
+        match kind {
+            // A stub's lines are the bills paid: the bill, its amount and what this payment paid.
+            FormKind::BillPayment => FormTemplate {
+                show_quantity: false,
+                show_line_numbers: false,
+                description_label: "Bill".into(),
+                rate_label: "Bill amount".into(),
+                amount_label: "Paid".into(),
+                ..template
+            },
+            _ => template,
         }
     }
 
@@ -1085,6 +1104,86 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
     })
 }
 
+/// A bill payment's stub: the payment (`payment_id`) and the other bills paid with it on the same
+/// check (same vendor, account, date and check number, or the same Print later check), each with
+/// the bill's amount and what was paid on it.
+pub async fn bill_payment_doc(pool: &SqlitePool, payment_id: i64, symbol: &str) -> Result<FormDoc, String> {
+    type Header = (i64, String, Option<String>, Option<String>, Option<String>, String, Option<String>, String, bool);
+    let header: Option<Header> = sqlx::query_as(
+        "SELECT v.id, v.name, v.company_name, v.address, v.email, p.payment_date, p.reference, a.name, p.is_voided
+         FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN vendors v ON v.id = b.vendor_id
+         JOIN chart_of_accounts a ON a.id = p.payment_account_id WHERE p.id = ?1",
+    )
+    .bind(payment_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (_, vendor, company, address, email, date, reference, account, voided) = header.ok_or("FORM_NOT_FOUND: that bill payment no longer exists")?;
+    let rows: Vec<(Option<String>, String, i64, i64)> = sqlx::query_as(
+        "SELECT b.bill_number, b.bill_date, b.total_cents, p.amount_cents
+         FROM bill_payments x JOIN bills xb ON xb.id = x.bill_id
+         JOIN bill_payments p ON p.payment_account_id = x.payment_account_id AND p.payment_date = x.payment_date AND p.is_voided = x.is_voided
+         JOIN bills b ON b.id = p.bill_id AND b.vendor_id = xb.vendor_id
+         WHERE x.id = ?1
+           AND (p.id = x.id
+                OR (x.check_group_id IS NOT NULL AND p.check_group_id = x.check_group_id)
+                OR (x.check_group_id IS NULL AND p.check_group_id IS NULL AND x.reference IS NOT NULL AND trim(x.reference) <> '' AND p.reference = x.reference))
+         ORDER BY b.bill_date, p.id",
+    )
+    .bind(payment_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let money = |cents: i64| format_money(cents, None, symbol);
+    let mut total: i64 = 0;
+    for r in &rows {
+        total = total.checked_add(r.3).ok_or("FORM_TOO_LARGE: the payment is too large to show")?;
+    }
+    let lines = rows
+        .iter()
+        .map(|(number, bill_date, bill_total, paid)| FormLine {
+            description: format!("Bill {}· {}", number.as_deref().map(|n| format!("{n} ")).unwrap_or_default(), format_date(bill_date)),
+            quantity: String::new(),
+            rate: money(*bill_total),
+            amount: money(*paid),
+            details: Vec::new(),
+            service_date: String::new(),
+        })
+        .collect();
+    let check = reference.as_deref().map(str::trim).filter(|r| !r.is_empty());
+    let mut details = Vec::new();
+    if let Some(company) = company.as_deref().map(str::trim).filter(|c| !c.is_empty() && *c != vendor) {
+        details.push(company.to_string());
+    }
+    details.extend(address_lines(address.as_deref()));
+    let mut meta = vec![("Payment date".to_string(), format_date(&date), false), ("Paid from".to_string(), account, false)];
+    if let Some(check) = check {
+        meta.push(("Check no.".to_string(), check.to_string(), false));
+    }
+    meta.push(("Amount paid".to_string(), money(total), true));
+    Ok(FormDoc {
+        kind: FormKind::BillPayment,
+        number: check.map_or_else(|| payment_id.to_string(), str::to_string),
+        subtitle: None,
+        voided,
+        customer_id: None,
+        customer_name: vendor,
+        customer_email: email.filter(|e| !e.trim().is_empty()),
+        customer_details: details,
+        meta,
+        lines,
+        totals: vec![TotalRow { label: "Total paid".into(), value: money(total), grand: true, payment: false }],
+        memo: voided.then(|| "This payment has been voided.".to_string()),
+        date: format_date(&date),
+        due_date: String::new(),
+        total: money(total),
+        balance: money(0),
+        statement: None,
+        sales: FormSales::default(),
+        form_style_id: None,
+    })
+}
+
 /// A made-up document for the designer's preview when no real one is chosen.
 pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
     let money = |cents: i64| format_money(cents, None, symbol);
@@ -1126,6 +1225,15 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
             vec![TotalRow { label: "Total credit".into(), value: money(total), grand: true, payment: false }],
             money(total),
         ),
+        FormKind::BillPayment => (
+            vec![
+                ("Payment date".to_string(), "10/15/2026".to_string(), false),
+                ("Check no.".to_string(), "1001".to_string(), false),
+                ("Amount paid".to_string(), money(total), true),
+            ],
+            vec![TotalRow { label: "Total paid".into(), value: money(total), grand: true, payment: false }],
+            money(0),
+        ),
         FormKind::SalesReceipt => (
             vec![
                 ("Receipt date".to_string(), "10/01/2026".to_string(), false),
@@ -1149,6 +1257,30 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         ],
         aging: [money(total - 100_000), money(0), money(0), money(0), money(0)],
     });
+    if kind == FormKind::BillPayment {
+        let bill = |n: &str, date: &str, amount: i64, paid: i64| FormLine { description: format!("Bill {n} · {date}"), quantity: String::new(), rate: money(amount), amount: money(paid), details: Vec::new(), service_date: String::new() };
+        return FormDoc {
+            kind,
+            number: "1001".into(),
+            subtitle: None,
+            voided: false,
+            customer_id: None,
+            customer_name: "Sample Vendor".into(),
+            customer_email: Some("billing@example.com".into()),
+            customer_details: vec!["Sample Supply Co.".into(), "200 Mill Road".into(), "Springfield, IL 62702".into()],
+            meta,
+            lines: vec![bill("INV-778", "09/20/2026", 240_000, 240_000), bill("INV-781", "09/28/2026", 174_250, 174_250)],
+            totals,
+            memo: None,
+            date: "10/15/2026".into(),
+            due_date: String::new(),
+            total: money(total),
+            balance,
+            statement: None,
+            sales: FormSales::default(),
+            form_style_id: None,
+        };
+    }
     FormDoc {
         kind,
         number: if kind == FormKind::Statement { "2026-10-31".into() } else { "1001".into() },
@@ -1489,6 +1621,7 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         FormKind::SalesReceipt => "SOLD TO",
         FormKind::Statement => "STATEMENT FOR",
         FormKind::CreditMemo => "CREDIT TO",
+        FormKind::BillPayment => "PAID TO",
     };
     let label_color = if modern { accent } else { MUTED };
     let start = l.y;
@@ -1764,6 +1897,7 @@ pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Opt
         (FormKind::Estimate, Some(id)) => estimate_doc(pool, id, symbol).await,
         (FormKind::SalesReceipt, Some(id)) => sales_receipt_doc(pool, id, symbol).await,
         (FormKind::CreditMemo, Some(id)) => credit_memo_doc(pool, id, symbol).await,
+        (FormKind::BillPayment, Some(id)) => bill_payment_doc(pool, id, symbol).await,
         (FormKind::Statement, Some(id)) => statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
     }
 }
