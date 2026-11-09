@@ -24,7 +24,11 @@ taken before you billed the work.
 3. Type the **Amount received**. LocalBooks applies it for you: to an invoice whose balance is
    exactly that amount, otherwise to the oldest invoices first. Adjust the **Payment** on any row
    if the customer told you otherwise, or tick and untick invoices in the first column. To spread
-   the amount received over the invoices again, click **Auto Apply** in the toolbar.
+   the amount received over the invoices again, click **Auto Apply** in the toolbar. Under the
+   invoices, a **Totals** row adds up each column, and beside it **Amount due**, **Applied**,
+   **Discounts applied** and **Left due after this payment** show where the payment leaves the
+   customer. If the amount received and the payments applied differ, **Unapplied amount** (or
+   **Applied more than received**) says by how much; make them match before you save.
 4. Click how you were paid: **Cash**, **Check**, **Card** (credit or debit), **Bank / ACH** (ACH,
    e-check or bank transfer), or **More** for **Wire** and **Other**. The chosen tile is
    highlighted.

@@ -3,8 +3,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import { useVendorRecall } from '../lib/recall.js';
-import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
+import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
 import MoneyBar from './MoneyBar.jsx';
@@ -12,6 +12,7 @@ import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
@@ -25,7 +26,7 @@ import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from 
 import DateBox, { CheckNumberBox } from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
-import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
+import { byDateThenNumber, discountDate, duplicateDates, stepButtons } from '../lib/formStep.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -33,17 +34,23 @@ export const isCategory = (a) =>
 const isPaymentAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PARTIAL');
 
-/** A new bill, or (with `editing` = { bill, lines }) a posted bill being edited. */
-function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, onCancelEdit, saved = [], onOpenSaved }) {
+/**
+ * A new bill, or (with `editing` = { bill, lines }) a posted bill being edited, or (with `copyOf`,
+ * the same shape) a new bill copied from a saved one by Duplicate: dated today, its own number left
+ * blank, due as many days later as the original was.
+ */
+function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
-  const [vendor, setVendor] = useState(editing?.bill.vendorName ?? '');
+  const source = editing ?? copyOf;
+  const copyDates = copyOf ? duplicateDates(copyOf.bill.billDate, copyOf.bill.dueDate, todayIso()) : null;
+  const [vendor, setVendor] = useState(source?.bill.vendorName ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
-  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate);
-  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? billDate);
+  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate ?? copyDates?.date);
+  const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? copyDates?.due ?? billDate);
   const termsList = useTerms();
-  const [termsId, setTermsId] = useState(editing?.bill.termsId ?? null);
+  const [termsId, setTermsId] = useState(source?.bill.termsId ?? null);
   // Set once the user picks a term (or a saved bill is loaded): the vendor's term no longer fills in.
-  const [termsTouched, setTermsTouched] = useState(Boolean(editing));
+  const [termsTouched, setTermsTouched] = useState(Boolean(source));
   // Without a term, the bill is due after the vendor's days, or Preferences › Bills' days (10
   // unless an Admin changes them), as the backend works it out.
   const applyTerms = (t, fromDate) => {
@@ -51,6 +58,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (t) setDueDate(addDays(fromDate, t.netDays));
     else api.getBillDueDate(vendor.trim(), fromDate).then(setDueDate, () => {});
   };
+  // Discount Date, beside Terms and the due date, when the term offers an early-payment discount.
+  const billDiscountDate = discountDate(termsList.find((t) => t.id === termsId) ?? null, billDate);
   const vendorRecord = vendors.find((v) => v.name.toLowerCase() === vendor.trim().toLowerCase());
   useEffect(() => {
     if (termsTouched) return;
@@ -59,8 +68,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     applyTerms(t, billDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendor, vendorRecord?.termsId, termsList, termsTouched]);
-  const [total, setTotal] = useState(editing ? centsToInput(editing.bill.totalCents) : '');
-  const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(null)]));
+  const [total, setTotal] = useState(source ? centsToInput(source.bill.totalCents) : '');
+  const [rows, setRows] = useState(() => (source ? splitRowsFrom(source.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files to attach once the bill posts, such as the vendor's invoice.
@@ -70,7 +79,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const formClass = useFormClass(accounts);
   // Closing the window (or stepping to another bill) asks first while the bill has entries not
   // yet saved. The due date is left out: it fills in by itself from the date and terms.
-  const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) }, Boolean(copyOf));
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -82,7 +91,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     vendor,
     vendors,
     rows,
-    enabled: !editing,
+    enabled: !source,
     kind: 'bill',
     onRecalled: (recalled, recalledRows) => {
       setRows(recalledRows);
@@ -180,6 +189,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       onPosted(`Bill from ${editing.bill.vendorName} voided: a reversing entry now offsets it.`);
       onCancelEdit();
     });
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the bill on the form.
+  const reports = useTransactionReports();
   // A bill being edited closes back to a new one; a new bill's window closes (formFlow.jsx).
   const flow = useFormFlow({ save: () => post('post'), clear, onClose: editing ? onCancelEdit : undefined, afterNew: editing ? onCancelEdit : undefined, busy });
   const toolbar = (
@@ -232,13 +243,18 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
               }
             : attachLaterButton({ setFiles, busy, what: 'this bill' }),
         ],
-        [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring bill', disabled: busy, onClick: () => post('memorize') }],
+        [
+          { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring bill', disabled: busy, onClick: () => post('memorize') },
+          duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: 'bill' }),
+        ],
+        reports.buttons({ journalEntryId: editing?.bill.journalEntryId, label: `Bill${editing?.bill.billNumber ? ` #${editing.bill.billNumber}` : ''}` }),
       ]}
     />
   );
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+      {reports.panel}
       {voucherPortal}
       {toolbar}
       {showAttachments && editing?.bill.journalEntryId && (
@@ -283,6 +299,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           <span className="qb-label">Due date</span>
           <DateBox className="qb-input w-[132px]" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </label>
+        {billDiscountDate && (
+          <div title="Pay by this date to take the term's early-payment discount in Pay Bills">
+            <span className="qb-label">Discount date</span>
+            <div className="flex h-input items-center text-sm">{formatDate(billDiscountDate)}</div>
+          </div>
+        )}
         {formClass.header}
         <label>
           <span className="qb-label">Bill total</span>
@@ -572,6 +594,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             className="qb-input w-[200px]"
           />
         </label>
+        <EndingBalance accounts={accounts} accountId={accountId} />
         <label>
           <span className="qb-label">Payment date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -723,6 +746,20 @@ export default function Bills({ accounts, intent }) {
   const [paying, setPaying] = useState(intent?.action === 'pay-bills');
   const [payments, setPayments] = useState({});
   const [editing, setEditing] = useState(null); // { bill, lines }
+  // Duplicate: the saved bill the new one on the form was copied from ({ bill, lines, n }).
+  const [copy, setCopy] = useState(null);
+  const duplicate = (from) => {
+    setPaying(false);
+    setEditing(null);
+    setCopy({ ...from, n: Date.now() });
+    setNotice({ kind: 'info', text: `A copy of the bill from ${from.bill.vendorName}, dated today: enter its bill number and save it as a new bill.` });
+  };
+  // From a list row: the bill's lines are loaded first.
+  const duplicateRow = (bill) =>
+    api.getDocumentLines('bill', bill.id).then(
+      (lines) => duplicate({ bill, lines }),
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const [achFiles, setAchFiles] = useState(false);
   const attachments = useAttachmentRows();
   const [printing, setPrinting] = useState([]);
@@ -735,6 +772,7 @@ export default function Bills({ accounts, intent }) {
     return api.getDocumentLines('bill', bill.id).then(
       (lines) => {
         setPaying(false);
+        setCopy(null);
         setEditing({ bill, lines });
       },
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
@@ -827,13 +865,18 @@ export default function Bills({ accounts, intent }) {
         />
       ) : (
         <NewBill
-          key={editing ? `edit-${editing.bill.id}` : 'new'}
+          key={editing ? `edit-${editing.bill.id}` : copy ? `copy-${copy.n}` : 'new'}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
           vendorRef={vendorRef}
           editing={editing}
-          onCancelEdit={() => setEditing(null)}
+          copyOf={copy}
+          onDuplicate={duplicate}
+          onCancelEdit={() => {
+            setEditing(null);
+            setCopy(null);
+          }}
           onPosted={(text) => setNotice({ kind: 'success', text })}
           saved={savedBills}
           onOpenSaved={startEdit}
@@ -901,6 +944,7 @@ export default function Bills({ accounts, intent }) {
                     hint: b.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                     onSelect: () => openBill(b),
                   },
+                  { label: 'Duplicate', hint: 'A new bill copied from this one, dated today', onSelect: () => duplicateRow(b) },
                   voidItem({
                     journalEntryId: b.journalEntryId,
                     voided: b.isVoided,

@@ -9,7 +9,8 @@ pay it.
 2. Choose the **Vendor**, then enter **Bill no.**, **Bill date** and the **Bill total** from the
    vendor's invoice. The **Due date** fills in from the vendor's terms, or for a vendor without
    terms from **Preferences › Bills › Bills are due** (10 days unless an Admin changes it). Type
-   another due date if the bill says so.
+   another due date if the bill says so. When the terms offer an early-payment discount (such as
+   2% 10 Net 30), **Discount date** beside the due date shows the last day to pay and take it.
 3. Split the bill across expense accounts, one line per category. A line can be an amount, or a
    quantity × rate (for example 2.5 hours at 40.00).
 4. The lines must add up to the bill total. When they do, the split shows as fully allocated.
@@ -53,7 +54,8 @@ changes. A voided bill, or one in a closed period, can't be edited.
    listed.
 2. Tick the bills to pay. Each ticked bill fills in its open balance; change the **Payment** amount
    to pay part of a bill.
-3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**. It can
+3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**.
+   **Ending balance** beside it shows what the account holds (or a card owes) now. It can
    be earlier than a bill's date if you paid the vendor ahead of the bill.
 4. Paying from a bank account writes checks: **Check no.** is filled in with the next number for
    that account. Change it if you need to, or clear it for payments made without a check. Leave
