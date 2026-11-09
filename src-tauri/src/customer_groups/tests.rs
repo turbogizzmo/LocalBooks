@@ -98,8 +98,11 @@ async fn automatic_groups_follow_the_customers_and_manual_groups_keep_their_list
     assert_eq!(edited.member_ids, vec![c]);
 
     assert!(save(&pool, None, &CustomerGroupInput { name: "oregon".into(), rules: vec![], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap_err().starts_with("GROUP_DUPLICATE"));
-    assert!(save(&pool, None, &CustomerGroupInput { name: "Bad".into(), rules: vec![Rule::State { code: "Oregon".into() }], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap_err().starts_with("GROUP_BAD_RULE"));
-    assert_eq!(list(&pool).await.unwrap().iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Oregon", "Owe 500+", "Picked"]);
+    for bad in [Rule::State { code: "Oregon".into() }, Rule::State { code: "O1".into() }, Rule::Zip { prefix: "".into() }, Rule::Zip { prefix: "A1".into() }] {
+        assert!(save(&pool, None, &CustomerGroupInput { name: "Bad".into(), rules: vec![bad], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap_err().starts_with("GROUP_BAD_RULE"));
+    }
+    assert!(save(&pool, None, &CustomerGroupInput { name: "Zip ok".into(), rules: vec![Rule::Zip { prefix: "97477-".into() }], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.is_ok());
+    assert_eq!(list(&pool).await.unwrap().iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Oregon", "Owe 500+", "Picked", "Zip ok"]);
     delete(&pool, picked.id).await.unwrap();
     assert!(get(&pool, picked.id).await.unwrap_err().starts_with("GROUP_NOT_FOUND"));
 }
