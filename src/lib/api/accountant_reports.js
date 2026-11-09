@@ -10,6 +10,8 @@ export default {
   listAccountTaxLines: () => invoke('list_account_tax_lines'),
   setAccountTaxLine: (accountId, taxLine) => invoke('set_account_tax_line', { accountId, taxLine }),
   getIncomeTaxReport: (startDate, endDate, detail, form = null, taxLine = null) => invoke('get_income_tax_report', { startDate, endDate, detail, form, taxLine }),
+  previewTxfExport: (startDate, endDate) => invoke('preview_txf_export', { startDate, endDate }),
+  saveTxfExport: (startDate, endDate, path) => invoke('save_txf_export', { startDate, endDate, path }),
   getCollectionsReport: (asOf) => invoke('get_collections_report', { asOf }),
   getOpenPurchaseOrdersReport: (asOf) => invoke('get_open_purchase_orders_report', { asOf }),
 };

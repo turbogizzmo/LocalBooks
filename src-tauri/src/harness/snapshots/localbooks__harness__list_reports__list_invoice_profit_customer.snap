@@ -1,0 +1,16 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Invoice Profitability by Customer, 2025-01-01 to 2025-12-31
+
+Customer                            Invoices        Income Cost of Goods  Gross Profit Margin
+Alder & Finch LLP                          4     44,837.50          0.00     44,837.50 100.0%
+Bonn Studio GmbH                           1      5,208.00          0.00      5,208.00 100.0%
+Brightwater Cafe                           5     49,537.50          0.00     49,537.50 100.0%
+Cobalt Outfitters                          4     42,337.50          0.00     42,337.50 100.0%
+TOTAL                                     14    141,920.50          0.00    141,920.50 100.0%
+
+4 lines
+
+Income is what each invoice credited to income accounts; cost is the cost of goods its tracked stock was sold at. Products and services whose stock isn't tracked carry no cost.

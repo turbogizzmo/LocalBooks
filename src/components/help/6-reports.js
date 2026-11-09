@@ -16,6 +16,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'cash-flow-forecast', area: 'reports', views: ['reports', 'dashboard'],
+    title: 'Forecast cash flow by week',
+    body: 'Reports › Cash Flow Forecast starts from your bank balances (plus payments not yet deposited) and, week by week, adds the open invoices due and takes away the open bills due, with past-due money first and anything due after the last week in Later. Its money in and out add up to the A/R and A/P Aging totals. The Dashboard’s Insights tab shows the next eight weeks; click it for the report.',
+    keywords: 'cash flow forecast projection projector weekly cash hub dashboard money in out receivable payable due',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'email-report-pdf', area: 'reports', views: ['reports', 'accounting/register', 'sales/customers', 'dashboard'],
     title: 'Email a report, list or register as a PDF',
     body: 'Export › Email as PDF… on any report, list or register attaches it as a PDF to a message: sent from LocalBooks when Settings › Email is set up, or opened in your mail app. Save as PDF… saves the same file, and the Reminders list can be emailed too.',
@@ -132,8 +140,8 @@ export const topics = [
   {
     id: 'income-tax-reports', area: 'reports', views: ['reports'],
     title: 'Total your books by income tax line',
-    body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines.',
-    keywords: 'income tax summary detail tax line mapping schedule c 1065 1120s 1120 s corporation partnership return preparer taxline',
+    body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines. For Schedule C, Export TXF… saves the year as a TXF file your tax program imports, and lists anything it leaves out for you to enter by hand.',
+    keywords: 'income tax summary detail tax line mapping schedule c 1065 1120s 1120 s corporation partnership return preparer taxline txf tax exchange format tax software export',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },
@@ -172,8 +180,8 @@ export const topics = [
   {
     id: 'list-reports', area: 'reports', views: ['reports'],
     title: 'Print a phone list, contact list or listing',
-    body: 'Reports › Lists has Customer and Vendor Phone and Contact Lists (contact lists add each balance), the Item Listing and the Account Listing. Other groups add Balance Sheet Summary, Profit & Loss YTD Comparison, Average Days to Pay, Unpaid Bills by Job, Open Purchase Orders Detail, Time by Job, Name and Item, the Physical Inventory Worksheet and the Audit Trail; each prints and exports like any report.',
-    keywords: 'list reports customer phone list contact list vendor phone list vendor contact list item listing account listing chart of accounts list balance sheet summary p&l ytd comparison year to date average days to pay unpaid bills by job open purchase orders detail po time by job time by name time by item timesheet hours physical inventory worksheet count audit trail who changed',
+    body: 'Reports › Lists has Customer and Vendor Phone and Contact Lists (contact lists add each balance), the Item Listing and the Account Listing. Other groups add Balance Sheet Summary, Profit & Loss YTD Comparison, Average Days to Pay, Unpaid Bills by Job, Open Purchase Orders Detail, Time by Job, Name and Item, the Physical Inventory Worksheet, Inventory Turnover by Item, Invoice Profitability by Customer and Detail, and the Audit Trail; each prints and exports like any report.',
+    keywords: 'list reports customer phone list contact list vendor phone list vendor contact list item listing account listing chart of accounts list balance sheet summary p&l ytd comparison year to date average days to pay unpaid bills by job open purchase orders detail po time by job time by name time by item timesheet hours physical inventory worksheet count inventory turnover days on hand invoice profitability margin gross profit audit trail who changed',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },

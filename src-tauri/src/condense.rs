@@ -87,6 +87,8 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("journal_lines", &[]),
     ("ledger_import_transactions", &["date"]),
     ("legacy_status_voids", &[]),
+    ("payroll_import_entries", &[]),
+    ("payroll_imports", &[]),
     ("purchase_order_lines", &[]),
     ("purchase_orders", &["po_date"]),
     ("qbw_posted_invoices", &[]),
@@ -124,6 +126,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "closing_locks",
     "custom_field_values",
     "custom_fields",
+    "customer_group_members",
+    "customer_groups",
     "customers",
     "data_key",
     "employees",
@@ -148,6 +152,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "mileage_rates",
     "mileage_trips",
     "payment_methods",
+    "payroll_account_map",
     "price_level_items",
     "price_levels",
     "products_services",
@@ -157,6 +162,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "reconciliation_statements",
     "reconciliation_undos",
     "reconciliations",
+    "record_attachments",
     "recurring_templates",
     "reminder_settings",
     "report_schedules",
@@ -187,6 +193,8 @@ const FORM_LINKS: &[(&str, &str, &str)] = &[
     ("form_email_log", "form_type", "document_id"),
     ("form_email_queue", "form_type", "document_id"),
     ("todos", "link_kind", "link_id"),
+    // A file on an estimate or purchase order keeps that document (the rest name lists).
+    ("record_attachments", "record_kind", "record_id"),
 ];
 
 /// The table a form kind in [`FORM_LINKS`] names; other kinds (statements) name no transaction.
@@ -196,6 +204,7 @@ fn form_table(kind: &str) -> Option<&'static str> {
         "SALES_RECEIPT" => Some("sales_receipts"),
         "ESTIMATE" => Some("estimates"),
         "BILL" => Some("bills"),
+        "PURCHASE_ORDER" => Some("purchase_orders"),
         _ => None,
     }
 }
