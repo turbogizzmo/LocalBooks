@@ -25,6 +25,9 @@ people using LocalBooks.
   recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
   checks and expenses show it for the chosen name. It can be hidden, and its figures match the
   reports.
+- **Reconciliation statements in the Attachments Library.** Statement files kept with a
+  reconciliation are now attachments like any other: they appear in Accounting › Attachments
+  Library, and deleting one there or on the Reconcile screen can be undone.
 - **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
   attached file with its date, keywords and what it's attached to; search, preview pictures and
   text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders

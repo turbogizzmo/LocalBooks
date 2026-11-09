@@ -111,3 +111,46 @@ async fn save_all_attachments_leaves_deleted_files_out() {
     let (files, _) = crate::attachment_export::write_zip(&pool, None, std::io::Cursor::new(Vec::new())).await.unwrap();
     assert_eq!(files, 1);
 }
+
+#[tokio::test]
+async fn migration_0096_moves_statement_files_into_the_library() {
+    use std::borrow::Cow;
+    let pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+    let mut before = sqlx::migrate::Migrator::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations"))).await.unwrap();
+    before.migrations = Cow::Owned(before.migrations.iter().filter(|m| m.version < 96).cloned().collect());
+    crate::db::migrate_with(&pool, &before).await.unwrap();
+    let checking: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '1010'").fetch_one(&pool).await.unwrap();
+    let rec: i64 = sqlx::query_scalar("INSERT INTO reconciliations (account_id, statement_end_date, statement_ending_balance_cents, beginning_balance_cents) VALUES (?1, '2026-08-31', 0, 0) RETURNING id")
+        .bind(checking)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO reconciliation_statements (reconciliation_id, file_name, media_type, size_bytes, content, created_at) VALUES (?1, 'August.pdf', 'application/pdf', 4, x'25504446', '2026-09-02T10:00:00.000Z')")
+        .bind(rec)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    crate::db::migrate(&pool).await.unwrap();
+    let files = record_files(&pool, "RECONCILIATION", rec).await.unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!((files[0].file_name.as_str(), files[0].media_type.as_str(), files[0].created_at.as_str()), ("August.pdf", "application/pdf", "2026-09-02T10:00:00.000Z"));
+    assert_eq!(content(&pool, FileRef { source: Source::Record, id: files[0].id }).await.unwrap().2, b"%PDF".to_vec());
+    let old: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_schema WHERE name = 'reconciliation_statements'").fetch_one(&pool).await.unwrap();
+    assert_eq!(old, 0, "the old table is gone");
+}
+
+#[tokio::test]
+async fn a_preview_reads_only_what_it_shows() {
+    let pool = crate::harness::fixture::harbor_lane().await;
+    let customer = first(&pool, "SELECT id FROM customers ORDER BY id LIMIT 1").await;
+    let text = add_record_file(&pool, "CUSTOMER", customer, "notes.txt", b"0123456789").await.unwrap();
+    let picture = add_record_file(&pool, "CUSTOMER", customer, "logo.png", b"png bytes").await.unwrap();
+    let pdf = add_record_file(&pool, "CUSTOMER", customer, "scan.pdf", b"%PDF synthetic").await.unwrap();
+    let shown = |id| preview(&pool, FileRef { source: Source::Record, id }, 4);
+    assert_eq!(shown(text.id).await.unwrap().2, Some(b"0123".to_vec()), "a text file is cut in SQL");
+    assert_eq!(shown(picture.id).await.unwrap().2, Some(b"png bytes".to_vec()), "a picture is whole");
+    let (name, media, bytes) = shown(pdf.id).await.unwrap();
+    assert_eq!((name.as_str(), media.as_str(), bytes), ("scan.pdf", "application/pdf", None));
+    assert!(shown(99_999).await.unwrap_err().starts_with("ATTACH_NOT_FOUND"));
+}

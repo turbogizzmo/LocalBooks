@@ -82,6 +82,12 @@ pub async fn add_record_file(pool: &SqlitePool, record_kind: &str, record_id: i6
     if !exists {
         return Err(format!("ATTACH_NO_RECORD: that {} does not exist", record_kind.to_lowercase().replace('_', " ")));
     }
+    if record_kind == "RECONCILIATION" {
+        let undone: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM reconciliation_undos WHERE reconciliation_id = ?1)").bind(record_id).fetch_one(pool).await.map_err(db_err)?;
+        if undone {
+            return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into());
+        }
+    }
     let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("attachment");
     sqlx::query_as(
         "INSERT INTO record_attachments (record_kind, record_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -206,6 +212,24 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
         .await
         .map_err(db_err)?
         .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
+}
+
+/// What a preview shows of a file, read in SQL so no more than that leaves the database: a picture
+/// whole, the first `text_bytes` of a text file, and nothing of any other kind.
+pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
+    sqlx::query_as(&format!(
+        "SELECT file_name, media_type,
+                CASE WHEN media_type LIKE 'image/%' THEN content
+                     WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
+         FROM {} WHERE id = ?1",
+        file.source.table()
+    ))
+    .bind(file.id)
+    .bind(text_bytes)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
 }
 
 /// Sets a file's keywords (blank clears them) and whether it goes with the form when emailed.
