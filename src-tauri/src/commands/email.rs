@@ -58,11 +58,15 @@ pub async fn email_form_with_mail_app(
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
     let (file_name, bytes) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
+    // The files marked Send with the form go with it, as they do through the email server.
+    let more = crate::attachments_library::files_to_send(&pool, kind, document_id).await?;
     let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
-    let message = mail_app::Compose { to: to.clone(), subject: subject.clone(), body, attachment: Default::default() };
+    let message = mail_app::Compose { to: to.clone(), subject: subject.clone(), body, attachment: Default::default(), more: Vec::new() };
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        let attachment = mail_app::stage_attachment(&outgoing, &file_name, &bytes)?;
-        mail_app::compose(&mail_app::Compose { attachment, ..message })
+        let files: Vec<(&str, &[u8])> = std::iter::once((file_name.as_str(), bytes.as_slice())).chain(more.iter().map(|(n, b, _)| (n.as_str(), b.as_slice()))).collect();
+        let mut staged = mail_app::stage_files(&outgoing, &files)?;
+        let attachment = staged.remove(0);
+        mail_app::compose(&mail_app::Compose { attachment, more: staged, ..message })
     })
     .await
     .map_err(|e| format!("MAIL_OPEN: {e}"))??;

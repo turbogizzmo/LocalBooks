@@ -35,7 +35,8 @@ Receipts and vendor bills that arrive before you have time to enter them can wai
 
 1. Drop the files on the inbox window, or click **Add files…**. PDFs, photos and scans (JPG, PNG,
    HEIC) up to 25 MB each are kept inside the company file, so they're in every backup.
-2. Click one to see it beside the list. Add a **Note** if it needs one (*ask Pat which job*).
+2. Click one to see it beside the list: a PDF shows page by page, a photo as it is. Add a **Note** if
+   it needs one (*ask Pat which job*).
 3. Click **Enter as bill**, **Expense** or **Check**. That form opens with the file attached and,
    for a PDF with text, what LocalBooks read from it filled in: the **total** (the amount on a line
    such as *Total*, *Amount due* or *Balance due*), the **date**, and the **name** at the top as the
@@ -46,6 +47,11 @@ without posting, the file stays in the inbox. **Remove** takes a file out withou
 
 Nothing is sent anywhere to read a file: LocalBooks reads only the text a PDF already contains.
 Photos and scanned PDFs have no text, so their fields are left for you to type (there's no OCR).
+
+To bring in paper, scan it with your scanner's own app (or a phone) to a PDF or photo, then drop
+the file on the inbox. LocalBooks doesn't drive scanners itself: each system has its own scanner
+interface (and some scanners need their maker's driver), so scanning from inside LocalBooks would
+work for some scanners and not others.
 
 ## Attach files to a posted transaction
 
@@ -80,14 +86,16 @@ its size.
 
 - **Search** by file name, keyword, or what it is attached to (a customer's or vendor's name, a
   document number, "invoice", "vendor").
-- Click a file to see it on the right: pictures and text files show a preview; for a PDF or other
-  file, **Save a copy…** and open it in another program.
+- Click a file to see it on the right: pictures, PDFs (page by page) and text files show a preview;
+  for any other kind of file, **Save a copy…** and open it in another program.
 - Give it **Keywords** (for example "W-9 2025" or "signed") so it's easy to find, and tick **Send
-  with the form when it is emailed** to send it along with the invoice, estimate or sales receipt
-  it belongs to. Click **Save details**. A file on an invoice's or sales receipt's transaction, or
-  on an estimate, goes with that form; a file on a customer goes with their statements. Marked
-  files are sent when LocalBooks emails the form itself (Settings › Email); a message opened in
-  your own mail app gets only the form's PDF. Together they can be up to 20 MB.
+  with the form when it is emailed or printed** to send it along with the invoice, estimate or
+  sales receipt it belongs to. Click **Save details**. A file on an invoice's, sales receipt's,
+  credit memo's or bill payment's transaction, or on an estimate, goes with that form; a file on a
+  customer goes with their statements. Marked files are attached whether LocalBooks emails the
+  form (Settings › Email) or opens the message in your mail app, up to 20 MB together. When the
+  form is printed, marked pictures and PDFs print after it, each on its own page; other kinds of
+  file are left out of the printout, and LocalBooks says which.
 - **Delete…** hides the file from its transaction or record but keeps it. Tick **Show deleted** to
   see deleted files, then **Restore** one to put it back.
 - **Remove for good…** (on a deleted file, Admins only) erases it from the company file after a

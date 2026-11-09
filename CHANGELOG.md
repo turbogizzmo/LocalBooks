@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **PDF previews, and attachments on printouts and mail-app emails.** The Attachments Library and
+  the Document Inbox show PDFs page by page. Files marked Send with the form now print after the
+  form and go with it when the email opens in your mail app, not only when LocalBooks sends it.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

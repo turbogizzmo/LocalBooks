@@ -24,6 +24,18 @@ const clean = (text) => text.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').tr
 const supplements = join(root, 'scripts', 'notices');
 
 /**
+ * Optional packages that never ship: pdf.js lists a native canvas for running under Node; in the
+ * app it draws on the webview's own canvas, and the bundle never imports this one.
+ */
+const NOT_SHIPPED = ['@napi-rs/canvas'];
+
+/** Folders inside a package whose files ship too, with license files of their own. */
+const SHIPPED_SUBFOLDERS = {
+  // The standard fonts the PDF viewer draws non-embedded text with (vite.config.js copies them).
+  'pdfjs-dist': ['standard_fonts'],
+};
+
+/**
  * License and NOTICE files at the top of a package directory, in name order, plus any file in
  * scripts/notices/extra/<name>/ that the published package leaves out (see the README there).
  */
@@ -35,6 +47,9 @@ function legalFiles(dir, name) {
       .map((file) => ({ name: label(file), notice: NOTICE_FILE.test(file), text: clean(readFileSync(join(from, file), 'utf8')) }))
       .filter((f) => f.text);
   const files = read(dir, (file) => file);
+  for (const folder of SHIPPED_SUBFOLDERS[name] ?? []) {
+    if (existsSync(join(dir, folder))) files.push(...read(join(dir, folder), (file) => `${folder}/${file}`));
+  }
   const extra = join(supplements, 'extra', name);
   if (existsSync(extra)) {
     for (const f of read(extra, (file) => `${file}, from the project's repository`)) {
@@ -80,6 +95,7 @@ function npmPackages() {
   const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
   return Object.entries(lock.packages)
     .filter(([path, p]) => path.startsWith('node_modules/') && !p.dev && !p.devOptional)
+    .filter(([path, p]) => !(p.optional && NOT_SHIPPED.some((name) => path.slice('node_modules/'.length).startsWith(name))))
     .map(([path, p]) => {
       const dir = join(root, path);
       if (!existsSync(dir)) throw new Error(`${path} is missing: run npm ci first`);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { contentMatches } from '../lib/inboxPreview.js';
+import PdfPreview from './PdfPreview.jsx';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import Notice from './Notice.jsx';
@@ -11,14 +12,22 @@ import { useOpenFromList } from '../lib/windows.js';
 const size = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 const canPreview = (media) => media === 'application/pdf' || media.startsWith('image/');
 
-/** The selected document, drawn by the webview: a PDF or a picture. */
+/** Bytes as a data URL, which the content security policy lets an <img> show (a blob: URL it doesn't). */
+function dataUrl(mediaType, bytes) {
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${mediaType};base64,${btoa(text)}`;
+}
+
+/** The selected document: a PDF drawn page by page (PdfPreview), or a picture. */
 function Preview({ doc }) {
   const [url, setUrl] = useState(null);
+  const [pdf, setPdf] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
     let live = true;
-    let made = null;
     setUrl(null);
+    setPdf(null);
     setError(null);
     if (!canPreview(doc.mediaType)) return undefined;
     api.inboxDocumentContent(doc.id).then(
@@ -31,22 +40,20 @@ function Preview({ doc }) {
           setError('This file’s contents don’t match its name, so it isn’t previewed. It is attached as it is when you enter it.');
           return;
         }
-        made = URL.createObjectURL(new Blob([bytes], { type: doc.mediaType }));
-        setUrl(made);
+        if (doc.mediaType === 'application/pdf') setPdf(new Uint8Array(bytes));
+        else setUrl(dataUrl(doc.mediaType, new Uint8Array(bytes)));
       },
       (err) => live && setError(errorText(err)),
     );
     return () => {
       live = false;
-      if (made) URL.revokeObjectURL(made);
     };
   }, [doc.id, doc.mediaType]);
   if (error) return <Notice kind="error" text={error} />;
   if (!canPreview(doc.mediaType)) return <p className="p-3 text-sm text-qb-ink-muted">No preview for this kind of file. It is attached as it is when you enter it.</p>;
+  if (pdf) return <PdfPreview bytes={pdf} name={doc.fileName} className="h-full p-2" />;
   if (!url) return <p className="p-3 text-sm text-qb-ink-muted">Loading…</p>;
-  return doc.mediaType === 'application/pdf' ? (
-    <iframe title={`Preview of ${doc.fileName}`} src={url} className="h-full w-full border-0 bg-white" />
-  ) : (
+  return (
     <img alt={`Preview of ${doc.fileName}`} src={url} className="mx-auto max-h-full max-w-full object-contain" />
   );
 }
