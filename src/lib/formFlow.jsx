@@ -196,7 +196,8 @@ function listenOnPage() {
     if (e.defaultPrevented || (t !== document.body && t !== document.documentElement)) return;
     if (document.querySelector('[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]')) return;
     const name = formKeyCommand(e);
-    if (!name || name === 'delete-line' || name === 'copy-line' || name === 'open-list') return;
+    // Line keys act on a grid that has focus (or come from the Edit menu), never from the page.
+    if (!name || name === 'delete-line' || name === 'copy-line' || name === 'paste-line' || name === 'open-list') return;
     if (runFormCommand(name)) e.preventDefault();
   });
 }
