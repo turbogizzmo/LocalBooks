@@ -94,12 +94,14 @@ export function VoucherPreview({ doc }) {
  *   form       { kind, id }: a customer form, previewed, printed and emailed as designed
  *   voucher    the voucher doc (TransactionVoucher): previewed and printed as a voucher
  *   onPrint    prints it some other way (purchase orders), with `children` as its preview
- *   entryId    its journal entry, for Attach File (none for estimates and purchase orders)
+ *   entryId    its journal entry, for Attach File
+ *   record     { kind, id } for Attach File on a document with no journal entry (estimates and
+ *              purchase orders: 'ESTIMATE', 'PURCHASE_ORDER')
  *   void       { onVoid, disabled, hint, confirm }, when it can be voided here
  *   notes      lines shown above it (status, what is left to apply)
  *   extra      more toolbar groups
  */
-export default function SavedDocView({ label, title, step, onFind, onNew, form, voucher, onPrint, entryId, void: voiding, notes = [], extra = [], children, onNotice }) {
+export default function SavedDocView({ label, title, step, onFind, onNew, form, voucher, onPrint, entryId, record = null, void: voiding, notes = [], extra = [], children, onNotice }) {
   const [notice, setNotice] = useState(null);
   const say = onNotice ?? setNotice;
   const [printPortal, forms] = useFormPrinter(say);
@@ -145,7 +147,7 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
     [
       printItem,
       emailItem,
-      entryId
+      entryId || record
         ? { id: 'attach', label: 'Attach File', icon: 'Attach', hint: 'Show and add files attached to it', onClick: () => setShowAttachments((v) => !v) }
         : null,
     ].filter(Boolean),
@@ -167,9 +169,9 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
         <Notice key={i} kind={n.kind ?? 'info'} text={n.text} />
       ))}
       {!onNotice && notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
-      {showAttachments && entryId && (
+      {showAttachments && (entryId || record) && (
         <div className="border-b border-qb-border bg-qb-canvas">
-          <Attachments entryId={entryId} />
+          {entryId ? <Attachments entryId={entryId} /> : <Attachments record={record} what={`this ${label.toLowerCase()}`} />}
         </div>
       )}
       <div className="max-h-[56vh] overflow-auto bg-qb-canvas p-3 scrollbar-thin">

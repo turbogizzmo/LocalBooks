@@ -5,14 +5,21 @@ import { askConfirm } from '../lib/dialogs.jsx';
 
 const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
-/** Files kept with a posted transaction (receipts, signed estimates): attach, save a copy, remove. */
-export default function Attachments({ entryId }) {
+/**
+ * Files kept with a posted transaction (`entryId`), or with another record (`record` =
+ * { kind: 'CUSTOMER' | 'VENDOR' | 'ITEM' | 'ACCOUNT' | 'ESTIMATE' | 'PURCHASE_ORDER' |
+ * 'RECONCILIATION', id }): attach, save a copy, delete. Deleting is reversible: Company ›
+ * Attachments Library can restore it.
+ */
+export default function Attachments({ entryId, record = null, what = record ? 'this record' : 'this transaction' }) {
   const [list, setList] = useState(null);
   const [error, setError] = useState(null);
-  const load = () => api.listAttachments(entryId).then(setList, (err) => setError(errorText(err)));
+  const source = record ? 'RECORD' : 'ENTRY';
+  const load = () =>
+    (record ? api.listRecordAttachments(record.kind, record.id) : api.listAttachments(entryId)).then(setList, (err) => setError(errorText(err)));
   useEffect(() => {
     load();
-  }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entryId, record?.kind, record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (work) => {
     setError(null);
@@ -26,7 +33,10 @@ export default function Attachments({ entryId }) {
   const attach = () =>
     run(async () => {
       const picked = await open({ multiple: true, directory: false });
-      for (const path of [picked].flat().filter(Boolean)) await api.addAttachment(entryId, path);
+      for (const path of [picked].flat().filter(Boolean)) {
+        if (record) await api.addRecordAttachment(record.kind, record.id, path);
+        else await api.addAttachment(entryId, path);
+      }
     });
 
   return (
@@ -35,15 +45,19 @@ export default function Attachments({ entryId }) {
       {list?.length === 0 && <span className="text-qb-ink-faint">none</span>}
       {list?.map((a) => (
         <span key={a.id} className="flex items-center gap-1 rounded-sm border border-qb-border bg-white px-1.5">
-          <button type="button" className="text-qb-link hover:underline" onClick={() => run(() => api.saveAttachment(a.id))} title="Save a copy">
+          <button type="button" className="text-qb-link hover:underline" onClick={() => run(() => api.saveLibraryAttachment({ source, id: a.id }))} title="Save a copy">
             {a.fileName}
           </button>
           <span className="text-2xs text-qb-ink-muted">{size(a.sizeBytes)}</span>
           <button
             type="button"
             className="text-qb-ink-muted hover:text-qb-negative"
-            aria-label={`Remove ${a.fileName}`}
-            onClick={async () => (await askConfirm(`Remove ${a.fileName} from this transaction?`, { confirmLabel: 'Remove', danger: true })) && run(() => api.deleteAttachment(a.id))}
+            aria-label={`Delete ${a.fileName}`}
+            title="Delete (Company › Attachments Library can restore it)"
+            onClick={async () =>
+              (await askConfirm(`Delete ${a.fileName} from ${what}? You can restore it from Company › Attachments Library.`, { confirmLabel: 'Delete', danger: true })) &&
+              run(() => api.deleteLibraryAttachment({ source, id: a.id }))
+            }
           >
             ×
           </button>

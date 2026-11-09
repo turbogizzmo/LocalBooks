@@ -48,7 +48,7 @@ async fn passwords_stay_out_of_the_company_file() {
     save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some("hunter2".into())).await.unwrap();
     let cleared = save_settings(&pool, &secrets, SmtpSettings { port: 2525, ..account() }, Some(String::new())).await.unwrap();
     assert!(!cleared.has_password);
-    let err = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![] }).await.unwrap_err();
+    let err = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], extra: vec![] }).await.unwrap_err();
     assert!(err.starts_with("SMTP_NO_PASSWORD"), "{err}");
 }
 
@@ -114,7 +114,7 @@ async fn sends_the_pdf_through_the_server() {
     send(
         &pool,
         &secrets,
-        Outgoing { to: vec!["ap@initech.test".into()], subject: "Invoice 1001 from Acme".into(), body: "Please find attached.".into(), file_name: "Invoice 1001.pdf".into(), pdf: b"%PDF-1.4 test".to_vec() },
+        Outgoing { to: vec!["ap@initech.test".into()], subject: "Invoice 1001 from Acme".into(), body: "Please find attached.".into(), file_name: "Invoice 1001.pdf".into(), pdf: b"%PDF-1.4 test".to_vec(), extra: vec![("Signed quote.png".into(), "image/png".into(), b"png bytes".to_vec())] },
     )
     .await
     .unwrap();
@@ -122,6 +122,8 @@ async fn sends_the_pdf_through_the_server() {
     assert!(text.contains("Subject: Invoice 1001 from Acme"), "{text}");
     assert!(text.contains("From: \"Acme Billing\" <billing@example.com>") || text.contains("From: Acme Billing <billing@example.com>"), "{text}");
     assert!(text.contains("To: ap@initech.test"), "{text}");
+    // A file marked Send with the form goes after the PDF.
+    assert!(text.contains("Signed quote.png") && text.contains("Content-Type: image/png"), "{text}");
     assert!(!text.contains("Bcc:"), "a blind copy is not shown in the message");
     assert!(text.contains("Please find attached."));
     assert!(text.contains("filename=\"Invoice 1001.pdf\""), "{text}");
@@ -129,6 +131,6 @@ async fn sends_the_pdf_through_the_server() {
 
     // Turned off, nothing is sent.
     save_settings(&pool, &secrets, SmtpSettings { enabled: false, host: "127.0.0.1".into(), port, security: Security::None, username: String::new(), ..account() }, None).await.unwrap();
-    let off = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![] }).await.unwrap_err();
+    let off = send(&pool, &secrets, Outgoing { to: vec!["a@x.com".into()], subject: "s".into(), body: "b".into(), file_name: "f.pdf".into(), pdf: vec![], extra: vec![] }).await.unwrap_err();
     assert!(off.starts_with("SMTP_OFF"));
 }

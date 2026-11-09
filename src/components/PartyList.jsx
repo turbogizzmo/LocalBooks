@@ -17,6 +17,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
+import Attachments from './Attachments.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -369,6 +370,10 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               <span className="font-semibold text-qb-ink-muted">Notes</span>
               <textarea className="qb-input h-[44px] py-1" value={form.notes ?? ''} onChange={set('notes')} />
             </label>
+          </div>
+          {/* Files kept with the customer or vendor (a W-9, a contract): saved at once, not with Save. */}
+          <div className="-mx-3 border-y border-qb-border bg-qb-canvas">
+            <Attachments record={{ kind: kind.toUpperCase(), id }} what={`this ${noun}`} />
           </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
           <div className="flex justify-end gap-2 border-t border-qb-border pt-2">

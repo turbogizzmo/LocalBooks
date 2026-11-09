@@ -50,6 +50,7 @@ features![
     accounts,
     ach,
     attachments,
+    attachments_library,
     backups,
     bank_feeds,
     bounced_checks,

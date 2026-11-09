@@ -249,6 +249,7 @@ function EstimateList({ accounts, intent, navigate }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           form={{ kind: 'ESTIMATE', id: viewing.id }}
+          record={{ kind: 'ESTIMATE', id: viewing.id }}
           onNotice={setNotice}
           extra={[
             [

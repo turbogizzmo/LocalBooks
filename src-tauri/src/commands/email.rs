@@ -109,7 +109,8 @@ pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormK
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
     let (file_name, pdf) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
-    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf }).await?;
+    let extra = crate::attachments_library::files_to_send(&pool, kind, document_id).await?;
+    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf, extra }).await?;
     record_sent(&app, &pool, kind, document_id, &to, email_log::Method::Smtp, &subject).await;
     Ok(())
 }

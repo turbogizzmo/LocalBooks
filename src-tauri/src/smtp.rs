@@ -230,6 +230,9 @@ pub struct Outgoing {
     pub body: String,
     pub file_name: String,
     pub pdf: Vec<u8>,
+    /// More files to send after the PDF (name, media type, bytes): attachments marked Send with
+    /// the form (`attachments_library::files_to_send`).
+    pub extra: Vec<(String, String, Vec<u8>)>,
 }
 
 fn build_message(settings: &SmtpSettings, outgoing: Outgoing) -> Result<Message, String> {
@@ -242,7 +245,12 @@ fn build_message(settings: &SmtpSettings, outgoing: Outgoing) -> Result<Message,
         builder = builder.bcc(from);
     }
     let pdf = Attachment::new(outgoing.file_name).body(outgoing.pdf, ContentType::parse("application/pdf").expect("a valid media type"));
-    builder.multipart(MultiPart::mixed().singlepart(SinglePart::plain(outgoing.body)).singlepart(pdf)).map_err(|e| format!("SMTP_MESSAGE: {e}"))
+    let mut parts = MultiPart::mixed().singlepart(SinglePart::plain(outgoing.body)).singlepart(pdf);
+    for (name, media_type, bytes) in outgoing.extra {
+        let content_type = ContentType::parse(&media_type).unwrap_or_else(|_| ContentType::parse("application/octet-stream").expect("a valid media type"));
+        parts = parts.singlepart(Attachment::new(name).body(bytes, content_type));
+    }
+    builder.multipart(parts).map_err(|e| format!("SMTP_MESSAGE: {e}"))
 }
 
 /// Sends the message through the configured server.

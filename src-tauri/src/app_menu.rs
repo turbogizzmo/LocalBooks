@@ -127,6 +127,7 @@ const COMPANY: &[Entry] = &[
     form("Make General Journal Entries…", "accounting/journal", "journal-entry"),
     page("Reclassify Transactions…", "accounting/reclassify"),
     page("Clean Up Books…", "accounting/clean-up"),
+    page("Attachments Library", "accounting/attachments"),
     Entry::Sub("Manage Currency", &[page("Home Currency Adjustment…", "accounting/fx-revaluation")]),
 ];
 

@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
+  attached file with its date, keywords and what it's attached to; search, preview pictures and
+  text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders
+  now take files too. A file marked **Send with the form** goes along when LocalBooks emails the
+  invoice, estimate, sales receipt or statement. Deleting a file is reversible: it can be restored
+  from the library, and only an Admin can remove a deleted file for good, after a warning.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
