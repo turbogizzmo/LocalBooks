@@ -185,9 +185,10 @@ struct Source {
     /// What left the bank, in home currency.
     bank_cents: i64,
     bank: i64,
-    /// What the bounce debits (A/R for a payment, the receipt's income account, a deposit line's
-    /// own account), with any exchange difference; together they come to `bank_cents`.
-    debits: Vec<JournalLine>,
+    /// Every line of the bounce but the bank's: what it debits (A/R for a payment, the receipt's
+    /// income account, a deposit line's own account), a discount taken back, any exchange
+    /// difference. They net to `bank_cents`, which the bank is credited.
+    lines: Vec<JournalLine>,
     payment_id: Option<i64>,
     receipt_id: Option<i64>,
     deposit_line_id: Option<i64>,
@@ -237,28 +238,28 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
             // A/R gets back what the payment relieved; the payment's realized exchange difference
             // (the bank's amount less that) is reversed.
             let ar_cents = ar_relief.unwrap_or(amount);
-            let mut debits = Vec::with_capacity(2);
+            let mut lines = Vec::with_capacity(3);
             if ar_cents > 0 {
-                debits.push(JournalLine::debit(ar, ar_cents).with_memo(Some(&label)));
+                lines.push(JournalLine::debit(ar, ar_cents).with_memo(Some(&label)));
             }
             // An early-payment discount the payment took is reversed: the invoice is open again for
             // all of it, and the customer has to pay in full.
             if discount > 0 {
                 let account = discount_account.ok_or("BOUNCE_NO_DISCOUNT_LINE: the payment's discount line could not be found")?;
-                debits.push(JournalLine::credit(account, discount).with_memo(Some("Early-payment discount reversed")));
+                lines.push(JournalLine::credit(account, discount).with_memo(Some("Early-payment discount reversed")));
             }
             let difference = bank_cents + discount - ar_cents;
             if difference != 0 {
                 let fx = system_account(tx, "OTHER_EXPENSE").await?;
                 let memo = Some(if difference > 0 { "Realized exchange gain reversed" } else { "Realized exchange loss reversed" });
-                debits.push(if difference > 0 { JournalLine::debit(fx, difference).with_memo(memo) } else { JournalLine::credit(fx, -difference).with_memo(memo) });
+                lines.push(if difference > 0 { JournalLine::debit(fx, difference).with_memo(memo) } else { JournalLine::credit(fx, -difference).with_memo(memo) });
             }
             Ok(Source {
                 date,
                 amount,
                 bank_cents,
                 bank,
-                debits,
+                lines,
                 payment_id: Some(id),
                 receipt_id: None,
                 deposit_line_id: None,
@@ -296,7 +297,7 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
                 amount,
                 bank_cents,
                 bank,
-                debits: vec![JournalLine::debit(income, amount).with_memo(Some(&label))],
+                lines: vec![JournalLine::debit(income, amount).with_memo(Some(&label))],
                 payment_id: None,
                 receipt_id: Some(id),
                 deposit_line_id: deposit_line,
@@ -318,7 +319,7 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
                 amount,
                 bank_cents,
                 bank,
-                debits: vec![JournalLine::debit(account, amount).with_memo(Some(&label))],
+                lines: vec![JournalLine::debit(account, amount).with_memo(Some(&label))],
                 payment_id: None,
                 receipt_id: None,
                 deposit_line_id: Some(id),
@@ -366,7 +367,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         return Err(format!("BOUNCE_BEFORE_DEPOSIT: the check bounced on or after {}, when it was deposited", source.date));
     }
 
-    let mut lines = source.debits.clone();
+    let mut lines = source.lines.clone();
     let bank_fee_account = if input.bank_fee_cents > 0 {
         let account = input.bank_fee_account_id.ok_or("BOUNCE_FEE_ACCOUNT: choose the expense account for the bank's fee")?;
         if classification(tx, account).await?.as_deref() != Some("EXPENSE") {
