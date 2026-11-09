@@ -1,0 +1,15 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Budget Overview, 2025-01-01 to 2025-12-31
+
+Account                             Jan 2025      Feb 2025      Mar 2025      Apr 2025      May 2025      Jun 2025      Jul 2025      Aug 2025      Sep 2025      Oct 2025      Nov 2025      Dec 2025         Total
+Plan 2025
+  Sales                            10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00     10,000.00    120,000.00
+  Rent & Lease                      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00      2,500.00     30,000.00
+Net Income · Plan 2025              7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00      7,500.00     90,000.00
+
+2 lines
+
+1 budget for the fiscal year starting 2025-01-01, as entered in Accounting › Budgets.

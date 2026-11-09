@@ -294,15 +294,8 @@ mod platform {
 /// returns its path. Older folders are removed: once a message is sent the mail app has its own
 /// copy, and these are only ever regenerated.
 pub fn stage_attachment(outgoing_dir: &Path, file_name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
-    if let Ok(entries) = std::fs::read_dir(outgoing_dir) {
-        let day_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 3600);
-        for entry in entries.flatten() {
-            let stale = entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < day_ago);
-            if stale {
-                let _ = std::fs::remove_dir_all(entry.path());
-            }
-        }
-    }
+    // Earlier staged copies the mail app has had time to read go first (temp_files.rs).
+    crate::temp_files::sweep_outgoing(outgoing_dir, crate::temp_files::KEEP, std::time::SystemTime::now());
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or_default();
     let dir = outgoing_dir.join(stamp.to_string());
     std::fs::create_dir_all(&dir).map_err(|e| format!("MAIL_STAGE: cannot create {}: {e}", dir.display()))?;

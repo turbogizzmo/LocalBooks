@@ -2528,10 +2528,12 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 name = "localbooks"
 version = "0.13.0"
 dependencies = [
+ "aes 0.8.4",
  "aes-gcm",
  "argon2",
  "base64 0.23.1",
  "calamine",
+ "cbc",
  "cfb 0.15.0",
  "chrono",
  "csv",
@@ -2543,6 +2545,7 @@ dependencies = [
  "keyring",
  "lettre",
  "libc",
+ "lopdf",
  "openqbw",
  "opensqlany",
  "pdf-extract",

@@ -7,6 +7,7 @@ mod accountant_reports;
 mod accounts;
 mod app_menu;
 mod ach;
+mod approvals;
 mod attachment_export;
 mod attachments_library;
 mod audit_chain;
@@ -23,6 +24,7 @@ mod cleanup;
 mod closing;
 mod commands;
 mod company_setup;
+mod company_snapshot;
 mod condense;
 mod credits;
 mod custom_fields;
@@ -32,12 +34,14 @@ mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
+mod document_inbox;
 mod edits;
 mod email_log;
 mod envelopes;
 mod estimates;
 mod expenses;
 mod forensic;
+mod form_1099;
 mod forms;
 mod fx_rates;
 mod gnucash_import;
@@ -66,15 +70,18 @@ mod list_order;
 mod list_reports;
 mod money;
 mod mail_app;
+mod offsite;
 mod parties;
 mod payroll_import;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod merges;
 mod mileage;
 mod nacha;
 mod preferences;
 mod price_levels;
+mod print_batches;
 mod print_queue;
 mod profile_lists;
 mod qbmac_import;
@@ -92,6 +99,7 @@ mod reconcile;
 mod registers;
 mod reminders;
 mod report_center;
+mod report_comments;
 mod release_check;
 mod reports;
 mod revaluation;
@@ -102,6 +110,7 @@ mod sales_prefs;
 mod sales_tax;
 mod tax_ids;
 mod txf;
+mod temp_files;
 #[cfg(test)]
 mod test_companies;
 mod secrets;
@@ -180,6 +189,10 @@ fn main() {
                 diagnostics::install(logs);
             }
             diagnostics::log(&format!("LocalBooks {} started", app.package_info().version));
+            // Temporary copies an earlier run left (staged mail, an unpacked backup) go now.
+            if let Ok(cache) = app.path().app_cache_dir() {
+                temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
+            }
             let config = db::DbConfig {
                 config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),
@@ -256,6 +269,15 @@ fn main() {
                 if let Err(err) = backup::auto_backup(db.inner()).await {
                     eprintln!("automatic backup failed: {err}");
                 }
+                // Offsite copies while the app stays open: checked now and every hour, made when
+                // the newest is older than a day (`offsite::INTERVAL`). A failure is kept on the
+                // Offsite screen; the message never holds the key or password.
+                loop {
+                    if let Ok(store) = commands::offsite_secrets(&handle) {
+                        let _ = offsite::run_if_due(db.inner(), &store).await;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
+                }
             });
             Ok(())
         })
@@ -286,6 +308,9 @@ fn main() {
                 }
                 if let Some(db) = app.try_state::<db::Db>() {
                     db.shutdown().await;
+                }
+                if let Ok(cache) = app.path().app_cache_dir() {
+                    temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
                 }
             }),
             _ => {}

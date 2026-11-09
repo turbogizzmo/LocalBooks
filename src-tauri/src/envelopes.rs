@@ -131,7 +131,7 @@ pub enum EnvelopeTarget {
 }
 
 /// Lines of an address block: the name, then the rest, blank lines and repeats left out.
-fn address_block(name: &str, company: Option<&str>, address: Option<&str>) -> Vec<String> {
+pub(crate) fn address_block(name: &str, company: Option<&str>, address: Option<&str>) -> Vec<String> {
     let mut lines = vec![name.trim().to_string()];
     if let Some(company) = company.map(str::trim).filter(|c| !c.is_empty() && !c.eq_ignore_ascii_case(name.trim())) {
         lines.push(company.to_string());
