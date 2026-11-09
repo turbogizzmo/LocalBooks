@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Report previews.** In the report center, rest the pointer on a report to see a small picture
+  of it, from your own books, before you open it.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

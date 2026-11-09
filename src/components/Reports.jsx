@@ -1,8 +1,8 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import { classLabel, useClasses } from './ClassSelect.jsx';
 import { ExportMenu, PERIODS, Statement, longDate, plainAmount, resolvePeriod, saveCsv, saveReportXlsx, saveText, saveXlsx, statementSheet, toCsv } from './ReportParts.jsx';
-import { useCompany } from './PrintDocuments.jsx';
+import { PreviewContext, useCompany } from './PrintDocuments.jsx';
 import CustomReport, { isCustomReport, useCustomReports, withCustomReports } from './CustomReport.jsx';
 import JobReport, { JOB_REPORTS, isJobReport } from './JobReports.jsx';
 import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReports.jsx';
@@ -35,7 +35,7 @@ import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import DateBox from './DateBox.jsx';
-import { datesFor, describeReport, DATED_REPORTS, pushRecent, searchReports, toggleFavorite, withFavoritesAndRecent } from '../lib/reportCenter.js';
+import { datesFor, describeReport, DATED_REPORTS, previewable, pushRecent, searchReports, toggleFavorite, withFavoritesAndRecent } from '../lib/reportCenter.js';
 import { CashFlowForecastReport } from './CashForecast.jsx';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -622,9 +622,22 @@ export default function Reports({ navigate, intent }) {
   const drill = initial ? `-${initial.at}` : '';
   const { reportOptionsFirst } = useMyPreferences();
   const askFirst = reportOptionsFirst && !initial && OPTIONS_FIRST[report];
+  // A miniature of the report under the pointer (or keyboard focus), after a moment's pause.
+  const [peek, setPeek] = useState(null);
+  const peekTimer = useRef(null);
+  const peekAt = (id) => {
+    clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(previewable(id) && id !== report ? id : null), id ? 450 : 0);
+  };
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
   return (
-    <div className="flex h-full gap-2 p-2">
-      <nav className="qb-panel no-print flex w-[270px] flex-none flex-col py-1" aria-label="Reports">
+    <div className="relative flex h-full gap-2 p-2">
+      {peek && (
+        <ReportPreview label={groups.flatMap((g) => g.reports).find(([id]) => id === peek)?.[1] ?? ''}>
+          <ReportBody report={peek} listCatalog={listCatalog} custom={custom} />
+        </ReportPreview>
+      )}
+      <nav className="qb-panel no-print flex w-[270px] flex-none flex-col py-1" aria-label="Reports" onMouseLeave={() => peekAt(null)}>
         <div className="flex flex-none flex-col gap-1 border-b border-qb-border px-2 pb-1.5">
           <input className="qb-input h-row w-full text-sm" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a report" aria-label="Find a report" />
           <label className="flex items-center gap-1 text-xs" title="Profit and Loss, the Balance Sheet, the aging and sales summaries open on these dates (a one-date report on the To date)">
@@ -646,7 +659,13 @@ export default function Reports({ navigate, intent }) {
                   <button
                     type="button"
                     aria-current={report === id ? 'page' : undefined}
-                    onClick={() => chooseReport(id)}
+                    onClick={() => {
+                      peekAt(null);
+                      chooseReport(id);
+                    }}
+                    onMouseEnter={() => peekAt(id)}
+                    onFocus={() => peekAt(id)}
+                    onBlur={() => peekAt(null)}
                     title={useDates && DATED_REPORTS[id] ? `${description} Opens on the dates above.` : description || undefined}
                     className="min-w-0 flex-1 px-3 py-0.5 text-left"
                   >
@@ -683,40 +702,87 @@ export default function Reports({ navigate, intent }) {
         </div>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-auto scrollbar-thin">
-        {askFirst && <ReportOptions key={report} kind={OPTIONS_FIRST[report]} name={reportName} onRun={(params) => openReport(report, params)} />}
-        {!askFirst && report === 'pl' && <ProfitAndLoss key={`pl${drill}`} navigate={navigate} initial={initial} />}
-        {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
-        {!askFirst && report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
-        {report === 'cf' && <CashFlowReport navigate={navigate} />}
-        {report === 'cash-forecast' && <CashFlowForecastReport />}
-        {!askFirst && report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
-        {!askFirst && report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
-        {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
-        {!askFirst && report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
-        {!askFirst && report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
-        {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" onZoom={zoom} />}
-        {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
-        {report === 'sales-tax' && <SalesTaxLiabilityReport />}
-        {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
-        {report === 'pl-py' && <ProfitAndLoss key="pl-py" initialCompare="year" title="Profit and Loss Prev Year Comparison" navigate={navigate} />}
-        {report === 'bs-py' && <BalanceSheetComparison navigate={navigate} />}
-        {report === 'bva' && <BudgetVsActualReport key={`bva${drill}`} navigate={navigate} initial={initial} />}
-        {report === 'bs-bva' && <BalanceSheetBudgetVsActualReport navigate={navigate} />}
-        {report === 'inv-val' && <InventoryValuationReport />}
-        {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
-        {report === 'stock-status' && <StockStatusReport />}
-        {report === 'item-price-list' && <ItemPriceListReport />}
-        {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
-        {report === '1099' && <Vendors1099Report key="1099" />}
-        {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
-        {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
-        {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
-        {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
-        {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
-        {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
-        {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
-        {report === SCHEDULED && <ScheduledReports />}
-        {isCustomReport(report) && report !== '1099-detail' && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
+        <ReportBody
+          report={report}
+          askFirst={askFirst}
+          reportName={reportName}
+          drill={drill}
+          initial={initial}
+          navigate={navigate}
+          zoom={zoom}
+          openReport={openReport}
+          setReport={setReport}
+          listCatalog={listCatalog}
+          custom={custom}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The report `report` (a report center id) on screen: what the center shows when it is chosen, and
+ * the miniature its preview shows on hover (`preview`: no options-first step, nothing printed).
+ */
+function ReportBody({ report, askFirst = false, reportName = '', drill = '', initial = null, navigate = null, zoom = undefined, openReport = undefined, setReport = undefined, listCatalog, custom }) {
+  return (
+    <>
+      {askFirst && <ReportOptions key={report} kind={OPTIONS_FIRST[report]} name={reportName} onRun={(params) => openReport(report, params)} />}
+      {!askFirst && report === 'pl' && <ProfitAndLoss key={`pl${drill}`} navigate={navigate} initial={initial} />}
+      {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
+      {!askFirst && report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
+      {report === 'cf' && <CashFlowReport navigate={navigate} />}
+      {report === 'cash-forecast' && <CashFlowForecastReport />}
+      {!askFirst && report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
+      {!askFirst && report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
+      {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
+      {!askFirst && report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
+      {!askFirst && report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
+      {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" onZoom={zoom} />}
+      {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
+      {report === 'sales-tax' && <SalesTaxLiabilityReport />}
+      {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
+      {report === 'pl-py' && <ProfitAndLoss key="pl-py" initialCompare="year" title="Profit and Loss Prev Year Comparison" navigate={navigate} />}
+      {report === 'bs-py' && <BalanceSheetComparison navigate={navigate} />}
+      {report === 'bva' && <BudgetVsActualReport key={`bva${drill}`} navigate={navigate} initial={initial} />}
+      {report === 'bs-bva' && <BalanceSheetBudgetVsActualReport navigate={navigate} />}
+      {report === 'inv-val' && <InventoryValuationReport />}
+      {report === 'inv-detail' && <InventoryValuationDetailReport navigate={navigate} />}
+      {report === 'stock-status' && <StockStatusReport />}
+      {report === 'item-price-list' && <ItemPriceListReport />}
+      {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
+      {report === '1099' && <Vendors1099Report key="1099" />}
+      {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
+      {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
+      {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
+      {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
+      {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
+      {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
+      {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
+      {report === SCHEDULED && <ScheduledReports />}
+      {isCustomReport(report) && report !== '1099-detail' && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
+    </>
+  );
+}
+
+/**
+ * The report center's sample picture of a report: the report itself, drawn by its own screen at
+ * about two-fifths size from the open company's books, with nothing in it clickable or printed.
+ * Nothing is stored: the picture is always the report as it looks now.
+ */
+function ReportPreview({ label, children }) {
+  const box = useRef(null);
+  // Out of the tab order and the accessibility tree: the list entry already says what it is.
+  useEffect(() => {
+    box.current?.setAttribute('inert', '');
+  }, []);
+  return (
+    <div className="no-print pointer-events-none absolute left-[288px] top-3 z-30 w-[420px] overflow-hidden rounded-xs border border-qb-border-strong bg-white shadow-popover" aria-hidden="true" data-testid="report-preview">
+      <div className="border-b border-qb-border bg-qb-canvas px-2 py-0.5 text-2xs font-semibold text-qb-ink-muted">{label} · a preview from your books</div>
+      <div ref={box} className="h-[270px] overflow-hidden">
+        <div style={{ transform: 'scale(0.4)', transformOrigin: 'top left', width: '250%' }}>
+          <PreviewContext.Provider value>{children}</PreviewContext.Provider>
+        </div>
       </div>
     </div>
   );

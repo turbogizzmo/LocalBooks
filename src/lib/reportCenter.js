@@ -137,3 +137,9 @@ export function datesFor(id, start, end) {
   if (!kind || !start || !end || start > end) return null;
   return kind === 'as-of' ? { asOf: end } : { startDate: start, endDate: end };
 }
+
+/** The report center's tools, which open screens of their own rather than a report. */
+export const CENTER_TOOLS = ['process-multiple', 'scheduled-reports'];
+
+/** Whether a report center entry gets a preview on hover: every report, not the tools. */
+export const previewable = (id) => Boolean(id) && !CENTER_TOOLS.includes(id);

@@ -47,3 +47,13 @@ test('the dates chosen in the center open the report on them', () => {
   assert.equal(datesFor('tb', '2026-01-01', '2026-03-31'), null, 'a report without dates opens as usual');
   assert.equal(datesFor('pl', '2026-04-01', '2026-03-31'), null);
 });
+
+test('every report has a preview, the report center tools do not', async () => {
+  const { previewable } = await import('./reportCenter.js');
+  assert.equal(previewable('pl'), true);
+  assert.equal(previewable('preset:journal'), true);
+  assert.equal(previewable('list:customer-phone'), true);
+  assert.equal(previewable('process-multiple'), false);
+  assert.equal(previewable('scheduled-reports'), false);
+  assert.equal(previewable(null), false);
+});
