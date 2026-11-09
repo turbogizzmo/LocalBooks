@@ -235,6 +235,7 @@ const REPORTS: &[Entry] = &[
             report("Balance Sheet Prev Year Comparison", "bs-py"),
             Entry::Sep,
             report("Statement of Cash Flows", "cf"),
+            report("Cash Flow Forecast", "cash-forecast"),
             report("Net Income Detail", "preset:net-income-detail"),
             Entry::Sep,
             report("Income & Expense Graph", "graph-ie"),

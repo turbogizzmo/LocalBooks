@@ -70,6 +70,24 @@ It shows income, cost of goods sold, gross profit, expenses and net income. Fisc
 Assets, liabilities and equity are shown at that date. Profit from earlier fiscal years appears as
 Retained Earnings, and this year's as Net Income.
 
+## Cash Flow Forecast
+
+**Reports › Company & Financial › Cash Flow Forecast** (also under **Business overview**) shows,
+week by week, the cash you have and the money your open invoices and bills will move:
+
+- **Cash on hand**: your bank accounts' balance, plus payments received but not yet deposited, on
+  the **From** date.
+- **Money in**: each open invoice's balance in the week it's due (unused customer credit counts
+  against it). **Money out**: each open bill's balance in the week it's due (less unused vendor
+  credit). Click either row to see the documents.
+- **Past due** (first column) is money already overdue, counted first; **Later** (last column) is
+  due after the last week.
+- **Net** and **Cash at the end** of each week follow.
+
+Choose 4, 8, 13 or 26 **Weeks**. Its money in adds up to the A/R Aging Summary's total, and its
+money out to the A/P Aging Summary's, as of the same date. The Dashboard's **Insights** tab shows
+the next eight weeks as a chart; click it to open the report.
+
 ## See the transactions behind a number (QuickZoom)
 
 Click an amount to see where it came from:

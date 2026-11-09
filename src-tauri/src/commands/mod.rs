@@ -56,6 +56,7 @@ features![
     bank_rules,
     bounced_checks,
     budgets,
+    cash_forecast,
     classes,
     cleanup,
     company_files,

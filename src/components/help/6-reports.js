@@ -16,6 +16,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'cash-flow-forecast', area: 'reports', views: ['reports', 'dashboard'],
+    title: 'Forecast cash flow by week',
+    body: 'Reports › Cash Flow Forecast starts from your bank balances (plus payments not yet deposited) and, week by week, adds the open invoices due and takes away the open bills due, with past-due money first and anything due after the last week in Later. Its money in and out add up to the A/R and A/P Aging totals. The Dashboard’s Insights tab shows the next eight weeks; click it for the report.',
+    keywords: 'cash flow forecast projection projector weekly cash hub dashboard money in out receivable payable due',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'email-report-pdf', area: 'reports', views: ['reports', 'accounting/register', 'sales/customers', 'dashboard'],
     title: 'Email a report, list or register as a PDF',
     body: 'Export › Email as PDF… on any report, list or register attaches it as a PDF to a message: sent from LocalBooks when Settings › Email is set up, or opened in your mail app. Save as PDF… saves the same file, and the Reminders list can be emailed too.',

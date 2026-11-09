@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Cash Flow Forecast.** A new report shows your cash on hand and, week by week, the money open
+  invoices will bring in and open bills will take out, with the cash left each week. Its totals
+  match the A/R and A/P agings. The Dashboard shows the next eight weeks at a glance.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

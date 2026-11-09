@@ -15,6 +15,7 @@ mod bank_pdf;
 mod banking;
 mod billable_costs;
 mod bounced_checks;
+mod cash_forecast;
 mod classes;
 mod cleanup;
 mod closing;
