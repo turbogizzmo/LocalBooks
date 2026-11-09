@@ -465,89 +465,34 @@ pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option
 }
 
 /// Abandons an in-progress reconciliation; its ticks are released (the FK sets them to NULL).
+///
+/// Statement files attached to it go with it: they belonged only to a reconciliation that no
+/// longer exists (they are marked deleted, then removed, as `attachments_library` requires).
 pub async fn cancel(pool: &SqlitePool, reconciliation_id: i64) -> Result<(), String> {
-    let result = sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0")
-        .bind(reconciliation_id)
-        .execute(pool)
-        .await
-        .map_err(db_err)?;
-    if result.rows_affected() != 1 {
-        return Err(format!("REC_NOT_OPEN: reconciliation {reconciliation_id} is not in progress"));
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = async {
+        let removed = sqlx::query("DELETE FROM reconciliations WHERE id = ?1 AND is_locked = 0")
+            .bind(reconciliation_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        if removed.rows_affected() != 1 {
+            return Err(format!("REC_NOT_OPEN: reconciliation {reconciliation_id} is not in progress"));
+        }
+        let files = "record_kind = 'RECONCILIATION' AND record_id = ?1";
+        sqlx::query(&format!("UPDATE record_attachments SET deleted_at = COALESCE(deleted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE {files}"))
+            .bind(reconciliation_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query(&format!("DELETE FROM record_attachments WHERE {files}")).bind(reconciliation_id).execute(&mut *tx).await.map_err(db_err)?;
+        Ok(())
     }
-    Ok(())
-}
-
-/// A statement file attached to a reconciliation (without its bytes).
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
-#[serde(rename_all = "camelCase")]
-pub struct StatementFile {
-    pub id: i64,
-    pub reconciliation_id: i64,
-    pub file_name: String,
-    pub media_type: String,
-    pub size_bytes: i64,
-    pub created_at: String,
-}
-
-/// Keeps a copy of the bank or card statement (a PDF, a picture) with a reconciliation, in progress
-/// or finished. Up to 25 MB, as other attachments.
-pub async fn attach_statement(pool: &SqlitePool, reconciliation_id: i64, file_name: &str, content: &[u8]) -> Result<StatementFile, String> {
-    if content.is_empty() {
-        return Err("ATTACH_EMPTY: that file is empty".into());
+    .await;
+    match result {
+        Ok(()) => crate::ledger::commit_write(tx).await.map_err(db_err),
+        Err(err) => Err(rollback(tx, err).await),
     }
-    if content.len() > crate::workflows::MAX_ATTACHMENT_BYTES {
-        return Err("ATTACH_SIZE: attach files of up to 25 MB".into());
-    }
-    let undone: Option<bool> = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id) FROM reconciliations r WHERE r.id = ?1",
-    )
-    .bind(reconciliation_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(db_err)?;
-    match undone {
-        None => return Err(format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist")),
-        Some(true) => return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into()),
-        Some(false) => {}
-    }
-    let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("statement");
-    sqlx::query_as(
-        "INSERT INTO reconciliation_statements (reconciliation_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5)
-         RETURNING id, reconciliation_id, file_name, media_type, size_bytes, created_at",
-    )
-    .bind(reconciliation_id)
-    .bind(name)
-    .bind(crate::workflows::media_type(name))
-    .bind(content.len() as i64)
-    .bind(content)
-    .fetch_one(pool)
-    .await
-    .map_err(db_err)
-}
-
-/// The statement files of a reconciliation, oldest first.
-pub async fn statement_files(pool: &SqlitePool, reconciliation_id: i64) -> Result<Vec<StatementFile>, String> {
-    sqlx::query_as(
-        "SELECT id, reconciliation_id, file_name, media_type, size_bytes, created_at FROM reconciliation_statements WHERE reconciliation_id = ?1 ORDER BY id",
-    )
-    .bind(reconciliation_id)
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
-}
-
-/// A statement file's name and bytes, to save a copy.
-pub async fn statement_content(pool: &SqlitePool, id: i64) -> Result<(String, Vec<u8>), String> {
-    sqlx::query_as("SELECT file_name, content FROM reconciliation_statements WHERE id = ?1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await
-        .map_err(db_err)?
-        .ok_or_else(|| "ATTACH_NOT_FOUND: that statement file does not exist".into())
-}
-
-pub async fn remove_statement(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    sqlx::query("DELETE FROM reconciliation_statements WHERE id = ?1").bind(id).execute(pool).await.map(|_| ()).map_err(db_err)
 }
 
 #[cfg(test)]

@@ -1,0 +1,12 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Memorized Transaction Listing, all dates to 2025-12-31
+
+Name                           Type                      How Often                 Next Date     Ends          Status
+Monthly rent                   Expense                   Every month               2026-01-01                  Active
+
+1 lines
+
+1 memorized transaction in Accounting › Recurring Transactions.
