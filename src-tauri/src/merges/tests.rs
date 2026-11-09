@@ -99,12 +99,22 @@ async fn the_document_exception_is_only_for_a_merge_being_applied_and_only_the_n
 #[tokio::test]
 async fn merge_exceptions_cover_every_trigger_on_the_documents_a_merge_moves() {
     let pool = test_pool().await;
-    let tables: Vec<&str> = CUSTOMER_COLUMNS.iter().chain(VENDOR_COLUMNS).chain(ITEM_COLUMNS).map(|(t, _)| *t).chain(["invoices"]).collect();
+    let moved: Vec<(&str, &str)> = CUSTOMER_COLUMNS.iter().chain(VENDOR_COLUMNS).chain(ITEM_COLUMNS).copied().chain([("invoices", "customer_id"), ("invoices", "customer_name")]).collect();
+    let tables: Vec<&str> = moved.iter().map(|(t, _)| *t).collect();
+    // A trigger limited to other columns (`BEFORE UPDATE OF a, b ON t`) never sees a repoint.
+    let watches_a_moved_column = |table: &str, sql: &str| {
+        let upper = sql.to_uppercase();
+        let Some(start) = upper.find("BEFORE UPDATE OF ") else { return true };
+        let rest = &sql[start + "BEFORE UPDATE OF ".len()..];
+        let columns = &rest[..rest.to_uppercase().find(" ON ").unwrap_or(rest.len())];
+        columns.split(',').map(str::trim).any(|c| moved.iter().any(|(t, m)| *t == table && c.eq_ignore_ascii_case(m)))
+    };
     let triggers: Vec<(String, String, String)> = sqlx::query_as("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger'").fetch_all(&pool).await.unwrap();
     let blocking: Vec<&str> = triggers
         .iter()
         .filter(|(_, table, sql)| tables.contains(&table.as_str()) && sql.to_uppercase().contains("BEFORE UPDATE") && sql.contains("RAISE"))
         .filter(|(_, _, sql)| !sql.contains("name_merges"))
+        .filter(|(_, table, sql)| watches_a_moved_column(table, sql))
         // Fires only on voiding, which a merge never does.
         .filter(|(name, _, _)| !matches!(name.as_str(), "trg_bounced_receipt_void_receipt" | "trg_uf_matched_payment_void" | "trg_uf_transferred_receipt_void"))
         .map(|(name, _, _)| name.as_str())
@@ -125,8 +135,24 @@ async fn merging_vendors_and_items_moves_bills_checks_and_lines() {
     .unwrap();
     crate::expenses::post_expense(&pool, check).await.unwrap();
     let (from, to) = (id_of(&pool, "vendors", "Landlord").await, id_of(&pool, "vendors", "Landlord LLC").await);
+    // A file kept with the merged vendor (the attachments library), and an item it supplies.
+    let file: i64 = sqlx::query_scalar("INSERT INTO record_attachments (record_kind, record_id, file_name, media_type, size_bytes, content) VALUES ('VENDOR', ?1, 'w9.pdf', 'application/pdf', 3, x'255044') RETURNING id")
+        .bind(from)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let supplied: i64 = sqlx::query_scalar("INSERT INTO products_services (name, rate_cents, income_account_id, preferred_vendor_id) VALUES ('Lease', 100, ?1, ?2) RETURNING id")
+        .bind(account(&pool, "4100").await)
+        .bind(from)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     let before = journal(&pool).await;
     merge(&pool, MergeKind::Vendor, from, to, day()).await.unwrap();
+    let owner: i64 = sqlx::query_scalar("SELECT record_id FROM record_attachments WHERE id = ?1").bind(file).fetch_one(&pool).await.unwrap();
+    assert_eq!(owner, to, "the merged vendor's files move to the one kept");
+    let preferred: Option<i64> = sqlx::query_scalar("SELECT preferred_vendor_id FROM products_services WHERE id = ?1").bind(supplied).fetch_one(&pool).await.unwrap();
+    assert_eq!(preferred, Some(to), "items it supplies name the kept vendor");
     assert_eq!(journal(&pool).await, before);
     let theirs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM expenses WHERE vendor_id = ?1").bind(to).fetch_one(&pool).await.unwrap();
     assert_eq!(theirs, 1);

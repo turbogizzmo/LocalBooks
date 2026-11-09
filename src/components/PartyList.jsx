@@ -22,9 +22,11 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { PartyInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
 import { useMergeOffer } from './MergeOffer.jsx';
+import Attachments from './Attachments.jsx';
 
 /** Customize Columns: the list's columns after Name, in their usual order. */
 const PARTY_COLUMNS = {
@@ -403,6 +405,10 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               <textarea className="qb-input h-[44px] py-1" value={form.notes ?? ''} onChange={set('notes')} />
             </label>
           </div>
+          {/* Files kept with the customer or vendor (a W-9, a contract): saved at once, not with Save. */}
+          <div className="-mx-3 border-y border-qb-border bg-qb-canvas">
+            <Attachments record={{ kind: kind.toUpperCase(), id }} what={`this ${noun}`} />
+          </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
           {mergeOffer.panel}
           <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
@@ -542,6 +548,8 @@ export default function PartyList({ kind, navigate, intent = null }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const selectedParty = (data ?? []).find((p) => p.id === selected) ?? null;
+  // The information panel beside the list, for the name clicked last; it can be hidden.
+  const info = useInfoPanel(kind);
   // QuickReport (Ctrl+Q): every transaction with the selected customer or vendor.
   const openReport = useReportOpener();
   const runQuickReport = (p) => openReport(quickReport({ kind, id: p.id, name: p.name }));
@@ -660,7 +668,8 @@ export default function PartyList({ kind, navigate, intent = null }) {
           }}
         />
       )}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 gap-2">
+      <section className="qb-panel flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">{cfg.title}</h2>
           {viewSwitch}
@@ -680,6 +689,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
           </span>
           <ExportMenu printable={false} onNotice={setNotice} {...exports} />
           <ColumnsMenu cols={cols} />
+          {info.button}
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {batching && (
@@ -779,6 +789,8 @@ export default function PartyList({ kind, navigate, intent = null }) {
           </form>
         </div>
       </section>
+      {info.shown && selectedParty && <PartyInfoPanel kind={kind} id={selectedParty.id} onHide={info.hide} />}
+      </div>
       {selectedParty && <PartyTransactions kind={kind} party={selectedParty} onClose={() => setSelected(null)} />}
     </div>
   );

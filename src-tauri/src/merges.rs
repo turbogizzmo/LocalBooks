@@ -86,6 +86,7 @@ const VENDOR_COLUMNS: &[(&str, &str)] = &[
     ("purchase_orders", "vendor_id"),
     ("ach_entries", "vendor_id"),
     ("tax_rates", "agency_vendor_id"),
+    ("products_services", "preferred_vendor_id"),
     ("todos", "vendor_id"),
 ];
 const ITEM_COLUMNS: &[(&str, &str)] = &[
@@ -401,6 +402,21 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
         }
     }
     moved += repoint_memorized(tx, kind, (from_id, &from_name), (to_id, &to_name)).await?;
+    // Files kept with the record (the attachments library) move to the one kept, deleted ones too.
+    let record_kind = match kind {
+        MergeKind::Customer => "CUSTOMER",
+        MergeKind::Vendor => "VENDOR",
+        MergeKind::Item => "ITEM",
+        MergeKind::Account => "ACCOUNT",
+    };
+    let files = sqlx::query("UPDATE record_attachments SET record_id = ?3 WHERE record_kind = ?1 AND record_id = ?2")
+        .bind(record_kind)
+        .bind(from_id)
+        .bind(to_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    moved += i64::try_from(files.rows_affected()).unwrap_or(i64::MAX);
 
     sqlx::query(&format!("UPDATE {table} SET is_active = 0, merged_into_id = ?2 WHERE id = ?1"))
         .bind(from_id)

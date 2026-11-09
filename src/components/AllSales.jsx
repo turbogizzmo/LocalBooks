@@ -26,6 +26,7 @@ import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useSalesPrefs } from '../lib/salesPrefs.js';
+import { FormInfoPanel } from './InfoPanel.jsx';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
@@ -109,7 +110,8 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
   const flow = useFormFlow({ save: () => save('post'), clear: onNew, onClose: onCancel, busy });
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       <FormToolbar
         label="Sales receipt"
         groups={[
@@ -177,6 +179,9 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
       </div>
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
     </section>
+    {/* The chosen customer's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="customer" name={customer} names={customers.data} />
+    </div>
   );
 }
 

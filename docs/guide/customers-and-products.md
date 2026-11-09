@@ -32,6 +32,35 @@ To copy an account, choose **Duplicate…** on its row in the Chart of Accounts.
 window opens with its type, parent and description filled in; give it a name and number and click
 **Add account**.
 
+### The information panel
+
+Click a name in the Customers or Vendors list, or an item in Products & Services, and its
+information panel opens beside the list:
+
+- **Customers:** the open balance, active estimates (pending or accepted, not yet invoiced),
+  unbilled costs and unbilled mileage, then phone, email, notes and the five most recent
+  transactions (click one to open it).
+- **Vendors:** the balance you owe, open purchase orders, phone, email, notes and recent
+  transactions.
+- **Items:** the sales price and preferred vendor and, for an item whose stock is tracked, on hand,
+  on order (with the next expected delivery), average cost, value and reorder point (marked
+  **time to reorder** when on hand is at or below it). Set the reorder point and preferred vendor on
+  the item's record (see [Reorder point and preferred vendor](inventory.md#reorder-point-and-preferred-vendor)).
+
+The figures are the reports' own: the open balance matches A/R or A/P Aging and the balance
+reports, open purchase orders the Open Purchase Orders report, unbilled costs Sales › Bill Costs,
+and the item figures Inventory Valuation and Stock Status.
+
+The panel has tabs. **Notes** shows the customer's or vendor's notes (the same Notes as on its
+record) to read and change: **Date Stamp** starts a new first line with today's date, and **Save**
+keeps them. For a customer, **Emails** lists every form emailed to them, newest first: invoices,
+estimates, sales receipts and statements, with the date, who it went to and the subject.
+
+Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and
+purchase orders show the same panel beside the form once you choose a customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
+(or the slim **Info** strip beside a form) to bring it back; LocalBooks remembers the choice for
+each list and for forms.
+
 ### See a customer's or vendor's transactions
 
 Click a name in the Customers or Vendors list. Its transactions (invoices, payments, bills, checks
@@ -84,7 +113,8 @@ LocalBooks asks whether to merge it into the other one; click **Merge into …**
 
 - Everything that named it now names the one you kept: invoices, sales receipts, estimates,
   credit memos, payments, bills, checks, expenses and their lines, purchase orders, time and
-  mileage, to-dos, price levels, customer groups and memorized transactions. Its history is under the kept name in
+  mileage, to-dos, price levels, customer groups, items' preferred vendor, attached files and
+  memorized transactions. Its history is under the kept name in
   every report, statement and list, and the totals don't change.
 - Posted amounts never change; only which name they belong to.
 - The merged one stays in the list as inactive, so old records can still say what it was.
