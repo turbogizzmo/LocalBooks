@@ -974,8 +974,8 @@ export const CATEGORIES = [
   },
 ];
 
-/** Help shortcuts (`intent.action`) to the category that holds them. */
-const ACTION_CATEGORY = { 'cash-flow': ['reports', 'company'], closing: ['accounting', 'company'], 'finance-charges': ['finance-charge', 'company'], 'class-tracking': ['accounting', 'company'] };
+/** Help shortcuts and menu items (`intent.action`) to the category that holds them (Lists › Currency List: currencies). */
+const ACTION_CATEGORY = { 'cash-flow': ['reports', 'company'], closing: ['accounting', 'company'], 'finance-charges': ['finance-charge', 'company'], 'class-tracking': ['accounting', 'company'], currencies: ['currencies', 'company'] };
 const ANCHORS = { 'cash-flow': 'cash-flow-mapping', closing: 'closing-date', 'class-tracking': 'class-tracking' };
 const REMEMBER = 'localbooks.preferencesCategory';
 

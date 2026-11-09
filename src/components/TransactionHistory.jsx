@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { transactionTarget } from '../lib/openTransaction.js';
+import { transactionJournal } from '../lib/quickReport.js';
+import { WindowManagerContext } from '../lib/windows.js';
+import { FORM_KEYS } from '../lib/formKeys.js';
 
 const typeLabel = (t) => SOURCE_LABEL[t.sourceType] ?? t.sourceType;
 
@@ -104,4 +107,45 @@ export default function TransactionHistory({ journalEntryId, onClose, onOpen }) 
       </div>
     </div>
   );
+}
+
+/**
+ * Transaction History (Ctrl+H) and Transaction Journal (Ctrl+Y) for the transaction open on a form:
+ *   const reports = useTransactionReports();
+ *   groups: [..., reports.buttons({ journalEntryId, label: 'Invoice #12' })]
+ *   {reports.panel}
+ * The buttons have ids `history` and `journal`, so the form's keys press them (formFlow.jsx). Both
+ * are off until the form holds a saved transaction.
+ */
+export function useTransactionReports() {
+  const [history, setHistory] = useState(null);
+  const { open } = useContext(WindowManagerContext);
+  const panel = history !== null ? <TransactionHistory journalEntryId={history} onClose={() => setHistory(null)} onOpen={open} /> : null;
+  const buttons = ({ journalEntryId, label }) => {
+    const saved = journalEntryId !== null && journalEntryId !== undefined;
+    return [
+      {
+        id: 'history',
+        label: 'History',
+        icon: 'AuditTrail',
+        keys: FORM_KEYS.history,
+        hint: saved ? 'The transactions linked to this one (payments, deposits, credits)' : 'Save it first, then see its history',
+        disabled: !saved,
+        onClick: () => setHistory(journalEntryId),
+      },
+      {
+        id: 'journal',
+        label: 'Journal',
+        icon: 'Reports',
+        keys: FORM_KEYS.journal,
+        hint: saved ? 'The debits and credits this transaction posted' : 'Save it first, then see its journal',
+        disabled: !saved,
+        onClick: () => {
+          const [view, action, data] = transactionJournal({ journalEntryId, label });
+          open(view, action, data, { forceNew: true });
+        },
+      },
+    ];
+  };
+  return { panel, buttons, showHistory: setHistory };
 }

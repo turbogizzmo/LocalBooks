@@ -38,8 +38,8 @@ export const topics = [
   {
     id: 'deposit', area: 'banking', views: ['banking/transfers', 'sales/invoices'],
     title: 'Make a bank deposit',
-    body: 'Choose the customer payments waiting in Undeposited Funds that went into the bank together, and add any other money in the same deposit. Cash back takes part of it out as cash to an account such as Petty Cash. The deposit total then matches the single line on your bank statement.',
-    keywords: 'deposit undeposited funds bank payments combine cash back petty cash',
+    body: 'Choose the customer payments waiting in Undeposited Funds that went into the bank together, and add any other money in the same deposit, with the customer or vendor it was received from. Cash back takes part of it out as cash to an account such as Petty Cash. The deposit total then matches the single line on your bank statement.',
+    keywords: 'deposit undeposited funds bank payments combine cash back petty cash received from payee',
     go: { label: 'New bank deposit', view: 'banking/transfers', action: 'bank-deposit' },
     guide: 'deposits-and-transfers',
   },
