@@ -9,6 +9,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 
@@ -71,6 +72,8 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
   const [description, setDescription] = useState(from?.description ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Renaming to another account's name (beside it in the chart) offers to merge into it.
+  const mergeOffer = useMergeOffer('ACCOUNT', account?.id ?? null, account?.name ?? '', (text) => onSaved(text));
 
   // A subaccount shares its parent's type and nests at most five levels; never beneath itself.
   const below = (a) => account && (a.id === account.id || a.fullName.startsWith(`${account.fullName}:`));
@@ -82,6 +85,7 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
     setBusy(true);
     const input = { name: name.trim(), accountNumber: number.trim() || null, accountType: type, parentId, description: description.trim() || null };
     try {
+      if (editing && (await mergeOffer.check(name))) return setBusy(false);
       const saved = editing ? await api.updateAccount(account.id, input) : await api.createAccount(input);
       onSaved(`${editing ? 'Saved' : 'Added'} ${saved.accountNumber ? `${saved.accountNumber} · ` : ''}${saved.fullName}.`);
     } catch (err) {
@@ -152,6 +156,7 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
           <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>{editing ? 'Save' : 'Add account'}</button>
         </div>
+        {mergeOffer.panel}
       </form>
     </Dialog>
   );

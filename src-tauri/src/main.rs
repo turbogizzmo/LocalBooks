@@ -70,6 +70,7 @@ mod payroll_import;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod merges;
 mod mileage;
 mod nacha;
 mod preferences;

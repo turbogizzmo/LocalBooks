@@ -157,8 +157,8 @@ export const topics = [
   {
     id: 'customers', area: 'sales', views: ['sales/customers'],
     title: 'Add and review customers',
-    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer.',
-    keywords: 'customer client contact receivable balance transactions add new customer quick add job',
+    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer. To merge a duplicate customer (or vendor or item), rename it to the other’s name: LocalBooks offers to merge them, and everything that named it moves to the one kept.',
+    keywords: 'customer client contact receivable balance transactions add new customer quick add job merge duplicate combine',
     go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'customers-and-products',
   },

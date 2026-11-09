@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
+  LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
+  kept, so its history and balances show under one name. An account's balance moves with one
+  journal entry, and its items, settings and subaccounts follow. Posted amounts never change, and
+  each merge is in the audit trail.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

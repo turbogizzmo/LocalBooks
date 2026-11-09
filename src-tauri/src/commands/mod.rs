@@ -91,6 +91,7 @@ features![
     list_reports,
     lists,
     mcp,
+    merges,
     migration,
     mileage,
     payroll_import,

@@ -25,6 +25,7 @@ import PartyTransactions from './PartyTransactions.jsx';
 import { PartyInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
+import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 
 /** Customize Columns: the list's columns after Name, in their usual order. */
@@ -214,7 +215,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
       api.getVendorAccountNumber(id).then((n) => setAccountNumber({ stored: n, draft: n ?? '' }), () => {});
     }
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
+      (p) => setForm({ ...p, originalTaxId: p.taxId, originalName: p.name, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -224,10 +225,14 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   }, [kind, id]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  // Renaming to another customer's (vendor's) name offers to merge into it.
+  // The name as loaded for this party (kept with the loaded record, so another party's can't linger).
+  const mergeOffer = useMergeOffer(kind === 'customer' ? 'CUSTOMER' : 'VENDOR', id, form?.originalName ?? null, (text) => onSaved(text));
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
+      if (await mergeOffer.check(form.name)) return setBusy(false);
       const saved = await api.updateParty(kind, id, {
         name: form.name,
         companyName: form.companyName,
@@ -405,6 +410,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             <Attachments record={{ kind: kind.toUpperCase(), id }} what={`this ${noun}`} />
           </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+          {mergeOffer.panel}
           <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
             <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
             <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>
