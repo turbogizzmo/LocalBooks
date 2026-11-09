@@ -298,6 +298,18 @@ In an account register, choose a **Color** (blue, green, yellow, orange, pink, p
 tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
 color is kept on this computer for that account in that company file; **Default** takes it away.
 
+## Choose a list's columns
+
+The customer and vendor lists, the item list, the chart of accounts and account registers (one
+line per transaction) have a **Columns ▾** button. Tick a column to show it or untick it to hide
+it, and use ▲ and ▼ to move it earlier or later; the table changes as you go. Some columns are off
+until you turn them on, such as **Terms**, **Tax**, **Preferred delivery** and **Job status** on
+the customer list. The first column (the name, the account or the date) always shows.
+**Default columns** puts a table back the way it came.
+
+LocalBooks keeps each table's columns on this computer for you, in **My Preferences**, so they stay
+the same the next time you open it.
+
 ## Open a transaction from a register
 
 In an account register, click a row to see all of the transaction's lines underneath it.

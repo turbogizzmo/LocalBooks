@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
+  accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
+  and Preferred delivery to turn on. Each table remembers its columns.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

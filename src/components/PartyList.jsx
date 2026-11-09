@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
@@ -17,6 +18,27 @@ import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
+
+/** Customize Columns: the list's columns after Name, in their usual order. */
+const PARTY_COLUMNS = {
+  customer: [
+    { id: 'name', label: 'Name', required: true },
+    { id: 'email', label: 'Email' },
+    { id: 'terms', label: 'Terms', hidden: true },
+    { id: 'tax', label: 'Tax', hidden: true },
+    { id: 'delivery', label: 'Preferred delivery', hidden: true },
+    { id: 'jobStatus', label: 'Job status', hidden: true },
+    { id: 'balance', label: 'Open balance' },
+  ],
+  vendor: [
+    { id: 'name', label: 'Name', required: true },
+    { id: 'email', label: 'Email' },
+    { id: 'terms', label: 'Terms', hidden: true },
+    { id: 'balance', label: 'Open balance' },
+  ],
+};
+const COLUMN_WIDTH = { email: 'w-[240px]', terms: 'w-[80px]', tax: 'w-[90px]', delivery: 'w-[120px]', jobStatus: 'w-[110px]', balance: 'w-[160px]' };
+const DELIVERY = { EMAIL: 'Email', PRINT: 'Print', NONE: 'None' };
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -510,7 +532,42 @@ export default function PartyList({ kind, navigate }) {
     name: (p) => p.name,
     email: (p) => p.email,
     balance: (p) => p.openBalanceCents || null,
+    terms: (p) => p.termsDays,
+    tax: (p) => (p.isTaxExempt ? 'Exempt' : ''),
+    delivery: (p) => p.preferredDelivery,
+    jobStatus: (p) => p.jobStatus,
   }, { storageKey: `${kind}-list` });
+  const cols = useColumns(`${kind}-list`, PARTY_COLUMNS[kind]);
+  // One cell of a row, by column.
+  const cell = (c, p) => {
+    switch (c.id) {
+      case 'name':
+        return (
+          <td key={c.id} className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
+            {p.name.split(':').at(-1)}
+            {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
+            {p.jobStatus && <span className="ml-1 text-2xs text-qb-info">· {jobStatus[p.jobStatus]}</span>}
+            {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
+          </td>
+        );
+      case 'email':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{p.email ?? ''}</td>;
+      case 'terms':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{p.termsDays != null ? `Net ${p.termsDays}` : ''}</td>;
+      case 'tax':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{p.isTaxExempt ? 'Exempt' : ''}</td>;
+      case 'delivery':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{DELIVERY[p.preferredDelivery] ?? ''}</td>;
+      case 'jobStatus':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{p.jobStatus ? jobStatus[p.jobStatus] : ''}</td>;
+      default:
+        return (
+          <td key={c.id} className={`qb-grid-cell num ${p.openBalanceCents < 0 ? 'text-qb-green-active' : ''}`} title={p.openBalanceCents < 0 ? 'Credit available' : undefined}>
+            {p.openBalanceCents ? formatCents(p.openBalanceCents) : ''}
+          </td>
+        );
+    }
+  };
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
   const company = useCompany();
   const exports = tableExports({
@@ -555,6 +612,7 @@ export default function PartyList({ kind, navigate }) {
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
           <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          <ColumnsMenu cols={cols} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
@@ -562,28 +620,36 @@ export default function PartyList({ kind, navigate }) {
           <form onSubmit={add}>
             <table className="qb-grid">
               <colgroup>
-                <col />
-                <col className="w-[280px]" />
-                <col className="w-[160px]" />
+                {cols.columns.map((c) => (
+                  <col key={c.id} className={COLUMN_WIDTH[c.id]} />
+                ))}
                 <col className="w-[96px]" />
               </colgroup>
               <thead>
                 <tr>
-                  <SortTh sorter={sorter} col="name">Name</SortTh>
-                  <SortTh sorter={sorter} col="email">Email</SortTh>
-                  <SortTh sorter={sorter} col="balance" className="text-right">{cfg.balance}</SortTh>
+                  {cols.columns.map((c) => (
+                    <SortTh key={c.id} sorter={sorter} col={c.id} className={c.id === 'balance' ? 'text-right' : ''}>
+                      {c.id === 'balance' ? cfg.balance : c.label}
+                    </SortTh>
+                  ))}
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 <tr className="bg-qb-row-selected">
-                  <td className="qb-grid-cell-edit">
-                    <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'customer' ? 'New customer, or Customer:Job' : `New ${cfg.noun} name`} aria-label="Name" />
-                  </td>
-                  <td className="qb-grid-cell-edit">
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" aria-label="Email" />
-                  </td>
-                  <td className="qb-grid-cell" />
+                  {cols.columns.map((c) =>
+                    c.id === 'name' ? (
+                      <td key={c.id} className="qb-grid-cell-edit">
+                        <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'customer' ? 'New customer, or Customer:Job' : `New ${cfg.noun} name`} aria-label="Name" />
+                      </td>
+                    ) : c.id === 'email' ? (
+                      <td key={c.id} className="qb-grid-cell-edit">
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" aria-label="Email" />
+                      </td>
+                    ) : (
+                      <td key={c.id} className="qb-grid-cell" />
+                    ),
+                  )}
                   <td className="qb-grid-cell cell-tight">
                     <button type="submit" className="qb-btn qb-btn-primary h-[20px] w-full" disabled={busy}>
                       Add
@@ -592,7 +658,7 @@ export default function PartyList({ kind, navigate }) {
                 </tr>
                 {data && rows.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="qb-grid-cell text-qb-ink-muted">
+                    <td colSpan={cols.columns.length + 1} className="qb-grid-cell text-qb-ink-muted">
                       {query ? `No ${cfg.noun}s match “${query}”.` : `No ${cfg.noun}s yet. They are also created automatically when you post a transaction.`}
                     </td>
                   </tr>
@@ -606,16 +672,7 @@ export default function PartyList({ kind, navigate }) {
                     onDoubleClick={() => openRecord(p.id)}
                     title="Click to see transactions, double-click to edit"
                   >
-                    <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
-                      {p.name.split(':').at(-1)}
-                      {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
-                      {p.jobStatus && <span className="ml-1 text-2xs text-qb-info">· {jobStatus[p.jobStatus]}</span>}
-                      {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
-                    </td>
-                    <td className="qb-grid-cell text-qb-ink-muted">{p.email ?? ''}</td>
-                    <td className={`qb-grid-cell num ${p.openBalanceCents < 0 ? 'text-qb-green-active' : ''}`} title={p.openBalanceCents < 0 ? 'Credit available' : undefined}>
-                      {p.openBalanceCents ? formatCents(p.openBalanceCents) : ''}
-                    </td>
+                    {cols.columns.map((c) => cell(c, p))}
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         label={`Actions for ${p.name}`}

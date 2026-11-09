@@ -215,6 +215,14 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'customize-columns', area: 'company', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'accounting/chart-of-accounts', 'accounting/register'],
+    title: 'Choose which columns a list shows, and their order',
+    body: 'Columns ▾ on the customer, vendor and item lists, the chart of accounts and account registers (one line per transaction) shows or hides each column and moves it earlier or later; Default columns puts it back. Extra columns such as Terms, Tax, Preferred delivery and Job status are there to turn on, and each table keeps its columns on this computer.',
+    keywords: 'customize columns column show hide reorder move order layout list register chart of accounts items customers vendors terms',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers, the journal, an account register or Reconcile to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first (registers and Reconcile in date order), and each list remembers the order you choose.',
