@@ -113,6 +113,7 @@ mod harness;
 mod report_pdf;
 mod report_schedules;
 mod statement_charges;
+mod sheet_import;
 
 use tauri::Manager;
 

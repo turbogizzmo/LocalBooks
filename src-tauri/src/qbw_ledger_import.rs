@@ -45,14 +45,20 @@ fn fingerprint(ledger: &Ledger) -> String {
 
 /// Stores a ledger read as a new staging batch and returns its id.
 pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, ledger: &Ledger) -> Result<i64, String> {
+    stage_as(pool, source_path, file_size_bytes, ledger, None).await
+}
+
+/// [`stage`], recording what the file was read as when its extension doesn't say it
+/// (`"SHEET"`: a spreadsheet the user laid out).
+pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, ledger: &Ledger, format: Option<&str>) -> Result<i64, String> {
     let q = &ledger.quality;
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     let file_name = source_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO ledger_import_batches
             (source_path, file_name, file_size_bytes, fingerprint, row_pages, decoded_pages, unreadable_lines,
-             rejected_lines, accounts_matching_stored, accounts_with_stored_balance)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id",
+             rejected_lines, accounts_matching_stored, accounts_with_stored_balance, source_format)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
     )
     .bind(source_path.display().to_string())
     .bind(&file_name)
@@ -64,6 +70,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
     .bind(q.rejected_lines as i64)
     .bind(q.accounts_matching_stored as i64)
     .bind(q.accounts_with_stored_balance as i64)
+    .bind(format)
     .fetch_one(&mut *tx)
     .await
     .map_err(db_err)?;
@@ -379,6 +386,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         pre_post_backup: Option<String>,
         mode: String,
         lists_added: i64,
+        source_format: Option<String>,
     }
     let head: Head = sqlx::query_as("SELECT * FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
@@ -492,7 +500,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         posted_as,
         fallbacks,
         id: batch_id,
-        source_format: source_format(&head.source_path).into(),
+        source_format: head.source_format.clone().unwrap_or_else(|| source_format(&head.source_path).into()),
         file_name: head.file_name,
         source_path: head.source_path,
         file_size_bytes: head.file_size_bytes,

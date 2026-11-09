@@ -104,6 +104,7 @@ const ADMIN: &[&str] = &[
     // Importing other programs' books.
     "ingest_raw_qbw",
     "ingest_report_exports",
+    "stage_import_sheet",
     "export_from_installed_quickbooks",
     "set_qbw_mapping",
     "auto_create_qbw_accounts",
@@ -132,6 +133,9 @@ const READ: &[&str] = &[
     "report_csv",
     "save_report_to_disk",
     "save_xlsx",
+    "read_import_sheet",
+    "check_import_sheet",
+    "save_import_template",
     "save_xlsx_book",
     "save_report_xlsx",
     "save_png",

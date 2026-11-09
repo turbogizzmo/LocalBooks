@@ -17,6 +17,11 @@ people using LocalBooks.
 - **Statement charges.** Enter statement charges… on a customer's row keeps a register of charges
   billed on the customer's next statement instead of an invoice. Each posts to Accounts
   Receivable, shows in the aging, and is paid in Receive Payments like an invoice.
+- **Import customers, vendors or invoices from your own spreadsheet.** In the Desktop Migration
+  Wizard, choose a .csv or Excel file (or download a template), match its columns to LocalBooks'
+  fields, and check it: every row that would fail is listed with its row number before anything is
+  staged. Then review and post it like any other import; invoices become real invoices, owed by
+  their customers.
 
 - **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
   list into the order you want; it's kept in the company file. Each can be shown as a tree (with
