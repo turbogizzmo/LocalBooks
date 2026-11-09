@@ -9,6 +9,14 @@ people using LocalBooks.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.
+- **Batch invoices and payment reminders.** Batch invoices… in the Customer Center invoices the
+  same lines to a whole customer group (or customers you pick) at once, each on the customer's
+  terms and queued to email or print as they prefer. Groups can send payment reminders for their
+  overdue invoices on a schedule, reviewed from Reminders.
+- **Customer groups.** The Customer Center has a Groups view: groups picked by hand, or automatic
+  ones that hold every customer meeting their rules (balance, type, terms, rep, state, ZIP code,
+  tax code, credit limit, status) and change as customers do. A group can remind you to send its
+  statements on a schedule, and Customer Statements can pick a group's customers.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
