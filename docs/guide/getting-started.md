@@ -329,6 +329,18 @@ who opens it sees the same order.
 Rows can't be dragged while you are searching a list or have sorted it by a column heading; click
 the sorted heading until the arrow goes away to get back to your own order.
 
+## Choose a list's columns
+
+The customer and vendor lists, the item list, the chart of accounts and account registers (one
+line per transaction) have a **Columns ▾** button. Tick a column to show it or untick it to hide
+it, and use ▲ and ▼ to move it earlier or later; the table changes as you go. Some columns are off
+until you turn them on, such as **Terms**, **Tax**, **Preferred delivery** and **Job status** on
+the customer list. The first column (the name, the account or the date) always shows.
+**Default columns** puts a table back the way it came.
+
+LocalBooks keeps each table's columns on this computer for you, in **My Preferences**, so they stay
+the same the next time you open it.
+
 ## Open a transaction from a register
 
 In an account register, click a row to see all of the transaction's lines underneath it.

@@ -1,3 +1,4 @@
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import Notice from './Notice.jsx';
@@ -22,6 +23,16 @@ const SECTIONS = [
 // Like classic desktop accounting software, balances are shown for balance sheet accounts only;
 // income and expense accounts are read for a period on the Profit and Loss.
 const HAS_BALANCE = new Set(['ASSET', 'LIABILITY', 'EQUITY']);
+
+/** Customize Columns: the chart of accounts' columns in their usual order. */
+const ACCOUNT_COLUMNS = [
+  { id: 'number', label: 'Number' },
+  { id: 'account', label: 'Account', required: true },
+  { id: 'type', label: 'Type' },
+  { id: 'description', label: 'Description' },
+  { id: 'balance', label: 'Balance' },
+];
+const ACCOUNT_COLUMN_WIDTH = { number: 'w-[84px]', type: 'w-[190px]', description: 'w-[260px]', balance: 'w-[140px]' };
 
 /**
  * Orders accounts as a tree (each parent followed by its subaccounts), keeping the server's
@@ -182,6 +193,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
 
   const { rolled, hasChildren } = useMemo(() => buildTree(accounts), [accounts]);
   const query = search.trim().toLowerCase();
+  const cols = useColumns('accounts', ACCOUNT_COLUMNS);
   // The custom order (drag a row among its siblings), shown as a tree or flat; a search shows every match.
   const listOrder = useListOrder('ACCOUNTS', accounts, { parentOf: accountParent, dragEnabled: !query, onNotice: setNotice });
   const ordered = listOrder.arranged.map((x) => x.row);
@@ -257,6 +269,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
           <div className="ml-auto">
             <ExportMenu printable={false} onNotice={setNotice} {...exports} />
           </div>
+          <ColumnsMenu cols={cols} />
           <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => setDialog({ account: null })}>
             New account
           </button>
@@ -265,20 +278,18 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <table className="qb-grid">
             <colgroup>
-              <col className="w-[84px]" />
-              <col />
-              <col className="w-[190px]" />
-              <col className="w-[260px]" />
-              <col className="w-[140px]" />
+              {cols.columns.map((c) => (
+                <col key={c.id} className={ACCOUNT_COLUMN_WIDTH[c.id]} />
+              ))}
               <col className="w-[30px]" />
             </colgroup>
             <thead>
               <tr>
-                <th className="qb-grid-head">Number</th>
-                <th className="qb-grid-head">Account</th>
-                <th className="qb-grid-head">Type</th>
-                <th className="qb-grid-head">Description</th>
-                <th className="qb-grid-head text-right">Balance</th>
+                {cols.columns.map((c) => (
+                  <th key={c.id} className={`qb-grid-head ${c.id === 'balance' ? 'text-right' : ''}`}>
+                    {c.label}
+                  </th>
+                ))}
                 <th className="qb-grid-head" aria-label="Actions" />
               </tr>
             </thead>
@@ -289,8 +300,14 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                 const total = ordered.filter((a) => a.classification === section.id && matches(a)).reduce((sum, a) => sum + a.balanceCents, 0);
                 return [
                   <tr key={section.id} className="bg-qb-row-header">
-                    <td className="qb-grid-cell font-semibold" colSpan={4}>{section.label}</td>
-                    <td className="qb-grid-cell num font-semibold">{HAS_BALANCE.has(section.id) && !query ? formatCents(total) : ''}</td>
+                    {/* The section's name across the columns, and its total under Balance. */}
+                    {cols.columns.map((c, i) =>
+                      c.id === 'balance' ? (
+                        <td key={c.id} className="qb-grid-cell num font-semibold">{HAS_BALANCE.has(section.id) && !query ? formatCents(total) : ''}</td>
+                      ) : (
+                        <td key={c.id} className="qb-grid-cell font-semibold">{i === 0 || (i === 1 && cols.columns[0].id === 'balance') ? section.label : ''}</td>
+                      ),
+                    )}
                     <td className="qb-grid-cell" />
                   </tr>,
                   ...rows.map((item) => {
@@ -304,19 +321,32 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                       onClick={() => setSelected(a.id)}
                       onDoubleClick={() => navigate('accounting/register', 'open', { accountId: a.id })}
                     >
-                      <td className="qb-grid-cell text-qb-ink-muted">{a.accountNumber ?? ''}</td>
-                      <td className="qb-grid-cell" title={a.fullName}>
-                        <span style={{ paddingLeft: `${indent(item) * 16}px` }}>
-                          {!query && <TreeToggle ctl={listOrder} item={item} />}
-                          {query || !listOrder.tree ? a.fullName : a.name}
-                        </span>
-                        {!a.isActive && <span className="ml-1 text-2xs uppercase tracking-wide">Inactive</span>}
-                      </td>
-                      <td className="qb-grid-cell text-qb-ink-muted">{a.accountTypeName}</td>
-                      <td className="qb-grid-cell text-qb-ink-muted" title={a.description ?? ''}>{a.description ?? ''}</td>
-                      <td className="qb-grid-cell num" title={hasChildren(a.id) ? 'Includes its subaccounts' : undefined}>
-                        {HAS_BALANCE.has(a.classification) ? formatCents(rolled.get(a.id) ?? a.balanceCents) : ''}
-                      </td>
+                      {cols.columns.map((c) => {
+                        switch (c.id) {
+                          case 'number':
+                            return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{a.accountNumber ?? ''}</td>;
+                          case 'account':
+                            return (
+                              <td key={c.id} className="qb-grid-cell" title={a.fullName}>
+                                <span style={{ paddingLeft: `${indent(item) * 16}px` }}>
+                                  {!query && <TreeToggle ctl={listOrder} item={item} />}
+                                  {query || !listOrder.tree ? a.fullName : a.name}
+                                </span>
+                                {!a.isActive && <span className="ml-1 text-2xs uppercase tracking-wide">Inactive</span>}
+                              </td>
+                            );
+                          case 'type':
+                            return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{a.accountTypeName}</td>;
+                          case 'description':
+                            return <td key={c.id} className="qb-grid-cell text-qb-ink-muted" title={a.description ?? ''}>{a.description ?? ''}</td>;
+                          default:
+                            return (
+                              <td key={c.id} className="qb-grid-cell num" title={hasChildren(a.id) ? 'Includes its subaccounts' : undefined}>
+                                {HAS_BALANCE.has(a.classification) ? formatCents(rolled.get(a.id) ?? a.balanceCents) : ''}
+                              </td>
+                            );
+                        }
+                      })}
                       <td className="qb-grid-cell cell-tight text-center">
                         <RowMenu
                           label={`Actions for ${a.fullName}`}
@@ -338,7 +368,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
               })}
               {ordered.filter(matches).length === 0 && (
                 <tr>
-                  <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">{query ? `No accounts match “${search.trim()}”.` : 'No accounts yet.'}</td>
+                  <td colSpan={cols.columns.length + 1} className="qb-grid-cell text-qb-ink-muted">{query ? `No accounts match “${search.trim()}”.` : 'No accounts yet.'}</td>
                 </tr>
               )}
             </tbody>
