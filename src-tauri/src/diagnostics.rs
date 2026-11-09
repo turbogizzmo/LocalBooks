@@ -186,8 +186,8 @@ mod tests {
         assert!(all.contains("Integrity (quick check): ok"));
         assert!(all.contains("  invoices: 1"), "counts per table");
         assert!(all.contains("\n  0001 "), "the schema migrations");
-        for secret in ["Secret Customer", "Confidential", "1234.56", "123456"] {
-            assert!(!all.contains(secret), "no business data: found {secret}");
+        for business in ["Secret Customer", "Confidential", "1234.56", "123456"] {
+            assert!(!all.contains(business), "no business data: found {business}");
         }
 
         let dir = std::env::temp_dir().join(format!("lb-diag-zip-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
