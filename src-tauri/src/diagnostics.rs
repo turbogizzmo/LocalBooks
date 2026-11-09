@@ -22,7 +22,8 @@ use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
 
-/// The log rolls over to `log.old.txt` past this size.
+/// The log (`diagnostics.log`) rolls over to `diagnostics.old.log` past this size; the bundle
+/// names them `log.txt` and `log.old.txt`.
 const LOG_LIMIT: u64 = 512 * 1024;
 
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -57,7 +58,10 @@ fn write_line(dir: &Path, line: &str, limit: u64) {
     let _guard = WRITING.lock();
     let path = log_path(dir);
     if std::fs::metadata(&path).is_ok_and(|m| m.len() > limit) {
-        let _ = std::fs::rename(&path, dir.join("diagnostics.old.log"));
+        // The older log goes first: renaming over an existing file fails on Windows.
+        let old = dir.join("diagnostics.old.log");
+        let _ = std::fs::remove_file(&old);
+        let _ = std::fs::rename(&path, &old);
     }
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "{} {}", chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), line.replace('\n', " "));
@@ -147,7 +151,7 @@ mod tests {
 
     #[test]
     fn the_log_appends_lines_and_rolls_over() {
-        let dir = std::env::temp_dir().join(format!("lb-diag-log-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lb-diag-log-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         write_line(&dir, "LocalBooks started", 64);
@@ -157,6 +161,11 @@ mod tests {
         assert!(text.contains("opened Books.localbooks second line"));
         write_line(&dir, "past the limit", 64);
         assert!(dir.join("diagnostics.old.log").exists(), "the full log rolls over");
+        // Again, with an older log already there (renaming over it fails on Windows).
+        for n in 0..4 {
+            write_line(&dir, &format!("filling the log again, line {n}"), 64);
+        }
+        assert!(std::fs::metadata(log_path(&dir)).unwrap().len() <= 200, "the log keeps rolling over");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -181,7 +190,7 @@ mod tests {
             assert!(!all.contains(secret), "no business data: found {secret}");
         }
 
-        let dir = std::env::temp_dir().join(format!("lb-diag-zip-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lb-diag-zip-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("diagnostics.zip");
         write_zip(&files, &path).unwrap();

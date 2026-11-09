@@ -23,7 +23,7 @@ pub async fn preview_diagnostics(app: AppHandle, db: State<'_, Db>) -> Result<Ve
 /// Asks where to save the bundle and writes it; `None` when the dialog is cancelled.
 #[tauri::command]
 pub async fn save_diagnostics(app: AppHandle, db: State<'_, Db>) -> Result<Option<String>, String> {
-    let bundle = files(&app, &db).await?;
+    // Where first: nothing is gathered if the dialog is cancelled.
     let name = format!("LocalBooks diagnostics {}.zip", Local::now().format("%Y-%m-%d"));
     let dialog_app = app.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&name).add_filter("Zip file", &["zip"]).blocking_save_file())
@@ -31,6 +31,7 @@ pub async fn save_diagnostics(app: AppHandle, db: State<'_, Db>) -> Result<Optio
         .map_err(|e| format!("DIAG_DIALOG: {e}"))?;
     let Some(target) = chosen else { return Ok(None) };
     let path = target.into_path().map_err(|e| format!("DIAG_BAD_PATH: {e}"))?;
+    let bundle = files(&app, &db).await?;
     crate::diagnostics::write_zip(&bundle, &path)?;
     Ok(Some(path.display().to_string()))
 }
