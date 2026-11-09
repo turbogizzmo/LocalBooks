@@ -48,6 +48,9 @@ people using LocalBooks.
 - **Approvals for bills and purchase orders.** Expenses › Approvals holds bills and purchase orders
   over an amount, or from a vendor you choose, until an Admin approves them. A waiting bill isn't
   posted or in Pay Bills; approving records it as entered, and rejecting keeps it with a note.
+- **Comment on report figures.** Click Comment on a report, then a figure, to explain it. The
+  report is kept as shown under Reports › Commented Reports, and it prints with its comments,
+  numbered beside their figures.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

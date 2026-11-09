@@ -437,6 +437,27 @@ the others, and a click on a line opens its transaction or account where it has 
 
 These reports can't be customized or memorized.
 
+## Comment on a figure
+
+To explain a number to your accountant, a partner or yourself next month, comment on it:
+
+1. Open the report (Profit and Loss, Balance Sheet, a detail report, an Accountant & Taxes report
+   and most others) and click **Comment** at the top.
+2. Click a figure. It's outlined while commenting is on; the click opens a comment box instead of
+   the transactions.
+3. Type the comment and press **Enter** or **Save**.
+
+The first comment keeps a copy of the report as it is on screen, with its title and dates, under
+**Reports › Accountant & Taxes › Commented Reports**. Later comments in the same report go on the
+same copy. Each commented figure shows a number, like **[1]**, and printing the report (or the
+kept copy) lists the comments under it by number, with the line, the figure, who wrote it and
+when.
+
+**Commented Reports** lists every kept report, the most recently commented first. Open one to read
+its comments, add more (click a figure), remove one, **Print…** it, or **Delete** it. The kept copy
+doesn't change when the books do: it shows the figures as they were when the comments were made.
+Run the report again for today's figures.
+
 ## Collapse and expand
 
 A report with headings (accounts, names, jobs, vendors, sections of the Balance Sheet Summary) has a

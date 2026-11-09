@@ -97,6 +97,7 @@ mod reconcile;
 mod registers;
 mod reminders;
 mod report_center;
+mod report_comments;
 mod release_check;
 mod reports;
 mod revaluation;

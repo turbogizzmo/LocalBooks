@@ -138,6 +138,14 @@ export const topics = [
     guide: 'reconciling',
   },
   {
+    id: 'report-comments', area: 'reports', views: ['reports'],
+    title: 'Comment on a report figure',
+    body: 'Click Comment at the top of a report, then click a figure and type. The first comment keeps a copy of the report as shown under Reports › Accountant & Taxes › Commented Reports; each commented figure gets a number, and the report prints with its comments listed by number. Open a commented report to add or remove comments, print it or delete it. The copy keeps the figures as they were when commented on.',
+    keywords: 'comment comments note annotate annotation explain figure number report accountant review commented reports print',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'income-tax-reports', area: 'reports', views: ['reports'],
     title: 'Total your books by income tax line',
     body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines. For Schedule C, Export TXF… saves the year as a TXF file your tax program imports, and lists anything it leaves out for you to enter by hand.',

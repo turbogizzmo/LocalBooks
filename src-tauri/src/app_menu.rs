@@ -400,6 +400,7 @@ const REPORTS: &[Entry] = &[
             report("Memorized Transaction Listing", "list:memorized-transactions"),
             report("Realized Gains & Losses", "list:realized-gains"),
             report("Unrealized Gains & Losses", "list:unrealized-gains"),
+            report("Commented Reports", "commented"),
         ],
     ),
     Entry::Sub("Budgets & Forecasts", &[report("Budget Overview", "list:budget-overview"), report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
