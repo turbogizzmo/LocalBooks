@@ -17,6 +17,25 @@ purchase order or vendor credit, type the name. If nobody matches, the list offe
 **＋ Add "…" as a new customer** (or vendor), added straight away, and **Add with details…**, which
 adds the name and opens its record for the address, terms and (for vendors) 1099 status.
 
+### Work with the list from the menus
+
+The customer, vendor and item lists (**Sales › Products & Services**) have three menus over the
+list:
+
+- **New Transactions**: the forms for that list, such as an invoice, sales receipt or credit memo
+  for customers, a bill, check or purchase order for vendors. An invoice opened from the customer
+  list starts with the customer you clicked.
+- **Print**: prints the list on screen, or opens the list reports (phone and contact lists, the item
+  listing and price list).
+- **Excel**: saves the list as an Excel workbook or a CSV file.
+
+The **Edit** menu works on the list on screen too: **New in List** goes to the new-name row, **Edit
+in List** opens the name you clicked, **Make Inactive / Active** switches it, and **Show All
+(inactive too)** shows or hides inactive names. **Delete from List** (also **Delete…** on a row's
+**Actions** menu) deletes a customer, vendor or item that has never been used: no transactions,
+jobs, groups, stock or other records. Anything used can't be deleted; make it inactive instead,
+which keeps its history. A delete is recorded in the audit trail.
+
 ### Copy a customer or vendor
 
 To add a name that shares most of another's details (a second location, a sister company), open

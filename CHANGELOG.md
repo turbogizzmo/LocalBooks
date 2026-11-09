@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **List menus and Edit-menu list commands.** The customer, vendor and item lists have New
+  Transactions, Print and Excel menus. The Edit menu's New, Edit, Delete, Make Inactive / Active and
+  Show All act on the list on screen, and a customer, vendor or item that was never used can now be
+  deleted.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

@@ -81,6 +81,7 @@ features![
     item_prices,
     job_reports,
     journal,
+    list_delete,
     list_order,
     list_reports,
     lists,

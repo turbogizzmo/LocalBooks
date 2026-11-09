@@ -84,6 +84,13 @@ const EDIT: &[Entry] = &[
     form_cmd("Go To Transfer (Ctrl+G)", "form:goto-transfer"),
     form_cmd("Duplicate Transaction (Ctrl+O)", "form:duplicate"),
     Entry::Sep,
+    // Act on the customer, vendor or item list on screen (`runListCommand` in listCommands.js).
+    form_cmd("New in List", "list:new"),
+    form_cmd("Edit in List", "list:edit"),
+    form_cmd("Delete from List", "list:delete"),
+    form_cmd("Make Inactive / Active", "list:toggle-active"),
+    form_cmd("Show All (inactive too)", "list:show-all"),
+    Entry::Sep,
     page("Use Register", "accounting/register"),
     keyed("Find…", "accounting/find", None, "CmdOrCtrl+F"),
     Entry::Sep,

@@ -6,7 +6,9 @@ import StatementCharges from './StatementCharges.jsx';
 import { useEnvelopePrinter } from './FormPages.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
-import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
+import { longDate, tableExports } from './ReportParts.jsx';
+import ListMenus from './ListMenus.jsx';
+import { useListCommands } from '../lib/listCommands.js';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
@@ -20,7 +22,7 @@ import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
-import { askText } from '../lib/dialogs.jsx';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -487,6 +489,27 @@ export default function PartyList({ kind, navigate }) {
   };
 
   const nameRef = useRef(null);
+  // Edit › New, Edit, Delete, Make Inactive and Show All act on this list and its selected name.
+  const listRef = useRef(null);
+  const chosen = () => (data ?? []).find((p) => p.id === selected) ?? null;
+  const needChoice = () => setNotice({ kind: 'info', text: `Click a ${cfg.noun} in the list first.` });
+  const removeRecord = async (p) => {
+    if (!(await askConfirm(`Delete ${p.name}? Only a ${cfg.noun} with no transactions or other records can be deleted; this can't be undone.`, { confirmLabel: 'Delete', danger: true }))) return;
+    try {
+      await api.deleteListRecord(kind, p.id);
+      setSelected(null);
+      setNotice({ kind: 'success', text: `Deleted ${p.name}.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  useListCommands(listRef, {
+    new: () => nameRef.current?.focus(),
+    edit: () => (chosen() ? openRecord(chosen().id) : needChoice()),
+    delete: () => (chosen() ? removeRecord(chosen()) : needChoice()),
+    'toggle-active': () => (chosen() ? setActive(chosen(), !chosen().isActive) : needChoice()),
+    'show-all': () => setShowInactive((on) => !on),
+  });
   // Jobs are customers named "Customer:Job"; ordering by each part keeps a job under its customer.
   const byPath = (a, b) => {
     const pa = a.name.split(':');
@@ -549,7 +572,7 @@ export default function PartyList({ kind, navigate }) {
   });
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={listRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
         <PartyDialog
           kind={kind}
@@ -573,7 +596,7 @@ export default function PartyList({ kind, navigate }) {
           <span className="ml-auto text-sm text-qb-ink-muted">
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
-          <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          <ListMenus kind={kind} selected={chosen()} exports={exports} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {charging && <StatementCharges customer={charging} onClose={() => setCharging(null)} />}
@@ -656,6 +679,7 @@ export default function PartyList({ kind, navigate }) {
                             : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
+                          { label: 'Delete…', hint: 'Only one with no transactions or other records', onSelect: () => removeRecord(p) },
                         ]}
                       />
                     </td>
