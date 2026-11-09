@@ -57,6 +57,8 @@ function Trend({ points }) {
 
 function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }) {
   const meta = WIDGETS[widget.kind];
+  // The aging widgets have an overdue column between the name and the amount.
+  const aging = widget.kind === 'WHO_OWES' || widget.kind === 'VENDORS_TO_PAY';
   const dates = meta.asOf ? `as of ${formatDate(widget.endDate)}` : `${formatDate(widget.startDate)} – ${formatDate(widget.endDate)}`;
   return (
     <section className="qb-panel flex flex-col" aria-label={meta.title}>
@@ -91,12 +93,14 @@ function WidgetCard({ widget, index, count, onMove, onRemove, onPeriod, onOpen }
               ))}
               {widget.othersCents !== 0 && (
                 <tr className="text-qb-ink-muted">
-                  <td className="py-0.5" colSpan={widget.lines[0]?.overdueCents !== undefined && widget.lines[0]?.overdueCents !== null ? 2 : 1}>Others</td>
+                  <td className="py-0.5" colSpan={aging ? 2 : 1}>Others</td>
                   <td className="num py-0.5 text-right">{formatCents(widget.othersCents)}</td>
                 </tr>
               )}
               {widget.lines.length === 0 && (
-                <tr><td className="py-1 text-qb-ink-muted">Nothing in these dates.</td></tr>
+                <tr>
+                  <td className="py-1 text-qb-ink-muted" colSpan={aging ? 3 : 2}>Nothing in these dates.</td>
+                </tr>
               )}
             </tbody>
           </table>
