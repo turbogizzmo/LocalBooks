@@ -36,7 +36,7 @@ re-check one against the code before you start it.
 | R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model |
 | R16 | open | M | Payroll: nothing posts a payroll service's results | Imports a payroll service's journal export into balanced entries |
 | R17 | open | M | Tax software export (TXF / tax-line mapping) | Accounts map to tax lines; TXF export imports into a tax program |
-| R18 | open | L | No condensing or archiving of old years | Old years condense to opening balances with an archive copy; reports from the archive still tie out |
+| R18 | done (#107) | L | No condensing or archiving of old years | Old years condense to opening balances with an archive copy; reports from the archive still tie out. Done by Condense Data: monthly summaries rather than one opening entry, checked against the archive before it switches (`condense::tests`); see `docs/plans/condense-old-years.md` |
 | R19 | partial | M | Accessibility untested | Every screen is reachable and operable by keyboard; an automated a11y check runs in the e2e suite |
 | R20 | partial | S | US-only, and not stated anywhere | README and the tester page say it is US-only and what that means |
 | R22 | open | M | No offsite backup: copies go to a folder beside the company file, or to a synced folder the user sets up, unencrypted | Back up › Offsite sends an encrypted copy (encrypted on this computer with a key from the user's password or recovery key, so the provider sees only scrambled data) to a folder or cloud service the user picks; it runs on a schedule and its restore is tested |
