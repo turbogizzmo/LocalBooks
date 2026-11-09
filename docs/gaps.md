@@ -19,7 +19,7 @@ re-check one against the code before you start it.
 
 | id | status | size | gap | accept |
 |---|---|---|---|---|
-| R1 | partial | L | Encryption at rest covers vendor tax IDs only; the rest of the file, backups and attachments are plain | Opening a company file, backup or attachment with plain SQLite or a hex dump shows no readable business data; the key is password-wrapped |
+| R1 | partial | L | Encryption at rest covers vendor tax IDs and bank details only; the rest of the file, local backups and attachments are plain. Design: `docs/plans/encryption-at-rest.md` (SQLCipher under sqlx, key slots in a header before the database, five phases; the owner must decide the loss model first) | Opening a company file, backup or attachment with plain SQLite or a hex dump shows no readable business data; the key is password-wrapped |
 | R2 | done (#166) | S | 1099 thresholds go by payment year: $600 before 2026, $2,000 from 2026 (NEC and most MISC boxes; royalties $10, attorneys $600) | Test: the 1099 report uses the threshold for the payment year, for years before and from 2026 (`workflows::tests::the_1099_report_follows_the_account_mapping_and_the_threshold_by_year`) |
 | R3 | partial | M | Import accuracy not signed off (one sample bank account off by −$3,995 after import) | Every sample in the test kit imports with account balances matching the source's own balance sheet; differences are listed, not hidden |
 | R4 | done (#245) | S–M | Plain-text copies outside the file: CSV/PDF exports, mail staging, staged imports | Temp and staging copies are deleted after use or encrypted; exports warn that they are plain |
