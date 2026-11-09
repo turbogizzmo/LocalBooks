@@ -104,7 +104,8 @@ export function CashForecastWidget({ navigate }) {
   const { data, error } = useLedgerQuery(() => api.getCashFlowForecast(todayIso(), 8));
   const weeks = data ? data.periods.filter((p) => p.kind === 'WEEK') : [];
   const pastDue = data?.periods.find((p) => p.kind === 'PAST_DUE');
-  const scale = Math.max(1, ...weeks.flatMap((w) => [w.moneyInCents, w.moneyOutCents]));
+  // Credits can make a week's total negative: its bar shows the size, faded, and the tooltip the sign.
+  const scale = Math.max(1, ...weeks.flatMap((w) => [Math.abs(w.moneyInCents), Math.abs(w.moneyOutCents)]));
   return (
     <button
       type="button"
@@ -125,8 +126,8 @@ export function CashForecastWidget({ navigate }) {
             {weeks.map((w) => (
               <div key={w.label} className="flex min-w-0 flex-col items-stretch" title={`${w.label}: in ${formatCents(w.moneyInCents)}, out ${formatCents(w.moneyOutCents)}, cash at the end ${formatCents(w.endingCashCents)}`}>
                 <div className="flex h-10 items-end gap-[2px]">
-                  <div className="flex-1 rounded-t-[2px] bg-qb-green" style={{ height: `${Math.max(0, (w.moneyInCents / scale) * 100)}%` }} />
-                  <div className="flex-1 rounded-t-[2px] bg-qb-negative" style={{ height: `${Math.max(0, (w.moneyOutCents / scale) * 100)}%` }} />
+                  <div className={`flex-1 rounded-t-[2px] bg-qb-green ${w.moneyInCents < 0 ? 'opacity-40' : ''}`} style={{ height: `${(Math.abs(w.moneyInCents) / scale) * 100}%` }} />
+                  <div className={`flex-1 rounded-t-[2px] bg-qb-negative ${w.moneyOutCents < 0 ? 'opacity-40' : ''}`} style={{ height: `${(Math.abs(w.moneyOutCents) / scale) * 100}%` }} />
                 </div>
                 <div className="truncate text-2xs text-qb-ink-muted">{w.label.replace('Week of ', '')}</div>
                 <div className={`num truncate text-2xs ${w.endingCashCents < 0 ? 'text-qb-negative' : ''}`}>{formatCents(w.endingCashCents)}</div>
