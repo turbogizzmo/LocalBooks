@@ -16,6 +16,22 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'email-report-pdf', area: 'reports', views: ['reports', 'accounting/register', 'sales/customers', 'dashboard'],
+    title: 'Email a report, list or register as a PDF',
+    body: 'Export › Email as PDF… on any report, list or register attaches it as a PDF to a message: sent from LocalBooks when Settings › Email is set up, or opened in your mail app. Save as PDF… saves the same file, and the Reminders list can be emailed too.',
+    keywords: 'email report pdf send attach accountant export save pdf list register reminders mail',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'scheduled-reports', area: 'reports', views: ['reports'],
+    title: 'Schedule reports to email or save',
+    body: 'Reports › Scheduled Reports… runs chosen reports every day, week, month or quarter, for dates counted from the run (last month, quarter to date…), and emails them through Settings › Email or saves them to a folder as PDF or Excel. Schedules run only while LocalBooks is open; a run missed while it was closed happens once when it next opens.',
+    keywords: 'schedule scheduled report automatic recurring email monthly weekly daily quarterly accountant folder pdf excel send',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'quickzoom', area: 'reports', views: ['reports'],
     title: 'See the transactions behind a number (QuickZoom)',
     body: 'Click an account or amount on the Profit and Loss, Balance Sheet or another statement to open its register for that column’s dates. On an aging summary, click a name to list its open invoices or bills; on a sales or vendor summary, click a line to open its detail report.',

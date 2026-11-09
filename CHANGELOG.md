@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Email reports as PDF, and schedule them.** Every report, list and register (and the Reminders
+  list) can be emailed or saved as a PDF from its Export menu. Reports › Scheduled Reports… sends
+  chosen reports every day, week, month or quarter by email, or saves them to a folder as PDF or
+  Excel, while LocalBooks is open; a run missed while it was closed happens when it next opens.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

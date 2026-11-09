@@ -32,7 +32,7 @@ pub struct EmailInput {
 }
 
 impl EmailInput {
-    fn checked(self) -> Result<(Vec<String>, String, String), String> {
+    pub(super) fn checked(self) -> Result<(Vec<String>, String, String), String> {
         let to = mail_app::parse_recipients(&self.to)?;
         let subject = self.subject.split_whitespace().collect::<Vec<_>>().join(" ");
         if subject.chars().count() > 200 {
@@ -109,7 +109,7 @@ pub async fn email_form_with_smtp(app: AppHandle, db: State<'_, Db>, kind: FormK
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
     let (file_name, pdf) = forms::pdf_file_for(&pool, kind, document_id, period).await?;
-    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf }).await?;
+    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to: to.clone(), subject: subject.clone(), body, file_name, pdf, more: Vec::new() }).await?;
     record_sent(&app, &pool, kind, document_id, &to, email_log::Method::Smtp, &subject).await;
     Ok(())
 }
@@ -121,7 +121,7 @@ pub async fn send_smtp_test_email(app: AppHandle, db: State<'_, Db>, settings: S
     smtp::send_test(settings, &smtp_secrets(&app)?, password, &company.name).await
 }
 
-fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
+pub(super) fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
     Ok(smtp::secret_store(&crate::data_dirs(app).map_err(|e| format!("SMTP_CONFIG: {e}"))?.1))
 }
 
