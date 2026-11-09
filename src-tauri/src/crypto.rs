@@ -374,5 +374,33 @@ pub async fn unlock_with_recovery_key(conn: &mut SqliteConnection, recovery_key:
         .ok_or_else(|| "KEY_WRONG_RECOVERY: that is not this company file's recovery key".to_string())
 }
 
+/// Argon2id cost of a key derived from a password outside the company file (an offsite backup's),
+/// stored beside its salt so the key can be derived again on any computer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KdfCost {
+    pub memory_kib: u32,
+    pub iterations: u32,
+    pub parallelism: u32,
+}
+
+impl KdfCost {
+    /// The cost new key slots use (Argon2's minimum in tests).
+    pub fn for_new_keys() -> Self {
+        KdfCost { memory_kib: COST.memory_kib, iterations: COST.iterations, parallelism: COST.parallelism }
+    }
+}
+
+/// Derives an offsite backup key from a backup password or the company's recovery key. A recovery
+/// key is read as it is when unlocking (case, spaces and dashes don't matter), so it opens the
+/// backup however it is typed. The cost is bounded like a slot's: a damaged backup header cannot
+/// ask for unbounded work.
+pub async fn derive_backup_key(password: &str, salt: [u8; SALT_LEN], cost: KdfCost) -> Result<Zeroizing<[u8; KEY_LEN]>, String> {
+    let secret = match parse_recovery_key(password) {
+        Ok(bytes) => Zeroizing::new(bytes.to_vec()),
+        Err(_) => Zeroizing::new(password.as_bytes().to_vec()),
+    };
+    derive(secret, salt, Cost { memory_kib: cost.memory_kib, iterations: cost.iterations, parallelism: cost.parallelism }).await
+}
+
 #[cfg(test)]
 mod tests;

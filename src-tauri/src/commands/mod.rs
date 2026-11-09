@@ -49,6 +49,7 @@ features![
     accountant_reports,
     accounts,
     ach,
+    approvals,
     attachments,
     attachments_library,
     backups,
@@ -62,6 +63,7 @@ features![
     classes,
     cleanup,
     company_files,
+    company_snapshot,
     condense,
     credits,
     custom_fields,
@@ -71,12 +73,14 @@ features![
     deposits,
     desktop,
     diagnostics,
+    document_inbox,
     editing,
     email,
     envelopes,
     estimates,
     expenses,
     finance_charges,
+    form_1099,
     forms,
     graphs,
     installed_quickbooks,
@@ -91,11 +95,14 @@ features![
     list_reports,
     lists,
     mcp,
+    merges,
     migration,
     mileage,
     payroll_import,
+    offsite,
     preferences,
     price_levels,
+    print_batches,
     print_queue,
     profile_lists,
     purchase_orders,
@@ -104,6 +111,7 @@ features![
     register_entry,
     reminders,
     repair,
+    report_comments,
     report_export,
     report_mail,
     revaluation,
@@ -126,6 +134,7 @@ features![
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
+pub use offsite::offsite_secrets;
 pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 
