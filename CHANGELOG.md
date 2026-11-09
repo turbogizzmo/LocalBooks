@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Set Discount and Set Credits in Pay Bills.** Click a bill to choose the early-payment discount
+  and the vendor credits to use on it, instead of what the automatic preferences would take.
+- **Income account column off by default on sales forms.** The item fills it in; turn it on from
+  **Columns ▾**, and it shows by itself while a line still needs an account.
 - **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
   and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
   order.

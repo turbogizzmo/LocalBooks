@@ -1,4 +1,5 @@
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
+import { creditLeftFor, overrideProblem, withOverrides } from '../lib/payBillsAdjust.js';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
@@ -356,6 +357,81 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
 
 const newRequestId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
+/**
+ * Set Discount / Set Credits for one bill in Pay Bills (T37): the early-payment discount to take
+ * (up to what its terms offer on the payment date) or how much of each of the vendor's open credits
+ * to use on it. `current` is what is taken now; `onSet` gets `{ discountCents }` or `{ credits }`.
+ */
+function AdjustBill({ bill, what, date, current, allCredits, onCancel, onSet }) {
+  const vendorCredits = useLedgerQuery(api.listVendorCredits).data ?? [];
+  const open = vendorCredits.filter((c) => c.vendorId === bill.vendorId && !c.isVoided && (c.remainingCents > 0 || current.credits.some((u) => u.creditId === c.id)));
+  const offered = bill.discountUntil && date <= bill.discountUntil && (bill.amountPaidCents ?? 0) === 0 ? bill.earlyDiscountCents ?? 0 : 0;
+  const [discount, setDiscount] = useState(centsToInput(current.discountCents));
+  const [amounts, setAmounts] = useState(() => Object.fromEntries(current.credits.map((c) => [c.creditId, centsToInput(c.amountCents)])));
+  const parsedCredits = open.map((c) => ({ creditId: c.id, amountCents: (amounts[c.id] ?? '').trim() === '' ? 0 : parseMoneyToCents(amounts[c.id]) }));
+  const change = what === 'discount' ? { discountCents: discount.trim() === '' ? 0 : parseMoneyToCents(discount) } : { credits: parsedCredits };
+  const leftOf = (creditId) => {
+    const c = open.find((x) => x.id === creditId);
+    return c ? creditLeftFor(c, allCredits, bill.id) : 0;
+  };
+  // The other half (credits when setting the discount, and the reverse) still counts toward the balance.
+  const problem = overrideProblem(
+    what === 'discount' ? { ...change, credits: current.credits } : { discountCents: current.discountCents, ...change },
+    { balanceCents: bill.balanceCents, offeredCents: what === 'discount' ? offered : Math.max(offered, current.discountCents), leftOf },
+  );
+  const label = `${bill.vendorName}${bill.billNumber ? ` · Bill #${bill.billNumber}` : ''}`;
+  return (
+    <div className="border-t border-qb-border bg-white px-2 py-1.5 text-sm" role="group" aria-label={what === 'discount' ? 'Set discount' : 'Set credits'}>
+      <div className="mb-1 font-semibold">
+        {what === 'discount' ? 'Discount' : 'Credits'} on {label} · balance {formatCents(bill.balanceCents)}
+      </div>
+      {what === 'discount' ? (
+        <label className="flex items-center gap-2">
+          <span>Discount to take</span>
+          <input className="qb-input num w-[110px]" value={discount} onChange={(e) => setDiscount(e.target.value)} inputMode="decimal" data-money />
+          <span className="text-xs text-qb-ink-muted">
+            {offered > 0 ? `The terms offer ${formatCents(offered)} through ${formatDate(bill.discountUntil)}.` : 'The terms offer no discount when paid on this date.'} It goes to the discount account in Preferences › Bills.
+          </span>
+        </label>
+      ) : open.length === 0 ? (
+        <p className="text-qb-ink-muted">{bill.vendorName} has no open credits.</p>
+      ) : (
+        <table className="qb-grid w-auto">
+          <thead>
+            <tr>
+              <th className="qb-grid-head">Credit</th>
+              <th className="qb-grid-head">Date</th>
+              <th className="qb-grid-head text-right">Left to use</th>
+              <th className="qb-grid-head text-right">Use on this bill</th>
+            </tr>
+          </thead>
+          <tbody>
+            {open.map((c) => (
+              <tr key={c.id} className="qb-grid-row">
+                <td className="qb-grid-cell">{c.reference ?? c.memo ?? `Credit ${c.id}`}</td>
+                <td className="qb-grid-cell">{formatDate(c.creditDate)}</td>
+                <td className="qb-grid-cell num">{formatCents(leftOf(c.id))}</td>
+                <td className="qb-grid-cell-edit">
+                  <input className="num" value={amounts[c.id] ?? ''} onChange={(e) => setAmounts({ ...amounts, [c.id]: e.target.value })} inputMode="decimal" data-money aria-label={`Use of credit ${c.reference ?? c.id}`} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {problem && <p className="mt-1 text-qb-negative">{problem}</p>}
+      <div className="mt-1 flex gap-2">
+        <button type="button" className="qb-btn qb-btn-primary h-row" disabled={Boolean(problem)} onClick={() => onSet(change)}>
+          Done
+        </button>
+        <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PayBills({ bills, accounts, onDone, onCancel }) {
   const open = bills.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   // Pay Bills opens on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -440,6 +516,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   };
 
   const toggle = (bill, on) => {
+    if (!on) setOverrides(({ [bill.id]: _dropped, ...rest }) => rest);
     setTyped((t) => {
       const next = new Set(t);
       next.delete(bill.id);
@@ -452,6 +529,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const shown = payBillsView(open, { vendorId: filterVendor, sortBy });
   const hiddenPicked = picked.filter((b) => !shown.includes(b)).length;
   const highlightedBill = shown.find((b) => b.id === highlight) ?? null;
+  // The bill whose discount or credits are being set ({ bill, what: 'discount' | 'credits' }).
+  const [adjusting, setAdjusting] = useState(null);
   // Early-payment discounts the terms still offer, then vendor credits (oldest first), taken off the
   // ticked bills as Preferences › Bills says; not with ACH.
   const { autoCredits, autoDiscounts } = useSalesPrefs();
@@ -478,9 +557,13 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
       live = false;
     };
   }, [autoCredits, autoDiscounts, ach, pickedKey, date]);
-  const discountOn = (b) => discounts.find((x) => x.billId === b.id)?.amountCents ?? 0;
+  // Set Discount and Set Credits on the bill information panel: a bill's own discount and credits,
+  // in place of the automatic ones (kept until the bill is unticked or Pay Bills closes).
+  const [overrides, setOverrides] = useState({});
+  const effective = useMemo(() => withOverrides({ discounts, credits }, overrides), [discounts, credits, overrides]);
+  const discountOn = (b) => effective.discounts.find((x) => x.billId === b.id)?.amountCents ?? 0;
   // What comes off a bill before it is paid: its discount and the credits used on it.
-  const creditOn = (b) => discountOn(b) + credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
+  const creditOn = (b) => discountOn(b) + effective.credits.filter((c) => c.billId === b.id).reduce((s, c) => s + c.amountCents, 0);
   // A ticked bill's payment is what the credits leave, until the person types an amount.
   useEffect(() => {
     setSelected((s) => {
@@ -497,7 +580,7 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
       return changed ? next : s;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credits, discounts]);
+  }, [effective]);
   const cents = (b) => parseMoneyToCents(selected[b.id] ?? '');
   const bad = picked.filter((b) => cents(b) === null || cents(b) < 0 || (cents(b) === 0 && creditOn(b) === 0) || cents(b) + creditOn(b) > b.balanceCents);
   const total = picked.reduce((s, b) => s + Math.max(0, cents(b) ?? 0), 0);
@@ -524,8 +607,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     try {
       const queued = printLater.on;
       const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: queued ? null : checkNumber(b.vendorId), toBePrinted: queued }));
-      const used = credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
-      const taken = discounts.filter((x) => picked.some((b) => b.id === x.billId));
+      const used = effective.credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
+      const taken = effective.discounts.filter((x) => picked.some((b) => b.id === x.billId));
       const count = used.length + taken.length > 0 ? await api.payBillsWithCredits(payments, used, taken, date) : await api.payVendorBills(payments);
       const written = checks
         ? payees.map((vendorId) => {
@@ -764,15 +847,48 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
               : 'none'}
           </span>
           <span>Discount &amp; credits used {formatCents(creditOn(highlightedBill))}</span>
+          {!ach && (
+            <>
+              <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setAdjusting({ bill: highlightedBill, what: 'discount' })} title="Choose the early-payment discount to take on this bill">
+                Set Discount
+              </button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setAdjusting({ bill: highlightedBill, what: 'credits' })} title="Choose which of the vendor's credits to use on this bill">
+                Set Credits
+              </button>
+            </>
+          )}
           <button
             type="button"
-            className="qb-btn qb-btn-secondary ml-auto h-row"
+            className={`qb-btn qb-btn-secondary h-row ${ach ? 'ml-auto' : ''}`}
             title="Open this bill in a window of its own"
             onClick={() => openFromList('expenses/bills', 'edit', { billId: highlightedBill.id })}
           >
             Go to Bill
           </button>
         </div>
+      )}
+      {adjusting && (
+        <AdjustBill
+          key={`${adjusting.bill.id}-${adjusting.what}`}
+          bill={adjusting.bill}
+          what={adjusting.what}
+          date={date}
+          current={{ discountCents: discountOn(adjusting.bill), credits: effective.credits.filter((c) => c.billId === adjusting.bill.id) }}
+          allCredits={effective.credits}
+          onCancel={() => setAdjusting(null)}
+          onSet={(change) => {
+            const bill = adjusting.bill;
+            setOverrides((o) => ({ ...o, [bill.id]: { ...o[bill.id], ...change } }));
+            // Setting a discount or credits ticks the bill; its payment becomes what they leave.
+            if (selected[bill.id] === undefined) setSelected((s) => ({ ...s, [bill.id]: centsToInput(bill.balanceCents) }));
+            setTyped((t) => {
+              const next = new Set(t);
+              next.delete(bill.id);
+              return next;
+            });
+            setAdjusting(null);
+          }}
+        />
       )}
       {checks && payees.length > 1 && (
         <div className="px-2 py-1 text-xs text-qb-ink-muted">

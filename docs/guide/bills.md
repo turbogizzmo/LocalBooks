@@ -111,6 +111,16 @@ the discount off a bill nothing has been paid on yet and pays the rest. The disc
 as a vendor credit to the discount account, used on that bill, so it shows in the vendor's
 history and reports like any other credit.
 
+### Set the discount or credits on one bill
+
+Click a bill in Pay Bills and its information shows under the list. **Set Discount** lets you
+choose the discount to take on that bill, up to what its terms offer on the payment date (0.00
+takes none); it needs a **Discount account** in **Preferences › Bills**. **Set Credits** lists the
+vendor's open credits with what is left of each; enter how much of each to use on this bill. Click
+**Done** and the bill is ticked, its **Payment** becomes what is left, and the totals update. What
+you set replaces what the automatic preferences would take on that bill, works with them turned off
+too, and is forgotten if you untick the bill. Neither is offered when paying by ACH file.
+
 ## Pay bills by ACH file
 
 Many banks let a business upload a file of payments instead of writing checks. LocalBooks can write

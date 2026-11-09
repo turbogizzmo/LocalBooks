@@ -240,7 +240,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
 /**
  * The columns between Description and Amount, in the desktop sales forms' order (Customize Columns
  * hides and reorders them; Qty and Rate always show). Service Date, Price level and Class appear
- * only where the form has them.
+ * only where the form has them; Income account is off by default (T37).
  */
 const LINE_COLUMNS = [
   { id: 'serviceDate', label: 'Service Date', width: 'w-[120px]', title: 'When the work on the line was done; printed in its own column' },
@@ -248,7 +248,9 @@ const LINE_COLUMNS = [
   { id: 'level', label: 'Price level', width: 'w-[120px]', title: 'Fills in the rate; a typed rate always wins' },
   { id: 'rate', label: 'Rate', width: 'w-[100px]', num: true, required: true },
   { id: 'class', label: 'Class', width: 'w-[150px]' },
-  { id: 'account', label: 'Income account', width: 'w-[200px]', title: 'Filled in from the item; choose one for a line without an item' },
+  // Off until turned on (the item fills it in, as on the desktop forms); it shows by itself while a
+  // line still needs an account.
+  { id: 'account', label: 'Income account', width: 'w-[200px]', title: 'Filled in from the item; choose one for a line without an item', hidden: true },
 ];
 
 export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates: datesAllowed = false }) {
@@ -457,7 +459,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
   // The middle columns as the person arranged them (Customize Columns), of those this form has.
   const offered = { serviceDate: serviceDates, level: withLevels, class: withClasses };
-  const middle = cols.columns.filter((c) => offered[c.id] ?? true);
+  const needsAccount = lines.some((l) => {
+    const state = evaluateLine(l, { allowZeroRate });
+    return !state.blank && Boolean(state.errors.account);
+  });
+  const middle = cols.all.filter((c) => (c.visible || (c.id === 'account' && needsAccount)) && (offered[c.id] ?? true));
   // A subtotal's or group heading's one cell spans them.
   const spareColumns = middle.length;
   const blankCell = (id) => <td key={id} className="qb-grid-cell" />;
