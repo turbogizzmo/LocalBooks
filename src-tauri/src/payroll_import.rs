@@ -340,14 +340,11 @@ pub async fn post(pool: &SqlitePool, file_name: &str, bytes: &[u8], choices: &Pa
             let lines = e
                 .lines
                 .iter()
-                .map(|l| JournalLine {
-                    account_id: l.account_id.unwrap_or_default(),
-                    debit: Cents(l.debit_cents),
-                    credit: Cents(l.credit_cents),
-                    memo: l.memo.clone(),
-                    class_id: None,
+                .map(|l| {
+                    let account_id = l.account_id.ok_or_else(|| format!("PAYROLL_PROBLEMS: row {}: '{}' has no LocalBooks account", l.row, l.source_account))?;
+                    Ok(JournalLine { account_id, debit: Cents(l.debit_cents), credit: Cents(l.credit_cents), memo: l.memo.clone(), class_id: None })
                 })
-                .collect();
+                .collect::<Result<Vec<_>, String>>()?;
             let entry = JournalEntry { id: None, date: e.date, description: e.description.clone(), lines, currency: None };
             ids.push(crate::ledger::post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await?);
         }

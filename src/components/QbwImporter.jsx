@@ -1211,7 +1211,7 @@ export default function QbwImporter({ accounts }) {
             <>
               <ChooseFile busy={busy} onFile={ingest} />
               <SheetImport busy={busy} onStage={stageSheet} />
-              <PayrollImport />
+              <PayrollImport busy={busy} />
               <InstalledQuickBooks busy={busy} onExport={exportInstalled} />
             </>
           )

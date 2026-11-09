@@ -397,7 +397,7 @@ service's journal export** and click **Choose a payroll export…**.
 3. **Check.** Every entry is shown with its lines and totals. Rows with a bad date or amount, and
    entries whose debits and credits differ, are listed as problems; summary rows with no date (like
    a Total row) are skipped.
-4. **Post.** **Post N entries** posts them all as journal entries, or none if anything is wrong
+4. **Post.** **Post N entries** (Admins only, like other imports) posts them all as journal entries, or none if anything is wrong
    (for example a date in a closed period). The same file can't be posted twice; to redo an
    import, void its entries in the journal, then import the file again.
 

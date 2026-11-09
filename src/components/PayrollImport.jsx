@@ -13,14 +13,15 @@ const HOW = { chosen: 'chosen here', saved: 'as last time', matched: 'same name'
  * export becomes journal entries. Choose the file, match its columns and its account names, look
  * over every entry, then post them all at once. Nothing posts while a row has a problem.
  */
-export default function PayrollImport() {
+export default function PayrollImport({ busy = false }) {
   const [expanded, setExpanded] = useState(false);
   const [path, setPath] = useState(null);
   const [preview, setPreview] = useState(null);
   const [choices, setChoices] = useState({ mapping: null, dateOrder: null, accounts: {} });
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
-  const [working, setWorking] = useState(false);
+  const [running, setWorking] = useState(false);
+  const working = busy || running;
   const { data: accounts } = useLedgerQuery(api.listAccounts);
   const { data: history, reload: reloadHistory } = useLedgerQuery(api.listPayrollImports);
 
@@ -76,7 +77,8 @@ export default function PayrollImport() {
 
   const mapping = preview ? (choices.mapping ?? preview.mapping) : {};
   const ready = preview && preview.problems.length === 0 && preview.entries.length > 0 && !preview.alreadyImported;
-  const accountName = (id) => (accounts ?? []).find((a) => a.id === id)?.fullName ?? '';
+  const names = new Map((accounts ?? []).map((a) => [a.id, a.fullName]));
+  const accountName = (id) => names.get(id) ?? '';
 
   return (
     <div className="border-t border-qb-border px-3 py-2">
