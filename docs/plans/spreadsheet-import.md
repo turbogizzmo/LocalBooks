@@ -81,9 +81,38 @@ existing account), carrying item, description, quantity and rate. A customer nam
 who isn't in the books yet is created with the batch, as other imports do. Sales tax, discounts and
 payments are not columns in this first version.
 
-## Later kinds
+## Other transactions (part 2)
 
-Sales receipts, payments, credit memos, bills, bill credits, checks, deposits and card charges or
-credits follow the same pattern: a field list, the same checks, and an IIF transaction type for the
-resolver. An accountant's journal entries take Date, Entry no., Account, Debit, Credit, Memo and
-Name, grouped by entry number and checked to balance. Each is its own PR.
+Each transaction kind is a short description (`Doc` in `sheet_import.rs`): its IIF type, who it is
+with (customer, vendor, or a payee who becomes a vendor), the account its total posts to (fixed,
+such as Accounts Receivable, or a column such as Bank account, with Undeposited Funds as a sales
+receipt's default), the label and type of its line accounts, and whether the total is a debit or a
+credit there. One reader and one builder serve them all.
+
+| Kind | IIF type | Total posts to | Lines post to |
+|---|---|---|---|
+| Invoices | INVOICE | Accounts Receivable, debit | income, credit |
+| Sales receipts | CASH SALE | Deposit to (Undeposited Funds), debit | income, credit |
+| Credit memos | CREDIT MEMO | Accounts Receivable, credit | income, debit |
+| Deposits | DEPOSIT | Bank account, debit | From account, credit |
+| Bills | BILL | Accounts Payable, credit | expense, debit |
+| Bill credits | BILL REFUND | Accounts Payable, debit | expense, credit |
+| Checks | CHECK | Bank account, credit | expense, debit |
+| Card charges | CREDIT CARD | Card account, credit | expense, debit |
+| Card credits | CCARD REFUND | Card account, debit | expense, credit |
+
+Rows with the same number are one transaction and must agree on who it is with, the date and the
+total's account. Where the number isn't required, a row without one is a transaction of its own.
+
+**Journal entries** take Entry no., Date, Account, Debit, Credit, Memo and Name. Each row has a
+debit or a credit, not both; rows are grouped by entry number, must agree on the date, and each
+entry's debits must equal its credits, or the entry's first row lists the difference. They go to the
+resolver as `GENERAL JOURNAL` blocks; an account the books don't have takes a type from its name,
+and the review matches it to one of the books' accounts.
+
+## Later
+
+Customer payments and bill payments are left out: the resolver applies a payment only to invoices in
+the same import, oldest first, but a payments sheet pays invoices already in the books. That needs a
+column naming the invoice or bill each row pays and an application against the books' open
+documents. Sales tax and discounts on sales are not columns yet.
