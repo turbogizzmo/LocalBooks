@@ -11,6 +11,7 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
+pub mod matching;
 pub mod suggest;
 
 use suggest::{Example, Query, SimilarTo, Suggester};
@@ -50,12 +51,16 @@ pub struct BankTransactionView {
     pub suggestion: Option<CategorySuggestion>,
     /// A payee learned from similar past expenses (money out only).
     pub payee: Option<String>,
+    /// The transaction already entered that this line is, when exactly one agrees (see [`matching`]).
+    pub suggested_match: Option<matching::MatchCandidate>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSummary {
     pub imported: usize,
+    /// Of those imported, how many were matched to a transaction already entered (they post nothing).
+    pub matched: usize,
     pub duplicates: usize,
     pub skipped_zero: usize,
 }
@@ -952,17 +957,20 @@ async fn write_import(
             }
         };
 
-        if insert_line(tx, bank_account_id, row.date, &row.description, row.amount_cents, &fingerprint).await? {
-            summary.imported += 1;
-        } else {
-            summary.duplicates += 1;
+        match insert_line(tx, bank_account_id, row.date, &row.description, row.amount_cents, &fingerprint).await? {
+            Some(matched) => {
+                summary.imported += 1;
+                summary.matched += usize::from(matched);
+            }
+            None => summary.duplicates += 1,
         }
     }
     Ok(summary)
 }
 
 /// Adds one line to the review queue of `bank_account_id`, unless a line with the same fingerprint
-/// is already there (in any status). Returns whether it was added.
+/// is already there (in any status), and matches it to the transaction already entered for it when
+/// exactly one agrees ([`matching`]). `None` when it was already there; else whether it matched.
 pub(crate) async fn insert_line(
     tx: &mut Transaction<'_, Sqlite>,
     bank_account_id: i64,
@@ -970,21 +978,25 @@ pub(crate) async fn insert_line(
     description: &str,
     amount_cents: i64,
     fingerprint: &str,
-) -> Result<bool, String> {
-    let result = sqlx::query(
+) -> Result<Option<bool>, String> {
+    let id: Option<i64> = sqlx::query_scalar(
         "INSERT INTO bank_transactions (bank_account_id, txn_date, description, amount_cents, fingerprint)
          VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (bank_account_id, fingerprint) DO NOTHING",
+         ON CONFLICT (bank_account_id, fingerprint) DO NOTHING
+         RETURNING id",
     )
     .bind(bank_account_id)
     .bind(date)
     .bind(description)
     .bind(amount_cents)
     .bind(fingerprint)
-    .execute(&mut **tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(db_err)?;
-    Ok(result.rows_affected() == 1)
+    match id {
+        Some(id) => matching::auto_match(tx, id, description).await.map(Some),
+        None => Ok(None),
+    }
 }
 
 /// Pending lines with their suggestions. `file` names the open company file, so the cached model is
@@ -1006,12 +1018,14 @@ pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) 
     let only: Vec<Option<i64>> = ruled.iter().map(|s| s.as_ref().map(|s| s.account_id)).collect();
     let predicted = suggester.with_model(pool, file, |m| m.predict_batch(&queries, &only)).await?;
     drop(queries);
+    let keys: Vec<(i64, String)> = rows.iter().map(|r| (r.0, r.3.clone())).collect();
+    let matches = matching::suggested_matches(pool, &keys).await?;
     Ok(rows
         .into_iter()
-        .zip(ruled.into_iter().zip(predicted))
-        .map(|((id, bank_account_id, date, description, amount_cents), (ruled, predicted))| {
+        .zip(ruled.into_iter().zip(predicted).zip(matches))
+        .map(|((id, bank_account_id, date, description, amount_cents), ((ruled, predicted), suggested_match))| {
             let (suggestion, payee) = combine(&rules, amount_cents, ruled, predicted);
-            BankTransactionView { suggestion, payee, id, bank_account_id, date: date.to_string(), description, amount_cents }
+            BankTransactionView { suggestion, payee, suggested_match, id, bank_account_id, date: date.to_string(), description, amount_cents }
         })
         .collect())
 }
@@ -1038,6 +1052,32 @@ pub async fn approve(pool: &SqlitePool, suggester: &Suggester, file: &str, trans
         }
         Err(err) => Err(rollback(tx, err).await),
     }
+}
+
+/// Add several at once: posts each pending line with its approval, all or none, then learns from them.
+/// Returns the entries, in order.
+pub async fn approve_many(pool: &SqlitePool, suggester: &Suggester, file: &str, approvals: Vec<(i64, Approval)>) -> Result<Vec<i64>, String> {
+    if approvals.is_empty() {
+        return Err("BANK_NOTHING_TO_ADD: tick the lines to add".into());
+    }
+    let before = Suggester::signature(pool).await?;
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut written = Vec::with_capacity(approvals.len());
+    for (id, approval) in &approvals {
+        match write_approval(&mut tx, *id, approval).await {
+            Ok(done) => written.push(done),
+            Err(err) => return Err(rollback(tx, err).await),
+        }
+    }
+    crate::ledger::commit_write(tx).await.map_err(db_err)?;
+    let mut entries = Vec::with_capacity(written.len());
+    let mut signature = before;
+    for (entry, example) in written {
+        suggester.learn(pool, file, &signature, example).await?;
+        signature = Suggester::signature(pool).await?;
+        entries.push(entry);
+    }
+    Ok(entries)
 }
 
 async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, approval: &Approval) -> Result<(i64, Example), String> {

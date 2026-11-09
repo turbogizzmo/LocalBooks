@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Downloaded bank transactions match what you already entered.** A downloaded line that agrees
+  with a check, deposit, bill payment or transfer already in the books (amount, date, check
+  number) is matched to it on import instead of waiting to be added twice. Lines entered later
+  show a suggested match; **Find a match…** matches by hand, **Show matched** lists matched lines
+  with **Unmatch**, and ticked lines can be added several at once.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

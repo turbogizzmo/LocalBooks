@@ -56,7 +56,7 @@ pub struct Register {
 }
 
 /// The number a document shows (as reports' Num column does), for the entry `e`.
-const DOC_NUMBER: &str = "CASE e.source_type
+pub(crate) const DOC_NUMBER: &str = "CASE e.source_type
     WHEN 'CHECK' THEN (SELECT check_number FROM expenses WHERE id = e.source_id)
     WHEN 'BILL_PAYMENT' THEN (SELECT reference FROM bill_payments WHERE id = e.source_id)
     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = e.source_id)

@@ -30,8 +30,8 @@ export const topics = [
   {
     id: 'bank-feed', area: 'banking', views: ['banking/feeds'],
     title: 'Import and categorize bank transactions',
-    body: 'Import a CSV, OFX or QFX statement from your bank, or click Connect a bank… to fetch transactions through SimpleFIN (overlapping imports and syncs are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and LocalBooks learns from your choices to suggest a category next time.',
-    keywords: 'bank feed csv ofx qfx qbo import statement categorize approve exclude rule download duplicate columns mapping simplefin connect sync automatic setup token',
+    body: 'Import a CSV, OFX or QFX statement from your bank, or click Connect a bank… to fetch transactions through SimpleFIN (overlapping imports and syncs are fine: anything already imported is skipped), then approve each transaction into a category or exclude it. Approved lines become real expenses or deposits, and LocalBooks learns from your choices to suggest a category next time. A downloaded line that is a check, deposit or payment you already entered is matched to it instead (on import when only one agrees, or with Match / Find a match…), and Show matched lists those, with Unmatch. Tick several lines to add them at once.',
+    keywords: 'bank feed csv ofx qfx qbo import statement categorize approve exclude rule download duplicate columns mapping simplefin connect sync automatic setup token match unmatch matched already entered add several batch',
     go: { label: 'Go to Bank Feeds', view: 'banking/feeds' },
     guide: 'bank-feeds',
   },

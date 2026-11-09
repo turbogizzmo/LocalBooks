@@ -54,6 +54,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("ach_files", &["payment_date", "effective_date"]),
     ("attachments", &[]),
     ("audit_log", &[]),
+    ("bank_matches", &[]),
     ("bank_transactions", &["txn_date"]),
     ("bill_lines", &[]),
     ("bill_payments", &["payment_date"]),
