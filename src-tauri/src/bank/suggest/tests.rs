@@ -125,7 +125,7 @@ async fn account(pool: &SqlitePool, number: &str) -> i64 {
 
 async fn add_line(pool: &SqlitePool, bank: i64, date: &str, description: &str, amount: i64) {
     let mut tx = pool.begin().await.unwrap();
-    crate::bank::insert_line(&mut tx, bank, day(date), description, amount, &format!("{date}|{description}|{amount}")).await.unwrap();
+    crate::bank::insert_line(&mut tx, bank, day(date), description, amount, &format!("{date}|{description}|{amount}")).await.unwrap().unwrap();
     tx.commit().await.unwrap();
 }
 
@@ -586,7 +586,7 @@ async fn seed_smart_suggestions_demo() {
     let history = synthetic_history(400, 5, &categories, banks);
     for (i, t) in history.iter().enumerate() {
         let mut tx = pool.begin().await.unwrap();
-        crate::bank::insert_line(&mut tx, t.bank, t.date, &t.description, t.amount, &format!("demo|{i}")).await.unwrap();
+        crate::bank::insert_line(&mut tx, t.bank, t.date, &t.description, t.amount, &format!("demo|{i}")).await.unwrap().unwrap();
         tx.commit().await.unwrap();
         let id: i64 = sqlx::query_scalar("SELECT MAX(id) FROM bank_transactions").fetch_one(&pool).await.unwrap();
         let payee_name = t.payee.clone().filter(|_| t.amount < 0);

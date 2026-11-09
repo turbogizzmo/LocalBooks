@@ -27,6 +27,9 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const [shipDate, setShipDate] = useState('');
   const [shipMethodId, setShipMethodId] = useState(null);
   const [messageId, setMessageId] = useState(null);
+  // The form style (template) this document prints with; null: the customer's style, or the default.
+  const styles = useLedgerQuery(api.listFormStyles).data ?? [];
+  const [styleId, setStyleId] = useState(null);
   // The company defaults go on a new form once preferences load, unless a document was loaded.
   const { defaultShipMethodId, loaded: prefsLoaded } = useSalesPrefs();
   const [defaulted, setDefaulted] = useState(false);
@@ -99,6 +102,17 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
 
   const picker = (
       <>
+        <label title="The form style this document prints, saves as PDF and emails with (Settings › Custom Forms)">
+          <span className="qb-label">Template</span>
+          <select className="qb-input w-[150px]" value={styleId ?? ''} onChange={(e) => setStyleId(e.target.value === '' ? null : Number(e.target.value))} aria-label="Template">
+            <option value="">{customer?.formStyleId ? 'Customer’s style' : 'Default style'}</option>
+            {styles.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
         {showRep && (
           <label>
             <span className="qb-label">Rep</span>
@@ -177,6 +191,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       shipDate: shipDate || null,
       shipMethodId,
       customerMessageId: messageId,
+      formStyleId: styleId,
       customFields: formFields.map((f) => ({ fieldId: f.id, value: (values[f.id] ?? '').trim() })).filter((f) => f.value !== ''),
       billTo: header.billTo,
       shipTo: header.shipTo,
@@ -191,6 +206,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setDefaulted(true);
       setShipMethodId(details?.shipMethodId ?? null);
       setMessageId(details?.customerMessageId ?? null);
+      setStyleId(details?.formStyleId ?? null);
       const loaded = Object.fromEntries((details?.customFields ?? []).map((f) => [f.fieldId, f.value]));
       setValues(loaded);
       setTouched(new Set(formFields.map((f) => f.id)));
@@ -208,6 +224,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setDefaulted(prefsLoaded);
       setShipMethodId(defaultShipMethodId);
       setMessageId(null);
+      setStyleId(null);
       setValues({});
       setTouched(new Set());
       addressTouched.current = { billTo: false, shipTo: false };

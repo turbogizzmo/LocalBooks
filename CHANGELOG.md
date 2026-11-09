@@ -12,6 +12,75 @@ people using LocalBooks.
   recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
   checks and expenses show it for the chosen name. It can be hidden, and its figures match the
   reports.
+- **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
+  lines take a Service Date that prints in its own column; the Template box on a sales form picks
+  the form style it prints with; and credit memos and refund receipts now print as a form of their
+  own, with a Credit memo layout in Settings › Custom Forms.
+- **Email reports as PDF, and schedule them.** Every report, list and register (and the Reminders
+  list) can be emailed or saved as a PDF from its Export menu. Reports › Scheduled Reports… sends
+  chosen reports every day, week, month or quarter by email, or saves them to a folder as PDF or
+  Excel, while LocalBooks is open; a run missed while it was closed happens when it next opens.
+- **Statement charges.** Enter statement charges… on a customer's row keeps a register of charges
+  billed on the customer's next statement instead of an invoice. Each posts to Accounts
+  Receivable, shows in the aging, and is paid in Receive Payments like an invoice.
+- **Import customers, vendors or invoices from your own spreadsheet.** In the Desktop Migration
+  Wizard, choose a .csv or Excel file (or download a template), match its columns to LocalBooks'
+  fields, and check it: every row that would fail is listed with its row number before anything is
+  staged. Then review and post it like any other import; invoices become real invoices, owed by
+  their customers.
+
+- **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
+  list into the order you want; it's kept in the company file. Each can be shown as a tree (with
+  Expand all and Collapse all) or flat with full names.
+- **Print envelopes.** Print Envelope… on an invoice or sales receipt, on a form's row, and on a
+  customer's or vendor's row prints an envelope with your return address and theirs. Set the
+  envelope's size, font and position in Settings › Custom Forms › Envelope.
+- **Early-payment discounts on invoices in another currency.** Receive Payments offers and takes
+  the discount on a foreign-currency invoice in its own currency. The discount leaves Accounts
+  Receivable at the invoice's exchange rate, so A/R clears exactly, and only the money received
+  carries an exchange gain or loss.
+- **Early-payment discounts on part-paid invoices, and bounced discounted payments.** Receive
+  Payments offers an invoice's early-payment discount on what is left of a part-paid invoice, and a
+  payment that took a discount can be recorded as a bounced check: the discount is reversed and the
+  invoice opens again for the whole amount.
+- **Print Pay Bills' checks later.** Pay Bills has **Print later**, as Write Checks does: the payments
+  post now and their checks, one per vendor, wait in **File › Print Forms › Checks…**, where they
+  take their numbers when they print.
+- **Bounced sales receipts and foreign-currency payments.** Record Bounced Check now lists sales
+  receipts, which it charges back to the customer on a new invoice, and payments in another
+  currency, which bounce at the rates they were recorded at (the exchange gain or loss they
+  realized is reversed).
+- **Save every attachment at once.** Settings › File & Data › Save All Attachments… saves every
+  file attached to a transaction in one zip file, a folder per transaction; a transaction with
+  several files has **Save all…** too.
+- **P.O. No. on statements.** Printed customer statements can show a P.O. No. column with the
+  customer's purchase order number on each invoice and credit (Settings › Custom Forms ›
+  Statement).
+- **Company-file import clears payments moved out of Undeposited Funds.** A full import left
+  payments waiting to be deposited when the file's deposit moved them into an account that isn't a
+  bank (such as receipts written off to an expense). It now posts that deposit as a transfer out of
+  Undeposited Funds that clears those payments; balances still match the file.
+- **Print a register, and transfers from its entry row.** A register has **Print…** (also
+  **File › Print…**, Ctrl+P), which prints its transactions for the dates chosen with the balance
+  forward and ending balance. In the entry row at the bottom, choosing another bank account records
+  a transfer, and choosing Undeposited Funds on the deposit side deposits the payments waiting
+  there.
+- **Save vouchers as PDF and email them.** Saved bills, checks, expenses, credits, deposits and
+  journal entries have **Print ▾ › Save as PDF…**, and **Email** sends the voucher's PDF to the
+  vendor or customer named on it, through your mail app or LocalBooks' email server, as invoices
+  are sent.
+- **A report center that's easier to search.** Type to find a report by name or by what it shows,
+  star reports into Favorites, see your Recent reports, read a line about each report, and choose
+  the dates reports open on before you run them.
+- **Renaming rules for downloaded payees.** When a downloaded description begins with, contains or
+  ends with some text, a renaming rule names its payee. LocalBooks offers a rule when you change a
+  payee, and **Rules…** in Bank Feeds lists them to search, edit and remove, along with the category
+  rules learned from your approvals.
+- **Downloaded bank transactions match what you already entered.** A downloaded line that agrees
+  with a check, deposit, bill payment or transfer already in the books (amount, date, check
+  number) is matched to it on import instead of waiting to be added twice. Lines entered later
+  show a suggested match; **Find a match…** matches by hand, **Show matched** lists matched lines
+  with **Unmatch**, and ticked lines can be added several at once.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
@@ -52,6 +121,14 @@ people using LocalBooks.
   customer or vendor the money came from, and a name typed in a register's deposit row is matched
   to your customers and vendors instead of only being kept in the memo. The register shows the
   name as the payee, and the deposit is listed in that name's transactions and reports by name.
+- **Keep the statement with a reconciliation.** Attach the bank or card statement (a PDF or a
+  picture) to a reconciliation in progress or a finished one; save a copy from Reconcile's history.
+- **Undo Last Reconciliation.** In Banking › Reconcile, the newest completed reconciliation can be
+  undone: its transactions are uncleared so the statement can be reconciled again. The
+  reconciliation stays on record and the undo, with an optional reason, goes into the Audit Log.
+- **Service charge and interest earned when you reconcile.** Starting a reconciliation now takes
+  the statement's service charge and interest earned (amount, date, account and class). Each posts
+  as a journal entry and is already ticked as cleared.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

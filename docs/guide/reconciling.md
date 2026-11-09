@@ -4,8 +4,12 @@ Reconciling checks your books against a bank or credit card statement. Once it b
 LocalBooks locks the matched transactions so the reconciled balance can't change.
 
 1. Go to **Banking › Reconcile** and choose the **Account**.
-2. From your statement, enter the **Statement ending date** and **Ending balance**, then click
-   **Start reconciling**.
+2. From your statement, enter the **Statement ending date** and **Ending balance**. If the
+   statement shows a **Service charge** (a bank or card fee) or **Interest earned**, enter each
+   one's amount, date and account (an expense account for the charge, an income account for the
+   interest), and a class if you track classes. Then click **Start reconciling**. LocalBooks posts
+   each as a journal entry ("Service charge" or "Interest earned") and ticks it as cleared, so you
+   don't have to record it separately. Its date must be on or before the statement ending date.
 3. Tick each transaction that appears on the statement. Only transactions up to the statement date
    are listed.
 4. Watch **Difference**. When it reaches $0.00 it reads **✓ Balanced. You can finish now.**
@@ -13,6 +17,31 @@ LocalBooks locks the matched transactions so the reconciled balance can't change
 
 The cleared transactions are now locked: they can't be voided or changed. Past reconciliations are
 listed under **Reconciliation history**.
+
+## Keep the statement with the reconciliation
+
+While reconciling, click **Attach statement…** beside **Edit statement info** and choose the
+statement file (a PDF or a picture, up to 25 MB). LocalBooks keeps a copy in the company file with
+that reconciliation. Finished reconciliations show theirs in the **Statement** column of
+**Reconciliation history**, where you can attach one later too. Click a file's name to save a copy,
+or **×** to remove it. Cancelling a reconciliation in progress removes its files with it.
+
+## Undo the last reconciliation
+
+If you finished a reconciliation by mistake (the wrong statement, or a transaction ticked that
+wasn't on it), choose the account in **Banking › Reconcile** and click **Undo Last
+Reconciliation…** on the newest row of **Reconciliation history**. After you confirm (and,
+if you like, type why), its transactions are uncleared and can be ticked again, voided or changed,
+and you can reconcile that statement again.
+
+- Only the account's last reconciliation can be undone; undo again to step back one more.
+  Cancel a reconciliation in progress first.
+- Nothing is deleted. The reconciliation stays on record, and the undo is written to the
+  **Audit Log** (as **Reconciliation undone**, with your reason) and to the audit trail. It
+  can't itself be undone: reconcile the statement again instead.
+- A service charge or interest earned entered when it started stays posted. Void it if it was
+  wrong.
+- Earlier reconciliations and their reports don't change.
 
 ## Reprint a past reconciliation
 

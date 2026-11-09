@@ -105,6 +105,7 @@ pub async fn set_queued(pool: &SqlitePool, kind: FormKind, document_id: i64, que
         FormKind::Invoice => sqlx::query_scalar("SELECT is_voided FROM invoices WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::Estimate => sqlx::query_scalar("SELECT 0 FROM estimates WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         FormKind::SalesReceipt => sqlx::query_scalar("SELECT is_voided FROM sales_receipts WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
+        FormKind::CreditMemo => sqlx::query_scalar("SELECT is_voided FROM credit_memos WHERE id = ?1").bind(document_id).fetch_optional(pool).await,
         // A statement covers a period chosen when it is sent; it is emailed from Customer Statements.
         FormKind::Statement => return Err("EMAIL_STATEMENT_QUEUE: email statements from Sales › Customer Statements".into()),
     }
@@ -150,6 +151,9 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
          UNION ALL
          SELECT q.form_type, q.document_id, r.receipt_number, COALESCE(c.name, ''), c.email, r.receipt_date, r.total_cents, NULL, q.queued_at
          FROM form_email_queue q JOIN sales_receipts r ON q.form_type = 'SALES_RECEIPT' AND r.id = q.document_id LEFT JOIN customers c ON c.id = r.customer_id
+         UNION ALL
+         SELECT q.form_type, q.document_id, m.credit_number, c.name, c.email, m.credit_date, m.total_cents, NULL, q.queued_at
+         FROM form_email_queue q JOIN credit_memos m ON q.form_type = 'CREDIT_MEMO' AND m.id = q.document_id JOIN customers c ON c.id = m.customer_id
          ORDER BY 9, 1, 3",
     )
     .fetch_all(pool)
@@ -161,6 +165,7 @@ pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
             kind: match kind.as_str() {
                 "ESTIMATE" => FormKind::Estimate,
                 "SALES_RECEIPT" => FormKind::SalesReceipt,
+                "CREDIT_MEMO" => FormKind::CreditMemo,
                 _ => FormKind::Invoice,
             },
             document_id,

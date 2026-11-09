@@ -69,7 +69,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
         due_date: d(31),
         lines: lines
             .iter()
-            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: l.rate_cents, income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false })
+            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: l.rate_cents, income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -137,7 +137,7 @@ async fn printed_checks_take_the_print_date() {
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
     crate::preferences::set(&pool, "expenses_billable_default", "true").await.unwrap();
     let queued = crate::print_queue::post_expense(&pool, check(checking, supplies, rent, acme, None), true).await.unwrap();
-    let printed = |id: i64, number: &str| vec![crate::print_queue::PrintedCheck { expense_id: id, check_number: number.into() }];
+    let printed = |id: i64, number: &str| vec![crate::print_queue::PrintedCheck { expense_id: id, check_number: number.into(), bill_check_id: None }];
 
     // Off: the check keeps its date.
     crate::print_queue::mark_checks_printed_on(&pool, printed(queued.id, "501"), d(9)).await.unwrap();

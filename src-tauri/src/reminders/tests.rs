@@ -18,7 +18,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
             customer_name: customer.into(),
             issue_date: issue,
             due_date: due,
-            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+            lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
