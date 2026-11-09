@@ -10,6 +10,26 @@ people using LocalBooks.
   time from the timesheet, so it goes on the customer's invoice at its hours and rate. And when
   reimbursed expenses count as income, each expense account can name the income account its
   reimbursements go to.
+- **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
+  and, for tracked stock, a reorder point. Both show on the item's information panel, which says
+  when it's time to reorder.
+- **The information panel on more forms.** Sales receipts, estimates, credit memos, vendor credits
+  and purchase orders now show the chosen customer's or vendor's panel too.
+- **Notes and Emails on the information panel.** A customer's or vendor's notes can be edited from
+  its panel, with **Date Stamp** to start a dated line, and a customer's **Emails** tab lists every
+  invoice, estimate, sales receipt and statement emailed to them.
+- **An information panel for customers, vendors and items.** Click a name in the Customers or
+  Vendors list, or an item in Products & Services, to see its summary beside the list: open
+  balance, active estimates and unbilled costs, open purchase orders, phone, email, notes and
+  recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
+  checks and expenses show it for the chosen name. It can be hidden, and its figures match the
+  reports.
+- **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
+  attached file with its date, keywords and what it's attached to; search, preview pictures and
+  text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders
+  now take files too. A file marked **Send with the form** goes along when LocalBooks emails the
+  invoice, estimate, sales receipt or statement. Deleting a file is reversible: it can be restored
+  from the library, and only an Admin can remove a deleted file for good, after a warning.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.
@@ -27,6 +47,9 @@ people using LocalBooks.
   columns to LocalBooks' fields, and check it: every row that would fail is listed with its row
   number before anything is staged. Then review and post it like any other import; each becomes
   the real LocalBooks document, and a journal entry must balance first.
+- **Pay Bills: filter, sort and bill details.** Filter the list to one vendor and sort it by due
+  date, discount date, vendor or amount due. Click a bill to see its terms, discount and credits
+  used below the list, with **Go to Bill** to open it.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
