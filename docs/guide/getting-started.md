@@ -3,6 +3,26 @@
 LocalBooks keeps your books in a single company file on your computer. These steps set up the
 details that appear on invoices and reports and decide how your fiscal year works.
 
+## Made for US businesses
+
+LocalBooks is built for businesses in the United States. You can use it elsewhere for plain
+double-entry books, but these parts follow US rules and formats only:
+
+- **Sales tax** is US-style: a rate (and the agency it's owed to) on each invoice or receipt, added
+  on top of the price. There is no VAT or GST: no tax-inclusive prices, no input tax credits and no
+  VAT or GST return.
+- **1099s and W-9s** are the IRS forms (1099-NEC and 1096). The **tax calendar**, tax-line mapping
+  and **TXF export** cover US federal returns only (Schedule C, 1065, 1120-S, 1120).
+- **Payroll:** LocalBooks calculates no pay or withholding in any country. Payroll import posts the
+  journal your payroll service exports.
+- **Bank and payment files:** ACH payment files use the US NACHA format and nine-digit US routing
+  numbers, and printed checks follow US check layouts with the amount in English words.
+- **Dates and numbers** show the US way: dates as month/day/year (10/13/2026) and amounts as
+  1,234.56. There is no setting for day/month/year dates or a decimal comma, and the screens are in
+  English only.
+- **Currency:** dollars by default. You can choose another home currency (Settings ›
+  Preferences Console › Multiple Currencies), but the tax features above still follow US rules.
+
 ## Create a new company
 
 **File › New Company…** opens a short setup assistant, modeled on QuickBooks' own:

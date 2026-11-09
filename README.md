@@ -3,6 +3,9 @@
 **Local-first, double-entry accounting for small businesses.** A classic-style desktop accounting app whose
 books live in a single SQLite file on your own machine: no account, no cloud, no telemetry.
 
+**United States only.** Sales tax, 1099s, the tax calendar, TXF export, ACH files, check printing
+and date and number formats follow US rules; see [Known limitations](#known-limitations).
+
 Built with **Rust + SQLite (SQLx)** for the accounting engine and **Tauri v2 + React + Tailwind CSS**
 for a high-density, keyboard-friendly interface.
 
@@ -598,6 +601,12 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 ## Known limitations
 
+- **United States only.** Sales tax is US-style (a rate and agency per document, added on top), with
+  no VAT or GST. 1099-NEC/1096, W-9s, the tax calendar, tax-line mapping and TXF export cover US
+  federal filings only. ACH files are NACHA with US routing numbers, and checks print in US layouts.
+  Dates show as MM/DD/YYYY and amounts as 1,234.56, with no other formats, and the screens are in
+  English. A non-US business can keep plain double-entry books in another home currency, but none of
+  its tax rules are built in. See [Made for US businesses](docs/guide/getting-started.md#made-for-us-businesses).
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
 - **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
