@@ -204,6 +204,14 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'item-categories', area: 'sales', views: ['sales/products', 'sales/invoices', 'reports'],
+    title: 'Item categories',
+    body: 'Products & Services has a Categories panel: All items, Uncategorized and your categories and sub-categories, each with its item count; click one to see its items. New… adds a category, and its Actions menu adds a sub-category, renames, makes inactive or deletes it. Move to a different category… on an item’s Actions menu (or Category on Edit…) files it. The Product/Service heading on sales forms, and Sales by Product/Service Summary, Inventory Valuation Summary and Inventory Stock Status by Item, have a category box to show one category’s items. Preferences › Items & Inventory turns categories off.',
+    keywords: 'category categories item category sub-category subcategory group items folder uncategorized move item filter items by category',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'item-types', area: 'sales', views: ['sales/products', 'sales/invoices', 'sales/all', 'sales/estimates'],
     title: 'Subtotals, discounts, other charges and groups',
     body: 'In the Product/Service list on an invoice, sales receipt or estimate, choose Subtotal to add up the lines above it. A Discount item takes an amount or a percentage (type 10%) off the line above: an item, a group or a subtotal. An Other charge can be an amount or a percentage of the line above. Choosing Group: … fills in a line for each of its items; tick Print as one line to print it with just its total. Set the Type on Products & Services, and make groups with Groups….',

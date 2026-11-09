@@ -6,6 +6,7 @@ import ItemGroups from './ItemGroups.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
+import { CategorySelect, CategoryTree, MoveToCategoryDialog, useItemCategories } from './ItemCategories.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
@@ -48,8 +49,9 @@ export function readRate(itemType, text) {
 const rateLabel = (p) => (p.percentPpm ? percentText(p.percentPpm) : p.rateCents ? formatCents(p.rateCents) : '');
 const typeLabel = (p) => (p.itemType && p.itemType !== 'ITEM' ? ITEM_TYPES.find((t) => t.value === p.itemType)?.label : null);
 
-function ProductDialog({ product, accounts, onClose, onSaved }) {
+function ProductDialog({ product, accounts, categories, onClose, onSaved }) {
   const [name, setName] = useState(product.name);
+  const [categoryId, setCategoryId] = useState(product.categoryId ?? null);
   const [description, setDescription] = useState(product.description ?? '');
   const [itemType, setItemType] = useState(product.itemType || 'ITEM');
   const [rate, setRate] = useState(product.percentPpm ? percentText(product.percentPpm) : product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
@@ -70,6 +72,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     try {
       const input = { name, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
       const saved = await api.updateProduct(product.id, input, read.kind);
+      if (categories && categoryId !== (product.categoryId ?? null)) await api.moveItemsToCategory([product.id], categoryId);
       if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       onSaved(`Saved ${saved.name}. Transactions already posted keep their original details.`);
     } catch (err) {
@@ -98,6 +101,12 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
               ))}
             </select>
           </label>
+          {categories && (
+            <label className="col-span-2 flex flex-col gap-0.5">
+              <span className="font-semibold text-qb-ink-muted">Category</span>
+              <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
+            </label>
+          )}
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Description on sales forms</span>
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -163,6 +172,12 @@ export default function Products({ accounts, intent }) {
   const [pricingLevels, setPricingLevels] = useState(false);
   const [grouping, setGrouping] = useState(false);
   const { priceLevels: levelsOn, loaded } = useSalesPrefs();
+  // Item categories: the tree on the left picks which items show (undefined = all, null = none).
+  const cats = useItemCategories();
+  const [category, setCategory] = useState(undefined);
+  const inCategory = (p) => !cats.enabled || cats.index.covers(category, p.categoryId ?? null);
+  const categoryCounts = useMemo(() => cats.index.counts((data ?? []).filter((p) => showInactive || p.isActive)), [cats.index, data, showInactive]);
+  const categoryName = (id) => cats.categories.find((c) => c.id === id)?.fullName ?? '';
   // Without a sorted column, the custom order (drag a row) as a tree of sub-items ("Parent:Child") or flat.
   const parentOfItem = useMemo(() => {
     const byName = new Map((data ?? []).map((p) => [p.name.toLowerCase(), p.id]));
@@ -170,7 +185,9 @@ export default function Products({ accounts, intent }) {
   }, [data]);
   const customOrder = !sorter.sort;
   const listOrder = useListOrder('ITEMS', data, { parentOf: parentOfItem, dragEnabled: customOrder, onNotice: setNotice, defaultView: 'flat' });
-  const shownItems = (customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: 0, hasChildren: false }))).filter((x) => showInactive || x.row.isActive);
+  const shownItems = (customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: 0, hasChildren: false }))).filter(
+    (x) => (showInactive || x.row.isActive) && inCategory(x.row),
+  );
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
@@ -198,6 +215,7 @@ export default function Products({ accounts, intent }) {
     columns: [
       { label: 'Name', kind: 'text' },
       { label: 'Description', kind: 'text' },
+      ...(cats.enabled ? [{ label: 'Category', kind: 'text' }] : []),
       { label: 'Rate', kind: 'money' },
       { label: 'Income account', kind: 'text' },
       { label: 'Taxable', kind: 'text' },
@@ -207,13 +225,14 @@ export default function Products({ accounts, intent }) {
     ],
     rows: () =>
       (data ?? [])
-        .filter((p) => showInactive || p.isActive)
+        .filter((p) => (showInactive || p.isActive) && inCategory(p))
         .map((p) => {
           const item = items.get(p.id);
           return {
             cells: [
               `${p.name}${p.isActive ? '' : ' (inactive)'}`,
               p.description ?? '',
+              ...(cats.enabled ? [p.categoryId != null ? categoryName(p.categoryId) : 'Uncategorized'] : []),
               p.rateCents || null,
               accountLabel(accounts, p.incomeAccountId),
               p.isTaxable ? 'Yes' : 'No',
@@ -247,7 +266,10 @@ export default function Products({ accounts, intent }) {
         },
         read.kind,
       );
-      setNotice({ kind: 'success', text: `Added ${product.name}.` });
+      // Added while a category is chosen in the tree: the item goes in it.
+      const into = cats.enabled && category != null ? category : null;
+      if (into !== null) await api.moveItemsToCategory([product.id], into);
+      setNotice({ kind: 'success', text: `Added ${product.name}${into !== null ? ` to ${categoryName(into)}` : ''}.` });
       setName('');
       setDescription('');
       setRate('');
@@ -274,6 +296,7 @@ export default function Products({ accounts, intent }) {
         <ProductDialog
           product={dialog.product}
           accounts={accounts}
+          categories={cats.enabled ? cats.categories : null}
           onClose={() => setDialog(null)}
           onSaved={(text) => {
             setDialog(null);
@@ -285,6 +308,17 @@ export default function Products({ accounts, intent }) {
         <AdjustDialog
           item={dialog.item}
           accounts={accounts}
+          onClose={() => setDialog(null)}
+          onDone={(text) => {
+            setDialog(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
+      {dialog?.mode === 'move' && (
+        <MoveToCategoryDialog
+          items={[dialog.product]}
+          categories={cats.categories}
           onClose={() => setDialog(null)}
           onDone={(text) => {
             setDialog(null);
@@ -322,7 +356,9 @@ export default function Products({ accounts, intent }) {
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
-        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
+        <div className="flex min-h-0 flex-1">
+          {cats.enabled && <CategoryTree categories={cats.categories} selected={category} onSelect={setCategory} counts={categoryCounts} onNotice={setNotice} />}
+          <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <form onSubmit={add}>
             <table className="qb-grid">
               <colgroup>
@@ -402,6 +438,9 @@ export default function Products({ accounts, intent }) {
                       {customOrder && listOrder.tree ? p.name.slice(p.name.lastIndexOf(':') + 1) : p.name}
                       {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
+                      {cats.enabled && p.categoryId != null && category === undefined && (
+                        <span className="ml-1 text-2xs font-normal text-qb-ink-muted" title="Category">{categoryName(p.categoryId)}</span>
+                      )}
                     </td>
                     <td className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>
                     <td className="qb-grid-cell num">{rateLabel(p)}</td>
@@ -443,6 +482,7 @@ export default function Products({ accounts, intent }) {
                         items={[
                           { label: 'Edit…', onSelect: () => setDialog({ mode: 'edit', product: p }) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
+                          ...(cats.enabled ? [{ label: 'Move to a different category…', onSelect: () => setDialog({ mode: 'move', product: p }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
                         ]}
                       />
@@ -452,6 +492,7 @@ export default function Products({ accounts, intent }) {
               </tbody>
             </table>
           </form>
+          </div>
         </div>
       </section>
     </div>

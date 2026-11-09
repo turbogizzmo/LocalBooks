@@ -5,6 +5,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
+import { useCategoryFilter } from './ItemCategories.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
@@ -244,6 +245,8 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const focusCol = useRef('description');
   const tableRef = useRef(null);
   const withProducts = Array.isArray(products);
+  // Item categories on: a filter over the item box narrows it to one category (and its sub-categories).
+  const categoryFilter = useCategoryFilter(products);
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = showsClassColumn(tracking, lines);
@@ -460,7 +463,14 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       <thead>
         <tr>
           <th className="qb-grid-head text-right">#</th>
-          {withProducts && <th className="qb-grid-head">Product/Service</th>}
+          {withProducts && (
+            <th className="qb-grid-head">
+              <span className="flex items-center gap-1">
+                Product/Service
+                {categoryFilter.control && <span className="ml-auto font-normal normal-case tracking-normal">{categoryFilter.control}</span>}
+              </span>
+            </th>
+          )}
           <th className="qb-grid-head">
             Description
             {datesAllowed && (
@@ -521,7 +531,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
                         <option value="">—</option>
-                        {products.filter((p) => p.isActive && (itemTypes || !(p.itemType === 'DISCOUNT' || p.percentPpm))).map((p) => (
+                        {products.filter((p) => p.isActive && (itemTypes || !(p.itemType === 'DISCOUNT' || p.percentPpm)) && (categoryFilter.keeps(p) || p.id === line.productId)).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.qtyOnHandE4 != null ? `${p.name} · ${formatQuantity(p.qtyOnHandE4)} on hand` : p.name}
                           </option>

@@ -77,6 +77,7 @@ features![
     installed_quickbooks,
     inventory,
     invoices,
+    item_categories,
     item_groups,
     item_prices,
     job_reports,

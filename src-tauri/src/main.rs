@@ -51,6 +51,7 @@ mod finance_charges;
 mod instance;
 mod inventory;
 mod invoices;
+mod item_categories;
 mod item_prices;
 mod item_types;
 mod job_reports;

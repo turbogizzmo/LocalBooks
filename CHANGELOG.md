@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Item categories.** Group products and services into categories and sub-categories. Products &
+  Services shows a category tree beside the items, with Move to a different category on each item;
+  sales forms, Sales by Product/Service Summary and the inventory valuation and stock status
+  reports can show one category's items. Preferences › Items & Inventory turns categories off.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
