@@ -30,6 +30,11 @@ people using LocalBooks.
   each. **Enter as bill**, **Expense** or **Check** opens that form filled in from the total, date
   and name read from a PDF's text, and the file is attached when it posts. Everything stays in the
   company file; there's no OCR service.
+- **Encrypted offsite backups.** Settings › File & Data Controls › Offsite backup saves a copy of
+  your books, encrypted on this computer with a key from a password you choose (or your recovery
+  key), to a folder you pick, such as a synced cloud folder or a USB drive, once a day while
+  LocalBooks is open. Test restore checks a copy without touching your books; Restore brings one
+  back.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

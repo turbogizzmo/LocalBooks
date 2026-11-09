@@ -67,6 +67,7 @@ mod list_order;
 mod list_reports;
 mod money;
 mod mail_app;
+mod offsite;
 mod parties;
 mod payroll_import;
 mod permissions;
@@ -258,6 +259,15 @@ fn main() {
                 let db = handle.state::<db::Db>();
                 if let Err(err) = backup::auto_backup(db.inner()).await {
                     eprintln!("automatic backup failed: {err}");
+                }
+                // Offsite copies while the app stays open: checked now and every hour, made when
+                // the newest is older than a day (`offsite::INTERVAL`). A failure is kept on the
+                // Offsite screen; the message never holds the key or password.
+                loop {
+                    if let Ok(store) = commands::offsite_secrets(&handle) {
+                        let _ = offsite::run_if_due(db.inner(), &store).await;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(60 * 60)).await;
                 }
             });
             Ok(())

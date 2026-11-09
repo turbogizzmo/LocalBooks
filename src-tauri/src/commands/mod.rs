@@ -97,6 +97,7 @@ features![
     migration,
     mileage,
     payroll_import,
+    offsite,
     preferences,
     price_levels,
     print_batches,
@@ -129,6 +130,7 @@ features![
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
+pub use offsite::offsite_secrets;
 pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 

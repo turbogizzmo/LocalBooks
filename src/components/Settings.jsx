@@ -12,6 +12,7 @@ import CondenseData, { openArchive } from './CondenseData.jsx';
 import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 import QbwImporter from './QbwImporter.jsx';
+import OffsiteBackup from './OffsiteBackup.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import PreferencesWindow, { Group } from './PreferencesWindow.jsx';
 import Diagnostics from './Diagnostics.jsx';
@@ -365,6 +366,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
       <FileDentist onRebuilt={backups.reload} />
       <CondenseData isAdmin={isAdmin} onDone={backups.reload} />
       <CompanyFileLocation />
+      <OffsiteBackup isAdmin={isAdmin} onRestored={backups.reload} />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel flex min-h-0 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
