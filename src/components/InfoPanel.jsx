@@ -231,8 +231,8 @@ function EmailsTab({ customerId }) {
   if (data.length === 0) return <span className="text-qb-ink-muted">Nothing emailed to them yet.</span>;
   return (
     <ul className="flex flex-col gap-1">
-      {data.map((m, i) => (
-        <li key={i} className="border-b border-qb-border pb-1 last:border-0">
+      {data.map((m) => (
+        <li key={`${m.sentAt}-${m.formType}-${m.documentId}`} className="border-b border-qb-border pb-1 last:border-0">
           <div className="flex gap-1">
             <span className="font-semibold">
               {FORM_LABEL[m.formType] ?? m.formType}
