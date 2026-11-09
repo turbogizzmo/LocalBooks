@@ -6,9 +6,10 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
+const noVendors = async () => [];
 // `billable` is null until the row's Billable box is touched: the company default then decides
 // (Preferences › Time & Expenses › "Mark all expenses as billable").
-export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, billable: null, memo: '', amount: '', qty: '', rate: '' });
+export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, vendorId: null, billable: null, memo: '', amount: '', qty: '', rate: '' });
 
 /** Split rows for a posted bill's or expense's lines, to edit it. */
 export const splitRowsFrom = (lines) =>
@@ -62,6 +63,7 @@ export function summarizeSplits(rows) {
       productServiceId: row.productId ?? null,
       classId: row.classId ?? null,
       customerId: row.customerId ?? null,
+      vendorId: row.vendorId ?? null,
       // Only a cost for a customer can be billed; left null, the company default applies.
       billable: row.customerId ? row.billable : null,
       ...(priced ? { quantityE4, rateCents } : {}),
@@ -75,13 +77,21 @@ export function summarizeSplits(rows) {
  * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
  * column (once the company has classes) for documents whose lines carry one. `withJobs` adds a
  * Customer:Job column (once the company has customers): the job a cost is for, for job costing.
+ * `withReceivedFrom` adds a Received From column (deposits): the customer or vendor the money
+ * came from, kept as the row's `customerId` or `vendorId`.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, currency = null, stockItems = [] }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, withReceivedFrom = false, currency = null, stockItems = [] }) {
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = classesAllowed && showsClassColumn(tracking, rows);
   const customers = useLedgerQuery(api.listCustomers).data ?? [];
   const withJobs = jobsAllowed && (customers.length > 0 || rows.some((r) => r.customerId));
+  const vendors = useLedgerQuery(withReceivedFrom ? api.listVendors : noVendors).data ?? [];
+  const nameValue = (row) => (row.customerId ? `c:${row.customerId}` : row.vendorId ? `v:${row.vendorId}` : '');
+  const pickName = (key, value) => {
+    const [kind, id] = value.split(':');
+    update(key, { customerId: kind === 'c' ? Number(id) : null, vendorId: kind === 'v' ? Number(id) : null });
+  };
   const prefs = useLedgerQuery(api.getPreferences).data;
   const billableByDefault = prefs?.expenses_billable_default === 'true';
   // Tracked products can be bought on a line: the line then posts to the item's inventory account.
@@ -107,6 +117,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
       <colgroup>
         <col className="w-[28px]" />
         {withStock && <col className="w-[150px]" />}
+        {withReceivedFrom && <col className="w-[180px]" />}
         <col className="w-[260px]" />
         <col />
         {withJobs && <col className="w-[170px]" />}
@@ -121,6 +132,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         <tr>
           <th className="qb-grid-head text-right">#</th>
           {withStock && <th className="qb-grid-head">Stock item</th>}
+          {withReceivedFrom && <th className="qb-grid-head">Received from</th>}
           <th className="qb-grid-head">{categoryLabel}</th>
           <th className="qb-grid-head">Description</th>
           {withJobs && <th className="qb-grid-head" title="The customer or job this cost is for (job costing)">Customer:Job</th>}
@@ -153,6 +165,27 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
                         {item.name}
                       </option>
                     ))}
+                  </select>
+                </td>
+              )}
+              {withReceivedFrom && (
+                <td className="qb-grid-cell-edit">
+                  <select value={nameValue(row)} onChange={(e) => pickName(row.key, e.target.value)} aria-label={`Received from ${i + 1}`}>
+                    <option value="">—</option>
+                    <optgroup label="Customers">
+                      {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
+                        <option key={`c${c.id}`} value={`c:${c.id}`}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Vendors">
+                      {vendors.filter((v) => v.isActive !== false || v.id === row.vendorId).map((v) => (
+                        <option key={`v${v.id}`} value={`v:${v.id}`}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </td>
               )}
@@ -222,7 +255,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 2 : 0)}>
+          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 2 : 0) + (withReceivedFrom ? 1 : 0)}>
             <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
               ＋ Add split row
             </button>

@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Deposits have a Received From name.** Each **Add funds** line of a bank deposit can name the
+  customer or vendor the money came from, and a name typed in a register's deposit row is matched
+  to your customers and vendors instead of only being kept in the memo. The register shows the
+  name as the payee, and the deposit is listed in that name's transactions and reports by name.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
