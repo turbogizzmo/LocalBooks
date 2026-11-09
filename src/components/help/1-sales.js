@@ -102,7 +102,7 @@ export const topics = [
   {
     id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
     title: 'Take a customer’s early-payment discount',
-    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day, with nothing paid on it yet, takes the discount and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment reverses both.',
+    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day takes the discount on its open balance (what is left of a part-paid one) and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment, or recording it as a bounced check, reverses both.',
     keywords: 'discount early payment terms 2% 10 net 30 sales discounts receive payments customer took discount',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',

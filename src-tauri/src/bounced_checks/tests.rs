@@ -412,3 +412,44 @@ async fn a_foreign_currency_payment_bounces_at_its_booked_rates() {
     assert_eq!(aging.rows.iter().map(|r| r.total_cents).sum::<i64>(), 108_000, "aging agrees with A/R");
     books_balance(&pool).await;
 }
+
+#[tokio::test]
+async fn a_payment_that_took_a_discount_bounces_for_the_whole_invoice_and_reverses_the_discount() {
+    let pool = test_pool().await;
+    let (checking, services, ar) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, ar(&pool).await);
+    let discounts: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('4995', 'Sales Discounts', 'INCOME') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    crate::preferences::set(&pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT, &discounts.to_string()).await.unwrap();
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let input: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "issueDate": "2026-10-01", "dueDate": "2026-10-31", "termsId": terms,
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 50_000, "incomeAccountId": services, "isTaxable": false }] }))
+    .unwrap();
+    let invoice_id = create_and_post_invoice(&pool, input).await.unwrap().id;
+    // 490.00 received with the 10.00 discount, straight to the bank.
+    record_payment(
+        &pool,
+        PaymentInput { discount_cents: 1_000, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 49_000, payment_method: "CHECK".into(), reference: Some("77".into()), exchange_rate_e6: None },
+    )
+    .await
+    .unwrap();
+    assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "PAID");
+    let payment: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments").fetch_one(&pool).await.unwrap();
+    let listed = candidates(&pool).await.unwrap();
+    assert_eq!((listed[0].amount_cents, listed[0].home_amount_cents), (50_000, 49_000), "it settled 500.00; 490.00 reached the bank");
+
+    let recorded = record(&pool, bounce("PAYMENT", payment)).await.unwrap();
+    assert_eq!(recorded.amount_cents, 50_000);
+    assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, discounts).await), (0, 50_000, 0), "the bank and the discount go back; A/R is the whole invoice");
+    let reopened = get_summary(&pool, invoice_id).await.unwrap();
+    assert_eq!((reopened.status.as_str(), reopened.balance_cents), ("UNPAID", 50_000));
+    books_balance(&pool).await;
+
+    void(&pool, recorded.id, None).await.unwrap();
+    assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, discounts).await), (49_000, 0, -1_000));
+    books_balance(&pool).await;
+}

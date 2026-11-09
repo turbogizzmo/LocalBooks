@@ -503,11 +503,11 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
             return Err("INV_BAD_DISCOUNT: a discount can't be negative".into());
         }
         if currency_code.is_some() {
-            return Err(format!("INV_DISCOUNT_FOREIGN: invoice #{number} is in a foreign currency; take its discount with a credit memo"));
+            return Err(format!("INV_DISCOUNT_FOREIGN: invoice #{number} is in a foreign currency, which takes no early-payment discount yet"));
         }
         let offered = crate::sales_prefs::offered_invoice_discount(&mut **tx, input.invoice_id, input.payment_date).await?;
         if offered == 0 {
-            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, or something has already been paid on it"));
+            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, a discount was already taken on it, or nothing is left to discount"));
         }
         if discount > offered {
             return Err(format!("INV_BAD_DISCOUNT: the discount on invoice #{number} is at most {}", format_cents(offered)));
