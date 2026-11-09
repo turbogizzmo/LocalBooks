@@ -333,13 +333,15 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               </label>
             )}
             {kind === 'vendor' && files1099 && (
-              <label className="col-span-2 flex items-center gap-1.5 text-sm">
-                <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
-                Track payments for a 1099
-                <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row px-2" onClick={(e) => (e.preventDefault(), setW9Open(true))}>
+              <div className="col-span-2 flex items-center gap-1.5 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
+                  Track payments for a 1099
+                </label>
+                <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row px-2" onClick={() => setW9Open(true)}>
                   W-9…
                 </button>
-              </label>
+              </div>
             )}
             {w9Open && (
               <W9Dialog

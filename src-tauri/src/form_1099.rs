@@ -290,7 +290,13 @@ struct W9Brief {
 /// The 1099-NEC forms for payments in `year`, with the 1096 summary.
 pub async fn nec_summary(pool: &SqlitePool, year: i32, access: Access<'_>) -> Result<Summary1096, String> {
     let rows = crate::workflows::vendors_1099(pool, year, access).await?;
-    let w9s: Vec<W9Brief> = sqlx::query_as("SELECT vendor_id, tin_type, legal_name, business_name, received_on FROM vendor_w9").fetch_all(pool).await.map_err(db_err)?;
+    let w9s: std::collections::HashMap<i64, W9Brief> = sqlx::query_as::<_, W9Brief>("SELECT vendor_id, tin_type, legal_name, business_name, received_on FROM vendor_w9")
+        .fetch_all(pool)
+        .await
+        .map_err(db_err)?
+        .into_iter()
+        .map(|w| (w.vendor_id, w))
+        .collect();
     let threshold = crate::workflows::threshold_1099_cents("NEC-1", year);
     let mut forms = Vec::new();
     let mut under = Vec::new();
@@ -304,7 +310,7 @@ pub async fn nec_summary(pool: &SqlitePool, year: i32, access: Access<'_>) -> Re
             under.push((r.vendor_name.clone(), b.paid_cents));
             continue;
         }
-        let w9 = w9s.iter().find(|w| w.vendor_id == r.vendor_id);
+        let w9 = w9s.get(&r.vendor_id);
         let mut missing = Vec::new();
         if r.tax_id_masked.is_none() {
             missing.push("TIN".to_string());

@@ -132,7 +132,7 @@ function CopyB({ year, payer, form }) {
           <tr><th style={{ width: '40%' }}>Payer’s name, address and phone</th><td style={{ whiteSpace: 'pre-line' }}>{payerLines(payer)}</td></tr>
           <tr><th>Payer’s TIN</th><td>{payer.ein ?? ''}</td></tr>
           <tr><th>Recipient’s TIN</th><td>{form.tinMasked ?? ''}</td></tr>
-          <tr><th>Recipient’s name</th><td>{form.recipientName}{form.businessName ? `\n${form.businessName}` : ''}</td></tr>
+          <tr><th>Recipient’s name</th><td style={{ whiteSpace: 'pre-line' }}>{form.recipientName}{form.businessName ? `\n${form.businessName}` : ''}</td></tr>
           <tr><th>Recipient’s address</th><td style={{ whiteSpace: 'pre-line' }}>{form.address ?? ''}</td></tr>
           <tr><th>Box 1 · Nonemployee compensation</th><td className="doc-num">{formatCents(form.box1Cents)}</td></tr>
           <tr><th>Box 4 · Federal income tax withheld</th><td className="doc-num">{formatCents(0)}</td></tr>
@@ -228,7 +228,7 @@ export function Forms1099Nec() {
         <PrintPortal>
           <article className="doc">
             <div className="doc-title">Form 1096 summary · 1099-NEC · {year}</div>
-            <div className="doc-subtitle">Filer’s worksheet. Keep it safe: it shows recipients’ full TINs.</div>
+            <div className="doc-subtitle">{data.fullTins ? 'Filer’s worksheet. Keep it safe: it shows recipients’ full TINs.' : 'Filer’s worksheet. TINs are masked: sign in as a user who can see sensitive data to print them in full.'}</div>
             <table className="doc-table" style={{ marginTop: '12pt' }}>
               <tbody>
                 <tr><th style={{ width: '40%' }}>Filer’s name and address</th><td style={{ whiteSpace: 'pre-line' }}>{payerLines(data.payer)}</td></tr>
