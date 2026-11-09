@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stepTargets, byDateThenNumber, stepButtons, duplicateDates } from './formStep.js';
+import { stepTargets, byDateThenNumber, stepButtons, duplicateDates, discountDate } from './formStep.js';
 
 const rows = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
@@ -48,4 +48,12 @@ test('a duplicate is dated today and keeps its terms’ days to the due date', (
   assert.deepEqual(duplicateDates('2026-05-01', '2026-05-11', '2026-12-28'), { date: '2026-12-28', due: '2027-01-07' });
   assert.deepEqual(duplicateDates('2026-05-01', null, '2026-11-08'), { date: '2026-11-08', due: null });
   assert.deepEqual(duplicateDates('2026-05-01T10:00', '2026-05-11', '2026-11-08'), { date: '2026-11-08', due: null });
+});
+
+test('a bill’s discount date is the term’s discount days after the bill date', () => {
+  const twoTenNet30 = { netDays: 30, discountPpm: 20_000, discountDays: 10 };
+  assert.equal(discountDate(twoTenNet30, '2026-11-25'), '2026-12-05');
+  assert.equal(discountDate({ netDays: 30, discountPpm: 0, discountDays: null }, '2026-11-25'), null);
+  assert.equal(discountDate(null, '2026-11-25'), null);
+  assert.equal(discountDate(twoTenNet30, ''), null);
 });

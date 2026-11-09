@@ -7,7 +7,8 @@ same single amount as your bank statement.
 
 1. Go to **Banking › Deposits & Transfers** and click **Bank deposit** (or **+ New › Bank
    Deposit**).
-2. Choose **Deposit to** (the bank account) and the **Date**.
+2. Choose **Deposit to** (the bank account) and the **Date**. **Ending balance** beside it shows
+   the account's balance before this deposit.
 3. Tick the payments waiting in Undeposited Funds that are part of this deposit.
 4. To include other money (for example a refund), use **Add funds to this deposit** with an
    account and amount.

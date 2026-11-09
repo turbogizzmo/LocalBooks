@@ -1,7 +1,7 @@
 import { Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
-import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import { useDirtySince, useOpenFromList, WindowManagerContext } from '../lib/windows.js';
@@ -125,6 +125,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
           <span className="qb-label">Deposit to</span>
           <AccountSelect ref={bankRef} accounts={accounts} filter={isBank} value={bankId} onChange={setBankId} className="qb-input w-[200px]" />
         </label>
+        <EndingBalance accounts={accounts} accountId={bankId} />
         {formClass.header}
         <label>
           <span className="qb-label">Date</span>
