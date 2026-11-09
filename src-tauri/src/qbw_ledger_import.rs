@@ -516,7 +516,10 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         rejected_lines: head.rejected_lines,
         accounts_matching_stored: head.accounts_matching_stored,
         accounts_with_stored_balance: head.accounts_with_stored_balance,
-        fractional_amounts: head.fractional_amounts.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default(),
+        fractional_amounts: match head.fractional_amounts.as_deref() {
+            Some(json) => serde_json::from_str(json).map_err(|e| format!("QBW_BAD_BATCH: import #{batch_id}'s list of amounts not in whole cents can't be read: {e}"))?,
+            None => Vec::new(),
+        },
         transaction_count,
         line_count,
         first_date,
