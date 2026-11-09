@@ -218,3 +218,22 @@ async fn receipts_and_their_bills_are_checked() {
         sqlx::query_as("SELECT amount_cents, quantity_e4, rate_cents FROM bill_lines WHERE bill_id = ?1 ORDER BY line_number").bind(id).fetch_all(&s.pool).await.unwrap();
     assert_eq!(lines, [(12_000, Some(120_000), Some(1_000)), (2_000, None, None)]);
 }
+
+#[tokio::test]
+async fn a_lower_price_takes_stock_value_down_to_zero_and_the_rest_to_cogs() {
+    let s = shop().await;
+    // 90 widgets already on hand at a penny each in all ($1.00), then 10 received at $10.00: the
+    // average is $1.01. Selling 95 leaves 5 worth $5.05.
+    crate::inventory::adjust(&s.pool, &crate::inventory::AdjustInput { item_id: s.item, date: d(1), qty_change_e4: 900_000, total_cost_cents: Some(100), offset_account_id: s.freight, memo: None }).await.unwrap();
+    let r = receive_items(&s.pool, receive(&s, None, d(5), vec![widgets(&s, None, 10)])).await.unwrap();
+    invoice(&s, 95).await;
+    assert_eq!(stock(&s).await, (50_000, 505));
+    let cogs_before = gl(&s.pool, s.cogs).await;
+
+    // Billed at a cent in all: -$99.99. Half the received units are on hand, so their share is
+    // -$50.00, but stock is worth only $5.05: it goes to zero and COGS takes the other $94.94.
+    bill_for(&s, &r, &[1]).await.unwrap();
+    assert_eq!(stock(&s).await, (50_000, 0));
+    assert_eq!(gl(&s.pool, s.inventory).await, 0, "stock and Inventory Asset agree");
+    assert_eq!(gl(&s.pool, s.cogs).await, cogs_before - 9_494);
+}

@@ -340,7 +340,11 @@ export function AgingReport({ payable, initial = null }) {
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
       footer={`${data?.basis === 'TRANSACTION' ? 'Days since the transaction date' : 'Days past due'} (Preferences › Reports & Graphs) · balances as of the report date · credit not yet used is negative · click a name for its open documents`}
-      onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
+      onCsvRows={() => [
+        ...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]),
+        ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)],
+        ...(payable && data.receivedNotBilledCents ? [['Items received, not billed', '', '', '', '', '', plainAmount(data.receivedNotBilledCents)]] : []),
+      ]}
     />
   );
 }

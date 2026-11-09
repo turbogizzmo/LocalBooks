@@ -316,9 +316,10 @@ pub(crate) async fn plan_price_difference(tx: &mut Transaction<'_, Sqlite>, prod
     let on_hand = item.qty_e4.clamp(0, qty_e4);
     let share = if on_hand == qty_e4 { Some(diff_cents) } else { mul_div_round(diff_cents, on_hand, qty_e4) };
     let mut to_stock = share.ok_or("STOCK_OVERFLOW: cost out of range")?;
-    // Stock keeps a value that agrees with its quantity; what can't go there goes to COGS.
-    if item.value_cents.checked_add(to_stock).is_none_or(|v| v < 0) {
-        to_stock = 0;
+    // Stock keeps a value that agrees with its quantity: a reduction takes its value down to zero at
+    // most, and what can't go there goes to COGS.
+    if to_stock < 0 {
+        to_stock = to_stock.max(-item.value_cents.max(0));
     }
     let to_cogs = diff_cents - to_stock;
     let side = |account: i64, cents: i64| match cents.signum() {
