@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Export lists and addresses.** **File › Utilities › Export** saves the chart of accounts,
+  customers, vendors, items and classes as an IIF file, or every customer's and vendor's address as a
+  text file for mail merges.
+- **Reports › QuickReport** runs the QuickReport (Ctrl+Q) for what is selected in the list or
+  register in front.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

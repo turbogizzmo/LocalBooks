@@ -112,8 +112,9 @@ Click an amount to see where it came from:
   - on a customer or vendor in the Customers or Vendors list: every transaction with them;
   - on a product or service in Products & Services: every line it is on, with quantity and rate.
 
-  It is also in each row's **Actions** menu, and a **QuickReport** button sits on registers and on
-  a name's transactions panel.
+  It is also in each row's **Actions** menu and in **Reports › QuickReport**, which acts on what is
+  selected in the list or register in front. A **QuickReport** button sits on registers and on a
+  name's transactions panel.
 - **Transaction History** (**Ctrl+H**) lists the transactions linked to the one you clicked in a
   register or a name's transactions panel: an invoice and the payments and credits applied to it, a
   payment and its invoice and deposit, a deposit and the payments in it, a bill and its bill
