@@ -68,7 +68,7 @@ export const topics = [
   {
     id: 'pay-bills', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Pay bills',
-    body: 'Pay bills lists every open bill so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them.',
+    body: 'Pay bills lists every open bill (Filter by a vendor, Sort by due date, discount date, vendor or amount; click one for its details and Go to Bill) so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them.',
     keywords: 'pay vendor payable ap batch partial',
     go: { label: 'Pay bills', view: 'expenses/bills', action: 'pay-bills' },
     guide: 'bills',

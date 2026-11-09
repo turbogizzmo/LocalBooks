@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Pay Bills: filter, sort and bill details.** Filter the list to one vendor and sort it by due
+  date, discount date, vendor or amount due. Click a bill to see its terms, discount and credits
+  used below the list, with **Go to Bill** to open it.
 - **Sales lines in the familiar order.** On invoices, sales receipts, estimates and credit memos
   the line columns now run Item, Description, Qty, Rate, Class, then the income account (which the
   item fills in), Amount and Tax.
