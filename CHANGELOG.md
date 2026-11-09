@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **The menu bar reaches more screens.** Lists › Currency List, Company › Email Setup, AI Access
+  (MCP) and Audit Log, Customers › Invoice for Time & Expenses, Reports › Memorized Reports ›
+  Memorized Report List, and Reports › Transaction History / Transaction Journal for the
+  transaction open on a form.
 - **Transaction History and Journal on forms.** A saved invoice, bill, check, expense, journal
   entry, sales receipt, credit, deposit or transfer has **History** and **Journal** on its toolbar,
   with **Ctrl+H** and **Ctrl+Y**, as registers already did; in the journal they act on the entry

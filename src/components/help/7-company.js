@@ -265,7 +265,7 @@ export const topics = [
   {
     id: 'menu-bar', area: 'company', views: [],
     title: 'Use the QuickBooks-style menu bar',
-    body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
+    body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group, with Memorized Reports and Transaction History and Journal for the open form. Lists › Currency List opens the currency preferences; Company has Email Setup, AI Access and the Audit Log; Customers has Invoice for Time & Expenses. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
     keywords: 'menu menus menu bar lists company customers vendors employees banking reports shortcut ctrl+i ctrl+w ctrl+r ctrl+j ctrl+t ctrl+f quickbooks desktop',
     go: null,
     guide: 'getting-started',
