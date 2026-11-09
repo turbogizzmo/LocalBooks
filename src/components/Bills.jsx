@@ -12,6 +12,7 @@ import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -252,7 +253,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   );
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       {reports.panel}
       {voucherElements}
       {toolbar}
@@ -344,6 +346,9 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
       )}
     </section>
+    {/* The chosen vendor's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="vendor" name={vendor} names={vendors} />
+    </div>
   );
 }
 

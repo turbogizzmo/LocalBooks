@@ -6,6 +6,20 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
+  and, for tracked stock, a reorder point. Both show on the item's information panel, which says
+  when it's time to reorder.
+- **The information panel on more forms.** Sales receipts, estimates, credit memos, vendor credits
+  and purchase orders now show the chosen customer's or vendor's panel too.
+- **Notes and Emails on the information panel.** A customer's or vendor's notes can be edited from
+  its panel, with **Date Stamp** to start a dated line, and a customer's **Emails** tab lists every
+  invoice, estimate, sales receipt and statement emailed to them.
+- **An information panel for customers, vendors and items.** Click a name in the Customers or
+  Vendors list, or an item in Products & Services, to see its summary beside the list: open
+  balance, active estimates and unbilled costs, open purchase orders, phone, email, notes and
+  recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
+  checks and expenses show it for the chosen name. It can be hidden, and its figures match the
+  reports.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.

@@ -60,6 +60,13 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'info-panel', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders'],
+    title: 'The information panel',
+    body: 'Click a customer, vendor or item to see its panel beside the list: open balance, active estimates and unbilled costs (customers), open purchase orders (vendors), phone, email, notes and recent transactions; for items, price, on hand, on order, average cost, value, reorder point and preferred vendor (set both on the item’s record). The figures match the aging, Open Purchase Orders, Inventory Valuation and Stock Status reports. Invoices, sales receipts, estimates, credit memos, bills, checks, expenses, vendor credits and purchase orders show it for the chosen name. Its Notes tab edits the notes, with Date Stamp for today’s date; a customer’s Emails tab lists every invoice, estimate, sales receipt and statement emailed to them. Hide info (or ×) hides it; Show info brings it back.',
+    keywords: 'information panel summary balance phone email notes recent transactions on hand on order average cost side panel',
+    guide: 'customers-and-products',
+  },
+  {
     id: 'terms-list', area: 'sales', views: ['sales/profile-lists', 'sales/invoices', 'expenses/bills', 'sales/customers', 'expenses/vendors'],
     title: 'Set up payment terms',
     body: 'Lists › Customer & Vendor Profile Lists › Terms List holds terms such as Net 30 or 2% 10 Net 30 (2 percent off if paid within 10 days). Give each customer and vendor a default term; on invoices and bills the Terms box sets the due date, and Receive Payments and Pay Bills show the discount offered and its last day, and take it when Preferences › Payments or Bills names a discount account.',
