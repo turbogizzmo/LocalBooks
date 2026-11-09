@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Seven more reports.** Budget Overview, Sales by Ship To Address, Sales Tax Revenue Summary, To Do
+  Notes, Memorized Transaction Listing, and Realized and Unrealized Gains & Losses are in the Report
+  Center and the Reports menu.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

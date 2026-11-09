@@ -378,6 +378,13 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
 | **Item Listing** | Lists | Each active product or service with its description, type, SKU, income account, price and quantity on hand |
 | **Account Listing** | Lists | Each active account with its type, description and, for balance sheet accounts, today's balance |
+| **To Do Notes** | Lists | Every to-do, open ones first by due date: done or not, what it says, who or what it is about and who it is assigned to |
+| **Budget Overview** | Budgets | Each budget for the fiscal year holding the date: every account's amount by month and its total, income first, with net income, as entered in **Accounting › Budgets** |
+| **Sales by Ship To Address** | Sales and customers | Invoices and sales receipts grouped by their **Ship To** address (those without one together); each amount is the income the sale posted, before sales tax, so the total matches the sales in Profit and Loss |
+| **Sales Tax Revenue Summary** | What you owe | For each tax rate: total, non-taxable and taxable sales, the same figures as the Sales Tax Liability report |
+| **Memorized Transaction Listing** | Accountant & Taxes | Every memorized (recurring) transaction: its type, how often, the next date, when it ends and whether it is paused |
+| **Realized Gains & Losses** | Accountant & Taxes | Gains and losses from paying foreign-currency invoices and bills, by transaction, as posted to **Exchange Gain or Loss** |
+| **Unrealized Gains & Losses** | Accountant & Taxes | Home currency adjustments (**Accounting › Currency Revaluation**) and their reversals, as posted to **Unrealized Exchange Gain or Loss** |
 
 These reports can't be customized or memorized.
 
