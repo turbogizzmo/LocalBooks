@@ -400,8 +400,8 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 | **New** | Clears the form for a new one. While you're editing a saved transaction, it closes the edit instead. |
 | **Save** | Saves and posts, then clears the form for the next one (the same as **Save & New**). |
 | **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. **Ctrl+D** presses it. |
-| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit, journal entry, credit memo, refund receipt, vendor credit, deposit or transfer, it prints a voucher: the header and the accounts it posted to, with debits and credits. Saved sales receipts, estimates and purchase orders print as their own forms. |
-| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. |
+| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit, journal entry, credit memo, refund receipt, vendor credit, deposit or transfer, it prints a voucher: the header and the accounts it posted to, with debits and credits, and **Save as PDF…** saves that voucher (a check's too) as a PDF file. Saved sales receipts, estimates and purchase orders print as their own forms. |
+| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. On a saved voucher (bill, check, expense, credit, deposit, journal entry), **Email** sends its PDF to the vendor or customer named on it, by your mail app or from LocalBooks, as forms are sent. |
 | **Attach File** | On a new form, picks files to attach when it posts. On a saved transaction that posted (anything but an estimate or purchase order), shows its attachments, where you can add more. |
 | **Memorize** | Saves the form as a recurring transaction. **Ctrl+M** presses it. |
 

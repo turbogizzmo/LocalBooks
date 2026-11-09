@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Save vouchers as PDF and email them.** Saved bills, checks, expenses, credits, deposits and
+  journal entries have **Print ▾ › Save as PDF…**, and **Email** sends the voucher's PDF to the
+  vendor or customer named on it, through your mail app or LocalBooks' email server, as invoices
+  are sent.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -100,6 +100,7 @@ mod storage;
 mod text_import;
 mod timesheet;
 mod users;
+mod vouchers;
 mod windows;
 mod workflows;
 mod xlsx_export;

@@ -5,7 +5,7 @@ import { useVendorRecall } from '../lib/recall.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
-import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { useVoucherActions } from './VoucherPrint.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
@@ -65,7 +65,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   // Files to attach once the bill posts, such as the vendor's invoice.
   const [files, setFiles] = useState([]);
   const [showAttachments, setShowAttachments] = useState(false);
-  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
+  const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
   const formClass = useFormClass(accounts);
   // Closing the window (or stepping to another bill) asks first while the bill has entries not
   // yet saved. The due date is left out: it fills in by itself from the date and terms.
@@ -202,24 +203,21 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           },
         }),
         [
-          {
-            id: 'print',
-            label: 'Print',
-            icon: 'Print',
-            hint: editing ? 'Print this bill as a voucher with the accounts it posted to' : 'Save the bill first, then print it',
-            disabled: !editing?.bill.journalEntryId,
-            onClick: () =>
-              printVoucher({
-                entryId: editing.bill.journalEntryId,
-                title: 'Bill',
-                number: editing.bill.billNumber,
-                date: editing.bill.billDate,
-                dueDate: editing.bill.dueDate,
-                name: editing.bill.vendorName,
-                nameLabel: 'Vendor',
-                amountCents: editing.bill.totalCents,
-              }),
-          },
+          ...voucherItems(
+            editing?.bill.journalEntryId
+              ? {
+                  entryId: editing.bill.journalEntryId,
+                  title: 'Bill',
+                  number: editing.bill.billNumber,
+                  date: editing.bill.billDate,
+                  dueDate: editing.bill.dueDate,
+                  name: editing.bill.vendorName,
+                  nameLabel: 'Vendor',
+                  amountCents: editing.bill.totalCents,
+                }
+              : null,
+            { hint: 'Save the bill first, then print it' },
+          ),
           editing
             ? {
                 id: 'attach',
@@ -238,7 +236,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
 
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
-      {voucherPortal}
+      {voucherElements}
       {toolbar}
       {showAttachments && editing?.bill.journalEntryId && (
         <div className="border-b border-qb-border bg-qb-canvas">
