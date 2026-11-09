@@ -23,6 +23,15 @@ const GROUP = 'group:';
  * `kind` is ITEM (a product, service or fixed charge), SUBTOTAL, DISCOUNT, CHARGE (a percent
  * charge) or GROUP (a group's heading; its items follow it with `inGroup` set to its key).
  */
+const SERVICE_DATE_KEY = 'localbooks.lineGrid.serviceDates';
+function readServiceDateColumn() {
+  try {
+    return window.localStorage.getItem(SERVICE_DATE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const blankLine = (accountId) => ({ key: nextKey++, kind: 'ITEM', productId: null, description: '', accountId, classId: null, isTaxable: false, qty: '', rate: '' });
 
 /** True for a line that is not a plain item: a subtotal, discount, percent charge or group heading. */
@@ -226,7 +235,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates = false }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates: datesAllowed = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const { amountOf } = summarizeLines(lines, { allowZeroRate });
   const groups = useLedgerQuery(api.listItemGroups).data ?? [];
@@ -404,6 +413,19 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     update(index, { levelId, levelAuto: false, rateTyped: false, rate: (line.productId != null && rateAt(line.productId, levelId)) || line.rate });
   };
   // Columns a subtotal leaves empty: account, class, quantity, price level and rate.
+  // The Service Date column (invoices, sales receipts): shown when turned on (kept on this computer)
+  // or when a line already has a date, so narrow windows keep room for the description.
+  const [datesOn, setDatesOn] = useState(readServiceDateColumn);
+  const serviceDates = datesAllowed && (datesOn || lines.some((l) => l.serviceDate));
+  const toggleDates = () => {
+    const next = !serviceDates;
+    setDatesOn(next);
+    try {
+      window.localStorage.setItem(SERVICE_DATE_KEY, next ? '1' : '0');
+    } catch {
+      // Not remembered; the column still shows for now.
+    }
+  };
   const spareColumns = 3 + (withClasses ? 1 : 0) + (withLevels ? 1 : 0) + (serviceDates ? 1 : 0);
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
 
@@ -415,7 +437,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <col />
         <col className="w-[220px]" />
         {withClasses && <col className="w-[150px]" />}
-        {serviceDates && <col className="w-[132px]" />}
+        {serviceDates && <col className="w-[120px]" />}
         <col className="w-[64px]" />
         {withLevels && <col className="w-[120px]" />}
         <col className="w-[100px]" />
@@ -427,7 +449,20 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <tr>
           <th className="qb-grid-head text-right">#</th>
           {withProducts && <th className="qb-grid-head">Product/Service</th>}
-          <th className="qb-grid-head">Description</th>
+          <th className="qb-grid-head">
+            Description
+            {datesAllowed && (
+              <button
+                type="button"
+                className="ml-2 font-normal normal-case text-qb-link hover:underline disabled:text-qb-ink-faint disabled:no-underline"
+                onClick={toggleDates}
+                disabled={serviceDates && lines.some((l) => l.serviceDate)}
+                title={serviceDates ? 'Hide the Service Date column (only while no line has a date)' : 'Show a Service Date column for when the work on each line was done'}
+              >
+                {serviceDates ? 'Hide service dates' : 'Service dates'}
+              </button>
+            )}
+          </th>
           <th className="qb-grid-head">Income account</th>
           {withClasses && <th className="qb-grid-head">Class</th>}
           {serviceDates && <th className="qb-grid-head" title="When the work on the line was done; printed in its own column">Service Date</th>}

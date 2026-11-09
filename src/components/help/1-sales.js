@@ -166,7 +166,7 @@ export const topics = [
   {
     id: 'service-date-template', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'settings/forms'],
     title: 'Service dates, the template on a form, and printed credit memos',
-    body: 'Each invoice and sales receipt line has a Service Date that prints in its own column when a line has one. The Template box in a sales form’s header picks the form style it prints and emails with; left on the default it follows the customer. Saved credit memos and refund receipts print as their own Credit memo form, with Credit To, P.O. No. and lines, laid out in Settings › Custom Forms.',
+    body: 'Service dates beside the Description heading adds a Service Date to each invoice and sales receipt line, printed in its own column when a line has one. The Template box in a sales form’s header picks the form style it prints and emails with; left on the default it follows the customer. Saved credit memos and refund receipts print as their own Credit memo form, with Credit To, P.O. No. and lines, laid out in Settings › Custom Forms.',
     keywords: 'service date date of service line date template form style layout picker credit memo print refund receipt credit note',
     go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
     guide: 'invoices',

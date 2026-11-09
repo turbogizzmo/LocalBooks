@@ -62,8 +62,10 @@ are in the home currency, so an invoice in another currency doesn't offer them.
 
 ### Service dates and the template
 
-- **Service Date**: each line of an invoice or sales receipt has a Service Date box for when the
-  work was done (a visit, a delivery, a week of work). Lines with one print it in a **Service
+- **Service Date**: click **Service dates** beside the Description heading of an invoice or sales
+  receipt to add a Service Date box to each line, for when the work was done (a visit, a delivery,
+  a week of work); LocalBooks remembers the choice on this computer, and a saved form whose lines
+  have dates always shows them. Lines with one print it in a **Service
   Date** column; the column is left off a form whose lines have none, and Settings › Custom Forms
   can turn it off altogether.
 - **Template**: the header's **Template** box picks the form style the document prints, saves as
