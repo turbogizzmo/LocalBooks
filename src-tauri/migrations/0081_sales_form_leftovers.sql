@@ -1,14 +1,15 @@
 -- 0081_sales_form_leftovers.sql
 -- Sales form leftovers (gap T23):
--- * a Service Date on each invoice and sales receipt line, printed in its own column;
+-- * a Service Date on each invoice and sales receipt line, printed in its own column (`IS`, not
+--   `=`, so an impossible date such as 2026-13-99, where date() is NULL, fails the check);
 -- * the form style a document prints with, picked on the form itself (NULL: the customer's style,
 --   or the default);
 -- * a printed credit memo, so form_templates also holds 'CREDIT_MEMO' layouts.
 
 ALTER TABLE invoice_items ADD COLUMN service_date TEXT
-    CHECK (service_date IS NULL OR (service_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(service_date) = service_date));
+    CHECK (service_date IS NULL OR (service_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(service_date) IS service_date));
 ALTER TABLE sales_receipt_lines ADD COLUMN service_date TEXT
-    CHECK (service_date IS NULL OR (service_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(service_date) = service_date));
+    CHECK (service_date IS NULL OR (service_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(service_date) IS service_date));
 
 ALTER TABLE invoices ADD COLUMN form_style_id INTEGER REFERENCES form_styles (id) ON DELETE SET NULL;
 ALTER TABLE sales_receipts ADD COLUMN form_style_id INTEGER REFERENCES form_styles (id) ON DELETE SET NULL;

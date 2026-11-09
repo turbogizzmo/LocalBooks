@@ -418,6 +418,8 @@ async fn a_document_keeps_its_service_dates_and_prints_with_the_style_picked_on_
     assert_eq!(detail.items[0].service_date, NaiveDate::from_ymd_opt(2026, 9, 20));
     assert_eq!(detail.items[1].service_date, None);
     assert_eq!(detail.details.form_style_id, Some(bold.id));
+    // An impossible service date is refused by the table itself.
+    assert!(sqlx::query("UPDATE invoice_items SET service_date = '2026-13-99' WHERE invoice_id = ?1").bind(invoice.id).execute(&pool).await.is_err());
     let rendered = render(&pool, FormKind::Invoice, Some(invoice.id), None, None, false).await.unwrap();
     assert_eq!(rendered.form.title, format!("Bill {} · Initech", invoice.invoice_number), "the style picked on the invoice");
     let all = texts(&rendered.form.pages);

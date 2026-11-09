@@ -1780,9 +1780,13 @@ pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>,
         Some(t) => t.validated(kind)?,
         // The style picked on the document itself, else the customer's (or the default).
         None => {
-            let style = match doc.form_style_id {
-                Some(id) if find_style(pool, id).await.is_ok() => id,
-                _ => customer_style(pool, doc.customer_id).await?,
+            let picked: Option<i64> = match doc.form_style_id {
+                Some(id) => sqlx::query_scalar("SELECT id FROM form_styles WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?,
+                None => None,
+            };
+            let style = match picked {
+                Some(id) => id,
+                None => customer_style(pool, doc.customer_id).await?,
             };
             get_template(pool, Some(style), kind).await?
         }
