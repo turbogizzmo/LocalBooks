@@ -91,5 +91,5 @@ fn a_protected_pdf_opens_only_with_its_password() {
     assert!(lopdf::Document::load_mem_with_password(&pdf, "wrong").is_err());
     let locked = lopdf::Document::load_mem(&pdf);
     assert!(locked.is_err() || locked.unwrap().extract_text(&[1]).map_or(true, |t| !t.contains("Profit")));
-    assert!(write_protected_pdf(&[], None, "x", Some("")).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));
+    assert!(write_protected_pdf(&[], None, "x", Some(String::new().as_str())).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));
 }
