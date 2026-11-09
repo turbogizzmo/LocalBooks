@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Print a register, and transfers from its entry row.** A register has **Print…** (also
+  **File › Print…**, Ctrl+P), which prints its transactions for the dates chosen with the balance
+  forward and ending balance. In the entry row at the bottom, choosing another bank account records
+  a transfer, and choosing Undeposited Funds on the deposit side deposits the payments waiting
+  there.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -21,6 +21,7 @@ import { formatDate, setFourDigitYears } from './lib/dates.js';
 import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
+import { runPrintCommand } from './lib/printCommand.js';
 import {
   guardWindowClose,
   isMainWindow,
@@ -178,6 +179,8 @@ export default function App() {
       if (payload === 'help') setHelpOpen(true);
       // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
       if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
+      // File › Print…: the screen's own printout (a register prints its rows), or the window.
+      if (payload === 'print') runPrintCommand();
       // View › Show or Hide Left Icon Bar: hides the left pane, or brings back the full menu; kept for next time.
       if (payload === 'sidebar') api.setWindowPreferences({ sidebar: sidebarRef.current === 'hidden' ? 'menu' : 'hidden' }).catch(() => {});
     }));

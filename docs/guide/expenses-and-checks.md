@@ -87,13 +87,21 @@ check, a deposit is a deposit, a charge is a credit card expense, and a payment 
 is a card credit. They show up in Expenses & Checks or Deposits & Transfers like any other, and you
 edit or void them there or from the register's row menu.
 
+Two accounts make a different transaction:
+
+- **Another bank account** records a **transfer** between the two: out of this account when the
+  amount is in **Payment** (or **Charge**), into it when it is in **Deposit** (or **Payment** on a
+  card). No check number is used.
+- **Undeposited Funds**, on a bank register's **Deposit** side, deposits payments waiting there: the
+  one whose amount matches, or else all of them dated up to the row's date when together they make
+  the amount. If neither matches, LocalBooks says so; choose the payments in **Make Deposits**.
+
 To spread one row over several accounts, click **Splits…**: a line grid opens under the row, with
 an account, memo, class and (for payments and charges) customer or job on each line. The row's
 amount is the total of the lines. Click **Splits…** again to go back to one account.
 
 A deposit has no payee of its own in LocalBooks, so a name typed in **Received from** is kept at the
-start of the deposit's memo. Deposits and card charges have no number. To deposit customer payments
-waiting in Undeposited Funds, use **Make Deposits** instead.
+start of the deposit's memo. Deposits and card charges have no number.
 
 ### Find, filter and view a register
 
@@ -103,6 +111,9 @@ waiting in Undeposited Funds, use **Make Deposits** instead.
   other range. A register that starts after its first transaction opens with the balance forward.
 - **2-line** shows each transaction on two lines: date, number, payee and amounts on the first;
   type, account, class and memo on the second. LocalBooks remembers your choice.
+- **Print…** (or **File › Print…**, **Ctrl+P**) prints the register for its dates: every
+  transaction in date order with the balance forward and the ending balance. **Export** saves the
+  same rows to CSV or Excel.
 - **QuickReport** (**Ctrl+Q**) opens the account's transactions as a report for the register's
   dates. Click a transaction, then press **Ctrl+H** for its
   [Transaction History](reports.md#quickreport-transaction-history-and-transaction-journal) or

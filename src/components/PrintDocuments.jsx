@@ -86,6 +86,47 @@ export function StatementDocument({ company, title, subtitle, lines, footer, col
   );
 }
 
+/**
+ * A table for print, such as a register: `columns` are { label, kind } (kind `money` right-aligns
+ * and formats cents, `date` formats an ISO date), and each row is { kind, cells } with kind
+ * `section` or `total` for the balance-forward and ending-balance lines.
+ */
+export function TableDocument({ company, title, subtitle, columns, rows }) {
+  const cell = (column, value) => {
+    if (value === null || value === undefined || value === '') return '';
+    if (column.kind === 'money') return formatMoney(value, null);
+    if (column.kind === 'date') return longDate(value);
+    return value;
+  };
+  return (
+    <article className="doc">
+      <DocHeader company={company} title={title} subtitle={subtitle} />
+      <table className="doc-table doc-statement doc-register">
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.label} className={c.kind === 'money' ? 'doc-num' : undefined}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className={row.kind === 'total' ? 'doc-line-total' : row.kind === 'section' ? 'doc-line-section' : undefined}>
+              {row.cells.map((value, c) => (
+                <td key={c} className={columns[c].kind === 'money' ? 'doc-num' : undefined}>
+                  {cell(columns[c], value)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </article>
+  );
+}
+
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
 const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 

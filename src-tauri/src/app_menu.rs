@@ -59,6 +59,8 @@ const FILE: &[Entry] = &[
         &[page("Invoices…", "sales/print-invoices"), page("Checks…", "expenses/print-checks"), Entry::Sep, page("Statements…", "sales/statements")],
     ),
     page("Send Forms…", "sales/send-forms"),
+    // Prints what is showing: a register prints its rows for the dates chosen (printCommand.js).
+    Entry::Cmd { label: "Print…", command: "print", accel: Some("CmdOrCtrl+P") },
     Entry::Sep,
 ];
 

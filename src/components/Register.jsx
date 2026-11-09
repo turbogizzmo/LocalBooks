@@ -4,10 +4,11 @@ import Notice from './Notice.jsx';
 import RegisterEntry, { takesEntries } from './RegisterEntry.jsx';
 import TransactionHistory from './TransactionHistory.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import { useCompany } from './PrintDocuments.jsx';
+import { PrintPortal, TableDocument, useCompany } from './PrintDocuments.jsx';
+import { usePrintCommand } from '../lib/printCommand.js';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
-import { api, useLedgerQuery } from '../lib/api.js';
+import { api, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
 import { quickReport, reportShortcut, transactionJournal } from '../lib/quickReport.js';
@@ -144,11 +145,8 @@ export default function Register({ accounts, intent }) {
 
   const company = useCompany();
   const exportRange = start && end ? `${longDate(start)} – ${longDate(end)}` : start ? `From ${longDate(start)}` : end ? `Through ${longDate(end)}` : 'All dates';
-  const exports = tableExports({
-    company: company.name,
-    title: data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''} Register` : 'Register',
-    subtitle: exportRange,
-    columns: [
+  const registerTitle = data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''} Register` : 'Register';
+  const registerColumns = [
       { label: 'Date', kind: 'date' },
       { label: 'Type', kind: 'text' },
       { label: 'No.', kind: 'text' },
@@ -160,8 +158,8 @@ export default function Register({ accounts, intent }) {
       { label: firstHead, kind: 'money' },
       { label: secondHead, kind: 'money' },
       { label: 'Balance', kind: 'money' },
-    ],
-    rows: () => [
+    ];
+  const registerRows = () => [
       ...(data.startDate ? [{ kind: 'section', cells: [data.startDate, '', '', '', 'Balance forward', '', '', '', null, null, data.openingBalanceCents] }] : []),
       ...data.rows.map((r) => ({
         cells: [
@@ -179,10 +177,31 @@ export default function Register({ accounts, intent }) {
         ],
       })),
       { kind: 'total', cells: ['', '', '', '', 'Ending balance', '', '', '', null, null, data.endingBalanceCents] },
-    ],
+    ];
+  const exports = tableExports({
+    company: company.name,
+    title: registerTitle,
+    subtitle: exportRange,
+    columns: registerColumns,
+    rows: registerRows,
     filename: `${(data?.accountName ?? 'Register').replace(/[^A-Za-z0-9]+/g, '-')}-Register${start ? `_${start}` : ''}${end ? `_to_${end}` : ''}`,
     onNotice: setNotice,
   });
+
+  // Print (the button, or File › Print… while this register shows): its rows for the dates chosen,
+  // in date order, with the balance forward and the ending balance.
+  const rootRef = useRef(null);
+  const [printing, setPrinting] = useState(false);
+  const print = async () => {
+    if (!data) return;
+    setPrinting(true);
+    // Let React render the register into the print root before the dialog opens, and empty it
+    // after: while it has content it is all that prints, from any window.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    window.addEventListener('afterprint', () => setPrinting(false), { once: true });
+    await printDocument(`${registerTitle} – ${exportRange}`);
+  };
+  usePrintCommand(rootRef, print);
 
   // Click a heading to sort; the register starts (and a third click returns) in date order. The
   // balance is always the running balance in date order, so it is dimmed while sorted otherwise.
@@ -282,7 +301,12 @@ export default function Register({ accounts, intent }) {
 
   return (
     // Ctrl+Q, Ctrl+H and Ctrl+Y work anywhere in the register's window.
-    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={rootRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+      {printing && data && (
+        <PrintPortal>
+          <TableDocument company={company} title={registerTitle} subtitle={exportRange} columns={registerColumns} rows={registerRows()} />
+        </PrintPortal>
+      )}
       <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
         <label>
           <span className="qb-label">Account</span>
@@ -334,6 +358,9 @@ export default function Register({ accounts, intent }) {
               <input type="checkbox" className="accent-qb-green" checked={twoLine} onChange={(e) => setTwoLine(e.target.checked)} />
               2-line
             </label>
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg self-end px-2" onClick={print} title="Print this register for the dates chosen (Ctrl+P)">
+              Print…
+            </button>
             <div className="self-end">
               <ExportMenu printable={false} onNotice={setNotice} {...exports} />
             </div>
