@@ -12,7 +12,8 @@ kept inside the company file, so they are in every backup and move with the book
 - Files go on these transactions: **bills**, **expenses and checks**, **invoices**, **sales
   receipts** and other sales, **deposits and transfers**, and **journal entries**.
 - They also go on **customers** and **vendors** (a W-9, a contract), **items** (a spec sheet, a
-  photo), **accounts** (a loan agreement), **estimates** and **purchase orders**. Open the record
+  photo), **accounts** (a loan agreement), **estimates**, **purchase orders** and
+  **reconciliations** (the bank statement; see [Reconcile an account](reconciling.md)). Open the record
   (double-click it in its list; for an estimate or purchase order open it and click **Attach File**
   on its toolbar) and use **Attach file…** in its Attachments strip. Files on these records are
   saved at once, not with the record's Save.

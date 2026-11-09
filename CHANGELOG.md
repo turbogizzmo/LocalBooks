@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Reconciliation statements in the Attachments Library.** Statement files kept with a
+  reconciliation are now attachments like any other: they appear in Accounting › Attachments
+  Library, and deleting one there or on the Reconcile screen can be undone.
 - **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
   attached file with its date, keywords and what it's attached to; search, preview pictures and
   text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders

@@ -154,7 +154,6 @@ pub const KEPT_TABLES: &[&str] = &[
     "profile_entries",
     "reconciliation_snapshot_lines",
     "reconciliation_snapshots",
-    "reconciliation_statements",
     "reconciliation_undos",
     "reconciliations",
     "record_attachments",

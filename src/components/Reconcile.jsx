@@ -115,17 +115,19 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
 
 /**
  * The bank or card statement kept with a reconciliation, in progress or finished: each file with
- * Save a copy and ×, and Attach statement… to add one (a PDF or a picture, up to 25 MB).
+ * Save a copy and ×, and Attach statement… to add one (a PDF or a picture, up to 25 MB). The files
+ * are attachments of kind RECONCILIATION, so they are in the Attachments Library too, and × deletes
+ * reversibly (the library can restore them).
  */
 function StatementFiles({ reconciliationId, onNotice, compact = false }) {
   const [files, setFiles] = useState([]);
   const load = useCallback(() => {
-    api.listReconciliationStatements(reconciliationId).then(setFiles, (err) => onNotice({ kind: 'error', text: errorText(err) }));
+    api.listRecordAttachments('RECONCILIATION', reconciliationId).then(setFiles, (err) => onNotice({ kind: 'error', text: errorText(err) }));
   }, [reconciliationId, onNotice]);
   useEffect(() => load(), [load]);
   const attach = async () => {
     try {
-      for (const path of await pickAttachments()) await api.attachReconciliationStatement(reconciliationId, path);
+      for (const path of await pickAttachments()) await api.addRecordAttachment('RECONCILIATION', reconciliationId, path);
     } catch (err) {
       onNotice({ kind: 'error', text: errorText(err) });
     }
@@ -144,16 +146,18 @@ function StatementFiles({ reconciliationId, onNotice, compact = false }) {
       {!compact && <span className="text-qb-ink-muted">Statement:</span>}
       {files.map((f) => (
         <span key={f.id} className="flex items-center gap-0.5 rounded-sm border border-qb-border bg-white px-1">
-          <button type="button" className="text-qb-link hover:underline" title="Save a copy" onClick={() => run(() => api.saveReconciliationStatement(f.id))}>
+          <button type="button" className="text-qb-link hover:underline" title="Save a copy" onClick={() => run(() => api.saveLibraryAttachment({ source: 'RECORD', id: f.id }))}>
             📎 {f.fileName}
           </button>
           <button
             type="button"
             className="px-0.5 text-qb-ink-faint hover:text-qb-negative"
-            aria-label={`Remove ${f.fileName}`}
-            title="Remove this file"
+            aria-label={`Delete ${f.fileName}`}
+            title="Delete (Accounting › Attachments Library can restore it)"
             onClick={async () => {
-              if (await askConfirm(`Remove ${f.fileName} from this reconciliation?`, { confirmLabel: 'Remove', danger: true })) run(() => api.removeReconciliationStatement(f.id));
+              if (await askConfirm(`Delete ${f.fileName} from this reconciliation? You can restore it from Accounting › Attachments Library.`, { confirmLabel: 'Delete', danger: true })) {
+                run(() => api.deleteLibraryAttachment({ source: 'RECORD', id: f.id }));
+              }
             }}
           >
             ×

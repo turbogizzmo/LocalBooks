@@ -82,6 +82,12 @@ pub async fn add_record_file(pool: &SqlitePool, record_kind: &str, record_id: i6
     if !exists {
         return Err(format!("ATTACH_NO_RECORD: that {} does not exist", record_kind.to_lowercase().replace('_', " ")));
     }
+    if record_kind == "RECONCILIATION" {
+        let undone: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM reconciliation_undos WHERE reconciliation_id = ?1)").bind(record_id).fetch_one(pool).await.map_err(db_err)?;
+        if undone {
+            return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into());
+        }
+    }
     let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("attachment");
     sqlx::query_as(
         "INSERT INTO record_attachments (record_kind, record_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
