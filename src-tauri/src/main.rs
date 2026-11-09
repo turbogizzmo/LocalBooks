@@ -18,6 +18,7 @@ mod banking;
 mod batch_invoices;
 mod billable_costs;
 mod bounced_checks;
+mod cash_forecast;
 mod classes;
 mod cleanup;
 mod closing;
@@ -31,6 +32,7 @@ mod crypto;
 mod customer_groups;
 mod db;
 mod desktop;
+mod diagnostics;
 mod edits;
 mod email_log;
 mod envelopes;
@@ -65,6 +67,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod parties;
+mod payroll_import;
 mod permissions;
 mod pdf;
 mod mcp_server;
@@ -98,6 +101,7 @@ mod sales_lists;
 mod sales_prefs;
 mod sales_tax;
 mod tax_ids;
+mod txf;
 #[cfg(test)]
 mod test_companies;
 mod secrets;
@@ -171,6 +175,11 @@ fn main() {
             secrets::install_for_this_build(&app.config().identifier);
             let (data_dir, config_dir) = data_dirs(app)?;
             audit_chain::install_anchor_store(&config_dir);
+            // Help › Save Diagnostics: a local log of starts, stops and crashes (nothing is sent).
+            if let Ok(logs) = app.path().app_log_dir() {
+                diagnostics::install(logs);
+            }
+            diagnostics::log(&format!("LocalBooks {} started", app.package_info().version));
             let config = db::DbConfig {
                 config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),
@@ -266,6 +275,7 @@ fn main() {
             }
             // Close the database cleanly (checkpoint, release any shared-location lock) on quit.
             tauri::RunEvent::Exit => tauri::async_runtime::block_on(async {
+                diagnostics::log("LocalBooks quit");
                 // Quitting closes the company: its desktop is saved while the windows are still known.
                 windows::save_on_close(app).await;
                 if let Some(state) = app.try_state::<std::sync::Mutex<Option<instance::InstanceGuard>>>() {

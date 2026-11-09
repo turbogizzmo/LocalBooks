@@ -253,7 +253,7 @@ under [`docs/guide/`](docs/guide/README.md).
 
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
-| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, TXF export of Schedule C for tax software, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Approvals | Expenses › Approvals | Rules hold bills and purchase orders over an amount or from a vendor until an Admin approves them; rejections are kept with a note | [guide](docs/guide/bills.md#approvals-for-bills-and-purchase-orders) |
@@ -277,7 +277,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; click a name to see its transactions; products fill in invoice lines; add a new customer, vendor or item right from a form as you type | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Home: a map of the everyday work with waiting counts, banking and company shortcuts, account balances. Insights: assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md#start-from-the-home-page) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts, Pay Down Credit Card | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox; payroll posted from a payroll service's journal export | [guide](docs/guide/desktop-migration.md) |
 | Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |
