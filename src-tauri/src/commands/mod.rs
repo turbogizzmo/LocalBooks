@@ -101,6 +101,7 @@ features![
     register_entry,
     reminders,
     repair,
+    report_comments,
     report_export,
     report_mail,
     revaluation,

@@ -28,6 +28,7 @@ import {
   Vendors1099Report,
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
+import CommentedReports from './ReportComments.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { reportBasis, useCompanyPreferences, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
@@ -446,6 +447,7 @@ const REPORT_GROUPS = [
       ['tb', 'Trial Balance'],
       ['gl', 'General Ledger'],
       ...ACCOUNTANT_REPORTS,
+      ['commented', 'Commented Reports'],
     ],
   },
 ];
@@ -704,6 +706,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'stock-status' && <StockStatusReport />}
         {report === 'item-price-list' && <ItemPriceListReport />}
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
+        {report === 'commented' && <CommentedReports />}
         {report === '1099' && <Vendors1099Report key="1099" />}
         {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}

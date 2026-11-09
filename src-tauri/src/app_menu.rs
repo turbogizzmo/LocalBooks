@@ -376,6 +376,8 @@ const REPORTS: &[Entry] = &[
             Entry::Sep,
             report("Income Tax Summary", "income-tax-summary"),
             report("Income Tax Detail", "income-tax-detail"),
+            Entry::Sep,
+            report("Commented Reports", "commented"),
         ],
     ),
     Entry::Sub("Budgets & Forecasts", &[report("Budget vs. Actual", "bva"), report("Balance Sheet Budget vs. Actual", "bs-bva"), Entry::Sep, report("Budget vs. Actual Graph", "graph-bva")]),
