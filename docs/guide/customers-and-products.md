@@ -76,6 +76,24 @@ progress, Closed or Not awarded. The status shows next to the job in the Custome
 can rename the five statuses in **Preferences › Jobs & Estimates**, for example *Awarded* to
 *Won*.
 
+### Merge two customers, vendors or items
+
+When the same customer, vendor or item was entered twice (*Acme Co* and *ACME Company*), merge them:
+open the one you don't want with **Edit…**, change its name to the other's, and click **Save**.
+LocalBooks asks whether to merge it into the other one; click **Merge into …**.
+
+- Everything that named it now names the one you kept: invoices, sales receipts, estimates,
+  credit memos, payments, bills, checks, expenses and their lines, purchase orders, time and
+  mileage, to-dos, price levels and memorized transactions. Its history is under the kept name in
+  every report, statement and list, and the totals don't change.
+- Posted amounts never change; only which name they belong to.
+- The merged one stays in the list as inactive, so old records can still say what it was.
+- A customer with jobs can't be merged until its jobs are merged or moved, and items tracked in
+  stock can't be merged. Items must be the same type.
+- Merging can't be undone. The audit trail records each merge.
+
+To merge two accounts, see [Merge two accounts](getting-started.md#merge-two-accounts).
+
 ## Add a product or service
 
 Products and services make invoices and sales receipts quicker to fill in.

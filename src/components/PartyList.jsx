@@ -17,6 +17,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
+import { useMergeOffer } from './MergeOffer.jsx';
 
 const CONFIG = {
   customer: { list: api.listCustomers, create: api.createCustomer, noun: 'customer', title: 'Customers', balance: 'Open balance (A/R)' },
@@ -194,10 +195,15 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   }, [kind, id]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  // Renaming to another customer's (vendor's) name offers to merge into it.
+  const loadedName = useRef(null);
+  if (form && loadedName.current === null) loadedName.current = form.name;
+  const mergeOffer = useMergeOffer(kind === 'customer' ? 'CUSTOMER' : 'VENDOR', id, loadedName.current, (text) => onSaved(text));
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
+      if (await mergeOffer.check(form.name)) return setBusy(false);
       const saved = await api.updateParty(kind, id, {
         name: form.name,
         companyName: form.companyName,
@@ -371,6 +377,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             </label>
           </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+          {mergeOffer.panel}
           <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
             <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
             <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>

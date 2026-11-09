@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
+  LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
+  kept, so its history and balances show under one name. An account's balance moves with one
+  journal entry, and its items, settings and subaccounts follow. Posted amounts never change, and
+  each merge is in the audit trail.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

@@ -60,6 +60,7 @@ mod parties;
 mod permissions;
 mod pdf;
 mod mcp_server;
+mod merges;
 mod mileage;
 mod nacha;
 mod preferences;

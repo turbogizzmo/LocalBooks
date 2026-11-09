@@ -26,6 +26,18 @@ rather start from LocalBooks' standard chart of accounts and set things up yours
 **Skip — use the standard chart** instead. Either way, you can add, rename or remove accounts
 later in the Chart of Accounts.
 
+### Merge two accounts
+
+To merge an account you don't need into another of the same type, open it with **Edit…** in the
+Chart of Accounts, change its name to the other's (they must sit at the same level), and click
+**Save**; LocalBooks asks whether to merge them. Posted transactions keep the account they posted
+to, so LocalBooks moves the merged account's balance with one journal entry dated today, and points
+items, sales tax agencies, budgets, subaccounts, bank feed rules, settings, unposted estimates and
+purchase orders and memorized transactions at the account you kept. The merged account becomes
+inactive. Bank and credit card accounts, and LocalBooks' own accounts (such as Accounts Receivable),
+can't be merged. Merging can't be undone; voiding its journal entry moves the balance back but
+doesn't restore the lists.
+
 ## Enter your company details
 
 1. In the left sidebar, open **Settings › Preferences Console** (or choose **Edit › Preferences**).
