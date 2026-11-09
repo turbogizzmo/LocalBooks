@@ -274,10 +274,9 @@ fn read_header(file: &mut impl Read) -> Result<Header, String> {
     }
     let u = |r: std::ops::Range<usize>| u32::from_le_bytes(head[r].try_into().unwrap_or([0; 4]));
     let cost = KdfCost { memory_kib: u(24..28), iterations: u(28..32), parallelism: u(32..36) };
-    let mut salt = [0u8; SALT_LEN];
-    salt.copy_from_slice(&head[8..24]);
-    let mut prefix = [0u8; PREFIX_LEN];
-    prefix.copy_from_slice(&head[36..]);
+    // The salt and nonce prefix are the file's own bytes.
+    let salt: [u8; SALT_LEN] = head[8..24].try_into().map_err(|_| not_ours())?;
+    let prefix: [u8; PREFIX_LEN] = head[36..].try_into().map_err(|_| not_ours())?;
     Ok((head, salt, cost, prefix))
 }
 
