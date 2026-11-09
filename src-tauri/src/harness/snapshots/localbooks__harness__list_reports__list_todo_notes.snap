@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+To Do Notes, all dates to 2025-12-31
+
+Done                           Due           To Do                     Note                      About                     Assigned To
+                               2025-12-20    Call about the patio men  Ask for the final copy    Brightwater Cafe
+✓                                            Order mug stock
+
+2 lines
+
+1 to-do open, 1 done.

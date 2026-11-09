@@ -78,6 +78,14 @@ export const topics = [
     guide: 'bills',
   },
   {
+    id: 'approvals', area: 'expenses', views: ['expenses/approvals', 'expenses/bills', 'expenses/purchase-orders'],
+    title: 'Approve bills and purchase orders',
+    body: 'Under Expenses › Approvals an Admin adds rules, such as bills of $1,000 or more, or every bill from one vendor. A bill or purchase order that matches is sent for approval instead of being recorded: a waiting bill isn’t posted and isn’t in Pay Bills, and a waiting order isn’t an open order. An Admin approves it, which records it as entered, or rejects it with a note, which keeps the request and records nothing.',
+    keywords: 'approval approve reject rule authorize authorise sign off manager bill purchase order po pending waiting threshold',
+    go: { label: 'Go to Approvals', view: 'expenses/approvals' },
+    guide: 'bills',
+  },
+  {
     id: 'pay-bills', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Pay bills',
     body: 'Pay bills lists every open bill (Filter by a vendor, Sort by due date, discount date, vendor or amount; click one for its details and Go to Bill) so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them. Afterwards, Payment stubs lists each vendor paid: print, save or email them a stub of the bills the payment covers. A paid bill\'s Actions menu has the same stub actions later.',
