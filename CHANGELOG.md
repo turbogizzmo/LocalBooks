@@ -38,6 +38,11 @@ people using LocalBooks.
   payments waiting to be deposited when the file's deposit moved them into an account that isn't a
   bank (such as receipts written off to an expense). It now posts that deposit as a transfer out of
   Undeposited Funds that clears those payments; balances still match the file.
+- **Print a register, and transfers from its entry row.** A register has **Print…** (also
+  **File › Print…**, Ctrl+P), which prints its transactions for the dates chosen with the balance
+  forward and ending balance. In the entry row at the bottom, choosing another bank account records
+  a transfer, and choosing Undeposited Funds on the deposit side deposits the payments waiting
+  there.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

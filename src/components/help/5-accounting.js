@@ -4,7 +4,7 @@
 /** What each screen is for (`help`) and its main guide (`guide`, docs/guide/<id>.md), shown at the top of Help. */
 export const screens = {
   'accounting/register': {
-    help: 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction. In a bank or credit card register, type a check, deposit, charge or card credit into the row at the bottom and click Record.',
+    help: 'Every transaction in one account, in date order, with a running balance, the other account, and whether it is cleared or reconciled. Click a row to see the whole transaction. In a bank or credit card register, type a check, deposit, charge or card credit into the row at the bottom and click Record; another bank account there records a transfer, and Undeposited Funds deposits the payments waiting there. Print… (Ctrl+P) prints the register for its dates.',
     guide: 'expenses-and-checks',
   },
   'accounting/chart-of-accounts': {
