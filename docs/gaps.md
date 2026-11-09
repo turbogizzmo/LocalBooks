@@ -34,7 +34,7 @@ re-check one against the code before you start it.
 | R13 | partial | M | Updates: no rollback; macOS not notarized; Windows not signed | Previous version can be reinstalled from the app; installers are signed and notarized |
 | R14 | partial | L | Accountant workflows: no Accountant's Copy or review mode | An accountant can work on a copy and the changes merge back with an audit record |
 | R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model |
-| R16 | done (#PR) | M | Payroll: nothing posts a payroll service's results | Imports a payroll service's journal export into balanced entries (`payroll_import::tests`) |
+| R16 | done (#254) | M | Payroll: nothing posts a payroll service's results | Imports a payroll service's journal export into balanced entries (`payroll_import::tests`) |
 | R17 | open | M | Tax software export (TXF / tax-line mapping) | Accounts map to tax lines; TXF export imports into a tax program |
 | R18 | open | L | No condensing or archiving of old years | Old years condense to opening balances with an archive copy; reports from the archive still tie out |
 | R19 | partial | M | Accessibility untested | Every screen is reachable and operable by keyboard; an automated a11y check runs in the e2e suite |
