@@ -137,7 +137,7 @@ export function setColumnLayout(table, layout) {
   setMyPreferences({ columnLayouts: next });
 }
 
-/** Puts every General preference back to its default (the remembered last date, hidden messages, text sizes and register colors are kept). */
+/** Puts every General preference back to its default (the remembered last date, hidden messages, text sizes, register colors and column layouts are kept). */
 export function resetMyPreferences() {
   const { textSizes, registerColors, columnLayouts } = current;
   setMyPreferences({ ...MY_PREFERENCE_DEFAULTS, textSizes, registerColors, columnLayouts });
