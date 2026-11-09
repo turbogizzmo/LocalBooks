@@ -151,6 +151,21 @@ Forms › Invoices…** (or **Sales › Print Invoices**), untick any to leave f
 **Print…**. LocalBooks asks **Did they all print?**: the invoices you confirm leave the queue, and
 the rest wait for the next batch. The invoice form remembers whether you last left Print later on.
 
+### Print other forms in a batch
+
+**File › Print Forms** also prints **Sales Receipts…**, **Credit Memos…**, **Bill Payment
+Stubs…** and **Purchase Orders…** in batches:
+
+1. Choose the forms in the **Print** box and the dates (**This month** to start).
+2. Every form dated in that range is ticked, except voided ones. Untick any you don't want.
+3. Click **Print…**. Each prints with its own form design, one after another. A bill payment
+   stub lists every bill paid on that check.
+
+**File › Print Forms › Mailing Labels…** prints customer or vendor addresses on Letter sheets of
+30 labels, 2⅝ × 1 inch, three across and ten down. Tick the names (only those with an address, at
+first), and if part of a sheet is used, enter how many labels to **Skip**: printing starts after
+them, across then down. In the print dialog, keep the scale at 100% so the labels line up.
+
 Invoices print with your company's form design. To change the title, colors, logo, columns or
 message, see [Design your invoices and estimates](custom-forms.md).
 

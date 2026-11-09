@@ -22,6 +22,7 @@ export const REPORT_DESCRIPTIONS = Object.freeze({
   'expenses-vendor': 'Total spent with each vendor for a period.',
   1099: 'Payments to each 1099 vendor, by the box they are reported in.',
   '1099-detail': 'The payments behind each 1099 vendor’s totals.',
+  '1099-nec': 'The year’s 1099-NEC forms, what each still needs, the 1096 totals, and printing them.',
   'inv-val': 'Quantity on hand, average cost and value of each inventory item.',
   'inv-detail': 'Each purchase, sale and adjustment that moved an inventory item’s value.',
   'stock-status': 'On hand, on order and reorder point for each inventory item.',

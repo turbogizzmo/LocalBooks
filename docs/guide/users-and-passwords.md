@@ -103,3 +103,15 @@ working.
   [Verify and correct the ledger](ledger-integrity.md).
 - For the whole file, turn on FileVault (System Settings › Privacy & Security) so the disk is
   encrypted too.
+
+### Copies outside the company file
+
+- **Exports are plain copies.** A report, list or register saved as CSV, Excel or PDF, a form or
+  voucher saved as PDF, and attachments saved to a folder or zip are ordinary files: the company
+  file's password doesn't protect them. LocalBooks says so each time it saves one. Keep them
+  somewhere safe, or delete them when you're done.
+- **Temporary copies are deleted.** A PDF handed to your mail app is kept in LocalBooks' cache
+  folder only long enough for the mail app to read it: it's deleted after an hour, when you next
+  send something, start LocalBooks or quit it. A QuickBooks backup unpacked to be read is deleted
+  as soon as the import has read it (one left behind by a crash goes at the next start). Imports
+  staged for review are kept inside the company file, not beside it.

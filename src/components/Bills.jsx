@@ -18,6 +18,7 @@ import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGr
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
 import { StatusBadge } from './Invoices.jsx';
+import { useFormPrinter } from './FormPages.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
@@ -41,13 +42,14 @@ const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PAR
  * the same shape) a new bill copied from a saved one by Duplicate: dated today, its own number left
  * blank, due as many days later as the original was.
  */
-function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
+function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, fromInbox = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const source = editing ?? copyOf;
   const copyDates = copyOf ? duplicateDates(copyOf.bill.billDate, copyOf.bill.dueDate, todayIso()) : null;
-  const [vendor, setVendor] = useState(source?.bill.vendorName ?? '');
+  // A document from the inbox fills in what was read from it, and attaches when the bill posts.
+  const [vendor, setVendor] = useState(source?.bill.vendorName ?? fromInbox?.nameHint ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
-  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate ?? copyDates?.date);
+  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate ?? copyDates?.date ?? fromInbox?.documentDate ?? undefined);
   const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? copyDates?.due ?? billDate);
   const termsList = useTerms();
   const [termsId, setTermsId] = useState(source?.bill.termsId ?? null);
@@ -70,12 +72,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     applyTerms(t, billDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendor, vendorRecord?.termsId, termsList, termsTouched]);
-  const [total, setTotal] = useState(source ? centsToInput(source.bill.totalCents) : '');
+  const [total, setTotal] = useState(source ? centsToInput(source.bill.totalCents) : fromInbox?.amountCents ? centsToInput(fromInbox.amountCents) : '');
   const [rows, setRows] = useState(() => (source ? splitRowsFrom(source.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files to attach once the bill posts, such as the vendor's invoice.
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState(() => (fromInbox ? [{ inboxId: fromInbox.id, name: fromInbox.fileName }] : []));
   const [showAttachments, setShowAttachments] = useState(false);
   // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
   const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
@@ -547,7 +549,12 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}`
           : '';
       const creditNote = used.length + taken.length > 0 ? `, after ${formatCents(creditTotal)} of discounts and credits` : '';
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks && !queued ? written : []);
+      // One stub per vendor: any bill of theirs leads to the payment, which gathers the rest.
+      const stubs = payees.map((vendorId) => {
+        const theirs = paying.filter((b) => b.vendorId === vendorId);
+        return { vendorName: theirs[0].vendorName, billId: theirs[0].id, totalCents: theirs.reduce((s, b) => s + cents(b), 0) };
+      });
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks && !queued ? written : [], stubs);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -808,6 +815,41 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   );
 }
 
+/** The payment stubs Pay Bills just made, one per vendor: print, save as PDF or email each. */
+function PaymentStubs({ stubs, actions, onNotice, onClose }) {
+  const stubFor = async (stub, act) => {
+    try {
+      // The newest live payment on the bill is the one just made; its stub lists every bill it paid.
+      const live = (await api.listBillPayments(stub.billId)).filter((p) => !p.isVoided);
+      const latest = live.reduce((a, p) => (a === null || p.id > a.id ? p : a), null);
+      if (!latest) return onNotice({ kind: 'error', text: `No payment to ${stub.vendorName} was found.` });
+      return act('BILL_PAYMENT', latest.id);
+    } catch (err) {
+      return onNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  return (
+    <section className="qb-panel flex flex-col gap-1 p-2" aria-label="Payment stubs">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold">Payment stubs</h3>
+        <span className="text-xs text-qb-ink-muted">Send each vendor a stub listing the bills this payment covers.</span>
+        <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={onClose}>
+          Done
+        </button>
+      </div>
+      {stubs.map((stub) => (
+        <div key={stub.billId} className="flex items-center gap-2 text-sm">
+          <span className="min-w-[200px] font-semibold">{stub.vendorName}</span>
+          <span className="num w-[110px]">{formatCents(stub.totalCents)}</span>
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => stubFor(stub, actions.print)}>Print</button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => stubFor(stub, actions.savePdf)}>Save as PDF</button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => stubFor(stub, actions.email)}>Email</button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function Bills({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listBills);
   const vendors = useLedgerQuery(api.listVendors);
@@ -818,6 +860,8 @@ export default function Bills({ accounts, intent }) {
   const [editing, setEditing] = useState(null); // { bill, lines }
   // Duplicate: the saved bill the new one on the form was copied from ({ bill, lines, n }).
   const [copy, setCopy] = useState(null);
+  // Document Inbox › Enter as bill: the document the new bill starts from.
+  const inboxDoc = intent?.action === 'bill' ? (intent.data?.inbox ?? null) : null;
   const duplicate = (from) => {
     setPaying(false);
     setEditing(null);
@@ -831,6 +875,9 @@ export default function Bills({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   const [achFiles, setAchFiles] = useState(false);
+  // After Pay Bills: one payment stub per vendor to print, save or email.
+  const [stubs, setStubs] = useState([]);
+  const [formPortal, formActions] = useFormPrinter(setNotice);
   const attachments = useAttachmentRows();
   const [printing, setPrinting] = useState([]);
   const company = useCompany();
@@ -923,9 +970,10 @@ export default function Bills({ accounts, intent }) {
           bills={bills}
           accounts={accounts}
           onCancel={() => setPaying(false)}
-          onDone={(text, kind = 'success', checks = []) => {
+          onDone={(text, kind = 'success', checks = [], paid = []) => {
             setPaying(false);
             setNotice({ kind, text });
+            setStubs(paid);
             if (checks.length > 0) {
               setPrinting(checks);
               // Let React render the checks into the print root before the dialog opens.
@@ -935,7 +983,8 @@ export default function Bills({ accounts, intent }) {
         />
       ) : (
         <NewBill
-          key={editing ? `edit-${editing.bill.id}` : copy ? `copy-${copy.n}` : 'new'}
+          key={editing ? `edit-${editing.bill.id}` : copy ? `copy-${copy.n}` : inboxDoc ? `inbox-${inboxDoc.id}` : 'new'}
+          fromInbox={editing || copy ? null : inboxDoc}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
@@ -955,6 +1004,8 @@ export default function Bills({ accounts, intent }) {
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load bills: ${error}`} />}
       {achFiles && <AchFilesPanel onClose={() => setAchFiles(false)} />}
+      {stubs.length > 0 && <PaymentStubs stubs={stubs} actions={formActions} onNotice={setNotice} onClose={() => setStubs([])} />}
+      {formPortal}
 
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
@@ -1030,6 +1081,14 @@ export default function Bills({ accounts, intent }) {
                     }),
                     label: `Void payment ${formatCents(p.amountCents)} · ${formatDate(p.paymentDate)}`,
                   })),
+                  ...livePayments.flatMap((p) => {
+                    const which = `${formatCents(p.amountCents)} · ${formatDate(p.paymentDate)}`;
+                    return [
+                      { label: `Print payment stub ${which}…`, onSelect: () => formActions.print('BILL_PAYMENT', p.id) },
+                      { label: `Save payment stub as PDF ${which}…`, onSelect: () => formActions.savePdf('BILL_PAYMENT', p.id) },
+                      { label: `Email payment stub ${which}…`, onSelect: () => formActions.email('BILL_PAYMENT', p.id) },
+                    ];
+                  }),
                 ];
                 return (
                   <Fragment key={b.id}>
