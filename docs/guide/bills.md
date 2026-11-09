@@ -78,6 +78,21 @@ numbers each one pays. The check numbers show in the **Num** column of reports a
 > **Tip:** A bill with payments can't be voided until those payments are voided. Void a payment
 > from its **Actions** menu.
 
+### Send the vendor a payment stub
+
+A bill payment has a form of its own, the payment stub: who was paid, the date, the account and
+check number, and each bill the payment covers with its amount and what was paid on it. Every bill
+paid on the same check (or with the same reference) is on one stub.
+
+- **Right after Pay Bills**, a **Payment stubs** panel lists each vendor you paid, with **Print**,
+  **Save as PDF** and **Email** buttons. Email goes to the vendor's email address, with a PDF of
+  the stub attached.
+- **Later**, open a paid bill's **Actions** menu and choose **Print payment stub**, **Save payment
+  stub as PDF** or **Email payment stub** for that payment.
+
+Change how the stub looks in **Settings › Custom Forms › Bill payment stub**
+(see [Custom forms](custom-forms.md)).
+
 ### Use vendor credits when paying
 
 Turn on **Use vendor credits automatically** in **Preferences › Bills › Company Preferences** and

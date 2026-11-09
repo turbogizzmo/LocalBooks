@@ -15,6 +15,9 @@ people using LocalBooks.
   time from the timesheet, so it goes on the customer's invoice at its hours and rate. And when
   reimbursed expenses count as income, each expense account can name the income account its
   reimbursements go to.
+- **Bill payment stubs.** A bill payment now has a form of its own listing every bill it pays.
+  Print it, save it as a PDF or email it to the vendor right after Pay Bills, or later from the
+  bill's Actions menu, and change its look in Settings › Custom Forms › Bill payment stub.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
