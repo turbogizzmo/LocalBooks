@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
+  import file together with a `-wal` log file written for a different file, which could have
+  exposed leftover memory. Move the stray `-wal` file away and open the file again.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

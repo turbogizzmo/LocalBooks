@@ -712,6 +712,7 @@ struct ArchiveRecord {
 /// Opens `path` on one connection with foreign-key enforcement off: the condense removes whole
 /// groups, and `PRAGMA foreign_key_check` (File Dentist's LINKS check) confirms nothing dangles.
 async fn open_private(path: &Path) -> Result<SqliteConnection, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).foreign_keys(false).create_if_missing(false);
     SqliteConnection::connect_with(&options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
@@ -1097,6 +1098,7 @@ pub async fn pool_is_archive(pool: &SqlitePool) -> bool {
 }
 
 async fn open_checked(path: &Path) -> Result<SqlitePool, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).foreign_keys(true).create_if_missing(false);
     SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| format!("CONDENSE_OPEN: cannot open {}: {e}", path.display()))
 }
