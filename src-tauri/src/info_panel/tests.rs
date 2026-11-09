@@ -87,3 +87,43 @@ async fn item_figures_match_inventory_valuation_and_stock_status() {
     let plain = item_summary(&pool, service.0, today).await.unwrap();
     assert_eq!(plain, ItemSummary { sales_price_cents: service.1, ..ItemSummary::default() });
 }
+
+#[tokio::test]
+async fn the_emails_list_has_every_form_sent_to_the_customer() {
+    use crate::email_log::{record, sent_to_customer, Method};
+    use crate::forms::FormKind;
+    let pool = crate::harness::job_costing::company().await;
+    let (maple, lakeview): (i64, i64) = (
+        sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Kestrel Homes:Maple St Addition'").fetch_one(&pool).await.unwrap(),
+        sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Kestrel Homes:Lakeview Remodel'").fetch_one(&pool).await.unwrap(),
+    );
+    let (invoice, number): (i64, i64) = sqlx::query_as("SELECT id, invoice_number FROM invoices WHERE customer_id = ?1 LIMIT 1").bind(maple).fetch_one(&pool).await.unwrap();
+    let estimate: i64 = sqlx::query_scalar("SELECT id FROM estimates WHERE customer_id = ?1 LIMIT 1").bind(maple).fetch_one(&pool).await.unwrap();
+    let to = ["site@kestrel.example".to_string()];
+    record(&pool, FormKind::Invoice, invoice, &to, Method::Smtp, "Invoice").await.unwrap();
+    record(&pool, FormKind::Estimate, estimate, &to, Method::MailApp, "Estimate").await.unwrap();
+    record(&pool, FormKind::Statement, maple, &to, Method::Smtp, "Statement").await.unwrap();
+    record(&pool, FormKind::Statement, lakeview, &to, Method::Smtp, "Someone else's statement").await.unwrap();
+
+    let sent = sent_to_customer(&pool, maple).await.unwrap();
+    let got: Vec<(&str, Option<i64>)> = sent.iter().map(|s| (s.form_type.as_str(), s.number)).collect();
+    assert_eq!(got[0], ("STATEMENT", None), "newest first");
+    assert_eq!(got.len(), 3, "only Maple St's own forms: {got:?}");
+    assert!(got.contains(&("INVOICE", Some(number))));
+    assert_eq!(sent_to_customer(&pool, lakeview).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn notes_save_from_the_panel_and_are_audited() {
+    let pool = crate::harness::job_costing::company().await;
+    let vendor = crate::expenses::list_vendors(&pool).await.unwrap().into_iter().next().unwrap();
+    set_notes(&pool, "vendor", vendor.id, "  11/08/2026: call about the oak order  ").await.unwrap();
+    let notes: Option<String> = sqlx::query_scalar("SELECT notes FROM vendors WHERE id = ?1").bind(vendor.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(notes.as_deref(), Some("11/08/2026: call about the oak order"));
+    set_notes(&pool, "vendor", vendor.id, " ").await.unwrap();
+    let notes: Option<String> = sqlx::query_scalar("SELECT notes FROM vendors WHERE id = ?1").bind(vendor.id).fetch_one(&pool).await.unwrap();
+    assert_eq!(notes, None);
+    assert!(set_notes(&pool, "vendor", 99_999, "x").await.unwrap_err().starts_with("PARTY_NOT_FOUND"));
+    assert!(set_notes(&pool, "item", vendor.id, "x").await.unwrap_err().starts_with("PARTY_KIND"));
+    assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
+}

@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Notes and Emails on the information panel.** A customer's or vendor's notes can be edited from
+  its panel, with **Date Stamp** to start a dated line, and a customer's **Emails** tab lists every
+  invoice, estimate, sales receipt and statement emailed to them.
 - **An information panel for customers, vendors and items.** Click a name in the Customers or
   Vendors list, or an item in Products & Services, to see its summary beside the list: open
   balance, active estimates and unbilled costs, open purchase orders, phone, email, notes and

@@ -49,6 +49,11 @@ The figures are the reports' own: the open balance matches A/R or A/P Aging and 
 reports, open purchase orders the Open Purchase Orders report, unbilled costs Sales › Bill Costs,
 and the item figures Inventory Valuation and Stock Status.
 
+The panel has tabs. **Notes** shows the customer's or vendor's notes (the same Notes as on its
+record) to read and change: **Date Stamp** starts a new first line with today's date, and **Save**
+keeps them. For a customer, **Emails** lists every form emailed to them, newest first: invoices,
+estimates, sales receipts and statements, with the date, who it went to and the subject.
+
 Invoices, bills, checks and expenses show the same panel beside the form once you choose a
 customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
 (or the slim **Info** strip beside a form) to bring it back; LocalBooks remembers the choice for

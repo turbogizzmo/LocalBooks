@@ -43,3 +43,12 @@ export function setInfoPanelHidden(place, hidden, storage = globalThis.localStor
     // Storage unavailable: the choice holds while the window is open.
   }
 }
+
+/**
+ * Date Stamp in the notes: a new first line starting with `stamp` (today, as dates show), ready to
+ * type after, with the notes so far below it.
+ */
+export function stampNotes(notes, stamp) {
+  const rest = (notes ?? '').replace(/^\s+/, '');
+  return rest ? `${stamp}: \n${rest}` : `${stamp}: `;
+}

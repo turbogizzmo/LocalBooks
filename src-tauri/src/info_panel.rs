@@ -112,5 +112,34 @@ pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) 
     })
 }
 
+/// The longest note a customer or vendor keeps.
+const NOTES_MAX: usize = 10_000;
+
+/// Saves the notes of customer or vendor `id` from the information panel (the same field as the
+/// record's Notes). Blank clears them. A list change, so the audit triggers record it.
+pub async fn set_notes(pool: &SqlitePool, kind: &str, id: i64, notes: &str) -> Result<(), String> {
+    let table = match kind {
+        "customer" => "customers",
+        "vendor" => "vendors",
+        other => return Err(format!("PARTY_KIND: unknown kind {other}")),
+    };
+    let notes = notes.trim();
+    if notes.chars().count() > NOTES_MAX {
+        return Err(format!("PARTY_NOTES_LONG: keep notes to {NOTES_MAX} characters"));
+    }
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = sqlx::query(&format!("UPDATE {table} SET notes = ?1 WHERE id = ?2"))
+        .bind((!notes.is_empty()).then_some(notes))
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err);
+    match result {
+        Ok(done) if done.rows_affected() == 1 => crate::ledger::commit_write(tx).await.map_err(db_err),
+        Ok(_) => Err(crate::ledger::rollback(tx, format!("PARTY_NOT_FOUND: {kind} {id} does not exist")).await),
+        Err(err) => Err(crate::ledger::rollback(tx, err).await),
+    }
+}
+
 #[cfg(test)]
 mod tests;

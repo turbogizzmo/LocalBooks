@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { infoPanelHidden, partySummaryLines, setInfoPanelHidden } from './infoPanel.js';
+import { infoPanelHidden, partySummaryLines, setInfoPanelHidden, stampNotes } from './infoPanel.js';
 
 const none = { openBalanceCents: 0, activeEstimateCount: 0, activeEstimateCents: 0, unbilledCostCount: 0, unbilledCostCents: 0, unbilledTripCount: 0, openPoCount: 0, openPoCents: 0 };
 
@@ -31,4 +31,10 @@ test('hiding the panel is remembered per place', () => {
   assert.equal(infoPanelHidden('item', storage), false);
   setInfoPanelHidden('customer', false, storage);
   assert.equal(infoPanelHidden('customer', storage), false);
+});
+
+test('Date Stamp starts a new first line with the date', () => {
+  assert.equal(stampNotes('', '11/08/2026'), '11/08/2026: ');
+  assert.equal(stampNotes('Prefers email.', '11/08/2026'), '11/08/2026: \nPrefers email.');
+  assert.equal(stampNotes(null, '11/08/2026'), '11/08/2026: ');
 });

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
-import { formatDate } from '../lib/dates.js';
-import { infoPanelHidden, partySummaryLines, setInfoPanelHidden } from '../lib/infoPanel.js';
+import { formatDate, todayIso } from '../lib/dates.js';
+import { infoPanelHidden, partySummaryLines, setInfoPanelHidden, stampNotes } from '../lib/infoPanel.js';
 import { useOpenFromList } from '../lib/windows.js';
 import { transactionTarget } from '../lib/openTransaction.js';
 
@@ -97,9 +97,31 @@ export function PartyInfoPanel({ kind, id, onHide }) {
   const error = party.error || summary.error || recent.error;
   const rows = [...(recent.data?.rows ?? [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, RECENT);
 
+  const tabs = kind === 'customer' ? ['Summary', 'Notes', 'Emails'] : ['Summary', 'Notes'];
+  const [tab, setTab] = useState('Summary');
+  useEffect(() => setTab('Summary'), [kind, id]);
+
   return (
     <Shell title={p?.name ?? (kind === 'customer' ? 'Customer' : 'Vendor')} onHide={onHide}>
+      <div role="tablist" className="-mx-2 -mt-2 flex border-b border-qb-border bg-qb-canvas px-1">
+        {tabs.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            className={`px-2 py-0.5 text-xs font-semibold ${tab === t ? 'border-b-2 border-qb-green text-qb-ink' : 'text-qb-ink-muted hover:text-qb-ink'}`}
+            onClick={() => setTab(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
       {error && <Notice kind="error" text={errorText(error)} />}
+      {tab === 'Notes' && p && <NotesTab kind={kind} id={id} notes={p.notes ?? ''} onSaved={reloadParty} />}
+      {tab === 'Emails' && <EmailsTab customerId={id} />}
+      {tab === 'Summary' && (
+      <>
       <Section title="Summary">
         {summary.data ? <Figures lines={partySummaryLines(kind, summary.data).map(([label, cents, note]) => [label, cents === null ? '' : formatCents(cents), note])} /> : <span className="text-qb-ink-muted">Loading…</span>}
       </Section>
@@ -128,7 +150,7 @@ export function PartyInfoPanel({ kind, id, onHide }) {
       )}
       {p?.notes && (
         <Section title="Notes">
-          <p className="whitespace-pre-wrap">{p.notes}</p>
+          <p className="line-clamp-4 whitespace-pre-wrap">{p.notes}</p>
         </Section>
       )}
       <Section title="Recent transactions">
@@ -153,7 +175,81 @@ export function PartyInfoPanel({ kind, id, onHide }) {
           ))}
         </ul>
       </Section>
+      </>
+      )}
     </Shell>
+  );
+}
+
+/**
+ * The Notes tab: the customer's or vendor's notes (the record's Notes field), edited here. Date
+ * Stamp starts a new first line with today's date; Save keeps them.
+ */
+function NotesTab({ kind, id, notes, onSaved }) {
+  const [text, setText] = useState(notes);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+  useEffect(() => setText(notes), [notes]);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.setPartyNotes(kind, id, text);
+      setMessage({ kind: 'success', text: 'Notes saved.' });
+      onSaved();
+    } catch (err) {
+      setMessage({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <textarea className="qb-input min-h-[180px] w-full resize-y py-1" value={text} onChange={(e) => setText(e.target.value)} aria-label="Notes" />
+      <div className="flex gap-1">
+        <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => setText((t) => stampNotes(t, formatDate(todayIso())))} title="Start a new first line with today's date">
+          Date Stamp
+        </button>
+        <button type="button" className="qb-btn qb-btn-primary ml-auto h-row px-2" onClick={save} disabled={busy || text === notes}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      {message && <Notice kind={message.kind} text={message.text} onDismiss={() => setMessage(null)} />}
+    </div>
+  );
+}
+
+const FORM_LABEL = { INVOICE: 'Invoice', ESTIMATE: 'Estimate', SALES_RECEIPT: 'Sales receipt', STATEMENT: 'Statement' };
+
+/** The Emails tab: every form emailed to the customer (invoices, estimates, sales receipts, statements), newest first. */
+function EmailsTab({ customerId }) {
+  const { data, error, reload } = useLedgerQuery(() => api.listCustomerEmails(customerId));
+  useEffect(() => {
+    reload();
+  }, [customerId, reload]);
+  if (error) return <Notice kind="error" text={errorText(error)} />;
+  if (!data) return <span className="text-qb-ink-muted">Loading…</span>;
+  if (data.length === 0) return <span className="text-qb-ink-muted">Nothing emailed to them yet.</span>;
+  return (
+    <ul className="flex flex-col gap-1">
+      {data.map((m, i) => (
+        <li key={i} className="border-b border-qb-border pb-1 last:border-0">
+          <div className="flex gap-1">
+            <span className="font-semibold">
+              {FORM_LABEL[m.formType] ?? m.formType}
+              {m.number ? ` #${m.number}` : ''}
+            </span>
+            <span className="ml-auto text-xs text-qb-ink-muted">{formatDate(m.sentAt.slice(0, 10))}</span>
+          </div>
+          <div className="truncate text-xs" title={m.recipients}>
+            To {m.recipients}
+            {m.method === 'MAIL_APP' ? ' · opened in mail app' : ''}
+          </div>
+          <div className="truncate text-xs text-qb-ink-muted" title={m.subject}>
+            {m.subject}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
