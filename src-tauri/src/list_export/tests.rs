@@ -9,8 +9,12 @@ async fn names(pool: &SqlitePool, sql: &str) -> Vec<String> {
 #[tokio::test]
 async fn the_lists_read_back_through_the_iif_import() {
     let pool = crate::harness::fixture::harbor_lane().await;
-    // A name with a quote and a tab, and notes over two lines, survive as one field each.
-    sqlx::query("UPDATE customers SET name = 'Joe''s \"Best\" Diner', notes = 'Line one\nLine two' WHERE id = (SELECT MIN(id) FROM customers)").execute(&pool).await.unwrap();
+    // A name with quotes, a company with a tab, and notes over two lines survive as one field each
+    // (the tab and line break become spaces).
+    sqlx::query("UPDATE customers SET name = 'Joe''s \"Best\" Diner', company_name = 'Joe' || char(9) || 'Diner LLC', notes = 'Line one\nLine two' WHERE id = (SELECT MIN(id) FROM customers)")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE vendors SET is_1099 = 1, tax_id = '12-3456789' WHERE id = (SELECT MIN(id) FROM vendors)").execute(&pool).await.unwrap();
 
     let text = lists_iif(&pool).await.unwrap();
@@ -35,6 +39,7 @@ async fn the_lists_read_back_through_the_iif_import() {
     assert!(customers.contains(&"Joe's \"Best\" Diner".to_string()));
     let joe = ledger.customers.iter().find(|p| p.name.starts_with("Joe's")).unwrap();
     assert_eq!(joe.notes.as_deref(), Some("Line one Line two"));
+    assert_eq!(joe.company_name.as_deref(), Some("Joe Diner LLC"), "a tab can't split the row");
     let mut vendors: Vec<String> = ledger.vendors.iter().map(|p| p.name.clone()).collect();
     vendors.sort_by_key(|n| n.to_lowercase());
     assert_eq!(vendors, names(&pool, "SELECT name FROM vendors").await);
