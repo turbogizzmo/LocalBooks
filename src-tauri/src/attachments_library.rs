@@ -214,6 +214,24 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
         .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
 }
 
+/// What a preview shows of a file, read in SQL so no more than that leaves the database: a picture
+/// whole, the first `text_bytes` of a text file, and nothing of any other kind.
+pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
+    sqlx::query_as(&format!(
+        "SELECT file_name, media_type,
+                CASE WHEN media_type LIKE 'image/%' THEN content
+                     WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
+         FROM {} WHERE id = ?1",
+        file.source.table()
+    ))
+    .bind(file.id)
+    .bind(text_bytes)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
+}
+
 /// Sets a file's keywords (blank clears them) and whether it goes with the form when emailed.
 pub async fn set_details(pool: &SqlitePool, file: FileRef, keywords: Option<&str>, send_with_form: bool) -> Result<(), String> {
     let keywords = keywords.map(str::trim).filter(|k| !k.is_empty());
