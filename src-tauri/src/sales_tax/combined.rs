@@ -89,9 +89,9 @@ pub async fn save_combined_rate(pool: &SqlitePool, id: Option<i64>, input: &Comb
     if name.is_empty() {
         return Err("TAX_NAME_REQUIRED: enter a name for the rate".into());
     }
-    let mut ids = input.component_ids.clone();
-    ids.dedup();
-    if ids.len() < 2 || ids.len() != input.component_ids.len() {
+    let ids = input.component_ids.clone();
+    let distinct: std::collections::HashSet<i64> = ids.iter().copied().collect();
+    if ids.len() < 2 || distinct.len() != ids.len() {
         return Err("TAX_COMBINED_PARTS: a combined rate is made of two or more different rates".into());
     }
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -105,7 +105,7 @@ pub async fn save_combined_rate(pool: &SqlitePool, id: Option<i64>, input: &Comb
                 Some((_, _, true, _)) => return Err("TAX_COMBINED_PARTS: a combined rate can't include another combined rate".into()),
                 Some((_, _, _, false)) => return Err("TAX_COMBINED_PARTS: a combined rate's rates must be active".into()),
                 Some((ppm, account, false, true)) => {
-                    total += ppm;
+                    total = total.checked_add(ppm).ok_or_else(|| "TAX_BAD_RATE: a rate is between 0% and 100%".to_string())?;
                     first_account.get_or_insert(account);
                 }
             }
@@ -237,7 +237,11 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
          FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.tax_rate_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2"
     );
     let docs: Vec<TaxedDoc> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
-    let parts: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT journal_entry_id, tax_rate_id, cents FROM document_tax_parts").fetch_all(pool).await.map_err(db_err)?;
+    // Each combined-rate entry's split, by entry.
+    let mut parts: std::collections::HashMap<i64, Vec<(i64, i64)>> = std::collections::HashMap::new();
+    for (entry, rate_id, cents) in sqlx::query_as::<_, (i64, i64, i64)>("SELECT journal_entry_id, tax_rate_id, cents FROM document_tax_parts").fetch_all(pool).await.map_err(db_err)? {
+        parts.entry(entry).or_default().push((rate_id, cents));
+    }
     let rates: Vec<(i64, String, i64, Option<i64>, Option<String>)> =
         sqlx::query_as("SELECT r.id, r.name, r.rate_ppm, r.agency_vendor_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id").fetch_all(pool).await.map_err(db_err)?;
     let rate = |id: i64| rates.iter().find(|r| r.0 == id);
@@ -258,10 +262,7 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
         if counted == 0 {
             continue;
         }
-        let split: Vec<(i64, i64)> = {
-            let mine: Vec<(i64, i64)> = parts.iter().filter(|p| p.0 == entry).map(|p| (p.1, p.2)).collect();
-            if mine.is_empty() { vec![(rate_id, tax)] } else { mine }
-        };
+        let split: Vec<(i64, i64)> = parts.get(&entry).cloned().unwrap_or_else(|| vec![(rate_id, tax)]);
         let taxable = share(taxable, counted, total)?.checked_mul(sign).ok_or_else(overflow)?;
         for (component, cents) in split {
             let cents = share(cents, counted, total)?.checked_mul(sign).ok_or_else(overflow)?;

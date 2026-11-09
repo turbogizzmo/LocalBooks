@@ -46,6 +46,7 @@ async fn a_combined_rate_posts_by_agency_and_files_a_return_per_agency() {
     let city = create_tax_rate(&pool, rate("City", 10_000, "County Treasurer", local_payable)).await.unwrap();
 
     assert!(save_combined_rate(&pool, None, &CombinedRateInput { name: "Lone".into(), component_ids: vec![state.id] }).await.unwrap_err().starts_with("TAX_COMBINED_PARTS"));
+    assert!(save_combined_rate(&pool, None, &CombinedRateInput { name: "Twice".into(), component_ids: vec![state.id, county.id, state.id] }).await.unwrap_err().starts_with("TAX_COMBINED_PARTS"), "a rate used twice, not next to itself");
     let combined = save_combined_rate(&pool, None, &CombinedRateInput { name: "Harbor City 8.5%".into(), component_ids: vec![state.id, county.id, city.id] }).await.unwrap();
     assert_eq!((combined.rate_ppm, combined.is_group, combined.component_ids.clone()), (85_000, true, vec![state.id, county.id, city.id]));
     assert!(save_combined_rate(&pool, None, &CombinedRateInput { name: "Nested".into(), component_ids: vec![combined.id, state.id] }).await.unwrap_err().starts_with("TAX_COMBINED_PARTS"));
