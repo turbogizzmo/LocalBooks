@@ -68,6 +68,11 @@ Click an amount to see where it came from:
 - **Transaction Journal** (**Ctrl+Y**) shows the debits and credits that transaction posted, in a
   Journal report of its own.
 
+Both also work on the transaction open on a form: a saved invoice, bill, check, expense, card credit
+or journal entry, and a saved sales receipt, credit memo, vendor credit, deposit or transfer. The
+form's toolbar has **History** and **Journal** buttons for them; on a new, unsaved form they are off.
+In the journal (**Accounting › Journal**), click an entry and press **Ctrl+H** or **Ctrl+Y**.
+
 These keys use **Ctrl** on a Mac too, since ⌘Q quits and ⌘H hides the app.
 
 ## Previous year comparisons
