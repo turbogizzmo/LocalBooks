@@ -32,6 +32,8 @@ pub struct StatementRow {
     pub date: NaiveDate,
     pub source_type: String,
     pub number: Option<String>,
+    /// The customer's P.O. number on an invoice or credit memo.
+    pub po_number: Option<String>,
     pub party_name: String,
     pub memo: Option<String>,
     /// Charges positive, payments and credits negative.
@@ -84,6 +86,10 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
                     WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = l.source_id)
                     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = l.source_id)
                 END AS number,
+                CASE l.source_type
+                    WHEN 'INVOICE' THEN (SELECT po_number FROM invoices WHERE id = l.source_id)
+                    WHEN 'CREDIT_MEMO' THEN (SELECT po_number FROM credit_memos WHERE id = l.source_id)
+                END AS po_number,
                 l.memo, l.debit_cents - l.credit_cents AS amount_cents
          {ar_lines}
          WHERE {mine} AND l.entry_date BETWEEN ?2 AND ?3

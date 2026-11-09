@@ -7,6 +7,7 @@ handlers![
     list_attachments,
     attachment_counts,
     save_attachment,
+    save_all_attachments,
     delete_attachment,
 ];
 
@@ -45,6 +46,26 @@ pub async fn save_attachment(app: AppHandle, db: State<'_, Db>, id: i64) -> Resu
     let path = target.into_path().map_err(|e| format!("ATTACH_BAD_PATH: {e}"))?;
     export_engine::write_atomically(&path, &content)?;
     Ok(Some(path.display().to_string()))
+}
+
+/// Saves every attachment (or, with `journal_entry_id`, one transaction's) to a zip file chosen
+/// in the Save dialog, a folder per transaction. Returns (path, how many files), or `None` if the
+/// user cancelled.
+#[tauri::command]
+pub async fn save_all_attachments(app: AppHandle, db: State<'_, Db>, journal_entry_id: Option<i64>) -> Result<Option<(String, usize)>, String> {
+    let (count, bytes) = crate::attachment_export::zip_attachments(&db.pool().await, journal_entry_id).await?;
+    let name = match journal_entry_id {
+        Some(id) => format!("Attachments (entry {id}).zip"),
+        None => format!("Attachments {}.zip", Local::now().format("%Y-%m-%d")),
+    };
+    let dialog_app = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || dialog_app.dialog().file().set_file_name(&name).add_filter("Zip file", &["zip"]).blocking_save_file())
+        .await
+        .map_err(|e| format!("ATTACH_DIALOG: {e}"))?;
+    let Some(target) = chosen else { return Ok(None) };
+    let path = target.into_path().map_err(|e| format!("ATTACH_BAD_PATH: {e}"))?;
+    export_engine::write_atomically(&path, &bytes)?;
+    Ok(Some((path.display().to_string(), count)))
 }
 
 #[tauri::command]

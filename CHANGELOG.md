@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Save every attachment at once.** Settings › File & Data › Save All Attachments… saves every
+  file attached to a transaction in one zip file, a folder per transaction; a transaction with
+  several files has **Save all…** too.
+- **P.O. No. on statements.** Printed customer statements can show a P.O. No. column with the
+  customer's purchase order number on each invoice and credit (Settings › Custom Forms ›
+  Statement).
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
