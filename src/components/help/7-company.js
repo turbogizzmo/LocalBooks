@@ -133,7 +133,7 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role (Admin, Standard or View only). Vendor tax IDs are then encrypted and shown in full only to users allowed to see sensitive data. Save the recovery key you are given: it is the only way back in if every Admin forgets their password.',
+    body: 'Turn on users so everyone signs in with their own password and a role: Admin (everything, including users, settings, imports and restores), Standard (day-to-day bookkeeping) or View only (looks and runs reports, changes nothing). LocalBooks checks the role before every action. Vendor tax IDs and bank details are then encrypted and shown in full only to users allowed to see sensitive data. Everyone is signed out after 15 minutes without typing or clicking (an Admin can change this under Sign out when idle). Remember me on this computer skips the sign-in once per opening. Save the recovery key you are given: it is the only way back in if every Admin forgets their password. Only those sensitive values are encrypted: use FileVault or BitLocker for the rest of the file and its backups.',
     keywords: 'user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',

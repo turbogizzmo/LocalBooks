@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Security claims you can check.** SECURITY.md now points every claim to the code and test
+  behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
+  check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
+  in a file only your account can read rather than a system keychain. **Remember me on this Mac** is
+  now **Remember me on this computer**, since it works on Windows and Linux too.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
