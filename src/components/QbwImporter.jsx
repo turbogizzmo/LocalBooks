@@ -5,6 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import AccountSelect from './AccountSelect.jsx';
 import InstalledQuickBooks from './InstalledQuickBooks.jsx';
 import SheetImport from './SheetImport.jsx';
+import PayrollImport from './PayrollImport.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
@@ -1210,6 +1211,7 @@ export default function QbwImporter({ accounts }) {
             <>
               <ChooseFile busy={busy} onFile={ingest} />
               <SheetImport busy={busy} onStage={stageSheet} />
+              <PayrollImport busy={busy} />
               <InstalledQuickBooks busy={busy} onExport={exportInstalled} />
             </>
           )

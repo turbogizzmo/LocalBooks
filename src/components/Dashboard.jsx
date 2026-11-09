@@ -6,6 +6,7 @@ import Notice from './Notice.jsx';
 import RemindersPanel from './Reminders.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
+import { CashForecastWidget } from './CashForecast.jsx';
 
 function StatTile({ label, cents, emphasis }) {
   return (
@@ -107,6 +108,9 @@ function Insights({ navigate }) {
         <StatTile label="Total liabilities" cents={data.totalLiabilitiesCents} />
         <StatTile label="Assets less liabilities" cents={data.totalAssetsCents - data.totalLiabilitiesCents} emphasis />
         <ArAgingWidget />
+      </div>
+      <div className="flex-none">
+        <CashForecastWidget navigate={navigate} />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)] gap-2">
         <AssetLiabilityChart series={data.series} />
