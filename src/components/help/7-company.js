@@ -207,6 +207,14 @@ export const topics = [
     guide: 'whats-new',
   },
   {
+    id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],
+    title: 'Make the text larger or smaller, and color a register',
+    body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and LocalBooks keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',
+    keywords: 'text size font larger smaller bigger zoom magnify enlarge readable view register color colour tint',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers, the journal, an account register or Reconcile to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first (registers and Reconcile in date order), and each list remembers the order you choose.',
