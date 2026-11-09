@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Statement charges.** Enter statement charges… on a customer's row keeps a register of charges
+  billed on the customer's next statement instead of an invoice. Each posts to Accounts
+  Receivable, shows in the aging, and is paid in Receive Payments like an invoice.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -106,6 +106,7 @@ mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod statement_charges;
 
 use tauri::Manager;
 

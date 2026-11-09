@@ -150,6 +150,25 @@ An invoice can't be edited while it is voided, reconciled, or in a closed period
 choose **Void Transaction** in its **Actions** menu. See
 [Journal entries and voiding](journal-entries-and-voids.md).
 
+## Bill on the statement instead: statement charges
+
+For customers you bill once a month (a retainer, regular visits, small charges you don't want to
+send an invoice for each), enter **statement charges** and send a statement instead.
+
+1. In **Sales › Customers**, open a customer's **Actions** menu and choose **Enter statement
+   charges…**. The customer's charge register opens, with every charge entered so far and what is
+   still open on each.
+2. Under **New charge**, enter the date, pick an item (it fills in the description, rate and
+   income account) or type a description, and enter the quantity and rate. Leave **Due date**
+   blank to make the charge due on its date.
+3. Click **Record charge**.
+
+Each charge posts to **Accounts Receivable** for the customer right away and shows in the A/R
+aging by its due date. It prints on the customer's next statement as a **Statement Charge** line
+with its description, and never prints as an invoice of its own. In the invoice list it is marked
+**SC**; in **Receive Payments** it shows as **Statement charge**, and a payment or credit applies to
+it like an invoice. To take one back, void it from the invoice list.
+
 ## Charge interest on late invoices
 
 To bill customers interest on invoices past their due date, use **Sales › Assess Finance Charges**.
