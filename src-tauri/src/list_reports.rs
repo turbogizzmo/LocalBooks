@@ -21,6 +21,7 @@ use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::statements::LineKind;
 
 mod more_reports;
+mod profitability;
 
 // ------------------------------------------------------------------------------------------------
 // Catalog
@@ -61,6 +62,8 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("bs-summary", "Balance Sheet Summary", "Business overview", AsOf, ""),
         r("pl-ytd", "Profit & Loss YTD Comparison", "Business overview", Range, "thisMonth"),
         r("average-days-to-pay", "Average Days to Pay Summary", "Who owes you", Range, "fiscalYearToDate"),
+        r("invoice-profit-customer", "Invoice Profitability by Customer", "Sales and customers", Range, "fiscalYearToDate"),
+        r("invoice-profit-detail", "Invoice Profitability Detail", "Sales and customers", Range, "fiscalYearToDate"),
         r("unpaid-bills-job", "Unpaid Bills by Job", "What you owe", AsOf, ""),
         r("open-po-detail", "Open Purchase Orders Detail", "Expenses and vendors", AsOf, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
@@ -68,6 +71,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("time-name", "Time by Name", "Jobs", Range, "thisMonth"),
         r("time-item", "Time by Item", "Jobs", Range, "thisMonth"),
         r("physical-inventory", "Physical Inventory Worksheet", "Inventory", Now, ""),
+        r("inventory-turnover", "Inventory Turnover by Item", "Inventory", Range, "fiscalYearToDate"),
         r("audit-trail", "Audit Trail", custom_reports::ACCOUNTANT, Range, "thisMonth"),
         r("customer-phone", "Customer Phone List", LISTS, Now, ""),
         r("customer-contact", "Customer Contact List", LISTS, Now, ""),
@@ -100,6 +104,8 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "bs-summary" => balance_sheet_summary(pool, end).await,
         "pl-ytd" => pl_ytd_comparison(pool, start, end).await,
         "average-days-to-pay" => average_days_to_pay(pool, start, end).await,
+        "invoice-profit-customer" => profitability::invoice_profitability_by_customer(pool, start, end).await,
+        "invoice-profit-detail" => profitability::invoice_profitability_detail(pool, start, end).await,
         "unpaid-bills-job" => unpaid_bills_by_job(pool, end).await,
         "open-po-detail" => open_po_detail(pool, end).await,
         "time-job-summary" => time_summary(pool, TimeBy::Job, start, end).await,
@@ -107,6 +113,7 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "time-name" => time_summary(pool, TimeBy::Name, start, end).await,
         "time-item" => time_summary(pool, TimeBy::Item, start, end).await,
         "physical-inventory" => physical_inventory(pool, today).await,
+        "inventory-turnover" => profitability::inventory_turnover(pool, start, end).await,
         "audit-trail" => audit_trail(pool, start, end).await,
         "customer-phone" => phone_list(pool, NameKind::Customer, today).await,
         "customer-contact" => contact_list(pool, NameKind::Customer, today).await,

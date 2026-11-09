@@ -105,8 +105,8 @@ describe('From no users to a View only user', () => {
 
   it('shows only Users & Passwords and Updates in Settings', async () => {
     await openSettingsTab('Users & Passwords');
-    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates']);
-    expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
+    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates', 'Diagnostics']);
+    expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates', 'Diagnostics']);
     await expect(notice('info', 'Company-wide settings are managed by an Admin.')).toBeDisplayed();
     // Their own sign-in, and no user list.
     expect(await signedInAs()).toContain(`(${VIEWER.username}), View only.`);
