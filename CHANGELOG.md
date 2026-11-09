@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Duplicate on every form.** Sales receipts, estimates, credit memos, refund receipts, vendor
+  credits, purchase orders, deposits and transfers now have **Duplicate** (Ctrl+O) too: open a saved
+  one and the copy starts as a new form dated today.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

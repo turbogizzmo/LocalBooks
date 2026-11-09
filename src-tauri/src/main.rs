@@ -33,6 +33,7 @@ mod db;
 mod desktop;
 mod diagnostics;
 mod document_inbox;
+mod duplicates;
 mod edits;
 mod email_log;
 mod envelopes;

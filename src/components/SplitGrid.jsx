@@ -28,6 +28,11 @@ export const splitRowsFrom = (lines) =>
     rate: l.quantityE4 && l.rateCents ? centsToInput(l.rateCents) : '',
   }));
 
+/** Split rows for a document copied by Duplicate (`api.getCopySource`): its lines' accounts, items,
+ * quantities and amounts, classes, customers and payers. */
+export const splitRowsFromCopy = (lines) =>
+  lines.map((l) => ({ ...splitRowsFrom([{ ...l, memo: l.description }])[0], vendorId: l.vendorId ?? null }));
+
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is
  * round_half_up(quantity × rate), exactly as the ledger computes it; otherwise the typed amount.

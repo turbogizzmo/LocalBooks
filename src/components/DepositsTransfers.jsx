@@ -8,7 +8,7 @@ import { useDirtySince, useOpenFromList, WindowManagerContext } from '../lib/win
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
-import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { kindLabel } from './ProfileFields.jsx';
@@ -23,7 +23,9 @@ const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRE
 const isTransferable = (a) => !a.isSystem && TRANSFERABLE.includes(a.accountType);
 const isOtherFunds = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE', 'BANK'].includes(a.accountType);
 
-function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
+/** `copyOf` (from Duplicate) starts the deposit as a copy of a saved one's bank account, other
+ * lines and cash back, dated today; payments waiting to be deposited are picked afresh. */
+function DepositForm({ accounts, onPosted, onCancel, savedStep, copyOf = null }) {
   const { data: waiting, error: waitingError } = useLedgerQuery(api.listUndeposited);
   // Deposits open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
   const { depositAccountId } = useMyPreferences();
@@ -31,19 +33,19 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
     () => accounts.find((a) => a.id === depositAccountId && a.isActive && isBank(a))?.id ?? accounts.find((a) => a.isActive && isBank(a))?.id ?? null,
     [accounts, depositAccountId],
   );
-  const [bankId, setBankId] = useState(defaultBank);
+  const [bankId, setBankId] = useState(copyOf?.accountId ?? defaultBank);
   const [date, setDate] = useTransactionDate();
-  const [memo, setMemo] = useState('');
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
   const [picked, setPicked] = useState(() => new Set());
-  const [rows, setRows] = useState(() => [blankSplit(null)]);
+  const [rows, setRows] = useState(() => (copyOf?.lines.length ? [...splitRowsFromCopy(copyOf.lines), blankSplit(null)] : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const bankRef = useRef(null);
   // Opening a saved deposit (Previous) asks for the entries to be saved or cleared first.
   // Cash back: part of the deposit kept as cash (petty cash, say) instead of banked.
-  const [cashAccountId, setCashAccountId] = useState(null);
-  const [cashMemo, setCashMemo] = useState('');
-  const [cashAmount, setCashAmount] = useState('');
+  const [cashAccountId, setCashAccountId] = useState(copyOf?.cashBackCents ? copyOf.cashBackAccountId : null);
+  const [cashMemo, setCashMemo] = useState(copyOf?.cashBackCents ? (copyOf.cashBackMemo ?? '') : '');
+  const [cashAmount, setCashAmount] = useState(copyOf?.cashBackCents ? centsToInput(copyOf.cashBackCents) : '');
   const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount, r.customerId, r.vendorId]), cashAccountId, cashAmount, cashMemo });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
@@ -233,12 +235,13 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   );
 }
 
-function TransferForm({ accounts, onPosted, onCancel, savedStep }) {
-  const [fromId, setFromId] = useState(null);
-  const [toId, setToId] = useState(null);
+/** `copyOf` (from Duplicate) starts the transfer as a copy of a saved one, dated today. */
+function TransferForm({ accounts, onPosted, onCancel, savedStep, copyOf = null }) {
+  const [fromId, setFromId] = useState(copyOf?.accountId ?? null);
+  const [toId, setToId] = useState(copyOf?.toAccountId ?? null);
   const [date, setDate] = useTransactionDate();
-  const [amount, setAmount] = useState('');
-  const [memo, setMemo] = useState('');
+  const [amount, setAmount] = useState(copyOf?.amountCents ? centsToInput(copyOf.amountCents) : '');
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const fromRef = useRef(null);
@@ -426,6 +429,9 @@ export default function DepositsTransfers({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listBankingActivity);
   const [mode, setMode] = useState(INTENT_MODES[intent?.action] ?? null);
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved deposit or transfer the new one starts from.
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     if (INTENT_MODES[intent?.action]) setMode(INTENT_MODES[intent.action]);
@@ -457,6 +463,31 @@ export default function DepositsTransfers({ accounts, intent }) {
     setMode(r.kind === 'TRANSFER' ? 'transfer' : 'deposit');
     saved.open(r);
   };
+  const duplicate = (r) =>
+    api.getCopySource(r.kind, r.id).then(
+      (copy) => {
+        saved.close();
+        setMode(r.kind === 'TRANSFER' ? 'transfer' : 'deposit');
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setNotice({
+          kind: 'info',
+          text:
+            r.kind === 'TRANSFER'
+              ? 'A copy of the transfer, dated today.'
+              : 'A copy of the deposit, dated today: its other lines and cash back come over; tick the payments to deposit this time.',
+        });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
+  const done = () => {
+    setCopyOf(null);
+    setMode(null);
+  };
+  const postedCopy = (text) => {
+    setCopyOf(null);
+    posted(text);
+  };
   const viewLabel = viewing?.kind === 'TRANSFER' ? 'Transfer' : 'Deposit';
 
   return (
@@ -468,6 +499,7 @@ export default function DepositsTransfers({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           entryId={viewing.journalEntryId}
           voucher={{
             entryId: viewing.journalEntryId,
@@ -513,8 +545,8 @@ export default function DepositsTransfers({ accounts, intent }) {
           }}
         />
       )}
-      {mode === 'deposit' && !viewing && <DepositForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={posted} onCancel={() => setMode(null)} />}
-      {mode === 'transfer' && !viewing && <TransferForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={posted} onCancel={() => setMode(null)} />}
+      {mode === 'deposit' && !viewing && <DepositForm key={formKey} copyOf={copyOf?.kind === 'DEPOSIT' ? copyOf : null} accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={postedCopy} onCancel={done} />}
+      {mode === 'transfer' && !viewing && <TransferForm key={formKey} copyOf={copyOf?.kind === 'TRANSFER' ? copyOf : null} accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onPosted={postedCopy} onCancel={done} />}
       {mode === 'pay-card' && <CardPaydownForm accounts={accounts} onPosted={posted} onCancel={() => setMode(null)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {error && <Notice kind="error" text={`Could not load activity: ${error}`} />}
@@ -579,6 +611,7 @@ export default function DepositsTransfers({ accounts, intent }) {
                     <RowMenu
                       items={[
                         { label: 'Open', onSelect: () => openRow(r) },
+                        { label: 'Duplicate', hint: 'A new one copied from this one, dated today', onSelect: () => duplicate(r) },
                         attachments.menuItem(r.journalEntryId),
                         voidItem({
                           journalEntryId: r.journalEntryId,

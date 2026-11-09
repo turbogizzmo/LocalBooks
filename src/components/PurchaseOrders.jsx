@@ -7,7 +7,7 @@ import { useDirtySince, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
-import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -66,13 +66,14 @@ export function PurchaseOrderDocument({ company, order, lines, accounts }) {
   );
 }
 
-function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel, savedStep }) {
+/** `copyOf` (from Duplicate) starts the order as a copy of a saved one, dated today. */
+function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCancel, savedStep, copyOf = null }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
-  const [vendor, setVendor] = useState('');
+  const [vendor, setVendor] = useState(copyOf?.name ?? '');
   const [poDate, setPoDate] = useTransactionDate();
   const [expected, setExpected] = useState('');
-  const [memo, setMemo] = useState('');
-  const [rows, setRows] = useState(() => [blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [rows, setRows] = useState(() => (copyOf ? splitRowsFromCopy(copyOf.lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const formClass = useFormClass(accounts);
@@ -285,6 +286,20 @@ export default function PurchaseOrders({ accounts, intent }) {
     saved.open(o);
     setComposing(true);
   };
+  // Duplicate: the saved order the new one on the form starts from.
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
+  const duplicate = (o) =>
+    api.getCopySource('PURCHASE_ORDER', o.id).then(
+      (copy) => {
+        saved.close();
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setComposing(true);
+        setNotice({ kind: 'info', text: `A copy of PO #${o.poNumber}, dated today: it gets the next number when you save it.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}
@@ -300,6 +315,7 @@ export default function PurchaseOrders({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={inventoryOn ? () => duplicate(viewing) : undefined}
           onPrint={() => print(viewing)}
           record={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           onNotice={setNotice}
@@ -316,12 +332,18 @@ export default function PurchaseOrders({ accounts, intent }) {
         </SavedDocView>
       ) : composing ? (
         <NewPurchaseOrder
+          key={formKey}
+          copyOf={copyOf}
           savedStep={(blocked) => saved.fromNew(blocked)}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}
-          onCancel={() => setComposing(false)}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(false);
+          }}
           onSaved={(text, toPrint) => {
+            setCopyOf(null);
             setNotice({ kind: 'success', text });
             setPrintId(toPrint);
             reload();
@@ -390,6 +412,7 @@ export default function PurchaseOrders({ accounts, intent }) {
                       label={`Actions for PO ${o.poNumber}`}
                       items={[
                         { label: 'Open', onSelect: () => openOrder(o) },
+                        ...(inventoryOn ? [{ label: 'Duplicate', hint: 'A new purchase order copied from this one, dated today', onSelect: () => duplicate(o) }] : []),
                         { label: 'Create bill…', disabled: o.status !== 'OPEN', onSelect: () => setBilling(o) },
                         { label: 'Print or save as PDF', onSelect: () => print(o) },
                         o.status === 'CLOSED'

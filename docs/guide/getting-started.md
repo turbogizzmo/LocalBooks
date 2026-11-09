@@ -554,7 +554,7 @@ While a form is open:
 | **Ctrl+Alt+Y** | Copy Line: copy the line you're on. |
 | **Ctrl+Alt+V** | Paste Line: insert a copy of the copied line above the line you're on (at the end from outside the lines). A line copied from an item grid pastes into item grids, an expense line into expense grids and a journal line into journal entries. |
 | **Ctrl+G** | Go To Transfer: on a saved transfer, open the other account's register at the transfer. |
-| **Ctrl+O** | Duplicate Transaction: on a saved invoice, bill, check, expense or journal entry, start a new one copied from it (see below). |
+| **Ctrl+O** | Duplicate Transaction: on any saved transaction, start a new one copied from it (see below). |
 
 Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line, Go To Transfer and
 Duplicate Transaction are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
@@ -571,9 +571,13 @@ check number; a bill's own number is left blank for the vendor's, and its due da
 after today as the original's was after its date. Change what you need and save it. The original
 isn't changed. Duplicate is off while the form has changes you haven't saved.
 
-Duplicate works on invoices, bills, checks, expenses, card credits and journal entries. Sales
-receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open
-read-only, so they don't offer it yet.
+Duplicate works on invoices, bills, checks, expenses, card credits and journal entries, and on
+sales receipts, estimates, credit memos and refund receipts, vendor credits, purchase orders,
+deposits and transfers. Those last ones open read-only; **Duplicate** on their toolbar (or row menu)
+puts the copy in a new form. A sales receipt keeps its deposit account and payment method but not
+its check number; a vendor credit leaves the vendor's reference blank for the new one; a deposit
+brings its other lines and cash back, while the payments waiting in Undeposited Funds are ticked
+afresh (each payment is deposited once).
 
 In a register, click a transaction, then press **Ctrl+E** to open it on its form to edit, or
 **Ctrl+G** to go to the other side of it: the register of the one other account it posted to (a
