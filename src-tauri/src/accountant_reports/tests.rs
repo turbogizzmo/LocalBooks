@@ -273,7 +273,7 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
         income_account_id: sales,
         product_service_id: None,
         class_id: None,
-        is_taxable: false,
+        is_taxable: false, service_date: None,
     };
     let invoice = |customer: &str, issue: NaiveDate, due: NaiveDate, amount: i64| crate::invoices::InvoiceInput {
         customer_name: customer.into(),

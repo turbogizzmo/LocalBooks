@@ -37,6 +37,9 @@ pub struct InvoiceLineInput {
     pub class_id: Option<i64>,
     #[serde(default)]
     pub is_taxable: bool,
+    /// When the work on this line was done, printed in the Service Date column.
+    #[serde(default)]
+    pub service_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -92,6 +95,8 @@ pub struct InvoiceSummary {
     pub credits_applied_cents: i64,
     /// Written by Assess Finance Charges.
     pub is_finance_charge: bool,
+    /// Entered as a statement charge (billed on the next statement, never printed on its own).
+    pub is_statement_charge: bool,
     /// The rep's initials, when the invoice has one.
     pub sales_rep: Option<String>,
     /// Waiting in File › Print Forms › Invoices.
@@ -113,6 +118,7 @@ const SUMMARY_SELECT: &str = "
            i.tax_cents, t.name AS tax_rate_name, i.discount_cents,
            COALESCE((SELECT SUM(amount_cents) FROM credit_applications WHERE invoice_id = i.id AND is_voided = 0), 0) AS credits_applied_cents,
            EXISTS (SELECT 1 FROM finance_charge_invoices f WHERE f.invoice_id = i.id) AS is_finance_charge,
+           EXISTS (SELECT 1 FROM statement_charge_invoices s WHERE s.invoice_id = i.id) AS is_statement_charge,
            (SELECT initials FROM sales_reps WHERE id = i.sales_rep_id) AS sales_rep,
            i.to_be_printed,
            tm.id AS terms_id, tm.name AS terms_name, COALESCE(tm.discount_ppm, 0) AS discount_ppm,
@@ -254,6 +260,20 @@ pub(crate) async fn list_to_print(pool: &SqlitePool) -> Result<Vec<InvoiceSummar
         .map_err(db_err)
 }
 
+/// A customer's (and their jobs') statement charges, oldest first, in one query.
+pub(crate) async fn statement_charge_summaries(pool: &SqlitePool, customer_id: i64) -> Result<Vec<InvoiceSummary>, String> {
+    sqlx::query_as::<_, InvoiceSummary>(&format!(
+        "{SUMMARY_SELECT} WHERE i.id IN (SELECT invoice_id FROM statement_charge_invoices)
+           AND (i.customer_id = ?1 OR i.customer_id IN (SELECT id FROM customers WHERE parent_id = ?1))
+         ORDER BY i.issue_date, i.id"
+    ))
+    .bind(customer_id)
+    .fetch_all(pool)
+    .await
+    .map(|all| all.into_iter().map(with_discount).collect())
+    .map_err(db_err)
+}
+
 pub(crate) async fn get_summary(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceSummary, String> {
     sqlx::query_as::<_, InvoiceSummary>(&format!("{SUMMARY_SELECT} WHERE i.id = ?1"))
         .bind(invoice_id)
@@ -391,8 +411,8 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO invoice_items
-                (invoice_id, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (invoice_id, line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, service_date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(invoice_id)
         .bind(numbers[idx])
@@ -404,6 +424,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
         .bind(line.product_service_id)
         .bind(line.class_id)
         .bind(line.is_taxable && tax.is_some())
+        .bind(line.service_date)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
@@ -699,6 +720,7 @@ pub struct InvoiceItemView {
     pub is_taxable: bool,
     /// Set on a percent charge: its percent of the line above.
     pub percent_ppm: Option<i64>,
+    pub service_date: Option<NaiveDate>,
 }
 
 /// Everything needed to print an invoice.
@@ -717,7 +739,7 @@ pub struct InvoiceDetail {
 pub async fn invoice_detail(pool: &SqlitePool, invoice_id: i64) -> Result<InvoiceDetail, String> {
     let invoice = get_summary(pool, invoice_id).await?;
     let items = sqlx::query_as::<_, InvoiceItemView>(
-        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, percent_ppm
+        "SELECT line_number, description, quantity_e4, rate_cents, amount_cents, income_account_id, product_service_id, class_id, is_taxable, percent_ppm, service_date
          FROM invoice_items WHERE invoice_id = ?1 ORDER BY line_number",
     )
     .bind(invoice_id)

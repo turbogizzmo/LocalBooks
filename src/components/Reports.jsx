@@ -9,6 +9,7 @@ import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReport
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
 import ListReport, { isListReport, useListReports, withListReports } from './ListReports.jsx';
 import ProcessMultipleReports from './ProcessMultipleReports.jsx';
+import ScheduledReports from './ScheduledReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
   AgingReport,
@@ -497,6 +498,7 @@ function ReportOptions({ kind, name, onRun }) {
 }
 
 const PROCESS_MULTIPLE = 'process-multiple';
+const SCHEDULED = 'scheduled-reports';
 
 // Favorites and recent reports, kept on this computer like a list's sort order.
 const FAVORITES_KEY = 'localbooks.reports.favorites';
@@ -523,9 +525,12 @@ function keep(key, value) {
 
 /** Process Multiple Reports, at the end of the memorized reports (a group of its own until there are some). */
 function withProcessMultiple(groups) {
-  const entry = [PROCESS_MULTIPLE, 'Process Multiple Reports…'];
+  const entries = [
+    [PROCESS_MULTIPLE, 'Process Multiple Reports…'],
+    [SCHEDULED, 'Scheduled Reports…'],
+  ];
   const memorized = groups.find((g) => g.title === 'Memorized reports');
-  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, entry] } : g)) : [...groups, { title: 'Memorized reports', reports: [entry] }];
+  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, ...entries] } : g)) : [...groups, { title: 'Memorized reports', reports: entries }];
 }
 
 export default function Reports({ navigate, intent }) {
@@ -707,6 +712,7 @@ export default function Reports({ navigate, intent }) {
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
         {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
         {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
+        {report === SCHEDULED && <ScheduledReports />}
         {isCustomReport(report) && report !== '1099-detail' && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>

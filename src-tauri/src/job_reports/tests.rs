@@ -92,7 +92,7 @@ async fn a_bill_line_is_shared_among_its_jobs() {
 async fn estimates_without_invoices() {
     let pool = test_pool().await;
     let services = account_id(&pool, "4100").await;
-    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, class_id: None, is_taxable: false };
+    let line = crate::sales::SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 10_000, rate_cents: 50_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let input = crate::estimates::EstimateInput {
         customer_name: "Acme:Kitchen".into(),
         estimate_date: d(2),
