@@ -214,13 +214,14 @@ fn check(input: &CustomerGroupInput) -> Result<(), String> {
     }
     for rule in &input.rules {
         let bad = match rule {
-            Rule::State { code } => code.trim().len() != 2,
-            Rule::Zip { prefix } => prefix.trim().is_empty() || !prefix.trim().chars().all(|c| c.is_ascii_alphanumeric() || c == '-'),
+            // As `state_and_zip` reads them: two letters, and a ZIP code that starts with a digit.
+            Rule::State { code } => code.trim().len() != 2 || !code.trim().chars().all(|c| c.is_ascii_alphabetic()),
+            Rule::Zip { prefix } => !prefix.trim().starts_with(|c: char| c.is_ascii_digit()) || !prefix.trim().chars().all(|c| c.is_ascii_digit() || c == '-'),
             Rule::Balance { cents, .. } => cents.unsigned_abs() > 100_000_000_000_000,
             _ => false,
         };
         if bad {
-            return Err("GROUP_BAD_RULE: a state is two letters, and a ZIP code rule needs its first digits".into());
+            return Err("GROUP_BAD_RULE: a state is two letters, and a ZIP code rule needs its first digits (digits and dashes)".into());
         }
     }
     if let Some(days) = input.statement.every_days {
