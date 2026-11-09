@@ -453,7 +453,8 @@ async fn filters_narrow_lines() {
     assert!(named.line_count > 0);
     assert!(values(&named, "Name").iter().all(|n| text(n) == "Brightwater Cafe"));
     let vendors = run(&pool, &lines_report(Filters { name_kind: Some(custom_reports::NameKind::Vendor), ..Filters::default() })).await;
-    assert!(values(&vendors, "Type").iter().all(|t| ["Bill", "Bill Payment", "Check", "Expense", "Vendor Credit", "Credit Card Credit"].contains(&text(t).as_str())));
+    // A void's reversal belongs to the name of what it voids.
+    assert!(values(&vendors, "Type").iter().all(|t| ["Bill", "Bill Payment", "Check", "Expense", "Vendor Credit", "Credit Card Credit", "Void"].contains(&text(t).as_str())));
 
     // An item matches the ledger lines it was posted on.
     let prints: i64 = sqlx::query_scalar("SELECT id FROM products_services WHERE name = 'Poster Prints'").fetch_one(&pool).await.unwrap();

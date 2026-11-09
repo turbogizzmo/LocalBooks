@@ -468,21 +468,23 @@ fn signed(net: i64, debit_normal: bool, sign: Sign) -> i64 {
 }
 
 /// The document behind each entry: name, number, due date, open balance as of `?2` and rep. Names
-/// follow `v_entry_party`, so reports by name agree with the existing summaries.
+/// follow `v_entry_party`, so reports by name agree with the existing summaries: a void's reversal
+/// (`ro`, the entry it reverses) takes that entry's document, and carries no open balance.
 const ENTRY_JOINS: &str = "
-    LEFT JOIN invoices inv ON e.source_type = 'INVOICE' AND inv.id = e.source_id
-    LEFT JOIN invoice_payments ip ON e.source_type = 'RECEIVE_PAYMENT' AND ip.id = e.source_id
+    LEFT JOIN journal_entries ro ON ro.id = e.reverses_entry_id
+    LEFT JOIN invoices inv ON COALESCE(ro.source_type, e.source_type) = 'INVOICE' AND inv.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN invoice_payments ip ON COALESCE(ro.source_type, e.source_type) = 'RECEIVE_PAYMENT' AND ip.id = COALESCE(ro.source_id, e.source_id)
     LEFT JOIN invoices ipi ON ipi.id = ip.invoice_id
-    LEFT JOIN sales_receipts sr ON e.source_type = 'SALES_RECEIPT' AND sr.id = e.source_id
-    LEFT JOIN credit_memos cm ON e.source_type = 'CREDIT_MEMO' AND cm.id = e.source_id
-    LEFT JOIN bills bl ON e.source_type = 'BILL' AND bl.id = e.source_id
-    LEFT JOIN bill_payments bp ON e.source_type = 'BILL_PAYMENT' AND bp.id = e.source_id
+    LEFT JOIN sales_receipts sr ON COALESCE(ro.source_type, e.source_type) = 'SALES_RECEIPT' AND sr.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN credit_memos cm ON COALESCE(ro.source_type, e.source_type) = 'CREDIT_MEMO' AND cm.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN bills bl ON COALESCE(ro.source_type, e.source_type) = 'BILL' AND bl.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN bill_payments bp ON COALESCE(ro.source_type, e.source_type) = 'BILL_PAYMENT' AND bp.id = COALESCE(ro.source_id, e.source_id)
     LEFT JOIN bills bpb ON bpb.id = bp.bill_id
-    LEFT JOIN vendor_credits vc ON e.source_type = 'VENDOR_CREDIT' AND vc.id = e.source_id
-    LEFT JOIN expenses x ON e.source_type IN ('EXPENSE', 'CHECK') AND x.id = e.source_id
-    LEFT JOIN credit_refunds crf ON e.source_type = 'JOURNAL' AND crf.journal_entry_id = e.id
+    LEFT JOIN vendor_credits vc ON COALESCE(ro.source_type, e.source_type) = 'VENDOR_CREDIT' AND vc.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN expenses x ON COALESCE(ro.source_type, e.source_type) IN ('EXPENSE', 'CHECK') AND x.id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN credit_refunds crf ON COALESCE(ro.source_type, e.source_type) = 'JOURNAL' AND crf.journal_entry_id = COALESCE(ro.id, e.id)
     LEFT JOIN credit_memos crm ON crm.id = crf.credit_memo_id
-    LEFT JOIN vendor_credit_refunds vrf ON e.source_type = 'JOURNAL' AND vrf.journal_entry_id = e.id
+    LEFT JOIN vendor_credit_refunds vrf ON COALESCE(ro.source_type, e.source_type) = 'JOURNAL' AND vrf.journal_entry_id = COALESCE(ro.id, e.id)
     LEFT JOIN vendor_credits vrc ON vrc.id = vrf.vendor_credit_id
     LEFT JOIN customers pc ON pc.id = COALESCE(inv.customer_id, ipi.customer_id, sr.customer_id, cm.customer_id, crm.customer_id)
     LEFT JOIN vendors pv ON pv.id = COALESCE(bl.vendor_id, bpb.vendor_id, vc.vendor_id, x.vendor_id, vrc.vendor_id)

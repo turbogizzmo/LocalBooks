@@ -949,6 +949,7 @@ fn statement_label(source_type: &str) -> &'static str {
         "CREDIT_MEMO" => "Credit Memo",
         "SALES_RECEIPT" => "Sales Receipt",
         "JOURNAL" => "Refund",
+        "VOID" => "Void",
         _ => "Adjustment",
     }
 }
