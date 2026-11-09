@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useAttachmentRows } from './Attachments.jsx';
-import AccountSelect, { accountLabel } from './AccountSelect.jsx';
+import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useOpenFromList, WindowManagerContext } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -16,7 +16,7 @@ import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
-import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { FORM_KEYS, SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 
 const isBank = (a) => a.accountType === 'BANK';
 const TRANSFERABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
@@ -44,7 +44,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const [cashAccountId, setCashAccountId] = useState(null);
   const [cashMemo, setCashMemo] = useState('');
   const [cashAmount, setCashAmount] = useState('');
-  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]), cashAccountId, cashAmount, cashMemo });
+  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount, r.customerId, r.vendorId]), cashAccountId, cashAmount, cashMemo });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
@@ -125,6 +125,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
           <span className="qb-label">Deposit to</span>
           <AccountSelect ref={bankRef} accounts={accounts} filter={isBank} value={bankId} onChange={setBankId} className="qb-input w-[200px]" />
         </label>
+        <EndingBalance accounts={accounts} accountId={bankId} />
         {formClass.header}
         <label>
           <span className="qb-label">Date</span>
@@ -194,7 +195,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
         </tbody>
       </table>
       <div className="border-y border-qb-border bg-qb-canvas px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Add funds to this deposit</div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses withReceivedFrom />
       <div className="flex flex-wrap items-end gap-2 border-t border-qb-border px-2 py-1">
         <label>
           <span className="qb-label">Cash back goes to</span>
@@ -451,6 +452,7 @@ export default function DepositsTransfers({ accounts, intent }) {
   const saved = useSavedDoc(ordered);
   const viewing = mode === 'deposit' || mode === 'transfer' ? saved.current : null;
   const openFromList = useOpenFromList();
+  const { open: openWindow } = useContext(WindowManagerContext);
   const openRow = (r) => {
     setMode(r.kind === 'TRANSFER' ? 'transfer' : 'deposit');
     saved.open(r);
@@ -479,6 +481,24 @@ export default function DepositsTransfers({ accounts, intent }) {
             footer: viewing.kind === 'TRANSFER' ? `From ${accountLabel(accounts, viewing.accountId)}` : null,
           }}
           onNotice={setNotice}
+          extra={
+            viewing.kind === 'TRANSFER'
+              ? [
+                  [
+                    {
+                      id: 'goto-transfer',
+                      label: 'Go To Transfer',
+                      icon: 'Go',
+                      keys: FORM_KEYS['goto-transfer'],
+                      hint: `Open the ${accountLabel(accounts, viewing.otherAccountId)} register at this transfer`,
+                      disabled: !viewing.journalEntryId,
+                      onClick: () =>
+                        openWindow('accounting/register', 'open', { accountId: viewing.otherAccountId, startDate: '', endDate: '', selectEntry: viewing.journalEntryId }, { forceNew: true }),
+                    },
+                  ],
+                ]
+              : []
+          }
           void={{
             onVoid: () => voidEntry(viewing.journalEntryId),
             disabled: viewing.isVoided || !viewing.journalEntryId,

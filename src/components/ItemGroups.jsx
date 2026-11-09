@@ -79,7 +79,7 @@ function GroupForm({ group, products, onDone, onCancel }) {
                 </select>
               </td>
               <td className="qb-grid-cell-edit">
-                <input className="num" inputMode="decimal" value={m.qty} onChange={(e) => setMember(i, { qty: e.target.value })} aria-label={`Quantity ${i + 1}`} />
+                <input className="num" inputMode="decimal" data-quantity value={m.qty} onChange={(e) => setMember(i, { qty: e.target.value })} aria-label={`Quantity ${i + 1}`} />
               </td>
               <td className="qb-grid-cell cell-flush text-center">
                 <button type="button" className="h-row w-full text-qb-ink-faint hover:text-qb-negative" onClick={() => setMembers((ms) => ms.filter((_, j) => j !== i))} aria-label={`Remove item ${i + 1}`}>

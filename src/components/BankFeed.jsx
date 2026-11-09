@@ -223,12 +223,16 @@ export default function BankFeed({ accounts }) {
       setBusy(false);
     }
   };
-  const matchTo = (line, m) =>
-    run(async () => {
+  const matchTo = (line, m) => {
+    // Where the line was before the list refreshes without it.
+    const index = pending.findIndex((t) => t.id === line.id);
+    return run(async () => {
       await api.matchBankTransaction(line.id, m.journalEntryId);
       setCandidates(null);
-      advanceFrom(pending.findIndex((t) => t.id === line.id));
+      if (index >= 0) advanceFrom(index);
+      else setSelectedId(null);
     }, `Matched "${line.description}" to ${matchLabel(m)}: nothing new posts.`);
+  };
   const findMatches = async () => {
     if (!selected) return;
     try {

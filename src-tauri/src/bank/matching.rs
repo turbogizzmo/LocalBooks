@@ -65,40 +65,56 @@ pub fn check_number(description: &str) -> Option<String> {
     (!digits.is_empty()).then(|| digits.to_string())
 }
 
-/// Entered transactions in the line's account for its amount, dated `before`..`after` days around
-/// it, not matched to another line and not added from the feed. Nearest date first.
-async fn candidates_for(conn: &mut sqlx::SqliteConnection, transaction_id: i64, before: i64, after: i64) -> Result<Vec<MatchCandidate>, String> {
+/// Entered transactions in each line's account for its amount, dated `before`..`after` days around
+/// it, not matched to another line and not added from the feed: (line, candidate), nearest date
+/// first for each line. One query for any number of lines.
+async fn candidates_for_lines(conn: &mut sqlx::SqliteConnection, transaction_ids: &[i64], before: i64, after: i64) -> Result<Vec<(i64, MatchCandidate)>, String> {
+    if transaction_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let sql = format!(
-        "SELECT e.id AS journal_entry_id, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
+        "SELECT t.id AS line_id, e.id AS journal_entry_id, e.entry_date AS date, {DISPLAY_SOURCE_TYPE} AS source_type, e.source_id,
                 {doc} AS num, p.party_name AS name, e.memo, t.amount_cents
          FROM bank_transactions t
          JOIN journal_lines l ON l.account_id = t.bank_account_id
          JOIN journal_entries e ON e.id = l.journal_entry_id
          LEFT JOIN v_entry_party p ON p.journal_entry_id = e.id
-         WHERE t.id = ?1 AND e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
+         WHERE t.id IN (SELECT value FROM json_each(?1)) AND e.status = 'POSTED' AND e.is_voided = 0 AND e.reverses_entry_id IS NULL
            AND e.entry_date BETWEEN date(t.txn_date, '-' || ?2 || ' days') AND date(t.txn_date, '+' || ?3 || ' days')
            AND NOT EXISTS (SELECT 1 FROM bank_matches m WHERE m.journal_entry_id = e.id AND m.is_undone = 0)
            AND NOT EXISTS (SELECT 1 FROM bank_transactions f WHERE f.journal_entry_id = e.id)
-         GROUP BY e.id
+         GROUP BY t.id, e.id
          HAVING SUM(l.debit_cents - l.credit_cents) = MAX(t.amount_cents)
-         ORDER BY abs(julianday(e.entry_date) - julianday(MAX(t.txn_date))), e.id",
+         ORDER BY t.id, abs(julianday(e.entry_date) - julianday(MAX(t.txn_date))), e.id",
         doc = crate::registers::DOC_NUMBER,
     );
-    sqlx::query_as::<_, MatchCandidate>(&sql).bind(transaction_id).bind(before).bind(after).fetch_all(conn).await.map_err(db_err)
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        line_id: i64,
+        #[sqlx(flatten)]
+        candidate: MatchCandidate,
+    }
+    let ids = serde_json::to_string(transaction_ids).map_err(|e| e.to_string())?;
+    let rows: Vec<Row> = sqlx::query_as(&sql).bind(ids).bind(before).bind(after).fetch_all(conn).await.map_err(db_err)?;
+    Ok(rows.into_iter().map(|r| (r.line_id, r.candidate)).collect())
 }
 
-/// The one entered transaction the import matches a new line to, if exactly one agrees. A line
-/// that names a check number matches only the check with that number.
-async fn auto_candidate(conn: &mut sqlx::SqliteConnection, transaction_id: i64, description: &str) -> Result<Option<MatchCandidate>, String> {
-    let found = candidates_for(conn, transaction_id, AUTO_DAYS_BEFORE, AUTO_DAYS_AFTER).await?;
+/// The one candidate the import would match a line to: the only one that agrees, and, when the
+/// bank names a check number, the only check with that number.
+fn pick(description: &str, found: Vec<MatchCandidate>) -> Option<MatchCandidate> {
     let found: Vec<MatchCandidate> = match check_number(description) {
         Some(number) => found.into_iter().filter(|c| c.num.as_deref().map(|n| n.trim().trim_start_matches('0')) == Some(number.as_str())).collect(),
         None => found,
     };
-    Ok(match found.as_slice() {
-        [one] => Some(one.clone()),
-        _ => None,
-    })
+    match <[MatchCandidate; 1]>::try_from(found) {
+        Ok([one]) => Some(one),
+        Err(_) => None,
+    }
+}
+
+async fn auto_candidate(conn: &mut sqlx::SqliteConnection, transaction_id: i64, description: &str) -> Result<Option<MatchCandidate>, String> {
+    let found = candidates_for_lines(conn, &[transaction_id], AUTO_DAYS_BEFORE, AUTO_DAYS_AFTER).await?;
+    Ok(pick(description, found.into_iter().map(|(_, c)| c).collect()))
 }
 
 /// Marks a pending line matched to an entry, inside the caller's transaction.
@@ -138,17 +154,18 @@ pub(crate) async fn auto_match(tx: &mut Transaction<'_, Sqlite>, transaction_id:
 /// What the import would match each pending line to now (lines entered after the download).
 pub async fn suggested_matches(pool: &SqlitePool, transaction_ids: &[(i64, String)]) -> Result<Vec<Option<MatchCandidate>>, String> {
     let mut conn = pool.acquire().await.map_err(db_err)?;
-    let mut out = Vec::with_capacity(transaction_ids.len());
-    for (id, description) in transaction_ids {
-        out.push(auto_candidate(&mut conn, *id, description).await?);
+    let ids: Vec<i64> = transaction_ids.iter().map(|(id, _)| *id).collect();
+    let mut by_line: std::collections::HashMap<i64, Vec<MatchCandidate>> = std::collections::HashMap::new();
+    for (line, candidate) in candidates_for_lines(&mut conn, &ids, AUTO_DAYS_BEFORE, AUTO_DAYS_AFTER).await? {
+        by_line.entry(line).or_default().push(candidate);
     }
-    Ok(out)
+    Ok(transaction_ids.iter().map(|(id, description)| pick(description, by_line.remove(id).unwrap_or_default())).collect())
 }
 
 /// The entered transactions a pending line could be matched to by hand, nearest date first.
 pub async fn candidates(pool: &SqlitePool, transaction_id: i64) -> Result<Vec<MatchCandidate>, String> {
     let mut conn = pool.acquire().await.map_err(db_err)?;
-    candidates_for(&mut conn, transaction_id, MANUAL_DAYS, MANUAL_DAYS).await
+    Ok(candidates_for_lines(&mut conn, &[transaction_id], MANUAL_DAYS, MANUAL_DAYS).await?.into_iter().map(|(_, c)| c).collect())
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
