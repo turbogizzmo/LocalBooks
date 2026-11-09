@@ -21,6 +21,7 @@ import { todayIso } from '../lib/dates.js';
 import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 
@@ -78,6 +79,8 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [fields, setFields] = useState([]);
+  // Renaming to another item's name offers to merge into it.
+  const mergeOffer = useMergeOffer('ITEM', product.id, product.name, (text) => onSaved(text));
   const read = readRate(itemType, rate);
   // Purchasing: the preferred vendor, and for a tracked item the reorder point.
   const tracked = product.qtyOnHandE4 != null;
@@ -104,6 +107,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     if (tracked && reorderRead.error) return setError(reorderRead.error);
     setBusy(true);
     try {
+      if (await mergeOffer.check(name)) return setBusy(false);
       const input = { name, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
       const saved = await api.updateProduct(product.id, input, read.kind);
       if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
@@ -183,6 +187,7 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
           <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>
         </div>
+        {mergeOffer.panel}
       </form>
     </Dialog>
   );

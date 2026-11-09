@@ -47,6 +47,14 @@ export const screens = {
     help: 'The Customer & Vendor Profile lists: Terms, Payment Method, Customer Type, Vendor Type, Job Type and Customer Message. Add, rename or make an entry inactive; one in use cannot be deleted.',
     guide: 'customers-and-products',
   },
+  'sales/print-forms': {
+    help: 'Sales receipts, credit memos, bill payment stubs and purchase orders dated in a range. Tick the ones to print and print them in one go, each with its form design.',
+    guide: 'invoices',
+  },
+  'sales/mailing-labels': {
+    help: 'Mailing labels for customers or vendors, 30 to a Letter sheet of 2⅝ × 1 inch labels. Skip the labels already used on a part-used sheet.',
+    guide: 'invoices',
+  },
   'sales/print-invoices': {
     help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
     guide: 'invoices',
@@ -88,6 +96,14 @@ export const topics = [
     body: 'Tick Print later on a new invoice, or choose Print later in an invoice’s Actions menu, and it waits in File › Print Forms › Invoices… with a To print mark in the list. Print the batch from there; the form remembers whether you last left Print later on.',
     keywords: 'print later to be printed queue batch print forms invoices',
     go: { label: 'Go to Print Invoices', view: 'sales/print-invoices' },
+    guide: 'invoices',
+  },
+  {
+    id: 'print-form-batches', area: 'sales', views: ['sales/print-forms', 'sales/mailing-labels', 'sales/print-invoices', 'expenses/print-checks'],
+    title: 'Print forms in a batch, and mailing labels',
+    body: 'File › Print Forms prints sales receipts, credit memos, bill payment stubs and purchase orders in batches: pick a date range, tick the ones to print and print them together, each with its form design. Mailing Labels prints customer or vendor addresses 30 to a Letter sheet, and can start after labels already used on a sheet.',
+    keywords: 'print forms batch sales receipts credit memos bill payment stubs purchase orders mailing labels address labels',
+    go: { label: 'Go to Print Forms', view: 'sales/print-forms' },
     guide: 'invoices',
   },
   {
@@ -165,8 +181,8 @@ export const topics = [
   {
     id: 'customers', area: 'sales', views: ['sales/customers'],
     title: 'Add and review customers',
-    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer.',
-    keywords: 'customer client contact receivable balance transactions add new customer quick add job',
+    body: 'Add a customer with a name and optional email, and see each customer’s open receivable balance. Click a customer to see all of their transactions. On an invoice, sales receipt, estimate or credit memo, type a name that isn’t on the list and choose Add as a new customer. To merge a duplicate customer (or vendor or item), rename it to the other’s name: LocalBooks offers to merge them, and everything that named it moves to the one kept.',
+    keywords: 'customer client contact receivable balance transactions add new customer quick add job merge duplicate combine',
     go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'customers-and-products',
   },
@@ -254,8 +270,8 @@ export const topics = [
   {
     id: 'bill-costs', area: 'sales', views: ['sales/bill-costs', 'expenses/expenses', 'expenses/bills'],
     title: 'Bill expenses to a customer',
-    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you.',
-    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses',
+    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you. Billable time from the timesheet is listed there too, one line per entry for its service item at its hours and rate; an expense account can send its reimbursements to an income account of its own (Chart of Accounts).',
+    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses billable time invoice from time hours timesheet',
     go: { label: 'Go to Bill Costs', view: 'sales/bill-costs' },
     guide: 'getting-started',
   },
@@ -359,8 +375,8 @@ export const topics = [
   {
     id: '1099', area: 'expenses', views: ['expenses/vendors', 'reports'],
     title: 'Prepare 1099s',
-    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties).',
-    keywords: '1099 1099-nec contractor tax id ein ssn year end vendor',
+    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties). Keep each contractor’s W-9 with W-9… on the vendor (name, classification, TIN and its type, date received). Reports › 1099-NEC and 1096 lists the year’s forms with anything missing, and Print forms… prints the filer’s worksheet with the 1096 totals and each recipient’s Copy B.',
+    keywords: '1099 1099-nec 1096 w-9 w9 tin itin contractor tax id ein ssn year end vendor copy b print iris',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
   },
   {

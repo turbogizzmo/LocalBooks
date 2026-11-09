@@ -13,6 +13,8 @@ handlers![
     get_sales_tax_periods,
     get_timesheet_week,
     list_unbilled_costs,
+    list_unbilled_time,
+    set_reimbursement_account,
     get_billing_defaults,
     bill_costs,
     get_recalled_vendor_transaction,
@@ -72,4 +74,18 @@ pub async fn set_vendor_account_number(app: AppHandle, db: State<'_, Db>, vendor
     let stored = crate::expenses::set_vendor_account_number(&db.pool().await, vendor_id, account_number.as_deref()).await?;
     notify(&app);
     Ok(stored)
+}
+
+/// Billable time not yet invoiced, for Sales › Bill Costs.
+#[tauri::command]
+pub async fn list_unbilled_time(db: State<'_, Db>, customer_id: Option<i64>) -> Result<Vec<billable_costs::UnbilledTime>, String> {
+    billable_costs::list_unbilled_time(&db.pool().await, customer_id).await
+}
+
+/// The income account an expense account's reimbursements go to (None: the one in Preferences).
+#[tauri::command]
+pub async fn set_reimbursement_account(app: AppHandle, db: State<'_, Db>, expense_account_id: i64, income_account_id: Option<i64>) -> Result<(), String> {
+    billable_costs::set_reimbursement_account(&db.pool().await, expense_account_id, income_account_id).await?;
+    notify(&app);
+    Ok(())
 }

@@ -21,10 +21,16 @@ export default function AttachmentsLibrary() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [selected, setSelected] = useState(null); // `${source}-${id}`
   const [notice, setNotice] = useState(null);
-  const { data, error, reload } = useLedgerQuery(() => api.listAttachmentLibrary(query.trim() || null, showDeleted));
+  // Searching waits for a pause in typing, so each keystroke doesn't ask for the whole library.
+  const [searched, setSearched] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const { data, error, reload } = useLedgerQuery(() => api.listAttachmentLibrary(searched || null, showDeleted));
   useEffect(() => {
     reload();
-  }, [query, showDeleted, reload]);
+  }, [searched, showDeleted, reload]);
   const files = data ?? [];
   const keyOf = (f) => `${f.source}-${f.id}`;
   const current = files.find((f) => keyOf(f) === selected) ?? null;
@@ -69,7 +75,7 @@ export default function AttachmentsLibrary() {
               {data && files.length === 0 && (
                 <tr>
                   <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">
-                    {query.trim() ? 'No file matches.' : 'No files yet. Attach them on a transaction, customer, vendor, item, account, estimate, purchase order or reconciliation.'}
+                    {searched ? 'No file matches.' : 'No files yet. Attach them on a transaction, customer, vendor, item, account, estimate, purchase order or reconciliation.'}
                   </td>
                 </tr>
               )}
@@ -78,7 +84,14 @@ export default function AttachmentsLibrary() {
                   key={keyOf(f)}
                   className={`qb-grid-row cursor-pointer ${keyOf(f) === selected ? 'is-active' : ''} ${f.deletedAt ? 'text-qb-ink-faint' : ''}`}
                   aria-selected={keyOf(f) === selected}
+                  tabIndex={0}
                   onClick={() => setSelected(keyOf(f))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelected(keyOf(f));
+                    }
+                  }}
                 >
                   <td className="qb-grid-cell">{formatDate(f.createdAt.slice(0, 10))}</td>
                   <td className="qb-grid-cell truncate" title={f.fileName}>

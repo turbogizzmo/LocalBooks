@@ -24,9 +24,11 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { W9Dialog } from './Forms1099.jsx';
 import { PartyInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
+import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 
 /** Customize Columns: the list's columns after Name, in their usual order. */
@@ -210,13 +212,14 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   const files1099 = useLedgerQuery(api.getPreferences).data?.tax_1099_enabled !== 'false';
   // The account number this vendor knows the company by (Preferences › Checking puts it in check memos).
   const [accountNumber, setAccountNumber] = useState({ stored: null, draft: '' });
+  const [w9Open, setW9Open] = useState(false);
 
   useEffect(() => {
     if (kind === 'vendor') {
       api.getVendorAccountNumber(id).then((n) => setAccountNumber({ stored: n, draft: n ?? '' }), () => {});
     }
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
+      (p) => setForm({ ...p, originalTaxId: p.taxId, originalName: p.name, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -226,10 +229,14 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   }, [kind, id]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  // Renaming to another customer's (vendor's) name offers to merge into it.
+  // The name as loaded for this party (kept with the loaded record, so another party's can't linger).
+  const mergeOffer = useMergeOffer(kind === 'customer' ? 'CUSTOMER' : 'VENDOR', id, form?.originalName ?? null, (text) => onSaved(text));
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
+      if (await mergeOffer.check(form.name)) return setBusy(false);
       const saved = await api.updateParty(kind, id, {
         name: form.name,
         companyName: form.companyName,
@@ -335,10 +342,26 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               </label>
             )}
             {kind === 'vendor' && files1099 && (
-              <label className="col-span-2 flex items-center gap-1.5 text-sm">
-                <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
-                Track payments for a 1099
-              </label>
+              <div className="col-span-2 flex items-center gap-1.5 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
+                  Track payments for a 1099
+                </label>
+                <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row px-2" onClick={() => setW9Open(true)}>
+                  W-9…
+                </button>
+              </div>
+            )}
+            {w9Open && (
+              <W9Dialog
+                vendorId={id}
+                vendorName={form.name}
+                onClose={(saved) => {
+                  setW9Open(false);
+                  // The W-9 may have changed the TIN: show it, and keep it when this form saves.
+                  if (saved) api.getParty(kind, id).then((p) => setForm((f) => ({ ...f, taxId: p.taxId, taxIdMasked: p.taxIdMasked, originalTaxId: p.taxId })), () => {});
+                }}
+              />
             )}
             {kind === 'customer' && salesTax.enabled && (
               <>
@@ -407,6 +430,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             <Attachments record={{ kind: kind.toUpperCase(), id }} what={`this ${noun}`} />
           </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+          {mergeOffer.panel}
           <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
             <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
             <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>Save</button>

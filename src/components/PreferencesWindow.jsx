@@ -959,6 +959,7 @@ export const CATEGORIES = [
     company: (p) => <Tax1099Company {...p} />,
     links: [
       { label: '1099 Summary', view: 'reports', data: { report: '1099' } },
+      { label: '1099-NEC and 1096', view: 'reports', data: { report: '1099-nec' } },
       { label: 'Vendors', view: 'expenses/vendors', hint: 'tax IDs and which vendors get a 1099' },
     ],
   },
