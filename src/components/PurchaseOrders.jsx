@@ -301,6 +301,7 @@ export default function PurchaseOrders({ accounts, intent }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           onPrint={() => print(viewing)}
+          record={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           onNotice={setNotice}
           extra={[
             [

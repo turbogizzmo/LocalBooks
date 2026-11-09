@@ -8,6 +8,7 @@ mod accounts;
 mod app_menu;
 mod ach;
 mod attachment_export;
+mod attachments_library;
 mod audit_chain;
 mod backup;
 mod bank;

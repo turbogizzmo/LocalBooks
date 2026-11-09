@@ -11,6 +11,11 @@ kept inside the company file, so they are in every backup and move with the book
 - As many files as you like on each transaction.
 - Files go on these transactions: **bills**, **expenses and checks**, **invoices**, **sales
   receipts** and other sales, **deposits and transfers**, and **journal entries**.
+- They also go on **customers** and **vendors** (a W-9, a contract), **items** (a spec sheet, a
+  photo), **accounts** (a loan agreement), **estimates** and **purchase orders**. Open the record
+  (double-click it in its list; for an estimate or purchase order open it and click **Attach File**
+  on its toolbar) and use **Attach file…** in its Attachments strip. Files on these records are
+  saved at once, not with the record's Save.
 
 ## Attach files while you enter a transaction
 
@@ -37,7 +42,8 @@ A 📎 after the number marks a transaction with files (📎3 means three). Clic
 
 - Click a **file name** to save a copy where you choose, for example to email it to your
   accountant or open it in another program.
-- Click **×** next to a file to remove it from the transaction. LocalBooks asks first.
+- Click **×** next to a file to delete it. LocalBooks asks first. Deleting is reversible: the file
+  is kept, and **Accounting › Attachments Library** can restore it (see below).
 - Click **Attach file…** in the strip to add more.
 - With two or more files, **Save all…** saves them together in one zip file.
 
@@ -45,6 +51,33 @@ Click the 📎 again to close the strip.
 
 In **Accounting › Journal Entries**, click any entry to open it: its files are listed under its
 lines, with **Attach file…**. Every transaction is in the journal, so this works for any of them.
+
+## The Attachments Library
+
+**Accounting › Attachments Library** (also **Company › Attachments Library**) lists every file in
+the company file, newest first: when it was added, its name, keywords, what it is attached to and
+its size.
+
+- **Search** by file name, keyword, or what it is attached to (a customer's or vendor's name, a
+  document number, "invoice", "vendor").
+- Click a file to see it on the right: pictures and text files show a preview; for a PDF or other
+  file, **Save a copy…** and open it in another program.
+- Give it **Keywords** (for example "W-9 2025" or "signed") so it's easy to find, and tick **Send
+  with the form when it is emailed** to send it along with the invoice, estimate or sales receipt
+  it belongs to. Click **Save details**. A file on an invoice's or sales receipt's transaction, or
+  on an estimate, goes with that form; a file on a customer goes with their statements. Marked
+  files are sent when LocalBooks emails the form itself (Settings › Email); a message opened in
+  your own mail app gets only the form's PDF. Together they can be up to 20 MB.
+- **Delete…** hides the file from its transaction or record but keeps it. Tick **Show deleted** to
+  see deleted files, then **Restore** one to put it back.
+- **Remove for good…** (on a deleted file, Admins only) erases it from the company file after a
+  warning. It can't be restored, except from a backup made before.
+
+### How long to keep files
+
+Many tax authorities expect you to keep the records behind your books (receipts, invoices, bank
+statements) for several years, often six or seven; check what applies to you. LocalBooks never
+removes a file unless an Admin removes a deleted one for good, and the files are in every backup.
 
 ## Save every attachment at once
 

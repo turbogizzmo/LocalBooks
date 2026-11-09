@@ -18,6 +18,7 @@ import { todayIso } from '../lib/dates.js';
 import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { SortTh, useSort } from './SortHead.jsx';
+import Attachments from './Attachments.jsx';
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 
 /** Customize Columns: the item list's columns in their usual order. */
@@ -169,6 +170,10 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
             />
           </label>
           <CustomFieldInputs fields={fields} onChange={setFields} />
+        </div>
+        {/* Files kept with the item (a spec sheet, a photo): saved at once, not with Save. */}
+        <div className="-mx-3 border-y border-qb-border bg-qb-canvas">
+          <Attachments record={{ kind: 'ITEM', id: product.id }} what="this item" />
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">

@@ -20,6 +20,12 @@ people using LocalBooks.
   recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
   checks and expenses show it for the chosen name. It can be hidden, and its figures match the
   reports.
+- **Attachments Library, and files on more records.** Accounting › Attachments Library lists every
+  attached file with its date, keywords and what it's attached to; search, preview pictures and
+  text, save a copy, or delete. Customers, vendors, items, accounts, estimates and purchase orders
+  now take files too. A file marked **Send with the form** goes along when LocalBooks emails the
+  invoice, estimate, sales receipt or statement. Deleting a file is reversible: it can be restored
+  from the library, and only an Admin can remove a deleted file for good, after a warning.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.
