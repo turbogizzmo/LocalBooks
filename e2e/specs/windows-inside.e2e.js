@@ -5,8 +5,8 @@ import { button, click, field, goTo, openSettingsTab, type, waitForApp, windowMe
 
 /** XPath of the window inside LocalBooks named `name` (its title, as the toolbar shows it). */
 const win = (name) => `//*[@aria-label="Open windows"]//section[@aria-label="${name}"]`;
-/** The toolbar title: the active window's name. */
-const activeTitle = () => $('//main//header//h1').getText();
+/** The toolbar title: the active window's name (the app's toolbar, not a heading inside a window). */
+const activeTitle = async () => (await $('//header[contains(@class, "qb-toolbar")]//h1').getProperty('textContent')).trim();
 
 /** The on-screen rectangle of the window named `name`, or null while it isn't there. */
 async function rect(name) {
@@ -84,9 +84,12 @@ describe('Windows inside LocalBooks', () => {
 
   it('reopens the company with its windows', async () => {
     await openSettingsTab('File & Data Controls');
+    // The windows open inside LocalBooks reach the desktop it saves 120 ms after they last change
+    // (WindowManager's report); a person never closes the company that quickly, a script can.
+    await browser.pause(600);
     await click(button('Close Company'));
     // The No Company Open screen lists the company; Open reopens it.
-    const row = $('//tr[td[contains(normalize-space(), "No Users Test Co")]]');
+    const row = $('//tr[td[contains(normalize-space(), "No Users Test Co")]]/td[1]');
     await click(row);
     await click(button('Open'));
     await waitForApp();
