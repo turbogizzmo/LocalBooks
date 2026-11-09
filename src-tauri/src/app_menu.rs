@@ -285,6 +285,8 @@ const REPORTS: &[Entry] = &[
             report("Job Estimates vs. Actuals Summary", "job-est"),
             report("Job Estimates vs. Actuals Detail", "job-est-detail"),
             report("Item Profitability", "item-profit"),
+            report("Invoice Profitability by Customer", "list:invoice-profit-customer"),
+            report("Invoice Profitability Detail", "list:invoice-profit-detail"),
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
@@ -345,6 +347,7 @@ const REPORTS: &[Entry] = &[
             report("Inventory Stock Status by Item", "stock-status"),
             Entry::Sep,
             report("Physical Inventory Worksheet", "list:physical-inventory"),
+            report("Inventory Turnover by Item", "list:inventory-turnover"),
         ],
     ),
     Entry::Sub(
