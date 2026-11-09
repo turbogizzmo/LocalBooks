@@ -1072,9 +1072,15 @@ pub async fn approve_many(pool: &SqlitePool, suggester: &Suggester, file: &str, 
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     let mut entries = Vec::with_capacity(written.len());
     let mut signature = before;
+    // The lines are posted; teaching the suggestion model is best-effort (it is rebuilt from the
+    // books when it next loads), so a failure here doesn't report the posting as failed.
     for (entry, example) in written {
-        suggester.learn(pool, file, &signature, example).await?;
-        signature = Suggester::signature(pool).await?;
+        if let Err(err) = suggester.learn(pool, file, &signature, example).await {
+            eprintln!("bank feed: could not add an added line to the suggestion model: {err}");
+        }
+        if let Ok(next) = Suggester::signature(pool).await {
+            signature = next;
+        }
         entries.push(entry);
     }
     Ok(entries)
