@@ -135,6 +135,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "exchange_rate_cache",
     "form_styles",
     "form_templates",
+    "inbox_documents",
     "inventory_items",
     "item_group_members",
     "item_groups",

@@ -71,6 +71,7 @@ features![
     deposits,
     desktop,
     diagnostics,
+    document_inbox,
     editing,
     email,
     envelopes,

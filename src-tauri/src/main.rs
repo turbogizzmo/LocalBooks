@@ -32,6 +32,7 @@ mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
+mod document_inbox;
 mod edits;
 mod email_log;
 mod envelopes;

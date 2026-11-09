@@ -37,6 +37,7 @@ export const NAV = [
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
+      { id: 'expenses/inbox', label: 'Document Inbox' },
       // `whenOn`: shown only while that company preference is on (Preferences › Items & Inventory).
       { id: 'expenses/purchase-orders', label: 'Purchase Orders', whenOn: 'inventory_enabled' },
       { id: 'expenses/credits', label: 'Vendor Credits' },

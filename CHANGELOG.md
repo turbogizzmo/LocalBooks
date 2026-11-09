@@ -25,6 +25,11 @@ people using LocalBooks.
   TIN and its type (checked for numbers the IRS never issues), and the date it came in. Reports ›
   1099-NEC and 1096 lists the year's forms with anything still missing, and prints a filer's
   worksheet with the 1096 totals and each recipient's Copy B.
+- **Document Inbox for receipts and bills.** Drop receipts and vendor bills in **Expenses ›
+  Document Inbox** (or click **Add files…**) to keep them until you enter them, with a preview of
+  each. **Enter as bill**, **Expense** or **Check** opens that form filled in from the total, date
+  and name read from a PDF's text, and the file is attached when it posts. Everything stays in the
+  company file; there's no OCR service.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

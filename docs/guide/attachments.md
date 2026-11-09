@@ -28,6 +28,25 @@ The files are attached when you post. If the transaction posts but a file can't 
 example it was moved, or is larger than 25 MB), LocalBooks says so; the transaction is kept, and
 you can attach the file afterwards.
 
+## The Document Inbox
+
+Receipts and vendor bills that arrive before you have time to enter them can wait in
+**Expenses › Document Inbox** (also **Vendors › Document Inbox**).
+
+1. Drop the files on the inbox window, or click **Add files…**. PDFs, photos and scans (JPG, PNG,
+   HEIC) up to 25 MB each are kept inside the company file, so they're in every backup.
+2. Click one to see it beside the list. Add a **Note** if it needs one (*ask Pat which job*).
+3. Click **Enter as bill**, **Expense** or **Check**. That form opens with the file attached and,
+   for a PDF with text, what LocalBooks read from it filled in: the **total** (the amount on a line
+   such as *Total*, *Amount due* or *Balance due*), the **date**, and the **name** at the top as the
+   vendor or payee. Check them, finish the form and post it.
+
+When it posts, the file is attached to the transaction and leaves the inbox. If you close the form
+without posting, the file stays in the inbox. **Remove** takes a file out without entering it.
+
+Nothing is sent anywhere to read a file: LocalBooks reads only the text a PDF already contains.
+Photos and scanned PDFs have no text, so their fields are left for you to type (there's no OCR).
+
 ## Attach files to a posted transaction
 
 1. Find the transaction in its list: **Expenses › Bills**, **Expenses › Expenses & Checks**,
