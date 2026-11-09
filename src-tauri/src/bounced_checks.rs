@@ -409,6 +409,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         product_service_id: None,
         class_id: None,
         is_taxable: false,
+        service_date: None,
     };
     let invoice_for = |customer: &str, lines: Vec<InvoiceLineInput>| InvoiceInput {
         customer_name: customer.to_string(),
@@ -431,6 +432,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
             product_service_id: None,
             class_id: None,
             is_taxable: false,
+            service_date: None,
         }];
         if input.customer_fee_cents > 0 {
             charge.push(fee_line(input.customer_fee_account_id.ok_or("BOUNCE_FEE_ACCOUNT: choose the income account for the customer's fee")?));

@@ -69,7 +69,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
         due_date: d(31),
         lines: lines
             .iter()
-            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: l.rate_cents, income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false })
+            .map(|l| crate::invoices::InvoiceLineInput { description: l.description.clone(), quantity_e4: l.quantity_e4, rate_cents: l.rate_cents, income_account_id: l.income_account_id, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,

@@ -99,6 +99,7 @@ features![
     reminders,
     repair,
     report_export,
+    report_mail,
     revaluation,
     sales,
     sales_header,
@@ -106,6 +107,8 @@ features![
     sales_prefs,
     sales_tax,
     search,
+    statement_charges,
+    sheet_import,
     statements,
     tax_and_time,
     timesheet,
@@ -115,6 +118,7 @@ features![
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
+pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 
 #[cfg(test)]

@@ -11,6 +11,7 @@ const KINDS = [
   { id: 'ESTIMATE', label: 'Estimate' },
   { id: 'SALES_RECEIPT', label: 'Sales receipt' },
   { id: 'STATEMENT', label: 'Statement' },
+  { id: 'CREDIT_MEMO', label: 'Credit memo' },
 ];
 const LAYOUTS = [
   ['CLASSIC', 'Classic', 'Company and title side by side over an accent rule'],
@@ -67,6 +68,7 @@ function useDocumentChoices(kind) {
   const estimates = useLedgerQuery(api.listEstimates);
   const sales = useLedgerQuery(api.listAllSales);
   const customers = useLedgerQuery(api.listCustomers);
+  const credits = useLedgerQuery(api.listCreditMemos);
   const rows = {
     INVOICE: () => (invoices.data ?? []).map((i) => ({ id: i.id, label: `Invoice ${i.invoiceNumber} · ${i.customerName} · ${formatDate(i.issueDate)}` })),
     ESTIMATE: () => (estimates.data ?? []).map((e) => ({ id: e.id, label: `Estimate ${e.estimateNumber} · ${e.customerName} · ${formatDate(e.estimateDate)}` })),
@@ -74,6 +76,7 @@ function useDocumentChoices(kind) {
       (sales.data ?? []).filter((r) => r.kind === 'SALES_RECEIPT').map((r) => ({ id: r.id, label: `Sales receipt ${r.number} · ${r.customerName} · ${formatDate(r.date)}` })),
     // A statement previews last month's statement for the customer.
     STATEMENT: () => (customers.data ?? []).map((c) => ({ id: c.id, label: `${c.name} · last month` })),
+    CREDIT_MEMO: () => (credits.data ?? []).map((m) => ({ id: m.id, label: `Credit ${m.creditNumber} · ${m.customerName} · ${formatDate(m.creditDate)}` })),
   }[kind]();
   return rows.slice(0, 50);
 }
@@ -425,6 +428,7 @@ function TemplateDesigner({ kind, setKind }) {
                   {text('amountLabel', { maxLength: 24 })}
                 </Row>
                 <Check label="Item custom fields marked for sales forms, under each line" checked={draft.showItemFields} onChange={set('showItemFields')} />
+                <Check label="Service Date column, when a line has one" checked={draft.showServiceDate} onChange={set('showServiceDate')} />
                 {kind === 'INVOICE' && <Check label="List payments and credits above the balance due" checked={draft.showPayments} onChange={set('showPayments')} />}
               </Section>
             )}

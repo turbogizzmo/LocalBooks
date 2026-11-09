@@ -45,7 +45,7 @@ fn invoice_input(pool_services: i64) -> InvoiceInput {
             income_account_id: pool_services,
             product_service_id: None,
             class_id: None,
-            is_taxable: false,
+            is_taxable: false, service_date: None,
         }],
         currency: None,
         tax_rate_id: None,

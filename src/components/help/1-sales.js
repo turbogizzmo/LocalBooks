@@ -172,6 +172,22 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'service-date-template', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'settings/forms'],
+    title: 'Service dates, the template on a form, and printed credit memos',
+    body: 'Service dates beside the Description heading adds a Service Date to each invoice and sales receipt line, printed in its own column when a line has one. The Template box in a sales form’s header picks the form style it prints and emails with; left on the default it follows the customer. Saved credit memos and refund receipts print as their own Credit memo form, with Credit To, P.O. No. and lines, laid out in Settings › Custom Forms.',
+    keywords: 'service date date of service line date template form style layout picker credit memo print refund receipt credit note',
+    go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
+    id: 'statement-charges', area: 'sales', views: ['sales/customers', 'sales/statements', 'sales/invoices'],
+    title: 'Enter statement charges (bill on the statement, no invoice)',
+    body: 'Enter statement charges… on a customer’s row opens their charge register: each charge posts to Accounts Receivable, shows in the A/R aging, and prints on the customer’s next statement as a Statement Charge with its description, without an invoice of its own. Receive Payments lists open statement charges, and a payment or credit applies to them like an invoice.',
+    keywords: 'statement charge charges register monthly billing retainer accounts receivable no invoice bill on statement',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'invoices',
+  },
+  {
     id: 'invoice-available-credits', area: 'sales', views: ['sales/invoices', 'sales/credits'],
     title: 'Use a customer’s credits on a new invoice',
     body: 'When the customer has credit memos with credit left, the invoice shows Available credits under Balance due. Saving the invoice asks whether to apply them now: Apply credits uses them oldest first, up to the invoice total, as applying them from Credit Memos & Refunds would. Home-currency invoices only.',

@@ -16,6 +16,8 @@ The wizard brings in books from:
   QuickBooks Online: the Journal (or General Ledger), with the Account Listing, contact lists and
   Item List
 - a **GnuCash book** (`.gnucash`), saved as XML or SQLite (see **From GnuCash** below)
+- a **spreadsheet you laid out yourself** (`.csv`, `.xlsx`, `.xls` or `.ods`) of customers, vendors
+  or invoices (see [From a spreadsheet you laid out](#from-a-spreadsheet-you-laid-out) below)
 
 > **Read this first:** newer company files, QuickBooks for Mac 2012 files, IIF and QIF exports, report exports and GnuCash books come in as the full ledger:
 > accounts, customers, vendors, items and every transaction. Some older `.qbw` files can only be
@@ -336,6 +338,46 @@ LocalBooks reads the book like this:
   tax tables and employees.
 - **Dates:** GnuCash stores each date as a time of day in UTC. LocalBooks takes the calendar date
   you saw in GnuCash, including for older books that stored midnight in your time zone.
+
+## From a spreadsheet you laid out
+
+Kept your customers, vendors or invoices in a spreadsheet? Under step 1, open **From a spreadsheet
+you laid out: customers, vendors or invoices**.
+
+1. Choose what the sheet holds: **Customers**, **Vendors** or **Invoices**. No sheet yet? Click
+   **Download the … template**: a CSV whose columns are LocalBooks' field names, with one example
+   row to replace.
+2. Click **Choose a spreadsheet…** and pick the file (`.csv`, `.xlsx`, `.xls` or `.ods`; the first
+   sheet of a workbook is read). The first row with two or more filled cells is taken as the
+   headings; blank rows are skipped.
+3. Check the matching: each LocalBooks field shows the column LocalBooks picked for it from the
+   headings (ignoring case and punctuation, so "E-mail", "Inv #" or "Qty" match) and that column's
+   first value. Change any of them, or choose **Not in the sheet**.
+
+   | The sheet holds | Fields (required ones first) |
+   |---|---|
+   | Customers | **Name**; Company, Email, Phone, Billing address, Terms (such as Net 30), Notes, Active (yes or no) |
+   | Vendors | **Name**; Company, Email, Phone, Address, Terms, Tax ID, 1099 (yes or no), Notes, Active |
+   | Invoices | **Invoice no.**, **Date**, **Customer**, **Income account**, and **Amount** or both Quantity and Rate; Due date, Item, Description, Memo |
+
+   For invoices, say whether dates like 03/04/2026 are month first or day first, or leave LocalBooks
+   to work it out from the dates in the sheet. Dates written 2026-03-04 and Excel date cells always
+   read.
+4. Click **Check the rows**. LocalBooks reads every row and lists each one that would fail, by its
+   row number in the spreadsheet: a required value missing, a date or amount that doesn't read, a
+   name that appears twice, an amount that isn't the quantity times the rate, or rows of one invoice
+   that name different customers or dates. Nothing is staged while any row has a problem: fix the
+   file (or the matching), save it, and check again.
+5. When every row reads, click **Continue to the review**. The sheet is staged like any other
+   import and continues at step 2 below.
+
+Rows with the same invoice number are one invoice, one line per row, in the order of the sheet.
+Each line credits the income account its row names; an account LocalBooks doesn't have yet is
+listed in step 2 to match to one of yours or create. A customer named on an invoice who isn't in
+your books yet is added with the import. In a **Full import** the invoices become LocalBooks
+invoices, owed in Accounts Receivable and payable in Receive Payments. Sales tax, discounts and
+payments aren't columns yet; sales receipts, bills, checks and the other kinds, and journal
+entries, are planned.
 
 ## 1. Choose a file
 

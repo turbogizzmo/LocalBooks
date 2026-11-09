@@ -706,7 +706,7 @@ async fn post_invoice(
                 income_account_id: income,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             })
             .collect(),
         currency: fx_rate.map(|rate| ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
