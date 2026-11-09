@@ -12,6 +12,10 @@ people using LocalBooks.
 - **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
   Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
   own, and LocalBooks remembers it. An account register can also be given a color.
+- **The menu bar reaches more screens.** Lists › Currency List, Company › Email Setup, AI Access
+  (MCP) and Audit Log, Customers › Invoice for Time & Expenses, Reports › Memorized Reports ›
+  Memorized Report List, and Reports › Transaction History / Transaction Journal for the
+  transaction open on a form.
 - **Transaction History and Journal on forms.** A saved invoice, bill, check, expense, journal
   entry, sales receipt, credit, deposit or transfer has **History** and **Journal** on its toolbar,
   with **Ctrl+H** and **Ctrl+Y**, as registers already did; in the journal they act on the entry

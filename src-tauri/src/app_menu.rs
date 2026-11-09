@@ -121,6 +121,8 @@ const LISTS: &[Entry] = &[
     ),
     form("Price Level List", "sales/products", "price-levels"),
     form("Vehicle List", "employees/mileage", "vehicles"),
+    // Preferences › Multiple Currencies: the home currency, symbol and exchange-rate lookup.
+    form("Currency List", "settings", "currencies"),
     Entry::Sep,
     form("Templates", "settings", "forms"),
     keyed("Memorized Transaction List", "accounting/recurring", None, "CmdOrCtrl+T"),
@@ -133,6 +135,8 @@ const COMPANY: &[Entry] = &[
     Entry::Sep,
     form("Set Up Users and Passwords…", "settings", "users"),
     form("Set Closing Date…", "settings", "closing"),
+    page("Email Setup…", "settings/email"),
+    page("AI Access (MCP)…", "settings/ai"),
     page("Bank Feeds", "banking/feeds"),
     Entry::Sub("Planning & Budgeting", &[page("Set Up Budgets", "accounting/budgets")]),
     Entry::Sep,
@@ -140,6 +144,7 @@ const COMPANY: &[Entry] = &[
     form("Make General Journal Entries…", "accounting/journal", "journal-entry"),
     page("Reclassify Transactions…", "accounting/reclassify"),
     page("Clean Up Books…", "accounting/clean-up"),
+    page("Audit Log", "accounting/audit"),
     Entry::Sub("Manage Currency", &[page("Home Currency Adjustment…", "accounting/fx-revaluation")]),
 ];
 
@@ -151,6 +156,7 @@ const CUSTOMERS: &[Entry] = &[
     form("Enter Sales Receipts", "sales/all", "sales-receipt"),
     page("Create Statements…", "sales/statements"),
     page("Assess Finance Charges…", "sales/finance-charges"),
+    page("Invoice for Time & Expenses…", "sales/bill-costs"),
     Entry::Sep,
     form("Receive Payments", "sales/invoices", "receive-payment"),
     form("Create Credit Memos/Refunds", "sales/credits", "credit-memo"),
@@ -198,7 +204,11 @@ const BANKING: &[Entry] = &[
 
 const REPORTS: &[Entry] = &[
     page("Report Center", "reports"),
-    Entry::Sub("Memorized Reports", &[report("Process Multiple Reports…", "process-multiple")]),
+    // Memorized reports are listed in the Report Center, which the first item opens.
+    Entry::Sub("Memorized Reports", &[page("Memorized Report List", "reports"), report("Process Multiple Reports…", "process-multiple")]),
+    // Act on the transaction open on a form (its toolbar's History and Journal, formFlow.jsx).
+    form_cmd("Transaction History (Ctrl+H)", "form:history"),
+    form_cmd("Transaction Journal (Ctrl+Y)", "form:journal"),
     Entry::Sep,
     Entry::Sub(
         "Company & Financial",
@@ -554,24 +564,78 @@ mod tests {
         }
     }
 
-    /// The Edit menu's form items name commands the page runs (`runFormCommand` in formFlow.jsx).
+    /// The menus' form items (Edit's, and Reports' History and Journal) name commands the page runs
+    /// (`runFormCommand` in formFlow.jsx).
     #[test]
-    fn edit_menu_form_commands_exist_in_the_page() {
+    fn form_commands_exist_in_the_page() {
         // The commands are named in formKeys.js (the keys) and formFlow.jsx (what runs them).
         let flow = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formFlow.jsx")).unwrap()
             + &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formKeys.js")).unwrap();
         let app = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/App.jsx")).unwrap();
         assert!(app.contains("runFormCommand(payload.slice(5))"), "App.jsx passes form: commands on");
-        let mut found = 0;
-        for entry in EDIT {
-            if let Entry::Cmd { command, .. } = entry {
-                if let Some(name) = command.strip_prefix("form:") {
-                    found += 1;
-                    assert!(flow.contains(&format!("'{name}'")), "formFlow.jsx has no command {name}");
+        fn walk(entries: &[Entry], out: &mut Vec<&'static str>) {
+            for entry in entries {
+                match entry {
+                    Entry::Cmd { command, .. } => out.extend(command.strip_prefix("form:")),
+                    Entry::Sub(_, children) => walk(children, out),
+                    _ => {}
                 }
             }
         }
-        assert_eq!(found, 8);
+        let mut found = Vec::new();
+        for entries in [FILE, EDIT, VIEW, HELP].into_iter().chain(MENUS.iter().map(|(_, e)| *e)) {
+            walk(entries, &mut found);
+        }
+        for name in &found {
+            assert!(flow.contains(&format!("'{name}'")), "formFlow.jsx has no command {name}");
+        }
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            ["copy-line", "delete", "delete-line", "duplicate", "goto-transfer", "history", "insert-line", "journal", "memorize", "paste-line"]
+        );
+    }
+
+    /// Every report the Report Center lists (its own, the presets and the list reports) has a
+    /// menu entry under Reports, so the menu bar reaches all of them.
+    #[test]
+    fn every_report_has_a_menu_entry() {
+        fn walk(entries: &[Entry], out: &mut Vec<&'static str>) {
+            for entry in entries {
+                match entry {
+                    Entry::Go { report: Some(id), .. } => out.push(id),
+                    Entry::Sub(_, children) => walk(children, out),
+                    _ => {}
+                }
+            }
+        }
+        let mut menu = Vec::new();
+        walk(REPORTS, &mut menu);
+        for p in crate::custom_reports::presets() {
+            assert!(menu.contains(&format!("preset:{}", p.id).as_str()), "Reports menu has no preset {}", p.id);
+        }
+        for r in crate::list_reports::catalog() {
+            assert!(menu.contains(&format!("list:{}", r.id).as_str()), "Reports menu has no list report {}", r.id);
+        }
+        // The Report Center's own reports, as `['id', ` in its catalogs.
+        let mut checked = 0;
+        let read = |path: &str| std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/components/").to_string() + path).unwrap();
+        for file in ["Reports.jsx", "JobReports.jsx", "MileageReports.jsx", "AccountantReports.jsx", "Graphs.jsx"] {
+            let text = read(file);
+            for (at, _) in text.match_indices("['") {
+                let rest = &text[at + 2..];
+                let Some(end) = rest.find("', ") else { continue };
+                let id = &rest[..end];
+                // Report ids are lower-case words joined by hyphens; other arrays (view switches) are skipped.
+                let is_id = !id.is_empty() && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+                if is_id && !NOT_REPORTS.contains(&id) {
+                    assert!(menu.contains(&id), "Reports menu has no report {id} (from {file})");
+                    checked += 1;
+                }
+            }
+        }
+        // The catalogs were read (about fifty reports in 0.13).
+        assert!(checked >= 40, "only {checked} reports found in the Report Center's catalogs");
     }
 
     /// View's commands are handled by the page (App.jsx).
@@ -584,6 +648,8 @@ mod tests {
             }
         }
     }
+    /// `['…', ` arrays in the report screens that aren't report ids.
+    const NOT_REPORTS: &[&str] = &["chart", "table"];
 
     #[test]
     fn ampersands_in_labels_are_shown() {
