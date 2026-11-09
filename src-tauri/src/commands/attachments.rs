@@ -53,7 +53,11 @@ pub async fn save_attachment(app: AppHandle, db: State<'_, Db>, id: i64) -> Resu
 /// user cancelled.
 #[tauri::command]
 pub async fn save_all_attachments(app: AppHandle, db: State<'_, Db>, journal_entry_id: Option<i64>) -> Result<Option<(String, usize)>, String> {
-    let (count, bytes) = crate::attachment_export::zip_attachments(&db.pool().await, journal_entry_id).await?;
+    let pool = db.pool().await;
+    // Nothing to save: say so before asking where.
+    if crate::attachment_export::count(&pool, journal_entry_id).await? == 0 {
+        return Err("ATTACH_NONE: there are no attachments to save".into());
+    }
     let name = match journal_entry_id {
         Some(id) => format!("Attachments (entry {id}).zip"),
         None => format!("Attachments {}.zip", Local::now().format("%Y-%m-%d")),
@@ -64,7 +68,7 @@ pub async fn save_all_attachments(app: AppHandle, db: State<'_, Db>, journal_ent
         .map_err(|e| format!("ATTACH_DIALOG: {e}"))?;
     let Some(target) = chosen else { return Ok(None) };
     let path = target.into_path().map_err(|e| format!("ATTACH_BAD_PATH: {e}"))?;
-    export_engine::write_atomically(&path, &bytes)?;
+    let count = crate::attachment_export::save_zip(&pool, journal_entry_id, &path).await?;
     Ok(Some((path.display().to_string(), count)))
 }
 
