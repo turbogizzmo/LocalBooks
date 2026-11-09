@@ -256,7 +256,7 @@ async fn a_statement_file_attaches_to_the_reconciliation() {
     let file = attach_statement(&pool, open.id, "/tmp/statements/August 2026.pdf", b"%PDF-1.7 synthetic").await.unwrap();
     assert_eq!((file.file_name.as_str(), file.media_type.as_str(), file.size_bytes), ("August 2026.pdf", "application/pdf", 18));
     assert_eq!(statement_content(&pool, file.id).await.unwrap(), ("August 2026.pdf".into(), b"%PDF-1.7 synthetic".to_vec()));
-    assert!(attach_statement(&pool, open.id, "empty.pdf", b"").await.unwrap_err().starts_with("ATTACH_SIZE"));
+    assert!(attach_statement(&pool, open.id, "empty.pdf", b"").await.unwrap_err().starts_with("ATTACH_EMPTY"));
 
     // It stays with the reconciliation once finished.
     let ids: Vec<i64> = unreconciled_lines(&pool, checking).await.unwrap().into_iter().map(|l| l.line_id).collect();

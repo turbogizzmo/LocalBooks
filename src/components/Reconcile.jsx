@@ -534,7 +534,9 @@ export default function Reconcile({ accounts }) {
                   <th className="qb-grid-head text-right">Ending balance</th>
                   <th className="qb-grid-head">Completed</th>
                   <th className="qb-grid-head">Statement</th>
-                  <th className="qb-grid-head" aria-label="Actions" />
+                  <th className="qb-grid-head">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

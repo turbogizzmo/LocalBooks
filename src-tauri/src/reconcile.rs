@@ -492,7 +492,10 @@ pub struct StatementFile {
 /// Keeps a copy of the bank or card statement (a PDF, a picture) with a reconciliation, in progress
 /// or finished. Up to 25 MB, as other attachments.
 pub async fn attach_statement(pool: &SqlitePool, reconciliation_id: i64, file_name: &str, content: &[u8]) -> Result<StatementFile, String> {
-    if content.is_empty() || content.len() > crate::workflows::MAX_ATTACHMENT_BYTES {
+    if content.is_empty() {
+        return Err("ATTACH_EMPTY: that file is empty".into());
+    }
+    if content.len() > crate::workflows::MAX_ATTACHMENT_BYTES {
         return Err("ATTACH_SIZE: attach files of up to 25 MB".into());
     }
     let undone: Option<bool> = sqlx::query_scalar(
@@ -508,8 +511,9 @@ pub async fn attach_statement(pool: &SqlitePool, reconciliation_id: i64, file_na
         Some(false) => {}
     }
     let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("statement");
-    let id: i64 = sqlx::query_scalar(
-        "INSERT INTO reconciliation_statements (reconciliation_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+    sqlx::query_as(
+        "INSERT INTO reconciliation_statements (reconciliation_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5)
+         RETURNING id, reconciliation_id, file_name, media_type, size_bytes, created_at",
     )
     .bind(reconciliation_id)
     .bind(name)
@@ -518,8 +522,7 @@ pub async fn attach_statement(pool: &SqlitePool, reconciliation_id: i64, file_na
     .bind(content)
     .fetch_one(pool)
     .await
-    .map_err(db_err)?;
-    statement_files(pool, reconciliation_id).await?.into_iter().find(|f| f.id == id).ok_or_else(|| "ATTACH_NOT_SAVED: the file was not saved".into())
+    .map_err(db_err)
 }
 
 /// The statement files of a reconciliation, oldest first.
