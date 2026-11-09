@@ -32,7 +32,7 @@ export const topics = [
   {
     id: 'quickreport', area: 'reports', views: ['reports', 'accounting/register', 'accounting/chart-of-accounts', 'sales/customers', 'expenses/vendors', 'sales/products'],
     title: 'QuickReport, Transaction History and Transaction Journal',
-    body: 'Press Ctrl+Q in a register, or on an account, customer, vendor or item in its list, for a report of its transactions. Click a transaction in a register or a name’s transactions and press Ctrl+H for the transactions linked to it (an invoice’s payments, a payment’s deposit) or Ctrl+Y for the debits and credits it posted; Ctrl is used on a Mac too.',
+    body: 'Press Ctrl+Q in a register, or on an account, customer, vendor or item in its list, for a report of its transactions. Click a transaction in a register or a name’s transactions and press Ctrl+H for the transactions linked to it (an invoice’s payments, a payment’s deposit) or Ctrl+Y for the debits and credits it posted. On a saved invoice, bill, check, journal entry or other saved form, the toolbar’s History and Journal buttons (Ctrl+H, Ctrl+Y) do the same, and in the journal they act on the entry you clicked; Ctrl is used on a Mac too.',
     keywords: 'quickreport quick report ctrl+q transaction history ctrl+h transaction journal ctrl+y linked payments debits credits',
     guide: 'reports',
   },

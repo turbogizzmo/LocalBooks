@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { todayIso } from './dates.js';
 import { impliedDecimalText, setImpliedDecimal } from './money.js';
+import { withRegisterColor, withTextSize } from './textSize.js';
 
 const STORAGE_KEY = 'localbooks.myPreferences';
 const CHANGED = 'localbooks-my-preferences-changed';
@@ -40,6 +41,10 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   checkAccountId: 0,
   payBillsAccountId: 0,
   depositAccountId: 0,
+  /** Text size by kind of window (list, register, form, report), in percent; missing means 100. */
+  textSizes: {},
+  /** A color per register, keyed by company file and account (textSize.js). */
+  registerColors: {},
 });
 
 /** Messages turned off with "Don't show this again", by key; Bring back all messages clears it. */
@@ -60,7 +65,10 @@ function read() {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}');
     const prefs = { ...MY_PREFERENCE_DEFAULTS };
     for (const key of Object.keys(MY_PREFERENCE_DEFAULTS)) {
-      if (typeof stored?.[key] === typeof MY_PREFERENCE_DEFAULTS[key]) prefs[key] = stored[key];
+      const value = stored?.[key];
+      if (typeof value !== typeof MY_PREFERENCE_DEFAULTS[key]) continue;
+      if (typeof value === 'object' && (value === null || Array.isArray(value))) continue;
+      prefs[key] = value;
     }
     if (typeof stored?.lastEnteredDate === 'string') prefs.lastEnteredDate = stored.lastEnteredDate;
     if (Array.isArray(stored?.hiddenMessages)) prefs.hiddenMessages = stored.hiddenMessages.filter((k) => typeof k === 'string');
@@ -108,9 +116,21 @@ export function setMyPreferences(changes) {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** Puts every General preference back to its default (the remembered last date and hidden messages are kept). */
+/** Larger (`step` 1), Smaller (-1) or normal (0) text in every window of `kind`. */
+export function changeTextSize(kind, step) {
+  const next = withTextSize(current.textSizes, kind, step);
+  if (next !== current.textSizes) setMyPreferences({ textSizes: next });
+}
+
+/** Gives a register a color ('' for the default). */
+export function setRegisterColor(companyPath, accountId, colorId) {
+  setMyPreferences({ registerColors: withRegisterColor(current.registerColors, companyPath, accountId, colorId) });
+}
+
+/** Puts every General preference back to its default (the remembered last date, hidden messages, text sizes and register colors are kept). */
 export function resetMyPreferences() {
-  setMyPreferences({ ...MY_PREFERENCE_DEFAULTS });
+  const { textSizes, registerColors } = current;
+  setMyPreferences({ ...MY_PREFERENCE_DEFAULTS, textSizes, registerColors });
 }
 
 /** The General preferences, kept current when they change in Preferences or another window. */

@@ -7,10 +7,13 @@ same single amount as your bank statement.
 
 1. Go to **Banking › Deposits & Transfers** and click **Bank deposit** (or **+ New › Bank
    Deposit**).
-2. Choose **Deposit to** (the bank account) and the **Date**.
+2. Choose **Deposit to** (the bank account) and the **Date**. **Ending balance** beside it shows
+   the account's balance before this deposit.
 3. Tick the payments waiting in Undeposited Funds that are part of this deposit.
 4. To include other money (for example a refund), use **Add funds to this deposit** with an
-   account and amount.
+   account and amount. **Received from** names the customer or vendor it came from (optional).
+   When every named line names the same one, the deposit belongs to them: registers show them as
+   the payee, and the deposit is listed in their transactions and in reports by name.
 5. If you kept some of it as cash (for petty cash, say), fill in **Cash back goes to** (the account
    the cash goes to), a memo, and the **Cash back amount**. The bank gets the subtotal less the
    cash back; the cash back must be less than the subtotal.
