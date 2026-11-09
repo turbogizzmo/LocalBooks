@@ -44,6 +44,7 @@ async fn billable_expenses_are_invoiced_with_markup_and_reduce_the_expense() {
     let bill = |markup: Option<&str>| BillCostsInput {
         customer_id: acme,
         costs: vec![CostRef { source: "EXPENSE".into(), line_id: unbilled[0].line_id }],
+        time: Vec::new(),
         issue_date: d(10),
         due_date: d(31),
         markup_percent: markup.map(str::to_string),
@@ -174,4 +175,70 @@ async fn a_vendors_last_transaction_is_recalled() {
     assert_eq!(latest.lines.iter().map(|l| (l.account_id, l.amount_cents, l.billable)).collect::<Vec<_>>(), [(supplies, 20_000, true), (rent, 5_000, false)]);
     let bill = crate::edits::last_for_vendor(&pool, "Harbor Hardware", Some("bill")).await.unwrap().unwrap();
     assert_eq!((bill.memo.as_deref(), bill.lines.len(), bill.lines[0].memo.as_deref()), (Some("Monthly"), 1, Some("Shed")));
+}
+
+#[tokio::test]
+async fn reimbursements_go_to_the_expense_accounts_own_income_account() {
+    let pool = test_pool().await;
+    let (checking, supplies, rent, services, sales) =
+        (account(&pool, "1010").await, account(&pool, "6250").await, account(&pool, "6300").await, account(&pool, "4100").await, account(&pool, "4000").await);
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    crate::expenses::post_expense(&pool, check(checking, supplies, rent, acme, Some(true))).await.unwrap();
+    crate::preferences::set(&pool, "reimbursed_as_income", "true").await.unwrap();
+    crate::preferences::set(&pool, "reimbursed_income_account_id", &sales.to_string()).await.unwrap();
+
+    // Only an expense account maps, and only to an income account.
+    assert!(set_reimbursement_account(&pool, sales, Some(services)).await.unwrap_err().starts_with("COST_REIMBURSE_NOT_EXPENSE"));
+    assert!(set_reimbursement_account(&pool, supplies, Some(rent)).await.unwrap_err().starts_with("COST_REIMBURSE_NOT_INCOME"));
+    set_reimbursement_account(&pool, supplies, Some(services)).await.unwrap();
+    let listed = crate::reports::list_accounts(&pool).await.unwrap().into_iter().find(|a| a.id == supplies).unwrap();
+    assert_eq!(listed.reimbursement_income_account_id, Some(services));
+
+    let cost = list_unbilled(&pool, Some(acme)).await.unwrap().remove(0);
+    let input = BillCostsInput { customer_id: acme, costs: vec![CostRef { source: "EXPENSE".into(), line_id: cost.line_id }], time: Vec::new(), issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None };
+    bill_costs(&pool, input).await.unwrap();
+    assert_eq!(balance(&pool, services).await, -20_000, "the supplies account's own income account");
+    assert_eq!(balance(&pool, sales).await, 0, "not the one in Preferences");
+}
+
+#[tokio::test]
+async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
+    let pool = test_pool().await;
+    let services = account(&pool, "4100").await;
+    let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
+    let design = crate::sales::create_product(&pool, crate::sales::ProductInput { name: "Design".into(), description: None, rate_cents: 9_500, income_account_id: services, is_taxable: false })
+        .await
+        .unwrap()
+        .id;
+    let dana = crate::timesheet::create_employee(&pool, "Dana", None).await.unwrap().id;
+    let entry = |minutes: i64, item: Option<i64>, billable: bool| crate::timesheet::TimeActivityInput {
+        employee_id: dana,
+        activity_date: d(4),
+        customer_id: Some(acme),
+        product_service_id: item,
+        minutes,
+        billable,
+        hourly_rate_cents: billable.then_some(9_500),
+        description: Some("Logo concepts".into()),
+        class_id: None,
+    };
+    crate::timesheet::create_time_activities(&pool, vec![entry(90, Some(design), true), entry(30, Some(design), false), entry(60, None, true)]).await.unwrap();
+    let time = list_unbilled_time(&pool, Some(acme)).await.unwrap();
+    assert_eq!(time.iter().map(|t| (t.minutes, t.amount_cents)).collect::<Vec<_>>(), [(90, 14_250), (60, 9_500)], "billable only; 1.5 h × $95");
+
+    let bill = |ids: Vec<i64>| BillCostsInput { customer_id: acme, costs: Vec::new(), time: ids, issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None };
+    // Time with no service item can't be billed: the item gives the invoice line its income account.
+    assert!(bill_costs(&pool, bill(vec![time[1].id])).await.unwrap_err().starts_with("TIME_NO_ITEM"));
+    let invoice = bill_costs(&pool, bill(vec![time[0].id])).await.unwrap();
+    assert_eq!(invoice.total_cents, 14_250);
+    assert_eq!(balance(&pool, services).await, -14_250, "the service item's income account");
+    let lines = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap().items;
+    assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, 9_500, Some(design)));
+    assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 1, "billed time leaves the list");
+    assert!(bill_costs(&pool, bill(vec![time[0].id])).await.unwrap_err().starts_with("TIME_NOT_BILLABLE"), "never billed twice");
+
+    // Voiding the invoice frees the time again.
+    let entry_id: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap();
+    crate::ledger::void_transaction(&pool, entry_id).await.unwrap();
+    assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 2);
 }

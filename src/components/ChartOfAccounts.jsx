@@ -57,6 +57,9 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
   const [number, setNumber] = useState(account?.accountNumber ?? '');
   const [parentId, setParentId] = useState(from?.parentId ?? null);
   const [description, setDescription] = useState(from?.description ?? '');
+  // An expense account's reimbursements, when Preferences count reimbursed expenses as income.
+  const [reimburseTo, setReimburseTo] = useState(account?.reimbursementIncomeAccountId ?? null);
+  const isExpense = types.find((t) => t.code === type)?.classification === 'EXPENSE';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -71,6 +74,7 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
     const input = { name: name.trim(), accountNumber: number.trim() || null, accountType: type, parentId, description: description.trim() || null };
     try {
       const saved = editing ? await api.updateAccount(account.id, input) : await api.createAccount(input);
+      if (editing && isExpense && reimburseTo !== (account.reimbursementIncomeAccountId ?? null)) await api.setReimbursementAccount(account.id, reimburseTo);
       onSaved(`${editing ? 'Saved' : 'Added'} ${saved.accountNumber ? `${saved.accountNumber} · ` : ''}${saved.fullName}.`);
     } catch (err) {
       setError(errorText(err));
@@ -128,6 +132,21 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
             <span className="font-semibold text-qb-ink-muted">Description (optional)</span>
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
+          {editing && isExpense && (
+            <label className="col-span-2 flex flex-col gap-0.5" title="Used when Preferences › Time & Expenses counts reimbursed expenses as income">
+              <span className="font-semibold text-qb-ink-muted">Reimbursements billed to customers go to</span>
+              <select className="qb-input" value={reimburseTo ?? ''} onChange={(e) => setReimburseTo(e.target.value === '' ? null : Number(e.target.value))}>
+                <option value="">The income account in Preferences › Time &amp; Expenses</option>
+                {accounts
+                  .filter((a) => a.isActive && a.classification === 'INCOME')
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.accountNumber ? `${a.accountNumber} · ${a.fullName}` : a.fullName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
         </div>
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">

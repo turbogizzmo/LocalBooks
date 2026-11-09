@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Bill time, and send reimbursements where they belong.** Sales › Bill Costs now lists billable
+  time from the timesheet, so it goes on the customer's invoice at its hours and rate. And when
+  reimbursed expenses count as income, each expense account can name the income account its
+  reimbursements go to.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
