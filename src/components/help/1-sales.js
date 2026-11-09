@@ -171,6 +171,22 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'customer-groups', area: 'sales', views: ['sales/customers', 'sales/statements'],
+    title: 'Customer groups and statement reminders',
+    body: 'Switch the Customer Center’s View to Groups to make groups of customers: picked by hand, or automatic, holding every customer who meets all its rules on balance, type, terms, rep, state, ZIP code, tax code, credit limit or status, so the members change when customers’ details do. A group can remind you to send its statements every so many days; Reminders lists it when due, and Customer Statements picks the group’s customers and marks them sent.',
+    keywords: 'customer group groups segment automatic rules smart list filter state zip balance rep terms type statement reminder schedule',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
+    id: 'batch-invoices', area: 'sales', views: ['sales/customers', 'sales/invoices'],
+    title: 'Batch invoices and payment reminders by group',
+    body: 'Batch invoices… in the Customer Center invoices the same lines to every customer of a group (or customers you tick), each due on their own terms and queued in Send Forms or Print Forms as they prefer; all are created or none are. A group can also send payment reminders on a schedule: Reminders lists its overdue invoices when a round is due, and Send reminders queues them to be emailed.',
+    keywords: 'batch invoice invoices many customers group bulk billing monthly fee payment reminder overdue dunning collection email schedule',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'service-date-template', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'settings/forms'],
     title: 'Service dates, the template on a form, and printed credit memos',
     body: 'Service dates beside the Description heading adds a Service Date to each invoice and sales receipt line, printed in its own column when a line has one. The Template box in a sales form’s header picks the form style it prints and emails with; left on the default it follows the customer. Saved credit memos and refund receipts print as their own Credit memo form, with Credit To, P.O. No. and lines, laid out in Settings › Custom Forms.',

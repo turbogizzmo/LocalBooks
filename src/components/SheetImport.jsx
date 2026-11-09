@@ -4,18 +4,40 @@ import { api, errorText } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import Notice from './Notice.jsx';
 
-const KINDS = [
-  ['CUSTOMERS', 'Customers'],
-  ['VENDORS', 'Vendors'],
-  ['INVOICES', 'Invoices'],
+/** What a sheet can hold: [kind, name, one record, several]. */
+const GROUPS = [
+  ['Lists', [['CUSTOMERS', 'Customers', 'customer', 'customers'], ['VENDORS', 'Vendors', 'vendor', 'vendors']]],
+  [
+    'Sales',
+    [
+      ['INVOICES', 'Invoices', 'invoice', 'invoices'],
+      ['SALES_RECEIPTS', 'Sales receipts', 'sales receipt', 'sales receipts'],
+      ['CREDIT_MEMOS', 'Credit memos', 'credit memo', 'credit memos'],
+      ['DEPOSITS', 'Deposits', 'deposit', 'deposits'],
+    ],
+  ],
+  [
+    'Purchases',
+    [
+      ['BILLS', 'Bills', 'bill', 'bills'],
+      ['BILL_CREDITS', 'Bill credits', 'bill credit', 'bill credits'],
+      ['CHECKS', 'Checks', 'check', 'checks'],
+      ['CARD_CHARGES', 'Credit card charges', 'card charge', 'card charges'],
+      ['CARD_CREDITS', 'Credit card credits', 'card credit', 'card credits'],
+    ],
+  ],
+  ['Accountant', [['JOURNAL_ENTRIES', 'Journal entries', 'journal entry', 'journal entries']]],
 ];
+const KINDS = GROUPS.flatMap(([, kinds]) => kinds);
+const LISTS = ['CUSTOMERS', 'VENDORS'];
 const SHEET_EXTENSIONS = ['csv', 'txt', 'xlsx', 'xls', 'xlsm', 'ods'];
 
 /** What a clean check found, in words. */
 function readyText(kind, c) {
-  const n = c.records.toLocaleString();
-  if (kind === 'INVOICES') return `${n} invoice${c.records === 1 ? '' : 's'} from ${c.rows.toLocaleString()} rows, ${formatCents(c.totalCents)} in total.`;
-  return `${n} ${kind === 'CUSTOMERS' ? 'customer' : 'vendor'}${c.records === 1 ? '' : 's'}.`;
+  const [, , one, many] = KINDS.find(([k]) => k === kind);
+  const counted = `${c.records.toLocaleString()} ${c.records === 1 ? one : many}`;
+  if (LISTS.includes(kind)) return `${counted}.`;
+  return `${counted} from ${c.rows.toLocaleString()} rows, ${formatCents(c.totalCents)} in total${kind === 'JOURNAL_ENTRIES' ? ' of debits' : ''}.`;
 }
 
 /**
@@ -95,7 +117,7 @@ export default function SheetImport({ busy, onStage }) {
     <div className="border-t border-qb-border px-3 py-2">
       <button type="button" className="flex w-full items-center gap-2 text-left text-sm font-semibold" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
         <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-        From a spreadsheet you laid out: customers, vendors or invoices
+        From a spreadsheet you laid out: customers, vendors, transactions or journal entries
       </button>
       {expanded && (
         <div className="mt-2 flex flex-col gap-2">
@@ -105,19 +127,25 @@ export default function SheetImport({ busy, onStage }) {
             columns match without any changes.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <div role="radiogroup" aria-label="The sheet holds" className="flex gap-3 text-sm">
-              {KINDS.map(([k, label]) => (
-                <label key={k} className="flex items-center gap-1">
-                  <input type="radio" name="sheet-kind" checked={kind === k} disabled={disabled} onChange={() => changeKind(k)} />
-                  {label}
-                </label>
-              ))}
-            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <span className="font-semibold">The sheet holds</span>
+              <select className="qb-input h-row" value={kind} disabled={disabled} onChange={(e) => changeKind(e.target.value)}>
+                {GROUPS.map(([group, kinds]) => (
+                  <optgroup key={group} label={group}>
+                    {kinds.map(([k, label]) => (
+                      <option key={k} value={k}>
+                        {label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4 text-md" disabled={disabled} onClick={choose}>
               Choose a spreadsheet…
             </button>
             <button type="button" className="qb-btn qb-btn-secondary h-row px-2 text-xs" disabled={disabled} onClick={template}>
-              Download the {KINDS.find(([k]) => k === kind)[1].toLowerCase()} template
+              Download the {KINDS.find(([k]) => k === kind)[3]} template
             </button>
           </div>
           {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
@@ -165,7 +193,7 @@ export default function SheetImport({ busy, onStage }) {
                   ))}
                 </tbody>
               </table>
-              {kind === 'INVOICES' && (
+              {!LISTS.includes(kind) && (
                 <label className="flex items-center gap-2 text-xs">
                   <span className="font-semibold text-qb-ink-muted">Dates like 03/04/2026 are</span>
                   <select className="qb-input h-row" value={dateOrder} disabled={disabled} onChange={(e) => (setDateOrder(e.target.value), setCheck(null))}>
