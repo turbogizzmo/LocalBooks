@@ -188,7 +188,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
       api.getVendorAccountNumber(id).then((n) => setAccountNumber({ stored: n, draft: n ?? '' }), () => {});
     }
     api.getParty(kind, id).then(
-      (p) => setForm({ ...p, originalTaxId: p.taxId, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
+      (p) => setForm({ ...p, originalTaxId: p.taxId, originalName: p.name, ...(kind === 'customer' ? customerRecordForm(p) : {}) }),
       (err) => setError(errorText(err)),
     );
     api.getCustomValues(kind.toUpperCase(), id).then(setFields, () => setFields([]));
@@ -199,9 +199,8 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   // Renaming to another customer's (vendor's) name offers to merge into it.
-  const loadedName = useRef(null);
-  if (form && loadedName.current === null) loadedName.current = form.name;
-  const mergeOffer = useMergeOffer(kind === 'customer' ? 'CUSTOMER' : 'VENDOR', id, loadedName.current, (text) => onSaved(text));
+  // The name as loaded for this party (kept with the loaded record, so another party's can't linger).
+  const mergeOffer = useMergeOffer(kind === 'customer' ? 'CUSTOMER' : 'VENDOR', id, form?.originalName ?? null, (text) => onSaved(text));
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);

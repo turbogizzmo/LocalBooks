@@ -21,6 +21,8 @@ export function useMergeOffer(kind, id, currentName, onMerged) {
   const [error, setError] = useState(null);
   const noun = NOUNS[kind];
   const check = async (name) => {
+    // An earlier offer is for an earlier name: it goes until this one finds its own.
+    setTarget(null);
     if (!id || !name.trim() || name.trim().toLowerCase() === (currentName ?? '').trim().toLowerCase()) return false;
     const found = await api.findMergeTarget(kind, id, name.trim());
     if (!found) return false;
