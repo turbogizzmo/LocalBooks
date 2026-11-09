@@ -21,6 +21,10 @@ people using LocalBooks.
 - **Bill payment stubs.** A bill payment now has a form of its own listing every bill it pays.
   Print it, save it as a PDF or email it to the vendor right after Pay Bills, or later from the
   bill's Actions menu, and change its look in Settings › Custom Forms › Bill payment stub.
+- **W-9s and 1099-NEC forms.** W-9… on a vendor keeps their W-9: legal name, tax classification,
+  TIN and its type (checked for numbers the IRS never issues), and the date it came in. Reports ›
+  1099-NEC and 1096 lists the year's forms with anything still missing, and prints a filer's
+  worksheet with the 1096 totals and each recipient's Copy B.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

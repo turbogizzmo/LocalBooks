@@ -38,6 +38,7 @@ mod envelopes;
 mod estimates;
 mod expenses;
 mod forensic;
+mod form_1099;
 mod forms;
 mod fx_rates;
 mod gnucash_import;

@@ -289,6 +289,31 @@ A box is reported once the year's payments reach its threshold, which goes by th
 $600 before 2026 and $2,000 from 2026 for nonemployee compensation, rents, other income and
 medical payments; $10 for royalties; $600 for attorneys' gross proceeds.
 
+### W-9s, 1099-NEC forms and the 1096
+
+Keep each contractor's Form W-9 on the vendor: open the vendor (**Expenses › Vendors › Edit…**)
+and click **W-9…** beside **Track payments for a 1099**. Enter the name on line 1 (as on their tax
+return), any business name, the tax classification, whether the TIN is an **SSN or ITIN** or an
+**EIN**, the TIN itself, and the date the W-9 came in. LocalBooks rejects numbers the IRS never
+issues (all-zero parts, SSNs starting 666, EIN prefixes it doesn't use) without repeating the
+number in the message. Once users are on, the TIN is encrypted in the company file, and only users
+who can see sensitive data see it in full; the audit trail notes only that it changed.
+
+**Reports › 1099-NEC and 1096** lists, for a calendar year, each vendor paid at least the
+threshold in box 1 (nonemployee compensation), with what is still missing to file: the TIN, its
+type, the W-9 date or an address. Click **Edit W-9** to fill a gap. Your company's name, EIN and
+address (Settings › Company) are the payer's. **Print forms…** prints:
+
+- a **filer's worksheet** with the Form 1096 totals (number of forms, total reported) and every
+  recipient's full TIN, name, address and box 1 amount, to enter in the IRS's free IRIS Taxpayer
+  Portal, or to copy onto the official red-ink Copy A and Form 1096 if you file on paper (Copy A
+  printed on plain paper can't be filed); keep it safe;
+- **Copy B** for each recipient, on plain paper, with their TIN shown as its last four digits, as
+  the IRS allows on recipient copies. Send them by January 31.
+
+Filing electronically straight from LocalBooks, in the IRS's IRIS format, isn't built yet: the
+IRS gives its schema only to registered software developers.
+
 **Units of measure** (selling by the each, case or pallet) are not in LocalBooks: each item has one
 unit.
 

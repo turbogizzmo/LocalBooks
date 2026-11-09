@@ -254,6 +254,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
 | Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, TXF export of Schedule C for tax software, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| 1099s | Reports › 1099 Summary, 1099-NEC and 1096; W-9… on a vendor | W-9 and TIN on each contractor, 1099 totals by box, the year's 1099-NEC forms with what's missing, the 1096 totals, and printed recipient copies | [guide](docs/guide/getting-started.md#w-9s-1099-nec-forms-and-the-1096) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
