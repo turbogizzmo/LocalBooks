@@ -8,6 +8,12 @@ import BankConnections, { syncSummaryText } from './BankConnections.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { SOURCE_LABEL } from './JournalEntries.jsx';
+import BankRules, { RuleFields, suggestedPattern } from './BankRules.jsx';
+
+/** "Check #1042 · Landlord, 03/01/2026": an entered transaction a bank line matches. */
+export const matchLabel = (m) =>
+  `${SOURCE_LABEL[m.sourceType] ?? m.sourceType}${m.num ? ` #${m.num}` : ''}${m.name ? ` · ${m.name}` : ''}, ${formatDate(m.date)}`;
 
 const ORIGIN_TEXT = {
   LEARNED: 'Suggested by a rule learned from your past approvals',
@@ -54,6 +60,15 @@ export default function BankFeed({ accounts }) {
   const [mappingFile, setMappingFile] = useState(null);
   const listRef = useRef(null);
   const [showConnections, setShowConnections] = useState(false);
+  // Matching: other entered transactions the selected line could be, the Show matched switch, and
+  // the lines ticked for Add several at once.
+  const [candidates, setCandidates] = useState(null); // { id, list } for the selected line
+  const [showMatched, setShowMatched] = useState(false);
+  const matched = useLedgerQuery(api.listMatchedBankTransactions);
+  const [ticked, setTicked] = useState(() => new Set());
+  // Renaming rules: the rules list, and the rule offered after the user changes a payee.
+  const [showRules, setShowRules] = useState(false);
+  const [offer, setOffer] = useState(null); // { matchKind, pattern, payeeName, description }
   // SimpleFIN connections with at least one linked account, for the Sync button.
   const [syncable, setSyncable] = useState([]);
 
@@ -115,6 +130,7 @@ export default function BankFeed({ accounts }) {
 
   const reportImport = (r, path) => {
     const extras = [
+      r.matched ? `${r.matched} matched to transactions already entered` : null,
       r.duplicates ? `${r.duplicates} already imported` : null,
       r.skippedZero ? `${r.skippedZero} zero-amount skipped` : null,
     ].filter(Boolean);
@@ -164,6 +180,13 @@ export default function BankFeed({ accounts }) {
     try {
       await api.approveBankTransaction(selected.id, categoryId, classId, payee.trim() || null);
       setFlashId(selected.id);
+      // A payee the user typed in place of the suggested one: offer a renaming rule for next time.
+      // Rules ignore capitals and spacing, so a change of only those offers nothing.
+      const squeeze = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+      const typed = (payees[selected.id] ?? '').trim().replace(/\s+/g, ' ');
+      if (selected.amountCents < 0 && typed && squeeze(typed) !== squeeze(selected.payee ?? '')) {
+        setOffer({ id: 0, matchKind: 'BEGINS', pattern: suggestedPattern(selected.description), payeeName: typed, description: selected.description });
+      }
       setNotice({
         kind: 'success',
         text: `Approved ${formatCents(Math.abs(selected.amountCents))} "${selected.description}" → ${accountLabel(accounts, categoryId)}.`,
@@ -189,6 +212,61 @@ export default function BankFeed({ accounts }) {
       setBusy(false);
     }
   };
+
+  // Match / Unmatch and Add several at once.
+  const run = async (work, text) => {
+    setBusy(true);
+    try {
+      await work();
+      setNotice({ kind: 'success', text });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const matchTo = (line, m) => {
+    // Where the line was before the list refreshes without it.
+    const index = pending.findIndex((t) => t.id === line.id);
+    return run(async () => {
+      await api.matchBankTransaction(line.id, m.journalEntryId);
+      setCandidates(null);
+      if (index >= 0) advanceFrom(index);
+      else setSelectedId(null);
+    }, `Matched "${line.description}" to ${matchLabel(m)}: nothing new posts.`);
+  };
+  const findMatches = async () => {
+    if (!selected) return;
+    try {
+      setCandidates({ id: selected.id, list: await api.listBankMatchCandidates(selected.id) });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  const unmatch = (line) => run(() => api.unmatchBankTransaction(line.id), `"${line.description}" is back for review.`);
+  const tickedLines = pending.filter((t) => ticked.has(t.id));
+  const lineCategory = (t) => overrides[t.id] ?? t.suggestion?.accountId ?? null;
+  const addTicked = () =>
+    run(async () => {
+      if (tickedLines.some((t) => lineCategory(t) === null)) throw new Error('Choose a category for every ticked line first.');
+      await api.approveBankTransactions(
+        tickedLines.map((t) => ({
+          transactionId: t.id,
+          categoryAccountId: lineCategory(t),
+          classId: classes[t.id] ?? null,
+          payeeName: t.amountCents < 0 ? (payees[t.id] ?? t.payee ?? '').trim() || null : null,
+        })),
+      );
+      setTicked(new Set());
+    }, `Added ${tickedLines.length} transaction${tickedLines.length === 1 ? '' : 's'}.`);
+  const toggleTick = (id) =>
+    setTicked((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const matchedHere = (matched.data ?? []).filter((m) => m.bankAccountId === bankAccountId);
 
   useEffect(() => {
     if (flashId === null) return undefined;
@@ -255,6 +333,9 @@ export default function BankFeed({ accounts }) {
             {busy ? 'Working…' : 'Sync banks'}
           </button>
         )}
+        <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setShowRules(true)} disabled={busy} title="Renaming rules for payees, and the category rules learned from your approvals">
+          Rules…
+        </button>
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setShowConnections(true)} disabled={busy}>
           {syncable.length > 0 ? 'Bank connections…' : 'Connect a bank…'}
         </button>
@@ -268,7 +349,31 @@ export default function BankFeed({ accounts }) {
         </div>
       </div>
 
+      {showRules && <BankRules accounts={accounts} onClose={() => setShowRules(false)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {offer && (
+        <div className="qb-panel flex flex-none flex-wrap items-center gap-1 px-2 py-1 text-sm" role="region" aria-label="Offer a renaming rule">
+          <span className="font-semibold">Use this name next time?</span>
+          <span className="text-qb-ink-muted">When a downloaded description</span>
+          <RuleFields rule={offer} onChange={setOffer} />
+          <button
+            type="button"
+            className="qb-btn qb-btn-primary h-row"
+            onClick={() =>
+              run(async () => {
+                await api.saveBankPayeeRule({ id: 0, matchKind: offer.matchKind, pattern: offer.pattern, payeeName: offer.payeeName });
+                setOffer(null);
+              }, `Saved: descriptions like "${offer.description}" will be named ${offer.payeeName.trim()}.`)
+            }
+            disabled={busy}
+          >
+            Save rule
+          </button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setOffer(null)}>
+            No thanks
+          </button>
+        </div>
+      )}
       {error && <Notice kind="error" text={`Could not load bank lines: ${error}`} />}
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(320px,2fr)] gap-2">
@@ -276,10 +381,20 @@ export default function BankFeed({ accounts }) {
           <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
             <h2 className="text-md font-semibold">For review</h2>
             <span className="ml-2 text-xs text-qb-ink-muted">{pending.length} imported line{pending.length === 1 ? '' : 's'} · ↑↓ to move · Enter to approve</span>
+            <div className="ml-auto flex items-center gap-2">
+              <label className="flex items-center gap-1 text-xs" title="Also list the lines matched to transactions already entered">
+                <input type="checkbox" className="accent-qb-green" checked={showMatched} onChange={(e) => setShowMatched(e.target.checked)} />
+                Show matched ({matchedHere.length})
+              </label>
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={addTicked} disabled={busy || tickedLines.length === 0} title="Add every ticked line with its category">
+                Add {tickedLines.length || ''} ticked
+              </button>
+            </div>
           </div>
           <div ref={listRef} tabIndex={0} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-auto outline-none scrollbar-thin focus-visible:shadow-focus">
             <table className="qb-grid">
               <colgroup>
+                <col className="w-[30px]" />
                 <col className="w-[92px]" />
                 <col />
                 <col className="w-[104px]" />
@@ -288,6 +403,15 @@ export default function BankFeed({ accounts }) {
               </colgroup>
               <thead>
                 <tr>
+                  <th className="qb-grid-head text-center">
+                    <input
+                      type="checkbox"
+                      className="accent-qb-green"
+                      aria-label="Tick every line"
+                      checked={pending.length > 0 && tickedLines.length === pending.length}
+                      onChange={(e) => setTicked(e.target.checked ? new Set(pending.map((t) => t.id)) : new Set())}
+                    />
+                  </th>
                   <th className="qb-grid-head">Date</th>
                   <th className="qb-grid-head">Description</th>
                   <th className="qb-grid-head text-right">Spent</th>
@@ -298,7 +422,7 @@ export default function BankFeed({ accounts }) {
               <tbody>
                 {pending.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">
+                    <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">
                       Nothing to review. Import a statement file from your bank, or connect a bank to sync transactions automatically.
                     </td>
                   </tr>
@@ -313,14 +437,23 @@ export default function BankFeed({ accounts }) {
                       className="qb-grid-row"
                       onMouseDown={() => setSelectedId(t.id)}
                     >
+                      <td className="qb-grid-cell text-center">
+                        <input type="checkbox" className="accent-qb-green" checked={ticked.has(t.id)} onChange={() => toggleTick(t.id)} onMouseDown={(e) => e.stopPropagation()} aria-label={`Tick ${t.description}`} />
+                      </td>
                       <td className="qb-grid-cell">{formatDate(t.date)}</td>
                       <td className="qb-grid-cell" title={t.description}>{t.description}</td>
                       <td className="qb-grid-cell num">{t.amountCents < 0 ? formatCents(-t.amountCents) : ''}</td>
                       <td className="qb-grid-cell num">{t.amountCents > 0 ? formatCents(t.amountCents) : ''}</td>
                       <td className={`qb-grid-cell ${t.suggestion?.origin === 'DEFAULT' ? 'text-qb-ink-faint' : ''}`}>
                         <div className="flex min-w-0 items-center">
-                          <span className="min-w-0 truncate">{chosen !== null ? accountLabel(accounts, chosen) : ''}</span>
-                          {overrides[t.id] === undefined && <Confidence suggestion={t.suggestion} />}
+                          {t.suggestedMatch ? (
+                            <span className="min-w-0 truncate font-semibold text-qb-green-active" title={`Already entered: ${matchLabel(t.suggestedMatch)}`}>
+                              Match: {matchLabel(t.suggestedMatch)}
+                            </span>
+                          ) : (
+                            <span className="min-w-0 truncate">{chosen !== null ? accountLabel(accounts, chosen) : ''}</span>
+                          )}
+                          {!t.suggestedMatch && overrides[t.id] === undefined && <Confidence suggestion={t.suggestion} />}
                         </div>
                       </td>
                     </tr>
@@ -328,6 +461,41 @@ export default function BankFeed({ accounts }) {
                 })}
               </tbody>
             </table>
+            {showMatched && (
+              <table className="qb-grid mt-2" aria-label="Matched lines">
+                <thead>
+                  <tr>
+                    <th className="qb-grid-head">Date</th>
+                    <th className="qb-grid-head">Description</th>
+                    <th className="qb-grid-head text-right">Amount</th>
+                    <th className="qb-grid-head">Matched to</th>
+                    <th className="qb-grid-head" aria-label="Unmatch" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchedHere.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">No lines in this account are matched yet.</td>
+                    </tr>
+                  )}
+                  {matchedHere.map((m) => (
+                    <tr key={m.id} className="qb-grid-row">
+                      <td className="qb-grid-cell">{formatDate(m.date)}</td>
+                      <td className="qb-grid-cell" title={m.description}>{m.description}</td>
+                      <td className="qb-grid-cell num">{formatCents(m.amountCents)}</td>
+                      <td className="qb-grid-cell" title={m.origin === 'AUTO' ? 'Matched on import' : 'Matched by hand'}>
+                        {matchLabel(m.matched)}
+                      </td>
+                      <td className="qb-grid-cell">
+                        <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => unmatch(m)} disabled={busy}>
+                          Unmatch
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
@@ -347,6 +515,39 @@ export default function BankFeed({ accounts }) {
                 <dt className="text-qb-ink-muted">Account</dt>
                 <dd>{accountLabel(accounts, selected.bankAccountId)}</dd>
               </dl>
+
+              <div className="rounded-xs border border-qb-border bg-qb-canvas px-2 py-1 text-sm">
+                {selected.suggestedMatch ? (
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1">
+                      Already entered: <b>{matchLabel(selected.suggestedMatch)}</b>
+                    </span>
+                    <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => matchTo(selected, selected.suggestedMatch)} disabled={busy}>
+                      Match
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 text-qb-ink-muted">Already entered this one? Match it so it isn't added twice.</span>
+                    <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={findMatches} disabled={busy}>
+                      Find a match…
+                    </button>
+                  </div>
+                )}
+                {candidates?.id === selected.id && (
+                  <ul className="mt-1 max-h-[160px] overflow-auto border-t border-qb-border pt-1">
+                    {candidates.list.length === 0 && <li className="text-qb-ink-muted">Nothing entered in this account for this amount within four months.</li>}
+                    {candidates.list.map((m) => (
+                      <li key={m.journalEntryId} className="flex items-center gap-2 py-0.5">
+                        <span className="min-w-0 flex-1 truncate">{matchLabel(m)}</span>
+                        <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => matchTo(selected, m)} disabled={busy}>
+                          Match
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
               <label>
                 <span className="qb-label">{selected.amountCents < 0 ? 'Expense category' : 'Income category'}</span>
@@ -386,7 +587,9 @@ export default function BankFeed({ accounts }) {
                     ))}
                   </datalist>
                   {selected.payee && payees[selected.id] === undefined && (
-                    <span className="mt-0.5 block text-xs text-qb-ink-muted">Suggested from similar past transactions</span>
+                    <span className="mt-0.5 block text-xs text-qb-ink-muted">
+                      {selected.payeeOrigin === 'RULE' ? 'Named by a renaming rule (Rules…)' : 'Suggested from similar past transactions'}
+                    </span>
                   )}
                 </label>
               )}

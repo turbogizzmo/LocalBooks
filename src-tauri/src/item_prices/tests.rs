@@ -143,7 +143,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
                 income_account_id: services,
                 product_service_id: Some(c.consulting),
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

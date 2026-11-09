@@ -392,18 +392,8 @@ export default function CreditMemos({ accounts, intent }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           entryId={viewing.journalEntryId}
-          voucher={{
-            entryId: viewing.journalEntryId,
-            title: viewingRefund ? 'Refund Receipt' : 'Credit Memo',
-            number: String(viewing.creditNumber),
-            date: viewing.creditDate,
-            name: viewing.customerName,
-            nameLabel: 'Customer',
-            memo: viewing.memo,
-            amountCents: viewing.totalCents,
-            voided: viewing.isVoided,
-            footer: viewingRefund || viewing.isVoided ? null : `Credit remaining: ${formatCents(viewing.remainingCents)}`,
-          }}
+          // Drawn, printed and emailed as its credit memo form (Settings › Custom Forms › Credit Memo).
+          form={{ kind: 'CREDIT_MEMO', id: viewing.id }}
           notes={[!viewingRefund && !viewing.isVoided && { text: `${formatCents(viewing.remainingCents)} of ${formatCents(viewing.totalCents)} is left to apply.` }]}
           onNotice={setNotice}
           void={{

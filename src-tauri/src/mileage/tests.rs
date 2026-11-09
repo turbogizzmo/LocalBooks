@@ -168,7 +168,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
             income_account_id: i.income_account_id,
             product_service_id: i.product_service_id,
             class_id: None,
-            is_taxable: false,
+            is_taxable: false, service_date: None,
         })
         .collect();
     let replacement = crate::edits::replace_invoice(&pool, invoice.id, edited).await.unwrap();

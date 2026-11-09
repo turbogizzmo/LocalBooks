@@ -65,7 +65,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         rate_cents: rate,
         income_account_id: income,
         class_id: None,
-        is_taxable: false,
+        is_taxable: false, service_date: None,
     };
     let invoice_line = |l: SalesLineInput| InvoiceLineInput {
         description: l.description,
@@ -74,7 +74,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         income_account_id: l.income_account_id,
         product_service_id: l.product_service_id,
         class_id: None,
-        is_taxable: false,
+        is_taxable: false, service_date: None,
     };
     let bill_line = |account_id: i64, cents: i64, memo: &str, job: Option<i64>| BillLineInput {
         account_id,

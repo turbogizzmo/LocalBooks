@@ -6,8 +6,8 @@ design is saved in your company file.
 
 ## Change the design
 
-1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt** or
-   **Statement**.
+1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt**,
+   **Statement** or **Credit memo**.
 2. Change the layout on the left. The preview on the right updates as you go:
    - **Layout**: **Classic** (company and title side by side over a rule), **Modern** (the title in
      a colored band, banded rows) or **Compact** (smaller type, more lines per page).
@@ -19,7 +19,10 @@ design is saved in your company file.
      under the billing address. On sales forms, also whether the rep, the ship date and Ship via,
      and customer custom fields print. Each prints only when the form has a value.
    - **Line items**: the shaded header, line numbers, the quantity and rate columns, the column
-     labels, and item custom fields under each line. On invoices you can also hide the payments and credits listed above the balance due.
+     labels, item custom fields under each line, and the Service Date column (it prints only when
+     a line has a service date). On invoices you can also hide the payments and credits listed above the balance due.
+   - **Statements**: the aging summary under the amount due, and a **P.O. No.** column with the
+     customer's purchase order number on each invoice and credit memo (off until you turn it on).
    - **Messages**: a message to the customer, terms or payment instructions, and a footer for
      every page.
    - **Email**: the subject and message used when you email the form.
@@ -51,6 +54,25 @@ saved design, so the PDF matches the printout.
 For statements, go to **Sales › Customer Statements**, pick the period, and click a customer to
 preview their statement; **Print…** and **Save as PDF…** are above the preview. Tick several
 customers and click **Print statements** to print them all at once.
+
+## Print an envelope
+
+**Print Envelope…** prints an envelope addressed to the customer or vendor: from the **Print**
+menu on an invoice or sales receipt and from the **Actions** menu on a row of invoices, estimates,
+sales receipts or statements (using the form's Bill To), and from the **Actions** menu on a row
+of the Customer or Vendor list (using the customer's billing address or the vendor's address).
+
+The envelope's layout is in **Settings › Custom Forms › Envelope**, one for the whole company:
+
+- **Envelope size**: #10 business (the usual one), #9, Monarch, DL or C5. Choose the same size in
+  the print dialog, and feed the envelope the way your printer's manual shows.
+- **Font**: sans serif, serif or typewriter.
+- **Print the company's return address**: your company name and address (from Company details) in
+  the top left corner. Turn it off for envelopes with a printed return address.
+- **Move the address**: if your printer feeds envelopes off center, move the address right or down
+  (or, with a minus sign, left or up) by up to an inch; 72 points is an inch.
+
+The preview shows a sample envelope as you change it; **Save envelope** keeps it.
 
 ## Email it
 

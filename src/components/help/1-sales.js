@@ -109,7 +109,7 @@ export const topics = [
   {
     id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
     title: 'Take a customer’s early-payment discount',
-    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day, with nothing paid on it yet, takes the discount and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment reverses both.',
+    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day takes the discount on its open balance (what is left of a part-paid one) and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment, or recording it as a bounced check, reverses both. An invoice in another currency takes its discount in that currency, at the invoice’s own exchange rate.',
     keywords: 'discount early payment terms 2% 10 net 30 sales discounts receive payments customer took discount',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
@@ -168,6 +168,22 @@ export const topics = [
     body: 'Invoices, sales receipts, estimates and credit memos fill their Bill To and Ship To from the customer’s billing and shipping addresses (a job without its own uses its customer’s); change them on the form, and Copy Bill To puts the billing address in Ship To. Each document keeps its own copy and prints it, with the P.O. No. and FOB, so changing the customer later leaves saved documents as they were.',
     keywords: 'bill to ship to shipping address billing address sold to po number purchase order fob free on board header address block',
     go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
+    id: 'service-date-template', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'settings/forms'],
+    title: 'Service dates, the template on a form, and printed credit memos',
+    body: 'Service dates beside the Description heading adds a Service Date to each invoice and sales receipt line, printed in its own column when a line has one. The Template box in a sales form’s header picks the form style it prints and emails with; left on the default it follows the customer. Saved credit memos and refund receipts print as their own Credit memo form, with Credit To, P.O. No. and lines, laid out in Settings › Custom Forms.',
+    keywords: 'service date date of service line date template form style layout picker credit memo print refund receipt credit note',
+    go: { label: 'New invoice', view: 'sales/invoices', action: 'invoice' },
+    guide: 'invoices',
+  },
+  {
+    id: 'statement-charges', area: 'sales', views: ['sales/customers', 'sales/statements', 'sales/invoices'],
+    title: 'Enter statement charges (bill on the statement, no invoice)',
+    body: 'Enter statement charges… on a customer’s row opens their charge register: each charge posts to Accounts Receivable, shows in the A/R aging, and prints on the customer’s next statement as a Statement Charge with its description, without an invoice of its own. Receive Payments lists open statement charges, and a payment or credit applies to them like an invoice.',
+    keywords: 'statement charge charges register monthly billing retainer accounts receivable no invoice bill on statement',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
     guide: 'invoices',
   },
   {
@@ -311,9 +327,9 @@ export const topics = [
   {
     id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
-    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy. Files stay with a transaction when you edit it.',
+    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it.',
     guide: 'attachments',
-    keywords: 'attachment attach receipt document file scan photo pdf paperclip',
+    keywords: 'attachment attach receipt document file scan photo pdf paperclip save all zip export every attachment',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {

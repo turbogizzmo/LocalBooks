@@ -14,7 +14,7 @@
 
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use rust_xlsxwriter::{Color, ExcelDateTime, Format, FormatAlign, FormatBorder, Workbook, Worksheet};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::SqlitePool;
 
@@ -22,7 +22,7 @@ use crate::preferences;
 use crate::statements::{self, ClassFilter, ClassReportLine, LineKind, ReportLine};
 
 /// One report as a single worksheet.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Sheet {
     pub company: String,
@@ -43,7 +43,7 @@ pub struct Sheet {
     pub footer: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Column {
     pub label: String,
@@ -52,7 +52,7 @@ pub struct Column {
 }
 
 /// How a column's cells are read and written.
-#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ColumnKind {
     /// Strings as text; numbers stay numbers.
@@ -70,7 +70,7 @@ pub enum ColumnKind {
     Percent,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Row {
     #[serde(default)]
@@ -82,7 +82,7 @@ pub struct Row {
     pub cells: Vec<Value>,
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RowKind {
     #[default]

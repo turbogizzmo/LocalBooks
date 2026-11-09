@@ -45,7 +45,7 @@ fn invoice_input(pool_services: i64) -> InvoiceInput {
             income_account_id: pool_services,
             product_service_id: None,
             class_id: None,
-            is_taxable: false,
+            is_taxable: false, service_date: None,
         }],
         currency: None,
         tax_rate_id: None,
@@ -70,11 +70,11 @@ async fn a_queued_check_posts_without_a_number_and_takes_one_when_it_prints() {
     assert_eq!(queue.iter().map(|x| x.id).collect::<Vec<_>>(), vec![first.id, second.id], "oldest first");
 
     // 1001 is taken by the check written by hand.
-    let clash = mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1001".into() }]).await.unwrap_err();
+    let clash = mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1001".into(), bill_check_id: None }]).await.unwrap_err();
     assert!(clash.starts_with("PRINT_NUMBER_USED"), "{clash}");
     let twice = mark_checks_printed(
         &pool,
-        vec![PrintedCheck { expense_id: first.id, check_number: "1002".into() }, PrintedCheck { expense_id: second.id, check_number: "1002".into() }],
+        vec![PrintedCheck { expense_id: first.id, check_number: "1002".into(), bill_check_id: None }, PrintedCheck { expense_id: second.id, check_number: "1002".into(), bill_check_id: None }],
     )
     .await
     .unwrap_err();
@@ -82,7 +82,7 @@ async fn a_queued_check_posts_without_a_number_and_takes_one_when_it_prints() {
     assert_eq!(queued_checks(&pool, None).await.unwrap().len(), 2, "a refused batch changes nothing");
 
     // Only the first printed cleanly; the second stays queued without a number.
-    assert_eq!(mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1002".into() }]).await.unwrap(), 1);
+    assert_eq!(mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1002".into(), bill_check_id: None }]).await.unwrap(), 1);
     let queue = queued_checks(&pool, None).await.unwrap();
     assert_eq!(queue.iter().map(|x| x.id).collect::<Vec<_>>(), vec![second.id]);
     let all = crate::expenses::list_expenses(&pool).await.unwrap();
@@ -95,7 +95,7 @@ async fn a_queued_check_posts_without_a_number_and_takes_one_when_it_prints() {
     let renumber = sqlx::query("UPDATE expenses SET check_number = '2000' WHERE id = ?1").bind(first.id).execute(&pool).await.unwrap_err();
     assert!(renumber.to_string().contains("EXP_IMMUTABLE"), "{renumber}");
     // And a printed check can't be printed again through the queue.
-    let again = mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1010".into() }]).await.unwrap_err();
+    let again = mark_checks_printed(&pool, vec![PrintedCheck { expense_id: first.id, check_number: "1010".into(), bill_check_id: None }]).await.unwrap_err();
     assert!(again.starts_with("PRINT_NOT_QUEUED"), "{again}");
 }
 
@@ -189,4 +189,52 @@ async fn the_print_later_default_is_remembered_per_form() {
     assert_eq!(crate::preferences::get(&pool, PREF_CHECKS).await.unwrap(), "true");
     assert_eq!(crate::preferences::get(&pool, PREF_INVOICES).await.unwrap(), "false");
     assert!(Form::parse("BILL").is_err());
+}
+
+#[tokio::test]
+async fn pay_bills_checks_wait_in_the_queue_one_per_vendor_and_take_their_number_when_printed() {
+    use crate::expenses::{BillInput, BillLineInput, BillPaymentInput};
+    let pool = test_pool().await;
+    let (checking, rent, card) = (account_id(&pool, "1010").await, account_id(&pool, "6300").await, account_id(&pool, "2100").await);
+    let bill = |vendor: &str, number: &str, cents: i64| BillInput {
+        terms_id: None,
+        vendor_name: vendor.into(),
+        bill_number: Some(number.into()),
+        bill_date: d(1),
+        due_date: d(31),
+        memo: None,
+        total_cents: cents,
+        lines: vec![BillLineInput { account_id: rent, amount_cents: cents, memo: None, quantity_e4: None, rate_cents: None, product_service_id: None, class_id: None, customer_id: None, billable: None }],
+    };
+    let mut ids = Vec::new();
+    for (vendor, number, cents) in [("Landlord", "L-1", 100_000), ("Landlord", "L-2", 20_000), ("Plumber", "P-9", 7_500)] {
+        ids.push(crate::expenses::post_vendor_bill(&pool, bill(vendor, number, cents)).await.unwrap().id);
+    }
+    let pay = |bill_id: i64, cents: i64| BillPaymentInput { bill_id, payment_account_id: checking, payment_date: d(10), amount_cents: cents, reference: Some("777".into()), to_be_printed: true };
+    crate::expenses::pay_vendor_bills(&pool, vec![pay(ids[0], 100_000), pay(ids[1], 20_000), pay(ids[2], 7_500)]).await.unwrap();
+
+    // Posted already, with no number yet; one check per vendor.
+    let refs: Vec<Option<String>> = sqlx::query_scalar("SELECT reference FROM bill_payments ORDER BY id").fetch_all(&pool).await.unwrap();
+    assert_eq!(refs, vec![None, None, None]);
+    let queue = queued_bill_checks(&pool, None).await.unwrap();
+    assert_eq!(
+        queue.iter().map(|c| (c.payee_name.as_str(), c.total_cents, c.memo.as_deref(), c.bill_count)).collect::<Vec<_>>(),
+        [("Landlord", 120_000, Some("Bills L-1, L-2"), 2), ("Plumber", 7_500, Some("Bill P-9"), 1)]
+    );
+
+    let landlord = PrintedCheck { expense_id: 0, check_number: "1001".into(), bill_check_id: Some(queue[0].id) };
+    assert_eq!(mark_checks_printed(&pool, vec![landlord.clone()]).await.unwrap(), 1);
+    let refs: Vec<Option<String>> = sqlx::query_scalar("SELECT reference FROM bill_payments ORDER BY id").fetch_all(&pool).await.unwrap();
+    assert_eq!(refs, vec![Some("1001".into()), Some("1001".into()), None]);
+    assert!(mark_checks_printed(&pool, vec![landlord]).await.unwrap_err().starts_with("PRINT_NOT_QUEUED"));
+    let reused = PrintedCheck { expense_id: 0, check_number: "1001".into(), bill_check_id: Some(queue[1].id) };
+    assert!(mark_checks_printed(&pool, vec![reused]).await.unwrap_err().starts_with("PRINT_NUMBER_USED"));
+    assert_eq!(crate::expenses::next_check_number(&pool, checking).await.unwrap(), "1002");
+    assert_eq!(queued_bill_checks(&pool, None).await.unwrap().len(), 1);
+
+    // A printed number is fixed; a card can't print a check.
+    assert!(sqlx::query("UPDATE bill_payments SET reference = '2000' WHERE reference = '1001'").execute(&pool).await.is_err());
+    let other = crate::expenses::post_vendor_bill(&pool, bill("Plumber", "P-10", 1_000)).await.unwrap().id;
+    let err = crate::expenses::pay_vendor_bills(&pool, vec![BillPaymentInput { payment_account_id: card, ..pay(other, 1_000) }]).await.unwrap_err();
+    assert!(err.starts_with("PRINT_NOT_A_CHECK"), "{err}");
 }
