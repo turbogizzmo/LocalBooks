@@ -14,7 +14,8 @@ test('a typed charge becomes cents to post; a blank row is skipped', () => {
 
 test('a charge needs an amount, a date by the statement end and an account', () => {
   assert.match(reconcileCharges([{ ...fee, amount: '0' }], '2026-09-30').error, /more than zero/);
-  assert.match(reconcileCharges([{ ...fee, amount: 'abc' }], '2026-09-30').error, /more than zero/);
+  assert.match(reconcileCharges([{ ...fee, amount: 'abc' }], '2026-09-30').error, /as a number/);
+  assert.match(reconcileCharges([{ ...fee, kind: 'OTHER' }], '2026-09-30').error, /Unknown kind/);
   assert.match(reconcileCharges([{ ...fee, date: '2026-10-01' }], '2026-09-30').error, /on or before/);
   assert.match(reconcileCharges([{ ...interest, amount: '1.25' }], '2026-09-30').error, /^Interest earned: choose the account/);
 });

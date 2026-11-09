@@ -55,7 +55,15 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
             <div key={kind} className="flex flex-wrap items-end gap-2">
               <label>
                 <span className="qb-label">{label}</span>
-                <input className="qb-input num w-[110px]" value={rows[i].amount} onChange={(e) => update(i, { amount: e.target.value })} placeholder="0.00" inputMode="decimal" data-money />
+                <input
+                  className="qb-input num w-[110px]"
+                  value={rows[i].amount}
+                  onChange={(e) => update(i, { amount: e.target.value })}
+                  placeholder="0.00"
+                  inputMode="decimal"
+                  data-money
+                  aria-describedby={charges.error ? 'reconcile-charge-error' : undefined}
+                />
               </label>
               <label>
                 <span className="qb-label">Date</span>
@@ -80,7 +88,11 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
               )}
             </div>
           ))}
-          {charges.error && <span className="text-sm text-qb-negative">{charges.error}</span>}
+          {charges.error && (
+            <span id="reconcile-charge-error" role="alert" className="text-sm text-qb-negative">
+              {charges.error}
+            </span>
+          )}
         </div>
       )}
       <button type="submit" className="qb-btn qb-btn-primary" disabled={busy || cents === null || Boolean(dateBad) || Boolean(charges.error)}>
@@ -184,7 +196,8 @@ export default function Reconcile({ accounts }) {
     try {
       await api.startReconciliation(accountId, date, cents, charges);
       if (charges.length > 0) {
-        setNotice({ kind: 'success', text: `${charges.length === 1 ? 'The charge is' : 'The service charge and interest are'} posted and already cleared below.` });
+        const what = CHARGE_KINDS.filter((k) => charges.some((c) => c.kind === k.kind)).map((k) => k.label.toLowerCase());
+        setNotice({ kind: 'success', text: `The ${what.join(' and ')} ${what.length === 1 ? 'is' : 'are'} posted and already cleared below.` });
       }
       setEditing(false);
       await load(accountId);
