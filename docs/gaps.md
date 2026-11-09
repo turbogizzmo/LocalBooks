@@ -72,7 +72,7 @@ re-check one against the code before you start it.
 | T29 | done (#195) | S | Make Deposits has no cash back (account, memo, amount) | Cash back posts to its account and the bank gets the net; the deposit prints with it |
 | T30 | open | M | Customers, vendors, items and accounts can't be merged | Renaming one to another's name offers to merge; history moves and reports tie out |
 | T31 | open | M | No Customize Columns on lists, centers, registers, Reconcile or form grids | Columns can be hidden and reordered, remembered per user |
-| T32 | open | M | File › Print Forms covers invoices, checks and statements only: no credit memos, sales receipts, purchase orders, mailing labels, bill payment stubs or 1099s / 1096 (some need T11 / T23 layouts) | Each prints in a batch from Print Forms |
+| T32 | done (#253) | M | File › Print Forms covers invoices, checks and statements only: no credit memos, sales receipts, purchase orders, mailing labels, bill payment stubs or 1099s / 1096 (some need T11 / T23 layouts) | Each prints in a batch from Print Forms |
 | T33 | open | S–M | No Edit-menu commands for the open list (New, Edit, Delete, Make Inactive, Show All) and no New Transactions / Print / Excel menus on the customer, vendor and item lists | The commands work from the Edit menu and the list's toolbar |
 | T34 | open | S–M | No inventory reorder points, "inventory to reorder" reminder or Inventory Activities submenu; the Preferences link text promises reorder points | Items have a reorder point; Reminders lists items at or below it |
 | T35 | open | M | No batch invoices (one invoice to many customers) and no payment reminders (review, send, schedule by customer group) | Both create and send from the Customers menu |
