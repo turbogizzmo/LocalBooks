@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Stripe payouts with their fees.** Banking › Payout Feeds connects a Stripe account with a
+  read-only key and brings each payout in as a deposit of its gross sales, less Stripe's fees,
+  refunds and chargebacks, so the deposit matches the bank line and fees are an expense.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

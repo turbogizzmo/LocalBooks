@@ -93,6 +93,7 @@ features![
     mcp,
     migration,
     mileage,
+    payout_feeds,
     payroll_import,
     preferences,
     price_levels,

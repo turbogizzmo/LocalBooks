@@ -67,6 +67,7 @@ mod money;
 mod mail_app;
 mod parties;
 mod payroll_import;
+mod payout_feeds;
 mod permissions;
 mod pdf;
 mod mcp_server;
