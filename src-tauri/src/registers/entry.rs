@@ -4,12 +4,16 @@
 //! is recorded as a check, a deposit as a deposit, a charge on a card as a card expense and a
 //! payment or refund on a card as a card credit. Each goes through the same code as its own form
 //! (`expenses::post_expense`, `banking::post_bank_deposit`), so the ledger rules stay there.
+//!
+//! Two rows stand for other forms: one line to another bank account is a transfer between the two
+//! (`banking::post_transfer`), and a deposit from Undeposited Funds deposits the payments waiting
+//! there that make up its amount, as Make Deposits would.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::banking::{DepositInput, DepositOtherLine};
+use crate::banking::{DepositInput, DepositItemRef, DepositOtherLine, TransferInput};
 use crate::expenses::{ExpenseInput, SplitLineInput};
 use crate::ledger::db_err;
 
@@ -58,9 +62,9 @@ pub struct RegisterEntryInput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterEntryPosted {
-    /// `CHECK`, `DEPOSIT`, `EXPENSE` or `CARD_CREDIT`, as journal entries show it.
+    /// `CHECK`, `DEPOSIT`, `EXPENSE`, `CARD_CREDIT` or `TRANSFER`, as journal entries show it.
     pub source_type: String,
-    /// The check, expense or deposit's id in its own table.
+    /// The check, expense, deposit or transfer's id in its own table.
     pub source_id: i64,
     pub journal_entry_id: i64,
 }
@@ -110,6 +114,63 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         return Err("REG_ENTRY_SAME_ACCOUNT: the other account can't be the register's own account".into());
     }
     let memo = clean(input.memo.as_deref());
+
+    // One line to another bank account: a transfer, out of this register on its Payment or Charge
+    // side and into it on its Deposit or Credit side.
+    let single: Option<(i64, String, bool)> = match input.lines.as_slice() {
+        [line] => sqlx::query_as("SELECT id, account_type, is_system FROM chart_of_accounts WHERE id = ?1")
+            .bind(line.account_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_err)?,
+        _ => None,
+    };
+    if let Some((other, _, _)) = single.as_ref().filter(|(_, t, _)| t == "BANK") {
+        let outflow = matches!(input.side, RegisterSide::Payment | RegisterSide::Charge);
+        let (from, to) = if outflow { (input.account_id, *other) } else { (*other, input.account_id) };
+        let transfer = TransferInput { from_account_id: from, to_account_id: to, transfer_date: input.entry_date, amount_cents: input.lines[0].amount_cents, memo: memo.map(str::to_string) };
+        let id = crate::banking::post_transfer(pool, transfer).await?;
+        let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM transfers WHERE id = ?1").bind(id).fetch_one(pool).await.map_err(db_err)?;
+        return Ok(RegisterEntryPosted {
+            source_type: "TRANSFER".into(),
+            source_id: id,
+            journal_entry_id: entry.ok_or("REG_ENTRY_NOT_POSTED: the transfer was saved but not posted")?,
+        });
+    }
+
+    // A deposit from Undeposited Funds banks the payments waiting there: the one that is the
+    // amount, or else all of them up to the row's date when together they are.
+    if kind == "DEPOSIT" {
+        if let Some((undeposited, _, true)) = single.as_ref().filter(|(_, t, _)| t == "OTHER_CURRENT_ASSET") {
+            let amount = input.lines[0].amount_cents;
+            let on_or_before = |date: &str| date.parse::<NaiveDate>().is_ok_and(|d| d <= input.entry_date);
+            let waiting: Vec<_> = crate::banking::list_undeposited(pool)
+                .await?
+                .into_iter()
+                .filter(|w| w.undeposited_account_id == *undeposited && on_or_before(&w.date))
+                .collect();
+            let together = waiting.iter().try_fold(0i64, |sum, w| sum.checked_add(w.amount_cents));
+            let chosen: Vec<_> = match waiting.iter().find(|w| w.amount_cents == amount) {
+                Some(one) => vec![one],
+                None if together == Some(amount) => waiting.iter().collect(),
+                None => {
+                    return Err(format!(
+                        "REG_ENTRY_UNDEPOSITED_NO_MATCH: no payment waiting in Undeposited Funds is {}, and together they aren't either; choose them in Make Deposits",
+                        crate::ledger::format_cents(amount)
+                    ))
+                }
+            };
+            let items = chosen.into_iter().map(|w| DepositItemRef { kind: w.kind.clone(), id: w.id }).collect();
+            let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo: memo.map(str::to_string), items, other_lines: Vec::new(), cash_back: None };
+            let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
+            let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
+            return Ok(RegisterEntryPosted {
+                source_type: kind.into(),
+                source_id: deposit_id,
+                journal_entry_id: entry.ok_or("REG_ENTRY_NOT_POSTED: the deposit was saved but not posted")?,
+            });
+        }
+    }
 
     if kind == "DEPOSIT" {
         // The payee is the deposit's Received From: a customer or vendor of that name. A name that

@@ -504,6 +504,74 @@ BEGIN
       AND EXISTS (SELECT 1 FROM deposit_lines WHERE sales_receipt_id = OLD.id AND is_voided = 0);
 END;
 
+DROP TRIGGER trg_bounced_receipt_void_receipt;
+CREATE TRIGGER trg_bounced_receipt_void_receipt
+BEFORE UPDATE OF is_voided ON sales_receipts
+WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
+       AND NEW.id IS OLD.id
+       AND NEW.receipt_number IS OLD.receipt_number
+       AND (NEW.customer_id IS OLD.customer_id OR EXISTS (SELECT 1 FROM name_merges m WHERE m.applying = 1 AND m.kind = 'CUSTOMER' AND m.from_id = OLD.customer_id AND m.to_id = NEW.customer_id))
+       AND NEW.receipt_date IS OLD.receipt_date
+       AND NEW.deposit_account_id IS OLD.deposit_account_id
+       AND NEW.payment_method IS OLD.payment_method
+       AND NEW.reference IS OLD.reference
+       AND NEW.memo IS OLD.memo
+       AND NEW.total_cents IS OLD.total_cents
+       AND NEW.journal_entry_id IS OLD.journal_entry_id
+       AND NEW.created_at IS OLD.created_at
+       AND NEW.is_voided IS OLD.is_voided
+       AND NEW.tax_rate_id IS OLD.tax_rate_id
+       AND NEW.tax_cents IS OLD.tax_cents
+       AND NEW.discount_cents IS OLD.discount_cents
+       AND NEW.sales_rep_id IS OLD.sales_rep_id
+       AND NEW.ship_date IS OLD.ship_date
+       AND NEW.ship_method_id IS OLD.ship_method_id
+       AND NEW.payment_method_id IS OLD.payment_method_id
+       AND NEW.customer_message_id IS OLD.customer_message_id
+       AND NEW.bill_to IS OLD.bill_to
+       AND NEW.ship_to IS OLD.ship_to
+       AND NEW.po_number IS OLD.po_number
+       AND NEW.fob IS OLD.fob)
+  AND (NEW.is_voided = 1 AND OLD.is_voided = 0)
+BEGIN
+    SELECT RAISE(ABORT, 'VOID_BOUNCED: this sales receipt bounced; void the bounced check first')
+    WHERE EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE sales_receipt_id = NEW.id AND is_voided = 0);
+END;
+
+DROP TRIGGER trg_uf_transferred_receipt_void;
+CREATE TRIGGER trg_uf_transferred_receipt_void
+BEFORE UPDATE OF is_voided ON sales_receipts
+WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
+       AND NEW.id IS OLD.id
+       AND NEW.receipt_number IS OLD.receipt_number
+       AND (NEW.customer_id IS OLD.customer_id OR EXISTS (SELECT 1 FROM name_merges m WHERE m.applying = 1 AND m.kind = 'CUSTOMER' AND m.from_id = OLD.customer_id AND m.to_id = NEW.customer_id))
+       AND NEW.receipt_date IS OLD.receipt_date
+       AND NEW.deposit_account_id IS OLD.deposit_account_id
+       AND NEW.payment_method IS OLD.payment_method
+       AND NEW.reference IS OLD.reference
+       AND NEW.memo IS OLD.memo
+       AND NEW.total_cents IS OLD.total_cents
+       AND NEW.journal_entry_id IS OLD.journal_entry_id
+       AND NEW.created_at IS OLD.created_at
+       AND NEW.is_voided IS OLD.is_voided
+       AND NEW.tax_rate_id IS OLD.tax_rate_id
+       AND NEW.tax_cents IS OLD.tax_cents
+       AND NEW.discount_cents IS OLD.discount_cents
+       AND NEW.sales_rep_id IS OLD.sales_rep_id
+       AND NEW.ship_date IS OLD.ship_date
+       AND NEW.ship_method_id IS OLD.ship_method_id
+       AND NEW.payment_method_id IS OLD.payment_method_id
+       AND NEW.customer_message_id IS OLD.customer_message_id
+       AND NEW.bill_to IS OLD.bill_to
+       AND NEW.ship_to IS OLD.ship_to
+       AND NEW.po_number IS OLD.po_number
+       AND NEW.fob IS OLD.fob)
+  AND (NEW.is_voided = 1 AND OLD.is_voided = 0)
+BEGIN
+    SELECT RAISE(ABORT, 'VOID_DEPOSITED: this sales receipt was moved out of Undeposited Funds by a transfer; void that first')
+    WHERE EXISTS (SELECT 1 FROM undeposited_transfers WHERE sales_receipt_id = NEW.id AND is_voided = 0);
+END;
+
 DROP TRIGGER trg_est_status_rules;
 CREATE TRIGGER trg_est_status_rules
 BEFORE UPDATE ON estimates
@@ -630,6 +698,39 @@ BEGIN
        OR NEW.bank_fee_account_id IS NOT OLD.bank_fee_account_id OR NEW.fee_invoice_id IS NOT OLD.fee_invoice_id
        OR NEW.memo IS NOT OLD.memo OR NEW.journal_entry_id IS NOT OLD.journal_entry_id
        OR NEW.created_at IS NOT OLD.created_at;
+    SELECT RAISE(ABORT, 'BOUNCE_UNVOID: a voided bounced check cannot be restored')
+    WHERE OLD.is_voided = 1 AND NEW.is_voided = 0;
+    SELECT RAISE(ABORT, 'BOUNCE_VOID_ENTRY_ACTIVE: the bounced check''s journal entry must be voided first')
+    WHERE OLD.is_voided = 0 AND NEW.is_voided = 1
+      AND NOT EXISTS (SELECT 1 FROM journal_entries WHERE id = OLD.journal_entry_id AND is_voided = 1);
+END;
+
+DROP TRIGGER trg_bounced_receipt_update_rules;
+CREATE TRIGGER trg_bounced_receipt_update_rules
+BEFORE UPDATE ON bounced_sales_receipts
+WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
+       AND NEW.id IS OLD.id
+       AND NEW.sales_receipt_id IS OLD.sales_receipt_id
+       AND NEW.deposit_line_id IS OLD.deposit_line_id
+       AND (NEW.customer_id IS OLD.customer_id OR EXISTS (SELECT 1 FROM name_merges m WHERE m.applying = 1 AND m.kind = 'CUSTOMER' AND m.from_id = OLD.customer_id AND m.to_id = NEW.customer_id))
+       AND NEW.bank_account_id IS OLD.bank_account_id
+       AND NEW.bounce_date IS OLD.bounce_date
+       AND NEW.amount_cents IS OLD.amount_cents
+       AND NEW.bank_fee_cents IS OLD.bank_fee_cents
+       AND NEW.bank_fee_account_id IS OLD.bank_fee_account_id
+       AND NEW.charge_invoice_id IS OLD.charge_invoice_id
+       AND NEW.memo IS OLD.memo
+       AND NEW.journal_entry_id IS OLD.journal_entry_id
+       AND NEW.is_voided IS OLD.is_voided
+       AND NEW.created_at IS OLD.created_at)
+BEGIN
+    SELECT RAISE(ABORT, 'BOUNCE_IMMUTABLE: a recorded bounced check cannot be changed; void it instead')
+    WHERE NEW.sales_receipt_id IS NOT OLD.sales_receipt_id OR NEW.deposit_line_id IS NOT OLD.deposit_line_id
+       OR NEW.customer_id IS NOT OLD.customer_id OR NEW.bank_account_id IS NOT OLD.bank_account_id
+       OR NEW.bounce_date IS NOT OLD.bounce_date OR NEW.amount_cents IS NOT OLD.amount_cents
+       OR NEW.bank_fee_cents IS NOT OLD.bank_fee_cents OR NEW.bank_fee_account_id IS NOT OLD.bank_fee_account_id
+       OR NEW.charge_invoice_id IS NOT OLD.charge_invoice_id OR NEW.memo IS NOT OLD.memo
+       OR NEW.journal_entry_id IS NOT OLD.journal_entry_id OR NEW.created_at IS NOT OLD.created_at;
     SELECT RAISE(ABORT, 'BOUNCE_UNVOID: a voided bounced check cannot be restored')
     WHERE OLD.is_voided = 1 AND NEW.is_voided = 0;
     SELECT RAISE(ABORT, 'BOUNCE_VOID_ENTRY_ACTIVE: the bounced check''s journal entry must be voided first')

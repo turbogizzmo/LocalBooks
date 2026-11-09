@@ -39,11 +39,20 @@ A 📎 after the number marks a transaction with files (📎3 means three). Clic
   accountant or open it in another program.
 - Click **×** next to a file to remove it from the transaction. LocalBooks asks first.
 - Click **Attach file…** in the strip to add more.
+- With two or more files, **Save all…** saves them together in one zip file.
 
 Click the 📎 again to close the strip.
 
 In **Accounting › Journal Entries**, click any entry to open it: its files are listed under its
 lines, with **Attach file…**. Every transaction is in the journal, so this works for any of them.
+
+## Save every attachment at once
+
+**Settings › File & Data › Save All Attachments…** saves every file attached to any transaction
+in one zip file, for your accountant or an auditor, or to keep outside LocalBooks. Inside the zip
+each transaction has its own folder, named by its date, its kind and its number, such as
+`2026-10-01 Bill 118 (entry 42)`; two files with the same name in one transaction are kept as
+`receipt.pdf` and `receipt (2).pdf`. Nothing in the company file changes.
 
 ## When you edit or void a transaction
 
