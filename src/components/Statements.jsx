@@ -7,8 +7,15 @@ import { periodRange } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 
 /** Sales › Customer Statements: pick a period and customers, preview, and print or save as PDF. */
-export default function Statements() {
+export default function Statements({ intent = null }) {
   const [[start, end], setRange] = useState(() => periodRange('lastMonth'));
+  // Customer groups: pick a group's customers; a group's statement reminder is marked sent here.
+  const groups = useLedgerQuery(api.listCustomerGroups);
+  const [groupId, setGroupId] = useState(() => intent?.data?.groupId ?? null);
+  useEffect(() => {
+    if (intent?.data?.groupId) setGroupId(intent.data.groupId);
+  }, [intent]);
+  const group = (groups.data ?? []).find((g) => g.id === groupId) ?? null;
   const customers = useLedgerQuery(() => api.listStatementCustomers(start, end));
   const [picked, setPicked] = useState(() => new Set());
   const [preview, setPreview] = useState(null); // { customerId, form }
@@ -25,6 +32,20 @@ export default function Statements() {
   }, [start, end]);
 
   const list = customers.data ?? [];
+  // Choosing a group ticks its customers who have a statement this period.
+  const listKey = list.map((c) => c[0]).join(',');
+  useEffect(() => {
+    if (group) setPicked(new Set(list.map((c) => c[0]).filter((id) => group.memberIds.includes(id))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id, group?.memberIds?.join(','), listKey]);
+  const markSent = async () => {
+    try {
+      await api.markGroupStatementsSent(group.id);
+      setNotice({ kind: 'success', text: `${group.name}: statements marked sent. The next reminder is in ${group.statement.everyDays} days.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
   const toggle = (id) =>
     setPicked((p) => {
       const next = new Set(p);
@@ -54,6 +75,22 @@ export default function Statements() {
           <span className="qb-label">To (statement date)</span>
           <DateBox className="qb-input w-[132px]" value={end} onChange={(e) => setRange([start, e.target.value])} aria-invalid={end < start} />
         </label>
+        <label>
+          <span className="qb-label">Customer group</span>
+          <select className="qb-input w-[180px]" value={groupId ?? ''} onChange={(e) => setGroupId(e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">All customers</option>
+            {(groups.data ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.memberCount})
+              </option>
+            ))}
+          </select>
+        </label>
+        {group?.statement.everyDays && (
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg self-end px-2" onClick={markSent} title="Starts the wait for this group's next statement reminder">
+            Mark sent
+          </button>
+        )}
         <span className="self-center text-xs text-qb-ink-muted">Customers with a balance or activity in the period. A customer’s statement includes its jobs.</span>
         <button type="button" className="qb-btn qb-btn-primary ml-auto" onClick={print} disabled={picked.size === 0}>
           Print {picked.size || ''} statement{picked.size === 1 ? '' : 's'}
