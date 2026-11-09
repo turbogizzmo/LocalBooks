@@ -1,3 +1,4 @@
+import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
@@ -5,7 +6,7 @@ import { useVendorRecall } from '../lib/recall.js';
 import AccountSelect, { accountLabel, EndingBalance } from './AccountSelect.jsx';
 import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
-import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { useVoucherActions } from './VoucherPrint.jsx';
 import MoneyBar from './MoneyBar.jsx';
 import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
@@ -74,7 +75,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   // Files to attach once the bill posts, such as the vendor's invoice.
   const [files, setFiles] = useState([]);
   const [showAttachments, setShowAttachments] = useState(false);
-  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
+  const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
   const formClass = useFormClass(accounts);
   // Closing the window (or stepping to another bill) asks first while the bill has entries not
   // yet saved. The due date is left out: it fills in by itself from the date and terms.
@@ -213,24 +215,21 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
           },
         }),
         [
-          {
-            id: 'print',
-            label: 'Print',
-            icon: 'Print',
-            hint: editing ? 'Print this bill as a voucher with the accounts it posted to' : 'Save the bill first, then print it',
-            disabled: !editing?.bill.journalEntryId,
-            onClick: () =>
-              printVoucher({
-                entryId: editing.bill.journalEntryId,
-                title: 'Bill',
-                number: editing.bill.billNumber,
-                date: editing.bill.billDate,
-                dueDate: editing.bill.dueDate,
-                name: editing.bill.vendorName,
-                nameLabel: 'Vendor',
-                amountCents: editing.bill.totalCents,
-              }),
-          },
+          ...voucherItems(
+            editing?.bill.journalEntryId
+              ? {
+                  entryId: editing.bill.journalEntryId,
+                  title: 'Bill',
+                  number: editing.bill.billNumber,
+                  date: editing.bill.billDate,
+                  dueDate: editing.bill.dueDate,
+                  name: editing.bill.vendorName,
+                  nameLabel: 'Vendor',
+                  amountCents: editing.bill.totalCents,
+                }
+              : null,
+            { hint: 'Save the bill first, then print it' },
+          ),
           editing
             ? {
                 id: 'attach',
@@ -254,7 +253,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       {reports.panel}
-      {voucherPortal}
+      {voucherElements}
       {toolbar}
       {showAttachments && editing?.bill.journalEntryId && (
         <div className="border-b border-qb-border bg-qb-canvas">
@@ -378,6 +377,8 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const checks = !ach && account?.accountType === 'BANK';
   const [checkNo, setCheckNo] = useState('');
   const [printChecks, setPrintChecks] = useState(true);
+  // Print later (as on Write Checks): the checks wait in File › Print Forms › Checks unnumbered.
+  const printLater = usePrintLater('CHECK', checks);
 
   useEffect(() => firstRef.current?.focus(), []);
 
@@ -501,10 +502,11 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     if (picked.length === 0) return setError('Select at least one bill.');
     if (bad.length > 0) return setError('Each payment must be above zero (unless credits cover the bill) and, with its credits, no more than the open balance.');
     if (ach) return payByAch();
-    if (checks && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
+    if (checks && !printLater.on && firstCheck && !numbered && payees.length > 1) return setError('To number a check for each vendor, the check number must be digits only.');
     setBusy(true);
     try {
-      const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: checkNumber(b.vendorId) }));
+      const queued = printLater.on;
+      const payments = paying.map((b) => ({ billId: b.id, paymentAccountId: accountId, paymentDate: date, amountCents: cents(b), reference: queued ? null : checkNumber(b.vendorId), toBePrinted: queued }));
       const used = credits.filter((c) => picked.some((b) => b.id === c.billId)).map((c) => ({ creditId: c.creditId, documentId: c.billId, amountCents: c.amountCents, appliedDate: date }));
       const taken = discounts.filter((x) => picked.some((b) => b.id === x.billId));
       const count = used.length + taken.length > 0 ? await api.payBillsWithCredits(payments, used, taken, date) : await api.payVendorBills(payments);
@@ -523,9 +525,14 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
             };
           })
         : [];
-      const range = written.length && firstCheck ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}` : '';
+      if (checks) printLater.remember(queued);
+      const range = queued
+        ? `; ${payees.length} check${payees.length === 1 ? ' waits' : 's wait'} in File › Print Forms › Checks`
+        : written.length && firstCheck
+          ? ` with check${written.length === 1 ? ` #${firstCheck}` : `s #${firstCheck}–${lastCheck ?? firstCheck}`}`
+          : '';
       const creditNote = used.length + taken.length > 0 ? `, after ${formatCents(creditTotal)} of discounts and credits` : '';
-      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks ? written : []);
+      onDone(`Paid ${count} bill${count === 1 ? '' : 's'} totalling ${formatCents(total)}${creditNote}${range}.`, 'success', printChecks && !queued ? written : []);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -590,18 +597,19 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           <span className="qb-label">Payment date</span>
           <DateBox className="qb-input w-[132px]" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
-        {checks && (
+        {checks && !printLater.on && (
           <label>
             <span className="qb-label">{payees.length > 1 ? 'First check no.' : 'Check no.'}</span>
             <CheckNumberBox className="qb-input num w-[90px]" value={checkNo} onChange={(e) => setCheckNo(e.target.value)} aria-label="Check number" />
           </label>
         )}
-        {checks && (
+        {checks && !printLater.on && (
           <label className="flex h-row items-center gap-1 self-end text-sm">
             <input type="checkbox" className="accent-qb-green" checked={printChecks} onChange={(e) => setPrintChecks(e.target.checked)} />
             Print checks
           </label>
         )}
+        {checks && <PrintLaterBox printLater={printLater} />}
         {ach && (
           <label>
             <span className="qb-label">Vendors paid on</span>

@@ -9,6 +9,9 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
+
+const accountParent = (a) => a.parentId ?? null;
 
 const SECTIONS = [
   { id: 'ASSET', label: 'Assets' },
@@ -169,9 +172,14 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
     if (intent?.action === 'new-account') setDialog({ account: null });
   }, [intent]);
 
-  const { ordered, rolled, hasChildren } = useMemo(() => buildTree(accounts), [accounts]);
+  const { rolled, hasChildren } = useMemo(() => buildTree(accounts), [accounts]);
   const query = search.trim().toLowerCase();
   const cols = useColumns('accounts', ACCOUNT_COLUMNS);
+  // The custom order (drag a row among its siblings), shown as a tree or flat; a search shows every match.
+  const listOrder = useListOrder('ACCOUNTS', accounts, { parentOf: accountParent, dragEnabled: !query, onNotice: setNotice });
+  const ordered = listOrder.arranged.map((x) => x.row);
+  const shown = query ? listOrder.arranged : listOrder.visible;
+  const indent = (item) => (query || !listOrder.tree ? 0 : item.depth);
   const matches = (a) =>
     (showInactive || a.isActive) &&
     (!query || a.fullName.toLowerCase().includes(query) || (a.accountNumber ?? '').includes(query) || a.accountTypeName.toLowerCase().includes(query));
@@ -197,8 +205,8 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
         return [
           { kind: 'section', cells: ['', section.label, '', '', withBalance && !query ? rows.reduce((sum, a) => sum + a.balanceCents, 0) : null] },
           ...rows.map((a) => ({
-            depth: query ? 0 : a.depth,
-            cells: [a.accountNumber ?? '', `${query ? a.fullName : a.name}${a.isActive ? '' : ' (inactive)'}`, a.accountTypeName, a.description ?? '', withBalance ? (rolled.get(a.id) ?? a.balanceCents) : null],
+            depth: query || !listOrder.tree ? 0 : a.depth,
+            cells: [a.accountNumber ?? '', `${query || !listOrder.tree ? a.fullName : a.name}${a.isActive ? '' : ' (inactive)'}`, a.accountTypeName, a.description ?? '', withBalance ? (rolled.get(a.id) ?? a.balanceCents) : null],
           })),
         ];
       }),
@@ -238,6 +246,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
           </label>
+          <ListViewControls ctl={listOrder} label="accounts" />
           <div className="ml-auto">
             <ExportMenu printable={false} onNotice={setNotice} {...exports} />
           </div>
@@ -267,9 +276,9 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
             </thead>
             <tbody>
               {SECTIONS.map((section) => {
-                const rows = ordered.filter((a) => a.classification === section.id && matches(a));
+                const rows = shown.filter((x) => x.row.classification === section.id && matches(x.row));
                 if (rows.length === 0) return null;
-                const total = rows.reduce((sum, a) => sum + a.balanceCents, 0);
+                const total = ordered.filter((a) => a.classification === section.id && matches(a)).reduce((sum, a) => sum + a.balanceCents, 0);
                 return [
                   <tr key={section.id} className="bg-qb-row-header">
                     {/* The section's name across the columns, and its total under Balance. */}
@@ -282,9 +291,12 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                     )}
                     <td className="qb-grid-cell" />
                   </tr>,
-                  ...rows.map((a) => (
+                  ...rows.map((item) => {
+                    const a = item.row;
+                    return (
                     <tr
                       key={a.id}
+                      {...listOrder.rowProps(a.id)}
                       className={`qb-grid-row ${a.id === selected ? 'is-active' : ''} ${a.isActive ? '' : 'text-qb-ink-faint'}`}
                       aria-selected={a.id === selected}
                       onClick={() => setSelected(a.id)}
@@ -297,7 +309,10 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                           case 'account':
                             return (
                               <td key={c.id} className="qb-grid-cell" title={a.fullName}>
-                                <span style={{ paddingLeft: `${(query ? 0 : a.depth) * 16}px` }}>{query ? a.fullName : a.name}</span>
+                                <span style={{ paddingLeft: `${indent(item) * 16}px` }}>
+                                  {!query && <TreeToggle ctl={listOrder} item={item} />}
+                                  {query || !listOrder.tree ? a.fullName : a.name}
+                                </span>
                                 {!a.isActive && <span className="ml-1 text-2xs uppercase tracking-wide">Inactive</span>}
                               </td>
                             );
@@ -328,7 +343,8 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                         />
                       </td>
                     </tr>
-                  )),
+                    );
+                  }),
                 ];
               })}
               {ordered.filter(matches).length === 0 && (
@@ -340,7 +356,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
           </table>
         </div>
         <div className="flex-none border-t border-qb-border px-2 py-0.5 text-xs text-qb-ink-muted">
-          Double-click an account to open its register; edit it from the ▾ menu. Balances are shown for balance sheet accounts; see Reports › Profit and Loss for income and expenses over a period.
+          Double-click an account to open its register; edit it from the ▾ menu; drag it to move it among the accounts beside it. Balances are shown for balance sheet accounts; see Reports › Profit and Loss for income and expenses over a period.
         </div>
       </section>
     </div>
