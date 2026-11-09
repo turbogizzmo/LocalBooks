@@ -43,6 +43,8 @@ export const MY_PREFERENCE_DEFAULTS = Object.freeze({
   depositAccountId: 0,
   /** Text size by kind of window (list, register, form, report), in percent; missing means 100. */
   textSizes: {},
+  /** Customize Columns: each table's columns, as `{ [table]: { order, shown } }` (columns.js). */
+  columnLayouts: {},
   /** A color per register, keyed by company file and account (textSize.js). */
   registerColors: {},
 });
@@ -127,10 +129,18 @@ export function setRegisterColor(companyPath, accountId, colorId) {
   setMyPreferences({ registerColors: withRegisterColor(current.registerColors, companyPath, accountId, colorId) });
 }
 
-/** Puts every General preference back to its default (the remembered last date, hidden messages, text sizes and register colors are kept). */
+/** Keeps a table's columns (`layout` from columns.js `layoutOf`), or forgets them (null). */
+export function setColumnLayout(table, layout) {
+  const next = { ...(current.columnLayouts ?? {}) };
+  if (layout) next[table] = layout;
+  else delete next[table];
+  setMyPreferences({ columnLayouts: next });
+}
+
+/** Puts every General preference back to its default (the remembered last date, hidden messages, text sizes, register colors and column layouts are kept). */
 export function resetMyPreferences() {
-  const { textSizes, registerColors } = current;
-  setMyPreferences({ ...MY_PREFERENCE_DEFAULTS, textSizes, registerColors });
+  const { textSizes, registerColors, columnLayouts } = current;
+  setMyPreferences({ ...MY_PREFERENCE_DEFAULTS, textSizes, registerColors, columnLayouts });
 }
 
 /** The General preferences, kept current when they change in Preferences or another window. */
