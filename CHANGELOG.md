@@ -87,6 +87,14 @@ people using LocalBooks.
   customer or vendor the money came from, and a name typed in a register's deposit row is matched
   to your customers and vendors instead of only being kept in the memo. The register shows the
   name as the payee, and the deposit is listed in that name's transactions and reports by name.
+- **Keep the statement with a reconciliation.** Attach the bank or card statement (a PDF or a
+  picture) to a reconciliation in progress or a finished one; save a copy from Reconcile's history.
+- **Undo Last Reconciliation.** In Banking › Reconcile, the newest completed reconciliation can be
+  undone: its transactions are uncleared so the statement can be reconciled again. The
+  reconciliation stays on record and the undo, with an optional reason, goes into the Audit Log.
+- **Service charge and interest earned when you reconcile.** Starting a reconciliation now takes
+  the statement's service charge and interest earned (amount, date, account and class). Each posts
+  as a journal entry and is already ticked as cleared.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

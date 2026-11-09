@@ -70,7 +70,7 @@ export const topics = [
   {
     id: 'reconcile', area: 'banking', views: ['banking/reconcile', 'banking/feeds'],
     title: 'Reconcile a bank or card account',
-    body: 'Enter the statement end date and ending balance, then tick the transactions that cleared until the difference is $0.00. Finishing locks those lines, so the reconciled balance can never drift.',
+    body: 'Enter the statement end date and ending balance (and any service charge or interest earned from the statement, which post with the reconciliation and start out cleared), then tick the transactions that cleared until the difference is $0.00. Finishing locks those lines, so the reconciled balance can never drift. Attach statement… keeps the statement file with the reconciliation. Finished one by mistake? Undo Last Reconciliation on the newest history row unclears its transactions again; the undo is kept in the Audit Log.',
     keywords: 'reconcile statement match cleared balance',
     go: { label: 'Go to Reconcile', view: 'banking/reconcile' },
     guide: 'reconciling',
