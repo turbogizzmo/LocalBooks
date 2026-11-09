@@ -30,7 +30,7 @@ re-check one against the code before you start it.
 | R9 | done (#243) | M | Retention: attachments can be hard-deleted; no retention guidance | Deleting an attachment on posted records is void-style (kept, hidden); guide states retention |
 | R10 | open | L | 1099-NEC forms, IRIS e-file export, W-9/TIN collection | Generates forms and an IRIS-format file that validates against the published schema |
 | R11 | partial | M | Sales tax on the accrual or cash basis, with a filing frequency that sets the report period and a return reminder, is done (#166). Still missing: one rate and agency per document, so a combined rate can't be split by agency or jurisdiction, and there is no sales tax return per agency | Combined rates split by agency; a sales tax return report per agency and period, accrual and cash |
-| R12 | open | S–M | No crash reporting or diagnostics bundle (no telemetry) | Help › Save diagnostics writes a local bundle (logs, versions, no business data) the user can send |
+| R12 | done (#247) | S–M | No crash reporting or diagnostics bundle (no telemetry) | Help › Save diagnostics writes a local bundle (logs, versions, no business data) the user can send |
 | R13 | partial | M | Updates: no rollback; macOS not notarized; Windows not signed | Previous version can be reinstalled from the app; installers are signed and notarized |
 | R14 | partial | L | Accountant workflows: no Accountant's Copy or review mode | An accountant can work on a copy and the changes merge back with an audit record |
 | R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model |

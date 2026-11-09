@@ -69,6 +69,7 @@ features![
     customer_statements,
     deposits,
     desktop,
+    diagnostics,
     editing,
     email,
     envelopes,
