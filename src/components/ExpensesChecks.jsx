@@ -7,6 +7,7 @@ import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButton
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
@@ -197,6 +198,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       onCancel();
     });
   const flow = useFormFlow({ save: () => save('post'), clear, onClose: onCancel, afterNew: editing ? onNew : undefined, busy });
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the one on the form.
+  const reports = useTransactionReports();
   const toolbar = (
     <FormToolbar
       label={EXPENSE_KINDS[kind]}
@@ -257,6 +260,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
           { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring transaction', disabled: busy, onClick: () => save('memorize') },
           duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: EXPENSE_KINDS[kind].toLowerCase() }),
         ],
+        reports.buttons({ journalEntryId: was?.journalEntryId, label: `${EXPENSE_KINDS[kind]}${was?.checkNumber ? ` #${was.checkNumber}` : ''}` }),
       ]}
     />
   );
@@ -264,6 +268,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   return (
     <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
       {voucherPortal}
+      {reports.panel}
       {toolbar}
       {showAttachments && was?.journalEntryId && (
         <div className="border-b border-qb-border bg-qb-canvas">

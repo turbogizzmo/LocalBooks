@@ -9,6 +9,7 @@ import Notice from './Notice.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { useTransactionReports } from './TransactionHistory.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
@@ -959,6 +960,8 @@ export default function Invoices({ accounts, intent }) {
   const emailed = useEmailStatuses('INVOICE');
   // The posted invoice on the form, as the list has it, for the toolbar's Print, Email, Void and Attach.
   const current = editing ? (invoices.data ?? []).find((i) => i.id === editing.id) ?? null : null;
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the invoice on the form.
+  const reports = useTransactionReports();
   const ordered = useMemo(() => [...(invoices.data ?? [])].sort((a, b) => a.invoiceNumber - b.invoiceNumber || a.id - b.id), [invoices.data]);
   const at = current ? ordered.indexOf(current) : -1;
   const step = (inv) => {
@@ -1158,6 +1161,9 @@ export default function Invoices({ accounts, intent }) {
     [
       { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring invoice', disabled: busy, onClick: () => save('memorize') },
       duplicateButton({ onDuplicate: duplicateInvoice, saved: Boolean(editing), dirty, busy, what: 'invoice' }),
+    ],
+    [
+      ...reports.buttons({ journalEntryId: current?.journalEntryId, label: current ? `Invoice #${current.invoiceNumber}` : '' }),
       { id: 'receive', label: 'Receive Payments', icon: 'ReceivePayment', hint: 'Record a customer payment against open invoices', disabled: receiving, onClick: () => setReceiving(true) },
     ],
   ];
@@ -1192,6 +1198,7 @@ export default function Invoices({ accounts, intent }) {
         />
       )}
       <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+        {reports.panel}
         <FormToolbar label="Invoice" groups={toolbarGroups} />
         {locked && (
           <Notice
