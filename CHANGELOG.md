@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Inventory Turnover and Invoice Profitability reports.** Inventory Turnover by Item shows how
+  often each item's stock turned over and its days on hand; Invoice Profitability by Customer and
+  Detail show each invoice's income, cost of goods, gross profit and margin.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

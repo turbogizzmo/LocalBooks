@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Inventory Turnover by Item, 2025-01-01 to 2025-12-31
+
+Item                           Beginning Value  Ending Value Average Value Cost of Goods Sold Turnover                  Days on Hand
+Gift Mugs                               0.00        108.00         54.00          0.00 0.00
+TOTAL                                   0.00        108.00         54.00          0.00 0.00
+
+1 lines
+
+1 item with stock tracked. Turnover is the cost of goods sold over the 365 days divided by the average of the beginning and ending value; days on hand is how long that average stock lasts at that rate.
