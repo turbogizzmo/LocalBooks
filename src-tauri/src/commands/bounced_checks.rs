@@ -28,8 +28,8 @@ pub async fn record_bounced_check(app: AppHandle, db: State<'_, Db>, input: Boun
 }
 
 #[tauri::command]
-pub async fn void_bounced_check(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
-    bounced_checks::void(&db.pool().await, id).await?;
+pub async fn void_bounced_check(app: AppHandle, db: State<'_, Db>, id: i64, kind: Option<String>) -> Result<(), String> {
+    bounced_checks::void(&db.pool().await, id, kind.as_deref()).await?;
     notify(&app);
     Ok(())
 }

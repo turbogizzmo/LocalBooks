@@ -130,6 +130,43 @@ LocalBooks read and its balance check.
 Approved money out becomes an expense; approved money in becomes a deposit. For money out you can
 also fill in the **Payee**, which becomes the expense's vendor (a new name adds a vendor).
 
+To add several at once, tick them in the list and click **Add … ticked**: each is approved with
+the category shown on its row (and its payee and class), all together or, if one can't be, none.
+
+## Match transactions you already entered
+
+A downloaded transaction is often one you already entered: a check you wrote, a deposit you made,
+a bill payment or a transfer. Matching it to that transaction records nothing new.
+
+- **On import**, LocalBooks matches a downloaded transaction by itself when exactly one entered
+  transaction in that account agrees: the same amount, dated from 45 days before to 7 days after
+  the bank's date, and, when the bank names a check number (*CHECK 1042*), the same check number.
+  The import message says how many were matched; they don't appear under **For review**.
+- **Suggested matches.** When you enter the transaction after downloading it, its line shows
+  **Match: Check #1042 · …** under **For review**. Select it and click **Match**.
+- **Match by hand.** For any other line, click **Find a match…** to list entered transactions for
+  that amount within four months, nearest date first, and click **Match** on the right one. When
+  two entered transactions agree, LocalBooks never picks one for you.
+- **Show matched** lists the matched lines with what each matched; **Unmatch** puts a line back
+  under **For review**. Voiding the matched transaction puts its line back too.
+
+## Rename downloaded payees
+
+Banks write the same payee many ways (*AMZN MKTP US\*2K4*, *AMZN MKTP DE\*7Q1*). A **renaming rule**
+gives them one name: when a downloaded description **begins with**, **contains** or **ends with**
+some text (capitals and extra spaces don't matter), its **Payee** is the name you chose. When more
+than one rule fits, the one with the longest text wins. The note under **Payee** says *Named by a
+renaming rule*.
+
+- **When you change a payee** and approve the line, LocalBooks offers a rule: *Use this name next
+  time?* with the description's first words filled in. Adjust it and click **Save rule**, or **No
+  thanks**.
+- **Rules…** lists your renaming rules: search them, **Edit**, **Remove**, or **Add rule**. Its
+  **Category rules** tab lists the rules learned from your approvals (and the built-in vendor
+  list): change a rule's category or remove it.
+
+Rules only name lines still waiting for review; transactions already added keep their payee.
+
 ## How categories are suggested
 
 LocalBooks suggests a category for every transaction, in this order:
@@ -160,7 +197,7 @@ Good to know:
 - **Voiding** an approved transaction sends it back for review, and LocalBooks forgets it.
 - Inactive accounts are never suggested.
 
-> **Tip:** Approving a bank transaction that you already entered by hand records it twice. Exclude
-> it instead.
+> **Tip:** Approving a bank transaction that you already entered by hand records it twice. Match it
+> instead (see [Match transactions you already entered](#match-transactions-you-already-entered)).
 
 Next: [Reconcile an account](reconciling.md)

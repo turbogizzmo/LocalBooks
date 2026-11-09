@@ -1,5 +1,22 @@
 # Run, export and print reports
 
+## Find a report in the report center
+
+The list on the left of **Reports** has every report, grouped by what it is about, with a line
+under each name saying what it shows.
+
+- **Find a report**: type part of a name or of what a report shows (`aging`, `cash`, `who owes`);
+  the list narrows to the reports with every word you typed.
+- **Favorites**: point at a report and click its ☆ to star it; starred reports are listed under
+  **Favorites** at the top. Click ★ to take one off.
+- **Recent**: the last eight reports you opened, newest first.
+- **Open reports on these dates**: tick it and choose a period (or From and To) above the list.
+  Profit and Loss, the sales summaries and the other reports that cover a period open on those
+  dates; the Balance Sheet and the A/R and A/P aging open as of the To date. Other reports open as
+  usual.
+
+Favorites, Recent and the date choice are kept on this computer.
+
 ## Email a report, list or register as a PDF
 
 Every report, list and register with an **Export** menu has **Email as PDF…** and **Save as PDF…**.

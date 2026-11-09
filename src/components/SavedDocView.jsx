@@ -3,7 +3,7 @@ import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments from './Attachments.jsx';
 import Notice from './Notice.jsx';
 import { FormSheet, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
-import { TransactionVoucher, useVoucherPrinter } from './VoucherPrint.jsx';
+import { TransactionVoucher, useVoucherActions } from './VoucherPrint.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { api, errorText } from '../lib/api.js';
 import { stepButtons } from '../lib/formStep.js';
@@ -105,7 +105,7 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   const [notice, setNotice] = useState(null);
   const say = onNotice ?? setNotice;
   const [printPortal, forms] = useFormPrinter(say);
-  const [voucherPortal, printVoucher] = useVoucherPrinter(say);
+  const [voucherElements, voucherItems, printVoucher] = useVoucherActions(say);
   // Hooks run either way; a voucher's lookup is unused (any form kind is a valid query).
   const emailed = useEmailStatuses(form?.kind ?? 'INVOICE');
   const [showAttachments, setShowAttachments] = useState(false);
@@ -118,10 +118,13 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   const key = form ? `${form.kind}-${form.id}` : voucher ? `v-${voucher.entryId}` : title;
   useEffect(() => setShowAttachments(false), [key]);
 
+  // A voucher (a posted transaction) saves as a PDF and emails to the name on it too.
+  // `onPrint` replaces only Print…; Save as PDF and Email stay.
+  const [voucherPrint, voucherEmail] = voucher ? voucherItems(voucher, { label, print: onPrint }) : [null, null];
   const printItem = form
     ? { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Print…', onSelect: () => forms.print(form.kind, form.id) }, { label: 'Save as PDF…', onSelect: () => forms.savePdf(form.kind, form.id) }] }
-    : { id: 'print', label: 'Print', icon: 'Print', hint: `Print this ${label.toLowerCase()}`, onClick: () => (onPrint ? onPrint() : printVoucher(voucher)) };
-  const emailItem = form && {
+    : (voucherPrint ?? { id: 'print', label: 'Print', icon: 'Print', hint: `Print this ${label.toLowerCase()}`, onClick: () => (onPrint ? onPrint() : printVoucher(voucher)) });
+  const emailItem = !form ? voucherEmail : {
     id: 'email',
     label: 'Email',
     icon: 'Email',
@@ -162,7 +165,7 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   return (
     <section ref={keys.ref} onKeyDown={keys.onKeyDown} className="qb-panel flex min-h-0 flex-none flex-col" aria-label={title}>
       {printPortal}
-      {voucherPortal}
+      {voucherElements}
       {reports.panel}
       <FormToolbar label={label} groups={groups} />
       <div className="flex items-center gap-2 border-b border-qb-border px-2 py-1">
