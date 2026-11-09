@@ -3,7 +3,9 @@ import Notice from './Notice.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
-import { formatDate } from '../lib/dates.js';
+import { formatDate, todayIso } from '../lib/dates.js';
+import ReportEmailDialog from './ReportEmail.jsx';
+import { useCompany } from './PrintDocuments.jsx';
 
 /** Where each reminder category's "Go" link leads: [view, action]. */
 const GO = {
@@ -12,6 +14,8 @@ const GO = {
   TODOS: ['accounting/todos', null, 'To Do List'],
   RECURRING: ['accounting/recurring', null, 'Recurring Transactions'],
   EMAIL_QUEUE: ['sales/send-forms', null, 'Send Forms'],
+  GROUP_STATEMENTS: ['sales/statements', null, 'Customer Statements'],
+  PAYMENT_REMINDERS: ['sales/customers', null, 'Customers'],
   TAX_DATES: ['settings', 'preferences', 'Tax calendar'],
   BACKUP: ['settings', 'data', 'Back up'],
 };
@@ -48,7 +52,15 @@ function ReminderGroup({ group, open, onToggle, navigate }) {
         <ul className="pb-1 pl-6 pr-2 text-xs">
           {group.items.map((item, i) => (
             <li key={`${item.id ?? 'x'}-${i}`} className="flex items-baseline gap-2 py-0.5">
-              {item.entryId ? (
+              {group.key === 'PAYMENT_REMINDERS' ? (
+                <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('sales/customers', 'payment-reminders', { groupId: item.id })}>
+                  {item.label}
+                </button>
+              ) : group.key === 'GROUP_STATEMENTS' ? (
+                <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('sales/statements', 'group', { groupId: item.id })}>
+                  {item.label}
+                </button>
+              ) : item.entryId ? (
                 <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('accounting/journal', 'open-entry', { entryId: item.entryId })}>
                   {item.label}
                 </button>
@@ -70,6 +82,9 @@ function ReminderGroup({ group, open, onToggle, navigate }) {
 export function ReminderList({ navigate }) {
   const { data, error } = useLedgerQuery(api.getReminders);
   const [openKeys, setOpenKeys] = useState(() => new Set());
+  const [emailing, setEmailing] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const company = useCompany();
   if (error) return <Notice kind="error" text={`Could not load reminders: ${errorText(error)}`} />;
   if (!data) return <div className="px-2 py-1 text-sm text-qb-ink-muted">Loading…</div>;
   if (data.length === 0) return <div className="px-2 py-2 text-sm text-qb-ink-muted">✓ Nothing needs attention today.</div>;
@@ -80,12 +95,40 @@ export function ReminderList({ navigate }) {
       else next.add(key);
       return next;
     });
+  // The whole list as a report, to email as a PDF.
+  const sheet = () => ({
+    company: company.name ?? '',
+    title: 'Reminders',
+    subtitle: `As of ${formatDate(todayIso())}`,
+    notes: [],
+    footer: null,
+    indentColumn: 0,
+    columns: [
+      { label: 'Reminder', kind: 'text' },
+      { label: 'Details', kind: 'text' },
+      { label: 'Date', kind: 'date' },
+      { label: 'Amount', kind: 'money' },
+    ],
+    rows: data.flatMap((g) => [
+      { kind: 'section', depth: 0, cells: [g.label, null, null, g.totalCents ?? null] },
+      ...g.items.map((i) => ({ kind: 'detail', depth: 1, cells: [i.label, i.detail || null, i.date ?? null, i.amountCents ?? null] })),
+    ]),
+  });
   return (
-    <ul>
-      {data.map((g) => (
-        <ReminderGroup key={g.key} group={g} open={openKeys.has(g.key)} onToggle={() => toggle(g.key)} navigate={navigate} />
-      ))}
-    </ul>
+    <>
+      <ul>
+        {data.map((g) => (
+          <ReminderGroup key={g.key} group={g} open={openKeys.has(g.key)} onToggle={() => toggle(g.key)} navigate={navigate} />
+        ))}
+      </ul>
+      <div className="flex items-center gap-2 px-2 py-1">
+        <button type="button" className="text-xs text-qb-link hover:underline" onClick={() => setEmailing(sheet())}>
+          Email as PDF…
+        </button>
+        {notice && <span className={`text-xs ${notice.kind === 'error' ? 'text-qb-negative' : 'text-qb-ink-muted'}`}>{notice.text}</span>}
+      </div>
+      {emailing && <ReportEmailDialog sheet={emailing} onClose={() => setEmailing(null)} onNotice={setNotice} />}
+    </>
   );
 }
 

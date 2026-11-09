@@ -13,6 +13,7 @@ mod backup;
 mod bank;
 mod bank_pdf;
 mod banking;
+mod batch_invoices;
 mod billable_costs;
 mod bounced_checks;
 mod classes;
@@ -25,6 +26,7 @@ mod credits;
 mod custom_fields;
 mod custom_reports;
 mod crypto;
+mod customer_groups;
 mod db;
 mod desktop;
 mod edits;
@@ -111,6 +113,11 @@ mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod payment_reminders;
+mod report_pdf;
+mod report_schedules;
+mod statement_charges;
+mod sheet_import;
 
 use tauri::Manager;
 
@@ -219,6 +226,17 @@ fn main() {
             windows::restore_on_next_load(app.handle(), true);
             let title_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { commands::company_changed(&title_handle).await });
+
+            // Scheduled reports: due ones run soon after launch (catching up on runs missed while
+            // LocalBooks was closed), then every few minutes while it stays open.
+            let schedules = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                loop {
+                    commands::run_due_schedules(&schedules).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(10 * 60)).await;
+                }
+            });
 
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();

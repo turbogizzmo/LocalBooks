@@ -230,6 +230,8 @@ pub struct Outgoing {
     pub body: String,
     pub file_name: String,
     pub pdf: Vec<u8>,
+    /// More files after the PDF: (file name, bytes, media type). Scheduled reports send several.
+    pub more: Vec<(String, Vec<u8>, &'static str)>,
 }
 
 fn build_message(settings: &SmtpSettings, outgoing: Outgoing) -> Result<Message, String> {
@@ -241,8 +243,15 @@ fn build_message(settings: &SmtpSettings, outgoing: Outgoing) -> Result<Message,
     if settings.copy_to_self {
         builder = builder.bcc(from);
     }
-    let pdf = Attachment::new(outgoing.file_name).body(outgoing.pdf, ContentType::parse("application/pdf").expect("a valid media type"));
-    builder.multipart(MultiPart::mixed().singlepart(SinglePart::plain(outgoing.body)).singlepart(pdf)).map_err(|e| format!("SMTP_MESSAGE: {e}"))
+    let mut parts = MultiPart::mixed().singlepart(SinglePart::plain(outgoing.body));
+    if !outgoing.pdf.is_empty() {
+        parts = parts.singlepart(Attachment::new(outgoing.file_name).body(outgoing.pdf, ContentType::parse("application/pdf").expect("a valid media type")));
+    }
+    for (name, bytes, media_type) in outgoing.more {
+        let content_type = ContentType::parse(media_type).map_err(|e| format!("SMTP_MESSAGE: {e}"))?;
+        parts = parts.singlepart(Attachment::new(name).body(bytes, content_type));
+    }
+    builder.multipart(parts).map_err(|e| format!("SMTP_MESSAGE: {e}"))
 }
 
 /// Sends the message through the configured server.

@@ -280,6 +280,9 @@ pub struct SalesDetails {
     pub terms_id: Option<i64>,
     /// The Customer Message printed at the foot of the form.
     pub customer_message_id: Option<i64>,
+    /// The form style this document prints with, picked on the form; None: the customer's style
+    /// (or the default).
+    pub form_style_id: Option<i64>,
     /// Subtotals and other non-item lines, placed among the item lines (`item_types`). Written by
     /// the document's writer, not by [`write_details`].
     pub form_lines: Vec<crate::item_types::FormLineInput>,
@@ -293,6 +296,7 @@ impl SalesDetails {
             && self.ship_method_id.is_none()
             && self.terms_id.is_none()
             && self.customer_message_id.is_none()
+            && self.form_style_id.is_none()
             && self.custom_fields.iter().all(|f| f.value.trim().is_empty())
     }
 }
@@ -317,6 +321,8 @@ pub struct SalesDetailsView {
     pub customer_message_id: Option<i64>,
     /// The message's text, printed at the foot of the form.
     pub customer_message: Option<String>,
+    /// The form style picked on the form, if any.
+    pub form_style_id: Option<i64>,
 }
 
 async fn check_active(tx: &mut Transaction<'_, Sqlite>, table: &str, id: i64, what: &str, code: &str) -> Result<(), String> {
@@ -390,11 +396,14 @@ async fn write_columns(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64,
     if invoice {
         query = query.bind(details.terms_id);
     }
-    query
-        .execute(&mut **tx)
-        .await
-        .map(|_| ())
-        .map_err(db_err)
+    query.execute(&mut **tx).await.map_err(db_err)?;
+    if let Some(style) = details.form_style_id {
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM form_styles WHERE id = ?1)").bind(style).fetch_one(&mut **tx).await.map_err(db_err)?;
+        if !exists {
+            return Err("FORM_STYLE_NOT_FOUND: that form style no longer exists".into());
+        }
+    }
+    sqlx::query(&format!("UPDATE {} SET form_style_id = ?1 WHERE id = ?2", doc.table())).bind(details.form_style_id).bind(id).execute(&mut **tx).await.map(|_| ()).map_err(db_err)
 }
 
 /// `terms_id` on a document of this kind, as a column expression (only invoices have one).
@@ -426,6 +435,7 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
         return Ok(SalesDetailsView::default());
     };
     let header = crate::sales_header::read(pool, doc.table(), id).await?;
+    let form_style_id: Option<i64> = sqlx::query_scalar(&format!("SELECT form_style_id FROM {} WHERE id = ?1", doc.table())).bind(id).fetch_one(pool).await.map_err(db_err)?;
     Ok(SalesDetailsView {
         sales_rep_id,
         sales_rep_initials,
@@ -439,13 +449,14 @@ pub async fn document_details(pool: &SqlitePool, doc: SalesDoc, id: i64) -> Resu
         terms_name,
         customer_message_id,
         customer_message,
+        form_style_id,
     })
 }
 
 /// A document's details inside a write, to carry them onto another document.
 pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDoc, id: i64) -> Result<SalesDetails, String> {
-    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id): (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>) =
-        sqlx::query_as(&format!("SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id FROM {} d WHERE d.id = ?1", terms_column(doc), doc.table()))
+    let (sales_rep_id, ship_date, ship_method_id, terms_id, customer_message_id, form_style_id): (Option<i64>, Option<NaiveDate>, Option<i64>, Option<i64>, Option<i64>, Option<i64>) =
+        sqlx::query_as(&format!("SELECT d.sales_rep_id, d.ship_date, d.ship_method_id, {}, d.customer_message_id, d.form_style_id FROM {} d WHERE d.id = ?1", terms_column(doc), doc.table()))
             .bind(id)
             .fetch_one(&mut **tx)
             .await
@@ -464,6 +475,7 @@ pub(crate) async fn details_in_tx(tx: &mut Transaction<'_, Sqlite>, doc: SalesDo
         header: crate::sales_header::read(&mut **tx, doc.table(), id).await?,
         terms_id,
         customer_message_id,
+        form_style_id,
         form_lines: Vec::new(),
     })
 }
@@ -480,6 +492,7 @@ impl SalesDetailsView {
             header: self.header.clone(),
             terms_id: self.terms_id,
             customer_message_id: self.customer_message_id,
+            form_style_id: self.form_style_id,
             form_lines: Vec::new(),
         }
     }

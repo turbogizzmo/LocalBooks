@@ -344,6 +344,14 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, from_id: i64, 
                 .map_err(db_err)?;
             moved += i64::try_from(done.rows_affected()).unwrap_or(i64::MAX);
             moved += repoint(tx, CUSTOMER_COLUMNS, from_id, to_id).await?;
+            // Customer groups: the kept customer joins each group the merged one was in.
+            sqlx::query("INSERT OR IGNORE INTO customer_group_members (group_id, customer_id) SELECT group_id, ?2 FROM customer_group_members WHERE customer_id = ?1")
+                .bind(from_id)
+                .bind(to_id)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
+            sqlx::query("DELETE FROM customer_group_members WHERE customer_id = ?1").bind(from_id).execute(&mut **tx).await.map_err(db_err)?;
         }
         MergeKind::Vendor => {
             moved += repoint(tx, VENDOR_COLUMNS, from_id, to_id).await?;

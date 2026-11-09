@@ -62,6 +62,18 @@ credit posts nothing, because the credit memo already reduced Accounts Receivabl
 what's paid on the invoice, the same as applying it from **Sales › Credit Memos & Refunds**. Credits
 are in the home currency, so an invoice in another currency doesn't offer them.
 
+### Service dates and the template
+
+- **Service Date**: click **Service dates** beside the Description heading of an invoice or sales
+  receipt to add a Service Date box to each line, for when the work was done (a visit, a delivery,
+  a week of work); LocalBooks remembers the choice on this computer, and a saved form whose lines
+  have dates always shows them. Lines with one print it in a **Service
+  Date** column; the column is left off a form whose lines have none, and Settings › Custom Forms
+  can turn it off altogether.
+- **Template**: the header's **Template** box picks the form style the document prints, saves as
+  PDF and emails with (Settings › Custom Forms). Left on **Default style** (or **Customer's
+  style**, when the customer has one), it follows the customer as before. Estimates have it too.
+
 ### Addresses on sales receipts, estimates and credit memos
 
 Sales receipts (**Sold To**), estimates and credit memos have the same address, P.O. No. and FOB
@@ -69,6 +81,10 @@ boxes, filled in the same way. Each document keeps its own copy: changing a cust
 later leaves documents already saved as they were. Converting an estimate to an invoice, or
 editing an invoice, carries its addresses over. Invoices saved before this version had no copy
 and print the customer's current billing address.
+
+A saved credit memo or refund receipt opens as its printed form, with its Credit To address, P.O.
+No., lines and total; **Print**, **Save as PDF** and **Email** use the **Credit memo** layout in
+Settings › Custom Forms.
 
 ## Subtotals, discounts, charges and groups
 
@@ -151,6 +167,25 @@ foreign-currency invoice, a different currency or exchange rate.
 An invoice can't be edited while it is voided, reconciled, or in a closed period. To cancel an invoice instead,
 choose **Void Transaction** in its **Actions** menu. See
 [Journal entries and voiding](journal-entries-and-voids.md).
+
+## Bill on the statement instead: statement charges
+
+For customers you bill once a month (a retainer, regular visits, small charges you don't want to
+send an invoice for each), enter **statement charges** and send a statement instead.
+
+1. In **Sales › Customers**, open a customer's **Actions** menu and choose **Enter statement
+   charges…**. The customer's charge register opens, with every charge entered so far and what is
+   still open on each.
+2. Under **New charge**, enter the date, pick an item (it fills in the description, rate and
+   income account) or type a description, and enter the quantity and rate. Leave **Due date**
+   blank to make the charge due on its date.
+3. Click **Record charge**.
+
+Each charge posts to **Accounts Receivable** for the customer right away and shows in the A/R
+aging by its due date. It prints on the customer's next statement as a **Statement Charge** line
+with its description, and never prints as an invoice of its own. In the invoice list it is marked
+**SC**; in **Receive Payments** it shows as **Statement charge**, and a payment or credit applies to
+it like an invoice. To take one back, void it from the invoice list.
 
 ## Charge interest on late invoices
 

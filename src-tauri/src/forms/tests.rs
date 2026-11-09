@@ -92,7 +92,7 @@ fn header_and_totals_text_stays_clear_of_the_logo_and_amounts() {
 fn long_documents_paginate_and_stay_on_the_page() {
     let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
     let mut doc = sample_doc(FormKind::Estimate, "$");
-    doc.lines = (0..80).map(|i| FormLine { description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new() }).collect();
+    doc.lines = (0..80).map(|i| FormLine { description: format!("Line {i} with a fairly long description that wraps onto a second line in the table"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new(), service_date: String::new() }).collect();
     let tpl = FormTemplate { paper: Paper::A4, ..FormTemplate::default_for(FormKind::Estimate) };
     let pages = layout(&doc, &company, &tpl, None);
     assert!(pages.len() > 2);
@@ -123,7 +123,7 @@ async fn real_invoices_render_saved_templates_to_pdf() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Design (hours)".into(), quantity_e4: 15_000, rate_cents: 10_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+            lines: vec![InvoiceLineInput { description: "Design (hours)".into(), quantity_e4: 15_000, rate_cents: 10_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
@@ -188,7 +188,7 @@ fn every_layout_preset_renders_every_form_on_one_page() {
     }
     // Compact fits more lines on a page than Classic.
     let mut doc = sample_doc(FormKind::Invoice, "$");
-    doc.lines = (0..60).map(|i| FormLine { description: format!("Line {i}"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new() }).collect();
+    doc.lines = (0..60).map(|i| FormLine { description: format!("Line {i}"), quantity: "1".into(), rate: "$1.00".into(), amount: "$1.00".into(), details: Vec::new(), service_date: String::new() }).collect();
     let pages = |preset| layout(&doc, &company, &FormTemplate { layout: preset, ..FormTemplate::default_for(FormKind::Invoice) }, None).len();
     assert!(pages(FormLayout::Compact) < pages(FormLayout::Classic));
 }
@@ -326,7 +326,7 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: 500, income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false }],
+            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: 500, income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,
@@ -363,7 +363,7 @@ async fn taxable_lines_print_with_a_t() {
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
     let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
-    let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: 1_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable };
+    let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: 1_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None };
     let day = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
     let input = |tax: Option<i64>| InvoiceInput {
         customer_name: "Acme".into(),
@@ -382,4 +382,75 @@ async fn taxable_lines_print_with_a_t() {
     assert_eq!(amounts(&invoice_doc(&pool, untaxed.id, "$").await.unwrap()), ["$10.00", "$10.00"], "no T without a tax rate");
     crate::preferences::set(&pool, "sales_tax_mark_taxable", "false").await.unwrap();
     assert_eq!(amounts(&invoice_doc(&pool, taxed.id, "$").await.unwrap()), ["$10.00", "$10.00"]);
+}
+
+#[test]
+fn service_dates_print_in_their_own_column_and_credit_memos_have_a_layout() {
+    let company = Company { name: "Acme".into(), currency_symbol: "$".into(), ..Company::default() };
+    let doc = sample_doc(FormKind::Invoice, "$");
+    let tpl = FormTemplate::default_for(FormKind::Invoice);
+    let all = texts(&layout(&doc, &company, &tpl, None));
+    assert!(all.iter().any(|t| t.eq_ignore_ascii_case("Service Date")), "{all:?}");
+    assert!(all.iter().any(|t| t == "09/15/2026"));
+    let hidden = texts(&layout(&doc, &company, &FormTemplate { show_service_date: false, ..tpl }, None));
+    assert!(!hidden.iter().any(|t| t == "09/15/2026"));
+    // No line has a date: no column.
+    let mut plain = sample_doc(FormKind::Invoice, "$");
+    plain.lines.iter_mut().for_each(|l| l.service_date.clear());
+    assert!(!texts(&layout(&plain, &company, &FormTemplate::default_for(FormKind::Invoice), None)).iter().any(|t| t.eq_ignore_ascii_case("Service Date")));
+
+    let credit = sample_doc(FormKind::CreditMemo, "$");
+    let all = texts(&layout(&credit, &company, &FormTemplate::default_for(FormKind::CreditMemo), None));
+    for expected in ["Credit Memo", "CREDIT TO", "Total credit", "PO-4471"] {
+        assert!(all.iter().any(|t| t == expected), "missing {expected:?} in {all:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_document_keeps_its_service_dates_and_prints_with_the_style_picked_on_it() {
+    let pool = test_pool().await;
+    let standard = list_styles(&pool).await.unwrap()[0].id;
+    let bold = create_style(&pool, "Bold", Some(standard)).await.unwrap();
+    save_template(&pool, Some(bold.id), FormKind::Invoice, FormTemplate { title: "Bill".into(), ..FormTemplate::default_for(FormKind::Invoice) }).await.unwrap();
+    let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
+    let input: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Initech", "issueDate": "2026-10-01", "dueDate": "2026-10-31",
+        "formStyleId": bold.id, "poNumber": "PO-9",
+        "lines": [{ "description": "Mowing", "quantityE4": 10_000, "rateCents": 5_000, "incomeAccountId": services, "serviceDate": "2026-09-20" },
+                  { "description": "Edging", "quantityE4": 10_000, "rateCents": 2_000, "incomeAccountId": services }] }))
+    .unwrap();
+    let invoice = create_and_post_invoice(&pool, input).await.unwrap();
+    let detail = crate::invoices::invoice_detail(&pool, invoice.id).await.unwrap();
+    assert_eq!(detail.items[0].service_date, NaiveDate::from_ymd_opt(2026, 9, 20));
+    assert_eq!(detail.items[1].service_date, None);
+    assert_eq!(detail.details.form_style_id, Some(bold.id));
+    // An impossible service date is refused by the table itself.
+    assert!(sqlx::query("UPDATE invoice_items SET service_date = '2026-13-99' WHERE invoice_id = ?1").bind(invoice.id).execute(&pool).await.is_err());
+    let rendered = render(&pool, FormKind::Invoice, Some(invoice.id), None, None, false).await.unwrap();
+    assert_eq!(rendered.form.title, format!("Bill {} · Initech", invoice.invoice_number), "the style picked on the invoice");
+    let all = texts(&rendered.form.pages);
+    assert!(all.iter().any(|t| t == "09/20/2026"), "{all:?}");
+    // A style that is deleted: the invoice goes back to the customer's (the default).
+    delete_style(&pool, bold.id).await.unwrap();
+    assert!(render(&pool, FormKind::Invoice, Some(invoice.id), None, None, false).await.unwrap().form.title.starts_with("Invoice "));
+    assert!(sqlx::query_scalar::<_, Option<i64>>("SELECT form_style_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn a_saved_credit_memo_prints_with_its_bill_to_and_po_number() {
+    let pool = test_pool().await;
+    let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
+    let input: crate::credits::CreditMemoInput = serde_json::from_value(serde_json::json!({ "customerName": "Globex", "creditDate": "2026-10-05", "memo": "Damaged on arrival",
+        "billTo": "Globex Corp\n9 Elm Street", "poNumber": "PO-31",
+        "lines": [{ "description": "Returned widget", "quantityE4": 20_000, "rateCents": 1_250, "incomeAccountId": services }] }))
+    .unwrap();
+    let memo = crate::credits::create_credit_memo(&pool, input).await.unwrap();
+    let rendered = render(&pool, FormKind::CreditMemo, Some(memo.id), None, None, false).await.unwrap();
+    assert_eq!(rendered.form.title, format!("Credit Memo {} · Globex", memo.credit_number));
+    let all = texts(&rendered.form.pages);
+    for expected in ["CREDIT TO", "Globex", "9 Elm Street", "PO-31", "Returned widget", "$25.00", "Total credit", "Damaged on arrival"] {
+        assert!(all.iter().any(|t| t.contains(expected)), "missing {expected:?} in {all:?}");
+    }
+    // A Credit Memo layout of its own is kept with the style.
+    save_template(&pool, None, FormKind::CreditMemo, FormTemplate { title: "Credit Note".into(), ..FormTemplate::default_for(FormKind::CreditMemo) }).await.unwrap();
+    assert!(render(&pool, FormKind::CreditMemo, Some(memo.id), None, None, false).await.unwrap().form.title.starts_with("Credit Note "));
 }

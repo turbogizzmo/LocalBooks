@@ -107,7 +107,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (OLD.status <> 'DRAFT'
  AND (   NEW.invoice_number   IS NOT OLD.invoice_number
       OR NEW.customer_name    IS NOT OLD.customer_name
@@ -151,7 +152,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (NOT (
        (OLD.status = 'DRAFT' AND NEW.status IN ('DRAFT', 'UNPAID'))
     OR (OLD.status IN ('UNPAID', 'PARTIAL', 'PAID') AND NEW.status IN ('UNPAID', 'PARTIAL', 'PAID'))
@@ -191,7 +193,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (NEW.is_voided IS NOT OLD.is_voided)
 BEGIN
     SELECT RAISE(ABORT, 'INV_UNVOID: a voided invoice cannot be restored') WHERE OLD.is_voided = 1;
@@ -232,7 +235,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (OLD.status <> 'DRAFT')
 BEGIN
     SELECT RAISE(ABORT, 'INV_IMMUTABLE: the currency of a posted invoice cannot change');
@@ -269,7 +273,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (OLD.status <> 'DRAFT' AND (NEW.tax_cents IS NOT OLD.tax_cents OR NEW.tax_rate_id IS NOT OLD.tax_rate_id))
 BEGIN
     SELECT RAISE(ABORT, 'INV_IMMUTABLE: posted invoices cannot be altered');
@@ -306,7 +311,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (OLD.status <> 'DRAFT' AND NEW.discount_cents IS NOT OLD.discount_cents)
 BEGIN
     SELECT RAISE(ABORT, 'INV_IMMUTABLE: posted invoices cannot be altered');
@@ -343,7 +349,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
 BEGIN
     SELECT RAISE(ABORT, 'INV_PAYMENT_UNPOSTED: every payment must be posted before it is applied')
     WHERE EXISTS (SELECT 1 FROM invoice_payments WHERE invoice_id = NEW.id AND journal_entry_id IS NULL);
@@ -385,7 +392,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
        AND NEW.fob IS OLD.fob
-       AND NEW.to_be_printed IS OLD.to_be_printed)
+       AND NEW.to_be_printed IS OLD.to_be_printed
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (OLD.status = 'DRAFT' AND NEW.status = 'UNPAID')
 BEGIN
     SELECT RAISE(ABORT, 'INV_NO_ITEMS: an invoice requires at least one line item')
@@ -429,7 +437,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.bill_to IS OLD.bill_to
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
-       AND NEW.fob IS OLD.fob)
+       AND NEW.fob IS OLD.fob
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (NEW.is_voided = 1 AND OLD.is_voided = 0)
 BEGIN
     SELECT RAISE(ABORT, 'VOID_DEPOSITED: this sales receipt is matched to a deposit; undo the match in Clean Up Books first')
@@ -463,7 +472,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.bill_to IS OLD.bill_to
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
-       AND NEW.fob IS OLD.fob)
+       AND NEW.fob IS OLD.fob
+       AND NEW.form_style_id IS OLD.form_style_id)
 BEGIN
     SELECT RAISE(ABORT, 'SR_IMMUTABLE: posted sales receipts cannot be changed')
     WHERE OLD.journal_entry_id IS NOT NULL
@@ -531,7 +541,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.bill_to IS OLD.bill_to
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
-       AND NEW.fob IS OLD.fob)
+       AND NEW.fob IS OLD.fob
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (NEW.is_voided = 1 AND OLD.is_voided = 0)
 BEGIN
     SELECT RAISE(ABORT, 'VOID_BOUNCED: this sales receipt bounced; void the bounced check first')
@@ -565,7 +576,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.bill_to IS OLD.bill_to
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
-       AND NEW.fob IS OLD.fob)
+       AND NEW.fob IS OLD.fob
+       AND NEW.form_style_id IS OLD.form_style_id)
   AND (NEW.is_voided = 1 AND OLD.is_voided = 0)
 BEGIN
     SELECT RAISE(ABORT, 'VOID_DEPOSITED: this sales receipt was moved out of Undeposited Funds by a transfer; void that first')
@@ -596,7 +608,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.bill_to IS OLD.bill_to
        AND NEW.ship_to IS OLD.ship_to
        AND NEW.po_number IS OLD.po_number
-       AND NEW.fob IS OLD.fob)
+       AND NEW.fob IS OLD.fob
+       AND NEW.form_style_id IS OLD.form_style_id)
 BEGIN
     SELECT RAISE(ABORT, 'EST_CONVERTED: a converted estimate is kept as it was quoted and cannot be changed')
     WHERE OLD.status = 'CONVERTED';
@@ -1209,7 +1222,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND (NEW.product_service_id IS OLD.product_service_id OR EXISTS (SELECT 1 FROM name_merges m WHERE m.applying = 1 AND m.kind = 'ITEM' AND m.from_id = OLD.product_service_id AND m.to_id = NEW.product_service_id))
        AND NEW.class_id IS OLD.class_id
        AND NEW.is_taxable IS OLD.is_taxable
-       AND NEW.percent_ppm IS OLD.percent_ppm)
+       AND NEW.percent_ppm IS OLD.percent_ppm
+       AND NEW.service_date IS OLD.service_date)
   AND ((SELECT status FROM invoices WHERE id = OLD.invoice_id) <> 'DRAFT'
   OR (SELECT status FROM invoices WHERE id = NEW.invoice_id) <> 'DRAFT')
 BEGIN
@@ -1231,7 +1245,8 @@ WHEN NOT (EXISTS (SELECT 1 FROM name_merges WHERE applying = 1)
        AND NEW.income_account_id IS OLD.income_account_id
        AND NEW.class_id IS OLD.class_id
        AND NEW.is_taxable IS OLD.is_taxable
-       AND NEW.percent_ppm IS OLD.percent_ppm)
+       AND NEW.percent_ppm IS OLD.percent_ppm
+       AND NEW.service_date IS OLD.service_date)
   AND ((SELECT journal_entry_id FROM sales_receipts WHERE id = OLD.sales_receipt_id) IS NOT NULL
   OR (SELECT journal_entry_id FROM sales_receipts WHERE id = NEW.sales_receipt_id) IS NOT NULL)
 BEGIN

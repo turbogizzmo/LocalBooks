@@ -25,7 +25,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, cents: i64, issued: NaiveDat
         customer_name: customer.into(),
         issue_date: issued,
         due_date: due,
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,
@@ -190,7 +190,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
 async fn zero_amount_estimate_lines_stay_off_the_invoice() {
     let pool = test_pool().await;
     let income = account(&pool, "4100").await;
-    let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false };
+    let line = |what: &str, rate: i64| SalesLineInput { product_service_id: None, description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, class_id: None, is_taxable: false, service_date: None };
     let estimate = |lines| EstimateInput { customer_name: "Initech".into(), estimate_date: d(10, 1), expiration_date: None, memo: None, lines, tax_rate_id: None, discount_cents: 0, details: Default::default() };
     let est = create_estimate(&pool, estimate(vec![line("Design", 50_000), line("Site visit (included)", 0), line("Build", 25_000)])).await.expect("a zero line is allowed");
     assert_eq!(est.total_cents, 75_000);
@@ -214,7 +214,7 @@ async fn zero_amount_estimate_lines_stay_off_the_invoice() {
         due_date: d(11, 5),
         lines: [("Design", 50_000), ("Extra", 0)]
             .into_iter()
-            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false })
+            .map(|(what, rate)| InvoiceLineInput { description: what.into(), quantity_e4: 10_000, rate_cents: rate, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -335,7 +335,7 @@ async fn invoice_on_terms(pool: &SqlitePool, customer: &str, cents: i64, issued:
         customer_name: customer.into(),
         issue_date: issued,
         due_date: issued + Duration::days(30),
-        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false }],
+        lines: vec![InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents: cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
         currency: None,
         tax_rate_id: None,
         discount_cents: 0,

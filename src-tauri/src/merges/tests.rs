@@ -40,7 +40,15 @@ async fn merging_customers_moves_their_documents_and_leaves_the_journal_alone() 
     let aging = ar_total(&pool).await;
 
     assert_eq!(merge_target(&pool, MergeKind::Customer, from, " acme co ").await.unwrap().map(|t| t.0), Some(to), "renaming to the other's name offers it");
+    // Customer groups: one with both, one with only the merged customer.
+    let both: i64 = sqlx::query_scalar("INSERT INTO customer_groups (name) VALUES ('Both') RETURNING id").fetch_one(&pool).await.unwrap();
+    let only: i64 = sqlx::query_scalar("INSERT INTO customer_groups (name) VALUES ('Only') RETURNING id").fetch_one(&pool).await.unwrap();
+    for (group, customer) in [(both, from), (both, to), (only, from)] {
+        sqlx::query("INSERT INTO customer_group_members (group_id, customer_id) VALUES (?1, ?2)").bind(group).bind(customer).execute(&pool).await.unwrap();
+    }
     let result = merge(&pool, MergeKind::Customer, from, to, day()).await.unwrap();
+    let members: Vec<(i64, i64)> = sqlx::query_as("SELECT group_id, customer_id FROM customer_group_members ORDER BY group_id").fetch_all(&pool).await.unwrap();
+    assert_eq!(members, vec![(both, to), (only, to)], "the kept customer is in every group the merged one was in");
     assert_eq!((result.from_name.as_str(), result.to_name.as_str()), ("ACME Company", "Acme Co"));
     assert_eq!(journal(&pool).await, before, "posted journal rows never change");
     assert_eq!(ar_total(&pool).await, aging, "A/R ties out");
