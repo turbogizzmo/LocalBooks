@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Included extras on estimates, and a usual F.O.B.** An estimate line can be priced at 0.00, and
+  such lines are left off the invoice the estimate becomes (Preferences › Sales & Customers can
+  bring them over instead). A usual F.O.B. set there fills in on new invoices, sales receipts and
+  estimates.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

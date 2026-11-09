@@ -674,7 +674,7 @@ function SalesCompany({ field }) {
     <>
       <Group title="Sales forms">
         {field({ label: 'Usual shipping method', prefKey: 'default_ship_method_id', hint: 'Filled in as Ship Via on new invoices, sales receipts and estimates (add methods in Reps, Ship Via & Fields)', children: ShipMethodChoice })}
-        {/* Usual F.O.B. (`default_fob`) goes here once the F.O.B. box (#158) is on sales forms. */}
+        {field({ label: 'Usual F.O.B.', prefKey: 'default_fob', hint: 'Filled in as F.O.B. on new invoices, sales receipts and estimates; change it on any form', children: textInput({ maxLength: 25, className: 'qb-input w-[180px]' }) })}
         {field({
           label: 'Default markup',
           prefKey: 'default_markup_percent',
@@ -695,7 +695,14 @@ function SalesCompany({ field }) {
         {field({ label: 'Overdue customers', prefKey: 'warn_customer_overdue', hint: 'Asks before saving a new invoice or sales receipt for a customer (or job) with invoices past due', children: flag('Warn before selling to a customer with overdue invoices') })}
         {field({ label: 'Open invoices', prefKey: 'warn_customer_open_invoices', hint: 'Asks before saving a new sales receipt for a customer (or job) with invoices still open: a receipt doesn’t pay them, Receive Payments does', children: flag('Warn before a sales receipt from a customer with open invoices') })}
       </Group>
-      {/* Estimates to invoices › Zero-amount lines (`estimate_drop_zero_lines`) shows once estimates take 0.00 lines (#151). */}
+      <Group title="Estimates to invoices">
+        {field({
+          label: 'Zero-amount lines',
+          prefKey: 'estimate_drop_zero_lines',
+          hint: 'An estimate line priced at 0.00 (an included extra) is left off the invoice the estimate becomes; turned off, it comes over and must be priced',
+          children: flag("Don't put zero-amount lines on the invoice"),
+        })}
+      </Group>
       <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
     </>
   );

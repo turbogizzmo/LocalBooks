@@ -65,13 +65,13 @@ as in `docs/gaps.md`.
 | Checking | Bank feed: how renaming rules apply to downloaded payees *(tour)* | partial (rules, no switch) | S |
 | Payments | Apply a payment to open invoices automatically; work out the amount from the invoices ticked | has (T3 batch 4: exact match else oldest, oldest, or off; auto-calculate) | – |
 | Payments | Deposit to Undeposited Funds by default | has (T3 batch 4: payments and sales receipts) | – |
-| Sales | Default shipping method, FOB and markup | partial (T3 batch 4: shipping method, and the markup is where Change Item Prices starts from cost, as items have no purchase cost field; the F.O.B. default waits on the F.O.B. box from #158) | S |
+| Sales | Default shipping method, FOB and markup | has (T3 batch 4: shipping method and F.O.B. fill in on new invoices, sales receipts and estimates; the markup is where Change Item Prices starts from cost, as items have no purchase cost field) | S |
 | Sales | Warn about a duplicate invoice number | has (always: invoice numbers are assigned and unique) | – |
 | Sales | Price levels on or off | has (T3 batch 4) | – |
 | Sales | Warn before selling to a customer with overdue invoices | has (T3 batch 4: new invoices and sales receipts, the customer and its jobs) | – |
 | Sales | Billable time and costs: ask, add, or don't add | missing | M |
 | Sales | Sales orders on or off, with their own duplicate-number warning and packing-slip template *(tour)* | left out (LocalBooks has no sales orders; the option comes with them) | L |
-| Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | in progress (T3 batch 4: the rule and its preference are built; estimates accepting 0.00 lines waits on #151's changes to estimate lines) | S |
+| Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | has (T3 batch 4: estimate lines may be 0.00, migration 0112, and the preference leaves them off the invoice) | S |
 | Sales | Collections Center on or off *(tour)* | left out (no Collections Center; the overdue warning and A/R aging cover the same ground) | M |
 
 ## Reports, items, jobs, time, tax
@@ -140,7 +140,6 @@ done in #164; its one left-out option, default report formatting, says why in it
 measure are left out on purpose: items have one unit, and quantities, stock and costs would all
 need a unit and conversions.
 
-Batch 4 (sales, payments and bills defaults) is built except two pieces that wait on other PRs:
-the F.O.B. default (#158's F.O.B. box) and zero-amount estimate lines (#151's estimate lines). Left
-out, with the reasons in the rows above: progress invoicing, and the sales order and Collections
+Batch 4 (sales, payments and bills defaults) is built, with the F.O.B. default and zero-amount
+estimate lines finishing it. Left out, with the reasons in the rows above: progress invoicing, and the sales order and Collections
 Center options.

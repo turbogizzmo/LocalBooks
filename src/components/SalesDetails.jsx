@@ -31,13 +31,15 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
   const styles = useLedgerQuery(api.listFormStyles).data ?? [];
   const [styleId, setStyleId] = useState(null);
   // The company defaults go on a new form once preferences load, unless a document was loaded.
-  const { defaultShipMethodId, loaded: prefsLoaded } = useSalesPrefs();
+  const { defaultShipMethodId, defaultFob, loaded: prefsLoaded } = useSalesPrefs();
   const [defaulted, setDefaulted] = useState(false);
   useEffect(() => {
     if (!prefsLoaded || defaulted) return;
     setDefaulted(true);
     setShipMethodId(defaultShipMethodId);
-  }, [prefsLoaded, defaulted, defaultShipMethodId]);
+    // The usual F.O.B., unless one was typed or a document was loaded meanwhile.
+    setHeader((h) => (h.fob ? h : { ...h, fob: defaultFob }));
+  }, [prefsLoaded, defaulted, defaultShipMethodId, defaultFob]);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
@@ -228,7 +230,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setValues({});
       setTouched(new Set());
       addressTouched.current = { billTo: false, shipTo: false };
-      setHeader({ billTo: '', shipTo: '', poNumber: '', fob: '' });
+      setHeader({ billTo: '', shipTo: '', poNumber: '', fob: prefsLoaded ? defaultFob : '' });
       setRefill((n) => n + 1);
     },
   };

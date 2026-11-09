@@ -22,8 +22,8 @@ import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
 import { FormInfoPanel } from './InfoPanel.jsx';
 
-/** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
-const ZERO_LINES = false;
+/** Estimate lines may be priced at 0.00 (an included extra): migration 0112. */
+const ZERO_LINES = true;
 
 const STATUS = {
   PENDING: { label: '○ Pending', className: 'text-qb-ink' },
@@ -80,7 +80,7 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
   const save = async (mode) => {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
-    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate above zero.`);
+    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a whole-number quantity and a rate (0.00 for an included extra).`);
     if (expires && expires < date) return setError('The expiration date is before the estimate date.');
     if (layoutError) return setError(layoutMessage(layoutError));
     if (discountCents === null) return setError('Enter the discount as an amount or a percentage such as 10%.');
