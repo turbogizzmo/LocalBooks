@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { menuKeyDown } from '../lib/menuKeys.js';
 import { Icon } from '../lib/icons.js';
 import { NewPaymentMethodDialog, usePaymentMethods } from './ProfileFields.jsx';
 
@@ -51,20 +52,7 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
     setOpen(false);
     moreRef.current?.focus();
   };
-  const onMenuKey = (e) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      setOpen(false);
-      moreRef.current?.focus();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const items = [...menuRef.current.querySelectorAll('button')];
-      const at = items.indexOf(document.activeElement);
-      items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
-    } else if (e.key === 'Tab') {
-      setOpen(false);
-    }
-  };
+  const onMenuKey = (e) => menuKeyDown(e, { menu: menuRef.current, opener: moreRef.current, close: () => setOpen(false) });
 
   return (
     <div ref={wrapRef} role="group" aria-label={label} className="relative flex items-end gap-1">
@@ -103,6 +91,7 @@ export default function PaymentMethodTiles({ value, onChange, label = 'Payment m
         <div
           ref={menuRef}
           role="menu"
+          tabIndex={-1}
           aria-label="More payment methods"
           onKeyDown={onMenuKey}
           className="absolute right-0 top-full z-40 mt-0.5 min-w-[150px] rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { menuKeyDown } from '../lib/menuKeys.js';
 import { errorText } from '../lib/api.js';
 import { myPreferences } from '../lib/myPreferences.js';
 
@@ -84,9 +85,11 @@ export default function RowMenu({ items, label = 'Actions' }) {
         <div
           ref={menuRef}
           role="menu"
+          tabIndex={-1}
           className="fixed z-40 max-h-[calc(100vh-8px)] min-w-[180px] max-w-[360px] overflow-y-auto rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"
           style={position}
           onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => menuKeyDown(e, { menu: menuRef.current, opener: buttonRef.current, close: () => setOpen(false) })}
         >
           {items.map((item) => (
             <button
@@ -145,7 +148,7 @@ export function ConfirmDialog({ item, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center whitespace-normal bg-qb-nav/40 text-left backdrop-blur-[2px]" onMouseDown={(e) => e.stopPropagation()}>
+    <div role="presentation" className="fixed inset-0 z-50 grid place-items-center whitespace-normal bg-qb-nav/40 text-left backdrop-blur-[2px]" onMouseDown={(e) => e.stopPropagation()}>
       <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-[420px] rounded-xs bg-white shadow-popover">
         <div className="border-b border-qb-border px-3 py-1.5">
           <h2 id="confirm-title" className="text-md font-semibold">{item.confirm.title}</h2>

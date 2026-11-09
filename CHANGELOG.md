@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Keyboard and screen-reader fixes.** A list row's ▾ menu now works with the arrow keys, Home
+  and End, and Esc returns you to its button. The bank feed's list and every pop-up menu can take
+  focus and are named for screen readers.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
