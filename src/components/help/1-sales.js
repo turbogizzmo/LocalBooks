@@ -246,8 +246,8 @@ export const topics = [
   {
     id: 'bill-costs', area: 'sales', views: ['sales/bill-costs', 'expenses/expenses', 'expenses/bills'],
     title: 'Bill expenses to a customer',
-    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you.',
-    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses',
+    body: 'On a check, expense or bill line, choose the Customer:Job and tick Bill?. Sales › Bill Costs lists those costs by customer: tick them, check the markup and click Create invoice. Each cost credits its expense account back (or an income account, if Preferences › Time & Expenses counts reimbursed expenses as income), plus one Markup line. Mark all expenses as billable there to tick Bill? for you. Billable time from the timesheet is listed there too, one line per entry for its service item at its hours and rate; an expense account can send its reimbursements to an income account of its own (Chart of Accounts).',
+    keywords: 'billable expenses reimbursable costs markup bill customer job reimbursement time and expenses billable time invoice from time hours timesheet',
     go: { label: 'Go to Bill Costs', view: 'sales/bill-costs' },
     guide: 'getting-started',
   },

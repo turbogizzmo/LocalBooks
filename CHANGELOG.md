@@ -11,6 +11,10 @@ people using LocalBooks.
   kept, so its history and balances show under one name. An account's balance moves with one
   journal entry, and its items, settings and subaccounts follow. Posted amounts never change, and
   each merge is in the audit trail.
+- **Bill time, and send reimbursements where they belong.** Sales › Bill Costs now lists billable
+  time from the timesheet, so it goes on the customer's invoice at its hours and rate. And when
+  reimbursed expenses count as income, each expense account can name the income account its
+  reimbursements go to.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

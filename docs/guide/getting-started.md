@@ -262,6 +262,21 @@ default.
 
 Voiding that invoice puts the costs back on the list; editing it keeps them billed.
 
+When reimbursed expenses count as income, each expense account can send its reimbursements to an
+income account of its own: open the expense account in the **Chart of Accounts** and choose it
+under **Reimbursements billed to customers go to**. Accounts left on the default use the income
+account in **Preferences › Time & Expenses**.
+
+### Bill time to a customer
+
+Time entered on the timesheet as **billable**, for a customer or job and with an hourly rate, is
+listed at the top of **Sales › Bill Costs** for that customer: the date, who did it, the service
+item, the hours, the rate and the amount. Tick the entries to bill (they start ticked) and click
+**Create invoice**: each becomes a line for its service item, at its hours and rate, crediting the
+item's income account. Time has no markup. An entry without a service item can't be billed until it
+has one on the timesheet. As with costs, voiding the invoice puts the time back on the list and
+editing it keeps the time billed.
+
 ### 1099 boxes and thresholds
 
 Map each expense account to a box under **Tax: 1099 › Company Preferences**, for example
