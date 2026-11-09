@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Batch invoices and payment reminders.** Batch invoices… in the Customer Center invoices the
+  same lines to a whole customer group (or customers you pick) at once, each on the customer's
+  terms and queued to email or print as they prefer. Groups can send payment reminders for their
+  overdue invoices on a schedule, reviewed from Reminders.
 - **Customer groups.** The Customer Center has a Groups view: groups picked by hand, or automatic
   ones that hold every customer meeting their rules (balance, type, terms, rep, state, ZIP code,
   tax code, credit limit, status) and change as customers do. A group can remind you to send its

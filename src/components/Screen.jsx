@@ -53,7 +53,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/invoices' && <Invoices {...props} />}
       {view === 'sales/estimates' && <Estimates {...props} />}
       {view === 'sales/credits' && <CreditMemos {...props} />}
-      {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} />}
+      {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} intent={intent} />}
       {view === 'sales/products' && <Products accounts={list} intent={intent} />}
       {view === 'sales/lists' && <SalesLists />}
       {view === 'sales/profile-lists' && <ProfileLists intent={intent} />}

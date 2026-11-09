@@ -8,7 +8,7 @@ import DateBox from './DateBox.jsx';
 
 const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
-export function Dialog({ title, children, onClose }) {
+export function Dialog({ title, children, onClose, wide = false }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current?.querySelector('input, select')?.focus();
@@ -18,7 +18,7 @@ export function Dialog({ title, children, onClose }) {
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <div ref={ref} className="qb-panel flex max-h-full w-full max-w-[620px] flex-col shadow-lg">
+      <div ref={ref} className={`qb-panel flex max-h-full w-full flex-col shadow-lg ${wide ? 'max-w-[1000px]' : 'max-w-[620px]'}`}>
         <h2 className="border-b border-qb-border px-3 py-2 text-md font-semibold">{title}</h2>
         {children}
       </div>

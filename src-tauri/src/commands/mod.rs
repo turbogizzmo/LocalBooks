@@ -52,6 +52,7 @@ features![
     attachments,
     backups,
     bank_feeds,
+    batch_invoices,
     bounced_checks,
     budgets,
     classes,

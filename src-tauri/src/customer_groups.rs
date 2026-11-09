@@ -108,6 +108,32 @@ pub struct CustomerGroup {
     pub member_ids: Vec<i64>,
     pub member_count: usize,
     pub statement: StatementReminder,
+    pub payments: PaymentReminder,
+}
+
+/// A group's payment reminder: every `every_days` days, its invoices at least
+/// `min_days_overdue` days past due come up to review and send (`payment_reminders.rs`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PaymentReminder {
+    /// None: no reminder.
+    pub every_days: Option<i64>,
+    pub min_days_overdue: i64,
+    pub last_sent: Option<NaiveDate>,
+}
+
+impl Default for PaymentReminder {
+    fn default() -> Self {
+        PaymentReminder { every_days: None, min_days_overdue: 1, last_sent: None }
+    }
+}
+
+impl PaymentReminder {
+    /// The day the next round is due; today's date when never sent.
+    pub fn next_due(&self, today: NaiveDate) -> Option<NaiveDate> {
+        let every = self.every_days?;
+        Some(self.last_sent.map_or(today, |sent| sent + Duration::days(every)))
+    }
 }
 
 /// A group's statement reminder: every `every_days` days the group's statements come up in
@@ -147,6 +173,8 @@ pub struct CustomerGroupInput {
     pub member_ids: Vec<i64>,
     #[serde(default)]
     pub statement: StatementReminder,
+    #[serde(default)]
+    pub payments: PaymentReminder,
 }
 
 /// Every customer's details, for the rules.
@@ -164,7 +192,7 @@ pub async fn customer_facts(pool: &SqlitePool) -> Result<Vec<CustomerFacts>, Str
     .map_err(db_err)
 }
 
-type GroupRow = (i64, String, Option<String>, Option<i64>, Option<NaiveDate>, bool, Option<i64>, Option<String>);
+type GroupRow = (i64, String, Option<String>, Option<i64>, Option<NaiveDate>, bool, Option<i64>, Option<String>, Option<i64>, i64, Option<NaiveDate>);
 
 async fn build(pool: &SqlitePool, rows: Vec<GroupRow>) -> Result<Vec<CustomerGroup>, String> {
     let facts = customer_facts(pool).await?;
@@ -173,7 +201,7 @@ async fn build(pool: &SqlitePool, rows: Vec<GroupRow>) -> Result<Vec<CustomerGro
         .await
         .map_err(db_err)?;
     let mut out = Vec::with_capacity(rows.len());
-    for (id, name, rules_json, every_days, last_sent, open_only, style_id, message) in rows {
+    for (id, name, rules_json, every_days, last_sent, open_only, style_id, message, pay_every, pay_min, pay_last) in rows {
         // Rules a newer version wrote that this one can't read leave the group empty, not broken.
         let rules: Vec<Rule> = rules_json.as_deref().map(|j| serde_json::from_str(j).unwrap_or_default()).unwrap_or_default();
         let automatic = rules_json.is_some();
@@ -190,12 +218,14 @@ async fn build(pool: &SqlitePool, rows: Vec<GroupRow>) -> Result<Vec<CustomerGro
             member_count: member_ids.len(),
             member_ids,
             statement: StatementReminder { every_days, last_sent, open_only, style_id, message },
+            payments: PaymentReminder { every_days: pay_every, min_days_overdue: pay_min, last_sent: pay_last },
         });
     }
     Ok(out)
 }
 
-const SELECT: &str = "SELECT id, name, rules_json, statement_every_days, statement_last_sent, statement_open_only, statement_style_id, statement_message FROM customer_groups";
+const SELECT: &str = "SELECT id, name, rules_json, statement_every_days, statement_last_sent, statement_open_only, statement_style_id, statement_message,
+    payment_every_days, payment_min_days_overdue, payment_last_sent FROM customer_groups";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<CustomerGroup>, String> {
     let rows: Vec<GroupRow> = sqlx::query_as(&format!("{SELECT} ORDER BY name COLLATE NOCASE")).fetch_all(pool).await.map_err(db_err)?;
@@ -228,6 +258,9 @@ fn check(input: &CustomerGroupInput) -> Result<(), String> {
             return Err("GROUP_BAD_SCHEDULE: send statements every 1 to 366 days".into());
         }
     }
+    if input.payments.every_days.is_some_and(|d| !(1..=366).contains(&d)) || !(0..=365).contains(&input.payments.min_days_overdue) {
+        return Err("GROUP_BAD_SCHEDULE: send payment reminders every 1 to 366 days, for invoices 0 to 365 days overdue".into());
+    }
     if input.statement.message.as_deref().is_some_and(|m| m.chars().count() > 2000) {
         return Err("GROUP_MESSAGE_LONG: the statement message can be at most 2,000 characters".into());
     }
@@ -250,7 +283,8 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, input: &CustomerGroupInput
         Some(id) => {
             let done = sqlx::query(
                 "UPDATE customer_groups SET name = ?1, rules_json = ?2, statement_every_days = ?3, statement_last_sent = ?4, statement_open_only = ?5,
-                        statement_style_id = ?6, statement_message = ?7 WHERE id = ?8",
+                        statement_style_id = ?6, statement_message = ?7, payment_every_days = ?9, payment_min_days_overdue = ?10, payment_last_sent = ?11
+                 WHERE id = ?8",
             )
             .bind(input.name.trim())
             .bind(&rules_json)
@@ -260,6 +294,9 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, input: &CustomerGroupInput
             .bind(s.style_id)
             .bind(message)
             .bind(id)
+            .bind(input.payments.every_days)
+            .bind(input.payments.min_days_overdue)
+            .bind(input.payments.last_sent)
             .execute(&mut *tx)
             .await
             .map_err(duplicate)?;
@@ -269,8 +306,9 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, input: &CustomerGroupInput
             id
         }
         None => sqlx::query_scalar(
-            "INSERT INTO customer_groups (name, rules_json, statement_every_days, statement_last_sent, statement_open_only, statement_style_id, statement_message)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+            "INSERT INTO customer_groups (name, rules_json, statement_every_days, statement_last_sent, statement_open_only, statement_style_id, statement_message,
+                                          payment_every_days, payment_min_days_overdue, payment_last_sent)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id",
         )
         .bind(input.name.trim())
         .bind(&rules_json)
@@ -279,6 +317,9 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, input: &CustomerGroupInput
         .bind(s.open_only)
         .bind(s.style_id)
         .bind(message)
+        .bind(input.payments.every_days)
+        .bind(input.payments.min_days_overdue)
+        .bind(input.payments.last_sent)
         .fetch_one(&mut *tx)
         .await
         .map_err(duplicate)?,

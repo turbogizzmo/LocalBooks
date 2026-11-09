@@ -3,6 +3,7 @@ import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import CustomerGroups from './CustomerGroups.jsx';
+import { BatchInvoiceDialog } from './BatchInvoices.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
@@ -417,7 +418,7 @@ function CustomerSendFields({ form, setForm }) {
 }
 
 /** Customer or vendor list with an inline "add" row at the top of the grid. */
-export default function PartyList({ kind, navigate }) {
+export default function PartyList({ kind, navigate, intent = null }) {
   const cfg = CONFIG[kind];
   const { data, error } = useLedgerQuery(cfg.list);
   const { jobStatus } = useSalesPrefs();
@@ -425,7 +426,12 @@ export default function PartyList({ kind, navigate }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
-  const [centerView, setCenterView] = useState('customers');
+  const [centerView, setCenterView] = useState(() => (intent?.action === 'payment-reminders' ? 'groups' : 'customers'));
+  const remindGroupId = intent?.action === 'payment-reminders' ? (intent.data?.groupId ?? null) : null;
+  useEffect(() => {
+    if (intent?.action === 'payment-reminders') setCenterView('groups');
+  }, [intent]);
+  const [batching, setBatching] = useState(false);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -553,7 +559,7 @@ export default function PartyList({ kind, navigate }) {
             <h2 className="text-md font-semibold">Customer groups</h2>
             {viewSwitch}
           </div>
-          <CustomerGroups navigate={navigate} />
+          <CustomerGroups navigate={navigate} remindGroupId={remindGroupId} />
         </section>
       </div>
     );
@@ -576,6 +582,11 @@ export default function PartyList({ kind, navigate }) {
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">{cfg.title}</h2>
           {viewSwitch}
+          {kind === 'customer' && (
+            <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => setBatching(true)} title="The same lines invoiced to a group of customers, or to customers you pick">
+              Batch invoices…
+            </button>
+          )}
           <input className="qb-input h-row w-[220px] text-sm" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Find a ${cfg.noun}`} aria-label="Filter" />
           <label className="flex items-center gap-1 text-sm">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
@@ -587,6 +598,15 @@ export default function PartyList({ kind, navigate }) {
           <ExportMenu printable={false} onNotice={setNotice} {...exports} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+        {batching && (
+          <BatchInvoiceDialog
+            onClose={() => setBatching(false)}
+            onDone={(text) => {
+              setBatching(false);
+              setNotice({ kind: 'success', text });
+            }}
+          />
+        )}
         {error && <Notice kind="error" text={error} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <form onSubmit={add}>

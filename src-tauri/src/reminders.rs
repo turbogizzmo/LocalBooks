@@ -714,6 +714,20 @@ pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newe
         })
         .collect();
     groups.push(group("GROUP_STATEMENTS", "Statements to send".into(), statements));
+    // Customer groups whose payment reminders are due and that have overdue invoices.
+    let payments: Vec<ReminderItem> = crate::payment_reminders::due(pool, as_of)
+        .await?
+        .into_iter()
+        .map(|(g, count, total)| ReminderItem {
+            id: Some(g.id),
+            label: format!("Payment reminders for {}", g.name),
+            detail: format!("{count} overdue invoice{}", if count == 1 { "" } else { "s" }),
+            date: None,
+            amount_cents: Some(total),
+            entry_id: None,
+        })
+        .collect();
+    groups.push(group("PAYMENT_REMINDERS", "Payment reminders to send".into(), payments));
     if s.tax_dates.show {
         groups.push(group("TAX_DATES", format!("Tax dates (next {})", days_word(s.tax_dates.days)), tax_dates(pool, as_of, s.tax_dates.days).await?));
     }

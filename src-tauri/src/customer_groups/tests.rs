@@ -73,7 +73,7 @@ async fn automatic_groups_follow_the_customers_and_manual_groups_keep_their_list
     let b = customer(&pool, "Birch Books", "4 Oak Ave\nSeattle, WA 98101", None).await;
     let c = customer(&pool, "Cedar Clinic", "7 Fir Rd\nPortland, OR 97201", None).await;
 
-    let oregon = save(&pool, None, &CustomerGroupInput { name: " Oregon ".into(), rules: vec![Rule::State { code: "OR".into() }], member_ids: vec![b], statement: StatementReminder::default() }).await.unwrap();
+    let oregon = save(&pool, None, &CustomerGroupInput { name: " Oregon ".into(), rules: vec![Rule::State { code: "OR".into() }], member_ids: vec![b], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap();
     assert!(oregon.automatic);
     assert_eq!(oregon.name, "Oregon");
     assert_eq!(oregon.member_ids, vec![a, c], "the rule decides; a member list is ignored");
@@ -87,18 +87,18 @@ async fn automatic_groups_follow_the_customers_and_manual_groups_keep_their_list
     let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Cedar Clinic", "issueDate": "2026-05-01", "dueDate": "2026-05-31",
         "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 75_000, "incomeAccountId": services }] })).unwrap();
     crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
-    let owing = save(&pool, None, &CustomerGroupInput { name: "Owe 500+".into(), rules: vec![Rule::Balance { cents: 50_000, at_most: false }], member_ids: vec![], statement: StatementReminder::default() }).await.unwrap();
+    let owing = save(&pool, None, &CustomerGroupInput { name: "Owe 500+".into(), rules: vec![Rule::Balance { cents: 50_000, at_most: false }], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap();
     assert_eq!(owing.member_ids, vec![c]);
 
     // A manual group keeps exactly who was picked (repeats and unknown ids dropped).
-    let picked = save(&pool, None, &CustomerGroupInput { name: "Picked".into(), rules: vec![], member_ids: vec![b, a, b, 9_999], statement: StatementReminder::default() }).await.unwrap();
+    let picked = save(&pool, None, &CustomerGroupInput { name: "Picked".into(), rules: vec![], member_ids: vec![b, a, b, 9_999], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap();
     assert!(!picked.automatic);
     assert_eq!(picked.member_ids, vec![a, b]);
-    let edited = save(&pool, Some(picked.id), &CustomerGroupInput { name: "Picked".into(), rules: vec![], member_ids: vec![c], statement: StatementReminder::default() }).await.unwrap();
+    let edited = save(&pool, Some(picked.id), &CustomerGroupInput { name: "Picked".into(), rules: vec![], member_ids: vec![c], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap();
     assert_eq!(edited.member_ids, vec![c]);
 
-    assert!(save(&pool, None, &CustomerGroupInput { name: "oregon".into(), rules: vec![], member_ids: vec![], statement: StatementReminder::default() }).await.unwrap_err().starts_with("GROUP_DUPLICATE"));
-    assert!(save(&pool, None, &CustomerGroupInput { name: "Bad".into(), rules: vec![Rule::State { code: "Oregon".into() }], member_ids: vec![], statement: StatementReminder::default() }).await.unwrap_err().starts_with("GROUP_BAD_RULE"));
+    assert!(save(&pool, None, &CustomerGroupInput { name: "oregon".into(), rules: vec![], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap_err().starts_with("GROUP_DUPLICATE"));
+    assert!(save(&pool, None, &CustomerGroupInput { name: "Bad".into(), rules: vec![Rule::State { code: "Oregon".into() }], member_ids: vec![], statement: StatementReminder::default(), payments: PaymentReminder::default() }).await.unwrap_err().starts_with("GROUP_BAD_RULE"));
     assert_eq!(list(&pool).await.unwrap().iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["Oregon", "Owe 500+", "Picked"]);
     delete(&pool, picked.id).await.unwrap();
     assert!(get(&pool, picked.id).await.unwrap_err().starts_with("GROUP_NOT_FOUND"));
@@ -109,8 +109,8 @@ async fn statement_reminders_come_due_and_wait_after_they_are_sent() {
     let pool = test_pool().await;
     let a = customer(&pool, "Alder Cafe", "Salem, OR 97301", None).await;
     let monthly = StatementReminder { every_days: Some(30), open_only: true, message: Some("Your statement is attached.".into()), ..Default::default() };
-    let g = save(&pool, None, &CustomerGroupInput { name: "Monthly".into(), rules: vec![], member_ids: vec![a], statement: monthly }).await.unwrap();
-    let _empty = save(&pool, None, &CustomerGroupInput { name: "Nobody".into(), rules: vec![], member_ids: vec![], statement: StatementReminder { every_days: Some(7), ..Default::default() } }).await.unwrap();
+    let g = save(&pool, None, &CustomerGroupInput { name: "Monthly".into(), rules: vec![], member_ids: vec![a], statement: monthly, payments: PaymentReminder::default() }).await.unwrap();
+    let _empty = save(&pool, None, &CustomerGroupInput { name: "Nobody".into(), rules: vec![], member_ids: vec![], statement: StatementReminder { every_days: Some(7), ..Default::default() }, payments: PaymentReminder::default() }).await.unwrap();
     let due = statements_due(&pool, d(5, 1)).await.unwrap();
     assert_eq!(due.iter().map(|(g, day)| (g.name.as_str(), *day)).collect::<Vec<_>>(), [("Monthly", d(5, 1))], "a group with no members never comes up");
     let sent = mark_statements_sent(&pool, g.id, d(5, 1)).await.unwrap();

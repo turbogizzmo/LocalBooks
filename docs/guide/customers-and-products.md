@@ -90,6 +90,31 @@ In **Sales › Customers**, switch **View** to **Groups** to see and make custom
 
 Click a group to list its customers right now; double-click it to change it.
 
+### Batch invoices
+
+To bill many customers the same thing (a monthly fee, a seasonal service), click **Batch
+invoices…** in **Sales › Customers**, or choose **Batch invoice this group…** on a group.
+
+1. Pick a **Customer group**, tick customers by hand, or both. Inactive customers are left out.
+2. Set the **Invoice date**, and **Due after (days)** for customers without terms of their own
+   (customers with terms are due on their terms).
+3. Enter the lines once, as on an invoice. The dialog shows each invoice's total and the total of
+   all of them.
+4. Click **Create invoices**.
+
+Each customer gets an invoice of their own, posted to Accounts Receivable. They are created
+together: if one can't be (an inactive item, say), none are. Each waits where the customer's
+**Preferred delivery** says: **Sales › Send Forms** for Email, **File › Print Forms** for Print.
+
+### Payment reminders
+
+On a group, tick **Payment reminders: every … days, remind about invoices at least … days
+overdue**. When a round is due and the group has overdue invoices, **Reminders** lists **Payment
+reminders for** the group with the amount overdue. Click it (or choose **Payment reminders…** on
+the group) to review the overdue invoices: untick any to leave out, then click **Send reminders**.
+Each ticked invoice is queued in **Sales › Send Forms**, which emails it with its invoice message,
+and the next round is due after the days you set.
+
 ### Statement reminders
 
 Tick **Remind me to send this group's statements every … days** on a group. When they are due

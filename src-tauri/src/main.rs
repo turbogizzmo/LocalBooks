@@ -12,6 +12,7 @@ mod backup;
 mod bank;
 mod bank_pdf;
 mod banking;
+mod batch_invoices;
 mod billable_costs;
 mod bounced_checks;
 mod classes;
@@ -107,6 +108,7 @@ mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod payment_reminders;
 
 use tauri::Manager;
 

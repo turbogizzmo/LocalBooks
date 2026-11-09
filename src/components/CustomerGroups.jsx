@@ -8,6 +8,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { BatchInvoiceDialog, PaymentRemindersDialog } from './BatchInvoices.jsx';
 
 /** The rule kinds, as the editor offers them. */
 export const RULE_FIELDS = [
@@ -179,6 +180,7 @@ function GroupDialog({ group, customers, names, onClose, onSaved }) {
   const [members, setMembers] = useState(() => new Set(group && !group.automatic ? group.memberIds : []));
   const [filter, setFilter] = useState('');
   const [statement, setStatement] = useState(group?.statement ?? { everyDays: null, lastSent: null, openOnly: false, styleId: null, message: null });
+  const [payments, setPayments] = useState(group?.payments ?? { everyDays: null, minDaysOverdue: 1, lastSent: null });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -196,7 +198,7 @@ function GroupDialog({ group, customers, names, onClose, onSaved }) {
     setBusy(true);
     setError(null);
     try {
-      const input = { name, rules: automatic ? rules : [], memberIds: automatic ? [] : [...members], statement };
+      const input = { name, rules: automatic ? rules : [], memberIds: automatic ? [] : [...members], statement, payments };
       const saved = await api.saveCustomerGroup(input, group?.id ?? null);
       onSaved(`Group “${saved.name}” saved: ${saved.memberCount} customer${saved.memberCount === 1 ? '' : 's'}.`);
     } catch (err) {
@@ -270,6 +272,32 @@ function GroupDialog({ group, customers, names, onClose, onSaved }) {
             </>
           )}
         </fieldset>
+        <fieldset className="flex flex-col gap-1 rounded-xs border border-qb-border p-2">
+          <legend className="px-1 text-xs font-semibold text-qb-ink-muted">Payment reminders</legend>
+          <label className="flex flex-wrap items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={payments.everyDays != null} onChange={(e) => setPayments((p) => ({ ...p, everyDays: e.target.checked ? 14 : null }))} />
+            Every
+            <input
+              className="qb-input num w-[56px]"
+              inputMode="numeric"
+              disabled={payments.everyDays == null}
+              value={payments.everyDays ?? ''}
+              onChange={(e) => setPayments((p) => ({ ...p, everyDays: Number.parseInt(e.target.value, 10) || 1 }))}
+              aria-label="Days between payment reminders"
+            />
+            days, remind about invoices at least
+            <input
+              className="qb-input num w-[56px]"
+              inputMode="numeric"
+              disabled={payments.everyDays == null}
+              value={payments.minDaysOverdue}
+              onChange={(e) => setPayments((p) => ({ ...p, minDaysOverdue: Math.max(0, Number.parseInt(e.target.value, 10) || 0) }))}
+              aria-label="Days overdue before a reminder"
+            />
+            days overdue
+          </label>
+          {payments.lastSent && <span className="text-2xs text-qb-ink-muted">Last sent {formatDate(payments.lastSent)}.</span>}
+        </fieldset>
         {error && <Notice kind="error" text={error} />}
         <div className="flex justify-end gap-2">
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>
@@ -285,8 +313,15 @@ function GroupDialog({ group, customers, names, onClose, onSaved }) {
 }
 
 /** The Groups view: each group with its rules or members and its statement reminder. */
-export default function CustomerGroups({ navigate }) {
+export default function CustomerGroups({ navigate, remindGroupId = null }) {
   const groups = useLedgerQuery(api.listCustomerGroups);
+  const [batching, setBatching] = useState(null); // { groupId }
+  const [reminding, setReminding] = useState(null); // group id
+  const [askedReminders, setAskedReminders] = useState(null);
+  if (remindGroupId && askedReminders !== remindGroupId) {
+    setAskedReminders(remindGroupId);
+    setReminding(remindGroupId);
+  }
   const customers = useLedgerQuery(api.listCustomers).data ?? [];
   const names = useNames();
   const [editing, setEditing] = useState(null); // { group } (null group = new)
@@ -307,6 +342,26 @@ export default function CustomerGroups({ navigate }) {
   const list = groups.data ?? [];
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {batching && (
+        <BatchInvoiceDialog
+          initialGroupId={batching.groupId}
+          onClose={() => setBatching(null)}
+          onDone={(text) => {
+            setBatching(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
+      {reminding && list.some((g) => g.id === reminding) && (
+        <PaymentRemindersDialog
+          group={list.find((g) => g.id === reminding)}
+          onClose={() => setReminding(null)}
+          onDone={(text) => {
+            setReminding(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
       {editing && (
         <GroupDialog
           group={editing.group}
@@ -334,7 +389,7 @@ export default function CustomerGroups({ navigate }) {
               <th className="qb-grid-head">Group</th>
               <th className="qb-grid-head">Who is in it</th>
               <th className="qb-grid-head w-[90px] text-right">Customers</th>
-              <th className="qb-grid-head w-[170px]">Statements</th>
+              <th className="qb-grid-head w-[240px]">Reminders</th>
               <th className="qb-grid-head w-[30px]" aria-label="Actions" />
             </tr>
           </thead>
@@ -355,13 +410,18 @@ export default function CustomerGroups({ navigate }) {
                 </td>
                 <td className="qb-grid-cell num">{g.memberCount}</td>
                 <td className="qb-grid-cell text-sm text-qb-ink-muted">
-                  {g.statement.everyDays ? `Every ${g.statement.everyDays} days${g.statement.lastSent ? ` · sent ${formatDate(g.statement.lastSent)}` : ''}` : '—'}
+                  {g.statement.everyDays ? `Statements every ${g.statement.everyDays} days` : ''}
+                  {g.statement.everyDays && g.payments.everyDays ? ' · ' : ''}
+                  {g.payments.everyDays ? `Payments every ${g.payments.everyDays} days` : ''}
+                  {!g.statement.everyDays && !g.payments.everyDays && '—'}
                 </td>
                 <td className="qb-grid-cell cell-tight text-center" onClick={(e) => e.stopPropagation()}>
                   <RowMenu
                     label={`Actions for ${g.name}`}
                     items={[
                       { label: 'Edit…', onSelect: () => setEditing({ group: g }) },
+                      { label: 'Batch invoice this group…', onSelect: () => setBatching({ groupId: g.id }) },
+                      { label: 'Payment reminders…', onSelect: () => setReminding(g.id) },
                       navigate && { label: 'Statements for this group…', onSelect: () => navigate('sales/statements', 'group', { groupId: g.id }) },
                       { label: 'Delete…', onSelect: () => remove(g) },
                     ].filter(Boolean)}

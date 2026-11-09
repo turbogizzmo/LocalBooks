@@ -172,6 +172,14 @@ export const topics = [
     guide: 'customers-and-products',
   },
   {
+    id: 'batch-invoices', area: 'sales', views: ['sales/customers', 'sales/invoices'],
+    title: 'Batch invoices and payment reminders by group',
+    body: 'Batch invoices… in the Customer Center invoices the same lines to every customer of a group (or customers you tick), each due on their own terms and queued in Send Forms or Print Forms as they prefer; all are created or none are. A group can also send payment reminders on a schedule: Reminders lists its overdue invoices when a round is due, and Send reminders queues them to be emailed.',
+    keywords: 'batch invoice invoices many customers group bulk billing monthly fee payment reminder overdue dunning collection email schedule',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'invoice-available-credits', area: 'sales', views: ['sales/invoices', 'sales/credits'],
     title: 'Use a customer’s credits on a new invoice',
     body: 'When the customer has credit memos with credit left, the invoice shows Available credits under Balance due. Saving the invoice asks whether to apply them now: Apply credits uses them oldest first, up to the invoice total, as applying them from Credit Memos & Refunds would. Home-currency invoices only.',
