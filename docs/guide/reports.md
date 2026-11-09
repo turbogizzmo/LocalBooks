@@ -84,6 +84,24 @@ It shows income, cost of goods sold, gross profit, expenses and net income. Fisc
 Assets, liabilities and equity are shown at that date. Profit from earlier fiscal years appears as
 Retained Earnings, and this year's as Net Income.
 
+## Cash Flow Forecast
+
+**Reports › Company & Financial › Cash Flow Forecast** (also under **Business overview**) shows,
+week by week, the cash you have and the money your open invoices and bills will move:
+
+- **Cash on hand**: your bank accounts' balance, plus payments received but not yet deposited, on
+  the **From** date.
+- **Money in**: each open invoice's balance in the week it's due (unused customer credit counts
+  against it). **Money out**: each open bill's balance in the week it's due (less unused vendor
+  credit). Click either row to see the documents.
+- **Past due** (first column) is money already overdue, counted first; **Later** (last column) is
+  due after the last week.
+- **Net** and **Cash at the end** of each week follow.
+
+Choose 4, 8, 13 or 26 **Weeks**. Its money in adds up to the A/R Aging Summary's total, and its
+money out to the A/P Aging Summary's, as of the same date. The Dashboard's **Insights** tab shows
+the next eight weeks as a chart; click it to open the report.
+
 ## See the transactions behind a number (QuickZoom)
 
 Click an amount to see where it came from:
@@ -360,6 +378,21 @@ LocalBooks line under **Tax lines…**.
 The amounts come from your books on the accrual basis. They are a starting point for your return,
 not the return itself: your tax preparer may adjust them, for example for meals or depreciation.
 
+#### Export to tax software (TXF)
+
+With **Schedule C** as the tax form, **Export TXF…** on the Income Tax report writes the tax year's
+totals as a TXF (Tax Exchange Format) file, which personal tax programs import. The panel lists
+each Schedule C line with its TXF code and amount before you click **Save TXF file…**; in the file,
+income is positive and expenses negative, as tax programs expect. Each account on line **27a ·
+Other expenses** goes in as its own entry, described by the account's name.
+
+Under **Not in the file** the panel lists what the file leaves out, with the amount for you to
+enter by hand: accounts with no tax line or another form's line, and the two Schedule C lines TXF
+has no code for (13 · Depreciation, which goes through Form 4562, and 30 · Business use of home,
+Form 8829). TXF has no codes for a partnership's or corporation's own return, so the export is
+offered for Schedule C only; for Forms 1065, 1120-S and 1120, export the Income Tax Summary to
+Excel or CSV for your preparer instead.
+
 ### Collections Report
 
 Every invoice past its due date and still open on the **As of** date, grouped by customer. Each
@@ -387,6 +420,8 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
 | **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
 | **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
+| **Inventory Turnover by Item** | Inventory | For each tracked item over the period: inventory value at the start and end, their average, the cost of goods sold, how many times the average stock **turned over** (cost of goods sold ÷ average value) and the **days on hand** that implies. The ending values match Inventory Valuation |
+| **Invoice Profitability by Customer** and **Detail** | Sales and customers | Each customer's invoices (or each invoice, under its customer): the income it posted, the cost of goods it sold, gross profit and margin. The totals tie out to the income and Cost of Goods Sold those invoices posted. A product or service whose stock isn't tracked carries no cost here |
 | **Audit Trail** | Accountant & Taxes | Every record of the audit trail made in the period: when, which user, what was posted, voided or changed, and the amount. The note under it says whether the trail's chain checks out |
 | **Customer Phone List** · **Vendor Phone List** | Lists | Each active customer (jobs as *Customer:Job*) or vendor with their phone number |
 | **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
