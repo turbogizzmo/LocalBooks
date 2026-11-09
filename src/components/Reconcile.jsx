@@ -10,6 +10,9 @@ import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
 
+/** The longest undo reason the Audit Log keeps (`reconciliation_undos.reason`, migration 0085). */
+const REASON_MAX = 500;
+
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
 const SOURCE_LABEL = {
@@ -234,8 +237,12 @@ export default function Reconcile({ accounts }) {
       { confirmLabel: 'Undo reconciliation', danger: true },
     );
     if (!ok) return;
-    const reason = await askText('Why are you undoing it? (optional, kept in the Audit Log)');
+    const reason = await askText('Why are you undoing it? (optional, up to 500 characters, kept in the Audit Log)');
     if (reason === null) return;
+    if (reason.trim().length > REASON_MAX) {
+      setNotice({ kind: 'error', text: `Keep the reason to ${REASON_MAX} characters (it has ${reason.trim().length}); nothing was undone.` });
+      return;
+    }
     setBusy(true);
     try {
       const released = await api.undoLastReconciliation(h.id, reason.trim() || null);

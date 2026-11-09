@@ -187,6 +187,9 @@ async fn undo_last_reconciliation_releases_its_lines_with_an_audit_row() {
     let september = reconcile_through(&pool, checking, d(9, 30), 98_000).await;
     let report_before = crate::accountant_reports::previous_reconciliation(&pool, august.id, true).await.unwrap();
 
+    assert!(undo_last(&pool, 9_999, None).await.unwrap_err().starts_with("REC_NOT_FOUND"));
+    let direct = sqlx::query("INSERT INTO reconciliation_undos (reconciliation_id, released_count, released_total_cents) VALUES (9999, 0, 0)").execute(&pool).await.unwrap_err();
+    assert!(direct.to_string().contains("REC_NOT_FOUND"), "{direct}");
     // Only the last one can be undone.
     let err = undo_last(&pool, august.id, None).await.expect_err("not the last");
     assert!(err.starts_with("REC_UNDO_NOT_LAST"), "{err}");

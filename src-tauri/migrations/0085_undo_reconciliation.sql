@@ -19,8 +19,10 @@ CREATE TABLE reconciliation_undos (
 CREATE TRIGGER trg_rec_undo_checks
 BEFORE INSERT ON reconciliation_undos
 BEGIN
+    SELECT RAISE(ABORT, 'REC_NOT_FOUND: that reconciliation does not exist')
+    WHERE NOT EXISTS (SELECT 1 FROM reconciliations WHERE id = NEW.reconciliation_id);
     SELECT RAISE(ABORT, 'REC_UNDO_NOT_LOCKED: only a completed reconciliation can be undone')
-    WHERE (SELECT is_locked FROM reconciliations WHERE id = NEW.reconciliation_id) IS NOT 1;
+    WHERE (SELECT is_locked FROM reconciliations WHERE id = NEW.reconciliation_id) = 0;
     SELECT RAISE(ABORT, 'REC_UNDO_NOT_LAST: only the last reconciliation of an account can be undone')
     WHERE EXISTS (
         SELECT 1 FROM reconciliations later, reconciliations r
