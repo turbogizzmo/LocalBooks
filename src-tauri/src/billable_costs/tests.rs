@@ -225,6 +225,7 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     crate::timesheet::create_time_activities(&pool, vec![entry(90, Some(design), true), entry(30, Some(design), false), entry(60, None, true)]).await.unwrap();
     let time = list_unbilled_time(&pool, Some(acme)).await.unwrap();
     assert_eq!(time.iter().map(|t| (t.minutes, t.amount_cents)).collect::<Vec<_>>(), [(90, 14_250), (60, 9_500)], "billable only; 1.5 h × $95");
+    assert_eq!(time[0].hours_e4, 15_000, "hours as the invoice line's quantity");
 
     let bill = |ids: Vec<i64>| BillCostsInput { customer_id: acme, costs: Vec::new(), time: ids, issue_date: d(10), due_date: d(31), markup_percent: Some("0".into()), tax_rate_id: None };
     // Time with no service item can't be billed: the item gives the invoice line its income account.
@@ -236,6 +237,8 @@ async fn billable_time_is_invoiced_once_at_its_hours_and_rate() {
     assert_eq!((lines[0].quantity_e4, lines[0].rate_cents, lines[0].product_service_id), (15_000, 9_500, Some(design)));
     assert_eq!(list_unbilled_time(&pool, Some(acme)).await.unwrap().len(), 1, "billed time leaves the list");
     assert!(bill_costs(&pool, bill(vec![time[0].id])).await.unwrap_err().starts_with("TIME_NOT_BILLABLE"), "never billed twice");
+    let removed = sqlx::query("DELETE FROM billed_time").execute(&pool).await.unwrap_err().to_string();
+    assert!(removed.contains("TIME_BILLED_IMMUTABLE"), "a billing record can't be removed: {removed}");
 
     // Voiding the invoice frees the time again.
     let entry_id: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(invoice.id).fetch_one(&pool).await.unwrap();

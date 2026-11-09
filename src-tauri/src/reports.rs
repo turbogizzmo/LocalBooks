@@ -70,8 +70,9 @@ pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<AccountView>, String
     sqlx::query_as::<_, AccountView>(
         "SELECT c.id, c.account_number, c.name, c.full_name, c.parent_id, c.depth, c.description, c.account_type, c.account_type_name, c.classification,
                 c.is_active, c.is_system, b.balance_cents,
-                (SELECT reimbursement_income_account_id FROM chart_of_accounts WHERE id = c.id) AS reimbursement_income_account_id
+                coa.reimbursement_income_account_id
          FROM v_chart_of_accounts c
+         JOIN chart_of_accounts coa ON coa.id = c.id
          JOIN v_account_balances b ON b.account_id = c.id
          ORDER BY c.type_sort_order, COALESCE(c.account_number, ''), c.full_name",
     )

@@ -20,8 +20,13 @@ CREATE TABLE billed_time (
 CREATE INDEX ix_billed_time_activity ON billed_time (time_activity_id);
 CREATE INDEX ix_billed_time_invoice ON billed_time (invoice_id);
 
--- A billing record is never changed (Condense keeps the table whole, so it keeps its invoice too).
+-- A billing record is never changed or removed (Condense keeps the table whole, so it keeps its
+-- invoice too); voiding the invoice is what makes the time billable again.
 CREATE TRIGGER trg_billed_time_no_update BEFORE UPDATE ON billed_time
 BEGIN
     SELECT RAISE(ABORT, 'TIME_BILLED_IMMUTABLE: a billing record cannot be changed');
+END;
+CREATE TRIGGER trg_billed_time_no_delete BEFORE DELETE ON billed_time
+BEGIN
+    SELECT RAISE(ABORT, 'TIME_BILLED_IMMUTABLE: a billing record cannot be removed');
 END;

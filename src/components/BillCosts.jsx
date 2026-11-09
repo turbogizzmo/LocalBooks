@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import DateBox from './DateBox.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const key = (c) => `${c.source}:${c.lineId}`;
@@ -179,7 +179,7 @@ export default function BillCosts({ navigate }) {
                   <td className="qb-grid-cell">{t.employeeName}</td>
                   <td className="qb-grid-cell">{t.serviceName ?? <span className="text-qb-negative">No service item</span>}</td>
                   <td className="qb-grid-cell">{t.description ?? ''}</td>
-                  <td className="qb-grid-cell num">{(t.minutes / 60).toFixed(2)}</td>
+                  <td className="qb-grid-cell num">{formatQuantity(t.hoursE4)}</td>
                   <td className="qb-grid-cell num">{formatCents(t.hourlyRateCents)}</td>
                   <td className="qb-grid-cell num">{formatCents(t.amountCents)}</td>
                 </tr>

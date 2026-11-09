@@ -73,6 +73,8 @@ pub struct UnbilledTime {
     pub service_name: Option<String>,
     pub description: Option<String>,
     pub minutes: i64,
+    /// Hours × 10,000, rounded as the invoice line's quantity is.
+    pub hours_e4: i64,
     pub hourly_rate_cents: i64,
     /// round_half_away(hours × rate).
     pub amount_cents: i64,
@@ -82,7 +84,7 @@ pub struct UnbilledTime {
 
 const UNBILLED_TIME: &str = "
     SELECT t.id, t.activity_date AS date, m.name AS employee_name, t.product_service_id, p.name AS service_name, NULLIF(t.description, '') AS description,
-           t.minutes, t.hourly_rate_cents, 0 AS amount_cents, t.customer_id, c.name AS customer_name
+           t.minutes, 0 AS hours_e4, t.hourly_rate_cents, 0 AS amount_cents, t.customer_id, c.name AS customer_name
     FROM time_activities t JOIN employees m ON m.id = t.employee_id JOIN customers c ON c.id = t.customer_id
     LEFT JOIN products_services p ON p.id = t.product_service_id
     WHERE t.billable = 1 AND t.hourly_rate_cents IS NOT NULL
@@ -102,7 +104,8 @@ pub async fn list_unbilled_time(pool: &SqlitePool, customer_id: Option<i64>) -> 
             .await
             .map_err(db_err)?;
     for r in &mut rows {
-        r.amount_cents = hours_e4(r.minutes).and_then(|h| mul_div_round(h, r.hourly_rate_cents, QUANTITY_SCALE)).ok_or("TIME_AMOUNT: the amount is out of range")?;
+        r.hours_e4 = hours_e4(r.minutes).ok_or("TIME_AMOUNT: the hours are out of range")?;
+        r.amount_cents = mul_div_round(r.hours_e4, r.hourly_rate_cents, QUANTITY_SCALE).ok_or("TIME_AMOUNT: the amount is out of range")?;
     }
     Ok(rows)
 }
@@ -226,6 +229,14 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
     let mut links = Vec::with_capacity(input.costs.len());
     let mut reimbursed = Vec::new();
     let mut markup_total = 0i64;
+    // Each expense account's own income account for reimbursements, read once for the whole billing.
+    let own_income: std::collections::HashMap<i64, i64> =
+        sqlx::query_as("SELECT id, reimbursement_income_account_id FROM chart_of_accounts WHERE reimbursement_income_account_id IS NOT NULL")
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(db_err)?
+            .into_iter()
+            .collect();
     for (n, cost) in input.costs.iter().enumerate() {
         let column = match cost.source.as_str() {
             "EXPENSE" => "expense_line_id",
@@ -248,12 +259,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         let from = found.vendor_name.as_deref().map(|v| format!(", {v}")).unwrap_or_default();
         // Counted as income: the expense account's own income account, else the one in Preferences.
         let account = if settings.as_income {
-            let own: Option<i64> = sqlx::query_scalar("SELECT reimbursement_income_account_id FROM chart_of_accounts WHERE id = ?1")
-                .bind(found.account_id)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(db_err)?;
-            own.or(settings.income_account_id)
+            own_income.get(&found.account_id).copied().or(settings.income_account_id)
                 .ok_or("COST_NO_INCOME_ACCOUNT: choose the income account for reimbursed expenses in Preferences › Time & Expenses, or on the expense account")?
         } else {
             reimbursed.push(found.account_id);

@@ -150,10 +150,11 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
               <select className="qb-input" value={reimburseTo ?? ''} onChange={(e) => setReimburseTo(e.target.value === '' ? null : Number(e.target.value))}>
                 <option value="">The income account in Preferences › Time &amp; Expenses</option>
                 {accounts
-                  .filter((a) => a.isActive && a.classification === 'INCOME')
+                  .filter((a) => a.classification === 'INCOME' && (a.isActive || a.id === reimburseTo))
                   .map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.accountNumber ? `${a.accountNumber} · ${a.fullName}` : a.fullName}
+                      {a.isActive ? '' : ' (inactive)'}
                     </option>
                   ))}
               </select>
