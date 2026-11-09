@@ -29,7 +29,8 @@ fn read_sheet(file_path: &str) -> Result<(String, i64, sheet::Sheet), String> {
     let path = PathBuf::from(file_path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if !sheet::EXTENSIONS.contains(&ext.as_str()) {
-        return Err(format!("SHEET_BAD_EXTENSION: {} is not a spreadsheet: choose a .csv, .xlsx, .xls or .ods file", path.display()));
+        let kinds = sheet::EXTENSIONS.iter().map(|e| format!(".{e}")).collect::<Vec<_>>().join(", ");
+        return Err(format!("SHEET_BAD_EXTENSION: {} is not a spreadsheet: choose a {kinds} file", path.display()));
     }
     let bytes = std::fs::read(&path).map_err(|e| format!("SHEET_UNREADABLE: {}: {e}", path.display()))?;
     let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| file_path.to_string());
