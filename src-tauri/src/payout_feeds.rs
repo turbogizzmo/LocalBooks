@@ -220,11 +220,12 @@ async fn check_accounts(pool: &SqlitePool, input: &FeedInput) -> Result<(), Stri
 /// saves the feed with its accounts.
 pub async fn connect_stripe(pool: &SqlitePool, store: &SecretStore, api: &str, key: &str, input: &FeedInput) -> Result<PayoutFeed, String> {
     let key = key.trim();
-    if !(key.starts_with("rk_") || key.starts_with("sk_")) {
-        return Err("PAYOUT_KEY: paste a Stripe restricted key (it starts rk_live_ or rk_test_)".into());
+    // Only a restricted key: a full secret key (sk_) could move money, and LocalBooks needs to read.
+    if !key.starts_with("rk_") {
+        return Err("PAYOUT_KEY: paste a Stripe restricted key with read access to Balance and Payouts (it starts rk_live_ or rk_test_)".into());
     }
     check_accounts(pool, input).await?;
-    stripe_get(api, key, "/v1/balance", &[]).await?;
+    stripe_get(&client()?, api, key, "/v1/balance", &[]).await?;
     let secret_key = format!("stripe-{}", hex(&crate::crypto::random::<8>()?));
     store.put(&secret_key, key).await?;
     let id: i64 = sqlx::query_scalar(
@@ -287,12 +288,15 @@ fn api_url(api: &str, path: &str) -> Result<reqwest::Url, String> {
     Ok(url)
 }
 
-async fn stripe_get(api: &str, key: &str, path: &str, query: &[(&str, String)]) -> Result<Value, String> {
+fn client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| format!("PAYOUT_NETWORK: {e}"))
+}
+
+async fn stripe_get(client: &reqwest::Client, api: &str, key: &str, path: &str, query: &[(&str, String)]) -> Result<Value, String> {
     let mut url = api_url(api, path)?;
     if !query.is_empty() {
         url.query_pairs_mut().extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())));
     }
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| format!("PAYOUT_NETWORK: {e}"))?;
     let response = client.get(url).bearer_auth(key).send().await.map_err(|e| format!("PAYOUT_NETWORK: Stripe couldn't be reached ({})", e.without_url()))?;
     let status = response.status();
     let body: Value = response.json().await.map_err(|_| "PAYOUT_RESPONSE: Stripe's answer couldn't be read".to_string())?;
@@ -308,17 +312,20 @@ async fn stripe_get(api: &str, key: &str, path: &str, query: &[(&str, String)]) 
     Ok(body)
 }
 
+/// Most pages a list is read to (10,000 objects); past that the fetch is refused, not cut short.
+const MAX_PAGES: usize = 100;
+
 /// Every object of a list endpoint, page by page.
-async fn stripe_list(api: &str, key: &str, path: &str, query: &[(&str, String)]) -> Result<Vec<Value>, String> {
+async fn stripe_list(client: &reqwest::Client, api: &str, key: &str, path: &str, query: &[(&str, String)]) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     let mut after: Option<String> = None;
-    for _ in 0..100 {
+    for _ in 0..MAX_PAGES {
         let mut q = query.to_vec();
         q.push(("limit", "100".into()));
         if let Some(a) = &after {
             q.push(("starting_after", a.clone()));
         }
-        let page = stripe_get(api, key, path, &q).await?;
+        let page = stripe_get(client, api, key, path, &q).await?;
         let data = page.get("data").and_then(Value::as_array).cloned().unwrap_or_default();
         after = data.last().map(|d| text(d, "id"));
         out.extend(data);
@@ -326,7 +333,7 @@ async fn stripe_list(api: &str, key: &str, path: &str, query: &[(&str, String)])
             return Ok(out);
         }
     }
-    Ok(out)
+    Err("PAYOUT_TOO_MANY: Stripe has more than LocalBooks reads in one go; get payouts more often so each fetch is smaller".into())
 }
 
 /// A payout as listed on the screen.
@@ -368,7 +375,8 @@ pub async fn fetch(pool: &SqlitePool, store: &SecretStore, api: &str, feed_id: i
         .as_deref()
         .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
         .map_or(now - chrono::Duration::days(FIRST_DAYS), |t| t.with_timezone(&Utc) - chrono::Duration::days(OVERLAP_DAYS));
-    let payouts = stripe_list(api, &key, "/v1/payouts", &[("status", "paid".into()), ("arrival_date[gte]", since.timestamp().to_string())]).await?;
+    let client = client()?;
+    let payouts = stripe_list(&client, api, &key, "/v1/payouts", &[("status", "paid".into()), ("arrival_date[gte]", since.timestamp().to_string())]).await?;
     let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_optional(pool).await.map_err(db_err)?.unwrap_or_else(|| "USD".into());
     let mut result = FetchResult { new_payouts: 0, refused: Vec::new() };
     for p in payouts {
@@ -383,7 +391,7 @@ pub async fn fetch(pool: &SqlitePool, store: &SecretStore, api: &str, feed_id: i
             result.refused.push(format!("{id}: paid in {currency}, not {home}"));
             continue;
         }
-        let transactions = stripe_list(api, &key, "/v1/balance_transactions", &[("payout", id.clone())]).await?;
+        let transactions = stripe_list(&client, api, &key, "/v1/balance_transactions", &[("payout", id.clone())]).await?;
         match stripe_breakdown(int(&p, "amount"), &transactions) {
             Ok(b) => {
                 sqlx::query(

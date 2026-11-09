@@ -74,7 +74,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'employees/time' && <TimeTracking {...props} />}
       {view === 'employees/mileage' && <MileageTracking {...props} />}
       {view === 'banking/feeds' && <BankFeed accounts={list} />}
-      {view === 'banking/payouts' && <PayoutFeeds accounts={list} isAdmin={isAdmin !== false} />}
+      {view === 'banking/payouts' && <PayoutFeeds accounts={list} isAdmin={isAdmin === true} />}
       {view === 'banking/transfers' && <DepositsTransfers {...props} />}
       {view === 'banking/reconcile' && <Reconcile accounts={list} />}
       {view === 'banking/bounced-checks' && <BouncedChecks accounts={list} />}

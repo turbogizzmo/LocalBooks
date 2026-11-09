@@ -112,6 +112,7 @@ async fn a_fetched_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
     assert!(requests.lock().unwrap().is_empty());
     assert!(connect_stripe(&pool, &store, &api, "rk_test_wrong", &input).await.unwrap_err().starts_with("PAYOUT_KEY"));
     assert!(connect_stripe(&pool, &store, &api, "pk_test_publishable", &input).await.unwrap_err().starts_with("PAYOUT_KEY"));
+    assert!(connect_stripe(&pool, &store, &api, "sk_test_full_secret", &input).await.unwrap_err().starts_with("PAYOUT_KEY"), "only a restricted key");
     assert!(feeds(&pool).await.unwrap().is_empty());
     let f = connect_stripe(&pool, &store, &api, "rk_test_good", &input).await.unwrap();
     let kept = std::fs::read_to_string(dir.join(SECRETS_FILE)).unwrap();
