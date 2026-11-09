@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Sales lines in the familiar order.** On invoices, sales receipts, estimates and credit memos
+  the line columns now run Item, Description, Qty, Rate, Class, then the income account (which the
+  item fills in), Amount and Tax.
 - **Receive Payments shows its totals.** Under the open invoices, a Totals row and a summary of
   the amount due, applied, discounts applied and what stays open; an amount received that doesn't
   match what's applied shows as unapplied before you save.
