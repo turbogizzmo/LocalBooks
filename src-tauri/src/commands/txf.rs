@@ -15,6 +15,6 @@ pub async fn preview_txf_export(db: State<'_, Db>, start_date: NaiveDate, end_da
 #[tauri::command]
 pub async fn save_txf_export(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate, path: PathBuf) -> Result<TxfExport, String> {
     let out = txf::export(&db.pool().await, start_date, end_date, Local::now().date_naive()).await?;
-    std::fs::write(&path, out.text.as_bytes()).map_err(|e| format!("TXF_NOT_SAVED: the file could not be written ({e})"))?;
+    crate::export_engine::write_atomically(&path, out.text.as_bytes())?;
     Ok(out)
 }

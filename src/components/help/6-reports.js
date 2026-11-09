@@ -133,7 +133,7 @@ export const topics = [
     id: 'income-tax-reports', area: 'reports', views: ['reports'],
     title: 'Total your books by income tax line',
     body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines. For Schedule C, Export TXF… saves the year as a TXF file your tax program imports, and lists anything it leaves out for you to enter by hand.',
-    keywords: 'income tax summary detail tax line mapping schedule c 1065 1120s 1120 s corporation partnership return preparer taxline txf tax exchange format tax software turbotax export',
+    keywords: 'income tax summary detail tax line mapping schedule c 1065 1120s 1120 s corporation partnership return preparer taxline txf tax exchange format tax software export',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',
   },

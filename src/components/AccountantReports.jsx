@@ -297,7 +297,7 @@ function TxfExport({ start, end, onClose }) {
       const path = await saveDialog({ defaultPath: `schedule-c-${end.slice(0, 4)}.txf`, filters: [{ name: 'Tax Exchange Format', extensions: ['txf'] }] });
       if (!path) return;
       const out = await api.saveTxfExport(start, end, path);
-      setNotice({ kind: 'success', text: `Saved ${out.records.length} tax line${out.records.length === 1 ? '' : 's'} to ${path}. Import it in your tax program.` });
+      setNotice({ kind: 'success', text: `Saved ${out.records.length} TXF record${out.records.length === 1 ? '' : 's'} to ${path}. Import it in your tax program.` });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     }
