@@ -74,12 +74,15 @@ export function StatementDocument({ company, title, subtitle, lines, footer, col
           {lines.map((line, i) => (
             <tr key={`${i}-${line.label}`} className={LINE_CLASS[line.kind]}>
               <td style={{ paddingLeft: `${6 + line.depth * 14}pt` }}>{line.label}</td>
-              {amounts(line).map((cents, c) => (
-                <td key={c} className="doc-num">
-                  {cents !== null && cents !== undefined ? format(c, cents) : ''}
-                  {marker?.(i, c + 1) ? <sup>[{marker(i, c + 1)}]</sup> : null}
-                </td>
-              ))}
+              {amounts(line).map((cents, c) => {
+                const n = marker?.(i, c + 1);
+                return (
+                  <td key={c} className="doc-num">
+                    {cents !== null && cents !== undefined ? format(c, cents) : ''}
+                    {n ? <sup>[{n}]</sup> : null}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

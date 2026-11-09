@@ -80,7 +80,8 @@ fn shape(snapshot: &Value) -> Result<(&Vec<Value>, &Vec<Value>), String> {
     let bad = || "COMMENT_BAD_REPORT: the report could not be kept".to_string();
     let columns = snapshot.get("columns").and_then(Value::as_array).filter(|c| !c.is_empty()).ok_or_else(bad)?;
     let rows = snapshot.get("rows").and_then(Value::as_array).ok_or_else(bad)?;
-    if columns.iter().any(|c| c.get("label").is_none_or(|l| !l.is_string())) || rows.iter().any(|r| r.get("cells").is_none_or(|c| !c.is_array())) {
+    let text = |v: &Value, key: &str| v.get(key).is_some_and(Value::is_string);
+    if columns.iter().any(|c| !text(c, "label") || !text(c, "kind")) || rows.iter().any(|r| r.get("cells").is_none_or(|c| !c.is_array())) {
         return Err(bad());
     }
     Ok((columns, rows))
@@ -92,7 +93,8 @@ fn cell(snapshot: &Value, row: i64, col: i64) -> Result<String, String> {
     let missing = || "COMMENT_NO_FIGURE: there is no figure there to comment on".to_string();
     let r = rows.get(usize::try_from(row).map_err(|_| missing())?).ok_or_else(missing)?;
     let c = usize::try_from(col).map_err(|_| missing())?;
-    if c >= columns.len() {
+    // The first column holds the line's name, not a figure.
+    if c == 0 || c >= columns.len() {
         return Err(missing());
     }
     let cells = r.get("cells").and_then(Value::as_array).ok_or_else(missing)?;

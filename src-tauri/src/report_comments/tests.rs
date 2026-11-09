@@ -45,7 +45,7 @@ async fn the_first_comment_keeps_the_report_and_more_attach_to_it() {
 #[tokio::test]
 async fn comments_need_a_figure_and_words_and_a_bad_one_keeps_nothing() {
     let pool = test_pool().await;
-    for (row, col, why) in [(0, 1, "a heading's empty cell"), (9, 1, "no such line"), (1, 5, "no such column"), (-1, 0, "negative")] {
+    for (row, col, why) in [(0, 1, "a heading's empty cell"), (9, 1, "no such line"), (1, 5, "no such column"), (-1, 0, "negative"), (1, 0, "the line's name")] {
         assert!(add_comment(&pool, &first(row, col, "x"), "Dana").await.unwrap_err().starts_with("COMMENT_NO_FIGURE"), "{why}");
     }
     assert!(add_comment(&pool, &first(1, 1, "   "), "Dana").await.unwrap_err().starts_with("COMMENT_EMPTY"));
@@ -53,6 +53,8 @@ async fn comments_need_a_figure_and_words_and_a_bad_one_keeps_nothing() {
     let mut shapeless = first(1, 1, "x");
     shapeless.snapshot = Some(json!({ "rows": [] }));
     assert!(add_comment(&pool, &shapeless, "Dana").await.unwrap_err().starts_with("COMMENT_BAD_REPORT"));
+    shapeless.snapshot = Some(json!({ "columns": [{ "label": "Total" }], "rows": [] }));
+    assert!(add_comment(&pool, &shapeless, "Dana").await.unwrap_err().starts_with("COMMENT_BAD_REPORT"), "a column needs its kind");
     let gone = CommentInput { report_id: Some(99), ..first(1, 1, "x") };
     assert!(add_comment(&pool, &gone, "Dana").await.unwrap_err().starts_with("COMMENT_NO_REPORT"));
     assert!(list(&pool).await.unwrap().is_empty(), "a refused first comment keeps no report");

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { commentNumbers, cellKey } from '../lib/reportComments.js';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
@@ -8,11 +8,11 @@ import Notice from './Notice.jsx';
 
 const RIGHT = new Set(['money', 'quantity', 'number']);
 
-/** A kept cell as text, by its column's kind (quantities are kept scaled by 10,000). */
+/** A kept cell as text, by its column's kind, as the report showed it. */
 export function cellText(kind, v) {
   if (v === null || v === undefined) return '';
   if (kind === 'money') return formatCents(v);
-  if (kind === 'quantity') return (v / 10000).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  if (kind === 'quantity') return formatQuantity(v);
   if (kind === 'date') return formatDate(v);
   return String(v);
 }
