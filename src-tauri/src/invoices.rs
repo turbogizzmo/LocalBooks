@@ -441,6 +441,10 @@ pub async fn record_payment(pool: &SqlitePool, input: PaymentInput) -> Result<In
     get_summary(pool, invoice_id).await
 }
 
+/// The memo on a payment's early-payment discount line, followed by the invoice number. Record
+/// Bounced Check finds the line by it to reverse the discount, so both use this.
+pub(crate) const DISCOUNT_LINE_MEMO: &str = "Early-payment discount on invoice #";
+
 /// Receive Payment: applies one customer payment across several invoices. All post, or none do.
 /// A payment may take its invoice's early-payment discount (Preferences › Payments names the
 /// account it goes to).
@@ -599,7 +603,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
             // One entry: the money to the deposit account, the discount to the discount account,
             // and both off A/R, so the customer's statement shows what the payment settled.
             let account = discount_account.ok_or("INV_NO_DISCOUNT_ACCOUNT: choose the account discounts go to in Preferences › Payments")?;
-            let memo = format!("Early-payment discount on invoice #{number}");
+            let memo = format!("{DISCOUNT_LINE_MEMO}{number}");
             let settled = format!("{} received + {} early-payment discount", format_cents(input.amount_cents), format_cents(discount));
             lines.push(JournalLine::debit(input.deposit_account_id, input.amount_cents));
             lines.push(JournalLine::debit(account, discount).with_memo(Some(&memo)));
@@ -618,7 +622,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
                 let booked = invoice_rate.ok_or("FX_RATE_REQUIRED: the invoice has no booked rate")?;
                 let home = crate::ledger::to_home_cents(discount, booked).ok_or("FX_OVERFLOW: amount out of range")?;
                 if home > 0 {
-                    lines.push(JournalLine::debit(account, home).with_memo(Some(&format!("Early-payment discount on invoice #{number}"))));
+                    lines.push(JournalLine::debit(account, home).with_memo(Some(&format!("{DISCOUNT_LINE_MEMO}{number}"))));
                 }
                 home
             } else {
