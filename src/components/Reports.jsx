@@ -510,12 +510,15 @@ function readIds(key) {
     return [];
   }
 }
+// Report windows inside this LocalBooks window share one page, where `storage` events don't fire.
+const CENTER_CHANGED = 'localbooks-report-center-changed';
 function keep(key, value) {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // Not remembered (storage blocked); the list still works for now.
   }
+  window.dispatchEvent(new CustomEvent(CENTER_CHANGED, { detail: key }));
 }
 
 /** Process Multiple Reports, at the end of the memorized reports (a group of its own until there are some). */
@@ -575,6 +578,23 @@ export default function Reports({ navigate, intent }) {
     setFavorites(next);
     keep(FAVORITES_KEY, next);
   };
+  // Another report window (here or in another LocalBooks window) starred a report, opened one,
+  // or turned the dates on or off.
+  useEffect(() => {
+    const reread = (key) => {
+      if (key === FAVORITES_KEY) setFavorites(readIds(FAVORITES_KEY));
+      if (key === RECENT_KEY) setRecent(readIds(RECENT_KEY));
+      if (key === DATES_KEY) setUseDatesState(readIds(DATES_KEY).length > 0);
+    };
+    const onStorage = (e) => reread(e.key);
+    const onChanged = (e) => reread(e.detail);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(CENTER_CHANGED, onChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CENTER_CHANGED, onChanged);
+    };
+  }, []);
   const known = groups.some((g) => g.reports.some(([id]) => id === report));
   useEffect(() => {
     if (!known || report === PROCESS_MULTIPLE) return;

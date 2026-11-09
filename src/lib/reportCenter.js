@@ -96,7 +96,7 @@ export function searchReports(groups, query) {
     .filter((g) => g.reports.length > 0);
 }
 
-/** Favorites first, as starred. */
+/** Stars or unstars a report: removing keeps the others' order; a new favorite goes last. */
 export function toggleFavorite(favorites, id) {
   return favorites.includes(id) ? favorites.filter((f) => f !== id) : [...favorites, id];
 }
@@ -121,7 +121,15 @@ export function withFavoritesAndRecent(groups, favorites, recent) {
 }
 
 /** The reports whose dates the center can set before they run, and how each takes them. */
-export const DATED_REPORTS = Object.freeze({ pl: 'range', bs: 'as-of', ar: 'as-of', ap: 'as-of', 'sales-customer': 'range', 'sales-product': 'range', 'sales-rep': 'range' });
+export const DATED_REPORTS = Object.freeze({
+  pl: 'range',
+  bs: 'as-of',
+  ar: 'as-of',
+  ap: 'as-of',
+  'sales-customer': 'range',
+  'sales-product': 'range',
+  'sales-rep': 'range',
+});
 
 /** The report's opening options for the dates chosen in the center: a range, or its end as the as-of date. */
 export function datesFor(id, start, end) {
