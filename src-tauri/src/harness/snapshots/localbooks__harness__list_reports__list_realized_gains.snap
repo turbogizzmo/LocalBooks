@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Realized Gains & Losses, 2025-01-01 to 2025-12-31
+
+Type                           Date          Entry                     Name                      Memo                        Gain (Loss)
+Payment                        2025-10-20    164                       Bonn Studio GmbH          Realized exchange gain            52.50
+TOTAL                                                                                                                              52.50
+
+1 lines
+
+Gains and losses realized on foreign-currency payments, as posted to Exchange Gain or Loss.
