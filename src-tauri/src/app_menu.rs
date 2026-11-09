@@ -56,7 +56,18 @@ const FILE: &[Entry] = &[
     Entry::Sep,
     Entry::Sub(
         "Print Forms",
-        &[page("Invoices…", "sales/print-invoices"), page("Checks…", "expenses/print-checks"), Entry::Sep, page("Statements…", "sales/statements")],
+        &[
+            page("Invoices…", "sales/print-invoices"),
+            form("Sales Receipts…", "sales/print-forms", "sales-receipts"),
+            form("Credit Memos…", "sales/print-forms", "credit-memos"),
+            Entry::Sep,
+            page("Checks…", "expenses/print-checks"),
+            form("Bill Payment Stubs…", "sales/print-forms", "bill-payments"),
+            form("Purchase Orders…", "sales/print-forms", "purchase-orders"),
+            Entry::Sep,
+            page("Statements…", "sales/statements"),
+            page("Mailing Labels…", "sales/mailing-labels"),
+        ],
     ),
     page("Send Forms…", "sales/send-forms"),
     // Prints what is showing: the open form, else a register's rows for its dates (printCommand.js),
@@ -173,6 +184,8 @@ const VENDORS: &[Entry] = &[
     page("Vendor Center", "expenses/vendors"),
     Entry::Sep,
     form("Enter Bills", "expenses/bills", "bill"),
+    // Receipts and bills waiting to be entered (the document inbox).
+    page("Document Inbox", "expenses/inbox"),
     form("Pay Bills", "expenses/bills", "pay-bills"),
     form("Enter Vendor Credits", "expenses/credits", "vendor-credit"),
     Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),
@@ -181,7 +194,7 @@ const VENDORS: &[Entry] = &[
     page("Receive Items", "expenses/item-receipts"),
     form("Enter Bill for Received Items", "expenses/item-receipts", "bill-received"),
     Entry::Sep,
-    Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099")]),
+    Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099"), report("1099-NEC and 1096", "1099-nec")]),
     ITEM_LIST,
 ];
 
@@ -238,6 +251,7 @@ const REPORTS: &[Entry] = &[
             report("Balance Sheet Prev Year Comparison", "bs-py"),
             Entry::Sep,
             report("Statement of Cash Flows", "cf"),
+            report("Cash Flow Forecast", "cash-forecast"),
             report("Net Income Detail", "preset:net-income-detail"),
             Entry::Sep,
             report("Income & Expense Graph", "graph-ie"),
@@ -287,6 +301,8 @@ const REPORTS: &[Entry] = &[
             report("Job Estimates vs. Actuals Summary", "job-est"),
             report("Job Estimates vs. Actuals Detail", "job-est-detail"),
             report("Item Profitability", "item-profit"),
+            report("Invoice Profitability by Customer", "list:invoice-profit-customer"),
+            report("Invoice Profitability Detail", "list:invoice-profit-detail"),
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
@@ -320,6 +336,7 @@ const REPORTS: &[Entry] = &[
             Entry::Sep,
             report("1099 Summary", "1099"),
             report("1099 Detail", "preset:1099-detail"),
+            report("1099-NEC and 1096", "1099-nec"),
             Entry::Sep,
             report("Transaction List by Vendor", "preset:transaction-list-vendor"),
             report("Vendor Phone List", "list:vendor-phone"),
@@ -347,6 +364,7 @@ const REPORTS: &[Entry] = &[
             report("Inventory Stock Status by Item", "stock-status"),
             Entry::Sep,
             report("Physical Inventory Worksheet", "list:physical-inventory"),
+            report("Inventory Turnover by Item", "list:inventory-turnover"),
         ],
     ),
     Entry::Sub(
@@ -394,7 +412,7 @@ const REPORTS: &[Entry] = &[
 ];
 
 /// Added to Help below LocalBooks Help.
-const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates")];
+const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates"), page("Save Diagnostics…", "settings/diagnostics")];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
 const MENUS: &[(&str, &[Entry])] =

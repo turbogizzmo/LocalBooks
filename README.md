@@ -253,12 +253,13 @@ under [`docs/guide/`](docs/guide/README.md).
 
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
-| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, TXF export of Schedule C for tax software, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| 1099s | Reports › 1099 Summary, 1099-NEC and 1096; W-9… on a vendor | W-9 and TIN on each contractor, 1099 totals by box, the year's 1099-NEC forms with what's missing, the 1096 totals, and printed recipient copies | [guide](docs/guide/getting-started.md#w-9s-1099-nec-forms-and-the-1096) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
-| Backups & company files | Settings › File & Data Controls | Backups and restore, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
+| Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
 | Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once, with one numbered, printable check per vendor | [guide](docs/guide/bills.md) |
 | Receive Items | Vendors › Receive Items | Receive goods from a purchase order before the bill (part shipments too), held in Items Received Not Billed; enter the bill for them at the vendor's prices later | [guide](docs/guide/bills.md#receive-items-before-the-bill) |
@@ -277,7 +278,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; click a name to see its transactions; products fill in invoice lines; add a new customer, vendor or item right from a form as you type | [guide](docs/guide/customers-and-products.md) |
 | Dashboard | Dashboard | Home: a map of the everyday work with waiting counts, banking and company shortcuts, account balances. Insights: assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md#start-from-the-home-page) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts, Pay Down Credit Card | [guide](docs/guide/deposits-and-transfers.md) |
-| Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox | [guide](docs/guide/desktop-migration.md) |
+| Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox; payroll posted from a payroll service's journal export | [guide](docs/guide/desktop-migration.md) |
 | Export from installed QuickBooks (Preview) | Settings › Import & Migration › step 1 | Asks a running QuickBooks Desktop (Mac or Windows) for its lists and Journal, read-only | [guide](docs/guide/desktop-migration.md#quickbooks-still-installed-let-localbooks-export-it) |
 | Estimates | Sales › Estimates | Non-posting quotes, converted to an invoice in one step | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Expenses & checks | Expenses › Expenses & Checks | Split expenses and checks with auto-numbering | [guide](docs/guide/expenses-and-checks.md) |

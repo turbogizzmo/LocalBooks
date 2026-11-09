@@ -28,6 +28,7 @@ import {
   Vendors1099Report,
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
+import { Forms1099Nec } from './Forms1099.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { reportBasis, useCompanyPreferences, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
@@ -36,6 +37,7 @@ import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import DateBox from './DateBox.jsx';
 import { datesFor, describeReport, DATED_REPORTS, pushRecent, searchReports, toggleFavorite, withFavoritesAndRecent } from '../lib/reportCenter.js';
+import { CashFlowForecastReport } from './CashForecast.jsx';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -388,6 +390,7 @@ const REPORT_GROUPS = [
       ['bs', 'Balance Sheet'],
       ['bs-py', 'Balance Sheet Prev Year Comparison'],
       ['cf', 'Statement of Cash Flows'],
+      ['cash-forecast', 'Cash Flow Forecast'],
     ],
   },
   {
@@ -425,6 +428,7 @@ const REPORT_GROUPS = [
     reports: [
       ['expenses-vendor', 'Expenses by Vendor Summary'],
       ['1099', '1099 Summary'],
+      ['1099-nec', '1099-NEC and 1096'],
     ],
   },
   {
@@ -686,6 +690,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
         {!askFirst && report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
+        {report === 'cash-forecast' && <CashFlowForecastReport />}
         {!askFirst && report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
         {!askFirst && report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
         {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
@@ -706,6 +711,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report key="1099" />}
         {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
+        {report === '1099-nec' && <Forms1099Nec />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
         {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}

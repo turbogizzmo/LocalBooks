@@ -43,7 +43,7 @@ pub fn unpack(backup: &Path, dir: &Path) -> Result<Unpacked, String> {
     let stream = container.open_stream(COMPANY_STREAM).map_err(|_| not_backup("it holds no company file".into()))?;
 
     std::fs::create_dir_all(dir).map_err(|e| format!("QBW_UNPACK: could not create {}: {e}", dir.display()))?;
-    let path = dir.join(format!("localbooks-unpacked-{}-{}.qbw", std::process::id(), unique_suffix()));
+    let path = dir.join(format!("{}{}-{}.qbw", crate::temp_files::UNPACKED_PREFIX, std::process::id(), unique_suffix()));
     let unpacked = Unpacked { path };
     let mut out = std::fs::File::create(&unpacked.path).map_err(|e| format!("QBW_UNPACK: could not write {}: {e}", unpacked.path.display()))?;
     let mut inflater = flate2::read::ZlibDecoder::new(stream).take(MAX_COMPANY_FILE_BYTES + 1);

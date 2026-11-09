@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import DateBox from './DateBox.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents } from '../lib/money.js';
+import { formatCents, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const key = (c) => `${c.source}:${c.lineId}`;
@@ -29,10 +29,12 @@ const markupOf = (cents, milli) => Math.round((cents * milli) / 100_000);
 
 /**
  * Sales › Bill Costs: invoice billable expenses (checks, expenses and bill lines marked Bill? for a
- * customer) to that customer, with the markup from Preferences › Time & Expenses.
+ * customer) to that customer, with the markup from Preferences › Time & Expenses, and billable time
+ * from the timesheet (one line per entry: its service item, hours and rate; no markup).
  */
 export default function BillCosts({ navigate }) {
   const costs = useLedgerQuery(() => api.listUnbilledCosts(null));
+  const time = useLedgerQuery(() => api.listUnbilledTime(null));
   const defaults = useLedgerQuery(api.getBillingDefaults).data;
   const [customerId, setCustomerId] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
@@ -42,11 +44,12 @@ export default function BillCosts({ navigate }) {
   const [notice, setNotice] = useState(null);
 
   const all = costs.data ?? [];
+  const allTime = time.data ?? [];
   const customers = useMemo(() => {
     const seen = new Map();
-    for (const c of all) if (!seen.has(c.customerId)) seen.set(c.customerId, c.customerName);
-    return [...seen.entries()];
-  }, [all]);
+    for (const c of [...all, ...allTime]) if (!seen.has(c.customerId)) seen.set(c.customerId, c.customerName);
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [all, allTime]);
   useEffect(() => {
     if (customerId === null && customers.length) setCustomerId(customers[0][0]);
   }, [customers, customerId]);
@@ -56,6 +59,19 @@ export default function BillCosts({ navigate }) {
   }, [defaults]);
   const shown = all.filter((c) => c.customerId === customerId);
   useEffect(() => setPicked(new Set(shown.map(key))), [customerId, costs.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shownTime = allTime.filter((t) => t.customerId === customerId);
+  const [pickedTime, setPickedTime] = useState(() => new Set());
+  // Time without a service item can't be billed (its line needs the item's income account).
+  useEffect(() => setPickedTime(new Set(shownTime.filter((t) => t.productServiceId !== null).map((t) => t.id))), [customerId, time.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chosenTime = shownTime.filter((t) => pickedTime.has(t.id));
+  const timeTotal = chosenTime.reduce((s, t) => s + t.amountCents, 0);
+  const toggleTime = (t) =>
+    setPickedTime((p) => {
+      const next = new Set(p);
+      if (next.has(t.id)) next.delete(t.id);
+      else next.add(t.id);
+      return next;
+    });
 
   const chosen = shown.filter((c) => picked.has(key(c)));
   const milli = parseMarkup(markup, defaults?.markupMilliPercent ?? 0);
@@ -72,18 +88,21 @@ export default function BillCosts({ navigate }) {
 
   const bill = async () => {
     const name = customers.find(([id]) => id === customerId)?.[1];
-    if (!(await askConfirm(`Invoice ${chosen.length} cost${chosen.length === 1 ? '' : 's'} to ${name} for ${formatCents(subtotal + markupTotal)}?`, { confirmLabel: 'Create invoice' }))) return;
+    const what = [chosen.length ? `${chosen.length} cost${chosen.length === 1 ? '' : 's'}` : null, chosenTime.length ? `${chosenTime.length} time entr${chosenTime.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean).join(' and ');
+    if (!(await askConfirm(`Invoice ${what} to ${name} for ${formatCents(subtotal + markupTotal + timeTotal)}?`, { confirmLabel: 'Create invoice' }))) return;
     setBusy(true);
     try {
       const invoice = await api.billCosts({
         customerId,
         costs: chosen.map((c) => ({ source: c.source, lineId: c.lineId })),
+        time: chosenTime.map((t) => t.id),
         issueDate,
         dueDate: addDays(issueDate, 30),
         markupPercent: markup,
       });
       setNotice({ kind: 'success', text: `Invoice #${invoice.invoiceNumber} to ${invoice.customerName} for ${formatCents(invoice.totalCents)}.` });
       costs.reload();
+      time.reload();
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -125,11 +144,52 @@ export default function BillCosts({ navigate }) {
         </div>
       </section>
       {costs.error && <Notice kind="error" text={costs.error} />}
+      {time.error && <Notice kind="error" text={time.error} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel min-h-0 flex-1 overflow-auto scrollbar-thin">
+        {shownTime.length > 0 && (
+          <table className="qb-grid border-b border-qb-border">
+            <thead>
+              <tr>
+                <th className="qb-grid-head w-[28px]" aria-label="Bill" />
+                <th className="qb-grid-head">Date</th>
+                <th className="qb-grid-head">Time by</th>
+                <th className="qb-grid-head">Service</th>
+                <th className="qb-grid-head">Description</th>
+                <th className="qb-grid-head text-right">Hours</th>
+                <th className="qb-grid-head text-right">Rate</th>
+                <th className="qb-grid-head text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownTime.map((t) => (
+                <tr key={`t${t.id}`} className="qb-grid-row">
+                  <td className="qb-grid-cell text-center">
+                    <input
+                      type="checkbox"
+                      className="accent-qb-green"
+                      checked={pickedTime.has(t.id)}
+                      disabled={t.productServiceId === null}
+                      title={t.productServiceId === null ? 'Give this time a service item on the timesheet to bill it' : undefined}
+                      onChange={() => toggleTime(t)}
+                      aria-label={`Bill time of ${formatDate(t.date)} by ${t.employeeName}`}
+                    />
+                  </td>
+                  <td className="qb-grid-cell">{formatDate(t.date)}</td>
+                  <td className="qb-grid-cell">{t.employeeName}</td>
+                  <td className="qb-grid-cell">{t.serviceName ?? <span className="text-qb-negative">No service item</span>}</td>
+                  <td className="qb-grid-cell">{t.description ?? ''}</td>
+                  <td className="qb-grid-cell num">{formatQuantity(t.hoursE4)}</td>
+                  <td className="qb-grid-cell num">{formatCents(t.hourlyRateCents)}</td>
+                  <td className="qb-grid-cell num">{formatCents(t.amountCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {shown.length === 0 ? (
           <p className="px-3 py-2 text-sm text-qb-ink-muted">
-            No unbilled costs. Give an expense, check or bill line a Customer:Job and tick Bill? to bill it here.
+            No unbilled costs. Give an expense, check or bill line a Customer:Job and tick Bill? to bill it here; billable time from the timesheet shows above.
           </p>
         ) : (
           <table className="qb-grid">
@@ -166,10 +226,15 @@ export default function BillCosts({ navigate }) {
       </section>
       <div className="flex items-center gap-3">
         <span className="text-sm">
-          {chosen.length} picked · costs <span className="num font-semibold">{formatCents(subtotal)}</span> · markup <span className="num font-semibold">{formatCents(markupTotal)}</span> · total{' '}
-          <span className="num font-semibold">{formatCents(subtotal + markupTotal)}</span>
+          {chosen.length + chosenTime.length} picked · costs <span className="num font-semibold">{formatCents(subtotal)}</span> · markup <span className="num font-semibold">{formatCents(markupTotal)}</span>
+          {chosenTime.length > 0 && (
+            <>
+              {' '}· time <span className="num font-semibold">{formatCents(timeTotal)}</span>
+            </>
+          )}{' '}
+          · total <span className="num font-semibold">{formatCents(subtotal + markupTotal + timeTotal)}</span>
         </span>
-        <button type="button" className="qb-btn qb-btn-primary ml-auto" onClick={bill} disabled={busy || chosen.length === 0 || badMarkup}>
+        <button type="button" className="qb-btn qb-btn-primary ml-auto" onClick={bill} disabled={busy || chosen.length + chosenTime.length === 0 || badMarkup}>
           {busy ? 'Creating…' : 'Create invoice'}
         </button>
       </div>

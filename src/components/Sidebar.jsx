@@ -26,6 +26,8 @@ export const NAV = [
       { id: 'sales/bill-costs', label: 'Bill Costs' },
       { id: 'sales/send-forms', label: 'Send Forms' },
       { id: 'sales/print-invoices', label: 'Print Invoices' },
+      { id: 'sales/print-forms', label: 'Print Forms' },
+      { id: 'sales/mailing-labels', label: 'Mailing Labels' },
     ],
   },
   {
@@ -35,6 +37,7 @@ export const NAV = [
     children: [
       { id: 'expenses/expenses', label: 'Expenses & Checks' },
       { id: 'expenses/bills', label: 'Bills' },
+      { id: 'expenses/inbox', label: 'Document Inbox' },
       // `whenOn`: shown only while that company preference is on (Preferences › Items & Inventory).
       { id: 'expenses/purchase-orders', label: 'Purchase Orders', whenOn: 'inventory_enabled' },
       { id: 'expenses/item-receipts', label: 'Receive Items', whenOn: 'inventory_enabled' },
@@ -99,6 +102,7 @@ export const NAV = [
       { id: 'settings/ai', label: 'AI Access (MCP)', adminOnly: true },
       { id: 'settings/users', label: 'Users & Passwords' },
       { id: 'settings/updates', label: 'Updates' },
+      { id: 'settings/diagnostics', label: 'Diagnostics' },
     ],
   },
 ];

@@ -67,6 +67,7 @@ describe('Tax IDs in a company with users', () => {
       'AI Access (MCP)',
       'Users & Passwords',
       'Updates',
+      'Diagnostics',
     ]);
     await openSettingsTab('File & Data Controls');
     await click(button('Desktop Migration Wizard…'));
@@ -82,7 +83,7 @@ describe('Tax IDs in a company with users', () => {
     await signIn('clerk', 'clerk temp pw');
     await chooseOwnPassword('clerk temp pw', 'clerk own password');
     await waitForPage('Dashboard');
-    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates']);
+    expect(await settingsPages()).toEqual(['Users & Passwords', 'Updates', 'Diagnostics']);
     // Help's "Go to Desktop View" leads to the Admin-only Preferences Console: the clerk lands on
     // Users & Passwords instead, in a window titled for it.
     await browser.keys('F1');
@@ -90,7 +91,7 @@ describe('Tax IDs in a company with users', () => {
     await click($('//button[normalize-space()="Reopen your windows with the company (Desktop View)"]'));
     await click(button('Go to Desktop View'));
     await waitForPage('Users & Passwords');
-    expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates']);
+    expect(await settingsTabs()).toEqual(['Users & Passwords', 'Updates', 'Diagnostics']);
     await expect($('//*[@role="tablist"][@aria-label="Settings"]//*[@role="tab"][@aria-selected="true"]')).toHaveText('Users & Passwords');
     await expect(button('Close books')).not.toExist();
   });

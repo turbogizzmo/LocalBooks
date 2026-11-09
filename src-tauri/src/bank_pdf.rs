@@ -36,6 +36,12 @@ pub struct PdfTable {
     pub closing_cents: Option<i64>,
 }
 
+/// The text of a PDF as lines, top to bottom and page by page, each line's words left to right;
+/// empty for a scan with no text layer. The document inbox reads a bill's total and date from it.
+pub fn text_lines(bytes: &[u8]) -> Result<Vec<String>, String> {
+    Ok(group_lines(extract_words(bytes)?).iter().map(Line::text).collect())
+}
+
 /// Fewer visible characters than this means there is no text layer worth reading.
 const MIN_TEXT_CHARS: usize = 20;
 

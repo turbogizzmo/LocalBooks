@@ -12,8 +12,11 @@ import CondenseData, { openArchive } from './CondenseData.jsx';
 import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
 import QbwImporter from './QbwImporter.jsx';
+import OffsiteBackup from './OffsiteBackup.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import PreferencesWindow, { Group } from './PreferencesWindow.jsx';
+import Diagnostics from './Diagnostics.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 function formatBytes(n) {
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
@@ -222,7 +225,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     setBusy(true);
     try {
       const result = await api.saveAllAttachments();
-      if (result) setNotice({ kind: 'success', text: `Saved ${result[1]} attachment${result[1] === 1 ? '' : 's'} to ${result[0]}.` });
+      if (result) setNotice({ kind: 'success', text: savedCopyText(result[0], `${result[1]} attachment${result[1] === 1 ? '' : 's'}`) });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
@@ -364,6 +367,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
       <FileDentist onRebuilt={backups.reload} />
       <CondenseData isAdmin={isAdmin} onDone={backups.reload} />
       <CompanyFileLocation />
+      <OffsiteBackup isAdmin={isAdmin} onRestored={backups.reload} />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       <section className="qb-panel flex min-h-0 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
@@ -590,6 +594,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
+      {tab === 'diagnostics' && <Diagnostics />}
     </div>
   );
 }

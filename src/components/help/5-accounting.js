@@ -8,7 +8,7 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'accounting/chart-of-accounts': {
-    help: 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here.',
+    help: 'Every account in your books, grouped into assets, liabilities, equity, income and expenses, with subaccounts under their parents. Add, rename, renumber or inactivate accounts here. Renaming an account to another’s name offers to merge them: one journal entry moves its balance, and the lists that name it follow.',
   },
   'accounting/classes': {
     help: 'Classes tag income and expenses by department, location or line of business, separately from your accounts. Add classes here, choose one on each line, then run Profit and Loss by Class.',

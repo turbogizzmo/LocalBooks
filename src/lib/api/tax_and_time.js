@@ -7,6 +7,9 @@ export default {
   getSalesTaxPeriods: (asOf) => invoke('get_sales_tax_periods', { asOf }),
   getTimesheetWeek: (date) => invoke('get_timesheet_week', { date }),
   listUnbilledCosts: (customerId = null) => invoke('list_unbilled_costs', { customerId }),
+  listUnbilledTime: (customerId = null) => invoke('list_unbilled_time', { customerId }),
+  // Where an expense account's reimbursements go when counted as income (null: Preferences' account).
+  setReimbursementAccount: (expenseAccountId, incomeAccountId) => invoke('set_reimbursement_account', { expenseAccountId, incomeAccountId }),
   getBillingDefaults: () => invoke('get_billing_defaults'),
   billCosts: (input) => recordTransaction('bill_costs', { input }),
   getRecalledVendorTransaction: (vendorName, kind = null) => invoke('get_recalled_vendor_transaction', { vendorName, kind }),

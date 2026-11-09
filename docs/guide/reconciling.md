@@ -24,7 +24,9 @@ While reconciling, click **Attach statement…** beside **Edit statement info** 
 statement file (a PDF or a picture, up to 25 MB). LocalBooks keeps a copy in the company file with
 that reconciliation. Finished reconciliations show theirs in the **Statement** column of
 **Reconciliation history**, where you can attach one later too. Click a file's name to save a copy,
-or **×** to remove it. Cancelling a reconciliation in progress removes its files with it.
+or **×** to delete it (you can restore it from **Accounting › Attachments Library**, where the
+statement files are listed with every other attachment). Cancelling a reconciliation in progress
+removes its files with it.
 
 ## Undo the last reconciliation
 

@@ -22,6 +22,8 @@ import JournalEntries from './JournalEntries.jsx';
 import PartyList from './PartyList.jsx';
 import Products from './Products.jsx';
 import { PrintChecks, PrintInvoices } from './PrintForms.jsx';
+import { MailingLabels, PrintBatch } from './PrintBatches.jsx';
+import DocumentInbox from './DocumentInbox.jsx';
 import BouncedChecks from './BouncedChecks.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
 import ItemReceipts from './ItemReceipts.jsx';
@@ -65,7 +67,10 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/bill-costs' && <BillCosts navigate={navigate} />}
       {view === 'sales/send-forms' && <SendForms />}
       {view === 'sales/print-invoices' && <PrintInvoices />}
+      {view === 'sales/print-forms' && <PrintBatch key={intent?.action ?? 'credit-memos'} action={intent?.action} accounts={list} />}
+      {view === 'sales/mailing-labels' && <MailingLabels />}
       {view === 'expenses/print-checks' && <PrintChecks accounts={list} />}
+      {view === 'expenses/inbox' && <DocumentInbox />}
       {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
       {view === 'expenses/bills' && <Bills {...props} />}
       {view === 'expenses/credits' && <VendorCredits {...props} />}

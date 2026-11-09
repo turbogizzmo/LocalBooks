@@ -54,20 +54,14 @@ pub struct AttachmentPreview {
 }
 
 /// How much of a text file the preview pane shows.
-const TEXT_PREVIEW_BYTES: usize = 200_000;
+const TEXT_PREVIEW_BYTES: i64 = 200_000;
 
 /// What the library's preview pane shows: a picture, or the start of a text file. Nothing else
-/// crosses to the page, so selecting a large PDF or spreadsheet moves no bytes.
+/// is read from the company file or crosses to the page, so selecting a large PDF or spreadsheet
+/// moves no bytes.
 #[tauri::command]
 pub async fn get_attachment_preview(db: State<'_, Db>, file: FileRef) -> Result<AttachmentPreview, String> {
-    let (file_name, media_type, content) = library::content(&db.pool().await, file).await?;
-    let shown: Option<&[u8]> = if media_type.starts_with("image/") {
-        Some(&content)
-    } else if media_type.starts_with("text/") {
-        Some(&content[..content.len().min(TEXT_PREVIEW_BYTES)])
-    } else {
-        None
-    };
+    let (file_name, media_type, shown) = library::preview(&db.pool().await, file, TEXT_PREVIEW_BYTES).await?;
     let data_base64 = shown.map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes));
     Ok(AttachmentPreview { file_name, media_type, data_base64 })
 }

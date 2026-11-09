@@ -58,6 +58,7 @@ features![
     batch_invoices,
     bounced_checks,
     budgets,
+    cash_forecast,
     classes,
     cleanup,
     company_files,
@@ -69,12 +70,15 @@ features![
     customer_statements,
     deposits,
     desktop,
+    diagnostics,
+    document_inbox,
     editing,
     email,
     envelopes,
     estimates,
     expenses,
     finance_charges,
+    form_1099,
     forms,
     graphs,
     installed_quickbooks,
@@ -90,10 +94,14 @@ features![
     list_reports,
     lists,
     mcp,
+    merges,
     migration,
     mileage,
+    payroll_import,
+    offsite,
     preferences,
     price_levels,
+    print_batches,
     print_queue,
     profile_lists,
     purchase_orders,
@@ -116,12 +124,14 @@ features![
     statements,
     tax_and_time,
     timesheet,
+    txf,
     users,
     vendor_1099,
     vouchers,
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
+pub use offsite::offsite_secrets;
 pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 

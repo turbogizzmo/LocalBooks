@@ -22,7 +22,7 @@ import { FormInfoPanel } from './InfoPanel.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
-function PurchaseOrderDocument({ company, order, lines, accounts }) {
+export function PurchaseOrderDocument({ company, order, lines, accounts }) {
   return (
     <article className="doc">
       <DocHeader company={company} title="Purchase Order" subtitle={`PO #${order.poNumber} · ${formatDate(order.poDate)}`} />

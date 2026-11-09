@@ -11,6 +11,10 @@ export const screens = {
     help: 'Company details and preferences, the closing date, backups and company files, users and passwords, and local AI access.',
     guide: 'getting-started',
   },
+  'settings/diagnostics': {
+    help: 'Save diagnostics: a zip of LocalBooks’ version, the operating system, the company file’s schema, integrity check and row counts, and LocalBooks’ own log of starts, stops, files opened and crashes. No business data, and nothing is sent anywhere.',
+    guide: 'troubleshooting',
+  },
   'settings/import': {
     help: 'The Desktop Migration Wizard: bring your books in from QuickBooks Desktop, QuickBooks for Mac, Quicken or GnuCash through a staging sandbox, check them against the original, then post them.',
     guide: 'desktop-migration',
@@ -23,6 +27,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
+    title: 'Save diagnostics for whoever is helping you',
+    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',
+    keywords: 'diagnostics crash log support bug report troubleshoot version help send logs',
+    go: { label: 'Go to Diagnostics', view: 'settings/diagnostics' },
+    guide: 'troubleshooting',
+  },
   {
     id: 'home-page', area: 'company', views: ['dashboard'],
     title: 'Start from the Home page',
@@ -65,8 +77,8 @@ export const topics = [
   {
     id: 'custom-forms', area: 'company', views: ['settings/forms', 'sales/invoices', 'sales/estimates', 'sales/all', 'sales/statements', 'sales/customers'],
     title: 'Design your forms: invoices, estimates, sales receipts and statements',
-    body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts and customer statements, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style.',
-    keywords: 'form designer template style layout classic modern compact customize logo color font pdf print invoice estimate sales receipt statement',
+    body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts, customer statements, credit memos and bill payment stubs, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style (bill payment stubs, sent to vendors, use the default style).',
+    keywords: 'form designer template style layout classic modern compact customize logo color font pdf print invoice estimate sales receipt statement bill payment stub',
     go: { label: 'Go to Custom Forms', view: 'settings/forms' },
     guide: 'custom-forms',
   },
@@ -135,6 +147,14 @@ export const topics = [
     guide: 'backups-and-company-files',
   },
   {
+    id: 'offsite-backup', area: 'company', views: ['settings/data'],
+    title: 'Keep encrypted backups offsite',
+    body: 'Under Offsite backup in File & Data Controls, click Set up…, choose a folder (one your cloud storage keeps in sync, or a USB drive), how many copies to keep, and a backup password: your sign-in password, the recovery key or another password. Each copy is encrypted on this computer before it is saved, so the cloud sees only scrambled data. A copy is made daily while LocalBooks is open. Test restore checks a copy without changing your books; Restore replaces your books with it. A copy can’t be opened without the password.',
+    keywords: 'offsite backup encrypted encryption cloud synced drive usb folder password recovery key test restore lbbackup',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
+    guide: 'backups-and-company-files',
+  },
+  {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
     body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',
@@ -187,6 +207,14 @@ export const topics = [
     title: 'Import from a spreadsheet: lists, transactions or journal entries',
     body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose what the sheet holds (customers, vendors, invoices, sales receipts, credit memos, deposits, bills, bill credits, checks, credit card charges or credits, or journal entries), and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same number become one transaction, a line per row; a journal entry\'s debits must equal its credits.',
     keywords: 'spreadsheet excel csv xlsx import customers vendors invoices sales receipts credit memos deposits bills checks credit card journal entries columns map mapping template rows',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
+    guide: 'desktop-migration',
+  },
+  {
+    id: 'payroll-import', area: 'company', views: ['settings/import'],
+    title: 'Post payroll from your payroll service',
+    body: 'Export each payroll from your payroll service as a journal (.csv or Excel). Under step 1 of the Desktop Migration Wizard, open "Payroll: a payroll service’s journal export" and choose the file. Match the Date, Account, and Debit and Credit (or Amount) columns, and the Entry column that groups rows into one payroll if the file has one. Match each of the service’s account names to one of yours; LocalBooks remembers them for next time. Every entry is shown with its totals, and nothing posts until each one balances. The same file can’t be posted twice; void its entries to redo it.',
+    keywords: 'payroll service wages salaries withholding payroll taxes journal export csv import post employees',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },
