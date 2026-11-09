@@ -106,6 +106,7 @@ mod sales_prefs;
 mod sales_tax;
 mod tax_ids;
 mod txf;
+mod temp_files;
 #[cfg(test)]
 mod test_companies;
 mod secrets;
@@ -184,6 +185,10 @@ fn main() {
                 diagnostics::install(logs);
             }
             diagnostics::log(&format!("LocalBooks {} started", app.package_info().version));
+            // Temporary copies an earlier run left (staged mail, an unpacked backup) go now.
+            if let Ok(cache) = app.path().app_cache_dir() {
+                temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
+            }
             let config = db::DbConfig {
                 config_dir: config_dir.clone(),
                 default_path: data_dir.join(storage::DB_FILE_NAME),
@@ -299,6 +304,9 @@ fn main() {
                 }
                 if let Some(db) = app.try_state::<db::Db>() {
                     db.shutdown().await;
+                }
+                if let Ok(cache) = app.path().app_cache_dir() {
+                    temp_files::sweep(&cache, temp_files::KEEP, std::time::SystemTime::now());
                 }
             }),
             _ => {}

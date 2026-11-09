@@ -35,6 +35,10 @@ people using LocalBooks.
   key), to a folder you pick, such as a synced cloud folder or a USB drive, once a day while
   LocalBooks is open. Test restore checks a copy without touching your books; Restore brings one
   back.
+- **Fewer plain copies outside the company file.** PDFs staged for your mail app are deleted after
+  an hour (they were kept for a day), and staged copies and unpacked QuickBooks backups left by an
+  earlier run are cleared when LocalBooks starts and quits. Saving a report, form, voucher or
+  attachments now says the file is a plain copy the company password doesn't protect.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

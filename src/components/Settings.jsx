@@ -16,6 +16,7 @@ import OffsiteBackup from './OffsiteBackup.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import PreferencesWindow, { Group } from './PreferencesWindow.jsx';
 import Diagnostics from './Diagnostics.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 function formatBytes(n) {
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
@@ -224,7 +225,7 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     setBusy(true);
     try {
       const result = await api.saveAllAttachments();
-      if (result) setNotice({ kind: 'success', text: `Saved ${result[1]} attachment${result[1] === 1 ? '' : 's'} to ${result[0]}.` });
+      if (result) setNotice({ kind: 'success', text: savedCopyText(result[0], `${result[1]} attachment${result[1] === 1 ? '' : 's'}`) });
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
     } finally {
