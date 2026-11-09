@@ -48,8 +48,8 @@ PDF) stay plain by design and LocalBooks already warns when it writes one.
 
 `libsqlite3-sys`, which sqlx 0.8 uses, can build SQLCipher instead of plain SQLite with its
 `bundled-sqlcipher` feature. Cargo merges features, so declaring
-`libsqlite3-sys = { version = "=0.30.1", features = ["bundled-sqlcipher…"] }` in our own
-`Cargo.toml` switches the library under sqlx **without changing sqlx or any query**. sqlx 0.8.6
+`libsqlite3-sys = { version = "=0.30.1", features = ["bundled-sqlcipher"] }` (or
+`"bundled-sqlcipher-vendored-openssl"`, see below) in our own `Cargo.toml` switches the library under sqlx **without changing sqlx or any query**. sqlx 0.8.6
 already supports it: `SqliteConnectOptions` runs a `key` pragma before every other pragma, and has
 slots for the other SQLCipher pragmas (`sqlx-sqlite` `options/mod.rs`).
 
