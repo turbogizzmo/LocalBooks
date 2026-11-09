@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **A report center that's easier to search.** Type to find a report by name or by what it shows,
+  star reports into Favorites, see your Recent reports, read a line about each report, and choose
+  the dates reports open on before you run them.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
