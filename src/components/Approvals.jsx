@@ -36,8 +36,10 @@ export default function Approvals({ isAdmin = true }) {
       const r = await fn();
       setNotice({ kind: 'success', text: ok(r) });
       reload();
+      return true;
     } catch (err) {
       setNotice({ kind: 'error', text: errorText(err) });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -45,7 +47,9 @@ export default function Approvals({ isAdmin = true }) {
   const approve = (r) => act(() => api.approveRequest(r.id), () => `${KIND[r.kind]} from ${r.vendorName} approved and ${r.kind === 'BILL' ? 'posted' : 'recorded'}: ${formatCents(r.totalCents)}.`);
   const reject = () => {
     const r = rejecting;
-    act(() => api.rejectRequest(r.id, note), () => `${KIND[r.kind]} from ${r.vendorName} rejected. It is kept with your note; nothing was recorded.`).then(() => {
+    // Keep the box and the note open if rejecting failed, so it can be tried again.
+    act(() => api.rejectRequest(r.id, note), () => `${KIND[r.kind]} from ${r.vendorName} rejected. It is kept with your note; nothing was recorded.`).then((done) => {
+      if (!done) return;
       setRejecting(null);
       setNote('');
     });
