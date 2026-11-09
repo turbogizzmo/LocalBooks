@@ -126,6 +126,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "closing_locks",
     "custom_field_values",
     "custom_fields",
+    "customer_group_members",
+    "customer_groups",
     "customers",
     "data_key",
     "employees",
