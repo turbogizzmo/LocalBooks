@@ -693,7 +693,7 @@ async fn write_undeposited_transfer(
     written: &Written,
 ) -> Result<(i64, usize), String> {
     if !t.lines.iter().any(|l| l.1 > 0 && books.is_undeposited(l.0)) {
-        return Err("it was not deposited into a bank account".into());
+        return Err("it went into no bank account and took nothing out of Undeposited Funds".into());
     }
     if t.lines.iter().any(|l| l.1 < 0 && books.is_undeposited(l.0)) {
         return Err("it puts money back into Undeposited Funds".into());
