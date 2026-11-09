@@ -15,6 +15,7 @@ import QbwImporter from './QbwImporter.jsx';
 import OffsiteBackup from './OffsiteBackup.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
 import PreferencesWindow, { Group } from './PreferencesWindow.jsx';
+import Diagnostics from './Diagnostics.jsx';
 
 function formatBytes(n) {
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
@@ -592,6 +593,7 @@ export default function Settings({ accounts, companyName, intent, isAdmin = true
       {tab === 'ai' && <LocalAiAccess />}
       {tab === 'users' && <UsersSettings />}
       {tab === 'updates' && <UpdatesPanel />}
+      {tab === 'diagnostics' && <Diagnostics />}
     </div>
   );
 }
