@@ -28,6 +28,11 @@ page, with the column headings repeated on each page.
 app instead**, a new message opens in your mail app for you to check and send. The **Reminders**
 list has **Email as PDF…** too.
 
+To password-protect the PDF, tick **Password-protect the PDF** and type a password. The PDF then
+opens only with that password (it is encrypted with 256-bit AES, which every current PDF reader
+opens). LocalBooks doesn't keep the password, so give it to the recipient another way, for example
+by phone, never in the same email.
+
 ## Scheduled reports
 
 **Reports › Scheduled Reports…** (under Memorized reports) sends chosen reports on a schedule, for
@@ -51,7 +56,41 @@ changing its next run; the list shows when each runs next and how its last run w
 Schedules run only while LocalBooks is open: it checks shortly after it starts and every few
 minutes after that. If a run fell due while LocalBooks was closed, it happens once, soon after
 LocalBooks next opens, for the latest date that was due; earlier missed dates are not sent one by
-one. The files can't be password-protected yet.
+one.
+
+### Password-protect scheduled PDFs
+
+When a schedule sends or saves PDFs, tick **Password-protect the PDFs** and type the password they
+should open with. The password is kept in this computer's credential store (Keychain on a Mac,
+Credential Manager on Windows), never in the company file, so a copy or backup of the company file
+doesn't carry it. To change it, open the schedule and type a new one; leave the box empty to keep
+the saved one. If the schedule is run on another computer, the password must be entered there
+again: until then its runs stop and say why.
+
+## Company Snapshot
+
+**Reports › Company Snapshot** (also **Reports › Company & Financial › Company Snapshot**) is a
+page of widgets you choose, each a summary of one report:
+
+| Widget | Shows | Same figures as |
+|---|---|---|
+| Account balances | Each bank and credit card account; the total is what's in the bank | Balance Sheet |
+| Who owes you | The five customers owing most, with the overdue part, then Others | A/R Aging Summary |
+| Vendors to pay | The five vendors you owe most, with the overdue part, then Others | A/P Aging Summary |
+| Income and expense trend | Income and expense columns by month, and the net | Profit and Loss |
+| Top customers | The five largest by income, then Others | Sales by Customer Summary |
+| Top items | The five best-selling products and services, then Others | Sales by Product/Service Summary |
+| Top vendors | The five you spent most with, then Others | Expenses by Vendor Summary |
+
+- **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
+- Each widget has its own period: today (the balance widgets show balances as of the period's
+  last day; "today" also means the year to date for the others), this or last month, quarter or
+  fiscal year, or the last 12 months.
+- **Open …** under a widget opens its report for the same dates, with every line.
+
+The figures are worked out exactly as their reports work them out (the same calculation, dates and
+basis), so a widget's total always matches the report's. The page is kept in the company file, so
+everyone who opens it sees the same widgets.
 
 ## Profit and Loss
 
@@ -413,8 +452,36 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
 | **Item Listing** | Lists | Each active product or service with its description, type, SKU, income account, price and quantity on hand |
 | **Account Listing** | Lists | Each active account with its type, description and, for balance sheet accounts, today's balance |
+| **To Do Notes** | Lists | Every to-do, open ones first by due date: done or not, what it says, who or what it is about and who it is assigned to |
+| **Budget Overview** | Budgets | Each budget for the fiscal year holding the date: every account's amount by month and its total, income first, with net income, as entered in **Accounting › Budgets** |
+| **Sales by Ship To Address** | Sales and customers | Invoices and sales receipts grouped by their **Ship To** address (those without one together); each amount is the income the sale posted, before sales tax, so the total matches the sales in Profit and Loss |
+| **Sales Tax Revenue Summary** | What you owe | For each tax rate: total, non-taxable and taxable sales, the same figures as the Sales Tax Liability report |
+| **Memorized Transaction Listing** | Accountant & Taxes | Every memorized (recurring) transaction: its type, how often, the next date, when it ends and whether it is paused |
+| **Realized Gains & Losses** | Accountant & Taxes | Gains and losses from paying foreign-currency invoices and bills, by transaction, as posted to **Exchange Gain or Loss** |
+| **Unrealized Gains & Losses** | Accountant & Taxes | Home currency adjustments (**Accounting › Currency Revaluation**) and their reversals, as posted to **Unrealized Exchange Gain or Loss** |
 
 These reports can't be customized or memorized.
+
+## Comment on a figure
+
+To explain a number to your accountant, a partner or yourself next month, comment on it:
+
+1. Open the report (Profit and Loss, Balance Sheet, a detail report, an Accountant & Taxes report
+   and most others) and click **Comment** at the top.
+2. Click a figure. It's outlined while commenting is on; the click opens a comment box instead of
+   the transactions.
+3. Type the comment and press **Enter** or **Save**.
+
+The first comment keeps a copy of the report as it is on screen, with its title and dates, under
+**Reports › Accountant & Taxes › Commented Reports**. Later comments in the same report go on the
+same copy. Each commented figure shows a number, like **[1]**, and printing the report (or the
+kept copy) lists the comments under it by number, with the line, the figure, who wrote it and
+when.
+
+**Commented Reports** lists every kept report, the most recently commented first. Open one to read
+its comments, add more (click a figure), remove one, **Print…** it, or **Delete** it. The kept copy
+doesn't change when the books do: it shows the figures as they were when the comments were made.
+Run the report again for today's figures.
 
 ## Collapse and expand
 
