@@ -132,7 +132,7 @@ export function EmailFormDialog({ kind, id, period = null, voucher = null, onClo
     return () => {
       cancelled = true;
     };
-  }, [kind, id, period?.startDate, period?.endDate, voucher ? JSON.stringify(voucher) : null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, id, period?.startDate, period?.endDate, voucher]);
   useEffect(() => {
     if (draft) toRef.current?.focus();
   }, [draft]);

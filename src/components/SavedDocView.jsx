@@ -113,7 +113,8 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   useEffect(() => setShowAttachments(false), [key]);
 
   // A voucher (a posted transaction) saves as a PDF and emails to the name on it too.
-  const [voucherPrint, voucherEmail] = voucher && !onPrint ? voucherItems(voucher, { label }) : [null, null];
+  // `onPrint` replaces only Print…; Save as PDF and Email stay.
+  const [voucherPrint, voucherEmail] = voucher ? voucherItems(voucher, { label, print: onPrint }) : [null, null];
   const printItem = form
     ? { id: 'print', label: 'Print', icon: 'Print', menu: [{ label: 'Print…', onSelect: () => forms.print(form.kind, form.id) }, { label: 'Save as PDF…', onSelect: () => forms.savePdf(form.kind, form.id) }] }
     : (voucherPrint ?? { id: 'print', label: 'Print', icon: 'Print', hint: `Print this ${label.toLowerCase()}`, onClick: () => (onPrint ? onPrint() : printVoucher(voucher)) });

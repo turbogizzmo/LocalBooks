@@ -177,6 +177,7 @@ export function useVoucherActions(onNotice) {
   const elements = (
     <>
       {portal}
+      {/* `emailing` is set once per Email click, so the dialog's draft loads once. */}
       {emailing && <EmailFormDialog voucher={emailing} onClose={() => setEmailing(null)} onNotice={(n) => onNotice?.(n)} />}
     </>
   );
