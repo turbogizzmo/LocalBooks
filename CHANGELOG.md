@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Company-file import clears payments moved out of Undeposited Funds.** A full import left
+  payments waiting to be deposited when the file's deposit moved them into an account that isn't a
+  bank (such as receipts written off to an expense). It now posts that deposit as a transfer out of
+  Undeposited Funds that clears those payments; balances still match the file.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -110,6 +110,7 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
            AND p.is_voided = 0 AND p.journal_entry_id IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM deposit_lines d WHERE d.invoice_payment_id = p.id AND d.is_voided = 0)
            AND NOT EXISTS (SELECT 1 FROM undeposited_fund_matches m WHERE m.invoice_payment_id = p.id AND m.is_voided = 0)
+           AND NOT EXISTS (SELECT 1 FROM undeposited_transfers t WHERE t.invoice_payment_id = p.id AND t.is_voided = 0)
          UNION ALL
          SELECT 'SALES_RECEIPT', r.id, r.receipt_date, c.name, r.payment_method,
                 (SELECT name FROM payment_methods WHERE id = r.payment_method_id), r.reference,
@@ -121,6 +122,7 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
            AND r.is_voided = 0 AND r.journal_entry_id IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM deposit_lines d WHERE d.sales_receipt_id = r.id AND d.is_voided = 0)
            AND NOT EXISTS (SELECT 1 FROM undeposited_fund_matches m WHERE m.sales_receipt_id = r.id AND m.is_voided = 0)
+           AND NOT EXISTS (SELECT 1 FROM undeposited_transfers t WHERE t.sales_receipt_id = r.id AND t.is_voided = 0)
          ORDER BY date, kind, id",
     )
     .fetch_all(pool)
