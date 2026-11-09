@@ -191,6 +191,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'payroll-import', area: 'company', views: ['settings/import'],
+    title: 'Post payroll from your payroll service',
+    body: 'Export each payroll from your payroll service as a journal (.csv or Excel). Under step 1 of the Desktop Migration Wizard, open "Payroll: a payroll service’s journal export" and choose the file. Match the Date, Account, and Debit and Credit (or Amount) columns, and the Entry column that groups rows into one payroll if the file has one. Match each of the service’s account names to one of yours; LocalBooks remembers them for next time. Every entry is shown with its totals, and nothing posts until each one balances. The same file can’t be posted twice; void its entries to redo it.',
+    keywords: 'payroll service wages salaries withholding payroll taxes journal export csv import post employees',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'import-classes', area: 'company', views: ['settings/import', 'accounting/classes'],
     title: 'Classes in an import',
     body: 'When the file you import has classes (a QuickBooks Desktop company file or backup, an IIF class list or CLASS column, a report export with a Class column, or QuickBooks still installed on Windows), posting brings them in: each class matches one you already have by name under the same parent, or is created, and every line keeps its class, so Profit & Loss by Class splits the same way as before. Classes hidden in the original come in inactive. Class tracking turns on, and the message after posting says so. Reversing the import makes the classes it created inactive.',

@@ -117,6 +117,7 @@ const ADMIN: &[&str] = &[
     "auto_map_ledger_accounts",
     "import_ledger_lists",
     "post_ledger_batch",
+    "post_payroll_import",
     "reverse_ledger_batch",
     "discard_ledger_batch",
     "start_over_ledger_batch",

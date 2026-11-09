@@ -30,6 +30,10 @@ people using LocalBooks.
   report saves the tax year's totals, line by line, as a TXF file that personal tax programs
   import. It lists anything it can't carry (accounts with no tax line, depreciation, business use
   of home) with the amount, for you to enter by hand.
+- **Post payroll from your payroll service.** In the Desktop Migration Wizard, Payroll takes a
+  payroll service's journal export (.csv or Excel), matches its columns and account names to yours
+  (remembering them for next time), shows every entry with its totals, and posts them only when
+  each one balances. The same file can't be posted twice.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.

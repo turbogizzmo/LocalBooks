@@ -64,6 +64,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod parties;
+mod payroll_import;
 mod permissions;
 mod pdf;
 mod mcp_server;
