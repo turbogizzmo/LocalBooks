@@ -16,6 +16,9 @@ export function usePartyContacts(kind, id) {
   const [error, setError] = useState(null);
   useEffect(() => {
     let live = true;
+    // Another record: nothing of the last one's shows while this one's load.
+    setContacts(null);
+    setError(null);
     api.listPartyContacts(kind, id).then(
       (rows) => live && setContacts(rows.map((c) => ({ ...c, key: c.id, role: c.role ?? '', email: c.email ?? '', phone: c.phone ?? '', mobile: c.mobile ?? '' }))),
       (err) => live && setError(errorText(err)),
