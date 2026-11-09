@@ -13,7 +13,7 @@ balances only", and where each part of the acceptance test is checked, so the ro
 | …to opening balances | Monthly summaries rather than one opening entry: the condensed file keeps month-by-month Profit and Loss and Balance Sheet for the old years, and its balance at the cut-off is the opening balance of the next day | the same test, comparing balances per account, class and month |
 | Open items carry forward | Unpaid invoices and bills, unused credits, undeposited payments, uncleared bank and card lines, drafts and foreign-currency entries are kept whole at their original dates | the same test (aging and open items match) |
 | An archive copy | `archive-through-<cut-off>-<time>.db` in the backups folder: the full history, opened read-only, with its own audit trail; plus a `pre-condense-<time>.db` copy to undo | `condense::tests` (archive opens read-only; audit verifies in both) |
-| Reports from the archive still tie out | Before the condensed copy replaces the books it is compared with the archive: balances per account, class and month; A/R and A/P aging and inventory value at the cut-off and today; cleared balances and uncleared lines; every list. Any difference stops the condense | `condense::verify` and the harbor-lane test |
+| Reports from the archive still tie out | Before the condensed copy replaces the books it is compared with the archive: balances per account, class and month; A/R and A/P aging and inventory value at the cut-off and today; cleared balances and uncleared lines; every list. Any difference stops condensing | `condense::verify` and the harbor-lane test |
 
 ## Why monthly summaries and not one opening-balance entry
 
