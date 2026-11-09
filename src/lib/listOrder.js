@@ -100,6 +100,7 @@ export function moveRow(arranged, dragId, targetId, { after = false } = {}) {
 
 /** A parent id from a "Parent:Child" name (customers' jobs, sub-items), given the rows' ids by name. */
 export function parentByName(name, idsByName) {
-  const at = String(name).lastIndexOf(':');
-  return at > 0 ? (idsByName.get(name.slice(0, at).toLowerCase()) ?? null) : null;
+  const text = String(name ?? '');
+  const at = text.lastIndexOf(':');
+  return at > 0 ? (idsByName.get(text.slice(0, at).toLowerCase()) ?? null) : null;
 }

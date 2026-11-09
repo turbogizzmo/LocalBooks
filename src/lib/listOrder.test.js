@@ -58,4 +58,6 @@ test('jobs and sub-items find their parent by name', () => {
   assert.equal(parentByName('Acme:Kitchen:Phase 1', byName), 2);
   assert.equal(parentByName('Acme', byName), null);
   assert.equal(parentByName('Other:Job', byName), null);
+  assert.equal(parentByName(null, byName), null);
+  assert.equal(parentByName(undefined, byName), null);
 });
