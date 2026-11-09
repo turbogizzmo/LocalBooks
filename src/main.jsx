@@ -7,6 +7,7 @@ import SignIn from './components/Users.jsx';
 import { api } from './lib/api.js';
 import { loadStartPage } from './lib/windows.js';
 import { installMyPreferenceBehaviours } from './lib/myPreferences.js';
+import { installCalculatorTape } from './lib/calcTape.js';
 import './index.css';
 import './styles/print.css';
 
@@ -14,6 +15,8 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 
 // Preferences › General: Enter moves between fields, tooltips for clipped text.
 installMyPreferenceBehaviours();
+// Arithmetic in amount and quantity boxes, with a tape of the running total.
+installCalculatorTape();
 
 // If the company file could not be opened at launch, explain that instead of starting the app; with
 // no company open (File › Close Company), show the No Company Open screen; with a company that has

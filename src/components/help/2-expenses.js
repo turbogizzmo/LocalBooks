@@ -44,7 +44,7 @@ export const topics = [
   {
     id: 'expense-check', area: 'expenses', views: ['expenses/expenses'],
     title: 'Record an expense or write a check',
-    body: 'Record money already spent as an expense (from a bank or credit card) or a check (numbered automatically), split across as many expense accounts as needed. It posts immediately and reduces the account it was paid from.',
+    body: 'Record money already spent as an expense (from a bank or credit card) or a check (numbered automatically), split across as many expense accounts as needed. It posts immediately and reduces the account it was paid from. Ending balance beside the account box shows what it holds (or a card owes) now.',
     keywords: 'spend purchase receipt check cheque card payment split',
     go: { label: 'New expense', view: 'expenses/expenses', action: 'expense' },
     guide: 'expenses-and-checks',
@@ -60,7 +60,7 @@ export const topics = [
   {
     id: 'bill', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Enter a vendor bill',
-    body: 'Choose New bill, pick the vendor and split the total across expense accounts, by amount or by quantity × rate; it must add up to the bill total. The bill sits in Accounts Payable until you pay it.',
+    body: 'Choose New bill, pick the vendor and split the total across expense accounts, by amount or by quantity × rate; it must add up to the bill total. The bill sits in Accounts Payable until you pay it. With a discount term (such as 2% 10 Net 30), Discount date shows the last day to pay and take the discount.',
     keywords: 'vendor payable ap supplier invoice split owe',
     go: { label: 'New bill', view: 'expenses/bills', action: 'bill' },
     guide: 'bills',

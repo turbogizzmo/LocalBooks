@@ -44,3 +44,32 @@ export function stepButtons(ordered, currentId, open, { blocked = false, blocked
     blockedHint: blocked ? blockedHint : undefined,
   };
 }
+
+/**
+ * Duplicate Transaction: the copy is dated `today`, and a due date keeps the same number of days
+ * after it as the original had (a bill due in 30 days is again due in 30 days). `due` is null for
+ * transactions without one.
+ */
+export function duplicateDates(originalDate, originalDue, today) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(originalDue ?? '') || !iso.test(originalDate ?? '') || !iso.test(today ?? '')) return { date: today, due: null };
+  const [ay, am, ad] = originalDate.split('-').map(Number);
+  const [by, bm, bd] = originalDue.split('-').map(Number);
+  // Both are UTC midnights, so the difference is a whole number of days.
+  const days = (Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000;
+  const [ty, tm, td] = today.split('-').map(Number);
+  const due = new Date(Date.UTC(ty, tm - 1, td + days));
+  return { date: today, due: due.toISOString().slice(0, 10) };
+}
+
+/**
+ * Enter Bills' Discount Date: the last day the term's early-payment discount applies, `discountDays`
+ * after the bill date (as Pay Bills reckons it, `discount_until` in expenses.rs). Null without a
+ * discount term or a valid date.
+ */
+export function discountDate(term, billDate) {
+  if (!term || !(term.discountPpm > 0) || term.discountDays === null || term.discountDays === undefined) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate ?? '')) return null;
+  const [y, m, d] = billDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + term.discountDays)).toISOString().slice(0, 10);
+}
