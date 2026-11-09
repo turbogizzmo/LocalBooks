@@ -48,16 +48,27 @@ pub async fn list_attachment_library(db: State<'_, Db>, query: Option<String>, i
 pub struct AttachmentPreview {
     pub file_name: String,
     pub media_type: String,
-    /// The file's bytes, base64, for an image, PDF or text preview; `None` for other kinds.
+    /// The bytes the preview pane shows, base64: a picture whole, a text file's first
+    /// [`TEXT_PREVIEW_BYTES`]; `None` for every other kind (the pane offers Save a copy instead).
     pub data_base64: Option<String>,
 }
 
-/// What the library's preview pane shows: the bytes of a picture, PDF or text file.
+/// How much of a text file the preview pane shows.
+const TEXT_PREVIEW_BYTES: usize = 200_000;
+
+/// What the library's preview pane shows: a picture, or the start of a text file. Nothing else
+/// crosses to the page, so selecting a large PDF or spreadsheet moves no bytes.
 #[tauri::command]
 pub async fn get_attachment_preview(db: State<'_, Db>, file: FileRef) -> Result<AttachmentPreview, String> {
     let (file_name, media_type, content) = library::content(&db.pool().await, file).await?;
-    let previewable = media_type.starts_with("image/") || media_type == "application/pdf" || media_type.starts_with("text/");
-    let data_base64 = previewable.then(|| base64::engine::general_purpose::STANDARD.encode(&content));
+    let shown: Option<&[u8]> = if media_type.starts_with("image/") {
+        Some(&content)
+    } else if media_type.starts_with("text/") {
+        Some(&content[..content.len().min(TEXT_PREVIEW_BYTES)])
+    } else {
+        None
+    };
+    let data_base64 = shown.map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes));
     Ok(AttachmentPreview { file_name, media_type, data_base64 })
 }
 

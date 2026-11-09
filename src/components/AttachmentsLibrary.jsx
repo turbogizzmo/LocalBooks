@@ -107,8 +107,14 @@ function FilePanel({ file, onNotice, onChanged }) {
   const [keywords, setKeywords] = useState(file.keywords ?? '');
   const [withForm, setWithForm] = useState(file.sendWithForm);
   const openFromList = useOpenFromList();
+  // Only pictures and text are previewed; other files aren't requested at all.
+  const previewable = file.mediaType.startsWith('image/') || file.mediaType.startsWith('text/');
   useEffect(() => {
     let live = true;
+    if (!previewable) {
+      setPreview({ mediaType: file.mediaType, dataBase64: null });
+      return undefined;
+    }
     api.getAttachmentPreview(ref).then(
       (p) => live && setPreview(p),
       () => live && setPreview({ dataBase64: null }),
@@ -234,7 +240,7 @@ function FilePanel({ file, onNotice, onChanged }) {
 function decodeText(base64) {
   try {
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes.slice(0, 200_000));
+    return new TextDecoder().decode(bytes);
   } catch {
     return '';
   }
