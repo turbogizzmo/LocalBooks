@@ -469,11 +469,21 @@ While a form is open:
 | **Ctrl+Delete** | Delete the line you're on. |
 | **Ctrl+N** | Start a new form of the same kind, as the toolbar's **New** does. |
 | **Ctrl+P** | Print the form, on forms that print. |
-| **Page Up** / **Page Down** | Open the previous or next one, as the toolbar's **Previous** and **Next** do. In a list or a text box with more lines they scroll it instead. |
+| **Page Up** / **Page Down** | Open the previous or next one, as the toolbar's **Previous** and **Next** do. In a list or a text box with more lines they scroll it instead. On a saved transaction shown read-only (a sales receipt, estimate, credit, purchase order, deposit or transfer) they work too, as do **Ctrl+N**, **Ctrl+P** and **Ctrl+D**. |
+| **Ctrl+L** | Open the list of the box you're in: a customer or vendor box, or an account, item or other drop-down. |
+| **Ctrl+Alt+Y** | Copy Line: copy the line you're on. |
+| **Ctrl+Alt+V** | Paste Line: insert a copy of the copied line above the line you're on (at the end from outside the lines). A line copied from an item grid pastes into item grids, an expense line into expense grids and a journal line into journal entries. |
+| **Ctrl+G** | Go To Transfer: on a saved transfer, open the other account's register at the transfer. |
 
-The first four are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too
-for D, Insert and Delete (Fn+Delete is Delete); **⌘M**, **⌘N** and **⌘P** stay the system's, so use
-**Control** with M, N and P.
+Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line and Go To Transfer are also
+in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
+Delete (Fn+Delete is Delete); **⌘M**, **⌘N**, **⌘P**, **⌘E**, **⌘G** and **⌘L** stay the system's, so
+use **Control** with those letters (**Control+Option** for Copy Line and Paste Line).
+
+In a register, click a transaction, then press **Ctrl+E** to open it on its form to edit, or
+**Ctrl+G** to go to the other side of it: the register of the one other account it posted to (a
+transfer's other bank account, a check's expense account). A transaction with several other
+accounts (**-Split-**) says so instead.
 
 ### Date keys
 

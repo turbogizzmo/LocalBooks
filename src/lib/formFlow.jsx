@@ -1,6 +1,9 @@
 import { useCallback, useContext, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { ChildContext, forgetUnsaved, WindowManagerContext } from './windows.js';
+import { copiedLine, copyLine, formKeyCommand, FORM_KEYS, LINE_COMMANDS, openBoxList } from './formKeys.js';
+
+export { formKeyCommand, FORM_KEYS };
 
 /**
  * The desktop save flow and keys every transaction form shares.
@@ -15,8 +18,10 @@ import { ChildContext, forgetUnsaved, WindowManagerContext } from './windows.js'
  *   Clear                 empties the form without saving (`clear`).
  * A form editing a saved transaction does not clear itself: Save & New then calls `afterNew`, which
  * swaps it for a new blank form.
- * Keys on the open form: Ctrl+D the toolbar's Void (or Delete), Ctrl+M its Memorize. Ctrl+Insert and
- * Ctrl+Delete insert and delete a line in the grid that has focus (`useLineCommands`). Ctrl+A is
+ * Keys on the open form (formKeys.js): Ctrl+D the toolbar's Void (or Delete), Ctrl+M its Memorize,
+ * Ctrl+N New, Ctrl+P Print, Ctrl+E Edit, Ctrl+G Go to Transfer, Page Up / Page Down Previous / Next;
+ * Ctrl+L opens the list of the box with focus. Ctrl+Insert, Ctrl+Delete, Ctrl+Alt+Y and Ctrl+Alt+V
+ * insert, delete, copy and paste a line in the grid that has focus (`useLineCommands`). Ctrl+A is
  * left as Select All. The Edit menu's form items run the same commands (`runFormCommand`).
  */
 export function useFormFlow({ save, clear, onClose, afterNew, busy = false, saveDisabled = false }) {
@@ -49,7 +54,8 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
       else if (name === 'save-new') saveAndNew();
       else if (name === 'clear' && l.clear) l.clear();
       else if (TOOLBAR_COMMANDS.includes(name)) return pressToolbar(formRef.current, name);
-      else if (name === 'insert-line' || name === 'delete-line') return lineCommand(formRef.current, name);
+      else if (LINE_COMMANDS.includes(name)) return lineCommand(formRef.current, name);
+      else if (name === 'open-list') return openBoxList(document.activeElement);
       else return false;
       return true;
     },
@@ -71,8 +77,12 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
     (e) => {
       if (e.defaultPrevented || modalOpenAbove(formRef.current, e.target)) return;
       const name = formKeyCommand(e);
-      if (!name || name === 'insert-line' || name === 'delete-line') return; // lines: useLineCommands
+      if (!name || LINE_COMMANDS.includes(name)) return; // lines: useLineCommands
       if (TOOLBAR_COMMANDS.includes(name) && !toolbarButton(formRef.current, name)) return;
+      if (name === 'open-list') {
+        if (openBoxList(e.target)) e.preventDefault();
+        return;
+      }
       e.preventDefault();
       // A save waits a tick, so the form has rendered with the last key typed before it reads it.
       if (name.startsWith('save')) setTimeout(() => command(name), 0);
@@ -85,10 +95,49 @@ export function useFormFlow({ save, clear, onClose, afterNew, busy = false, save
 }
 
 /**
- * Ctrl+D and Ctrl+M press the form toolbar's own button (FormToolbar.jsx), so they ask the same
- * question first (Void this transaction?) and are off whenever the button is.
+ * The toolbar keys (Ctrl+D, Ctrl+N, Ctrl+P, Ctrl+G, Page Up / Page Down …) on a view that has a form
+ * toolbar but nothing to save, such as a saved transaction shown read-only (SavedDocView.jsx):
+ *   const keys = useToolbarKeys();
+ *   <section ref={keys.ref} onKeyDown={keys.onKeyDown}> <FormToolbar … /> … </section>
+ * The Edit menu's form items reach it too.
  */
-const TOOLBAR_IDS = { delete: ['void', 'delete'], memorize: ['memorize'], new: ['new'], print: ['print'], previous: ['previous'], next: ['next'] };
+export function useToolbarKeys() {
+  const ref = useRef(null);
+  const command = useCallback((name) => (TOOLBAR_COMMANDS.includes(name) ? pressToolbar(ref.current, name) : false), []);
+  useEffect(() => {
+    const entry = { root: () => ref.current, command };
+    openForms.push(entry);
+    listenOnPage();
+    return () => {
+      const at = openForms.indexOf(entry);
+      if (at >= 0) openForms.splice(at, 1);
+    };
+  }, [command]);
+  const onKeyDown = useCallback(
+    (e) => {
+      if (e.defaultPrevented || modalOpenAbove(ref.current, e.target)) return;
+      const name = formKeyCommand(e);
+      if (name && TOOLBAR_COMMANDS.includes(name) && pressToolbar(ref.current, name)) e.preventDefault();
+    },
+    [],
+  );
+  return { ref, onKeyDown };
+}
+
+/**
+ * Ctrl+D, Ctrl+M and the rest press the form toolbar's own button (FormToolbar.jsx), so they ask
+ * the same question first (Void this transaction?) and are off whenever the button is.
+ */
+const TOOLBAR_IDS = {
+  delete: ['void', 'delete'],
+  memorize: ['memorize'],
+  new: ['new'],
+  print: ['print'],
+  previous: ['previous'],
+  next: ['next'],
+  edit: ['edit'],
+  'goto-transfer': ['goto-transfer'],
+};
 const TOOLBAR_COMMANDS = Object.keys(TOOLBAR_IDS);
 
 function toolbarButton(root, name) {
@@ -96,59 +145,11 @@ function toolbarButton(root, name) {
   return root?.querySelector(selector) ?? null;
 }
 
-function pressToolbar(root, name) {
+export function pressToolbar(root, name) {
   const button = toolbarButton(root, name);
   button?.click();
   return Boolean(button);
 }
-
-/**
- * The command a key press asks of a form, or null:
- *   Alt+S save-close · Alt+N save-new · Ctrl+D delete · Ctrl+M memorize · Ctrl+N new ·
- *   Ctrl+P print · Ctrl+Insert insert-line · Ctrl+Delete delete-line ·
- *   Page Up previous · Page Down next (not while a list or text box would scroll)
- * Letters are read from the physical key, so Option+S on a Mac (which types ß) still saves.
- * On a Mac, Cmd also works for D, Insert and Delete; Cmd+M, Cmd+N and Cmd+P stay the system's.
- */
-export function formKeyCommand(e) {
-  const ctrl = e.ctrlKey || (IS_MAC && e.metaKey);
-  // The physical key when the event has one (Option+S types ß on a Mac), else the character.
-  const letter = (l) => e.code === `Key${l.toUpperCase()}` || (!e.code && String(e.key).toLowerCase() === l);
-  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-    if (letter('s')) return 'save-close';
-    if (letter('n')) return 'save-new';
-    return null;
-  }
-  if (e.altKey || e.shiftKey) return null;
-  if (!e.ctrlKey && !e.metaKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
-    const t = e.target;
-    if (t instanceof Element && t.closest('textarea, select, [role="listbox"], [role="grid"], [contenteditable="true"]')) return null;
-    return e.key === 'PageUp' ? 'previous' : 'next';
-  }
-  if (ctrl && letter('d')) return 'delete';
-  if (e.ctrlKey && !e.metaKey && letter('m')) return 'memorize';
-  if (e.ctrlKey && !e.metaKey && letter('n')) return 'new';
-  if (e.ctrlKey && !e.metaKey && letter('p')) return 'print';
-  if (ctrl && e.key === 'Insert') return 'insert-line';
-  if (ctrl && e.key === 'Delete') return 'delete-line';
-  return null;
-}
-
-const IS_MAC = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
-
-/** The shortcut shown beside a command in buttons and tips, for this platform. */
-export const FORM_KEYS = {
-  'save-close': 'Alt+S',
-  'save-new': 'Alt+N',
-  delete: IS_MAC ? '⌘D' : 'Ctrl+D',
-  memorize: 'Ctrl+M',
-  new: 'Ctrl+N',
-  print: 'Ctrl+P',
-  previous: 'Page Up',
-  next: 'Page Down',
-  'insert-line': IS_MAC ? '⌘Insert' : 'Ctrl+Insert',
-  'delete-line': IS_MAC ? '⌘Delete' : 'Ctrl+Delete',
-};
 
 /** A dialog opened from the form (Memorize, Void?) owns the keys while it is up. */
 function modalOpenAbove(root, target) {
@@ -195,7 +196,8 @@ function listenOnPage() {
     if (e.defaultPrevented || (t !== document.body && t !== document.documentElement)) return;
     if (document.querySelector('[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="menu"]')) return;
     const name = formKeyCommand(e);
-    if (!name || name === 'delete-line') return;
+    // Line keys act on a grid that has focus (or come from the Edit menu), never from the page.
+    if (!name || name === 'delete-line' || name === 'copy-line' || name === 'paste-line' || name === 'open-list') return;
     if (runFormCommand(name)) e.preventDefault();
   });
 }
@@ -215,7 +217,7 @@ export function runFormCommand(name) {
   return target ? target.f.command(name) !== false : false;
 }
 
-/** Sends 'insert-line' / 'delete-line' to the grid with focus inside `root`, or its first grid. */
+/** Sends a line command ('insert-line', 'delete-line', 'copy-line', 'paste-line') to the grid with focus inside `root`, or its first grid. */
 function lineCommand(root, name) {
   if (!root) return false;
   const active = document.activeElement;
@@ -227,15 +229,22 @@ function lineCommand(root, name) {
 }
 
 /**
- * Ctrl+Insert / Ctrl+Delete (and Edit › Insert Line / Delete Line) on a line grid. Put
- * `data-line-grid` on the element `ref` points at and `data-row={index}` on each line's row.
- * `insert(index)` adds a blank line before line `index` (at the end when null); `remove(index)`
- * deletes line `index`. Afterwards the first field of the line at that position takes focus, unless
- * the callback returns 'focused' (it moved focus itself).
+ * The line commands on a line grid: Ctrl+Insert / Ctrl+Delete (and Edit › Insert Line / Delete
+ * Line), Ctrl+Alt+Y Copy Line and Ctrl+Alt+V Paste Line. Put `data-line-grid` on the element `ref`
+ * points at and `data-row={index}` on each line's row.
+ *   insert(index)       adds a blank line before line `index` (at the end when null)
+ *   remove(index)       deletes line `index`
+ *   copy(index)         the line to copy (a plain object), or null when it can't be copied
+ *   paste(index, line)  inserts a copy of `line` before line `index` (at the end when null)
+ *   grid                the kind of grid ('items', 'splits', 'journal'): a line pastes only into
+ *                       a grid of the same kind
+ * Afterwards the first field of the line at that position takes focus, unless the callback
+ * returns 'focused' (it moved focus itself). Copy and paste are off when `copy` / `paste` aren't
+ * given.
  */
-export function useLineCommands(ref, { insert, remove }) {
+export function useLineCommands(ref, { insert, remove, copy, paste, grid = 'lines' }) {
   const latest = useRef({});
-  latest.current = { insert, remove };
+  latest.current = { insert, remove, copy, paste, grid };
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
@@ -247,25 +256,36 @@ export function useLineCommands(ref, { insert, remove }) {
     // Listened for outside React, so the change is committed at once (flushSync) and the line at
     // that position is in the page before it takes focus.
     const run = (name, row) => {
+      const l = latest.current;
       const count = el.querySelectorAll('[data-row]').length;
       let focused;
       if (name === 'insert-line') {
         const at = row ?? count;
         flushSync(() => {
-          focused = latest.current.insert(at);
+          focused = l.insert(at);
         });
         if (focused !== 'focused') focusRow(at);
       } else if (name === 'delete-line' && row !== null) {
         flushSync(() => {
-          focused = latest.current.remove(row);
+          focused = l.remove(row);
         });
         if (focused !== 'focused') focusRow(row);
+      } else if (name === 'copy-line' && row !== null && l.copy) {
+        copyLine(l.grid, l.copy(row));
+      } else if (name === 'paste-line' && l.paste) {
+        const line = copiedLine(l.grid);
+        if (!line) return;
+        const at = row ?? count;
+        flushSync(() => {
+          focused = l.paste(at, line);
+        });
+        if (focused !== 'focused') focusRow(at);
       }
     };
     const onKey = (e) => {
       if (e.defaultPrevented) return;
       const name = formKeyCommand(e);
-      if (name !== 'insert-line' && name !== 'delete-line') return;
+      if (!LINE_COMMANDS.includes(name)) return;
       e.preventDefault();
       const row = e.target instanceof Element ? e.target.closest('[data-row]') : null;
       run(name, row ? Number(row.dataset.row) : null);

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useLineCommands } from '../lib/formFlow.jsx';
+import { pasteLineAt } from '../lib/formKeys.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
@@ -100,6 +101,10 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
   useLineCommands(tableRef, {
     insert: (at) => setRows((rs) => [...rs.slice(0, at), blankSplit(defaultAccountId), ...rs.slice(at)]),
     remove: (at) => setRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== at) : [blankSplit(defaultAccountId)])),
+    // Copy Line / Paste Line (Ctrl+Alt+Y / Ctrl+Alt+V): the pasted line goes above the one with focus.
+    copy: (at) => rows[at] ?? null,
+    paste: (at, line) => setRows((rs) => pasteLineAt(rs, at, line, () => nextKey++)),
+    grid: 'splits',
   });
 
   return (
