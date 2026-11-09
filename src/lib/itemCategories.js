@@ -31,9 +31,20 @@ export function categoryIndex(categories) {
     },
     /** Items under each category, counting its sub-categories, plus all and uncategorized. */
     counts(items) {
+      // Items counted once per category, then each category adds up its own subtree.
+      const direct = new Map();
+      let none = 0;
+      for (const i of items) {
+        if (i.categoryId == null) none += 1;
+        else direct.set(i.categoryId, (direct.get(i.categoryId) ?? 0) + 1);
+      }
       const byCategory = new Map();
-      for (const c of categories) byCategory.set(c.id, items.filter((i) => i.categoryId != null && collect(c.id).has(i.categoryId)).length);
-      return { all: items.length, none: items.filter((i) => i.categoryId == null).length, byCategory };
+      for (const c of categories) {
+        let n = 0;
+        for (const id of collect(c.id)) n += direct.get(id) ?? 0;
+        byCategory.set(c.id, n);
+      }
+      return { all: items.length, none, byCategory };
     },
   };
 }

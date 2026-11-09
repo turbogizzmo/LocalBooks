@@ -135,6 +135,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "form_styles",
     "form_templates",
     "inventory_items",
+    "item_categories",
     "item_group_members",
     "item_groups",
     "key_slots",
