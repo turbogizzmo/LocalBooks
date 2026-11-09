@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Overpayments and prepayments.** Receive Payments takes more than a customer owes, and payments
+  from a customer with no open invoice. The amount left over can stay as the customer's credit (to
+  use on a later invoice), be refunded straight away, or be written off to income. Credit Memos &
+  Refunds lists it as an unapplied payment, the Customer Center shows the unapplied amount and
+  remaining credit, and Make Deposits picks it up from Undeposited Funds. Any credit left can now
+  also be written off.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

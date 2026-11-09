@@ -90,10 +90,16 @@ pub struct CreditMemoSummary {
     pub remaining_cents: i64,
     pub is_voided: bool,
     pub journal_entry_id: Option<i64>,
+    /// Money received that wasn't applied to an invoice (an overpayment or a prepayment), kept as
+    /// the customer's credit; the account it was deposited to is `payment_account_id`.
+    pub is_payment: bool,
+    pub payment_account_id: Option<i64>,
+    pub payment_reference: Option<String>,
 }
 
 const CREDIT_MEMO_SELECT: &str = "SELECT m.id, m.credit_number, m.customer_id, c.name AS customer_name, m.credit_date, m.memo,
-        m.refund_account_id, m.total_cents, b.remaining_cents, m.is_voided, m.journal_entry_id
+        m.refund_account_id, m.total_cents, b.remaining_cents, m.is_voided, m.journal_entry_id,
+        m.payment_account_id IS NOT NULL AS is_payment, m.payment_account_id, m.payment_reference
  FROM credit_memos m JOIN customers c ON c.id = m.customer_id JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id";
 
 pub async fn list_credit_memos(pool: &SqlitePool) -> Result<Vec<CreditMemoSummary>, String> {
@@ -103,7 +109,7 @@ pub async fn list_credit_memos(pool: &SqlitePool) -> Result<Vec<CreditMemoSummar
         .map_err(db_err)
 }
 
-async fn credit_memo(pool: &SqlitePool, id: i64) -> Result<CreditMemoSummary, String> {
+pub(crate) async fn credit_memo(pool: &SqlitePool, id: i64) -> Result<CreditMemoSummary, String> {
     sqlx::query_as::<_, CreditMemoSummary>(&format!("{CREDIT_MEMO_SELECT} WHERE m.id = ?1"))
         .bind(id)
         .fetch_optional(pool)
@@ -397,51 +403,180 @@ pub struct RefundCreditInput {
 
 /// Pays credit left on a credit memo back to the customer: Dr A/R / Cr the bank or card account.
 pub async fn refund_customer_credit(pool: &SqlitePool, input: RefundCreditInput) -> Result<CreditMemoSummary, String> {
-    run(pool, async |tx| {
-        let memo: Option<(i64, String, i64, bool, Option<i64>)> = sqlx::query_as(
-            "SELECT m.credit_number, c.name, b.remaining_cents, m.is_voided, m.refund_account_id
-             FROM credit_memos m JOIN customers c ON c.id = m.customer_id JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
-             WHERE m.id = ?1",
-        )
-        .bind(input.credit_id)
+    run(pool, async |tx| refund_customer_credit_in_tx(tx, &input, false).await).await?;
+    credit_memo(pool, input.credit_id).await
+}
+
+/// Writes off credit left on a credit memo or an unapplied payment, keeping it as income:
+/// Dr A/R / Cr the income account. Undone by voiding its journal entry, like a refund.
+pub async fn write_off_customer_credit(pool: &SqlitePool, input: RefundCreditInput) -> Result<CreditMemoSummary, String> {
+    run(pool, async |tx| refund_customer_credit_in_tx(tx, &input, true).await).await?;
+    credit_memo(pool, input.credit_id).await
+}
+
+/// A write-off goes to an active income account.
+async fn check_income_account(tx: &mut Transaction<'_, Sqlite>, account_id: i64) -> Result<(), String> {
+    let row: Option<(String, bool)> = sqlx::query_as("SELECT account_type, is_active FROM chart_of_accounts WHERE id = ?1")
+        .bind(account_id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-        let (number, customer, remaining, voided, refund) = memo.ok_or("CM_NOT_FOUND: that credit memo does not exist")?;
-        if voided || refund.is_some() {
-            return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to refund".into());
-        }
-        if input.amount_cents < 1 || input.amount_cents > remaining {
-            return Err(format!("CM_BAD_AMOUNT: refund up to the {} of credit left", format_cents(remaining)));
-        }
+    match row {
+        Some((kind, true)) if kind == "INCOME" || kind == "OTHER_INCOME" => Ok(()),
+        Some((_, false)) => Err("CM_INACTIVE_ACCOUNT: that account is inactive".into()),
+        _ => Err("CM_BAD_ACCOUNT: write the amount off to an Income or Other Income account".into()),
+    }
+}
+
+/// [`refund_customer_credit`] (or, with `write_off`, [`write_off_customer_credit`]) inside the
+/// caller's transaction.
+pub(crate) async fn refund_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>, input: &RefundCreditInput, write_off: bool) -> Result<(), String> {
+    let memo: Option<(i64, String, i64, bool, Option<i64>, bool)> = sqlx::query_as(
+        "SELECT m.credit_number, c.name, b.remaining_cents, m.is_voided, m.refund_account_id, m.payment_account_id IS NOT NULL
+         FROM credit_memos m JOIN customers c ON c.id = m.customer_id JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
+         WHERE m.id = ?1",
+    )
+    .bind(input.credit_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (number, customer, remaining, voided, refund, is_payment) = memo.ok_or("CM_NOT_FOUND: that credit memo does not exist")?;
+    let what = if write_off { "write off" } else { "refund" };
+    if voided || refund.is_some() {
+        return Err(format!("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to {what}"));
+    }
+    if input.amount_cents < 1 || input.amount_cents > remaining {
+        return Err(format!("CM_BAD_AMOUNT: {what} up to the {} of credit left", format_cents(remaining)));
+    }
+    if write_off {
+        check_income_account(tx, input.account_id).await?;
+    } else {
         check_money_account(tx, input.account_id, "CM").await?;
-        let ar = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
-        let reference = clean(input.reference.as_deref()).map(|r| format!(" ({r})")).unwrap_or_default();
-        let entry = JournalEntry {
-            id: None,
-            date: input.refund_date,
-            description: format!("Refund of credit memo #{number} - {customer}{reference}"),
-            lines: vec![JournalLine::debit(ar, input.amount_cents), JournalLine::credit(input.account_id, input.amount_cents)],
-            currency: None,
-        };
-        let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
-        sqlx::query(
-            "INSERT INTO credit_refunds (credit_memo_id, account_id, refund_date, amount_cents, reference, journal_entry_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )
-        .bind(input.credit_id)
-        .bind(input.account_id)
-        .bind(input.refund_date)
-        .bind(input.amount_cents)
-        .bind(clean(input.reference.as_deref()))
-        .bind(entry_id)
-        .execute(&mut **tx)
+    }
+    let ar = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
+    let reference = clean(input.reference.as_deref()).map(|r| format!(" ({r})")).unwrap_or_default();
+    let source = if is_payment { "unapplied payment".to_string() } else { format!("credit memo #{number}") };
+    let action = if write_off { "Write-off" } else { "Refund" };
+    let entry = JournalEntry {
+        id: None,
+        date: input.refund_date,
+        description: format!("{action} of {source} - {customer}{reference}"),
+        lines: vec![JournalLine::debit(ar, input.amount_cents), JournalLine::credit(input.account_id, input.amount_cents)],
+        currency: None,
+    };
+    let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Journal).await?;
+    sqlx::query(
+        "INSERT INTO credit_refunds (credit_memo_id, account_id, refund_date, amount_cents, reference, journal_entry_id, is_write_off)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )
+    .bind(input.credit_id)
+    .bind(input.account_id)
+    .bind(input.refund_date)
+    .bind(input.amount_cents)
+    .bind(clean(input.reference.as_deref()))
+    .bind(entry_id)
+    .bind(write_off)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    Ok(())
+}
+
+/// Money received from a customer that isn't applied to an invoice: an overpayment, a prepayment,
+/// or a payment from a customer with no open invoice (see `docs/plans/overpayments.md`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnappliedPaymentInput {
+    pub customer_name: String,
+    /// Undeposited Funds or a bank account, as for an invoice payment.
+    pub deposit_account_id: i64,
+    pub payment_date: NaiveDate,
+    pub amount_cents: i64,
+    pub payment_method: String,
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
+    pub reference: Option<String>,
+    /// What to do with it: `CREDIT` (keep it as the customer's credit, the default), `REFUND` (pay
+    /// it back from `account_id`) or `WRITE_OFF` (keep it as income in `account_id`).
+    #[serde(default)]
+    pub keep_as: Option<String>,
+    #[serde(default)]
+    pub account_id: Option<i64>,
+}
+
+/// Posts an unapplied payment as the customer's credit (Dr the deposit account / Cr A/R), then
+/// refunds it or writes it off at once if asked. Returns the credit's id.
+pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, input: &UnappliedPaymentInput) -> Result<i64, String> {
+    if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
+        return Err("INV_BAD_AMOUNT: the unapplied amount must be greater than zero".into());
+    }
+    let keep_as = input.keep_as.as_deref().unwrap_or("CREDIT");
+    if !matches!(keep_as, "CREDIT" | "REFUND" | "WRITE_OFF") {
+        return Err(format!("INV_BAD_UNAPPLIED: unknown choice '{keep_as}' for the unapplied amount"));
+    }
+    if keep_as != "CREDIT" && input.account_id.is_none() {
+        return Err(if keep_as == "REFUND" {
+            "INV_REFUND_ACCOUNT: choose the bank or card account the refund is paid from".into()
+        } else {
+            "INV_WRITE_OFF_ACCOUNT: choose the income account to write the amount off to".into()
+        });
+    }
+    if input.payment_method_id.is_none() && !crate::invoices::PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
+        return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
+    }
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
+    let deposit_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
+        .bind(input.deposit_account_id)
+        .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-        Ok(())
-    })
-    .await?;
-    credit_memo(pool, input.credit_id).await
+    match deposit_type.as_deref() {
+        Some("BANK") | Some("OTHER_CURRENT_ASSET") => {}
+        Some(_) => return Err("INV_BAD_DEPOSIT_ACCOUNT: deposit to a Bank or Undeposited Funds account".into()),
+        None => return Err("INV_BAD_DEPOSIT_ACCOUNT: deposit account does not exist".into()),
+    }
+    let customer = input.customer_name.trim();
+    // The same name lookup as a credit memo's, so a job's "Customer:Job" name finds the job.
+    let customer_id = find_or_create_named(tx, Party::Customer, customer).await?;
+    let reference = clean(input.reference.as_deref());
+    let memo_id: i64 = sqlx::query_scalar(
+        "INSERT INTO credit_memos (credit_number, customer_id, credit_date, total_cents,
+                                   payment_account_id, payment_method, payment_method_id, payment_reference)
+         VALUES ((SELECT COALESCE(MAX(credit_number), 0) + 1 FROM credit_memos), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         RETURNING id",
+    )
+    .bind(customer_id)
+    .bind(input.payment_date)
+    .bind(input.amount_cents)
+    .bind(input.deposit_account_id)
+    .bind(method.as_deref().unwrap_or(&input.payment_method))
+    .bind(method_id)
+    .bind(reference)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let ar = system_account(tx, "ACCOUNTS_RECEIVABLE").await?;
+    let note = reference.map(|r| format!(" ({r})")).unwrap_or_default();
+    let entry = JournalEntry {
+        id: None,
+        date: input.payment_date,
+        description: format!("Payment - unapplied - {customer}{note}"),
+        lines: vec![JournalLine::debit(input.deposit_account_id, input.amount_cents), JournalLine::credit(ar, input.amount_cents)],
+        currency: None,
+    };
+    let entry_id = post_entry_in_tx(tx, &entry, EntrySource::CreditMemo(memo_id)).await?;
+    sqlx::query("UPDATE credit_memos SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(memo_id).execute(&mut **tx).await.map_err(db_err)?;
+    if let (Some(account_id), "REFUND" | "WRITE_OFF") = (input.account_id, keep_as) {
+        let refund = RefundCreditInput {
+            credit_id: memo_id,
+            account_id,
+            refund_date: input.payment_date,
+            amount_cents: input.amount_cents,
+            reference: input.reference.clone(),
+        };
+        refund_customer_credit_in_tx(tx, &refund, keep_as == "WRITE_OFF").await?;
+    }
+    Ok(memo_id)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -705,3 +840,5 @@ pub async fn refund_vendor_credit(pool: &SqlitePool, input: RefundCreditInput) -
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unapplied_tests;

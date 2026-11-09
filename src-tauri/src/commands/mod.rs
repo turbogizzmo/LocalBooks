@@ -111,6 +111,7 @@ features![
     statements,
     tax_and_time,
     timesheet,
+    unapplied_payments,
     users,
     vendor_1099,
     vouchers,
