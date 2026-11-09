@@ -14,6 +14,7 @@ mod backup;
 mod bank;
 mod bank_pdf;
 mod banking;
+mod batch_invoices;
 mod billable_costs;
 mod bounced_checks;
 mod classes;
@@ -26,6 +27,7 @@ mod credits;
 mod custom_fields;
 mod custom_reports;
 mod crypto;
+mod customer_groups;
 mod db;
 mod desktop;
 mod edits;
@@ -111,6 +113,7 @@ mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod payment_reminders;
 mod report_pdf;
 mod report_schedules;
 mod statement_charges;
