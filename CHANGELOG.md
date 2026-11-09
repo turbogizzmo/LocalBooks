@@ -23,6 +23,9 @@ people using LocalBooks.
   columns to LocalBooks' fields, and check it: every row that would fail is listed with its row
   number before anything is staged. Then review and post it like any other import; each becomes
   the real LocalBooks document, and a journal entry must balance first.
+- **Pay Bills: filter, sort and bill details.** Filter the list to one vendor and sort it by due
+  date, discount date, vendor or amount due. Click a bill to see its terms, discount and credits
+  used below the list, with **Go to Bill** to open it.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
