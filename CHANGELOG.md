@@ -13,6 +13,10 @@ people using LocalBooks.
 - **Print envelopes.** Print Envelope… on an invoice or sales receipt, on a form's row, and on a
   customer's or vendor's row prints an envelope with your return address and theirs. Set the
   envelope's size, font and position in Settings › Custom Forms › Envelope.
+- **Early-payment discounts on invoices in another currency.** Receive Payments offers and takes
+  the discount on a foreign-currency invoice in its own currency. The discount leaves Accounts
+  Receivable at the invoice's exchange rate, so A/R clears exactly, and only the money received
+  carries an exchange gain or loss.
 - **Early-payment discounts on part-paid invoices, and bounced discounted payments.** Receive
   Payments offers an invoice's early-payment discount on what is left of a part-paid invoice, and a
   payment that took a discount can be recorded as a bounced check: the discount is reversed and the

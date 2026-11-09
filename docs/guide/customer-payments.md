@@ -81,7 +81,10 @@ A payment that took a discount can bounce like any other ([Record a bounced chec
 the bank goes down by the money it received, the discount is taken back off the discount account,
 and the invoice opens again for the whole amount the payment settled.
 
-Not covered yet: invoices in another currency get no early-payment discount in Receive Payments.
+An invoice in another currency takes its discount the same way, in its own currency. The money
+converts at the payment's exchange rate and the discount at the invoice's rate, so Accounts
+Receivable clears exactly what the invoice booked, and only the money carries an exchange gain or
+loss.
 
 ## Payments in another currency
 

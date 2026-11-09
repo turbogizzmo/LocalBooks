@@ -265,7 +265,7 @@ pub async fn payment_application(
     });
     let mut open = open_invoices(pool, customer_name, currency).await?;
     let mut discounts = BTreeMap::new();
-    if let Some(date) = payment_date.filter(|_| currency.is_none_or(|c| c.trim().is_empty())) {
+    if let Some(date) = payment_date {
         if auto_customer_discounts(pool).await? {
             for inv in &mut open {
                 let discount = offered_invoice_discount(pool, inv.id, date).await?.min(inv.balance_cents);
@@ -294,18 +294,20 @@ pub async fn auto_customer_discounts(pool: &SqlitePool) -> Result<bool, String> 
     Ok(preferences::flag(pool, PAYMENT_AUTO_DISCOUNTS).await? && !preferences::get(pool, PAYMENT_DISCOUNT_ACCOUNT).await?.is_empty())
 }
 
-/// The discount an invoice's terms offer when paid on `payment_date`: on a home-currency invoice's
-/// open balance (all of it, or what is left of a part-paid one), once, through the discount's last day.
+/// The discount an invoice's terms offer when paid on `payment_date`, in the invoice's currency: on
+/// its open balance (all of it, or what is left of a part-paid one), once, through the discount's
+/// last day.
 pub async fn offered_invoice_discount<'e, E: sqlx::SqliteExecutor<'e>>(db: E, invoice_id: i64, payment_date: NaiveDate) -> Result<i64, String> {
     // A part-paid invoice offers the discount on what is left; one that already took a discount
     // offers no more.
     let row: Option<(i64, i64, i64, Option<String>, bool)> = sqlx::query_as(
         "SELECT i.total_cents, i.amount_paid_cents, COALESCE(tm.discount_ppm, 0),
                 CASE WHEN tm.discount_days IS NOT NULL THEN date(i.issue_date, '+' || tm.discount_days || ' days') END,
-                EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.discount_cents > 0
+                EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0
+                        AND p.discount_cents + p.foreign_discount_cents > 0
                         AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.invoice_payment_id = p.id AND b.is_voided = 0))
          FROM invoices i LEFT JOIN terms tm ON tm.id = i.terms_id
-         WHERE i.id = ?1 AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL') AND i.currency_code IS NULL",
+         WHERE i.id = ?1 AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL')",
     )
     .bind(invoice_id)
     .fetch_optional(db)
