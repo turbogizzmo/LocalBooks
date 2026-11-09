@@ -9,4 +9,6 @@ export default {
   paySalesTax: (input) => invoke('pay_sales_tax', { input }),
   listSalesTaxPayments: () => invoke('list_sales_tax_payments'),
   getTaxLiability: (startDate, endDate) => invoke('get_tax_liability', { startDate, endDate }),
+  saveCombinedRate: (id, input) => invoke('save_combined_rate', { id, input }),
+  getSalesTaxReturn: (startDate, endDate, basis = null) => invoke('get_sales_tax_return', { startDate, endDate, basis }),
 };

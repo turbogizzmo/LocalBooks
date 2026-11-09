@@ -224,6 +224,25 @@ credit cards) in operating, fixed and other assets in investing, and long-term l
 equity in financing. Bank accounts are the cash itself, so they can't be moved. **Classify
 accounts…** on the report opens the list.
 
+## Sales tax rates, combined rates and the sales tax return
+
+**Sales › Sales Tax** holds the rates you charge. Each **rate** has a percentage, the **agency** you
+pay it to, and the liability account it builds up in (Sales Tax Payable unless you choose another).
+
+Where one sale is taxed by several agencies (a state, a county and a city, say), add each as its own
+rate with its agency, then **New combined rate…**: name it and tick the rates it adds up. Its
+percentage is theirs added together, and you choose it on sales forms like any rate. When you post a
+sale at a combined rate, LocalBooks works out the tax at the combined percentage, splits it into one
+line per agency's rate (each its own rate's share, any rounding cent going to the largest), and
+credits each to its rate's liability account. If a rate in it changes later, the combined rate
+follows for new sales; sales already posted keep the split they were posted with.
+
+**Sales tax return by agency**, under the liability report on the same dates, is what you file:
+for each agency, each of its rates with the taxable sales and the tax for the period, and what you
+paid that agency in it. Choose **Accrual** (tax owed when you invoice) or **Cash** (when you're
+paid; an invoice counts in proportion to what was paid on it in the period); it starts on the basis
+set in Preferences › Sales Tax. A payment counts for the agency of the rate it was recorded against.
+
 ## Sales tax, time, 1099 and inventory preferences
 
 These company preferences (Admins only) change how LocalBooks works out tax, time and stock.

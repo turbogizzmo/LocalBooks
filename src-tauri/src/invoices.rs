@@ -323,7 +323,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "INV").await?;
-    let tax_cents = tax.map_or(0, |t| t.cents);
+    let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
     let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("INV_AMOUNT_TOO_LARGE: the invoice total must be above zero and in range")?;
     let customer = input.customer_name.trim();
     let customer_id = crate::sales::find_or_create_named(tx, crate::sales::Party::Customer, customer).await?;
@@ -350,7 +350,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
     lines.extend(crate::item_types::discount_debits(form, &layout));
     lines.extend(discount.and_then(|d| d.line()));
-    lines.extend(tax.and_then(|t| t.line(false)));
+    lines.extend(tax.as_ref().map(|t| t.lines(false)).unwrap_or_default());
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
@@ -378,7 +378,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
     .bind(home_total)
-    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
     .fetch_one(&mut **tx)
@@ -442,6 +442,10 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
         currency: input.currency.clone(),
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Invoice(invoice_id)).await?;
+    // A combined rate's split by component, for the sales tax return.
+    if let Some(t) = &tax {
+        t.record_parts(tx, entry_id).await?;
+    }
     cost.record(tx, input.issue_date, entry_id).await?;
 
     sqlx::query("UPDATE invoices SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2")
