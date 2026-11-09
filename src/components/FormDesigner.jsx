@@ -396,6 +396,7 @@ function TemplateDesigner({ kind, setKind }) {
               <Section title="Statement">
                 <Check label="Shaded header row" checked={draft.shadeTableHeader || draft.layout === 'MODERN'} onChange={set('shadeTableHeader')} />
                 <Check label="Aging summary (current, 1–30, 31–60, 61–90, over 90 days)" checked={draft.showAging} onChange={set('showAging')} />
+                <Check label="P.O. No. column (the customer's purchase order number on invoices and credits)" checked={draft.showStatementPo} onChange={set('showStatementPo')} />
                 <Row label="Amount" htmlFor="form-amountLabel">
                   {text('amountLabel', { maxLength: 24 })}
                 </Row>

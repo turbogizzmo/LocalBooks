@@ -143,6 +143,7 @@ const READ: &[&str] = &[
     "get_envelope_layout",
     "render_envelope",
     "save_attachment",
+    "save_all_attachments",
     "attachment_counts",
     "next_check_number",
     "backup_now",

@@ -28,6 +28,12 @@ people using LocalBooks.
   receipts, which it charges back to the customer on a new invoice, and payments in another
   currency, which bounce at the rates they were recorded at (the exchange gain or loss they
   realized is reversed).
+- **Save every attachment at once.** Settings › File & Data › Save All Attachments… saves every
+  file attached to a transaction in one zip file, a folder per transaction; a transaction with
+  several files has **Save all…** too.
+- **P.O. No. on statements.** Printed customer statements can show a P.O. No. column with the
+  customer's purchase order number on each invoice and credit (Settings › Custom Forms ›
+  Statement).
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

@@ -20,6 +20,8 @@ design is saved in your company file.
      and customer custom fields print. Each prints only when the form has a value.
    - **Line items**: the shaded header, line numbers, the quantity and rate columns, the column
      labels, and item custom fields under each line. On invoices you can also hide the payments and credits listed above the balance due.
+   - **Statements**: the aging summary under the amount due, and a **P.O. No.** column with the
+     customer's purchase order number on each invoice and credit memo (off until you turn it on).
    - **Messages**: a message to the customer, terms or payment instructions, and a footer for
      every page.
    - **Email**: the subject and message used when you email the form.

@@ -7,6 +7,7 @@ mod accountant_reports;
 mod accounts;
 mod app_menu;
 mod ach;
+mod attachment_export;
 mod audit_chain;
 mod backup;
 mod bank;
