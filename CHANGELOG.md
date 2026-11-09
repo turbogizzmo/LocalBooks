@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Document Inbox for receipts and bills.** Drop receipts and vendor bills in **Expenses ›
+  Document Inbox** (or click **Add files…**) to keep them until you enter them, with a preview of
+  each. **Enter as bill**, **Expense** or **Check** opens that form filled in from the total, date
+  and name read from a PDF's text, and the file is attached when it posts. Everything stays in the
+  company file; there's no OCR service.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

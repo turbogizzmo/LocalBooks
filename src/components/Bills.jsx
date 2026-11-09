@@ -39,13 +39,14 @@ const isOpen = (b) => !b.isVoided && (b.status === 'UNPAID' || b.status === 'PAR
  * the same shape) a new bill copied from a saved one by Duplicate: dated today, its own number left
  * blank, due as many days later as the original was.
  */
-function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
+function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, editing = null, copyOf = null, fromInbox = null, onDuplicate, onCancelEdit, saved = [], onOpenSaved }) {
   const stockItems = useLedgerQuery(api.listInventoryItems);
   const source = editing ?? copyOf;
   const copyDates = copyOf ? duplicateDates(copyOf.bill.billDate, copyOf.bill.dueDate, todayIso()) : null;
-  const [vendor, setVendor] = useState(source?.bill.vendorName ?? '');
+  // A document from the inbox fills in what was read from it, and attaches when the bill posts.
+  const [vendor, setVendor] = useState(source?.bill.vendorName ?? fromInbox?.nameHint ?? '');
   const [billNumber, setBillNumber] = useState(editing?.bill.billNumber ?? '');
-  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate ?? copyDates?.date);
+  const [billDate, setBillDate] = useTransactionDate(editing?.bill.billDate ?? copyDates?.date ?? fromInbox?.documentDate ?? undefined);
   const [dueDate, setDueDate] = useState(editing?.bill.dueDate ?? copyDates?.due ?? billDate);
   const termsList = useTerms();
   const [termsId, setTermsId] = useState(source?.bill.termsId ?? null);
@@ -68,12 +69,12 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     applyTerms(t, billDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendor, vendorRecord?.termsId, termsList, termsTouched]);
-  const [total, setTotal] = useState(source ? centsToInput(source.bill.totalCents) : '');
+  const [total, setTotal] = useState(source ? centsToInput(source.bill.totalCents) : fromInbox?.amountCents ? centsToInput(fromInbox.amountCents) : '');
   const [rows, setRows] = useState(() => (source ? splitRowsFrom(source.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files to attach once the bill posts, such as the vendor's invoice.
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState(() => (fromInbox ? [{ inboxId: fromInbox.id, name: fromInbox.fileName }] : []));
   const [showAttachments, setShowAttachments] = useState(false);
   // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
   const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
@@ -746,6 +747,8 @@ export default function Bills({ accounts, intent }) {
   const [editing, setEditing] = useState(null); // { bill, lines }
   // Duplicate: the saved bill the new one on the form was copied from ({ bill, lines, n }).
   const [copy, setCopy] = useState(null);
+  // Document Inbox › Enter as bill: the document the new bill starts from.
+  const inboxDoc = intent?.action === 'bill' ? (intent.data?.inbox ?? null) : null;
   const duplicate = (from) => {
     setPaying(false);
     setEditing(null);
@@ -863,7 +866,8 @@ export default function Bills({ accounts, intent }) {
         />
       ) : (
         <NewBill
-          key={editing ? `edit-${editing.bill.id}` : copy ? `copy-${copy.n}` : 'new'}
+          key={editing ? `edit-${editing.bill.id}` : copy ? `copy-${copy.n}` : inboxDoc ? `inbox-${inboxDoc.id}` : 'new'}
+          fromInbox={editing || copy ? null : inboxDoc}
           accounts={accounts}
           vendors={vendors.data ?? []}
           defaultCategory={defaultCategory}

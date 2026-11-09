@@ -172,6 +172,8 @@ const VENDORS: &[Entry] = &[
     page("Vendor Center", "expenses/vendors"),
     Entry::Sep,
     form("Enter Bills", "expenses/bills", "bill"),
+    // Receipts and bills waiting to be entered (the document inbox).
+    page("Document Inbox", "expenses/inbox"),
     form("Pay Bills", "expenses/bills", "pay-bills"),
     form("Enter Vendor Credits", "expenses/credits", "vendor-credit"),
     Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),

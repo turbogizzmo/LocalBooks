@@ -12,7 +12,7 @@ import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGr
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
-import { formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney, formatRate, parseRateE6, toHomeCents } from '../lib/money.js';
 import CurrencyFields from './CurrencyFields.jsx';
 import { CheckDocument, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
@@ -42,7 +42,7 @@ const PAY_FROM = {
  * edited, or (with `copyOf`, the same shape) a new one copied from a saved one by Duplicate: dated
  * today, and a check takes the next check number.
  */
-function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, copyOf = null, onDuplicate, onOpenSaved, onPrintCheck }) {
+function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, copyOf = null, fromInbox = null, onDuplicate, onOpenSaved, onPrintCheck }) {
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -56,9 +56,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const was = editing?.expense;
   // What the form starts from: the one being edited, or the one being duplicated.
   const from = (editing ?? copyOf)?.expense;
-  const [payee, setPayee] = useState(from?.payeeName ?? '');
+  // A document from the inbox fills in what was read from it, and attaches when this posts.
+  const [payee, setPayee] = useState(from?.payeeName ?? fromInbox?.nameHint ?? '');
   const [accountId, setAccountId] = useState(from?.paymentAccountId ?? defaultPayFrom);
-  const [date, setDate] = useTransactionDate(was?.expenseDate ?? (copyOf ? todayIso() : undefined));
+  const [date, setDate] = useTransactionDate(was?.expenseDate ?? (copyOf ? todayIso() : (fromInbox?.documentDate ?? undefined)));
   const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
   const method = usePaymentMethodChoice(from?.paymentMethod ?? 'CREDIT_CARD', from?.paymentMethodId ?? null);
   const [memo, setMemo] = useState(from?.memo ?? '');
@@ -66,10 +67,14 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const [currency, setCurrency] = useState(from?.currencyCode ?? '');
   const [rate, setRate] = useState(from?.currencyCode ? formatRate(from.exchangeRateE6) : '');
   const rateE6 = currency ? parseRateE6(rate) : null;
-  const [rows, setRows] = useState(() => (editing ?? copyOf ? splitRowsFrom((editing ?? copyOf).lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
+  const [rows, setRows] = useState(() =>
+    editing ?? copyOf
+      ? splitRowsFrom((editing ?? copyOf).lines)
+      : [{ ...blankSplit(defaultCategory), amount: fromInbox?.amountCents ? centsToInput(fromInbox.amountCents) : '' }, blankSplit(defaultCategory)],
+  );
   const [busy, setBusy] = useState(false);
   // Files to attach once it posts, such as the receipt.
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState(() => (fromInbox ? [{ inboxId: fromInbox.id, name: fromInbox.fileName }] : []));
   const [error, setError] = useState(null);
   const [showAttachments, setShowAttachments] = useState(false);
   // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
@@ -355,6 +360,8 @@ export default function ExpensesChecks({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listExpenses);
   const vendors = useLedgerQuery(api.listVendors);
   const initialKind = INTENT_KINDS[intent?.action] ?? null;
+  // Document Inbox › Enter as expense / check: the document the new one starts from.
+  const inboxDoc = INTENT_KINDS[intent?.action] ? (intent.data?.inbox ?? null) : null;
   const [kind, setKind] = useState(initialKind);
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { expense, lines }
@@ -436,7 +443,8 @@ export default function ExpensesChecks({ accounts, intent }) {
       )}
       {kind && (
         <ExpenseForm
-          key={editing ? `edit-${editing.expense.id}` : copy ? `copy-${copy.n}` : 'new'}
+          key={editing ? `edit-${editing.expense.id}` : copy ? `copy-${copy.n}` : inboxDoc ? `inbox-${inboxDoc.id}` : 'new'}
+          fromInbox={editing || copy ? null : inboxDoc}
           editing={editing}
           copyOf={copy}
           onDuplicate={duplicate}

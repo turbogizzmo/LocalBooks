@@ -22,6 +22,7 @@ import JournalEntries from './JournalEntries.jsx';
 import PartyList from './PartyList.jsx';
 import Products from './Products.jsx';
 import { PrintChecks, PrintInvoices } from './PrintForms.jsx';
+import DocumentInbox from './DocumentInbox.jsx';
 import BouncedChecks from './BouncedChecks.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
 import Reclassify from './Reclassify.jsx';
@@ -64,6 +65,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/send-forms' && <SendForms />}
       {view === 'sales/print-invoices' && <PrintInvoices />}
       {view === 'expenses/print-checks' && <PrintChecks accounts={list} />}
+      {view === 'expenses/inbox' && <DocumentInbox />}
       {view === 'expenses/expenses' && <ExpensesChecks {...props} />}
       {view === 'expenses/bills' && <Bills {...props} />}
       {view === 'expenses/credits' && <VendorCredits {...props} />}

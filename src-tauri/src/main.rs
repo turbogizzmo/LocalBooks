@@ -27,6 +27,7 @@ mod custom_reports;
 mod crypto;
 mod db;
 mod desktop;
+mod document_inbox;
 mod edits;
 mod email_log;
 mod envelopes;
