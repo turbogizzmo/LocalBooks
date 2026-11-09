@@ -3,6 +3,7 @@ import { pasteLineAt } from '../lib/formKeys.js';
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
@@ -236,6 +237,20 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
+/**
+ * The columns between Description and Amount, in the desktop sales forms' order (Customize Columns
+ * hides and reorders them; Qty and Rate always show). Service Date, Price level and Class appear
+ * only where the form has them.
+ */
+const LINE_COLUMNS = [
+  { id: 'serviceDate', label: 'Service Date', width: 'w-[120px]', title: 'When the work on the line was done; printed in its own column' },
+  { id: 'qty', label: 'Qty', width: 'w-[64px]', num: true, required: true },
+  { id: 'level', label: 'Price level', width: 'w-[120px]', title: 'Fills in the rate; a typed rate always wins' },
+  { id: 'rate', label: 'Rate', width: 'w-[100px]', num: true, required: true },
+  { id: 'class', label: 'Class', width: 'w-[150px]' },
+  { id: 'account', label: 'Income account', width: 'w-[200px]', title: 'Filled in from the item; choose one for a line without an item' },
+];
+
 export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates: datesAllowed = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const { amountOf } = summarizeLines(lines, { allowZeroRate });
@@ -247,6 +262,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = showsClassColumn(tracking, lines);
+  const cols = useColumns('sales-lines', LINE_COLUMNS);
   const pricing = usePriceLevels();
   const withLevels = withProducts && (pricing.levels.length > 0 || lines.some((l) => l.levelId != null));
   const customerRow = (customers ?? []).find((c) => c.name.toLowerCase() === String(customer ?? '').trim().toLowerCase());
@@ -438,8 +454,129 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       // Not remembered; the column still shows for now.
     }
   };
-  const spareColumns = 3 + (withClasses ? 1 : 0) + (withLevels ? 1 : 0) + (serviceDates ? 1 : 0);
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
+  // The middle columns as the person arranged them (Customize Columns), of those this form has.
+  const offered = { serviceDate: serviceDates, level: withLevels, class: withClasses };
+  const middle = cols.columns.filter((c) => offered[c.id] ?? true);
+  // A subtotal's or group heading's one cell spans them.
+  const spareColumns = middle.length;
+  const blankCell = (id) => <td key={id} className="qb-grid-cell" />;
+  /** A middle column's cell on the line being edited. */
+  const editCell = (id, line, i, formLine, bad) => {
+    if (formLine && id !== 'rate' && id !== 'class' && id !== 'account') return blankCell(id);
+    switch (id) {
+      case 'serviceDate':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input type="date" data-col="serviceDate" value={line.serviceDate ?? ''} onChange={(e) => update(i, { serviceDate: e.target.value })} onKeyDown={(e) => onKeyDown(e, i)} aria-label={`Service date ${i + 1}`} />
+          </td>
+        );
+      case 'qty':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input data-col="qty" inputMode="decimal" data-quantity className="num" value={line.qty} onChange={(e) => update(i, { qty: e.target.value })} onKeyDown={(e) => onKeyDown(e, i)} aria-invalid={bad('qty')} aria-label={`Quantity ${i + 1}`} />
+          </td>
+        );
+      case 'level':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <select data-col="level" value={line.levelId ?? ''} onChange={(e) => pickLevel(i, e.target.value === '' ? null : Number(e.target.value))} onKeyDown={(e) => onKeyDown(e, i)} aria-label={`Price level ${i + 1}`}>
+              <option value="">Standard</option>
+              {pricing.levels.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </td>
+        );
+      case 'rate':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input
+              data-col="rate"
+              inputMode="decimal"
+              data-money={line.kind === 'CHARGE' ? undefined : ''}
+              className="num"
+              value={line.rate}
+              onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
+              placeholder={line.kind === 'DISCOUNT' ? '0.00 or %' : line.kind === 'CHARGE' ? '%' : undefined}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              aria-invalid={bad('rate')}
+              aria-label={`Rate ${i + 1}`}
+            />
+          </td>
+        );
+      case 'class':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <ClassSelect data-col="class" className="" classes={classes} value={line.classId ?? null} onChange={(classId) => update(i, { classId })} onKeyDown={(e) => onKeyDown(e, i)} aria-label={`Class ${i + 1}`} />
+          </td>
+        );
+      case 'account':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <AccountSelect
+              data-col="account"
+              className=""
+              accounts={accounts}
+              filter={incomeOnly}
+              value={line.accountId}
+              onChange={(accountId) => update(i, { accountId })}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              placeholder="Select account"
+              aria-invalid={bad('account')}
+              aria-label={`Income account ${i + 1}`}
+            />
+          </td>
+        );
+      default:
+        return blankCell(id);
+    }
+  };
+  /** A middle column's cell on a line shown as text (click to edit). */
+  const viewCell = (id, line, state, bad, cellProps) => {
+    switch (id) {
+      case 'serviceDate':
+        return (
+          <td key={id} className="qb-grid-cell" {...cellProps('serviceDate')}>
+            {line.serviceDate ? formatDate(line.serviceDate) : ''}
+          </td>
+        );
+      case 'qty':
+        return (
+          <td key={id} className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
+            {line.qty}
+          </td>
+        );
+      case 'level':
+        return (
+          <td key={id} className="qb-grid-cell" {...cellProps('level')}>
+            {line.levelId != null ? levelName(line.levelId) : ''}
+          </td>
+        );
+      case 'rate':
+        return (
+          <td key={id} className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
+            {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
+          </td>
+        );
+      case 'class':
+        return (
+          <td key={id} className="qb-grid-cell" {...cellProps('class')}>
+            {line.classId != null ? classLabel(classes, line.classId) : ''}
+          </td>
+        );
+      case 'account':
+        return (
+          <td key={id} className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
+            {line.accountId !== null ? accountLabel(accounts, line.accountId) : state.blank ? '' : 'Select account'}
+          </td>
+        );
+      default:
+        return blankCell(id);
+    }
+  };
 
   return (
     <table ref={tableRef} className="qb-grid" data-line-grid>
@@ -447,12 +584,9 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <col className="w-[28px]" />
         {withProducts && <col className="w-[180px]" />}
         <col />
-        {serviceDates && <col className="w-[120px]" />}
-        <col className="w-[64px]" />
-        {withLevels && <col className="w-[120px]" />}
-        <col className="w-[100px]" />
-        {withClasses && <col className="w-[150px]" />}
-        <col className="w-[200px]" />
+        {middle.map((c) => (
+          <col key={c.id} className={c.width} />
+        ))}
         <col className="w-[108px]" />
         {withTax && <col className="w-[40px]" />}
         <col className="w-[28px]" />
@@ -462,25 +596,29 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           <th className="qb-grid-head text-right">#</th>
           {withProducts && <th className="qb-grid-head">Product/Service</th>}
           <th className="qb-grid-head">
-            Description
-            {datesAllowed && (
-              <button
-                type="button"
-                className="ml-2 font-normal normal-case text-qb-link hover:underline disabled:text-qb-ink-faint disabled:no-underline"
-                onClick={toggleDates}
-                disabled={serviceDates && lines.some((l) => l.serviceDate)}
-                title={serviceDates ? 'Hide the Service Date column (only while no line has a date)' : 'Show a Service Date column for when the work on each line was done'}
-              >
-                {serviceDates ? 'Hide service dates' : 'Service dates'}
-              </button>
-            )}
+            <span className="flex items-center gap-2">
+              Description
+              {datesAllowed && (
+                <button
+                  type="button"
+                  className="font-normal normal-case text-qb-link hover:underline disabled:text-qb-ink-faint disabled:no-underline"
+                  onClick={toggleDates}
+                  disabled={serviceDates && lines.some((l) => l.serviceDate)}
+                  title={serviceDates ? 'Hide the Service Date column (only while no line has a date)' : 'Show a Service Date column for when the work on each line was done'}
+                >
+                  {serviceDates ? 'Hide service dates' : 'Service dates'}
+                </button>
+              )}
+              <span className="ml-auto font-normal normal-case">
+                <ColumnsMenu cols={cols} compact />
+              </span>
+            </span>
           </th>
-          {serviceDates && <th className="qb-grid-head" title="When the work on the line was done; printed in its own column">Service Date</th>}
-          <th className="qb-grid-head text-right">Qty</th>
-          {withLevels && <th className="qb-grid-head" title="Fills in the rate; a typed rate always wins">Price level</th>}
-          <th className="qb-grid-head text-right">Rate</th>
-          {withClasses && <th className="qb-grid-head">Class</th>}
-          <th className="qb-grid-head" title="Filled in from the item; choose one for a line without an item">Income account</th>
+          {middle.map((c) => (
+            <th key={c.id} className={`qb-grid-head ${c.num ? 'text-right' : ''}`} title={c.title}>
+              {c.label}
+            </th>
+          ))}
           <th className="qb-grid-head text-right">Amount</th>
           {withTax && <th className="qb-grid-head text-center" title="Taxable">Tax</th>}
           <th className="qb-grid-head" aria-label="Remove" />
@@ -556,87 +694,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       )}
                     </td>
                   ) : (
-                    <>
-                      {serviceDates && (formLine ? <td className="qb-grid-cell" /> : (
-                        <td className="qb-grid-cell-edit">
-                          <input
-                            type="date"
-                            data-col="serviceDate"
-                            value={line.serviceDate ?? ''}
-                            onChange={(e) => update(i, { serviceDate: e.target.value })}
-                            onKeyDown={(e) => onKeyDown(e, i)}
-                            aria-label={`Service date ${i + 1}`}
-                          />
-                        </td>
-                      ))}
-                      {formLine ? <td className="qb-grid-cell" /> : <td className="qb-grid-cell-edit">
-                        <input
-                          data-col="qty"
-                          inputMode="decimal"
-                          data-quantity
-                          className="num"
-                          value={line.qty}
-                          onChange={(e) => update(i, { qty: e.target.value })}
-                          onKeyDown={(e) => onKeyDown(e, i)}
-                          aria-invalid={bad('qty')}
-                        />
-                      </td>}
-                      {withLevels && (formLine ? <td className="qb-grid-cell" /> :
-                        <td className="qb-grid-cell-edit">
-                          <select
-                            data-col="level"
-                            value={line.levelId ?? ''}
-                            onChange={(e) => pickLevel(i, e.target.value === '' ? null : Number(e.target.value))}
-                            onKeyDown={(e) => onKeyDown(e, i)}
-                            aria-label={`Price level ${i + 1}`}
-                          >
-                            <option value="">Standard</option>
-                            {pricing.levels.map((l) => (
-                              <option key={l.id} value={l.id}>{l.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
-                      <td className="qb-grid-cell-edit">
-                        <input
-                          data-col="rate"
-                          inputMode="decimal"
-                          data-money={line.kind === 'CHARGE' ? undefined : ''}
-                          className="num"
-                          value={line.rate}
-                          onChange={(e) => update(i, { rate: e.target.value, rateTyped: true })}
-                          placeholder={line.kind === 'DISCOUNT' ? '0.00 or %' : line.kind === 'CHARGE' ? '%' : undefined}
-                          onKeyDown={(e) => onKeyDown(e, i)}
-                          aria-invalid={bad('rate')}
-                        />
-                      </td>
-                      {withClasses && (
-                        <td className="qb-grid-cell-edit">
-                          <ClassSelect
-                            data-col="class"
-                            className=""
-                            classes={classes}
-                            value={line.classId ?? null}
-                            onChange={(classId) => update(i, { classId })}
-                            onKeyDown={(e) => onKeyDown(e, i)}
-                            aria-label={`Class ${i + 1}`}
-                          />
-                        </td>
-                      )}
-                      <td className="qb-grid-cell-edit">
-                        <AccountSelect
-                          data-col="account"
-                          className=""
-                          accounts={accounts}
-                          filter={incomeOnly}
-                          value={line.accountId}
-                          onChange={(accountId) => update(i, { accountId })}
-                          onKeyDown={(e) => onKeyDown(e, i)}
-                          placeholder="Select account"
-                          aria-invalid={bad('account')}
-                        />
-                      </td>
-                    </>
+                    <>{middle.map((c) => editCell(c.id, line, i, formLine, bad))}</>
                   )}
                 </>
               ) : (
@@ -659,32 +717,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       )}
                     </td>
                   ) : (
-                    <>
-                      {serviceDates && (
-                        <td className="qb-grid-cell" {...cellProps('serviceDate')}>
-                          {line.serviceDate ? formatDate(line.serviceDate) : ''}
-                        </td>
-                      )}
-                      <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>
-                        {line.qty}
-                      </td>
-                      {withLevels && (
-                        <td className="qb-grid-cell" {...cellProps('level')}>
-                          {line.levelId != null ? levelName(line.levelId) : ''}
-                        </td>
-                      )}
-                      <td className={`qb-grid-cell num ${bad('rate') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('rate')}>
-                        {state.rate !== null && state.rate !== undefined && !bad('rate') ? money(state.rate) : line.rate}
-                      </td>
-                      {withClasses && (
-                        <td className="qb-grid-cell" {...cellProps('class')}>
-                          {line.classId != null ? classLabel(classes, line.classId) : ''}
-                        </td>
-                      )}
-                      <td className={`qb-grid-cell ${bad('account') ? 'text-qb-negative' : ''}`} {...cellProps('account')}>
-                        {line.accountId !== null ? accountLabel(accounts, line.accountId) : state.blank ? '' : 'Select account'}
-                      </td>
-                    </>
+                    <>{middle.map((c) => viewCell(c.id, line, state, bad, cellProps))}</>
                   )}
                 </>
               )}

@@ -24,7 +24,8 @@ export function useColumns(table, defs) {
 }
 
 /** The Columns button and its menu, for a table's toolbar. */
-export default function ColumnsMenu({ cols, label = 'Columns' }) {
+/** `compact`: a small text button, for a grid's header row. */
+export default function ColumnsMenu({ cols, label = 'Columns', compact = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function ColumnsMenu({ cols, label = 'Columns' }) {
   }, [open]);
   return (
     <div ref={ref} className="no-print relative flex-none self-center">
-      <button type="button" className="qb-btn qb-btn-secondary h-row px-2" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Choose which columns show and their order">
+      <button type="button" className={compact ? 'text-xs text-qb-link hover:underline' : 'qb-btn qb-btn-secondary h-row px-2'} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Choose which columns show and their order">
         {label} ▾
       </button>
       {open && (

@@ -375,6 +375,15 @@ until you turn them on, such as **Terms**, **Tax**, **Preferred delivery** and *
 the customer list. The first column (the name, the account or the date) always shows.
 **Default columns** puts a table back the way it came.
 
+**Reconcile** has the same button above its lines (the amounts and the cleared tick always show).
+The line grids on forms have a smaller **Columns ▾** link: in the **Description** heading on
+invoices, sales receipts, estimates and credit memos, where it hides or reorders **Service Date**,
+**Price level**, **Class** and **Income account** and moves **Qty** and **Rate** among them (the item
+and description stay first and the amount last, so subtotals and groups line up); and beside
+**＋ Add split row** on bills, checks, expenses, vendor credits, purchase orders and deposits, for
+every column before the amount. A hidden column still keeps what was in it; show it again to
+change it. The sales forms share one layout, and so do the purchase and banking forms.
+
 LocalBooks keeps each table's columns on this computer for you, in **My Preferences**, so they stay
 the same the next time you open it.
 

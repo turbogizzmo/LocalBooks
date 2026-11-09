@@ -267,9 +267,9 @@ export const topics = [
     guide: 'getting-started',
   },
   {
-    id: 'customize-columns', area: 'company', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'accounting/chart-of-accounts', 'accounting/register'],
+    id: 'customize-columns', area: 'company', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'accounting/chart-of-accounts', 'accounting/register', 'banking/reconcile', 'sales/invoices', 'expenses/bills'],
     title: 'Choose which columns a list shows, and their order',
-    body: 'Columns ▾ on the customer, vendor and item lists, the chart of accounts and account registers (one line per transaction) shows or hides each column and moves it earlier or later; Default columns puts it back. Extra columns such as Terms, Tax, Preferred delivery and Job status are there to turn on, and each table keeps its columns on this computer.',
+    body: 'Columns ▾ on the customer, vendor and item lists, the chart of accounts and account registers (one line per transaction) shows or hides each column and moves it earlier or later; Default columns puts it back. Reconcile has it too, and the line grids on forms have a Columns ▾ link (in the Description heading on sales forms, beside Add split row on purchase and banking forms). Extra columns such as Terms, Tax, Preferred delivery and Job status are there to turn on, and each table keeps its columns on this computer.',
     keywords: 'customize columns column show hide reorder move order layout list register chart of accounts items customers vendors terms',
     go: null,
     guide: 'getting-started',
