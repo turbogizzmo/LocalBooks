@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 export default {
   listChecksToPrint: (accountId = null) => invoke('list_checks_to_print', { accountId }),
+  listBillChecksToPrint: (accountId = null) => invoke('list_bill_checks_to_print', { accountId }),
   listInvoicesToPrint: () => invoke('list_invoices_to_print'),
   /** kind: 'CHECK' or 'INVOICE'. */
   setToBePrinted: (kind, id, queued) => invoke('set_to_be_printed', { kind, id, queued }),

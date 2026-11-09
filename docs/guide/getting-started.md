@@ -298,6 +298,22 @@ In an account register, choose a **Color** (blue, green, yellow, orange, pink, p
 tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
 color is kept on this computer for that account in that company file; **Default** takes it away.
 
+## Put a list in your own order, flat or as a tree
+
+The chart of accounts, the item list and the customer list can be put in any order you like:
+drag a row up or down and drop it where you want it. A row moves among the rows beside it (the
+accounts under the same parent, a customer's jobs, the sub-items of an item), and takes its
+subaccounts, jobs or sub-items with it. LocalBooks keeps the order in the company file, so everyone
+who opens it sees the same order.
+
+- **Tree** shows subaccounts, jobs and sub-items (an item named `Parent:Child`) indented under
+  their parent, with ▾ to fold one away; **Expand all** and **Collapse all** open or fold them all.
+- **Flat** shows every row at the same level with its full name (`Checking:Payroll`).
+- **Usual order** forgets the order you dragged rows into.
+
+Rows can't be dragged while you are searching a list or have sorted it by a column heading; click
+the sorted heading until the arrow goes away to get back to your own order.
+
 ## Open a transaction from a register
 
 In an account register, click a row to see all of the transaction's lines underneath it.
@@ -436,8 +452,8 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 | **New** | Clears the form for a new one. While you're editing a saved transaction, it closes the edit instead. |
 | **Save** | Saves and posts, then clears the form for the next one (the same as **Save & New**). |
 | **Void** | On a saved transaction that's open on the form, voids it with a reversing entry after you confirm. **Ctrl+D** presses it. |
-| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit, journal entry, credit memo, refund receipt, vendor credit, deposit or transfer, it prints a voucher: the header and the accounts it posted to, with debits and credits. Saved sales receipts, estimates and purchase orders print as their own forms. |
-| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. |
+| **Print ▾** | Prints or saves a PDF of the saved form. On a new form, **Post and print…** (or **Save and print…**) saves it first. On a saved check, **Print** prints the check. On a saved bill, expense, card credit, journal entry, credit memo, refund receipt, vendor credit, deposit or transfer, it prints a voucher: the header and the accounts it posted to, with debits and credits, and **Save as PDF…** saves that voucher (a check's too) as a PDF file. Saved sales receipts, estimates and purchase orders print as their own forms. |
+| **Email ▾** | Emails the saved form, or marks it **Email later**. On a new form, **Post and email…** saves it first. On a saved voucher (bill, check, expense, credit, deposit, journal entry), **Email** sends its PDF to the vendor or customer named on it, by your mail app or from LocalBooks, as forms are sent. |
 | **Attach File** | On a new form, picks files to attach when it posts. On a saved transaction that posted (anything but an estimate or purchase order), shows its attachments, where you can add more. |
 | **Memorize** | Saves the form as a recurring transaction. **Ctrl+M** presses it. |
 

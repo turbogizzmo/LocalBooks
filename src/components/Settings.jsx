@@ -217,6 +217,19 @@ function FileAndData({ companyName, isAdmin, navigate }) {
     }
   };
 
+  // Every file attached to a transaction, in one zip file (a folder per transaction).
+  const saveAllAttachments = async () => {
+    setBusy(true);
+    try {
+      const result = await api.saveAllAttachments();
+      if (result) setNotice({ kind: 'success', text: `Saved ${result[1]} attachment${result[1] === 1 ? '' : 's'} to ${result[0]}.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const backupNow = async () => {
     setBusy(true);
     try {
@@ -333,6 +346,9 @@ function FileAndData({ companyName, isAdmin, navigate }) {
               Desktop Migration Wizard…
             </button>
           )}
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={saveAllAttachments} disabled={busy} title="Every file attached to a transaction, in one zip file with a folder per transaction">
+            Save All Attachments…
+          </button>
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={closeCompany} disabled={busy}>
             Close Company
           </button>
