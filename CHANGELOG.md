@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
+  it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
+  printed voucher shows it.
 - **A warning before paying around open bills or invoices.** Writing a check or entering an
   expense to a vendor with unpaid bills now asks first, since it doesn't pay those bills (Pay Bills
   does). A sales receipt from a customer with open invoices asks too, since Receive Payments is

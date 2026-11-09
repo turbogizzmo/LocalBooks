@@ -66,6 +66,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         memo: Some("Branch deposit".into()),
         items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
         other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None }],
+        cash_back: None,
     };
     let deposit_id = post_bank_deposit(&pool, deposit_input(waiting.iter().collect())).await.expect("deposit posts");
     assert_eq!(balance(&pool, checking).await, 80_125);
@@ -111,4 +112,36 @@ async fn transfer_moves_money_between_accounts() {
     let activity = list_banking_activity(&pool).await.unwrap();
     assert_eq!(activity.len(), 2);
     assert!(activity.iter().all(|a| a.kind == "TRANSFER"));
+}
+
+#[tokio::test]
+async fn cash_back_comes_out_of_what_the_bank_gets() {
+    let pool = test_pool().await;
+    let (checking, services, supplies) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, account_id(&pool, "6250").await);
+    let input = |cash: Option<CashBack>| DepositInput {
+        bank_account_id: checking,
+        deposit_date: d(5),
+        memo: None,
+        items: vec![],
+        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: 50_000, memo: Some("Market stall".into()), class_id: None }],
+        cash_back: cash,
+    };
+    let back = |account_id, amount_cents| Some(CashBack { account_id, amount_cents, memo: Some("Float".into()) });
+    // It must leave the bank something, and go somewhere other than the bank.
+    assert!(post_bank_deposit(&pool, input(back(supplies, 50_000))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
+    assert!(post_bank_deposit(&pool, input(back(supplies, -1))).await.unwrap_err().starts_with("DEP_BAD_CASH_BACK"));
+    assert!(post_bank_deposit(&pool, input(back(checking, 100))).await.unwrap_err().starts_with("DEP_CASH_BACK_ACCOUNT"));
+
+    let id = post_bank_deposit(&pool, input(back(supplies, 7_500))).await.unwrap();
+    assert_eq!(balance(&pool, checking).await, 42_500);
+    assert_eq!(balance(&pool, supplies).await, 7_500);
+    assert_eq!(balance(&pool, services).await, 50_000);
+    let stored: (i64, i64, Option<String>) = sqlx::query_as("SELECT total_cents, cash_back_cents, cash_back_memo FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    assert_eq!(stored, (50_000, 7_500, Some("Float".into())));
+    // The register lists what the bank got.
+    let row = list_banking_activity(&pool).await.unwrap().into_iter().find(|r| r.kind == "DEPOSIT" && r.id == id).unwrap();
+    assert_eq!(row.amount_cents, 42_500);
+    // A zero amount is no cash back at all.
+    post_bank_deposit(&pool, input(back(supplies, 0))).await.unwrap();
+    assert_eq!(balance(&pool, checking).await, 92_500);
 }

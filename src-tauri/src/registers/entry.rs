@@ -105,7 +105,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
             .iter()
             .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id })
             .collect();
-        let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines };
+        let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines, cash_back: None };
         let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
         let entry: Option<i64> = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit_id).fetch_one(pool).await.map_err(db_err)?;
         return Ok(RegisterEntryPosted {

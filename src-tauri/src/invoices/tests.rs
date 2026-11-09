@@ -413,6 +413,7 @@ async fn foreign_payment_deposits_its_home_amount() {
             memo: None,
             items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: waiting[0].id }],
             other_lines: vec![],
+            cash_back: None,
         },
     )
     .await

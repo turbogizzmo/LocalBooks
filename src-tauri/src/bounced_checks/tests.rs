@@ -232,7 +232,7 @@ async fn a_payment_banked_through_a_deposit_bounces_out_of_that_bank() {
 
     let deposit = post_bank_deposit(
         &pool,
-        DepositInput { bank_account_id: savings, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "PAYMENT".into(), id: payment }], other_lines: vec![] },
+        DepositInput { bank_account_id: savings, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "PAYMENT".into(), id: payment }], other_lines: vec![], cash_back: None },
     )
     .await
     .unwrap();
@@ -262,6 +262,7 @@ async fn other_funds_on_a_deposit_bounce_back_to_their_account() {
             memo: None,
             items: vec![],
             other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 7_000, memo: Some("Refund check".into()), class_id: None }],
+            cash_back: None,
         },
     )
     .await
