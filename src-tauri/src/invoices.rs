@@ -507,7 +507,7 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
         }
         let offered = crate::sales_prefs::offered_invoice_discount(&mut **tx, input.invoice_id, input.payment_date).await?;
         if offered == 0 {
-            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, or something has already been paid on it"));
+            return Err(format!("INV_NO_DISCOUNT: invoice #{number}'s terms offer no discount on this date, or a discount was already taken on it"));
         }
         if discount > offered {
             return Err(format!("INV_BAD_DISCOUNT: the discount on invoice #{number} is at most {}", format_cents(offered)));

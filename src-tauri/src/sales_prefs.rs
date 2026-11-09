@@ -294,12 +294,16 @@ pub async fn auto_customer_discounts(pool: &SqlitePool) -> Result<bool, String> 
     Ok(preferences::flag(pool, PAYMENT_AUTO_DISCOUNTS).await? && !preferences::get(pool, PAYMENT_DISCOUNT_ACCOUNT).await?.is_empty())
 }
 
-/// The discount an invoice's terms offer when paid on `payment_date`: only on a home-currency
-/// invoice nothing has been paid or credited on yet, and only through the discount's last day.
+/// The discount an invoice's terms offer when paid on `payment_date`: on a home-currency invoice's
+/// open balance (all of it, or what is left of a part-paid one), once, through the discount's last day.
 pub async fn offered_invoice_discount<'e, E: sqlx::SqliteExecutor<'e>>(db: E, invoice_id: i64, payment_date: NaiveDate) -> Result<i64, String> {
-    let row: Option<(i64, i64, i64, Option<String>)> = sqlx::query_as(
+    // A part-paid invoice offers the discount on what is left; one that already took a discount
+    // offers no more.
+    let row: Option<(i64, i64, i64, Option<String>, bool)> = sqlx::query_as(
         "SELECT i.total_cents, i.amount_paid_cents, COALESCE(tm.discount_ppm, 0),
-                CASE WHEN tm.discount_days IS NOT NULL THEN date(i.issue_date, '+' || tm.discount_days || ' days') END
+                CASE WHEN tm.discount_days IS NOT NULL THEN date(i.issue_date, '+' || tm.discount_days || ' days') END,
+                EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.discount_cents > 0
+                        AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.invoice_payment_id = p.id AND b.is_voided = 0))
          FROM invoices i LEFT JOIN terms tm ON tm.id = i.terms_id
          WHERE i.id = ?1 AND i.is_voided = 0 AND i.status IN ('UNPAID', 'PARTIAL') AND i.currency_code IS NULL",
     )
@@ -307,13 +311,14 @@ pub async fn offered_invoice_discount<'e, E: sqlx::SqliteExecutor<'e>>(db: E, in
     .fetch_optional(db)
     .await
     .map_err(db_err)?;
-    let Some((total, paid, ppm, until)) = row else { return Ok(0) };
+    let Some((total, paid, ppm, until, discounted)) = row else { return Ok(0) };
     let until = until.and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
-    if paid != 0 || ppm == 0 || until.is_none_or(|u| payment_date > u) {
+    let open = total - paid;
+    if discounted || open <= 1 || ppm == 0 || until.is_none_or(|u| payment_date > u) {
         return Ok(0);
     }
-    // Never the whole invoice: some money must change hands.
-    Ok(crate::profile_lists::early_discount_cents(total, ppm).unwrap_or(0).clamp(0, total - 1))
+    // Never the whole balance: some money must change hands.
+    Ok(crate::profile_lists::early_discount_cents(open, ppm).unwrap_or(0).clamp(0, open - 1))
 }
 
 /// An early-payment discount one invoice's terms offer on the payment date.

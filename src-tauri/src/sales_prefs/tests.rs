@@ -416,7 +416,11 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     // Within the date, with nothing paid yet: 2% of 500.00 through the 10th day (Oct 11).
     let offered = payment_discounts(&pool, &ids, d(10, 11)).await.unwrap();
     assert!(offered.available && offered.automatic);
-    assert_eq!(offered.offered, vec![OfferedDiscount { invoice_id: early, amount_cents: 1_000 }], "none after the date, on a part-paid invoice or without terms");
+    assert_eq!(
+        offered.offered,
+        vec![OfferedDiscount { invoice_id: early, amount_cents: 1_000 }, OfferedDiscount { invoice_id: part_paid, amount_cents: 300 }],
+        "none after the date or without terms; a part-paid invoice's is on what is left (2% of 150.00)"
+    );
     assert!(payment_discounts(&pool, &ids, d(10, 12)).await.unwrap().offered.is_empty(), "the discount has ended");
     // Auto Apply: 490.00 received pays the early invoice in full with its discount.
     let plan = payment_application(&pool, "Acme", None, 49_000, Some("exact"), Some(d(10, 11))).await.unwrap();
@@ -424,11 +428,11 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
     let partial = payment_application(&pool, "Acme", None, 20_000, Some("oldest"), Some(d(10, 11))).await.unwrap();
     assert!(partial.iter().all(|a| a.discount_cents == 0), "money that doesn't pay the rest in full takes no discount: {partial:?}");
 
-    // Refused: after the date, on a part-paid invoice, more than offered, more than owed.
+    // Refused: after the date, more than offered (on a part-paid invoice, on what is left), more than owed.
     for (input, code) in [
         (pay(late, 29_400, 600, 11), "INV_NO_DISCOUNT"),
         (pay(early, 49_000, 1_000, 12), "INV_NO_DISCOUNT"),
-        (pay(part_paid, 14_700, 300, 11), "INV_NO_DISCOUNT"),
+        (pay(part_paid, 14_600, 400, 11), "INV_BAD_DISCOUNT"),
         (pay(early, 48_900, 1_100, 11), "INV_BAD_DISCOUNT"),
         (pay(early, 49_001, 1_000, 11), "INV_OVERPAYMENT"),
     ] {

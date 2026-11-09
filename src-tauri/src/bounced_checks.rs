@@ -116,14 +116,14 @@ const CANDIDATES: &str = "
            i.invoice_number, p.payment_method, (SELECT name FROM payment_methods WHERE id = p.payment_method_id) AS payment_method_name,
            p.reference, NULL AS memo, p.amount_cents,
            COALESCE(d.bank_account_id, p.deposit_account_id) AS bank_account_id,
-           i.currency_code, COALESCE(p.home_amount_cents, p.amount_cents) AS home_amount_cents
+           i.currency_code, COALESCE(p.home_amount_cents, p.amount_cents - p.discount_cents) AS home_amount_cents
     FROM invoice_payments p
     JOIN invoices i ON i.id = p.invoice_id
     LEFT JOIN customers c ON c.id = i.customer_id
     JOIN chart_of_accounts pa ON pa.id = p.deposit_account_id
     LEFT JOIN deposit_lines dl ON dl.invoice_payment_id = p.id AND dl.is_voided = 0
     LEFT JOIN deposits d ON d.id = dl.deposit_id
-    WHERE p.is_voided = 0 AND p.journal_entry_id IS NOT NULL AND i.is_voided = 0 AND p.discount_cents = 0
+    WHERE p.is_voided = 0 AND p.journal_entry_id IS NOT NULL AND i.is_voided = 0
       AND (pa.account_type = 'BANK' OR d.id IS NOT NULL)
       AND NOT EXISTS (SELECT 1 FROM bounced_checks b WHERE b.invoice_payment_id = p.id AND b.is_voided = 0)
     UNION ALL
@@ -209,16 +209,20 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
     let Some((date, amount, bank, bank_cents)) = row else {
         return Err(match kind {
             "PAYMENT" | "DEPOSIT_LINE" | "SALES_RECEIPT" => {
-                "BOUNCE_UNAVAILABLE: that payment can't be recorded as bounced: it is voided, already bounced, still in Undeposited Funds (void it instead), took an early-payment discount (void it instead), or is a sales receipt with no customer".into()
+                "BOUNCE_UNAVAILABLE: that payment can't be recorded as bounced: it is voided, already bounced, still in Undeposited Funds (void it instead), or is a sales receipt with no customer".into()
             }
             other => format!("BOUNCE_BAD_KIND: unknown kind '{other}'"),
         });
     };
     match kind {
         "PAYMENT" => {
-            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency): (i64, i64, Option<i64>, String, Option<String>, Option<i64>, Option<String>) =
+            type PaymentRow = (i64, i64, Option<i64>, String, Option<String>, Option<i64>, Option<String>, i64, Option<i64>);
+            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency, discount, discount_account): PaymentRow =
                 sqlx::query_as(
-                    "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), p.reference, p.ar_relief_cents, i.currency_code
+                    "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), p.reference, p.ar_relief_cents, i.currency_code,
+                            p.discount_cents,
+                            (SELECT l.account_id FROM journal_lines l WHERE l.journal_entry_id = p.journal_entry_id AND p.discount_cents > 0
+                               AND l.debit_cents = p.discount_cents AND l.account_id <> p.deposit_account_id ORDER BY l.line_number LIMIT 1)
                      FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id LEFT JOIN customers c ON c.id = i.customer_id
                      WHERE p.id = ?1",
                 )
@@ -237,7 +241,13 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
             if ar_cents > 0 {
                 debits.push(JournalLine::debit(ar, ar_cents).with_memo(Some(&label)));
             }
-            let difference = bank_cents - ar_cents;
+            // An early-payment discount the payment took is reversed: the invoice is open again for
+            // all of it, and the customer has to pay in full.
+            if discount > 0 {
+                let account = discount_account.ok_or("BOUNCE_NO_DISCOUNT_LINE: the payment's discount line could not be found")?;
+                debits.push(JournalLine::credit(account, discount).with_memo(Some("Early-payment discount reversed")));
+            }
+            let difference = bank_cents + discount - ar_cents;
             if difference != 0 {
                 let fx = system_account(tx, "OTHER_EXPENSE").await?;
                 let memo = Some(if difference > 0 { "Realized exchange gain reversed" } else { "Realized exchange loss reversed" });

@@ -57,7 +57,9 @@ last day in **Discount offered**. To let Receive Payments take it:
    automatically**.
 
 Receive Payments then shows a **Discount** column. When the payment date is on or before the
-discount's last day and nothing has been paid or credited on the invoice yet:
+discount's last day and no discount has been taken on the invoice yet, it offers the terms'
+discount on the invoice's open balance: the whole invoice, or what is left of one already
+part-paid (2% of the 150.00 left on a 200.00 invoice is 3.00):
 
 - With the automatic option on, ticking the invoice (or **Auto Apply**, when the money pays the
   rest of it in full) fills in the discount and sets the **Payment** to what is left. A customer
@@ -71,9 +73,11 @@ statement shows the payment and discount on one line. Only the money goes to Und
 into the bank deposit. Voiding the payment reverses the discount with it, and the invoice offers
 the discount again while its date allows.
 
-Not covered: an invoice that is already part-paid gets no discount (the terms' discount is for
-paying the whole invoice early), invoices in another currency take their discount with a credit
-memo, and a payment that took a discount can't be recorded as a bounced check (void it instead).
+A payment that took a discount can bounce like any other ([Record a bounced check](#record-a-bounced-check)):
+the bank goes down by the money it received, the discount is taken back off the discount account,
+and the invoice opens again for the whole amount the payment settled.
+
+Not covered yet: invoices in another currency get no early-payment discount in Receive Payments.
 
 ## Payments in another currency
 

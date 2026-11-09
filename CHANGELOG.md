@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Early-payment discounts on part-paid invoices, and bounced discounted payments.** Receive
+  Payments offers an invoice's early-payment discount on what is left of a part-paid invoice, and a
+  payment that took a discount can be recorded as a bounced check: the discount is reversed and the
+  invoice opens again for the whole amount.
 - **Print Pay Bills' checks later.** Pay Bills has **Print later**, as Write Checks does: the payments
   post now and their checks, one per vendor, wait in **File › Print Forms › Checks…**, where they
   take their numbers when they print.
