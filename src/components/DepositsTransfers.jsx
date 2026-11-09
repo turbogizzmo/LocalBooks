@@ -44,7 +44,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const [cashAccountId, setCashAccountId] = useState(null);
   const [cashMemo, setCashMemo] = useState('');
   const [cashAmount, setCashAmount] = useState('');
-  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]), cashAmount, cashMemo });
+  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]), cashAccountId, cashAmount, cashMemo });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
@@ -206,7 +206,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
         </label>
         <label>
           <span className="qb-label">Cash back amount</span>
-          <input className="qb-input num w-[110px]" inputMode="decimal" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} aria-invalid={cashCents === null || undefined} />
+          <input className="qb-input num w-[110px]" inputMode="decimal" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} aria-invalid={cashCents === null || cashCents < 0 || undefined} />
         </label>
         <div className="ml-auto text-right text-sm">
           <div>
