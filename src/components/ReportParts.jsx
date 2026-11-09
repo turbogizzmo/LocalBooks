@@ -1,3 +1,4 @@
+import ReportEmailDialog from './ReportEmail.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { PrintPortal, StatementDocument, useCompany } from './PrintDocuments.jsx';
 import { api, errorText, printDocument } from '../lib/api.js';
@@ -149,6 +150,19 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
       onNotice({ kind: 'error', text: errorText(err) });
     }
   };
+  // Email as PDF / Save as PDF: the sheet the Excel export would save, drawn as a PDF.
+  const [emailing, setEmailing] = useState(null);
+  const asPdf = async (then) => {
+    const sheet = await captureSheet(onXlsx);
+    if (!sheet) throw new Error('This report has nothing to put in a PDF yet.');
+    return then(sheet);
+  };
+  const emailPdf = () => asPdf((sheet) => setEmailing(sheet));
+  const savePdf = () =>
+    asPdf(async (sheet) => {
+      const path = await api.saveReportPdf(sheet);
+      if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+    });
   const print = printDocument;
 
   return (
@@ -168,6 +182,16 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
               Export to Excel
             </button>
           )}
+          {onXlsx && (
+            <>
+              <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(emailPdf)}>
+                Email as PDF…
+              </button>
+              <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(savePdf)}>
+                Save as PDF…
+              </button>
+            </>
+          )}
           {onPng && (
             <button type="button" role="menuitem" className="block w-full px-2 py-0.5 text-left text-sm hover:bg-qb-row-hover" onClick={() => run(onPng)}>
               Save as picture (PNG)
@@ -181,8 +205,34 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
         </div>
       )}
     </div>
+    {emailing && <ReportEmailDialog sheet={emailing} onClose={() => setEmailing(null)} onNotice={onNotice} />}
     </>
   );
+}
+
+// While "Email as PDF…" or "Save as PDF…" asks a report for its sheet, the Excel savers hand the
+// sheet over instead of saving a file (see `captureSheet`).
+let capturing = null;
+
+/** The sheet a report's Excel export (`onXlsx`) builds, without saving a file; null if it has none. */
+// Captures run one at a time, so overlapping exports (two windows, a double click) can't take
+// each other's sheet through the shared `capturing` callback.
+let captureQueue = Promise.resolve();
+export function captureSheet(onXlsx) {
+  const run = captureQueue.then(async () => {
+    let sheet = null;
+    capturing = (s) => {
+      sheet = s;
+    };
+    try {
+      await onXlsx();
+    } finally {
+      capturing = null;
+    }
+    return sheet;
+  });
+  captureQueue = run.catch(() => {});
+  return run;
 }
 
 export async function saveCsv(report, params, filename, onNotice) {
@@ -193,12 +243,17 @@ export async function saveCsv(report, params, filename, onNotice) {
 
 /** Saves a financial statement the Rust side renders (as `saveCsv` does) as an Excel workbook. */
 export async function saveReportXlsx(report, params, filename, onNotice) {
+  if (capturing) {
+    const take = capturing;
+    return take(await api.reportSheet(report, params));
+  }
   const path = await api.saveReportXlsx(report, params, filename);
   if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
 }
 
 /** Saves a sheet (see `statementSheet` and `tableSheet`) as an Excel workbook. */
 export async function saveXlsx(sheet, filename, onNotice) {
+  if (capturing) return capturing(sheet);
   const path = await api.saveXlsx(sheet, filename);
   if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
 }

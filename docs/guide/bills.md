@@ -59,7 +59,9 @@ changes. A voided bill, or one in a closed period, can't be edited.
    be earlier than a bill's date if you paid the vendor ahead of the bill.
 4. Paying from a bank account writes checks: **Check no.** is filled in with the next number for
    that account. Change it if you need to, or clear it for payments made without a check. Leave
-   **Print checks** ticked to print them when you pay.
+   **Print checks** ticked to print them when you pay, or tick **Print later** to post the
+   payments now and print the checks in a batch from **File › Print Forms › Checks…**, where they
+   take their numbers (see [Print checks later](expenses-and-checks.md#print-checks-later-in-a-batch)).
 5. Check **Total payment**, then click **Pay bills**.
 
 Each payment reduces Accounts Payable and the account it was paid from. A partly paid bill stays in

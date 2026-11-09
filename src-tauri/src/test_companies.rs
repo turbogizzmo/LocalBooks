@@ -56,7 +56,7 @@ async fn fresh(path: &Path, name: &str) -> SqlitePool {
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable }
+    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None }
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
@@ -92,7 +92,7 @@ async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, ac
 }
 
 async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, cents: i64) {
-    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: cents, reference: None }).await.expect("pay a bill");
+    expenses::pay_vendor_bill(pool, BillPaymentInput { bill_id, payment_account_id: bank, payment_date: date, amount_cents: cents, reference: None, to_be_printed: false }).await.expect("pay a bill");
 }
 
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {
@@ -211,7 +211,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),
             refund_account_id: None,
-            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false }],
+            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false, service_date: None }],
             tax_rate_id: None,
             header: Default::default(),
         },

@@ -8,7 +8,7 @@ import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { kindLabel } from './ProfileFields.jsx';
-import { formatCents, parseMoneyToCents } from '../lib/money.js';
+import { formatCents, formatMoney, parseMoneyToCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 
@@ -17,9 +17,14 @@ const isExpense = (a) => a.classification === 'EXPENSE';
 const isIncome = (a) => a.classification === 'INCOME';
 
 function describe(c) {
-  if (c.kind === 'PAYMENT') return `${c.customerName ?? 'Customer'} · invoice #${c.invoiceNumber}${c.reference ? ` · check #${c.reference}` : ''}`;
+  const check = c.reference ? ` · check #${c.reference}` : '';
+  if (c.kind === 'PAYMENT') return `${c.customerName ?? 'Customer'} · invoice #${c.invoiceNumber}${check}${c.currencyCode ? ` · ${formatCents(c.homeAmountCents)} home` : ''}`;
+  if (c.kind === 'SALES_RECEIPT') return `${c.customerName} · sales receipt${check}`;
   return `Deposit · ${c.memo ?? 'other funds'}`;
 }
+
+/** An amount in its currency (a foreign-currency payment's is in the invoice's currency). */
+const amountOf = (x) => formatMoney(x.amountCents, x.currencyCode ?? null);
 
 function RecordForm({ accounts, candidates, onPosted, onCancel }) {
   const [picked, setPicked] = useState(candidates[0] ? keyOf(candidates[0]) : null);
@@ -40,7 +45,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
 
   const bankFeeCents = bankFee.trim() === '' ? 0 : parseMoneyToCents(bankFee);
   const customerFeeCents = customerFee.trim() === '' ? 0 : parseMoneyToCents(customerFee);
-  const fromCustomer = chosen?.kind === 'PAYMENT';
+  const fromCustomer = chosen?.kind === 'PAYMENT' || chosen?.kind === 'SALES_RECEIPT';
 
   const save = async (e) => {
     e.preventDefault();
@@ -59,11 +64,16 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
         customerFeeAccountId: fromCustomer && customerFeeCents > 0 ? customerFeeAccount : null,
         memo: memo.trim() || null,
       });
+      const receipt = recorded.kind === 'SALES_RECEIPT';
       onPosted(
-        `Bounced check of ${formatCents(recorded.amountCents)} recorded: ` +
-          (fromCustomer ? `invoice #${recorded.invoiceNumber} is open again, ` : '') +
-          `${accountLabel(accounts, recorded.bankAccountId)} is down ${formatCents(recorded.amountCents + recorded.bankFeeCents)}` +
-          (recorded.feeInvoiceNumber ? `, and invoice #${recorded.feeInvoiceNumber} charges the returned-check fee.` : '.'),
+        `Bounced check of ${amountOf(recorded)} recorded: ` +
+          (receipt ? '' : fromCustomer ? `invoice #${recorded.invoiceNumber} is open again, ` : '') +
+          `${accountLabel(accounts, recorded.bankAccountId)} is down ${formatCents(chosen.homeAmountCents + recorded.bankFeeCents)}` +
+          (receipt
+            ? `, and invoice #${recorded.feeInvoiceNumber} charges ${recorded.customerName} for it${customerFeeCents > 0 ? ' and the returned-check fee' : ''}.`
+            : recorded.feeInvoiceNumber
+              ? `, and invoice #${recorded.feeInvoiceNumber} charges the returned-check fee.`
+              : '.'),
       );
     } catch (err) {
       setError(errorText(err));
@@ -83,7 +93,7 @@ function RecordForm({ accounts, candidates, onPosted, onCancel }) {
               {candidates.length === 0 && <option value="">No deposited checks to choose from</option>}
               {candidates.map((c) => (
                 <option key={keyOf(c)} value={keyOf(c)}>
-                  {formatDate(c.date)} · {formatCents(c.amountCents)} · {describe(c)}
+                  {formatDate(c.date)} · {amountOf(c)} · {describe(c)}
                 </option>
               ))}
             </select>
@@ -198,7 +208,7 @@ export default function BouncedChecks({ accounts }) {
                 </tr>
               )}
               {rows.map((b) => (
-                <tr key={b.id} className={`qb-grid-row ${b.isVoided ? 'text-qb-ink-faint' : ''}`}>
+                <tr key={`${b.kind}:${b.id}`} className={`qb-grid-row ${b.isVoided ? 'text-qb-ink-faint' : ''}`}>
                   <td className="qb-grid-cell">{formatDate(b.bounceDate)}</td>
                   <td className="qb-grid-cell">
                     {b.customerName ? (
@@ -206,7 +216,7 @@ export default function BouncedChecks({ accounts }) {
                         <span className="font-semibold">{b.customerName}</span>
                         <span className="text-qb-ink-muted">
                           {' '}
-                          · invoice #{b.invoiceNumber}
+                          {b.receiptNumber ? ` · sales receipt #${b.receiptNumber}` : ` · invoice #${b.invoiceNumber}`}
                           {b.reference ? ` · check #${b.reference}` : ''}
                         </span>
                       </>
@@ -217,7 +227,7 @@ export default function BouncedChecks({ accounts }) {
                     {b.isVoided && <span className="ml-1 text-2xs font-semibold">VOIDED</span>}
                   </td>
                   <td className="qb-grid-cell">{accountLabel(accounts, b.bankAccountId)}</td>
-                  <td className={`qb-grid-cell num ${b.isVoided ? 'line-through' : ''}`}>{formatCents(b.amountCents)}</td>
+                  <td className={`qb-grid-cell num ${b.isVoided ? 'line-through' : ''}`}>{amountOf(b)}</td>
                   <td className="qb-grid-cell num">{b.bankFeeCents ? formatCents(b.bankFeeCents) : ''}</td>
                   <td className="qb-grid-cell">{b.feeInvoiceNumber ? `#${b.feeInvoiceNumber}` : ''}</td>
                   <td className="qb-grid-cell cell-tight text-center">
@@ -230,11 +240,13 @@ export default function BouncedChecks({ accounts }) {
                           disabled: b.isVoided,
                           confirm: {
                             title: 'Void this bounced check?',
-                            body: `The ${formatCents(b.amountCents)} goes back into the bank${b.bankFeeCents ? ' with the bank fee' : ''}, the payment counts toward its invoice again${b.feeInvoiceNumber ? `, and fee invoice #${b.feeInvoiceNumber} is voided` : ''}. A reversing entry keeps the history.`,
+                            body: b.receiptNumber
+                              ? `The ${amountOf(b)} goes back into the bank${b.bankFeeCents ? ' with the bank fee' : ''}, and invoice #${b.feeInvoiceNumber}, which charged it back, is voided. A reversing entry keeps the history.`
+                              : `The ${amountOf(b)} goes back into the bank${b.bankFeeCents ? ' with the bank fee' : ''}, the payment counts toward its invoice again${b.feeInvoiceNumber ? `, and fee invoice #${b.feeInvoiceNumber} is voided` : ''}. A reversing entry keeps the history.`,
                             confirmLabel: 'Void',
                           },
                           onSelect: async () => {
-                            await api.voidBouncedCheck(b.id);
+                            await api.voidBouncedCheck(b.id, b.kind);
                             setNotice({ kind: 'success', text: 'Bounced check voided: the payment counts again.' });
                           },
                         },

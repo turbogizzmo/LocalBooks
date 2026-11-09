@@ -852,6 +852,9 @@ struct AuditRow {
     list_name: Option<String>,
     changed: Option<String>,
     reversal_number: Option<i64>,
+    /// What an `EDIT` record was (`UNDO_RECONCILIATION`), and its own description.
+    kind: Option<String>,
+    payload_detail: Option<String>,
 }
 
 fn action_label(action: &str) -> &str {
@@ -867,6 +870,7 @@ fn action_label(action: &str) -> &str {
         "LIST_CHANGE" => "List changed",
         "CLEANUP" => "Clean up",
         "CONDENSE" => "Condense",
+        "EDIT" => "Edited",
         other => other,
     }
 }
@@ -882,7 +886,8 @@ async fn audit_trail(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Res
                 COALESCE(json_extract(a.payload_snapshot, '$.totalDebitCents'), json_extract(a.payload_snapshot, '$.amountCents')) AS amount_cents,
                 json_extract(a.payload_snapshot, '$.list') AS list, json_extract(a.payload_snapshot, '$.after.name') AS list_name,
                 (SELECT group_concat(value, ', ') FROM json_each(a.payload_snapshot, '$.changed')) AS changed,
-                json_extract(a.payload_snapshot, '$.reversalEntryNumber') AS reversal_number
+                json_extract(a.payload_snapshot, '$.reversalEntryNumber') AS reversal_number,
+                json_extract(a.payload_snapshot, '$.kind') AS kind, json_extract(a.payload_snapshot, '$.detail') AS payload_detail
          FROM ledger_audit_log a
          LEFT JOIN journal_entries e ON a.action_type IN ('POST', 'VOID') AND e.id = a.target_entity_id
          WHERE date(a.timestamp, 'localtime') BETWEEN ?1 AND ?2
@@ -917,6 +922,7 @@ async fn audit_trail(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Res
                         None => format!("{what} {name}"),
                     })
                 }
+                "EDIT" if a.kind.as_deref() == Some("UNDO_RECONCILIATION") => a.payload_detail.clone(),
                 "POST" | "MIGRATION" => None,
                 _ => Some(format!("Record {}", a.target_entity_id)),
             };
@@ -928,7 +934,7 @@ async fn audit_trail(pool: &SqlitePool, start: NaiveDate, end: NaiveDate) -> Res
                     json!(a.day),
                     json!(a.time),
                     json!(a.actor.as_deref().unwrap_or("")),
-                    json!(action_label(&a.action_type)),
+                    json!(if a.kind.as_deref() == Some("UNDO_RECONCILIATION") { "Reconciliation undone" } else { action_label(&a.action_type) }),
                     json!(a.entry_number.map(|n| n.to_string())),
                     json!(kind),
                     json!(a.entry_date),

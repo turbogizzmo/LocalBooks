@@ -9,6 +9,7 @@ import MileageReport, { MILEAGE_REPORTS, isMileageReport } from './MileageReport
 import AccountantReports, { ACCOUNTANT_REPORTS, isAccountantReport } from './AccountantReports.jsx';
 import ListReport, { isListReport, useListReports, withListReports } from './ListReports.jsx';
 import ProcessMultipleReports from './ProcessMultipleReports.jsx';
+import ScheduledReports from './ScheduledReports.jsx';
 import GraphReport, { GRAPH_REPORTS, isGraphReport } from './Graphs.jsx';
 import {
   AgingReport,
@@ -34,6 +35,7 @@ import { formatCents } from '../lib/money.js';
 import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import DateBox from './DateBox.jsx';
+import { datesFor, describeReport, DATED_REPORTS, pushRecent, searchReports, toggleFavorite, withFavoritesAndRecent } from '../lib/reportCenter.js';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -496,19 +498,46 @@ function ReportOptions({ kind, name, onRun }) {
 }
 
 const PROCESS_MULTIPLE = 'process-multiple';
+const SCHEDULED = 'scheduled-reports';
+
+// Favorites and recent reports, kept on this computer like a list's sort order.
+const FAVORITES_KEY = 'localbooks.reports.favorites';
+const RECENT_KEY = 'localbooks.reports.recent';
+const DATES_KEY = 'localbooks.reports.useCenterDates';
+function readIds(key) {
+  try {
+    const ids = JSON.parse(window.localStorage.getItem(key) ?? '[]');
+    return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+// Report windows inside this LocalBooks window share one page, where `storage` events don't fire.
+const CENTER_CHANGED = 'localbooks-report-center-changed';
+function keep(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Not remembered (storage blocked); the list still works for now.
+  }
+  window.dispatchEvent(new CustomEvent(CENTER_CHANGED, { detail: key }));
+}
 
 /** Process Multiple Reports, at the end of the memorized reports (a group of its own until there are some). */
 function withProcessMultiple(groups) {
-  const entry = [PROCESS_MULTIPLE, 'Process Multiple Reports…'];
+  const entries = [
+    [PROCESS_MULTIPLE, 'Process Multiple Reports…'],
+    [SCHEDULED, 'Scheduled Reports…'],
+  ];
   const memorized = groups.find((g) => g.title === 'Memorized reports');
-  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, entry] } : g)) : [...groups, { title: 'Memorized reports', reports: [entry] }];
+  return memorized ? groups.map((g) => (g === memorized ? { ...g, reports: [...g.reports, ...entries] } : g)) : [...groups, { title: 'Memorized reports', reports: entries }];
 }
 
 export default function Reports({ navigate, intent }) {
   const [report, setReportId] = useState(() => intent?.data?.report ?? 'pl');
   // Where a graph's drill-down opens a report: its dates (or budget, or as-of date) to start on.
   // A QuickReport or Transaction Journal opens with its `zoom`.
-  const [initial, setInitial] = useState(() => (intent?.data?.zoom ? { zoom: intent.data.zoom, at: Date.now() } : null));
+  const [initial, setInitial] = useState(() => (intent?.data?.zoom ? { zoom: intent.data.zoom, at: Date.now() } : intent?.data?.dates ? { ...intent.data.dates, at: Date.now() } : null));
   const setReport = (id) => {
     setReportId(id);
     setInitial(null);
@@ -522,6 +551,8 @@ export default function Reports({ navigate, intent }) {
   const custom = useCustomReports();
   useEffect(() => {
     if (intent?.data?.zoom) openReport(intent.data.report, { zoom: intent.data.zoom });
+    // Opened from the report center with its dates: the report starts on them.
+    else if (intent?.data?.dates) openReport(intent.data.report, intent.data.dates);
     else if (intent?.data?.report) setReport(intent.data.report);
   }, [intent]); // eslint-disable-line react-hooks/exhaustive-deps
   const listCatalog = useListReports();
@@ -537,29 +568,107 @@ export default function Reports({ navigate, intent }) {
   // already shows it), as reports do in QuickBooks; the Report Center stays where it is.
   const openFromList = useOpenFromList();
   const { open: openChild } = useContext(WindowManagerContext);
-  const chooseReport = (id) => id !== report && openFromList('reports', 'open', { report: id });
+  // The report center: search, Favorites and Recent, and the dates a report opens on.
+  const [query, setQuery] = useState('');
+  const [favorites, setFavorites] = useState(() => readIds(FAVORITES_KEY));
+  const [recent, setRecent] = useState(() => readIds(RECENT_KEY));
+  const centerPeriod = usePeriod('fiscalYearToDate', Array.isArray(intent?.data?.center) ? intent.data.center : null);
+  const [useDates, setUseDatesState] = useState(() => readIds(DATES_KEY).length > 0);
+  const setUseDates = (on) => {
+    setUseDatesState(on);
+    keep(DATES_KEY, on ? ['on'] : []);
+  };
+  const star = (id) => {
+    const next = toggleFavorite(readIds(FAVORITES_KEY), id);
+    setFavorites(next);
+    keep(FAVORITES_KEY, next);
+  };
+  // Another report window (here or in another LocalBooks window) starred a report, opened one,
+  // or turned the dates on or off.
+  useEffect(() => {
+    const reread = (key) => {
+      if (key === FAVORITES_KEY) setFavorites(readIds(FAVORITES_KEY));
+      if (key === RECENT_KEY) setRecent(readIds(RECENT_KEY));
+      if (key === DATES_KEY) setUseDatesState(readIds(DATES_KEY).length > 0);
+    };
+    const onStorage = (e) => reread(e.key);
+    const onChanged = (e) => reread(e.detail);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(CENTER_CHANGED, onChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CENTER_CHANGED, onChanged);
+    };
+  }, []);
+  const known = groups.some((g) => g.reports.some(([id]) => id === report));
+  useEffect(() => {
+    if (!known || report === PROCESS_MULTIPLE) return;
+    // Other report windows add to the same list: start from what is stored.
+    const next = pushRecent(readIds(RECENT_KEY), report);
+    setRecent(next);
+    keep(RECENT_KEY, next);
+  }, [report, known]);
+  const shownGroups = searchReports(withFavoritesAndRecent(groups, favorites, recent), query);
+  const chooseReport = (id) => {
+    const dates = useDates && centerPeriod.valid ? datesFor(id, centerPeriod.start, centerPeriod.end) : null;
+    if (id === report) {
+      if (dates) openReport(id, dates);
+      return;
+    }
+    openFromList('reports', 'open', dates ? { report: id, dates, center: [centerPeriod.start, centerPeriod.end] } : { report: id });
+  };
   const drill = initial ? `-${initial.at}` : '';
   const { reportOptionsFirst } = useMyPreferences();
   const askFirst = reportOptionsFirst && !initial && OPTIONS_FIRST[report];
   return (
     <div className="flex h-full gap-2 p-2">
-      <nav className="qb-panel no-print w-[230px] flex-none overflow-y-auto scrollbar-thin py-1" aria-label="Reports">
-        {groups.map((group) => (
+      <nav className="qb-panel no-print flex w-[270px] flex-none flex-col py-1" aria-label="Reports">
+        <div className="flex flex-none flex-col gap-1 border-b border-qb-border px-2 pb-1.5">
+          <input className="qb-input h-row w-full text-sm" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a report" aria-label="Find a report" />
+          <label className="flex items-center gap-1 text-xs" title="Profit and Loss, the Balance Sheet, the aging and sales summaries open on these dates (a one-date report on the To date)">
+            <input type="checkbox" checked={useDates} onChange={(e) => setUseDates(e.target.checked)} />
+            Open reports on these dates
+          </label>
+          {useDates && <div className="flex flex-wrap items-end gap-1 [&_.qb-input]:w-[118px] [&_select.qb-input]:w-[244px]">{centerPeriod.controls}</div>}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin pt-1">
+        {shownGroups.length === 0 && <div className="px-2 py-1 text-sm text-qb-ink-muted">No reports match “{query.trim()}”.</div>}
+        {shownGroups.map((group) => (
           <div key={group.title} className="mb-1">
             <div className="px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-qb-ink-muted">{group.title}</div>
-            {group.reports.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                aria-current={report === id ? 'page' : undefined}
-                onClick={() => chooseReport(id)}
-                className={`block w-full px-3 py-0.5 text-left text-sm ${report === id ? 'bg-qb-green-tint font-semibold text-qb-green-active' : 'hover:bg-qb-row-hover'}`}
-              >
-                {label}
-              </button>
-            ))}
+            {group.reports.map(([id, label]) => {
+              const description = describeReport(id, label);
+              const starred = favorites.includes(id);
+              return (
+                <div key={id} className={`group flex items-start ${report === id ? 'bg-qb-green-tint' : 'hover:bg-qb-row-hover'}`}>
+                  <button
+                    type="button"
+                    aria-current={report === id ? 'page' : undefined}
+                    onClick={() => chooseReport(id)}
+                    title={useDates && DATED_REPORTS[id] ? `${description} Opens on the dates above.` : description || undefined}
+                    className="min-w-0 flex-1 px-3 py-0.5 text-left"
+                  >
+                    <span className={`block truncate text-sm ${report === id ? 'font-semibold text-qb-green-active' : ''}`}>{label}</span>
+                    {description && <span className="block truncate text-2xs text-qb-ink-muted">{description}</span>}
+                  </button>
+                  {id !== PROCESS_MULTIPLE && (
+                    <button
+                      type="button"
+                      onClick={() => star(id)}
+                      aria-pressed={starred}
+                      aria-label={starred ? `Remove ${label} from Favorites` : `Add ${label} to Favorites`}
+                      title={starred ? 'Remove from Favorites' : 'Add to Favorites'}
+                      className={`flex-none px-1.5 py-0.5 text-sm ${starred ? 'text-[#c99700]' : 'text-qb-ink-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
+                    >
+                      {starred ? '★' : '☆'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
+        </div>
         <div className="border-t border-qb-border px-2 pt-1.5">
           <button
             type="button"
@@ -603,6 +712,7 @@ export default function Reports({ navigate, intent }) {
         {isAccountantReport(report) && <AccountantReports key={report} report={report} navigate={navigate} />}
         {isListReport(report) && <ListReport key={report} report={report} catalog={listCatalog} navigate={navigate} />}
         {report === PROCESS_MULTIPLE && <ProcessMultipleReports custom={custom} navigate={navigate} />}
+        {report === SCHEDULED && <ScheduledReports />}
         {isCustomReport(report) && report !== '1099-detail' && <CustomReport key={`${report}${drill}`} report={report} custom={custom} navigate={navigate} onOpen={setReport} zoom={initial?.zoom} />}
       </div>
     </div>
