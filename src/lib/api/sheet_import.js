@@ -1,4 +1,4 @@
-// Importing a spreadsheet the user laid out: customers, vendors or invoices.
+// Importing a spreadsheet the user laid out: customers, vendors, sales and purchase transactions, or journal entries.
 import { invoke } from '@tauri-apps/api/core';
 
 export default {

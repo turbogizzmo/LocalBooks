@@ -103,6 +103,53 @@ progress, Closed or Not awarded. The status shows next to the job in the Custome
 can rename the five statuses in **Preferences › Jobs & Estimates**, for example *Awarded* to
 *Won*.
 
+## Customer groups
+
+In **Sales › Customers**, switch **View** to **Groups** to see and make customer groups.
+
+- **Pick the customers**: tick the customers that belong; the group keeps exactly that list.
+- **Automatic**: add rules, and the group holds every customer who meets all of them, worked out
+  from their details each time you look, so it changes by itself when a balance, address or other
+  detail does. A rule can look at the **open balance** (at least or at most an amount), **customer
+  type**, **terms**, **sales rep**, **state** or **ZIP code** (from the last line of the billing
+  address, such as `Salem, OR 97301`), **tax code** (or tax exempt), **credit limit** (over it, or
+  has one) and **status** (active or inactive).
+
+Click a group to list its customers right now; double-click it to change it.
+
+### Batch invoices
+
+To bill many customers the same thing (a monthly fee, a seasonal service), click **Batch
+invoices…** in **Sales › Customers**, or choose **Batch invoice this group…** on a group.
+
+1. Pick a **Customer group**, tick customers by hand, or both. Inactive customers are left out.
+2. Set the **Invoice date**, and **Due after (days)** for customers without terms of their own
+   (customers with terms are due on their terms).
+3. Enter the lines once, as on an invoice. The dialog shows each invoice's total and the total of
+   all of them.
+4. Click **Create invoices**.
+
+Each customer gets an invoice of their own, posted to Accounts Receivable. They are created
+together: if one can't be (an inactive item, say), none are. Each waits where the customer's
+**Preferred delivery** says: **Sales › Send Forms** for Email, **File › Print Forms** for Print.
+
+### Payment reminders
+
+On a group, tick **Payment reminders: every … days, remind about invoices at least … days
+overdue**. When a round is due and the group has overdue invoices, **Reminders** lists **Payment
+reminders for** the group with the amount overdue. Click it (or choose **Payment reminders…** on
+the group) to review the overdue invoices: untick any to leave out, then click **Send reminders**.
+Each ticked invoice is queued in **Sales › Send Forms**, which emails it with its invoice message,
+and the next round is due after the days you set.
+
+### Statement reminders
+
+Tick **Remind me to send this group's statements every … days** on a group. When they are due
+(and on the first day, if they have never been sent), **Reminders** lists **Statements for** the
+group. Click it to open **Sales › Customer Statements** with the group chosen: its customers with a
+statement in the period are ticked. Print or email them, then click **Mark sent** to start the wait
+for the next ones. In Customer Statements you can also pick any group under **Customer group**.
+
 ## Add a product or service
 
 Products and services make invoices and sales receipts quicker to fill in.
