@@ -30,8 +30,10 @@ function usePicker(rows) {
       else next.add(id);
       return next;
     });
-  const all = rows.length > 0 && rows.every((r) => picked.has(r.id));
-  const toggleAll = () => setPicked(all ? new Set() : new Set(rows.map((r) => r.id)));
+  // "All" means every row that isn't voided: a voided one is ticked only by hand.
+  const live = rows.filter((r) => !r.isVoided);
+  const all = live.length > 0 && live.every((r) => picked.has(r.id));
+  const toggleAll = () => setPicked(all ? new Set() : new Set(live.map((r) => r.id)));
   return { picked, toggle, all, toggleAll, chosen: rows.filter((r) => picked.has(r.id)) };
 }
 

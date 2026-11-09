@@ -140,16 +140,16 @@ const LEADING: f32 = 11.0;
 /// The space kept clear inside each label's edge.
 const INSET: f32 = 9.0;
 
-/// `text` shortened with an ellipsis to fit `width`.
-fn fit(text: &str, width: f32) -> String {
-    if pdf::text_width(FontFamily::Helvetica, false, SIZE, text) <= width {
+/// `text` shortened with an ellipsis to fit `width` in the weight it prints in.
+fn fit(text: &str, width: f32, bold: bool) -> String {
+    if pdf::text_width(FontFamily::Helvetica, bold, SIZE, text) <= width {
         return text.to_string();
     }
     let mut chars: Vec<char> = text.chars().collect();
     while !chars.is_empty() {
         chars.pop();
         let shorter = format!("{}…", chars.iter().collect::<String>().trim_end());
-        if pdf::text_width(FontFamily::Helvetica, false, SIZE, &shorter) <= width {
+        if pdf::text_width(FontFamily::Helvetica, bold, SIZE, &shorter) <= width {
             return shorter;
         }
     }
@@ -180,7 +180,7 @@ pub fn layout(sheet: LabelSheet, labels: &[Vec<String>], skip: usize) -> Vec<Pag
             page.ops.push(Op::Text {
                 x,
                 y,
-                text: fit(line, sheet.label_width - 2.0 * INSET),
+                text: fit(line, sheet.label_width - 2.0 * INSET, i == 0),
                 family: FontFamily::Helvetica,
                 bold: i == 0,
                 size: SIZE,
@@ -198,8 +198,8 @@ pub async fn render_labels(pool: &SqlitePool, names: LabelNames, ids: &[i64], sk
     if ids.is_empty() {
         return Err("LABELS_NONE: choose at least one name".into());
     }
-    let all = label_rows(pool, names).await?;
-    let labels: Vec<Vec<String>> = ids.iter().filter_map(|id| all.iter().find(|r| r.id == *id)).map(|r| r.lines.clone()).collect();
+    let mut all: std::collections::HashMap<i64, Vec<String>> = label_rows(pool, names).await?.into_iter().map(|r| (r.id, r.lines)).collect();
+    let labels: Vec<Vec<String>> = ids.iter().filter_map(|id| all.remove(id)).collect();
     if labels.is_empty() {
         return Err("LABELS_NONE: none of those names is active".into());
     }
@@ -259,7 +259,7 @@ mod tests {
         let lines = texts(&pages[0]);
         assert!(lines.len() <= 5, "a 1-inch label holds a few lines: {}", lines.len());
         assert!(lines[0].2.ends_with('…') && lines[0].2.len() < long.len());
-        assert!(pdf::text_width(FontFamily::Helvetica, true, SIZE, &lines[0].2) <= 189.0, "the bold name fits too");
+        assert!(pdf::text_width(FontFamily::Helvetica, true, SIZE, &lines[0].2) <= 189.0 - 2.0 * INSET, "the bold name fits inside the label's margins");
     }
 
     #[tokio::test]
