@@ -98,8 +98,10 @@ export default function Register({ accounts, intent }) {
   const { open: openChild } = useContext(WindowManagerContext);
   // The register's color (a My Preference), kept per company file and account.
   const { data: storage } = useLedgerQuery(api.getStorageStatus);
-  const companyPath = storage?.path ?? '';
-  const color = registerColor(useMyPreferences().registerColors, companyPath, accountId);
+  // Until the company file's path is known there is no key to keep a color under.
+  const companyPath = storage?.path ?? null;
+  const registerColors = useMyPreferences().registerColors;
+  const color = companyPath === null ? '' : registerColor(registerColors, companyPath, accountId);
   const tint = registerTint(color);
 
   useEffect(() => {
@@ -343,7 +345,7 @@ export default function Register({ accounts, intent }) {
             </label>
             <label title="A color for this account's register, so it's easy to tell apart (kept on this computer)">
               <span className="qb-label">Color</span>
-              <select className="qb-input w-[96px]" value={color} onChange={(e) => setRegisterColor(companyPath, accountId, e.target.value)} aria-label="Register color">
+              <select className="qb-input w-[96px]" value={color} onChange={(e) => companyPath !== null && setRegisterColor(companyPath, accountId, e.target.value)} disabled={companyPath === null} aria-label="Register color">
                 {REGISTER_COLORS.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
