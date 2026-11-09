@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { contentMatches } from '../lib/inboxPreview.js';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import Notice from './Notice.jsx';
@@ -23,6 +24,13 @@ function Preview({ doc }) {
     api.inboxDocumentContent(doc.id).then(
       (bytes) => {
         if (!live) return;
+        // A PDF is previewed only when its bytes are a PDF: a file named .pdf that holds something
+        // else (a web page, say) is never handed to the viewer. Images show in an <img>, which runs
+        // nothing.
+        if (doc.mediaType === 'application/pdf' && !contentMatches(doc.mediaType, new Uint8Array(bytes))) {
+          setError('This file’s contents don’t match its name, so it isn’t previewed. It is attached as it is when you enter it.');
+          return;
+        }
         made = URL.createObjectURL(new Blob([bytes], { type: doc.mediaType }));
         setUrl(made);
       },
