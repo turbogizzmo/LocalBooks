@@ -14,6 +14,8 @@ const GO = {
   TODOS: ['accounting/todos', null, 'To Do List'],
   RECURRING: ['accounting/recurring', null, 'Recurring Transactions'],
   EMAIL_QUEUE: ['sales/send-forms', null, 'Send Forms'],
+  GROUP_STATEMENTS: ['sales/statements', null, 'Customer Statements'],
+  PAYMENT_REMINDERS: ['sales/customers', null, 'Customers'],
   TAX_DATES: ['settings', 'preferences', 'Tax calendar'],
   BACKUP: ['settings', 'data', 'Back up'],
 };
@@ -50,7 +52,15 @@ function ReminderGroup({ group, open, onToggle, navigate }) {
         <ul className="pb-1 pl-6 pr-2 text-xs">
           {group.items.map((item, i) => (
             <li key={`${item.id ?? 'x'}-${i}`} className="flex items-baseline gap-2 py-0.5">
-              {item.entryId ? (
+              {group.key === 'PAYMENT_REMINDERS' ? (
+                <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('sales/customers', 'payment-reminders', { groupId: item.id })}>
+                  {item.label}
+                </button>
+              ) : group.key === 'GROUP_STATEMENTS' ? (
+                <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('sales/statements', 'group', { groupId: item.id })}>
+                  {item.label}
+                </button>
+              ) : item.entryId ? (
                 <button type="button" className="min-w-0 flex-1 truncate text-left text-qb-link hover:underline" title={item.label} onClick={() => navigate('accounting/journal', 'open-entry', { entryId: item.entryId })}>
                   {item.label}
                 </button>

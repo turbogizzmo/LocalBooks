@@ -784,6 +784,8 @@ pub async fn open(path: &Path) -> Result<SqlitePool, String> {
 /// time) and `backups` is given, a verified copy is saved there first, so an upgrade can always be
 /// undone by restoring it.
 async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>) -> Result<SqlitePool, String> {
+    // The diagnostics log names the file, never its contents.
+    crate::diagnostics::log(&format!("opening company file {}", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create data directory {}: {e}", dir.display()))?;
     }

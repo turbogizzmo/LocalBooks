@@ -340,3 +340,87 @@ async fn several_reports_make_one_workbook() {
     ]);
     assert!(crate::xlsx_export::to_xlsx_book(&[], "$").is_err());
 }
+
+#[tokio::test]
+async fn t49_reports_tie_out_to_the_ledger() {
+    let pool = company().await;
+    let p = &pool;
+    // Four of the twelve mugs sold to the cafe in December, so an invoice carries cost of goods.
+    let mugs: i64 = sqlx::query_scalar("SELECT id FROM products_services WHERE name = 'Gift Mugs'").fetch_one(p).await.unwrap();
+    let sales = account(p, "4000").await;
+    crate::invoices::create_and_post_invoice(
+        p,
+        crate::invoices::InvoiceInput {
+            customer_name: "Brightwater Cafe".into(),
+            issue_date: d(2025, 12, 15),
+            due_date: d(2025, 12, 30),
+            lines: vec![crate::invoices::InvoiceLineInput {
+                description: "Gift mugs".into(),
+                quantity_e4: 40_000,
+                rate_cents: 1_800,
+                income_account_id: sales,
+                product_service_id: Some(mugs),
+                class_id: None,
+                is_taxable: false,
+                service_date: None,
+            }],
+            currency: None,
+            tax_rate_id: None,
+            discount_cents: 0,
+            details: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+    let (start, end) = (d(2025, 1, 1), d(2025, 12, 31));
+    let run_on = |id: &'static str| {
+        let p = p.clone();
+        async move { list_reports::run(&p, id, Some(start), Some(end), today()).await.unwrap_or_else(|e| panic!("{id}: {e}")) }
+    };
+    let ledger = |classification_or_type: &'static str, column: &'static str| {
+        let p = p.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(&format!(
+                "SELECT COALESCE(SUM({}), 0) FROM journal_lines l
+                 JOIN journal_entries e ON e.id = l.journal_entry_id JOIN v_chart_of_accounts a ON a.id = l.account_id
+                 WHERE a.{column} = ?1 AND e.status = 'POSTED' AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'
+                   AND e.id IN (SELECT journal_entry_id FROM invoices WHERE is_voided = 0)",
+                if column == "classification" { "l.credit_cents - l.debit_cents" } else { "l.debit_cents - l.credit_cents" }
+            ))
+            .bind(classification_or_type)
+            .fetch_one(&p)
+            .await
+            .unwrap()
+        }
+    };
+    let income = ledger("INCOME", "classification").await;
+    let cogs = ledger("COST_OF_GOODS_SOLD", "account_type").await;
+    assert_eq!(cogs, 3_600, "four mugs at their $9.00 average cost");
+
+    // Invoice Profitability by Customer and Detail: the invoices' income and cost of goods, as posted.
+    let by_customer = run_on("invoice-profit-customer").await;
+    let t = total(&by_customer);
+    assert_eq!((cents(&t.cells[2]), cents(&t.cells[3]), cents(&t.cells[4])), (income, cogs, income - cogs));
+    let detail = run_on("invoice-profit-detail").await;
+    let t = total(&detail);
+    assert_eq!((cents(&t.cells[2]), cents(&t.cells[3])), (income, cogs));
+    assert_eq!(details(&detail).count() as i64, sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM invoices i JOIN journal_entries e ON e.id = i.journal_entry_id WHERE i.is_voided = 0 AND e.entry_date BETWEEN '2025-01-01' AND '2025-12-31'").fetch_one(p).await.unwrap());
+
+    // Inventory Turnover: ending values are Inventory Valuation's; its cost of goods sold is what the
+    // stock ledger took out for sales.
+    let turnover = run_on("inventory-turnover").await;
+    let valuation = crate::report_center::inventory_valuation(p, end).await.unwrap();
+    assert_eq!(cents(&total(&turnover).cells[2]), valuation.total_asset_value_cents);
+    let sold: i64 = sqlx::query_scalar(
+        "SELECT -COALESCE(SUM(s.value_change_cents), 0) FROM stock_ledger_entries s LEFT JOIN stock_ledger_entries r ON r.id = s.reverses_id
+         WHERE s.movement_date BETWEEN '2025-01-01' AND '2025-12-31' AND (s.kind = 'SALE' OR (s.kind = 'VOID' AND r.kind = 'SALE'))",
+    )
+    .fetch_one(p)
+    .await
+    .unwrap();
+    assert_eq!(cents(&total(&turnover).cells[4]), sold);
+    assert_eq!(sold, cogs, "the stock ledger and the invoices' cost of goods agree");
+    // Mugs: nothing at the start, $72.00 at the end, $36.00 on average, $36.00 sold: turned over once.
+    let mug_row = details(&turnover).find(|r| text(&r.cells[0]) == "Gift Mugs").unwrap();
+    assert_eq!((text(&mug_row.cells[5]), text(&mug_row.cells[6])), ("1.00".to_string(), "365".to_string()));
+}

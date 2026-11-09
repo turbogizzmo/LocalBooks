@@ -78,6 +78,7 @@ export const NAV = [
       { id: 'accounting/todos', label: 'To Do List' },
       { id: 'accounting/budgets', label: 'Budgets' },
       { id: 'accounting/audit', label: 'Audit Log' },
+      { id: 'accounting/attachments', label: 'Attachments Library' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
     ],
   },
@@ -97,6 +98,7 @@ export const NAV = [
       { id: 'settings/ai', label: 'AI Access (MCP)', adminOnly: true },
       { id: 'settings/users', label: 'Users & Passwords' },
       { id: 'settings/updates', label: 'Updates' },
+      { id: 'settings/diagnostics', label: 'Diagnostics' },
     ],
   },
 ];
