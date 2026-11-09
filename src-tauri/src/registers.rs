@@ -28,6 +28,8 @@ pub struct RegisterRow {
     pub account_name: String,
     /// The other account, or "-Split-" when the transaction has several.
     pub split: Option<String>,
+    /// The other account's id when there is just one (Go To Transfer, Ctrl+G); `None` on a split.
+    pub split_account_id: Option<i64>,
     pub class_name: Option<String>,
     pub debit_cents: i64,
     pub credit_cents: i64,
@@ -109,6 +111,9 @@ pub async fn account_register(
                 (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(o_a.full_name) WHEN COUNT(*) > 1 THEN '-Split-' END
                  FROM journal_lines o JOIN v_chart_of_accounts o_a ON o_a.id = o.account_id
                  WHERE o.journal_entry_id = e.id AND o.account_id NOT IN ({scope})) AS split,
+                (SELECT CASE WHEN COUNT(DISTINCT o.account_id) = 1 THEN MAX(o.account_id) END
+                 FROM journal_lines o
+                 WHERE o.journal_entry_id = e.id AND o.account_id NOT IN ({scope})) AS split_account_id,
                 k.full_name AS class_name, l.debit_cents, l.credit_cents,
                 e.is_voided, e.reverses_entry_id IS NOT NULL AS is_reversal,
                 l.reconciliation_id IS NOT NULL AS cleared, l.reconciled_at IS NOT NULL AS reconciled

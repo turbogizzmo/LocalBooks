@@ -22,6 +22,9 @@ async fn registers_run_a_balance_from_the_opening_and_name_the_other_side() {
     assert_eq!(reg.opening_balance_cents, 10_000);
     let rows: Vec<(Option<&str>, i64)> = reg.rows.iter().map(|r| (r.split.as_deref(), r.balance_cents)).collect();
     assert_eq!(rows, [(Some("Rent & Lease"), 7_000), (Some("-Split-"), 6_000)]);
+    // Go To Transfer (Ctrl+G) opens the other side's register: there is one only when it is one account.
+    let others: Vec<Option<i64>> = reg.rows.iter().map(|r| r.split_account_id).collect();
+    assert_eq!(others, [Some(rent), None]);
     assert_eq!(reg.ending_balance_cents, 6_000);
 
     // Credit-normal accounts run positive the other way.

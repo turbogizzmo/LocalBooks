@@ -8,6 +8,7 @@ import { useDirtySince, useOpenFromList } from '../lib/windows.js';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
+import { pasteLineAt } from '../lib/formKeys.js';
 import { MemorizeDialog } from './Recurring.jsx';
 import Attachments from './Attachments.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -53,6 +54,10 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, save
   useLineCommands(linesRef, {
     insert: (at) => setRows((rs) => [...rs.slice(0, at), blankRow(), ...rs.slice(at)]),
     remove: (at) => setRows((rs) => (rs.length > 2 ? rs.filter((_, i) => i !== at) : rs.map((r, i) => (i === at ? blankRow() : r)))),
+    // Copy Line / Paste Line (Ctrl+Alt+Y / Ctrl+Alt+V): the pasted line goes above the one with focus.
+    copy: (at) => rows[at] ?? null,
+    paste: (at, line) => setRows((rs) => pasteLineAt(rs, at, line, () => nextKey++)),
+    grid: 'journal',
   });
 
   // With My Preferences › Accounting › Autofill memo, a line started below the first one takes

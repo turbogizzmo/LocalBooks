@@ -11,6 +11,7 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
 import { quickReport, reportShortcut, transactionJournal } from '../lib/quickReport.js';
+import { formKeyCommand } from '../lib/formKeys.js';
 import { useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
 import { SortTh, useSort } from './SortHead.jsx';
@@ -93,6 +94,8 @@ export default function Register({ accounts, intent }) {
   const scrollRef = useRef(null);
   // A row just recorded is scrolled into view once the register has reloaded with it.
   const scrollToEntry = useRef(null);
+  // Go To Transfer (Ctrl+G) opens a register on a transaction: it is selected once the rows load.
+  const selectOnLoad = useRef(intent?.data?.selectEntry ?? null);
   const { open: openChild } = useContext(WindowManagerContext);
 
   useEffect(() => {
@@ -101,6 +104,7 @@ export default function Register({ accounts, intent }) {
     setStart(intent.data.startDate ?? '');
     setEnd(intent.data.endDate ?? '');
     setSubaccounts(intent.data.includeSubaccounts ?? false);
+    selectOnLoad.current = intent.data.selectEntry ?? null;
   }, [intent]);
 
   const { data, error, reload } = useLedgerQuery(() =>
@@ -118,6 +122,13 @@ export default function Register({ accounts, intent }) {
       row.scrollIntoView({ block: 'nearest' });
       scrollToEntry.current = null;
     }
+  }, [data]);
+  useEffect(() => {
+    const id = selectOnLoad.current;
+    if (id === null || !data?.rows.some((r) => r.journalEntryId === id)) return;
+    selectOnLoad.current = null;
+    setSelected(id);
+    requestAnimationFrame(() => scrollRef.current?.querySelector(`[data-entry="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
   }, [data]);
   const dateFilter = filterFor(start, end);
   const chooseDates = (id) => {
@@ -237,7 +248,24 @@ export default function Register({ accounts, intent }) {
   const runQuickReport = () => account && openReport(quickReport({ kind: 'account', id: account.id, name: account.name, startDate: start, endDate: end }));
   const runJournal = (r) => openReport(transactionJournal({ journalEntryId: r.journalEntryId, label: rowLabel(r) }));
   const pickFirst = () => setNotice({ kind: 'info', text: 'Click a transaction in the register first.' });
+  // Ctrl+G: the other side of the selected transaction, in its own register, when it is one account.
+  const goToTransfer = (r) => {
+    if (r.splitAccountId === null || r.splitAccountId === undefined) {
+      setNotice({ kind: 'info', text: 'This transaction has several other accounts (-Split-); open it to see them.' });
+      return;
+    }
+    openChild('accounting/register', 'open', { accountId: r.splitAccountId, startDate: start, endDate: end, selectEntry: r.journalEntryId }, { forceNew: true });
+  };
   const onKeyDown = (e) => {
+    // Ctrl+E opens the selected transaction to edit; Ctrl+G goes to the other side of a transfer.
+    const formKey = formKeyCommand(e);
+    if ((formKey === 'edit' || formKey === 'goto-transfer') && data) {
+      e.preventDefault();
+      if (!selectedRow) pickFirst();
+      else if (formKey === 'edit') openTransaction(selectedRow);
+      else goToTransfer(selectedRow);
+      return;
+    }
     const key = reportShortcut(e);
     if (!key || !data) return;
     e.preventDefault();
@@ -393,7 +421,7 @@ export default function Register({ accounts, intent }) {
           <h2 className="text-md font-semibold">{data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''}` : 'Register'}</h2>
           {data && (
             <span className="text-xs text-qb-ink-muted">
-              {data.accountTypeName} · click a row to see its lines, double-click to open it · Ctrl+Q QuickReport · Ctrl+H history · Ctrl+Y journal
+              {data.accountTypeName} · click a row to see its lines, double-click to open it · Ctrl+E edit · Ctrl+G go to transfer · Ctrl+Q QuickReport · Ctrl+H history · Ctrl+Y journal
             </span>
           )}
           {data && !inDateOrder && (

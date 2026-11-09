@@ -1,4 +1,5 @@
 import { useLineCommands } from '../lib/formFlow.jsx';
+import { pasteLineAt } from '../lib/formKeys.js';
 import { useEffect, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
@@ -301,6 +302,15 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
       activate(Math.max(0, Math.min(at, lines.length - 2)), firstCol);
       return 'focused';
     },
+    // Copy Line / Paste Line (Ctrl+Alt+Y / Ctrl+Alt+V). A group's heading isn't copied (its items
+    // belong to it); a line pasted among a group's items joins the group, as an inserted one does.
+    copy: (at) => (lines[at] && lines[at].kind !== 'GROUP' ? { ...lines[at], inGroup: null } : null),
+    paste: (at, line) => {
+      setLines((ls) => pasteLineAt(ls, at, { ...line, inGroup: ls[at]?.inGroup ?? null }, () => nextKey++));
+      activate(at, firstCol);
+      return 'focused';
+    },
+    grid: 'items',
   });
   const onKeyDown = (e, index) => {
     if (e.key === 'Enter') {

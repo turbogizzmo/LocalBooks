@@ -63,7 +63,7 @@ const FILE: &[Entry] = &[
 ];
 
 /// Acts on the transaction form open in the focused window (`runFormCommand` in formFlow.jsx).
-/// No accelerators: the page handles Ctrl+D, Ctrl+M, Ctrl+Insert and Ctrl+Delete itself, so the keys
+/// No accelerators: the page handles Ctrl+D, Ctrl+M, Ctrl+G and the line keys itself, so the keys
 /// work while typing in a field, and Cmd+M stays Minimize on macOS.
 const fn form_cmd(label: &'static str, command: &'static str) -> Entry {
     Entry::Cmd { label, command, accel: None }
@@ -76,6 +76,9 @@ const EDIT: &[Entry] = &[
     form_cmd("Memorize Transaction (Ctrl+M)", "form:memorize"),
     form_cmd("Insert Line (Ctrl+Insert)", "form:insert-line"),
     form_cmd("Delete Line (Ctrl+Delete)", "form:delete-line"),
+    form_cmd("Copy Line (Ctrl+Alt+Y)", "form:copy-line"),
+    form_cmd("Paste Line (Ctrl+Alt+V)", "form:paste-line"),
+    form_cmd("Go To Transfer (Ctrl+G)", "form:goto-transfer"),
     Entry::Sep,
     page("Use Register", "accounting/register"),
     keyed("Find…", "accounting/find", None, "CmdOrCtrl+F"),
@@ -544,7 +547,9 @@ mod tests {
     /// The Edit menu's form items name commands the page runs (`runFormCommand` in formFlow.jsx).
     #[test]
     fn edit_menu_form_commands_exist_in_the_page() {
-        let flow = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formFlow.jsx")).unwrap();
+        // The commands are named in formKeys.js (the keys) and formFlow.jsx (what runs them).
+        let flow = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formFlow.jsx")).unwrap()
+            + &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/formKeys.js")).unwrap();
         let app = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/App.jsx")).unwrap();
         assert!(app.contains("runFormCommand(payload.slice(5))"), "App.jsx passes form: commands on");
         let mut found = 0;
@@ -556,7 +561,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(found, 4);
+        assert_eq!(found, 7);
     }
 
     #[test]

@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **More desktop shortcuts.** On forms, **Ctrl+L** opens the list of the box you're in, and
+  **Ctrl+Alt+Y** / **Ctrl+Alt+V** copy a line and paste it above the line you're on (also Edit ›
+  Copy Line and Paste Line). In a register, **Ctrl+E** opens the selected transaction to edit and
+  **Ctrl+G** goes to the register of its other account; on a saved transfer, **Go To Transfer**
+  (Ctrl+G) does the same. Page Up / Page Down, Ctrl+N, Ctrl+P and Ctrl+D now also work on saved
+  sales receipts, estimates, credits, purchase orders, deposits and transfers.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

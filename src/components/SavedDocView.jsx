@@ -7,6 +7,7 @@ import { TransactionVoucher, useVoucherPrinter } from './VoucherPrint.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { api, errorText } from '../lib/api.js';
 import { stepButtons } from '../lib/formStep.js';
+import { useToolbarKeys } from '../lib/formFlow.jsx';
 
 /**
  * Which saved transaction a screen shows in place of its form. `ordered` is the saved ones, oldest
@@ -108,6 +109,8 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   const emailed = useEmailStatuses(form?.kind ?? 'INVOICE');
   const [showAttachments, setShowAttachments] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Page Up / Page Down, Ctrl+N, Ctrl+P, Ctrl+D and Ctrl+G press the toolbar's buttons.
+  const keys = useToolbarKeys();
   // Another transaction opened: its attachments start closed.
   const key = form ? `${form.kind}-${form.id}` : voucher ? `v-${voucher.entryId}` : title;
   useEffect(() => setShowAttachments(false), [key]);
@@ -153,7 +156,7 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
   ];
 
   return (
-    <section className="qb-panel flex min-h-0 flex-none flex-col" aria-label={title}>
+    <section ref={keys.ref} onKeyDown={keys.onKeyDown} className="qb-panel flex min-h-0 flex-none flex-col" aria-label={title}>
       {printPortal}
       {voucherPortal}
       <FormToolbar label={label} groups={groups} />
