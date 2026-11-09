@@ -37,6 +37,11 @@ const DESKTOP_VIEW_CHANGED: &str = "desktop-view-changed";
 /// "close" (the active one), "cascade", "tile-vertically", "tile-horizontally", "arrange-icons",
 /// or "focus:<id>".
 const WINDOW_COMMAND: &str = "window-command";
+/// Sent to every LocalBooks window before the desktop is saved: report the windows inside you now,
+/// without waiting out the pause after the last change ([`flush_reports`]).
+const WINDOW_REPORT_FLUSH: &str = "window-report-flush";
+/// How long saving the desktop waits for the windows' reports before saving what it has.
+const FLUSH_WAIT: std::time::Duration = std::time::Duration::from_millis(500);
 
 const MENU_NEW_WINDOW: &str = "new-window";
 const MENU_CLOSE_WINDOW: &str = "window-close";
@@ -90,6 +95,8 @@ struct Registry {
     /// The company was just opened: the first LocalBooks window to ask gets its desktop back.
     restore_pending: bool,
     next_label: usize,
+    /// Reports received, counted, so [`flush_reports`] can wait for fresh ones.
+    reports: u64,
 }
 
 #[derive(Clone, Default)]
@@ -123,6 +130,7 @@ impl Registry {
 
     /// A LocalBooks window reports the windows inside it and which is active.
     fn report(&mut self, label: &str, children: Vec<ChildWindow>, active: Option<String>, frame: Option<Bounds>) {
+        self.reports = self.reports.wrapping_add(1);
         let entry = self.entry(label);
         entry.children = children;
         entry.active = active;
@@ -392,6 +400,7 @@ fn config_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
 /// The company is closing (File › Close Company, another company opening, quitting): under "Save
 /// when closing company" the windows open inside LocalBooks become its desktop.
 pub async fn save_on_close(app: &AppHandle) {
+    flush_reports(app).await;
     let Some((dir, key)) = desktop_key(app).await else { return };
     let now = registry(app).snapshot();
     if now.windows.is_empty() && now.frame.is_none() {
@@ -401,6 +410,28 @@ pub async fn save_on_close(app: &AppHandle) {
         desktop::company_closing(file, &key, now);
     }) {
         eprintln!("cannot save the desktop: {err}");
+    }
+}
+
+/// Asks every open LocalBooks window to report the windows inside it now, and waits (up to
+/// [`FLUSH_WAIT`]) until each has. A window reports a change only once it has been still for a
+/// moment, so without this a company closed (or LocalBooks quit) right after a window was opened,
+/// closed or moved would save the windows as they were before.
+pub async fn flush_reports(app: &AppHandle) {
+    let open = app.webview_windows().len() as u64;
+    if open == 0 {
+        return;
+    }
+    let before = registry(app).reports;
+    if app.emit(WINDOW_REPORT_FLUSH, ()).is_err() {
+        return;
+    }
+    let deadline = std::time::Instant::now() + FLUSH_WAIT;
+    while std::time::Instant::now() < deadline {
+        if registry(app).reports.wrapping_sub(before) >= open {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
 }
 
