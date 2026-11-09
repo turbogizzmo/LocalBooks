@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Keep the statement with a reconciliation.** Attach the bank or card statement (a PDF or a
+  picture) to a reconciliation in progress or a finished one; save a copy from Reconcile's history.
 - **Undo Last Reconciliation.** In Banking › Reconcile, the newest completed reconciliation can be
   undone: its transactions are uncleared so the statement can be reconciled again. The
   reconciliation stays on record and the undo, with an optional reason, goes into the Audit Log.

@@ -246,3 +246,32 @@ async fn undo_waits_for_a_reconciliation_in_progress() {
     let err = sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE id = ?1").bind(line).execute(&pool).await.expect_err("locked");
     assert!(err.to_string().contains("REC_LOCKED"), "{err}");
 }
+
+#[tokio::test]
+async fn a_statement_file_attaches_to_the_reconciliation() {
+    let pool = test_pool().await;
+    let (checking, owner) = (account_id(&pool, "1010").await, account_id(&pool, "3100").await);
+    post(&pool, d(8, 2), checking, owner, 100_000).await;
+    let open = start(&pool, checking, d(8, 31), 100_000).await.unwrap();
+    let file = attach_statement(&pool, open.id, "/tmp/statements/August 2026.pdf", b"%PDF-1.7 synthetic").await.unwrap();
+    assert_eq!((file.file_name.as_str(), file.media_type.as_str(), file.size_bytes), ("August 2026.pdf", "application/pdf", 18));
+    assert_eq!(statement_content(&pool, file.id).await.unwrap(), ("August 2026.pdf".into(), b"%PDF-1.7 synthetic".to_vec()));
+    assert!(attach_statement(&pool, open.id, "empty.pdf", b"").await.unwrap_err().starts_with("ATTACH_SIZE"));
+
+    // It stays with the reconciliation once finished.
+    let ids: Vec<i64> = unreconciled_lines(&pool, checking).await.unwrap().into_iter().map(|l| l.line_id).collect();
+    set_lines_cleared(&pool, open.id, &ids, true).await.unwrap();
+    lock(&pool, open.id).await.unwrap();
+    assert_eq!(statement_files(&pool, open.id).await.unwrap().len(), 1);
+    remove_statement(&pool, file.id).await.unwrap();
+    assert!(statement_files(&pool, open.id).await.unwrap().is_empty());
+
+    // Cancelling one in progress takes its files with it; an undone one takes no new ones.
+    let next = start(&pool, checking, d(9, 30), 100_000).await.unwrap();
+    attach_statement(&pool, next.id, "september.png", b"png").await.unwrap();
+    cancel(&pool, next.id).await.unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM reconciliation_statements").fetch_one(&pool).await.unwrap();
+    assert_eq!(left, 0);
+    undo_last(&pool, open.id, None).await.unwrap();
+    assert!(attach_statement(&pool, open.id, "late.pdf", b"x").await.unwrap_err().starts_with("REC_UNDONE"));
+}

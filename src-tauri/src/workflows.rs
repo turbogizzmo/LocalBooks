@@ -795,7 +795,7 @@ pub struct AttachmentView {
 
 pub const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
 
-fn media_type(name: &str) -> &'static str {
+pub(crate) fn media_type(name: &str) -> &'static str {
     match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
         Some("pdf") => "application/pdf",
         Some("png") => "image/png",

@@ -9,6 +9,7 @@ import DateBox from './DateBox.jsx';
 import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
+import { pickAttachments } from './Attachments.jsx';
 
 /** The longest undo reason the Audit Log keeps (`reconciliation_undos.reason`, migration 0085). */
 const REASON_MAX = 500;
@@ -109,6 +110,60 @@ function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCance
       )}
       {dateBad && <span className="self-center text-sm text-qb-negative">Must be after {formatDate(lastDate)}, the last reconciled statement.</span>}
     </form>
+  );
+}
+
+/**
+ * The bank or card statement kept with a reconciliation, in progress or finished: each file with
+ * Save a copy and ×, and Attach statement… to add one (a PDF or a picture, up to 25 MB).
+ */
+function StatementFiles({ reconciliationId, onNotice, compact = false }) {
+  const [files, setFiles] = useState([]);
+  const load = useCallback(() => {
+    api.listReconciliationStatements(reconciliationId).then(setFiles, (err) => onNotice({ kind: 'error', text: errorText(err) }));
+  }, [reconciliationId, onNotice]);
+  useEffect(() => load(), [load]);
+  const attach = async () => {
+    try {
+      for (const path of await pickAttachments()) await api.attachReconciliationStatement(reconciliationId, path);
+    } catch (err) {
+      onNotice({ kind: 'error', text: errorText(err) });
+    }
+    load();
+  };
+  const run = async (action) => {
+    try {
+      await action();
+    } catch (err) {
+      onNotice({ kind: 'error', text: errorText(err) });
+    }
+    load();
+  };
+  return (
+    <span className="flex flex-wrap items-center gap-1 text-sm">
+      {!compact && <span className="text-qb-ink-muted">Statement:</span>}
+      {files.map((f) => (
+        <span key={f.id} className="flex items-center gap-0.5 rounded-sm border border-qb-border bg-white px-1">
+          <button type="button" className="text-qb-link hover:underline" title="Save a copy" onClick={() => run(() => api.saveReconciliationStatement(f.id))}>
+            📎 {f.fileName}
+          </button>
+          <button
+            type="button"
+            className="px-0.5 text-qb-ink-faint hover:text-qb-negative"
+            aria-label={`Remove ${f.fileName}`}
+            title="Remove this file"
+            onClick={async () => {
+              if (await askConfirm(`Remove ${f.fileName} from this reconciliation?`, { confirmLabel: 'Remove', danger: true })) run(() => api.removeReconciliationStatement(f.id));
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={attach}>
+        {files.length ? 'Attach another…' : 'Attach statement…'}
+      </button>
+    </span>
   );
 }
 
@@ -308,9 +363,12 @@ export default function Reconcile({ accounts }) {
           </div>
         )}
         {rec && !editing && (
-          <button type="button" className="qb-btn qb-btn-secondary ml-auto" onClick={() => setEditing(true)}>
-            Edit statement info
-          </button>
+          <span className="ml-auto flex items-center gap-2">
+            <StatementFiles reconciliationId={rec.id} onNotice={setNotice} />
+            <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setEditing(true)}>
+              Edit statement info
+            </button>
+          </span>
         )}
         {rec && editing && (
           <div className="ml-auto">
@@ -475,13 +533,14 @@ export default function Reconcile({ accounts }) {
                   <th className="qb-grid-head text-right">Beginning balance</th>
                   <th className="qb-grid-head text-right">Ending balance</th>
                   <th className="qb-grid-head">Completed</th>
+                  <th className="qb-grid-head">Statement</th>
                   <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
+                    <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
                   </tr>
                 )}
                 {history.map((h, i) => (
@@ -490,6 +549,9 @@ export default function Reconcile({ accounts }) {
                     <td className="qb-grid-cell num">{formatCents(h.beginningBalanceCents)}</td>
                     <td className="qb-grid-cell num">{formatCents(h.statementEndingBalanceCents)}</td>
                     <td className="qb-grid-cell text-qb-ink-muted">🔒 {formatDate(h.lockedAt?.slice(0, 10))}</td>
+                    <td className="qb-grid-cell">
+                      <StatementFiles reconciliationId={h.id} onNotice={setNotice} compact />
+                    </td>
                     <td className="qb-grid-cell cell-tight text-right">
                       {/* Newest first: only the last reconciliation can be undone. */}
                       {i === 0 && (

@@ -18,6 +18,14 @@ LocalBooks locks the matched transactions so the reconciled balance can't change
 The cleared transactions are now locked: they can't be voided or changed. Past reconciliations are
 listed under **Reconciliation history**.
 
+## Keep the statement with the reconciliation
+
+While reconciling, click **Attach statement…** beside **Edit statement info** and choose the
+statement file (a PDF or a picture, up to 25 MB). LocalBooks keeps a copy in the company file with
+that reconciliation. Finished reconciliations show theirs in the **Statement** column of
+**Reconciliation history**, where you can attach one later too. Click a file's name to save a copy,
+or **×** to remove it. Cancelling a reconciliation in progress removes its files with it.
+
 ## Undo the last reconciliation
 
 If you finished a reconciliation by mistake (the wrong statement, or a transaction ticked that
