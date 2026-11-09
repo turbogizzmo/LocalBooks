@@ -60,6 +60,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod parties;
+mod party_contacts;
 mod permissions;
 mod pdf;
 mod mcp_server;

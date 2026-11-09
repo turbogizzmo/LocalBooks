@@ -53,8 +53,15 @@ the customer's **Actions** menu and choose **Edit…**. A customer's record also
   billing address in the shipping box. New invoices, sales receipts, estimates and credit memos
   fill their Bill To and Ship To from these. A job (a name like `Acme:Kitchen`) whose boxes are
   blank uses its customer's addresses.
-- **Contact** and **Alt. contact**, **Alt. phone**, **Fax** and **Website**. The contact prints in
-  the address blocks, under the company name.
+- **Contacts**: as many people as you need, each with a **Role** (pick one such as *Billing* or
+  *Accounts payable*, or type your own), **Email**, **Phone** and **Mobile**. Click **Add
+  contact** for another, ↑ and ↓ to reorder, × to remove. Tick **Invoices** on the contact for
+  invoices: their name prints in Bill To and Ship To on new sales forms, under the company name,
+  and emailed invoices, estimates, sales receipts and credit memos go to their email (the
+  customer's own email when they have none). Tick **Statements** on the contact for statements:
+  their name prints on the customer's statements and emailed statements go to them. One contact
+  can do both. A vendor's record has contacts too, with a **Main** contact.
+- **Alt. phone**, **Fax** and **Website**.
 - **Account no.**, the customer's account number.
 - **Credit limit**. An invoice that would take the customer over it asks before saving (see
   [Credit limits](invoices.md#credit-limits)). Leave it blank for no limit.

@@ -142,20 +142,22 @@ pub struct QueuedForm {
 
 pub async fn queue(pool: &SqlitePool) -> Result<Vec<QueuedForm>, String> {
     type Row = (String, i64, i64, String, Option<String>, String, i64, Option<String>, String);
-    let rows: Vec<Row> = sqlx::query_as(
-        "SELECT q.form_type, q.document_id, i.invoice_number, COALESCE(c.name, i.customer_name), c.email, i.issue_date, i.total_cents, i.currency_code, q.queued_at
+    // The default invoice contact's email when it has one, else the customer's.
+    let to = crate::party_contacts::recipient_sql("invoices");
+    let rows: Vec<Row> = sqlx::query_as(&format!(
+        "SELECT q.form_type, q.document_id, i.invoice_number, COALESCE(c.name, i.customer_name), {to}, i.issue_date, i.total_cents, i.currency_code, q.queued_at
          FROM form_email_queue q JOIN invoices i ON q.form_type = 'INVOICE' AND i.id = q.document_id LEFT JOIN customers c ON c.id = i.customer_id
          UNION ALL
-         SELECT q.form_type, q.document_id, e.estimate_number, c.name, c.email, e.estimate_date, e.total_cents, NULL, q.queued_at
+         SELECT q.form_type, q.document_id, e.estimate_number, c.name, {to}, e.estimate_date, e.total_cents, NULL, q.queued_at
          FROM form_email_queue q JOIN estimates e ON q.form_type = 'ESTIMATE' AND e.id = q.document_id JOIN customers c ON c.id = e.customer_id
          UNION ALL
-         SELECT q.form_type, q.document_id, r.receipt_number, COALESCE(c.name, ''), c.email, r.receipt_date, r.total_cents, NULL, q.queued_at
+         SELECT q.form_type, q.document_id, r.receipt_number, COALESCE(c.name, ''), {to}, r.receipt_date, r.total_cents, NULL, q.queued_at
          FROM form_email_queue q JOIN sales_receipts r ON q.form_type = 'SALES_RECEIPT' AND r.id = q.document_id LEFT JOIN customers c ON c.id = r.customer_id
          UNION ALL
-         SELECT q.form_type, q.document_id, m.credit_number, c.name, c.email, m.credit_date, m.total_cents, NULL, q.queued_at
+         SELECT q.form_type, q.document_id, m.credit_number, c.name, {to}, m.credit_date, m.total_cents, NULL, q.queued_at
          FROM form_email_queue q JOIN credit_memos m ON q.form_type = 'CREDIT_MEMO' AND m.id = q.document_id JOIN customers c ON c.id = m.customer_id
-         ORDER BY 9, 1, 3",
-    )
+         ORDER BY 9, 1, 3"
+    ))
     .fetch_all(pool)
     .await
     .map_err(db_err)?;

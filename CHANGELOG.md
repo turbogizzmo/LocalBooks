@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Any number of contacts.** A customer's or vendor's record lists as many contacts as you need,
+  each with a role, email, phone and mobile. Choose one of a customer's contacts for invoices (named
+  in Bill To and sent emailed invoices, estimates, sales receipts and credit memos) and one for
+  statements (printed on statements and sent them). The contact and alternate contact you had
+  become the first two.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

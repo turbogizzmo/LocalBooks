@@ -87,6 +87,7 @@ features![
     mcp,
     migration,
     mileage,
+    party_contacts,
     preferences,
     price_levels,
     print_queue,

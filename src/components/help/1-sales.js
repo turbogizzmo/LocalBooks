@@ -188,6 +188,14 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'customer-contacts', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/statements'],
+    title: 'Contacts on a customer or vendor',
+    body: 'Edit… on a customer or vendor lists their contacts: as many as you need, each with a role, email, phone and mobile; Add contact adds one, and the arrows put them in order. Tick Invoices on one of a customer’s contacts to name them in Bill To on new sales forms and send them emailed invoices, estimates, sales receipts and credit memos; tick Statements on one to print them on statements and email statements to them. Without an email of their own, the customer’s email is used. A vendor’s contacts have a Main contact.',
+    keywords: 'contact contacts person people role billing accounts payable main contact alternate contact email phone mobile default invoice contact statement contact',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
     title: 'Customer credit limits',
     body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',
