@@ -210,7 +210,7 @@ export function PrintChecks({ accounts }) {
         />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
-      {error && <Notice kind="error" text={`Could not load the checks to print: ${error}`} />}
+      {(error || billChecks.error) && <Notice kind="error" text={`Could not load the checks to print: ${error ?? billChecks.error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
           <h2 className="mr-2 self-center text-md font-semibold">Select checks to print</h2>
@@ -252,7 +252,7 @@ export function PrintChecks({ accounts }) {
               </tr>
             </thead>
             <tbody>
-              {data && rows.length === 0 && (
+              {data && billChecks.data && rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">
                     No checks are waiting to print. Tick Print later on a check (Banking › Write Checks) or in Pay Bills to queue it here.
