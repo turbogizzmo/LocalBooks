@@ -263,6 +263,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
 | Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once, with one numbered, printable check per vendor | [guide](docs/guide/bills.md) |
+| Receive Items | Vendors › Receive Items | Receive goods from a purchase order before the bill (part shipments too), held in Items Received Not Billed; enter the bill for them at the vendor's prices later | [guide](docs/guide/bills.md#receive-items-before-the-bill) |
 | Bounced checks | Banking › Record Bounced Check… | Reopens the invoice a returned check paid, takes the check and bank fee out of the bank, and invoices a returned-check fee | [guide](docs/guide/customer-payments.md#record-a-bounced-check) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
@@ -349,6 +350,8 @@ its entry form with focus in the first field.
 | Imported (.qbw) invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
 | Sale of a tracked product (added to the invoice or sales receipt entry) | Cost of Goods Sold, at moving average cost | Inventory Asset |
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
+| Item receipt line for a tracked product | Inventory Asset (quantity and value added) | Items Received Not Billed |
+| Bill entered for an item receipt | Items Received Not Billed (the receipt's amount), and any price difference to Inventory Asset or Cost of Goods Sold | Accounts Payable (the bill's amount) |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
 | Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |

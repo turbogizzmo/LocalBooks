@@ -12,6 +12,10 @@ people using LocalBooks.
 - **Take a payment with the invoice.** Tick **Payment received** on a new invoice to record the money
   the customer paid as you wrote it. It's saved with the invoice in one step, and the invoice comes
   back Paid or Partial.
+- **Receive items before the bill.** **Vendors › Receive Items** brings goods from a purchase order
+  into stock when they arrive, even a part shipment, with their cost held in Items Received Not Billed
+  until the bill comes. **Enter Bill for Received Items** then posts the bill at the vendor's prices.
+  A/P Aging Summary shows what's received and not billed under its total.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
