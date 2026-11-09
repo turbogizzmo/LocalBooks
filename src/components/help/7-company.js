@@ -155,6 +155,14 @@ export const topics = [
     guide: 'backups-and-company-files',
   },
   {
+    id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
+    title: 'Keep a backup off this computer, and test that it restores',
+    body: 'Backup safety in File & Data Controls shows when a backup was last copied off this computer (Back up to… on another drive, a network or synced folder, or the offsite backup) and last test-restored. Test beside a snapshot, or Test restore a backup…, opens a backup and checks it as a restore would without replacing your books. Reminders lists either one after 30 days; change the days in Preferences › Reminders.',
+    keywords: 'backup safety offsite another drive usb test restore verify check reminder disk failure',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
+    guide: 'backups-and-company-files',
+  },
+  {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
     body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',

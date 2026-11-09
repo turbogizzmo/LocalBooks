@@ -71,6 +71,8 @@ pub struct ReminderSettings {
     pub email_queue: Category,
     pub tax_dates: Category,
     pub backup: Category,
+    /// A backup copied off this computer and a test restore (`backup_safety`): days before each is due.
+    pub backup_safety: Category,
 }
 
 impl Default for ReminderSettings {
@@ -84,12 +86,13 @@ impl Default for ReminderSettings {
             email_queue: shown(0),
             tax_dates: shown(30),
             backup: shown(7),
+            backup_safety: shown(30),
         }
     }
 }
 
 impl ReminderSettings {
-    fn categories(&self) -> [(&'static str, Category); 7] {
+    fn categories(&self) -> [(&'static str, Category); 8] {
         [
             ("overdue invoices", self.overdue_invoices),
             ("bills due", self.bills_due),
@@ -98,6 +101,7 @@ impl ReminderSettings {
             ("email later", self.email_queue),
             ("tax dates", self.tax_dates),
             ("backup", self.backup),
+            ("backup safety", self.backup_safety),
         ]
     }
 
@@ -107,7 +111,7 @@ impl ReminderSettings {
                 return Err(format!("REMINDER_BAD_DAYS: days for {name} must be 0 to {MAX_DAYS}"));
             }
         }
-        if self.backup.days < 1 {
+        if self.backup.days < 1 || self.backup_safety.days < 1 {
             return Err("REMINDER_BAD_DAYS: a backup is due after at least 1 day".into());
         }
         Ok(())
@@ -736,6 +740,10 @@ pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newe
     }
     if s.backup.show {
         groups.push(group("BACKUP", "Backup".into(), backup_due(newest_backup, as_of, s.backup.days)));
+    }
+    if s.backup_safety.show {
+        let safety = crate::backup_safety::status(pool).await?;
+        groups.push(group("BACKUP_SAFETY", "Backup safety".into(), crate::backup_safety::due(&safety, as_of, s.backup_safety.days)));
     }
     groups.retain(|g| !g.items.is_empty());
     Ok(groups)

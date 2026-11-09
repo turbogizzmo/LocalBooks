@@ -51,6 +51,7 @@ features![
     ach,
     attachments,
     attachments_library,
+    backup_safety,
     backups,
     bank_feeds,
     bank_matching,

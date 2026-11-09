@@ -47,6 +47,24 @@ offsite backup with the same folder and password, and click **Restore** beside t
 Copies are named `<company>-<date>-<time>.lbbackup`. Turning offsite backup off leaves the copies
 in the folder.
 
+## Backup safety: a copy off this computer, and a test restore
+
+The daily backups are kept on this computer, so a failed disk or a lost laptop takes them too. And
+a backup nobody has opened might not restore. **Backup safety** in File & Data Controls shows when
+each of these was last done:
+
+- **A copy off this computer**: a backup saved with **Back up to…** onto another drive, a network
+  share or a synced folder, or made by the offsite backup. A copy saved to another folder on the
+  same disk doesn't count.
+- **A test restore**: **Test** beside a snapshot, **Test restore a backup…** for any backup file,
+  or **Test restore** on an offsite copy. LocalBooks opens the backup and checks it as a restore
+  would (that it's an undamaged LocalBooks file, and how many entries it has), without replacing
+  your books.
+
+**Reminders** lists **Copy a backup off this computer** or **Test-restore a backup** when either
+hasn't been done in 30 days. Change the days, or turn it off, under **Backup safety** in
+**Edit › Preferences › Reminders**.
+
 ## Restore a backup
 
 1. Click **Restore from Backup…** and choose the backup, or click **Restore** beside a snapshot in

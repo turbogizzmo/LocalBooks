@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Backup safety.** File & Data Controls shows when a backup was last copied off this computer
+  and last test-restored. Reminders lists either one when it hasn't been done in 30 days, and Test
+  beside a snapshot (or Test restore a backup…) checks a backup without replacing your books.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

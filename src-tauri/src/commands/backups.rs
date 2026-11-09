@@ -16,7 +16,12 @@ handlers![
 pub async fn export_company_file(app_handle: AppHandle, destination_path: String) -> Result<BackupFile, String> {
     let db = app_handle.state::<Db>();
     let destination = PathBuf::from(destination_path);
-    backup::snapshot(&db.pool().await, &db.path().await?, &destination).await?;
+    let (pool, live) = (db.pool().await, db.path().await?);
+    backup::snapshot(&pool, &live, &destination).await?;
+    // A copy on another drive, a network share or a synced folder survives this disk (gap R8).
+    if crate::backup_safety::saved_copy(&pool, &destination, &live).await? {
+        notify(&app_handle);
+    }
     backup::describe_export(&destination)
 }
 
