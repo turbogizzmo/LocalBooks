@@ -7,6 +7,7 @@ import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButton
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -260,7 +261,8 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   );
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       {voucherElements}
       {reports.panel}
       {toolbar}
@@ -345,6 +347,9 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         <MemorizeDialog kind="EXPENSE" payload={memorizing} date={date} defaultName={payee.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
       )}
     </section>
+    {/* The chosen vendor's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="vendor" name={payee} names={vendors} />
+    </div>
   );
 }
 

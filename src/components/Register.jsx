@@ -1,3 +1,4 @@
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
@@ -34,6 +35,22 @@ function amountHeads(typeName) {
       return ['Increase', 'Decrease'];
   }
 }
+
+/** Customize Columns: the one-line register's columns in their usual order. */
+const REGISTER_COLUMNS = [
+  { id: 'date', label: 'Date', required: true },
+  { id: 'type', label: 'Type' },
+  { id: 'number', label: 'No.' },
+  { id: 'payee', label: 'Payee / name' },
+  { id: 'memo', label: 'Memo' },
+  { id: 'account', label: 'Account' },
+  { id: 'class', label: 'Class' },
+  { id: 'cleared', label: 'Cleared (✓)' },
+  { id: 'first', label: 'Increase (Deposit, Charge…)' },
+  { id: 'second', label: 'Decrease (Payment…)' },
+  { id: 'balance', label: 'Balance' },
+];
+const REGISTER_COLUMN_WIDTH = { date: 'w-[92px]', type: 'w-[110px]', number: 'w-[64px]', payee: 'w-[170px]', account: 'w-[190px]', class: 'w-[110px]', cleared: 'w-[30px]', first: 'w-[110px]', second: 'w-[110px]', balance: 'w-[120px]' };
 
 /** The register's date filter: all dates, this month, this year, or a range typed in From and To. */
 const DATE_FILTERS = [
@@ -262,7 +279,25 @@ export default function Register({ accounts, intent }) {
     </SortTh>
   );
   const balanceTh = <th className="qb-grid-head text-right" title="Running balance in date order">Balance</th>;
-  const columnCount = twoLine ? 9 : 12;
+  // Customize Columns (one line per transaction): which columns show, in what order.
+  const cols = useColumns('register', REGISTER_COLUMNS);
+  const columnCount = twoLine ? 9 : cols.columns.length + 1;
+  const oneLineHead = (c) => {
+    switch (c.id) {
+      case 'class':
+        return <th key={c.id} className="qb-grid-head">Class</th>;
+      case 'cleared':
+        return <Fragment key={c.id}>{clearedTh}</Fragment>;
+      case 'first':
+        return <Fragment key={c.id}>{sortTh('first', firstHead, 'text-right')}</Fragment>;
+      case 'second':
+        return <Fragment key={c.id}>{sortTh('second', secondHead, 'text-right')}</Fragment>;
+      case 'balance':
+        return <Fragment key={c.id}>{balanceTh}</Fragment>;
+      default:
+        return <Fragment key={c.id}>{sortTh(c.id, c.label)}</Fragment>;
+    }
+  };
 
   // Double-click (or the row menu) opens the transaction itself: the bill, check or invoice form
   // where LocalBooks has one, otherwise the journal entry.
@@ -426,6 +461,11 @@ export default function Register({ accounts, intent }) {
             <div className="self-end">
               <ExportMenu printable={false} onNotice={setNotice} {...exports} />
             </div>
+            {!twoLine && (
+              <div className="self-end">
+                <ColumnsMenu cols={cols} />
+              </div>
+            )}
           </>
         )}
         {data && (
@@ -508,17 +548,9 @@ export default function Register({ accounts, intent }) {
                 </colgroup>
               ) : (
                 <colgroup>
-                  <col className="w-[92px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[64px]" />
-                  <col className="w-[170px]" />
-                  <col />
-                  <col className="w-[190px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[30px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[120px]" />
+                  {cols.columns.map((c) => (
+                    <col key={c.id} className={REGISTER_COLUMN_WIDTH[c.id]} />
+                  ))}
                   <col className="w-[30px]" />
                 </colgroup>
               )}
@@ -546,31 +578,32 @@ export default function Register({ accounts, intent }) {
                   </>
                 ) : (
                   <tr>
-                    {sortTh('date', 'Date')}
-                    {sortTh('type', 'Type')}
-                    {sortTh('number', 'No.')}
-                    {sortTh('payee', 'Payee / name')}
-                    {sortTh('memo', 'Memo')}
-                    {sortTh('account', 'Account')}
-                    <th className="qb-grid-head">Class</th>
-                    {clearedTh}
-                    {sortTh('first', firstHead, 'text-right')}
-                    {sortTh('second', secondHead, 'text-right')}
-                    {balanceTh}
+                    {cols.columns.map(oneLineHead)}
                     <th className="qb-grid-head" aria-label="Actions" />
                   </tr>
                 )}
               </thead>
               <tbody>
-                {data && (data.startDate || data.rows.length === 0) && (
-                  <tr className="bg-qb-canvas">
-                    <td className="qb-grid-cell" colSpan={columnCount - 2}>
-                      {data.startDate ? `Balance forward as of ${formatDate(data.startDate)}` : 'No transactions yet.'}
-                    </td>
-                    <td className="qb-grid-cell num font-semibold">{formatCents(data.openingBalanceCents)}</td>
-                    <td />
-                  </tr>
-                )}
+                {data && (data.startDate || data.rows.length === 0) && (() => {
+                  // The opening balance sits under Balance, wherever that column is.
+                  const label = data.startDate ? `Balance forward as of ${formatDate(data.startDate)}` : 'No transactions yet.';
+                  const at = twoLine ? 7 : cols.columns.findIndex((c) => c.id === 'balance');
+                  if (at < 0) {
+                    return (
+                      <tr className="bg-qb-canvas">
+                        <td className="qb-grid-cell" colSpan={columnCount}>{label}</td>
+                      </tr>
+                    );
+                  }
+                  const after = columnCount - at - 1;
+                  return (
+                    <tr className="bg-qb-canvas">
+                      {at > 0 && <td className="qb-grid-cell" colSpan={at}>{label}</td>}
+                      <td className="qb-grid-cell num font-semibold" title={at === 0 ? label : undefined}>{formatCents(data.openingBalanceCents)}</td>
+                      {after > 0 && <td colSpan={after} />}
+                    </tr>
+                  );
+                })()}
                 {sorter.sorted.map((r) => {
                   const active = expanded === r.journalEntryId || selected === r.journalEntryId;
                   const rowProps = {
@@ -595,12 +628,11 @@ export default function Register({ accounts, intent }) {
                       {r.memo ?? ''}
                     </td>
                   );
-                  const amounts = (
-                    <>
-                      <td className="qb-grid-cell text-center font-semibold">{r.reconciled ? 'R' : r.cleared ? 'C' : ''}</td>
-                      <td className="qb-grid-cell num">{firstAmount(r) ? formatCents(firstAmount(r)) : ''}</td>
-                      <td className="qb-grid-cell num">{secondAmount(r) ? formatCents(secondAmount(r)) : ''}</td>
-                      <td className={`qb-grid-cell num font-semibold ${r.balanceCents < 0 ? 'text-qb-negative' : ''} ${inDateOrder ? '' : 'opacity-50'}`}>{formatCents(r.balanceCents)}</td>
+                  const clearedTd = <td className="qb-grid-cell text-center font-semibold">{r.reconciled ? 'R' : r.cleared ? 'C' : ''}</td>;
+                  const firstTd = <td className="qb-grid-cell num">{firstAmount(r) ? formatCents(firstAmount(r)) : ''}</td>;
+                  const secondTd = <td className="qb-grid-cell num">{secondAmount(r) ? formatCents(secondAmount(r)) : ''}</td>;
+                  const balanceTd = <td className={`qb-grid-cell num font-semibold ${r.balanceCents < 0 ? 'text-qb-negative' : ''} ${inDateOrder ? '' : 'opacity-50'}`}>{formatCents(r.balanceCents)}</td>;
+                  const actionsTd = (
                       <td className="qb-grid-cell cell-tight text-center" onClick={(ev) => ev.stopPropagation()}>
                         {!r.isReversal && (
                           <RowMenu
@@ -618,8 +650,42 @@ export default function Register({ accounts, intent }) {
                           />
                         )}
                       </td>
+                  );
+                  const amounts = (
+                    <>
+                      {clearedTd}
+                      {firstTd}
+                      {secondTd}
+                      {balanceTd}
+                      {actionsTd}
                     </>
                   );
+                  const oneLineCell = (c) => {
+                    switch (c.id) {
+                      case 'date':
+                        return <td key={c.id} className="qb-grid-cell">{formatDate(r.entryDate)}</td>;
+                      case 'type':
+                        return <td key={c.id} className="qb-grid-cell">{typeLabel(r)}</td>;
+                      case 'number':
+                        return <td key={c.id} className="qb-grid-cell" title={`Entry #${r.entryNumber}`}>{r.num ?? ''}</td>;
+                      case 'payee':
+                        return <td key={c.id} className="qb-grid-cell" title={r.partyName ?? ''}>{r.partyName ?? ''}</td>;
+                      case 'memo':
+                        return <Fragment key={c.id}>{memoCell}</Fragment>;
+                      case 'account':
+                        return <td key={c.id} className="qb-grid-cell" title={r.split ?? ''}>{otherAccount}</td>;
+                      case 'class':
+                        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{r.className ?? ''}</td>;
+                      case 'cleared':
+                        return <Fragment key={c.id}>{clearedTd}</Fragment>;
+                      case 'first':
+                        return <Fragment key={c.id}>{firstTd}</Fragment>;
+                      case 'second':
+                        return <Fragment key={c.id}>{secondTd}</Fragment>;
+                      default:
+                        return <Fragment key={c.id}>{balanceTd}</Fragment>;
+                    }
+                  };
                   return (
                     <Fragment key={r.lineId}>
                       {twoLine ? (
@@ -644,14 +710,8 @@ export default function Register({ accounts, intent }) {
                         </>
                       ) : (
                         <tr {...rowProps}>
-                          <td className="qb-grid-cell">{formatDate(r.entryDate)}</td>
-                          <td className="qb-grid-cell">{typeLabel(r)}</td>
-                          <td className="qb-grid-cell" title={`Entry #${r.entryNumber}`}>{r.num ?? ''}</td>
-                          <td className="qb-grid-cell" title={r.partyName ?? ''}>{r.partyName ?? ''}</td>
-                          {memoCell}
-                          <td className="qb-grid-cell" title={r.split ?? ''}>{otherAccount}</td>
-                          <td className="qb-grid-cell text-qb-ink-muted">{r.className ?? ''}</td>
-                          {amounts}
+                          {cols.columns.map(oneLineCell)}
+                          {actionsTd}
                         </tr>
                       )}
                       {expanded === r.journalEntryId && (

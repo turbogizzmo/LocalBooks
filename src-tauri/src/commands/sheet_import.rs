@@ -1,5 +1,5 @@
-//! Importing a spreadsheet the user laid out: customers, vendors or invoices, mapped column by
-//! column, checked row by row, then staged for the import review (Settings › Import & Migration).
+//! Importing a spreadsheet the user laid out: customers, vendors, transactions or journal entries,
+//! mapped column by column, checked row by row, then staged for the import review (Settings › Import & Migration).
 
 use super::migration::{IngestResult, QBW_PROGRESS};
 use super::prelude::*;
@@ -97,12 +97,8 @@ pub async fn stage_import_sheet(app: AppHandle, db: State<'_, Db>, file_path: St
 /// dialog. Returns the saved path, or `None` if the user cancelled.
 #[tauri::command]
 pub async fn save_import_template(app: AppHandle, kind: SheetKind) -> Result<Option<String>, String> {
-    let name = match kind {
-        SheetKind::Customers => "Customers template.csv",
-        SheetKind::Vendors => "Vendors template.csv",
-        SheetKind::Invoices => "Invoices template.csv",
-    };
-    let Some(path) = choose_export_path(app, name.into()).await? else { return Ok(None) };
+    let name = format!("{} template.csv", kind.title());
+    let Some(path) = choose_export_path(app, name).await? else { return Ok(None) };
     export_engine::write_atomically(&path, sheet::template(kind).as_bytes())?;
     Ok(Some(path.display().to_string()))
 }
