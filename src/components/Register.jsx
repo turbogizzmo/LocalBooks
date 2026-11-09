@@ -12,10 +12,13 @@ import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
 import { quickReport, reportShortcut, transactionJournal } from '../lib/quickReport.js';
+import { formKeyCommand } from '../lib/formKeys.js';
 import { useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import { opensOwnForm, transactionTarget } from '../lib/openTransaction.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
+import { setRegisterColor, useMyPreferences } from '../lib/myPreferences.js';
+import { REGISTER_COLORS, registerColor, registerTint } from '../lib/textSize.js';
 
 /** Headings for the increase and decrease columns, by account type, as in classic desktop registers. */
 function amountHeads(typeName) {
@@ -94,7 +97,16 @@ export default function Register({ accounts, intent }) {
   const scrollRef = useRef(null);
   // A row just recorded is scrolled into view once the register has reloaded with it.
   const scrollToEntry = useRef(null);
+  // Go To Transfer (Ctrl+G) opens a register on a transaction: it is selected once the rows load.
+  const selectOnLoad = useRef(intent?.data?.selectEntry ?? null);
   const { open: openChild } = useContext(WindowManagerContext);
+  // The register's color (a My Preference), kept per company file and account.
+  const { data: storage } = useLedgerQuery(api.getStorageStatus);
+  // Until the company file's path is known there is no key to keep a color under.
+  const companyPath = storage?.path ?? null;
+  const registerColors = useMyPreferences().registerColors;
+  const color = companyPath === null ? '' : registerColor(registerColors, companyPath, accountId);
+  const tint = registerTint(color);
 
   useEffect(() => {
     if (intent?.action !== 'open' || !intent.data) return;
@@ -102,6 +114,7 @@ export default function Register({ accounts, intent }) {
     setStart(intent.data.startDate ?? '');
     setEnd(intent.data.endDate ?? '');
     setSubaccounts(intent.data.includeSubaccounts ?? false);
+    selectOnLoad.current = intent.data.selectEntry ?? null;
   }, [intent]);
 
   const { data, error, reload } = useLedgerQuery(() =>
@@ -119,6 +132,13 @@ export default function Register({ accounts, intent }) {
       row.scrollIntoView({ block: 'nearest' });
       scrollToEntry.current = null;
     }
+  }, [data]);
+  useEffect(() => {
+    const id = selectOnLoad.current;
+    if (id === null || !data?.rows.some((r) => r.journalEntryId === id)) return;
+    selectOnLoad.current = null;
+    setSelected(id);
+    requestAnimationFrame(() => scrollRef.current?.querySelector(`[data-entry="${id}"]`)?.scrollIntoView({ block: 'nearest' }));
   }, [data]);
   const dateFilter = filterFor(start, end);
   const chooseDates = (id) => {
@@ -265,7 +285,30 @@ export default function Register({ accounts, intent }) {
   const runQuickReport = () => account && openReport(quickReport({ kind: 'account', id: account.id, name: account.name, startDate: start, endDate: end }));
   const runJournal = (r) => openReport(transactionJournal({ journalEntryId: r.journalEntryId, label: rowLabel(r) }));
   const pickFirst = () => setNotice({ kind: 'info', text: 'Click a transaction in the register first.' });
+  // Ctrl+G: the other side of the selected transaction, in its own register, when it is one account.
+  const goToTransfer = (r) => {
+    if (r.splitAccountId === null || r.splitAccountId === undefined) {
+      setNotice({ kind: 'info', text: 'This transaction has several other accounts (-Split-); open it to see them.' });
+      return;
+    }
+    openChild('accounting/register', 'open', { accountId: r.splitAccountId, startDate: start, endDate: end, selectEntry: r.journalEntryId }, { forceNew: true });
+  };
   const onKeyDown = (e) => {
+    // Ctrl+E opens the selected transaction to edit; Ctrl+G goes to the other side of a transfer.
+    const formKey = formKeyCommand(e);
+    // Ctrl+P prints the register for its dates.
+    if (formKey === 'print' && data) {
+      e.preventDefault();
+      print();
+      return;
+    }
+    if ((formKey === 'edit' || formKey === 'goto-transfer') && data) {
+      e.preventDefault();
+      if (!selectedRow) pickFirst();
+      else if (formKey === 'edit') openTransaction(selectedRow);
+      else goToTransfer(selectedRow);
+      return;
+    }
     const key = reportShortcut(e);
     if (!key || !data) return;
     e.preventDefault();
@@ -316,7 +359,7 @@ export default function Register({ accounts, intent }) {
           <TableDocument company={company} title={registerTitle} subtitle={exportRange} columns={registerColumns} rows={registerRows()} />
         </PrintPortal>
       )}
-      <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1">
+      <div className="qb-panel flex flex-none flex-wrap items-end gap-2 px-2 py-1" style={tint ? { backgroundColor: tint } : undefined}>
         <label>
           <span className="qb-label">Account</span>
           <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} placeholder="Choose an account…" className="qb-input w-[300px]" />
@@ -367,9 +410,19 @@ export default function Register({ accounts, intent }) {
               <input type="checkbox" className="accent-qb-green" checked={twoLine} onChange={(e) => setTwoLine(e.target.checked)} />
               2-line
             </label>
-            <button type="button" className="qb-btn qb-btn-secondary h-row-lg self-end px-2" onClick={print} title="Print this register for the dates chosen (Ctrl+P)">
+            <button type="button" className="qb-btn qb-btn-secondary h-row-lg self-end px-2" onClick={print} title="Print this register for the dates chosen (Ctrl+P, or File › Print…)">
               Print…
             </button>
+            <label title="A color for this account's register, so it's easy to tell apart (kept on this computer)">
+              <span className="qb-label">Color</span>
+              <select className="qb-input w-[96px]" value={color} onChange={(e) => companyPath !== null && setRegisterColor(companyPath, accountId, e.target.value)} disabled={companyPath === null} aria-label="Register color">
+                {REGISTER_COLORS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="self-end">
               <ExportMenu printable={false} onNotice={setNotice} {...exports} />
             </div>
@@ -429,7 +482,7 @@ export default function Register({ accounts, intent }) {
           <h2 className="text-md font-semibold">{data ? `${data.accountName}${data.includeSubaccounts ? ' (with subaccounts)' : ''}` : 'Register'}</h2>
           {data && (
             <span className="text-xs text-qb-ink-muted">
-              {data.accountTypeName} · click a row to see its lines, double-click to open it · Ctrl+Q QuickReport · Ctrl+H history · Ctrl+Y journal
+              {data.accountTypeName} · click a row to see its lines, double-click to open it · Ctrl+E edit · Ctrl+G go to transfer · Ctrl+Q QuickReport · Ctrl+H history · Ctrl+Y journal
             </span>
           )}
           {data && !inDateOrder && (
@@ -440,7 +493,7 @@ export default function Register({ accounts, intent }) {
           {accountId === null ? (
             <div className="p-2 text-sm text-qb-ink-muted">Choose an account to see its register.</div>
           ) : (
-            <table className="qb-grid">
+            <table className="qb-grid" style={tint ? { backgroundColor: tint } : undefined}>
               {twoLine ? (
                 <colgroup>
                   <col className="w-[110px]" />

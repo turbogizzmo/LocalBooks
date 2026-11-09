@@ -25,6 +25,9 @@ choose a customer or job to count that line as the job's cost in the
    if you need to.
 3. Add the category lines and click **Save & Post Check**.
 
+Beside the bank account (or the card, on a card charge or credit), **Ending balance** shows the
+account's balance now, with everything posted to it so far; it updates after each save.
+
 To keep the receipt with an expense or check, click **Attach a receipt…** before you post, or
 choose **Attach file…** in a posted row's **Actions** menu. See
 [Attach the vendor's invoice](bills.md#attach-the-vendors-invoice).
@@ -100,8 +103,10 @@ To spread one row over several accounts, click **Splits…**: a line grid opens 
 an account, memo, class and (for payments and charges) customer or job on each line. The row's
 amount is the total of the lines. Click **Splits…** again to go back to one account.
 
-A deposit has no payee of its own in LocalBooks, so a name typed in **Received from** is kept at the
-start of the deposit's memo. Deposits and card charges have no number.
+A name typed in a deposit's **Received from** that is one of your customers or vendors becomes the
+deposit's Received From: the register shows it as the payee, and the deposit is listed in that
+name's transactions and in reports by name. A name on neither list is kept at the start of the
+deposit's memo instead. Deposits and card charges have no number.
 
 ### Find, filter and view a register
 
@@ -111,7 +116,7 @@ start of the deposit's memo. Deposits and card charges have no number.
   other range. A register that starts after its first transaction opens with the balance forward.
 - **2-line** shows each transaction on two lines: date, number, payee and amounts on the first;
   type, account, class and memo on the second. LocalBooks remembers your choice.
-- **Print…** (or **File › Print…**, **Ctrl+P**) prints the register for its dates: every
+- **Print…** (or **File › Print…**, or **Ctrl+P** in the register) prints the register for its dates: every
   transaction in date order with the balance forward and the ending balance. **Export** saves the
   same rows to CSV or Excel.
 - **QuickReport** (**Ctrl+Q**) opens the account's transactions as a report for the register's

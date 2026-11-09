@@ -62,6 +62,75 @@ async fn a_bank_deposit_is_recorded_as_a_deposit_and_keeps_the_payee_in_its_memo
 }
 
 #[tokio::test]
+async fn a_deposit_from_a_customer_or_vendor_shows_them_as_payee_and_in_their_transactions() {
+    use crate::custom_reports::find::{find, FindQuery};
+    use crate::custom_reports::{Filters, NameKind, NameRef};
+    let pool = test_pool().await;
+    let (checking, sales, supplies) = (account(&pool, "1010").await, account(&pool, "4000").await, account(&pool, "6100").await);
+    let customer = crate::sales::create_customer(&pool, "Harbor Cafe", None).await.unwrap().id;
+    let vendor = crate::expenses::create_vendor(&pool, "Paper Supply Co", None).await.unwrap().id;
+
+    // Typed in the register: the payee becomes the deposit's Received From, not part of its memo.
+    let posted = post_register_entry(&pool, row(checking, RegisterSide::Deposit, Some("harbor cafe"), None, vec![split(sales, 30_000)])).await.unwrap();
+    let (memo, named): (Option<String>, Option<i64>) =
+        sqlx::query_as("SELECT d.memo, l.customer_id FROM deposits d JOIN deposit_lines l ON l.deposit_id = d.id WHERE d.id = ?1").bind(posted.source_id).fetch_one(&pool).await.unwrap();
+    assert_eq!((memo.as_deref(), named), (Some("typed in the register"), Some(customer)));
+
+    // On the Make Deposits form: a vendor's refund.
+    let refund = crate::banking::post_bank_deposit(
+        &pool,
+        DepositInput {
+            bank_account_id: checking,
+            deposit_date: d("2026-03-05"),
+            memo: None,
+            items: vec![],
+            other_lines: vec![DepositOtherLine { account_id: supplies, amount_cents: 2_500, memo: Some("Returned toner".into()), class_id: None, customer_id: None, vendor_id: Some(vendor) }],
+            cash_back: None,
+        },
+    )
+    .await
+    .unwrap();
+    let refund_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(refund).fetch_one(&pool).await.unwrap();
+
+    let reg = account_register(&pool, checking, None, None, false).await.unwrap();
+    let payee = |entry: i64| reg.rows.iter().find(|r| r.journal_entry_id == entry).unwrap().party_name.clone();
+    assert_eq!(payee(posted.journal_entry_id).as_deref(), Some("Harbor Cafe"));
+    assert_eq!(payee(refund_entry).as_deref(), Some("Paper Supply Co"));
+
+    let listed = |kind: NameKind, id: i64| {
+        let pool = pool.clone();
+        async move {
+            let query = FindQuery { filters: Filters { names: vec![NameRef { kind, id }], ..Default::default() }, end_date: Some(d("2026-12-31")), ..Default::default() };
+            find(&pool, &query, d("2026-12-31")).await.unwrap().rows.iter().map(|r| r.journal_entry_id).collect::<Vec<_>>()
+        }
+    };
+    assert_eq!(listed(NameKind::Customer, customer).await, vec![posted.journal_entry_id]);
+    assert_eq!(listed(NameKind::Vendor, vendor).await, vec![refund_entry]);
+
+    // A line names a customer or a vendor, not both.
+    let both = DepositOtherLine { account_id: sales, amount_cents: 100, memo: None, class_id: None, customer_id: Some(customer), vendor_id: Some(vendor) };
+    let err = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-06"), memo: None, items: vec![], other_lines: vec![both], cash_back: None }).await.unwrap_err();
+    assert!(err.starts_with("DEP_TWO_NAMES"), "{err}");
+}
+
+#[tokio::test]
+async fn a_deposit_whose_lines_name_different_people_has_no_payee_and_unknown_names_stay_in_the_memo() {
+    let pool = test_pool().await;
+    let (checking, sales) = (account(&pool, "1010").await, account(&pool, "4000").await);
+    let a = crate::sales::create_customer(&pool, "Ann", None).await.unwrap().id;
+    let b = crate::sales::create_customer(&pool, "Bo", None).await.unwrap().id;
+    let line = |customer_id| DepositOtherLine { account_id: sales, amount_cents: 1_000, memo: None, class_id: None, customer_id: Some(customer_id), vendor_id: None };
+    let id = crate::banking::post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d("2026-03-05"), memo: None, items: vec![], other_lines: vec![line(a), line(b)], cash_back: None }).await.unwrap();
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    let party: Option<String> = sqlx::query_scalar("SELECT party_name FROM v_entry_party WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();
+    assert_eq!(party, None);
+
+    let posted = post_register_entry(&pool, row(checking, RegisterSide::Deposit, Some("Walk-in"), None, vec![split(sales, 500)])).await.unwrap();
+    let named: Option<i64> = sqlx::query_scalar("SELECT customer_id FROM deposit_lines WHERE deposit_id = ?1").bind(posted.source_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(named, None);
+}
+
+#[tokio::test]
 async fn card_charges_and_credits_post_as_card_expenses_and_card_credits() {
     let pool = test_pool().await;
     let (card, rent) = (account(&pool, "2100").await, account(&pool, "6300").await);

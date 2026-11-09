@@ -187,7 +187,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
           <span className="qb-label">{isDeposit ? 'Received from' : 'Payee'}</span>
           {isDeposit ? (
             <>
-              <input className="qb-input w-[190px]" list={`register-payees-${account.id}`} value={payee} onChange={(e) => setPayee(e.target.value)} title="Kept in the deposit's memo" />
+              <input className="qb-input w-[190px]" list={`register-payees-${account.id}`} value={payee} onChange={(e) => setPayee(e.target.value)} title="A customer or vendor; a name on neither list is kept in the deposit's memo" />
               <datalist id={`register-payees-${account.id}`}>
                 {payeeNames.map((p) => (
                   <option key={`${p.id}-${p.name}`} value={p.name} />
@@ -253,7 +253,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
         ) : (
           <span>
             Records a {records}
-            {isDeposit && payee.trim() ? ` (the name is kept in its memo)` : ''} · Enter records a complete row · Restore clears it
+            {isDeposit && payee.trim() && !payeeNames.some((p) => p.name.toLocaleLowerCase() === payee.trim().toLocaleLowerCase()) ? ` (a name on neither list is kept in its memo)` : ''} · Enter records a complete row · Restore clears it
           </span>
         )}
       </div>

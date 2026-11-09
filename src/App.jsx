@@ -21,6 +21,8 @@ import { formatDate, setFourDigitYears } from './lib/dates.js';
 import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
+import { changeTextSize, useMyPreferences } from './lib/myPreferences.js';
+import { KIND_LABEL, NORMAL_TEXT_SIZE, textSizeFor, textSizeStepForKey, windowKind } from './lib/textSize.js';
 import { runPrintCommand } from './lib/printCommand.js';
 import {
   guardWindowClose,
@@ -115,6 +117,11 @@ export default function App() {
   const { state, open: openChild, focus: focusChild, close: closeChild } = manager;
   const active = state.windows.find((w) => w.id === state.activeId) ?? null;
   const activeView = active?.view ?? null;
+  // The active window's page, for the text size keys and menu items (their listeners outlive renders).
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+  const activeKind = windowKind(activeView);
+  const activeTextSize = textSizeFor(useMyPreferences().textSizes, activeKind);
   const activeMaximized = !!active && !active.minimized && (windowMode === 'one' || active.maximized);
 
   // Opening a page brings forward the window that shows it, or opens one. `data` carries what the
@@ -179,9 +186,13 @@ export default function App() {
       if (payload === 'help') setHelpOpen(true);
       // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
       if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
-      // File › Print…: the screen's own printout (a register prints its rows), or the window.
-      if (payload === 'print') runPrintCommand();
+      // File › Print…: the open form's Print, else the screen's own printout (a register prints its
+      // rows), else the window.
+      if (payload === 'print' && !runFormCommand('print')) runPrintCommand();
       // View › Show or Hide Left Icon Bar: hides the left pane, or brings back the full menu; kept for next time.
+      // View › Larger Text, Smaller Text, Actual Text Size: for every window of the active one's kind.
+      const step = { 'text-larger': 1, 'text-smaller': -1, 'text-actual': 0 }[payload];
+      if (step !== undefined) changeTextSize(windowKind(activeViewRef.current), step);
       if (payload === 'sidebar') api.setWindowPreferences({ sidebar: sidebarRef.current === 'hidden' ? 'menu' : 'hidden' }).catch(() => {});
     }));
     keep(win.listen(NEW_WINDOW_REQUESTED, () => openNewWindow()));
@@ -198,6 +209,14 @@ export default function App() {
       if (!IS_MAC && e.ctrlKey && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         openNewWindow();
+        return;
+      }
+      // Cmd/Ctrl + and −: larger or smaller text in this kind of window; Cmd/Ctrl+0 back to normal.
+      const step = textSizeStepForKey(e, IS_MAC);
+      const kind = windowKind(activeViewRef.current);
+      if (step !== null && kind) {
+        e.preventDefault();
+        changeTextSize(kind, step);
         return;
       }
       if (e.key === 'F1') {
@@ -281,6 +300,38 @@ export default function App() {
               )}
             </span>
           )}
+            {activeKind && (
+              <span className="flex flex-none items-center" role="group" aria-label={`Text size in ${KIND_LABEL[activeKind]}`}>
+                <button
+                  type="button"
+                  className="grid h-[24px] w-[26px] place-items-center rounded-xs text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+                  onClick={() => changeTextSize(activeKind, -1)}
+                  title={`Smaller text in ${KIND_LABEL[activeKind]} (${IS_MAC ? 'Cmd' : 'Ctrl'}+−)`}
+                  aria-label="Smaller text"
+                >
+                  <Icon name="SmallerText" />
+                </button>
+                {activeTextSize !== NORMAL_TEXT_SIZE && (
+                  <button
+                    type="button"
+                    className="rounded-xs px-1 text-xs text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+                    onClick={() => changeTextSize(activeKind, 0)}
+                    title={`Back to the normal text size (${IS_MAC ? 'Cmd' : 'Ctrl'}+0)`}
+                  >
+                    {activeTextSize}%
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="grid h-[24px] w-[26px] place-items-center rounded-xs text-qb-ink-muted hover:bg-qb-row-hover hover:text-qb-ink"
+                  onClick={() => changeTextSize(activeKind, 1)}
+                  title={`Larger text in ${KIND_LABEL[activeKind]} (${IS_MAC ? 'Cmd' : 'Ctrl'}++)`}
+                  aria-label="Larger text"
+                >
+                  <Icon name="LargerText" />
+                </button>
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setHelpOpen((o) => !o)}
