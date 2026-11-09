@@ -1,0 +1,14 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Sales Tax Revenue Summary, 2025-01-01 to 2025-12-31
+
+Tax                              Total Sales Non-Taxable Sales Taxable Sales
+State Sales Tax                   135,352.50    127,500.00      7,852.50
+No tax rate                         2,050.00      2,050.00          0.00
+TOTAL                             137,402.50    129,550.00      7,852.50
+
+2 lines
+
+The sales the Sales Tax Liability report counts, by tax rate. Sales with no rate are non-taxable.

@@ -1,0 +1,12 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Unrealized Gains & Losses, 2025-01-01 to 2025-12-31
+
+Type                           Date          Entry                     Name                      Memo                        Gain (Loss)
+TOTAL                                                                                                                               0.00
+
+0 lines
+
+Home currency adjustments (Accounting › Currency Revaluation) and their reversals, as posted to Unrealized Exchange Gain or Loss.
