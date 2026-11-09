@@ -51,10 +51,12 @@ export function stepButtons(ordered, currentId, open, { blocked = false, blocked
  * transactions without one.
  */
 export function duplicateDates(originalDate, originalDue, today) {
-  if (!originalDue || !originalDate) return { date: today, due: null };
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(originalDue ?? '') || !iso.test(originalDate ?? '') || !iso.test(today ?? '')) return { date: today, due: null };
   const [ay, am, ad] = originalDate.split('-').map(Number);
   const [by, bm, bd] = originalDue.split('-').map(Number);
-  const days = Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+  // Both are UTC midnights, so the difference is a whole number of days.
+  const days = (Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000;
   const [ty, tm, td] = today.split('-').map(Number);
   const due = new Date(Date.UTC(ty, tm - 1, td + days));
   return { date: today, due: due.toISOString().slice(0, 10) };

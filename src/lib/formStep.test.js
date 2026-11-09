@@ -47,4 +47,5 @@ test('a duplicate is dated today and keeps its terms’ days to the due date', (
   // Across a year end.
   assert.deepEqual(duplicateDates('2026-05-01', '2026-05-11', '2026-12-28'), { date: '2026-12-28', due: '2027-01-07' });
   assert.deepEqual(duplicateDates('2026-05-01', null, '2026-11-08'), { date: '2026-11-08', due: null });
+  assert.deepEqual(duplicateDates('2026-05-01T10:00', '2026-05-11', '2026-11-08'), { date: '2026-11-08', due: null });
 });
