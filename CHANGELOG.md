@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **An information panel for customers, vendors and items.** Click a name in the Customers or
+  Vendors list, or an item in Products & Services, to see its summary beside the list: open
+  balance, active estimates and unbilled costs, open purchase orders, phone, email, notes and
+  recent transactions, or for an item on hand, on order, average cost and value. Invoices, bills,
+  checks and expenses show it for the chosen name. It can be hidden, and its figures match the
+  reports.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

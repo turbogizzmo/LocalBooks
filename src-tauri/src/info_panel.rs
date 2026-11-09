@@ -1,0 +1,116 @@
+//! The information panel beside the customer, vendor and item lists and on forms (T56): the
+//! summary figures for one name or item. Every figure comes from the same function the matching
+//! list or report uses, so the panel can't disagree with them (tests check it):
+//!
+//! - open balance: the customer or vendor list (`sales::list_customers`, `expenses::list_vendors`),
+//!   which A/R and A/P aging and the balance reports add up the same way;
+//! - active estimates: `estimates::list_estimates` (pending or accepted, not yet invoiced);
+//! - unbilled costs: `billable_costs::list_unbilled` (Sales › Bill Costs); unbilled mileage trips:
+//!   `mileage::list_unbilled_trips`;
+//! - open purchase orders: `workflows::list_purchase_orders` (status OPEN), as Open Purchase Orders;
+//! - items: Inventory Valuation (`report_center::inventory_valuation`) for on hand, average cost and
+//!   value, and Stock Status (`report_center::stock_status`) for on order and the next delivery.
+
+use chrono::NaiveDate;
+use serde::Serialize;
+use sqlx::SqlitePool;
+
+use crate::ledger::db_err;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartySummary {
+    pub open_balance_cents: i64,
+    /// Customers: estimates pending or accepted and not yet turned into an invoice.
+    pub active_estimate_count: i64,
+    pub active_estimate_cents: i64,
+    /// Customers: billable expense and bill lines not yet on an invoice.
+    pub unbilled_cost_count: i64,
+    pub unbilled_cost_cents: i64,
+    /// Customers: billable mileage trips not yet on an invoice.
+    pub unbilled_trip_count: i64,
+    /// Vendors: purchase orders still open.
+    pub open_po_count: i64,
+    pub open_po_cents: i64,
+}
+
+/// The summary for customer (`kind` = `customer`) or vendor (`vendor`) `id`.
+pub async fn party_summary(pool: &SqlitePool, kind: &str, id: i64) -> Result<PartySummary, String> {
+    match kind {
+        "customer" => {
+            let customers = crate::sales::list_customers(pool).await?;
+            let customer = customers.iter().find(|c| c.id == id).ok_or_else(|| format!("PARTY_NOT_FOUND: customer {id} does not exist"))?;
+            let estimates: Vec<_> = crate::estimates::list_estimates(pool)
+                .await?
+                .into_iter()
+                .filter(|e| e.customer_name == customer.name && matches!(e.status.as_str(), "PENDING" | "ACCEPTED") && e.converted_to_invoice_id.is_none())
+                .collect();
+            let costs = crate::billable_costs::list_unbilled(pool, Some(id)).await?;
+            let trips = crate::mileage::list_unbilled_trips(pool, Some(id)).await?;
+            Ok(PartySummary {
+                open_balance_cents: customer.open_balance_cents,
+                active_estimate_count: estimates.len() as i64,
+                active_estimate_cents: sum(estimates.iter().map(|e| e.total_cents))?,
+                unbilled_cost_count: costs.len() as i64,
+                unbilled_cost_cents: sum(costs.iter().map(|c| c.amount_cents))?,
+                unbilled_trip_count: trips.len() as i64,
+                ..PartySummary::default()
+            })
+        }
+        "vendor" => {
+            let vendors = crate::expenses::list_vendors(pool).await?;
+            let vendor = vendors.iter().find(|v| v.id == id).ok_or_else(|| format!("PARTY_NOT_FOUND: vendor {id} does not exist"))?;
+            let pos: Vec<_> = crate::workflows::list_purchase_orders(pool).await?.into_iter().filter(|o| o.vendor_id == id && o.status == "OPEN").collect();
+            Ok(PartySummary {
+                open_balance_cents: vendor.open_balance_cents,
+                open_po_count: pos.len() as i64,
+                open_po_cents: sum(pos.iter().map(|o| o.total_cents))?,
+                ..PartySummary::default()
+            })
+        }
+        other => Err(format!("PARTY_KIND: unknown kind {other}")),
+    }
+}
+
+fn sum(mut values: impl Iterator<Item = i64>) -> Result<i64, String> {
+    values.try_fold(0i64, |acc, v| acc.checked_add(v)).ok_or_else(|| "INFO_OVERFLOW: amount out of range".to_string())
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemSummary {
+    /// False for a product or service whose stock isn't tracked: the stock figures are then empty.
+    pub tracked: bool,
+    pub qty_on_hand_e4: i64,
+    pub qty_on_order_e4: i64,
+    pub next_delivery: Option<NaiveDate>,
+    pub average_cost_cents: Option<i64>,
+    pub asset_value_cents: i64,
+    pub sales_price_cents: i64,
+}
+
+/// The summary for product or service `product_id`, as of `today`.
+pub async fn item_summary(pool: &SqlitePool, product_id: i64, today: NaiveDate) -> Result<ItemSummary, String> {
+    let item: Option<i64> = sqlx::query_scalar("SELECT id FROM inventory_items WHERE product_id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
+    let price: Option<i64> = sqlx::query_scalar("SELECT rate_cents FROM products_services WHERE id = ?1").bind(product_id).fetch_optional(pool).await.map_err(db_err)?;
+    let price = price.ok_or_else(|| format!("ITEM_NOT_FOUND: product or service {product_id} does not exist"))?;
+    let Some(item_id) = item else {
+        return Ok(ItemSummary { sales_price_cents: price, ..ItemSummary::default() });
+    };
+    let valuation = crate::report_center::inventory_valuation(pool, today).await?;
+    let status = crate::report_center::stock_status(pool, today, today).await?;
+    let value = valuation.rows.iter().find(|r| r.item_id == item_id);
+    let stock = status.rows.iter().find(|r| r.item_id == item_id);
+    Ok(ItemSummary {
+        tracked: true,
+        qty_on_hand_e4: value.map_or(0, |r| r.qty_on_hand_e4),
+        qty_on_order_e4: stock.map_or(0, |r| r.qty_on_order_e4),
+        next_delivery: stock.and_then(|r| r.next_delivery),
+        average_cost_cents: value.and_then(|r| r.average_cost_cents),
+        asset_value_cents: value.map_or(0, |r| r.asset_value_cents),
+        sales_price_cents: price,
+    })
+}
+
+#[cfg(test)]
+mod tests;

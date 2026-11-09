@@ -15,6 +15,7 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { PartyInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
 
@@ -498,6 +499,8 @@ export default function PartyList({ kind, navigate }) {
   };
   const inactiveCount = (data ?? []).filter((p) => !p.isActive).length;
   const selectedParty = (data ?? []).find((p) => p.id === selected) ?? null;
+  // The information panel beside the list, for the name clicked last; it can be hidden.
+  const info = useInfoPanel(kind);
   // QuickReport (Ctrl+Q): every transaction with the selected customer or vendor.
   const openReport = useReportOpener();
   const runQuickReport = (p) => openReport(quickReport({ kind, id: p.id, name: p.name }));
@@ -543,7 +546,8 @@ export default function PartyList({ kind, navigate }) {
           }}
         />
       )}
-      <section className="qb-panel flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 gap-2">
+      <section className="qb-panel flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">{cfg.title}</h2>
           <input className="qb-input h-row w-[220px] text-sm" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Find a ${cfg.noun}`} aria-label="Filter" />
@@ -555,6 +559,7 @@ export default function PartyList({ kind, navigate }) {
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
           <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          {info.button}
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
@@ -637,6 +642,8 @@ export default function PartyList({ kind, navigate }) {
           </form>
         </div>
       </section>
+      {info.shown && selectedParty && <PartyInfoPanel kind={kind} id={selectedParty.id} onHide={info.hide} />}
+      </div>
       {selectedParty && <PartyTransactions kind={kind} party={selectedParty} onClose={() => setSelected(null)} />}
     </div>
   );

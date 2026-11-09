@@ -32,6 +32,28 @@ To copy an account, choose **Duplicate…** on its row in the Chart of Accounts.
 window opens with its type, parent and description filled in; give it a name and number and click
 **Add account**.
 
+### The information panel
+
+Click a name in the Customers or Vendors list, or an item in Products & Services, and its
+information panel opens beside the list:
+
+- **Customers:** the open balance, active estimates (pending or accepted, not yet invoiced),
+  unbilled costs and unbilled mileage, then phone, email, notes and the five most recent
+  transactions (double-click one to open it).
+- **Vendors:** the balance you owe, open purchase orders, phone, email, notes and recent
+  transactions.
+- **Items:** the sales price and, for an item whose stock is tracked, on hand, on order (with the
+  next expected delivery), average cost and value.
+
+The figures are the reports' own: the open balance matches A/R or A/P Aging and the balance
+reports, open purchase orders the Open Purchase Orders report, unbilled costs Sales › Bill Costs,
+and the item figures Inventory Valuation and Stock Status.
+
+Invoices, bills, checks and expenses show the same panel beside the form once you choose a
+customer or vendor on it. Click **Hide info** (or **×** on the panel) to hide it, and **Show info**
+(or the slim **Info** strip beside a form) to bring it back; LocalBooks remembers the choice for
+each list and for forms.
+
 ### See a customer's or vendor's transactions
 
 Click a name in the Customers or Vendors list. Its transactions (invoices, payments, bills, checks

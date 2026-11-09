@@ -6,6 +6,7 @@ import ItemGroups from './ItemGroups.jsx';
 import Notice from './Notice.jsx';
 import { AdjustDialog, Dialog, TrackDialog } from './InventoryDialog.jsx';
 import RowMenu from './RowMenu.jsx';
+import { ItemInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
@@ -132,6 +133,9 @@ export default function Products({ accounts, intent }) {
     e.preventDefault();
     runQuickReport(p);
   };
+  // The information panel beside the list, for the item clicked last; it can be hidden.
+  const info = useInfoPanel('item');
+  const selectedProduct = selected === null ? null : (data ?? []).find((x) => x.id === selected) ?? null;
   const stock = useLedgerQuery(api.listInventoryItems);
   const items = useMemo(() => new Map((stock.data ?? []).map((i) => [i.productId, i])), [stock.data]);
   // Preferences › Items & Inventory › inventory off: products already tracked keep their stock; no new ones.
@@ -285,7 +289,8 @@ export default function Products({ accounts, intent }) {
       {grouping && <ItemGroups products={data ?? []} onClose={() => setGrouping(false)} />}
       {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
       {pricingLevels && !changingPrices && <PriceLevels onClose={() => setPricingLevels(false)} />}
-      <section className={`qb-panel min-h-0 flex-1 flex-col ${changingPrices || pricingLevels ? 'hidden' : 'flex'}`}>
+      <div className={`min-h-0 flex-1 gap-2 ${changingPrices || pricingLevels ? 'hidden' : 'flex'}`}>
+      <section className="qb-panel flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
@@ -301,6 +306,7 @@ export default function Products({ accounts, intent }) {
           <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setChangingPrices(true)}>
             Change prices…
           </button>
+          <span className="mr-2 flex-none">{info.button}</span>
           <label className="flex flex-none items-center gap-1 text-sm">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive
@@ -441,6 +447,8 @@ export default function Products({ accounts, intent }) {
           </form>
         </div>
       </section>
+      {info.shown && selectedProduct && <ItemInfoPanel product={selectedProduct} onHide={info.hide} />}
+      </div>
     </div>
   );
 }

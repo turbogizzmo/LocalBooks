@@ -9,6 +9,7 @@ import Notice from './Notice.jsx';
 import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
@@ -1155,7 +1156,8 @@ export default function Invoices({ accounts, intent }) {
           onDismiss={reset}
         />
       )}
-      <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+      <div className="flex flex-none gap-2">
+      <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
         <FormToolbar label="Invoice" groups={toolbarGroups} />
         {locked && (
           <Notice
@@ -1272,6 +1274,9 @@ export default function Invoices({ accounts, intent }) {
         )}
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       </section>
+      {/* The chosen customer's information panel (T56); it can be hidden. */}
+      <FormInfoPanel kind="customer" name={customer} names={customers.data} />
+      </div>
 
       <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })} />
     </div>
