@@ -39,6 +39,21 @@ people using LocalBooks.
   an hour (they were kept for a day), and staged copies and unpacked QuickBooks backups left by an
   earlier run are cleared when LocalBooks starts and quits. Saving a report, form, voucher or
   attachments now says the file is a plain copy the company password doesn't protect.
+- **Password-protected report PDFs.** A report emailed as a PDF, and the PDFs a scheduled report
+  sends or saves, can open only with a password (256-bit AES). A schedule's password is kept in
+  this computer's credential store, not in the company file.
+- **Seven more reports.** Budget Overview, Sales by Ship To Address, Sales Tax Revenue Summary, To Do
+  Notes, Memorized Transaction Listing, and Realized and Unrealized Gains & Losses are in the Report
+  Center and the Reports menu.
+- **Approvals for bills and purchase orders.** Expenses › Approvals holds bills and purchase orders
+  over an amount, or from a vendor you choose, until an Admin approves them. A waiting bill isn't
+  posted or in Pay Bills; approving records it as entered, and rejecting keeps it with a note.
+- **Comment on report figures.** Click Comment on a report, then a figure, to explain it. The
+  report is kept as shown under Reports › Commented Reports, and it prints with its comments,
+  numbered beside their figures.
+- **Company Snapshot.** Reports › Company Snapshot is a page of widgets you add, move and date:
+  account balances, who owes you, vendors to pay, the income and expense trend, and your top
+  customers, items and vendors. Each figure matches its report, which opens from the widget.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
