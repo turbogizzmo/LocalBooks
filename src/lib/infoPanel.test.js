@@ -46,4 +46,6 @@ test('a reorder point is a quantity, zero, or blank to clear it', () => {
   assert.deepEqual(readReorderPoint(' 2.5 '), { e4: 25_000 });
   assert.match(readReorderPoint('-3').error, /quantity/);
   assert.match(readReorderPoint('ten').error, /quantity/);
+  assert.match(readReorderPoint('.').error, /quantity/);
+  assert.deepEqual(readReorderPoint('.0'), { e4: 0 });
 });

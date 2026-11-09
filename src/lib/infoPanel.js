@@ -61,7 +61,8 @@ export function stampNotes(notes, stamp) {
 export function readReorderPoint(text) {
   const t = String(text ?? '').trim();
   if (t === '') return { e4: null };
-  if (/^0*(\.0*)?$/.test(t)) return { e4: 0 };
+  // Zero written any way (0, 00, 0.0, .0), but not a bare dot.
+  if (/^(0+(\.0*)?|0*\.0+)$/.test(t)) return { e4: 0 };
   const e4 = parseQuantityE4(t);
   return e4 === null ? { error: 'Enter the reorder point as a quantity, such as 10 or 2.5.' } : { e4 };
 }
