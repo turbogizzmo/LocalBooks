@@ -49,6 +49,22 @@ Close LocalBooks on the other computer, or wait a few minutes if it crashed.
 - **"Cannot reach the email server":** check the server name, the security setting and the port
   (STARTTLS on 587 or SSL/TLS on 465 are the usual pairs).
 
+## Save diagnostics for whoever is helping you
+
+Choose **Help › Save Diagnostics…** (or **Settings › Diagnostics**) and click **Save
+diagnostics…**. LocalBooks saves a zip file where you choose. It holds:
+
+- LocalBooks' version, your operating system and processor, and SQLite's version;
+- the company file's name and size, which schema updates it has, its integrity check, and how many
+  rows each table holds (counts only);
+- LocalBooks' own log: when it started and quit, which company file it opened, and any crash with
+  where in the program it happened.
+
+It holds no customers, vendors, amounts or other business data. **Show what's in it** lets you read
+everything before you save. LocalBooks never sends it anywhere; send the file yourself to whoever
+asked for it. The log itself is in LocalBooks' log folder (on a Mac, `~/Library/Logs/com.localbooks.desktop`)
+and keeps about half a megabyte.
+
 ## Where are my files?
 
 On a Mac:
