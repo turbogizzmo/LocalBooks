@@ -2,7 +2,7 @@
 //!
 //! SQLite before 3.54 can hand back uninitialized memory when it opens a database together with a
 //! `-wal` file whose page size doesn't match the database's (RUSTSEC-2026-0459). LocalBooks bundles
-//! an older SQLite through sqlx (gap R23 in `docs/gaps.md`), and it opens files other people send:
+//! an older SQLite through sqlx (gap R24 in `docs/gaps.md`), and it opens files other people send:
 //! company files, backups, and GnuCash or QuickBooks for Mac files to import. A real log always has
 //! its database's page size (SQLite can't change the page size of a database in WAL mode), so a
 //! mismatch only comes from a leftover or crafted file, and refusing it costs nothing.
@@ -24,13 +24,19 @@ fn head<const N: usize>(path: &Path) -> Option<[u8; N]> {
     Some(buf)
 }
 
-/// The database's page size, or None when `path` isn't (yet) a SQLite database.
+/// A page size SQLite accepts: a power of two from 512 to 65536.
+fn valid_page_size(size: u32) -> Option<u32> {
+    ((512..=65_536).contains(&size) && size.is_power_of_two()).then_some(size)
+}
+
+/// The database's page size, or None when `path` isn't (yet) a SQLite database or its header
+/// holds a size SQLite would reject anyway.
 fn db_page_size(path: &Path) -> Option<u32> {
     let header: [u8; 18] = head(path)?;
     if &header[..16] != DB_MAGIC {
         return None;
     }
-    Some(match u16::from_be_bytes([header[16], header[17]]) {
+    valid_page_size(match u16::from_be_bytes([header[16], header[17]]) {
         1 => 65_536,
         n => u32::from(n),
     })
@@ -43,10 +49,11 @@ fn wal_page_size(path: &Path) -> Option<u32> {
     if magic != 0x377f_0682 && magic != 0x377f_0683 {
         return None;
     }
-    Some(u32::from_be_bytes([header[8], header[9], header[10], header[11]]))
+    valid_page_size(u32::from_be_bytes([header[8], header[9], header[10], header[11]]))
 }
 
-fn wal_path(db: &Path) -> PathBuf {
+/// `db`'s log file: its name with `-wal` added, built without going through a string.
+pub(crate) fn wal_path(db: &Path) -> PathBuf {
     let mut name = db.as_os_str().to_owned();
     name.push("-wal");
     PathBuf::from(name)
@@ -71,7 +78,10 @@ mod tests {
     use super::*;
 
     fn dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("lb-wal-guard-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        // The process, a counter and the time: unique even for tests started in the same instant.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("lb-wal-guard-{}-{n}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -122,6 +132,14 @@ mod tests {
         assert_eq!(check(&db), Ok(()), "an empty log");
         std::fs::write(wal_path(&db), vec![0u8; 32]).unwrap();
         assert_eq!(check(&db), Ok(()), "not a log at all: SQLite ignores it");
+        // Page sizes SQLite would reject in either header are not this check's business.
+        for bad in [0u32, 256, 3000, 131_072] {
+            std::fs::write(wal_path(&db), wal_header(bad)).unwrap();
+            assert_eq!(check(&db), Ok(()), "log page size {bad}");
+        }
+        std::fs::write(&db, db_header(3000)).unwrap();
+        std::fs::write(wal_path(&db), wal_header(1024)).unwrap();
+        assert_eq!(check(&db), Ok(()), "database page size 3000");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

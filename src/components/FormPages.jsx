@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatDate } from '../lib/dates.js';
 import { PrintPortal } from './PrintDocuments.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 // The standard PDF fonts, as the screen and the print dialog show them.
 const FONT_STACKS = {
@@ -57,7 +58,7 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
-const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo' };
+const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo', BILL_PAYMENT: 'bill payment stub' };
 
 /** "Emailed 10/21/2026 to ap@acme.com" (sent_at is UTC; shown as the local date). */
 export function sentText(record) {
@@ -306,7 +307,7 @@ export function useFormPrinter(onNotice) {
     async (kind, id, period = null) => {
       try {
         const path = await api.saveFormPdf(kind, id, period);
-        if (path) onNotice({ kind: 'success', text: `Saved ${path}` });
+        if (path) onNotice({ kind: 'success', text: savedCopyText(path) });
       } catch (err) {
         onNotice({ kind: 'error', text: errorText(err) });
       }

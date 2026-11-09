@@ -854,7 +854,7 @@ async fn prepare(pool: &SqlitePool, path: &Path, backups: Option<&Path>) -> Resu
 /// left behind (seen on Linux and Windows); one connection opened and closed on its own does it.
 /// Best effort: the data is safe either way, the next open replays the log.
 async fn checkpoint_closed(path: &Path) {
-    if !PathBuf::from(format!("{}-wal", path.display())).exists() || crate::wal_guard::check(path).is_err() {
+    if !crate::wal_guard::wal_path(path).exists() || crate::wal_guard::check(path).is_err() {
         return;
     }
     let options = SqliteConnectOptions::new().filename(path).busy_timeout(Duration::from_secs(5));

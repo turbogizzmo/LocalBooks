@@ -9,6 +9,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 
@@ -69,8 +70,13 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
   const [number, setNumber] = useState(account?.accountNumber ?? '');
   const [parentId, setParentId] = useState(from?.parentId ?? null);
   const [description, setDescription] = useState(from?.description ?? '');
+  // An expense account's reimbursements, when Preferences count reimbursed expenses as income.
+  const [reimburseTo, setReimburseTo] = useState(account?.reimbursementIncomeAccountId ?? null);
+  const isExpense = types.find((t) => t.code === type)?.classification === 'EXPENSE';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Renaming to another account's name (beside it in the chart) offers to merge into it.
+  const mergeOffer = useMergeOffer('ACCOUNT', account?.id ?? null, account?.name ?? '', (text) => onSaved(text));
 
   // A subaccount shares its parent's type and nests at most five levels; never beneath itself.
   const below = (a) => account && (a.id === account.id || a.fullName.startsWith(`${account.fullName}:`));
@@ -82,7 +88,9 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
     setBusy(true);
     const input = { name: name.trim(), accountNumber: number.trim() || null, accountType: type, parentId, description: description.trim() || null };
     try {
+      if (editing && (await mergeOffer.check(name))) return setBusy(false);
       const saved = editing ? await api.updateAccount(account.id, input) : await api.createAccount(input);
+      if (editing && isExpense && reimburseTo !== (account.reimbursementIncomeAccountId ?? null)) await api.setReimbursementAccount(account.id, reimburseTo);
       onSaved(`${editing ? 'Saved' : 'Added'} ${saved.accountNumber ? `${saved.accountNumber} · ` : ''}${saved.fullName}.`);
     } catch (err) {
       setError(errorText(err));
@@ -140,6 +148,22 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
             <span className="font-semibold text-qb-ink-muted">Description (optional)</span>
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
+          {editing && isExpense && (
+            <label className="col-span-2 flex flex-col gap-0.5" title="Used when Preferences › Time & Expenses counts reimbursed expenses as income">
+              <span className="font-semibold text-qb-ink-muted">Reimbursements billed to customers go to</span>
+              <select className="qb-input" value={reimburseTo ?? ''} onChange={(e) => setReimburseTo(e.target.value === '' ? null : Number(e.target.value))}>
+                <option value="">The income account in Preferences › Time &amp; Expenses</option>
+                {accounts
+                  .filter((a) => a.classification === 'INCOME' && (a.isActive || a.id === reimburseTo))
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.accountNumber ? `${a.accountNumber} · ${a.fullName}` : a.fullName}
+                      {a.isActive ? '' : ' (inactive)'}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
         </div>
         {/* Files kept with the account (a loan agreement, a statement): saved at once, not with Save. */}
         {editing && (
@@ -152,6 +176,7 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
           <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy}>{editing ? 'Save' : 'Add account'}</button>
         </div>
+        {mergeOffer.panel}
       </form>
     </Dialog>
   );

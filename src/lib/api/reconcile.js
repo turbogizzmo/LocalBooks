@@ -14,9 +14,4 @@ export default {
   cancelReconciliation: (reconciliationId) => invoke('cancel_reconciliation', { reconciliationId }),
   // Undo Last Reconciliation; resolves how many transactions were uncleared.
   undoLastReconciliation: (reconciliationId, reason = null) => invoke('undo_last_reconciliation', { reconciliationId, reason }),
-  // The bank or card statement kept with a reconciliation.
-  attachReconciliationStatement: (reconciliationId, path) => invoke('attach_reconciliation_statement', { reconciliationId, path }),
-  listReconciliationStatements: (reconciliationId) => invoke('list_reconciliation_statements', { reconciliationId }),
-  saveReconciliationStatement: (id) => invoke('save_reconciliation_statement', { id }),
-  removeReconciliationStatement: (id) => invoke('remove_reconciliation_statement', { id }),
 };
