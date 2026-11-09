@@ -1142,7 +1142,10 @@ pub async fn bill_payment_doc(pool: &SqlitePool, payment_id: i64, symbol: &str) 
     let lines = rows
         .iter()
         .map(|(number, bill_date, bill_total, paid)| FormLine {
-            description: format!("Bill {}· {}", number.as_deref().map(|n| format!("{n} ")).unwrap_or_default(), format_date(bill_date)),
+            description: match number.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+                Some(n) => format!("Bill {n} · {}", format_date(bill_date)),
+                None => format!("Bill · {}", format_date(bill_date)),
+            },
             quantity: String::new(),
             rate: money(*bill_total),
             amount: money(*paid),
@@ -1228,6 +1231,7 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
         FormKind::BillPayment => (
             vec![
                 ("Payment date".to_string(), "10/15/2026".to_string(), false),
+                ("Paid from".to_string(), "Business Checking".to_string(), false),
                 ("Check no.".to_string(), "1001".to_string(), false),
                 ("Amount paid".to_string(), money(total), true),
             ],

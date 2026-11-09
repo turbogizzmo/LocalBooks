@@ -65,7 +65,7 @@ export const topics = [
   {
     id: 'custom-forms', area: 'company', views: ['settings/forms', 'sales/invoices', 'sales/estimates', 'sales/all', 'sales/statements', 'sales/customers'],
     title: 'Design your forms: invoices, estimates, sales receipts and statements',
-    body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts, customer statements, credit memos and bill payment stubs, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style.',
+    body: 'Settings › Custom Forms sets the layout (Classic, Modern or Compact), title, paper size, font, accent color, logo placement, columns, message and terms for printed invoices, estimates, sales receipts, customer statements, credit memos and bill payment stubs, with a live preview. Save several styles and pick one per customer in the customer’s record; everyone else gets the default style. Print… and Save as PDF… use the customer’s style (bill payment stubs, sent to vendors, use the default style).',
     keywords: 'form designer template style layout classic modern compact customize logo color font pdf print invoice estimate sales receipt statement bill payment stub',
     go: { label: 'Go to Custom Forms', view: 'settings/forms' },
     guide: 'custom-forms',
