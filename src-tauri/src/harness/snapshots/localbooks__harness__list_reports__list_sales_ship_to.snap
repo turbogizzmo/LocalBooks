@@ -1,0 +1,34 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Sales by Ship To Address, 2025-01-01 to 2025-12-31
+
+Type                           Date          Num                       Customer                         Amount
+8 Pier Road, Harbor Lane
+  Invoice                      2025-02-10    1002                      Brightwater Cafe              11,887.50
+Total 8 Pier Road, Harbo                                                                             11,887.50
+(No ship-to address)
+  Invoice                      2025-01-10    1001                      Alder & Finch LLP             11,156.25
+  Sales Receipt                2025-02-20    1                                                          210.00
+  Invoice                      2025-03-10    1003                      Cobalt Outfitters             10,743.75
+  Invoice                      2025-04-10    1004                      Alder & Finch LLP             11,050.00
+  Invoice                      2025-05-10    1005                      Brightwater Cafe              11,781.25
+  Sales Receipt                2025-05-20    2                                                          210.00
+  Invoice                      2025-06-10    1006                      Cobalt Outfitters             10,637.50
+  Invoice                      2025-07-10    1007                      Alder & Finch LLP             11,368.75
+  Invoice                      2025-08-10    1008                      Brightwater Cafe              11,675.00
+  Sales Receipt                2025-08-20    3                                                          210.00
+  Invoice                      2025-09-10    1009                      Cobalt Outfitters             10,531.25
+  Invoice                      2025-09-15    1013                      Bonn Studio GmbH               5,208.00
+  Invoice                      2025-10-10    1010                      Alder & Finch LLP             11,262.50
+  Invoice                      2025-11-10    1011                      Brightwater Cafe              11,993.75
+  Invoice                      2025-11-14    1014                      Brightwater Cafe               2,200.00
+  Sales Receipt                2025-11-20    4                                                          210.00
+  Invoice                      2025-12-10    1012                      Cobalt Outfitters             10,425.00
+Total (No ship-to addres                                                                            130,873.00
+TOTAL                                                                                               142,760.50
+
+18 lines
+
+Invoices and sales receipts by their Ship To address; each amount is the income it posted, before sales tax.

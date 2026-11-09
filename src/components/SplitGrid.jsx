@@ -138,9 +138,9 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
 
   // The columns between # and Amount as the person arranged them (Customize Columns), of those
   // this form has.
-  const cols = useColumns('split-lines', SPLIT_COLUMNS);
   const offered = { stock: withStock, from: withReceivedFrom, job: withJobs, bill: withJobs, class: withClasses, qty: withPricing, rate: withPricing };
-  const middle = cols.columns.filter((c) => offered[c.id] ?? true);
+  const cols = useColumns('split-lines', SPLIT_COLUMNS, (id) => offered[id] ?? true);
+  const middle = cols.columns;
   const headLabel = (c) => (c.id === 'category' ? categoryLabel : c.label);
   /** One row's cell in column `id`. */
   const cell = (id, row, i, evaluated) => {

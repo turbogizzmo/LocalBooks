@@ -264,7 +264,6 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = showsClassColumn(tracking, lines);
-  const cols = useColumns('sales-lines', LINE_COLUMNS);
   const pricing = usePriceLevels();
   const withLevels = withProducts && (pricing.levels.length > 0 || lines.some((l) => l.levelId != null));
   const customerRow = (customers ?? []).find((c) => c.name.toLowerCase() === String(customer ?? '').trim().toLowerCase());
@@ -459,11 +458,12 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
   // The middle columns as the person arranged them (Customize Columns), of those this form has.
   const offered = { serviceDate: serviceDates, level: withLevels, class: withClasses };
+  const cols = useColumns('sales-lines', LINE_COLUMNS, (id) => offered[id] ?? true);
   const needsAccount = lines.some((l) => {
     const state = evaluateLine(l, { allowZeroRate });
     return !state.blank && Boolean(state.errors.account);
   });
-  const middle = cols.all.filter((c) => (c.visible || (c.id === 'account' && needsAccount)) && (offered[c.id] ?? true));
+  const middle = cols.all.filter((c) => c.visible || (c.id === 'account' && needsAccount));
   // A subtotal's or group heading's one cell spans them.
   const spareColumns = middle.length;
   const blankCell = (id) => <td key={id} className="qb-grid-cell" />;

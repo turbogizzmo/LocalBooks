@@ -36,6 +36,33 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Approvals for bills and purchase orders
+
+A company can have bills and purchase orders approved before they count. Under **Expenses ›
+Approvals**, an Admin adds **rules**: for example "Approve bills of $1,000.00 or more", "Approve
+bills from Harbor Leasing" (every one, any amount), or "Approve purchase orders of $500.00 or more".
+
+When you save a bill or purchase order that matches a rule, LocalBooks doesn't record it. It says
+**Sent for approval** and the document waits under **Expenses › Approvals**. A waiting bill isn't
+posted: it isn't in Accounts Payable, the aging or **Pay Bills**. A waiting purchase order isn't
+an open order, so it can't be received or billed.
+
+An Admin then opens **Approvals** and, for each one:
+
+- **Approve** records it as entered: the bill is posted (Dr expense, Cr Accounts Payable) and can
+  be paid; the purchase order becomes an open order. If it can't be recorded any more (for example
+  its date is now before the closing date), it stays waiting and the reason is shown.
+- **Reject…** asks why and keeps the request with that note. Nothing is recorded. Enter it again,
+  corrected, if it should go ahead.
+
+**Waiting**, **Approved**, **Rejected** and **All** show the record of every request, who asked,
+who decided and when. Approving and rejecting are Admin tasks (see [Users and
+passwords](users-and-passwords.md)); in a company file without users, everyone is an Admin, so
+approval is a second look rather than a control.
+
+Only bills and orders entered on their forms are held. Imports, bills made from an approved
+purchase order, and edits to a bill that was already approved are recorded straight away.
+
 ## Fix a mistake on a bill
 
 Double-click the bill in the list (or choose **Edit…** in its **Actions** menu), make your changes

@@ -10,10 +10,12 @@ repository = "https://github.com/turbogizzmo/LocalBooks"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+aes = "=0.8.4"
 aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 argon2 = { version = "=0.6.0", default-features = false, features = ["alloc"] }
 base64 = "0.23"
 calamine = { version = "0.38", default-features = false }
+cbc = { version = "=0.1.2", features = ["alloc"] }
 cfb = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 csv = "1"
@@ -58,4 +60,6 @@ lto = true
 [dev-dependencies]
 calamine = { version = "0.38", features = ["dates"] }
 insta = "1"
+# Opens the password-protected PDFs pdf.rs writes, as a reader would (pdf-extract already uses it).
+lopdf = { version = "=0.42.0", default-features = false }
 proptest = { version = "1", default-features = false, features = ["std"] }
