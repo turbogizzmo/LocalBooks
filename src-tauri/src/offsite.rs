@@ -281,12 +281,22 @@ fn read_header(file: &mut impl Read) -> Result<Header, String> {
     Ok((head, salt, cost, prefix))
 }
 
-/// Decrypts the copy at `path` into `out`, with the key `password` gives.
+/// Decrypts the copy at `path` into `out`, with the key `password` gives. On any failure `out` is
+/// removed, so no partly decrypted data is left behind.
 pub async fn decrypt_file(path: &Path, password: &str, out: &Path) -> Result<(), String> {
+    let result = decrypt_into(path, password, out).await;
+    if result.is_err() {
+        let _ = std::fs::remove_file(out);
+    }
+    result
+}
+
+async fn decrypt_into(path: &Path, password: &str, out: &Path) -> Result<(), String> {
     let io = |e: std::io::Error| format!("OFFSITE_READ: {e}");
     let mut reader = std::io::BufReader::new(std::fs::File::open(path).map_err(io)?);
     let (head, salt, cost, prefix) = read_header(&mut reader)?;
-    let key = crypto::derive_backup_key(password, salt, cost).await?;
+    // A damaged header can carry an unusable cost; report it as a file that isn't a backup.
+    let key = crypto::derive_backup_key(password, salt, cost).await.map_err(|_| "OFFSITE_NOT_A_BACKUP: the file's header is damaged".to_string())?;
     let cipher = Aes256Gcm::new_from_slice(key.as_slice()).map_err(|_| "OFFSITE_KEY: bad key length".to_string())?;
     let wrong = || "OFFSITE_DECRYPT: the password is wrong, or the file is damaged or incomplete".to_string();
     let mut writer = std::io::BufWriter::new(std::fs::File::create(out).map_err(io)?);

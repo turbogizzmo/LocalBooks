@@ -4,7 +4,8 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import Notice from './Notice.jsx';
 
 function formatBytes(n) {
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -24,6 +25,7 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const settings = status?.settings ?? null;
+  const keepOk = form && Number.isInteger(Number(form.keep)) && Number(form.keep) >= 1 && Number(form.keep) <= 100 && String(form.keep).trim() !== '';
 
   const act = async (fn, ok) => {
     setBusy(true);
@@ -52,10 +54,10 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
       setNotice({ kind: 'error', text: 'The two passwords are not the same.' });
       return;
     }
-    const done = await act(() => api.setUpOffsiteBackup(form.folder, form.password, Number(form.keep)), () => 'Offsite backup is on. The first copy is being made now.');
+    const done = await act(() => api.setUpOffsiteBackup(form.folder, form.password, Number(form.keep)));
     if (done) {
       setForm(null);
-      act(() => api.offsiteBackupNow(), (c) => `Saved ${c.fileName} to the folder.`);
+      await act(() => api.offsiteBackupNow(), (c) => `Offsite backup is on. Saved the first copy, ${c.fileName}, to the folder.`);
     }
   };
 
@@ -119,7 +121,7 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
             <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={pickFolder}>Choose…</button>
             <label>
               <span className="qb-label">Copies to keep</span>
-              <input className="qb-input w-[80px]" type="number" min={1} max={100} value={form.keep} onChange={(e) => setForm({ ...form, keep: e.target.value })} />
+              <input className="qb-input w-[80px]" type="number" min={1} max={100} step={1} value={form.keep} aria-invalid={!keepOk} onChange={(e) => setForm({ ...form, keep: e.target.value })} />
             </label>
           </div>
           <div className="flex items-end gap-2">
@@ -137,7 +139,7 @@ export default function OffsiteBackup({ isAdmin, onRestored }) {
             can’t open a copy without it. This computer keeps the key in its {navigator.platform.startsWith('Mac') ? 'Keychain' : 'credential store'} so copies need no password.
           </p>
           <div className="flex gap-2">
-            <button type="button" className="qb-btn qb-btn-primary h-row" disabled={busy || !form.folder || form.password.length < 8} onClick={saveSetup}>Save</button>
+            <button type="button" className="qb-btn qb-btn-primary h-row" disabled={busy || !form.folder || form.password.length < 8 || !keepOk} onClick={saveSetup}>Save</button>
             <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy} onClick={() => setForm(null)}>Cancel</button>
           </div>
         </div>

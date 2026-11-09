@@ -53,12 +53,18 @@ async fn chunks_round_trip_and_tampering_is_caught() {
             std::fs::write(&sealed, &bytes[..HEADER_LEN + CHUNK + TAG_LEN]).unwrap();
             assert!(decrypt_file(&sealed, "correct horse battery", &out).await.unwrap_err().starts_with("OFFSITE_DECRYPT"), "truncated");
         }
+        assert!(!out.exists(), "a failed decrypt leaves no partial plaintext");
         let mut flipped = bytes.clone();
         let last = flipped.len() - 1;
         flipped[last] ^= 1;
         std::fs::write(&sealed, &flipped).unwrap();
         assert!(decrypt_file(&sealed, "correct horse battery", &out).await.unwrap_err().starts_with("OFFSITE_DECRYPT"), "flipped bit");
     }
+    // A header whose Argon2 cost is out of range is not a backup.
+    let mut bad_cost = std::fs::read(tmp.0.join("sealed.lbbackup")).unwrap();
+    bad_cost[24..28].copy_from_slice(&u32::MAX.to_le_bytes());
+    std::fs::write(tmp.0.join("bad.lbbackup"), &bad_cost).unwrap();
+    assert!(decrypt_file(&tmp.0.join("bad.lbbackup"), "correct horse battery", &tmp.0.join("o")).await.unwrap_err().starts_with("OFFSITE_NOT_A_BACKUP"));
     std::fs::write(tmp.0.join("x.lbbackup"), b"SQLite format 3\0 and more").unwrap();
     assert!(decrypt_file(&tmp.0.join("x.lbbackup"), "correct horse battery", &tmp.0.join("o")).await.unwrap_err().starts_with("OFFSITE_NOT_A_BACKUP"));
 }
