@@ -6,8 +6,8 @@ design is saved in your company file.
 
 ## Change the design
 
-1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt** or
-   **Statement**.
+1. Go to **Settings › Custom Forms** and pick **Invoice**, **Estimate**, **Sales receipt**,
+   **Statement** or **Credit memo**.
 2. Change the layout on the left. The preview on the right updates as you go:
    - **Layout**: **Classic** (company and title side by side over a rule), **Modern** (the title in
      a colored band, banded rows) or **Compact** (smaller type, more lines per page).
@@ -19,7 +19,8 @@ design is saved in your company file.
      under the billing address. On sales forms, also whether the rep, the ship date and Ship via,
      and customer custom fields print. Each prints only when the form has a value.
    - **Line items**: the shaded header, line numbers, the quantity and rate columns, the column
-     labels, and item custom fields under each line. On invoices you can also hide the payments and credits listed above the balance due.
+     labels, item custom fields under each line, and the Service Date column (it prints only when
+     a line has a service date). On invoices you can also hide the payments and credits listed above the balance due.
    - **Statements**: the aging summary under the amount due, and a **P.O. No.** column with the
      customer's purchase order number on each invoice and credit memo (off until you turn it on).
    - **Messages**: a message to the customer, terms or payment instructions, and a footer for

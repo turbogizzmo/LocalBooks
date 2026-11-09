@@ -130,7 +130,7 @@ async fn an_invoice_paid_total_out_of_step_with_its_payments_is_reported() {
                 income_account_id: account(&pool, "4000").await,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

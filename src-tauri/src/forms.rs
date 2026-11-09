@@ -27,11 +27,13 @@ pub enum FormKind {
     SalesReceipt,
     /// A customer statement; its document id is the customer's id, with a statement period.
     Statement,
+    /// A credit memo (or refund receipt) for a customer.
+    CreditMemo,
 }
 
 impl FormKind {
     #[cfg(test)]
-    pub const ALL: [FormKind; 4] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement];
+    pub const ALL: [FormKind; 5] = [FormKind::Invoice, FormKind::Estimate, FormKind::SalesReceipt, FormKind::Statement, FormKind::CreditMemo];
 
     pub(crate) fn key(self) -> &'static str {
         match self {
@@ -39,6 +41,7 @@ impl FormKind {
             FormKind::Estimate => "ESTIMATE",
             FormKind::SalesReceipt => "SALES_RECEIPT",
             FormKind::Statement => "STATEMENT",
+            FormKind::CreditMemo => "CREDIT_MEMO",
         }
     }
 
@@ -48,6 +51,7 @@ impl FormKind {
             FormKind::Estimate => "Estimate",
             FormKind::SalesReceipt => "Sales Receipt",
             FormKind::Statement => "Statement",
+            FormKind::CreditMemo => "Credit Memo",
         }
     }
 }
@@ -177,6 +181,8 @@ pub struct FormTemplate {
     pub show_custom_fields: bool,
     /// Sales forms: item custom fields marked for sales forms, under each line.
     pub show_item_fields: bool,
+    /// Sales forms: a Service Date column, when a line has one.
+    pub show_service_date: bool,
     /// Below the totals. Placeholders: {number}, {customer}, {date}, {due_date}, {total}, {balance}, {company},
     /// {rep}, {ship_date}, {ship_via}, {po_number}.
     pub message: String,
@@ -221,6 +227,7 @@ impl Default for FormTemplate {
             show_po_number: true,
             show_custom_fields: true,
             show_item_fields: true,
+            show_service_date: true,
             message: String::new(),
             terms: String::new(),
             footer: String::new(),
@@ -237,6 +244,7 @@ impl FormTemplate {
             FormKind::Estimate => "Thank you for the opportunity. This estimate is valid until the expiration date shown.",
             FormKind::SalesReceipt => "Thank you for your business.",
             FormKind::Statement => "Please contact us with any questions about your account.",
+            FormKind::CreditMemo => "This credit can be applied to an open invoice or refunded. Please keep it for your records.",
         };
         let (subject, body) = match kind {
             FormKind::Invoice => (
@@ -246,6 +254,7 @@ impl FormTemplate {
             FormKind::Estimate => ("Estimate {number} from {company}", "Dear {customer},\n\nPlease find attached estimate {number} for {total}.\n\nWe look forward to working with you.\n{company}"),
             FormKind::SalesReceipt => ("Sales receipt {number} from {company}", "Dear {customer},\n\nPlease find attached your receipt {number} for {total}.\n\nThank you for your business.\n{company}"),
             FormKind::Statement => ("Statement from {company}", "Dear {customer},\n\nPlease find attached your statement as of {date}. The amount due is {balance}.\n\n{company}"),
+            FormKind::CreditMemo => ("Credit memo {number} from {company}", "Dear {customer},\n\nPlease find attached credit memo {number} for {total}.\n\n{company}"),
         };
         FormTemplate {
             title: kind.default_title().into(),
@@ -373,6 +382,10 @@ pub async fn delete_style(pool: &SqlitePool, id: i64) -> Result<(), String> {
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
     sqlx::query("UPDATE customers SET form_style_id = NULL WHERE form_style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    // Documents that picked it print with their customer's style again.
+    for table in ["invoices", "sales_receipts", "estimates"] {
+        sqlx::query(&format!("UPDATE {table} SET form_style_id = NULL WHERE form_style_id = ?1")).bind(id).execute(&mut *tx).await.map_err(db_err)?;
+    }
     sqlx::query("DELETE FROM form_templates WHERE style_id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     sqlx::query("DELETE FROM form_styles WHERE id = ?1").bind(id).execute(&mut *tx).await.map_err(db_err)?;
     crate::ledger::commit_write(tx).await.map_err(db_err)
@@ -478,6 +491,8 @@ pub struct FormLine {
     pub amount: String,
     /// The item's custom fields marked for sales forms, as "Label: value".
     pub details: Vec<String>,
+    /// When the work was done, as printed; empty without one.
+    pub service_date: String,
 }
 
 /// A sales form's rep, shipping and customer custom fields, already formatted.
@@ -586,6 +601,8 @@ pub struct FormDoc {
     pub statement: Option<StatementTable>,
     /// Sales forms: rep, shipping and customer custom fields.
     pub sales: FormSales,
+    /// The form style picked on the document itself (else the customer's style is used).
+    pub form_style_id: Option<i64>,
 }
 
 /// 123456 → "$1,234.56" (or "EUR 1,234.56" for a foreign-currency document), as the app shows it.
@@ -707,7 +724,8 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         .zip(details)
         .map(|(i, details)| {
             let rate = i.percent_ppm.map_or_else(|| money(i.rate_cents), crate::item_types::percent_text);
-            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details })
+            let service_date = i.service_date.map(|d| format_date(&d.to_string())).unwrap_or_default();
+            (i.line_number, FormLine { description: i.description.clone(), quantity: format_quantity(i.quantity_e4), rate, amount: money(i.amount_cents), details, service_date })
         })
         .collect();
     let taxable: Vec<bool> = detail.items.iter().map(|i| i.is_taxable).collect();
@@ -742,6 +760,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
         balance: money(balance),
         statement: None,
         sales: FormSales::of(&detail.details),
+        form_style_id: detail.details.form_style_id,
     })
 }
 
@@ -757,8 +776,8 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
     .await
     .map_err(db_err)?;
     let (number, customer_id, name, date, expires, memo, total, tax, discount, tax_name) = header.ok_or("FORM_NOT_FOUND: that estimate no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
+    let rows: Vec<ItemRow> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm, NULL AS service_date FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number")
         .bind(estimate_id)
         .fetch_all(pool)
         .await
@@ -798,6 +817,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         balance: money(total),
         statement: None,
         sales: FormSales::of(&sales),
+        form_style_id: sales.form_style_id,
     })
 }
 
@@ -818,8 +838,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     .map_err(db_err)?;
     let (number, customer_id, name, date, method, reference, memo, total, tax, discount, tax_name, voided) =
         header.ok_or("FORM_NOT_FOUND: that sales receipt no longer exists")?;
-    let rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)> =
-        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
+    let rows: Vec<ItemRow> =
+        sqlx::query_as("SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, percent_ppm, service_date FROM sales_receipt_lines WHERE sales_receipt_id = ?1 ORDER BY line_number")
             .bind(receipt_id)
             .fetch_all(pool)
             .await
@@ -865,6 +885,61 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
         balance: money(0),
         statement: None,
         sales: FormSales::of(&sales),
+        form_style_id: sales.form_style_id,
+    })
+}
+
+/// A credit memo (or refund receipt): what was credited, with the customer's Bill To, Ship To and
+/// P.O. number as the credit keeps them.
+pub async fn credit_memo_doc(pool: &SqlitePool, credit_id: i64, symbol: &str) -> Result<FormDoc, String> {
+    type Header = (i64, i64, String, String, Option<String>, i64, i64, Option<String>, bool, Option<i64>);
+    let header: Option<Header> = sqlx::query_as(
+        "SELECT m.credit_number, m.customer_id, c.name, m.credit_date, m.memo, m.total_cents, m.tax_cents, t.name, m.is_voided, m.refund_account_id
+         FROM credit_memos m JOIN customers c ON c.id = m.customer_id LEFT JOIN tax_rates t ON t.id = m.tax_rate_id
+         WHERE m.id = ?1",
+    )
+    .bind(credit_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (number, customer_id, name, date, memo, total, tax, tax_name, voided, refund_account) = header.ok_or("FORM_NOT_FOUND: that credit memo no longer exists")?;
+    let rows: Vec<ItemRow> = sqlx::query_as(
+        "SELECT description, quantity_e4, rate_cents, amount_cents, product_service_id, line_number, NULL AS percent_ppm, NULL AS service_date
+         FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number",
+    )
+    .bind(credit_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let money = |cents: i64| format_money(cents, None, symbol);
+    let cust = customer(pool, Some(customer_id), &name).await?;
+    let sales = crate::sales_lists::SalesDetailsView { header: crate::sales_header::read(pool, "credit_memos", credit_id).await?, ..Default::default() };
+    let title = if refund_account.is_some() { "Refund" } else { "Credit" };
+    let mut totals = Vec::new();
+    breakdown(&mut totals, total, tax, 0, tax_name.as_deref(), &money);
+    totals.push(TotalRow { label: format!("Total {}", title.to_lowercase()), value: money(total), grand: true, payment: false });
+    let mark = marks_taxable(pool, tax_name.is_some()).await?;
+    let taxable = taxable_flags(pool, "credit_memo_lines", "credit_memo_id", credit_id).await?;
+    Ok(FormDoc {
+        kind: FormKind::CreditMemo,
+        number: number.to_string(),
+        subtitle: None,
+        voided,
+        customer_id: Some(customer_id),
+        customer_details: bill_to_details(&name, &sales.header, &cust),
+        customer_name: name,
+        customer_email: cust.email,
+        meta: vec![(format!("{title} date"), format_date(&date), false), (format!("Total {}", title.to_lowercase()), money(total), true)],
+        lines: mark_taxable(lines_of(pool, rows, &money).await?, &taxable, mark).into_iter().map(|(_, l)| l).collect(),
+        totals,
+        memo: if voided { Some("This credit memo has been voided.".into()) } else { memo.filter(|m| !m.trim().is_empty()) },
+        date: format_date(&date),
+        due_date: String::new(),
+        total: money(total),
+        balance: money(total),
+        statement: None,
+        sales: FormSales::of(&sales),
+        form_style_id: None,
     })
 }
 
@@ -891,15 +966,18 @@ async fn taxable_flags(pool: &SqlitePool, table: &str, parent: &str, id: i64) ->
 }
 
 /// Estimate and sales receipt lines: (description, quantity, rate, amount, product).
-async fn lines_of(pool: &SqlitePool, rows: Vec<(String, i64, i64, i64, Option<i64>, i64, Option<i64>)>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
+type ItemRow = (String, i64, i64, i64, Option<i64>, i64, Option<i64>, Option<String>);
+
+async fn lines_of(pool: &SqlitePool, rows: Vec<ItemRow>, money: &(dyn Fn(i64) -> String + Sync)) -> Result<Vec<(i64, FormLine)>, String> {
     let details = item_details(pool, &rows.iter().map(|r| r.4).collect::<Vec<_>>()).await?;
     Ok(rows
         .into_iter()
         .zip(details)
-        .map(|((description, qty, rate, amount, _, number, percent), details)| {
+        .map(|((description, qty, rate, amount, _, number, percent, service_date), details)| {
             // A percent charge shows its percent in the rate column.
             let rate = percent.map_or_else(|| money(rate), crate::item_types::percent_text);
-            (number, FormLine { description, quantity: format_quantity(qty), rate, amount: money(amount), details })
+            let service_date = service_date.as_deref().map(format_date).unwrap_or_default();
+            (number, FormLine { description, quantity: format_quantity(qty), rate, amount: money(amount), details, service_date })
         })
         .collect())
 }
@@ -929,6 +1007,7 @@ fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormL
                 rate: String::new(),
                 amount: if one_line { money(f.amount_cents) } else { String::new() },
                 details: Vec::new(),
+                service_date: String::new(),
             }
         } else {
             let rate = f.percent_ppm.map(crate::item_types::percent_text).unwrap_or_default();
@@ -936,7 +1015,7 @@ fn with_form_lines(items: Vec<(i64, FormLine)>, form: &[crate::item_types::FormL
             if mark && f.kind == "DISCOUNT" && f.is_taxable {
                 amount.push_str(" T");
             }
-            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount, details: Vec::new() }
+            FormLine { description: f.description.clone(), quantity: String::new(), rate, amount, details: Vec::new(), service_date: String::new() }
         };
         numbered.push((f.line_number, line));
     }
@@ -948,6 +1027,7 @@ fn statement_label(source_type: &str) -> &'static str {
     match source_type {
         "INVOICE" => "Invoice",
         "FINANCE_CHARGE" => "Finance Charge",
+        "STATEMENT_CHARGE" => "Statement Charge",
         "RECEIVE_PAYMENT" => "Payment",
         "CREDIT_MEMO" => "Credit Memo",
         "SALES_RECEIPT" => "Sales Receipt",
@@ -1001,17 +1081,18 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
         balance: due,
         statement: Some(StatementTable { rows, aging: s.aging_cents.map(money) }),
         sales: FormSales::default(),
+        form_style_id: None,
     })
 }
 
 /// A made-up document for the designer's preview when no real one is chosen.
 pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
     let money = |cents: i64| format_money(cents, None, symbol);
-    let line = |d: &str, q: i64, r: i64| FormLine { description: d.into(), quantity: format_quantity(q), rate: money(r), amount: money(q * r / 10_000), details: Vec::new() };
+    let line = |d: &str, q: i64, r: i64, served: &str| FormLine { description: d.into(), quantity: format_quantity(q), rate: money(r), amount: money(q * r / 10_000), details: Vec::new(), service_date: served.into() };
     let lines = vec![
-        line("Website redesign: discovery, wireframes and two rounds of revisions", 1_0000, 240_000),
-        line("Consulting (hours)", 12_5000, 12_500),
-        line("Hosting, 12 months", 1_0000, 18_000),
+        line("Website redesign: discovery, wireframes and two rounds of revisions", 1_0000, 240_000, "09/15/2026"),
+        line("Consulting (hours)", 12_5000, 12_500, "09/28/2026"),
+        line("Hosting, 12 months", 1_0000, 18_000, ""),
     ];
     let total = 240_000 + 156_250 + 18_000;
     let tax = 0;
@@ -1038,6 +1119,11 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
                 ("Total".to_string(), money(total), true),
             ],
             vec![TotalRow { label: "Total".into(), value: money(total), grand: true, payment: false }],
+            money(total),
+        ),
+        FormKind::CreditMemo => (
+            vec![("Credit date".to_string(), "10/01/2026".to_string(), false), ("Total credit".to_string(), money(total), true)],
+            vec![TotalRow { label: "Total credit".into(), value: money(total), grand: true, payment: false }],
             money(total),
         ),
         FormKind::SalesReceipt => (
@@ -1095,6 +1181,7 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
             }
         },
         statement,
+        form_style_id: None,
     }
 }
 
@@ -1401,6 +1488,7 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         FormKind::Estimate => "PREPARED FOR",
         FormKind::SalesReceipt => "SOLD TO",
         FormKind::Statement => "STATEMENT FOR",
+        FormKind::CreditMemo => "CREDIT TO",
     };
     let label_color = if modern { accent } else { MUTED };
     let start = l.y;
@@ -1491,16 +1579,19 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
         let amount = Col { x: take(92.0), w: 92.0, label: tpl.amount_label.clone(), align: Align::Right };
         let rate = tpl.show_rate.then(|| Col { x: take(84.0), w: 84.0, label: tpl.rate_label.clone(), align: Align::Right });
         let quantity = tpl.show_quantity.then(|| Col { x: take(56.0), w: 56.0, label: tpl.quantity_label.clone(), align: Align::Right });
+        let served = tpl.show_service_date && doc.lines.iter().any(|l| !l.service_date.is_empty());
+        let service = served.then(|| Col { x: take(72.0), w: 72.0, label: "Service Date".into(), align: Align::Left });
         let number = tpl.show_line_numbers.then(|| Col { x: MARGIN, w: 26.0, label: "#".into(), align: Align::Right });
         let desc_left = number.as_ref().map_or(MARGIN, |n| n.x + n.w);
         cols.extend(number);
         cols.push(Col { x: desc_left, w: x - desc_left, label: tpl.description_label.clone(), align: Align::Left });
+        cols.extend(service);
         cols.extend(quantity);
         cols.extend(rate);
         cols.push(amount);
         l.ensure(m.header_h + m.leading + m.row_pad, doc);
         table_header(&mut l, &cols, m);
-        let desc_w = cols.iter().find(|c| c.align == Align::Left).map_or(100.0, |c| c.w) - 2.0 * CELL_PAD;
+        let desc_w = cols.iter().find(|c| c.align == Align::Left && c.label == tpl.description_label).map_or(100.0, |c| c.w) - 2.0 * CELL_PAD;
         for (i, item) in doc.lines.iter().enumerate() {
             let desc = if item.description.trim().is_empty() { "—".to_string() } else { item.description.clone() };
             let mut cells = Vec::new();
@@ -1514,6 +1605,9 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
                 }
             }
             cells.push(desc_lines);
+            if served {
+                cells.push(vec![item.service_date.clone()]);
+            }
             if tpl.show_quantity {
                 cells.push(vec![item.quantity.clone()]);
             }
@@ -1669,6 +1763,7 @@ pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Opt
         (FormKind::Invoice, Some(id)) => invoice_doc(pool, id, symbol).await,
         (FormKind::Estimate, Some(id)) => estimate_doc(pool, id, symbol).await,
         (FormKind::SalesReceipt, Some(id)) => sales_receipt_doc(pool, id, symbol).await,
+        (FormKind::CreditMemo, Some(id)) => credit_memo_doc(pool, id, symbol).await,
         (FormKind::Statement, Some(id)) => statement_doc(pool, id, period.unwrap_or_else(|| Period::last_month(chrono::Local::now().date_naive())), symbol).await,
     }
 }
@@ -1690,7 +1785,18 @@ pub async fn render(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>,
     let doc = document(pool, kind, document_id, period, &company.currency_symbol).await?;
     let tpl = match template {
         Some(t) => t.validated(kind)?,
-        None => get_template(pool, Some(customer_style(pool, doc.customer_id).await?), kind).await?,
+        // The style picked on the document itself, else the customer's (or the default).
+        None => {
+            let picked: Option<i64> = match doc.form_style_id {
+                Some(id) => sqlx::query_scalar("SELECT id FROM form_styles WHERE id = ?1").bind(id).fetch_optional(pool).await.map_err(db_err)?,
+                None => None,
+            };
+            let style = match picked {
+                Some(id) => id,
+                None => customer_style(pool, doc.customer_id).await?,
+            };
+            get_template(pool, Some(style), kind).await?
+        }
     };
     let logo = company.logo.as_deref().filter(|_| tpl.logo != LogoPlacement::Hidden);
     let (image, size) = if with_image {

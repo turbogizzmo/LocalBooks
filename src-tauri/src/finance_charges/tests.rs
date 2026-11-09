@@ -29,7 +29,7 @@ async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, due: Naive
                 income_account_id: services,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

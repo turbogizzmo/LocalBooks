@@ -179,7 +179,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
             income_account_id: account,
             product_service_id: None,
             class_id: None,
-            is_taxable: false,
+            is_taxable: false, service_date: None,
         });
         let this_markup = markup_cents(found.amount_cents, markup).filter(|m| (0..=MAX_LINE_CENTS).contains(m)).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
         markup_total = markup_total.checked_add(this_markup).ok_or("COST_MARKUP_TOO_LARGE: the markup is out of range")?;
@@ -194,7 +194,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
             income_account_id: account,
             product_service_id: None,
             class_id: None,
-            is_taxable: false,
+            is_taxable: false, service_date: None,
         });
     }
 
