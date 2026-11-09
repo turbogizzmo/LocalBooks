@@ -11,6 +11,10 @@ export const screens = {
     help: 'Company details and preferences, the closing date, backups and company files, users and passwords, and local AI access.',
     guide: 'getting-started',
   },
+  'settings/diagnostics': {
+    help: 'Save diagnostics: a zip of LocalBooks’ version, the operating system, the company file’s schema, integrity check and row counts, and LocalBooks’ own log of starts, stops, files opened and crashes. No business data, and nothing is sent anywhere.',
+    guide: 'troubleshooting',
+  },
   'settings/import': {
     help: 'The Desktop Migration Wizard: bring your books in from QuickBooks Desktop, QuickBooks for Mac, Quicken or GnuCash through a staging sandbox, check them against the original, then post them.',
     guide: 'desktop-migration',
@@ -23,6 +27,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
+    title: 'Save diagnostics for whoever is helping you',
+    body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',
+    keywords: 'diagnostics crash log support bug report troubleshoot version help send logs',
+    go: { label: 'Go to Diagnostics', view: 'settings/diagnostics' },
+    guide: 'troubleshooting',
+  },
   {
     id: 'home-page', area: 'company', views: ['dashboard'],
     title: 'Start from the Home page',

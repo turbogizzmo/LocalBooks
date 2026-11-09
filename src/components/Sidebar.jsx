@@ -97,6 +97,7 @@ export const NAV = [
       { id: 'settings/ai', label: 'AI Access (MCP)', adminOnly: true },
       { id: 'settings/users', label: 'Users & Passwords' },
       { id: 'settings/updates', label: 'Updates' },
+      { id: 'settings/diagnostics', label: 'Diagnostics' },
     ],
   },
 ];

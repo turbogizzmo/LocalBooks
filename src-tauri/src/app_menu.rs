@@ -391,7 +391,7 @@ const REPORTS: &[Entry] = &[
 ];
 
 /// Added to Help below LocalBooks Help.
-const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates")];
+const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates"), page("Save Diagnostics…", "settings/diagnostics")];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
 const MENUS: &[(&str, &[Entry])] =
