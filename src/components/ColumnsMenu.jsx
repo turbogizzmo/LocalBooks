@@ -7,17 +7,21 @@ import { arrangeColumns, layoutOf, moveColumn, toggleColumn, visibleColumns } fr
 /**
  * A table's columns as the person chose them. `table` names the table (e.g. 'customers');
  * `defs` its columns in their usual order ({ id, label, required?, hidden? }, plus anything the
- * table draws them with). Returns `{ columns, all, toggle, move, reset, customized }`.
+ * table draws them with). `offered` says which of them this table has now (a table shared by
+ * several forms, where only some have a Class column); the others are left out of `columns` and
+ * `all` (so the menu doesn't offer them) but keep their places in the saved layout.
+ * Returns `{ columns, all, toggle, move, reset, customized }`.
  */
-export function useColumns(table, defs) {
+export function useColumns(table, defs, offered = () => true) {
   const saved = useMyPreferences().columnLayouts?.[table] ?? null;
-  const all = useMemo(() => arrangeColumns(defs, saved), [defs, saved]);
+  const arranged = useMemo(() => arrangeColumns(defs, saved), [defs, saved]);
   const keep = (next) => setColumnLayout(table, layoutOf(next));
+  const all = arranged.filter((c) => offered(c.id));
   return {
     columns: visibleColumns(all),
     all,
-    toggle: (id) => keep(toggleColumn(all, id)),
-    move: (id, step) => keep(moveColumn(all, id, step)),
+    toggle: (id) => keep(toggleColumn(arranged, id)),
+    move: (id, step) => keep(moveColumn(arranged, id, step, offered)),
     reset: () => setColumnLayout(table, null),
     customized: saved !== null,
   };
