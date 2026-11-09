@@ -124,12 +124,12 @@ export function AdjustDialog({ item, accounts, onClose, onDone }) {
           </fieldset>
           <label className="flex w-[90px] flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Quantity</span>
-            <input className="qb-input num" value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="0" />
+            <input className="qb-input num" value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" data-quantity placeholder="0" />
           </label>
           {direction === 'add' ? (
             <label className="flex w-[120px] flex-col gap-0.5">
               <span className="font-semibold text-qb-ink-muted">Total cost</span>
-              <input className="qb-input num" value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" placeholder="0.00" />
+              <input className="qb-input num" value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" data-money placeholder="0.00" />
             </label>
           ) : (
             <div className="flex w-[120px] flex-col gap-0.5">

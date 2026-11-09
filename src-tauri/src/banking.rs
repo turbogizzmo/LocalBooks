@@ -47,6 +47,12 @@ pub struct DepositOtherLine {
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// Received From: the customer the money came from (at most one of this and `vendor_id`).
+    #[serde(default)]
+    pub customer_id: Option<i64>,
+    /// Received From: the vendor the money came from (a refund, say).
+    #[serde(default)]
+    pub vendor_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -239,8 +245,12 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
     }
     for line in &input.other_lines {
         line_number += 1;
+        if line.customer_id.is_some() && line.vendor_id.is_some() {
+            return Err(format!("DEP_TWO_NAMES: deposit line {line_number} is received from a customer or a vendor, not both"));
+        }
         sqlx::query(
-            "INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo, class_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO deposit_lines (deposit_id, line_number, account_id, amount_cents, memo, class_id, customer_id, vendor_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(deposit_id)
         .bind(line_number)
@@ -248,6 +258,8 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         .bind(line.amount_cents)
         .bind(clean(line.memo.as_deref()))
         .bind(line.class_id)
+        .bind(line.customer_id)
+        .bind(line.vendor_id)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;

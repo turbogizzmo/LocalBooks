@@ -58,3 +58,45 @@ select.qb-input {
     outline: none;
   }
 }
+
+/* Calculator tape under an amount or quantity box (calcTape.js). */
+.lb-calc-tape {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 8px;
+  background-color: theme('colors.qb.surface');
+  border: 1px solid theme('colors.qb.border.strong');
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  pointer-events: none;
+}
+.lb-calc-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lb-calc-op {
+  color: theme('colors.qb.ink.muted');
+}
+.lb-calc-total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid theme('colors.qb.border.DEFAULT');
+  font-weight: 600;
+}
+.lb-calc-error {
+  color: theme('colors.qb.negative');
+  font-weight: 400;
+}
+.lb-calc-hint {
+  color: theme('colors.qb.ink.faint');
+  font-size: 10px;
+}
+@media print {
+  .lb-calc-tape {
+    display: none;
+  }
+}
