@@ -82,6 +82,12 @@ pub async fn add_record_file(pool: &SqlitePool, record_kind: &str, record_id: i6
     if !exists {
         return Err(format!("ATTACH_NO_RECORD: that {} does not exist", record_kind.to_lowercase().replace('_', " ")));
     }
+    if record_kind == "RECONCILIATION" {
+        let undone: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM reconciliation_undos WHERE reconciliation_id = ?1)").bind(record_id).fetch_one(pool).await.map_err(db_err)?;
+        if undone {
+            return Err("REC_UNDONE: that reconciliation was undone; attach the statement to the new one".into());
+        }
+    }
     let name = std::path::Path::new(file_name).file_name().and_then(|n| n.to_str()).unwrap_or("attachment");
     sqlx::query_as(
         "INSERT INTO record_attachments (record_kind, record_id, file_name, media_type, size_bytes, content) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -208,6 +214,24 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
         .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
 }
 
+/// What a preview shows of a file, read in SQL so no more than that leaves the database: a picture
+/// whole, the first `text_bytes` of a text file, and nothing of any other kind.
+pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
+    sqlx::query_as(&format!(
+        "SELECT file_name, media_type,
+                CASE WHEN media_type LIKE 'image/%' THEN content
+                     WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
+         FROM {} WHERE id = ?1",
+        file.source.table()
+    ))
+    .bind(file.id)
+    .bind(text_bytes)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?
+    .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
+}
+
 /// Sets a file's keywords (blank clears them) and whether it goes with the form when emailed.
 pub async fn set_details(pool: &SqlitePool, file: FileRef, keywords: Option<&str>, send_with_form: bool) -> Result<(), String> {
     let keywords = keywords.map(str::trim).filter(|k| !k.is_empty());
@@ -268,7 +292,7 @@ pub const MAX_SENT_WITH_FORM_BYTES: i64 = 20 * 1024 * 1024;
 pub type SentFile = (String, Vec<u8>, &'static str);
 
 /// The files marked Send with the form for the form `kind` / `document_id`, oldest first: those on
-/// an invoice's, sales receipt's or credit memo's transaction, an estimate's own, and for a statement the
+/// an invoice's, sales receipt's, credit memo's or bill payment's transaction, an estimate's own, and for a statement the
 /// customer's. Deleted files are left out. Refused when they add up to more than
 /// [`MAX_SENT_WITH_FORM_BYTES`].
 pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, document_id: i64) -> Result<Vec<SentFile>, String> {
@@ -293,6 +317,11 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
         FormKind::Statement => {
             "SELECT file_name, content FROM record_attachments
              WHERE record_kind = 'CUSTOMER' AND record_id = ?1 AND send_with_form = 1 AND deleted_at IS NULL ORDER BY id"
+        }
+        // A bill payment stub: the files on the payment's own transaction.
+        FormKind::BillPayment => {
+            "SELECT a.file_name, a.content FROM attachments a JOIN bill_payments p ON p.journal_entry_id = a.journal_entry_id
+             WHERE p.id = ?1 AND a.send_with_form = 1 AND a.deleted_at IS NULL ORDER BY a.id"
         }
     };
     let rows: Vec<(String, Vec<u8>)> = sqlx::query_as(sql).bind(document_id).fetch_all(pool).await.map_err(db_err)?;

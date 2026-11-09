@@ -3,6 +3,7 @@ import { DocHeader, PrintPortal, longDate, useCompany } from './PrintDocuments.j
 import { api, errorText, printDocument } from '../lib/api.js';
 import { EmailFormDialog } from './FormPages.jsx';
 import { formatMoney } from '../lib/money.js';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 /**
  * A posted transaction printed as a voucher: its header (number, date, name, memo) and the ledger
@@ -147,7 +148,7 @@ export function useVoucherActions(onNotice) {
   const savePdf = async (doc) => {
     try {
       const path = await api.saveVoucherPdf(voucherForPdf(doc));
-      if (path) onNotice?.({ kind: 'success', text: `Saved ${path}.` });
+      if (path) onNotice?.({ kind: 'success', text: savedCopyText(path) });
     } catch (err) {
       onNotice?.({ kind: 'error', text: errorText(err) });
     }

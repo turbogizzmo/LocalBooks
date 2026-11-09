@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm } from '../lib/dialogs.jsx';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 const size = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -75,7 +76,7 @@ export default function Attachments({ entryId, record = null, what = record ? 't
           onClick={() =>
             run(async () => {
               const result = await api.saveAllAttachments(entryId);
-              setSaved(result ? `Saved ${result[1]} files to ${result[0]}` : null);
+              setSaved(result ? savedCopyText(result[0], `${result[1]} files`) : null);
             })
           }
         >
@@ -94,10 +95,16 @@ export async function pickAttachments() {
   return [picked].flat().filter(Boolean);
 }
 
-/** Attaches files picked on a form to the transaction it just posted. Returns an error message, or null. */
+/**
+ * Attaches files picked on a form to the transaction it just posted: paths, or a document from the
+ * inbox ({ inboxId, name }), which leaves the inbox. Returns an error message, or null.
+ */
 export async function attachPicked(entryId, paths) {
   try {
-    for (const path of paths) await api.addAttachment(entryId, path);
+    for (const item of paths) {
+      if (typeof item === 'object') await api.attachInboxDocument(item.inboxId, entryId);
+      else await api.addAttachment(entryId, item);
+    }
     return null;
   } catch (err) {
     return `It posted, but a file could not be attached: ${errorText(err)}`;
@@ -106,11 +113,13 @@ export async function attachPicked(entryId, paths) {
 
 /** The files picked on a form before it posts, with a button to pick more and × to drop one. */
 export function PendingAttachments({ paths, onChange, label = 'Attach file…' }) {
-  const name = (path) => path.split(/[\\/]/).pop();
+  // A path, or a document from the inbox ({ inboxId, name }).
+  const name = (item) => (typeof item === 'object' ? item.name : item.split(/[\\/]/).pop());
+  const key = (item) => (typeof item === 'object' ? `inbox-${item.inboxId}` : item);
   return (
     <span className="flex flex-wrap items-center gap-1 text-sm">
       {paths.map((path) => (
-        <span key={path} className="flex items-center gap-1 rounded-sm border border-qb-border bg-white px-1.5" title={path}>
+        <span key={key(path)} className="flex items-center gap-1 rounded-sm border border-qb-border bg-white px-1.5" title={typeof path === 'object' ? `${path.name}, from the document inbox` : path}>
           📎 {name(path)}
           <button type="button" className="text-qb-ink-muted hover:text-qb-negative" aria-label={`Don't attach ${name(path)}`} onClick={() => onChange(paths.filter((p) => p !== path))}>
             ×

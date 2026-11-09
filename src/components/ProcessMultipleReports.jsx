@@ -5,6 +5,7 @@ import { longDate } from './ReportParts.jsx';
 import { RANGE_PERIODS, ReportTable, datesFor, engineOnly, reportSheet } from './CustomReport.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { todayIso } from '../lib/dates.js';
+import { savedCopyText } from '../lib/plainCopy.js';
 
 /**
  * Process Multiple Reports: pick memorized reports and run them together, each with its own saved
@@ -75,7 +76,7 @@ export default function ProcessMultipleReports({ custom, navigate }) {
   const exportXlsx = async (out) => {
     const sheets = out.map(({ run, report, subtitle }) => reportSheet({ company: company.name, title: run.title, subtitle, report }));
     const path = await api.saveXlsxBook(sheets, 'Reports.xlsx');
-    if (path) setNotice({ kind: 'success', text: `Saved ${path}` });
+    if (path) setNotice({ kind: 'success', text: savedCopyText(path) });
   };
 
   if (saved.length === 0) {

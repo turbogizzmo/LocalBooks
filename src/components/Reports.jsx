@@ -28,6 +28,9 @@ import {
   Vendors1099Report,
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
+import { Forms1099Nec } from './Forms1099.jsx';
+import CommentedReports from './ReportComments.jsx';
+import CompanySnapshot from './CompanySnapshot.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { reportBasis, useCompanyPreferences, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
@@ -383,6 +386,7 @@ const REPORT_GROUPS = [
   {
     title: 'Business overview',
     reports: [
+      ['snapshot', 'Company Snapshot'],
       ['pl', 'Profit and Loss'],
       ['plc', 'Profit and Loss by Class'],
       ['pl-py', 'Profit and Loss Prev Year Comparison'],
@@ -427,6 +431,7 @@ const REPORT_GROUPS = [
     reports: [
       ['expenses-vendor', 'Expenses by Vendor Summary'],
       ['1099', '1099 Summary'],
+      ['1099-nec', '1099-NEC and 1096'],
     ],
   },
   {
@@ -448,6 +453,7 @@ const REPORT_GROUPS = [
       ['tb', 'Trial Balance'],
       ['gl', 'General Ledger'],
       ...ACCOUNTANT_REPORTS,
+      ['commented', 'Commented Reports'],
     ],
   },
 ];
@@ -750,7 +756,7 @@ function ReportBody({ report, askFirst = false, reportName = '', drill = '', ini
       {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}
       {!askFirst && report === 'sales-product' && <SummaryReport key={`sp${drill}`} by="product" initial={initial} onZoom={zoom} />}
       {!askFirst && report === 'sales-rep' && <SummaryReport key={`sr${drill}`} by="rep" initial={initial} />}
-      {report === 'expenses-vendor' && <SummaryReport key="ev" by="vendor" onZoom={zoom} />}
+      {report === 'expenses-vendor' && <SummaryReport key={`ev${drill}`} by="vendor" initial={initial} onZoom={zoom} />}
       {report === 'tb' && <TrialBalanceReport navigate={navigate} />}
       {report === 'sales-tax' && <SalesTaxLiabilityReport />}
       {report === 'gl' && <GeneralLedgerReport navigate={navigate} />}
@@ -763,8 +769,11 @@ function ReportBody({ report, askFirst = false, reportName = '', drill = '', ini
       {report === 'stock-status' && <StockStatusReport />}
       {report === 'item-price-list' && <ItemPriceListReport />}
       {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
+      {report === 'commented' && <CommentedReports />}
+      {report === 'snapshot' && <CompanySnapshot onOpenReport={openReport} />}
       {report === '1099' && <Vendors1099Report key="1099" />}
       {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
+      {report === '1099-nec' && <Forms1099Nec />}
       {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
       {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
       {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}
