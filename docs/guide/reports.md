@@ -17,6 +17,42 @@ under each name saying what it shows.
 
 Favorites, Recent and the date choice are kept on this computer.
 
+## Email a report, list or register as a PDF
+
+Every report, list and register with an **Export** menu has **Email as PDF…** and **Save as PDF…**.
+The PDF holds what the Excel export would: the report's heading, columns and rows, page after
+page, with the column headings repeated on each page.
+
+**Email as PDF…** opens a message with the PDF attached. When sending from LocalBooks is set up
+(**Settings › Email**), **Send** sends it from there; otherwise, or if you choose **Open in my mail
+app instead**, a new message opens in your mail app for you to check and send. The **Reminders**
+list has **Email as PDF…** too.
+
+## Scheduled reports
+
+**Reports › Scheduled Reports…** (under Memorized reports) sends chosen reports on a schedule, for
+example the month's Profit and Loss and Balance Sheet to your accountant on the first of every
+month.
+
+1. Click **New schedule** and name it.
+2. Add the reports: Profit and Loss, Profit and Loss by Class, the Balance Sheet, any report from
+   the report builder, or a memorized report. For each, choose the dates it covers, counted from
+   the day it runs: **Last month**, **Quarter to date**, **Last year** and so on. A report as of
+   one date (the Balance Sheet, aging) is as of the last day.
+3. Choose **How often** (every day, week, month or quarter), the day it **Starts**, and if you
+   like the day it **Ends**.
+4. Choose **Email them**, with the addresses to send to, or **Save them in a folder** on this
+   computer, and whether they go **As** PDF or Excel spreadsheets.
+
+Email goes only through the email server set up in **Settings › Email** (it must be turned on),
+and only to the addresses on the schedule. **Run now** on a schedule sends it for today without
+changing its next run; the list shows when each runs next and how its last run went.
+
+Schedules run only while LocalBooks is open: it checks shortly after it starts and every few
+minutes after that. If a run fell due while LocalBooks was closed, it happens once, soon after
+LocalBooks next opens, for the latest date that was due; earlier missed dates are not sent one by
+one. The files can't be password-protected yet.
+
 ## Profit and Loss
 
 1. Click **Reports**. **Profit and Loss** is the first report in the list.

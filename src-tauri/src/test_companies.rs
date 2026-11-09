@@ -56,7 +56,7 @@ async fn fresh(path: &Path, name: &str) -> SqlitePool {
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable }
+    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None }
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
@@ -211,7 +211,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),
             refund_account_id: None,
-            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false }],
+            lines: vec![SalesLineInput { product_service_id: None, description: "Return".into(), quantity_e4: 10_000, rate_cents: 2_500, income_account_id: sales_acct, class_id: None, is_taxable: false, service_date: None }],
             tax_rate_id: None,
             header: Default::default(),
         },

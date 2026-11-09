@@ -183,6 +183,14 @@ export const topics = [
     guide: 'desktop-migration',
   },
   {
+    id: 'sheet-import', area: 'company', views: ['settings/import'],
+    title: 'Import customers, vendors or invoices from a spreadsheet',
+    body: 'Under step 1 of the Desktop Migration Wizard, open "From a spreadsheet you laid out", choose whether the sheet holds customers, vendors or invoices, and choose the .csv or Excel file (or download the template first). Match each field to a column, then click Check the rows: every row that would fail is listed with its row number, and nothing is staged until there are none. Continue to the review, which works like any other import. Rows with the same invoice number become one invoice, a line per row, crediting the income account each row names.',
+    keywords: 'spreadsheet excel csv xlsx import customers vendors invoices columns map mapping template rows',
+    go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
+    guide: 'desktop-migration',
+  },
+  {
     id: 'import-classes', area: 'company', views: ['settings/import', 'accounting/classes'],
     title: 'Classes in an import',
     body: 'When the file you import has classes (a QuickBooks Desktop company file or backup, an IIF class list or CLASS column, a report export with a Class column, or QuickBooks still installed on Windows), posting brings them in: each class matches one you already have by name under the same parent, or is created, and every line keeps its class, so Profit & Loss by Class splits the same way as before. Classes hidden in the original come in inactive. Class tracking turns on, and the message after posting says so. Reversing the import makes the classes it created inactive.',

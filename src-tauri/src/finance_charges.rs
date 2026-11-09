@@ -315,7 +315,7 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
                 income_account_id: account,
                 product_service_id: None,
                 class_id: None,
-                is_taxable: false,
+                is_taxable: false, service_date: None,
             }],
             currency: None,
             tax_rate_id: None,

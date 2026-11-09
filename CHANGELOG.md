@@ -9,6 +9,22 @@ people using LocalBooks.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.
+- **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
+  lines take a Service Date that prints in its own column; the Template box on a sales form picks
+  the form style it prints with; and credit memos and refund receipts now print as a form of their
+  own, with a Credit memo layout in Settings › Custom Forms.
+- **Email reports as PDF, and schedule them.** Every report, list and register (and the Reminders
+  list) can be emailed or saved as a PDF from its Export menu. Reports › Scheduled Reports… sends
+  chosen reports every day, week, month or quarter by email, or saves them to a folder as PDF or
+  Excel, while LocalBooks is open; a run missed while it was closed happens when it next opens.
+- **Statement charges.** Enter statement charges… on a customer's row keeps a register of charges
+  billed on the customer's next statement instead of an invoice. Each posts to Accounts
+  Receivable, shows in the aging, and is paid in Receive Payments like an invoice.
+- **Import customers, vendors or invoices from your own spreadsheet.** In the Desktop Migration
+  Wizard, choose a .csv or Excel file (or download a template), match its columns to LocalBooks'
+  fields, and check it: every row that would fail is listed with its row number before anything is
+  staged. Then review and post it like any other import; invoices become real invoices, owed by
+  their customers.
 
 - **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
   list into the order you want; it's kept in the company file. Each can be shown as a tree (with

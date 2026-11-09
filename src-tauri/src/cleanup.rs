@@ -647,7 +647,7 @@ pub async fn write_off(pool: &SqlitePool, input: &WriteOffInput) -> Result<Write
                     rate_cents: open,
                     income_account_id: input.account_id,
                     class_id: None,
-                    is_taxable: false,
+                    is_taxable: false, service_date: None,
                 }],
                 tax_rate_id: None,
                 header: Default::default(),

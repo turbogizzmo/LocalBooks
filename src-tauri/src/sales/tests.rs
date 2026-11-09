@@ -23,7 +23,7 @@ fn d(day: u32) -> NaiveDate {
 }
 
 fn line(product: Option<i64>, qty: i64, rate: i64, account: i64) -> SalesLineInput {
-    SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None, is_taxable: false }
+    SalesLineInput { product_service_id: product, description: "Item".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: account, class_id: None, is_taxable: false, service_date: None }
 }
 
 #[tokio::test]
@@ -111,7 +111,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             customer_name: "acme corp".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,

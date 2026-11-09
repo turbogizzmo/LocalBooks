@@ -38,7 +38,7 @@ pub const EXTENSIONS: [&str; 3] = ["csv", "xlsx", "xls"];
 /// How far down a file the row of column headings may be.
 const HEADER_SEARCH_ROWS: usize = 40;
 
-type Grid = Vec<Vec<String>>;
+pub(crate) type Grid = Vec<Vec<String>>;
 
 /// A column heading reduced to letters, digits and `#`, lowercased: `Trans #` is `trans#`,
 /// `Memo/Description` is `memodescription`.
@@ -213,7 +213,7 @@ fn cell_text(data: &Data) -> String {
 }
 
 /// The sheets of a file: one for CSV, each worksheet for a workbook.
-fn grids(file: &str, bytes: &[u8]) -> Result<Vec<Grid>, String> {
+pub(crate) fn grids(file: &str, bytes: &[u8]) -> Result<Vec<Grid>, String> {
     let ext = Path::new(file).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if ext == "csv" || ext == "txt" {
         let text = decode(bytes);
