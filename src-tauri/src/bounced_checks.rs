@@ -217,14 +217,15 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
     };
     match kind {
         "PAYMENT" => {
-            type PaymentRow = (i64, i64, Option<i64>, String, Option<String>, Option<i64>, Option<String>, i64, Option<i64>);
-            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency, discount, discount_account): PaymentRow =
+            type PaymentRow = (i64, i64, Option<i64>, String, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<i64>);
+            let (invoice_id, number, customer_id, customer, reference, ar_relief, currency, discount_account, discount): PaymentRow =
                 sqlx::query_as(
                     "SELECT i.id, i.invoice_number, i.customer_id, COALESCE(c.name, i.customer_name), p.reference, p.ar_relief_cents, i.currency_code,
-                            p.discount_cents,
-                            (SELECT l.account_id FROM journal_lines l WHERE l.journal_entry_id = p.journal_entry_id AND p.discount_cents > 0
-                               AND l.debit_cents = p.discount_cents AND l.account_id <> p.deposit_account_id ORDER BY l.line_number LIMIT 1)
+                            d.account_id, d.debit_cents
                      FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id LEFT JOIN customers c ON c.id = i.customer_id
+                     -- The discount line the payment posted (home or booked-rate home amount).
+                     LEFT JOIN journal_lines d ON d.journal_entry_id = p.journal_entry_id AND p.discount_cents + p.foreign_discount_cents > 0
+                          AND d.debit_cents > 0 AND d.memo LIKE 'Early-payment discount%'
                      WHERE p.id = ?1",
                 )
                 .bind(id)
@@ -244,8 +245,8 @@ async fn resolve(tx: &mut Transaction<'_, Sqlite>, kind: &str, id: i64) -> Resul
             }
             // An early-payment discount the payment took is reversed: the invoice is open again for
             // all of it, and the customer has to pay in full.
-            if discount > 0 {
-                let account = discount_account.ok_or("BOUNCE_NO_DISCOUNT_LINE: the payment's discount line could not be found")?;
+            let discount = discount.unwrap_or(0);
+            if let (Some(account), true) = (discount_account, discount > 0) {
                 lines.push(JournalLine::credit(account, discount).with_memo(Some("Early-payment discount reversed")));
             }
             let difference = bank_cents + discount - ar_cents;

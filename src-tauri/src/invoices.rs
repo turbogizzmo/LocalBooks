@@ -495,15 +495,13 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
     if status != "UNPAID" && status != "PARTIAL" {
         return Err(format!("INV_NOT_OPEN: invoice #{number} is {status}; only open invoices accept payments"));
     }
-    // The discount must be one the invoice's terms still offer on the payment date (nothing paid
-    // yet, on or before its last day); it is applied along with the money.
+    // The discount must be one the invoice's terms still offer on the payment date (on its open
+    // balance, once, on or before its last day); it is applied along with the money. A foreign-
+    // currency invoice's is in its currency, and leaves A/R at the invoice's booked rate.
     let discount = input.discount_cents;
     if discount != 0 {
         if discount < 0 {
             return Err("INV_BAD_DISCOUNT: a discount can't be negative".into());
-        }
-        if currency_code.is_some() {
-            return Err(format!("INV_DISCOUNT_FOREIGN: invoice #{number} is in a foreign currency, which takes no early-payment discount yet"));
         }
         let offered = crate::sales_prefs::offered_invoice_discount(&mut **tx, input.invoice_id, input.payment_date).await?;
         if offered == 0 {
@@ -574,8 +572,8 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
     let payment_id: i64 = sqlx::query_scalar(
         "INSERT INTO invoice_payments
             (invoice_id, payment_date, amount_cents, payment_method, reference, deposit_account_id,
-             exchange_rate_e6, home_amount_cents, ar_relief_cents, payment_method_id, discount_cents)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             exchange_rate_e6, home_amount_cents, ar_relief_cents, payment_method_id, discount_cents, foreign_discount_cents)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          RETURNING id",
     )
     .bind(input.invoice_id)
@@ -588,7 +586,8 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
     .bind(fx.map(|f| f.1))
     .bind(fx.map(|f| f.2))
     .bind(method_id)
-    .bind(discount)
+    .bind(if fx.is_none() { discount } else { 0 })
+    .bind(if fx.is_some() { discount } else { 0 })
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;
@@ -612,10 +611,23 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
         }
         Some((_, home_amount, ar_relief)) => {
             lines.push(JournalLine::debit(input.deposit_account_id, home_amount));
+            // The discount at the invoice's booked rate, so only the money carries an exchange
+            // difference.
+            let discount_home = if discount > 0 {
+                let account = discount_account.ok_or("INV_NO_DISCOUNT_ACCOUNT: choose the account discounts go to in Preferences › Payments")?;
+                let booked = invoice_rate.ok_or("FX_RATE_REQUIRED: the invoice has no booked rate")?;
+                let home = crate::ledger::to_home_cents(discount, booked).ok_or("FX_OVERFLOW: amount out of range")?;
+                if home > 0 {
+                    lines.push(JournalLine::debit(account, home).with_memo(Some(&format!("Early-payment discount on invoice #{number}"))));
+                }
+                home
+            } else {
+                0
+            };
             if ar_relief > 0 {
                 lines.push(JournalLine::credit(ar_account, ar_relief));
             }
-            let difference = home_amount - ar_relief;
+            let difference = home_amount.checked_add(discount_home).ok_or("FX_OVERFLOW: amount out of range")? - ar_relief;
             if difference != 0 {
                 let fx_account = system_account(tx, "OTHER_EXPENSE").await?;
                 let memo = Some(if difference > 0 { "Realized exchange gain" } else { "Realized exchange loss" });
@@ -659,7 +671,8 @@ async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, d
 pub async fn list_payments(pool: &SqlitePool, invoice_id: i64) -> Result<Vec<PaymentView>, String> {
     sqlx::query_as::<_, PaymentView>(
         "SELECT id, payment_date, amount_cents, payment_method, (SELECT name FROM payment_methods WHERE id = payment_method_id) AS payment_method_name,
-                reference, deposit_account_id, journal_entry_id, is_voided, exchange_rate_e6, home_amount_cents, ar_relief_cents, discount_cents
+                reference, deposit_account_id, journal_entry_id, is_voided, exchange_rate_e6, home_amount_cents, ar_relief_cents,
+                discount_cents + foreign_discount_cents AS discount_cents
          FROM invoice_payments WHERE invoice_id = ?1 ORDER BY payment_date, id",
     )
     .bind(invoice_id)

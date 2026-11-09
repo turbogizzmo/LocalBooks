@@ -215,9 +215,9 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     setDiscounts({});
     setReceived('');
   };
-  // The engine says which invoices' terms still offer a discount on the payment date (home
-  // currency only, nothing paid on them yet, through the discount's last day).
-  const rowKey = currency ? '' : rows.map((inv) => inv.id).join(',');
+  // The engine says which invoices' terms still offer a discount on the payment date (on what is
+  // left of each, once, through the discount's last day), in the invoices' currency.
+  const rowKey = rows.map((inv) => inv.id).join(',');
   useEffect(() => {
     if (rowKey === '' || !date) {
       setOffer((o) => (o.offered.length ? { ...o, offered: [] } : o));

@@ -453,3 +453,56 @@ async fn a_payment_that_took_a_discount_bounces_for_the_whole_invoice_and_revers
     assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, discounts).await), (49_000, 0, -1_000));
     books_balance(&pool).await;
 }
+
+#[tokio::test]
+async fn a_foreign_currency_invoice_takes_its_discount_at_the_booked_rate_and_its_bounce_reverses_it() {
+    let pool = test_pool().await;
+    let (checking, services, ar) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, ar(&pool).await);
+    let fx: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_EXPENSE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let discounts: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (account_number, name, account_type) VALUES ('4995', 'Sales Discounts', 'INCOME') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    crate::preferences::set(&pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT, &discounts.to_string()).await.unwrap();
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    // €1,000.00 booked at 1.08: A/R $1,080.00.
+    let input: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "issueDate": "2026-10-01", "dueDate": "2026-10-31", "termsId": terms,
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 100_000, "incomeAccountId": services, "isTaxable": false }],
+        "currency": { "code": "EUR", "exchangeRateE6": 1_080_000 } }))
+    .unwrap();
+    let invoice_id = create_and_post_invoice(&pool, input).await.unwrap().id;
+    let offered = crate::sales_prefs::payment_discounts(&pool, &[invoice_id], d(5)).await.unwrap();
+    assert_eq!(offered.offered.iter().map(|o| o.amount_cents).collect::<Vec<_>>(), [2_000], "2% of €1,000.00, in euros");
+
+    // €980.00 received at 1.10 ($1,078.00) with the €20.00 discount at the booked 1.08 ($21.60).
+    record_payment(
+        &pool,
+        PaymentInput { discount_cents: 2_000, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 98_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
+    )
+    .await
+    .unwrap();
+    assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "PAID");
+    // A/R is relieved in full at the booked rate; only the money's rate differs: 1,078.00 + 21.60 − 1,080.00 = 19.60 gain.
+    assert_eq!(
+        (balance(&pool, checking).await, balance(&pool, discounts).await, balance(&pool, ar).await, balance(&pool, fx).await),
+        (107_800, -2_160, 0, -1_960)
+    );
+    let (amount, home_discount, foreign_discount): (i64, i64, i64) =
+        sqlx::query_as("SELECT amount_cents, discount_cents, foreign_discount_cents FROM invoice_payments").fetch_one(&pool).await.unwrap();
+    assert_eq!((amount, home_discount, foreign_discount), (100_000, 0, 2_000));
+    assert!(crate::sales_prefs::payment_discounts(&pool, &[invoice_id], d(5)).await.unwrap().offered.is_empty(), "never twice");
+    books_balance(&pool).await;
+
+    let payment: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments").fetch_one(&pool).await.unwrap();
+    record(&pool, bounce("PAYMENT", payment)).await.unwrap();
+    assert_eq!(
+        (balance(&pool, checking).await, balance(&pool, discounts).await, balance(&pool, ar).await, balance(&pool, fx).await),
+        (0, 0, 108_000, 0),
+        "the money, the discount and the gain all go back; the invoice is open for its booked A/R"
+    );
+    assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "UNPAID");
+    books_balance(&pool).await;
+}
