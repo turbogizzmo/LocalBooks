@@ -132,7 +132,7 @@ pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<Reconci
     let normal_balance = normal_balance(pool, account_id).await?;
     let reconciled_balance_cents = reconciled_balance(pool, account_id).await?;
     let last_statement_end_date: Option<String> = sqlx::query_scalar(
-        "SELECT MAX(statement_end_date) FROM reconciliations WHERE account_id = ?1 AND is_locked = 1",
+        "SELECT MAX(statement_end_date) FROM reconciliations r WHERE account_id = ?1 AND is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)",
     )
     .bind(account_id)
     .fetch_one(pool)
@@ -150,7 +150,9 @@ pub async fn account_state(pool: &SqlitePool, account_id: i64) -> Result<Reconci
 
 pub async fn list_reconciliations(pool: &SqlitePool, account_id: i64) -> Result<Vec<Reconciliation>, String> {
     sqlx::query_as::<_, Reconciliation>(
-        "SELECT * FROM reconciliations WHERE account_id = ?1 AND is_locked = 1 ORDER BY statement_end_date DESC",
+        "SELECT * FROM reconciliations r WHERE account_id = ?1 AND is_locked = 1
+           AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)
+         ORDER BY statement_end_date DESC",
     )
     .bind(account_id)
     .fetch_all(pool)
@@ -388,6 +390,75 @@ pub async fn lock(pool: &SqlitePool, reconciliation_id: i64) -> Result<Reconcili
         Ok(rec) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
             Ok(rec)
+        }
+        Err(err) => Err(rollback(tx, err).await),
+    }
+}
+
+/// Undo Last Reconciliation (docs/plans/undo-reconciliation.md): the locked reconciliation is left
+/// as it was; an append-only `reconciliation_undos` row records the undo (its trigger refuses all
+/// but the account's last reconciliation, or one while another is in progress, and writes the Audit
+/// Log row), then the lines it cleared are released, and a sealed record goes on the ledger audit
+/// trail. Nothing is posted. Returns how many lines were released.
+pub async fn undo_last(pool: &SqlitePool, reconciliation_id: i64, reason: Option<&str>) -> Result<i64, String> {
+    let reason = reason.map(str::trim).filter(|r| !r.is_empty());
+    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let result = async {
+        let (account_id, account_name, statement_end_date): (i64, String, String) = sqlx::query_as(
+            "SELECT r.account_id, a.name, r.statement_end_date FROM reconciliations r JOIN chart_of_accounts a ON a.id = r.account_id WHERE r.id = ?1",
+        )
+        .bind(reconciliation_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| format!("REC_NOT_FOUND: reconciliation {reconciliation_id} does not exist"))?;
+        let (count, total): (i64, i64) = sqlx::query_as(&format!(
+            "SELECT COUNT(*), COALESCE(SUM({NORMAL_SIGNED}), 0)
+             FROM journal_lines l
+             JOIN chart_of_accounts a ON a.id = l.account_id
+             JOIN account_types t ON t.code = a.account_type
+             WHERE l.reconciliation_id = ?1"
+        ))
+        .bind(reconciliation_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_err)?;
+        sqlx::query("INSERT INTO reconciliation_undos (reconciliation_id, released_count, released_total_cents, reason) VALUES (?1, ?2, ?3, ?4)")
+            .bind(reconciliation_id)
+            .bind(count)
+            .bind(total)
+            .bind(reason)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE reconciliation_id = ?1")
+            .bind(reconciliation_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        let payload = serde_json::json!({
+            "kind": "UNDO_RECONCILIATION",
+            "reconciliationId": reconciliation_id,
+            "accountId": account_id,
+            "statementEndDate": statement_end_date,
+            "releasedCount": count,
+            "amountCents": total,
+            "detail": format!("Undid the reconciliation of {account_name} through {statement_end_date}"),
+            "reason": reason,
+        });
+        sqlx::query("INSERT INTO ledger_audit_log (action_type, target_entity_id, payload_snapshot) VALUES ('EDIT', ?1, ?2)")
+            .bind(reconciliation_id)
+            .bind(payload.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(db_err)?;
+        Ok(count)
+    }
+    .await;
+    match result {
+        Ok(count) => {
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            Ok(count)
         }
         Err(err) => Err(rollback(tx, err).await),
     }

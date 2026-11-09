@@ -12,4 +12,6 @@ export default {
     invoke('set_lines_cleared', { reconciliationId, lineIds, cleared }),
   lockReconciliation: (reconciliationId) => invoke('lock_reconciliation', { reconciliationId }),
   cancelReconciliation: (reconciliationId) => invoke('cancel_reconciliation', { reconciliationId }),
+  // Undo Last Reconciliation; resolves how many transactions were uncleared.
+  undoLastReconciliation: (reconciliationId, reason = null) => invoke('undo_last_reconciliation', { reconciliationId, reason }),
 };

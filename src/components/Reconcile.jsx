@@ -8,6 +8,7 @@ import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
 
 const RECONCILABLE = ['BANK', 'CREDIT_CARD', 'OTHER_CURRENT_ASSET', 'FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_LIABILITY', 'LONG_TERM_LIABILITY'];
 const isReconcilable = (a) => !a.isSystem && RECONCILABLE.includes(a.accountType);
@@ -222,6 +223,28 @@ export default function Reconcile({ accounts }) {
     } catch (err) {
       setCleared(previous);
       setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+
+  // Undo Last Reconciliation (docs/plans/undo-reconciliation.md): the reconciliation stays on
+  // record, an audited undo releases its transactions to be cleared again.
+  const undoLast = async (h) => {
+    const ok = await askConfirm(
+      `Undo the reconciliation of ${account?.fullName ?? 'this account'} through ${formatDate(h.statementEndDate)}? Its transactions become uncleared, so you can reconcile that statement again. The undo is recorded in the Audit Log and can't itself be undone. Service charges and interest posted with it stay posted.`,
+      { confirmLabel: 'Undo reconciliation', danger: true },
+    );
+    if (!ok) return;
+    const reason = await askText('Why are you undoing it? (optional, kept in the Audit Log)');
+    if (reason === null) return;
+    setBusy(true);
+    try {
+      const released = await api.undoLastReconciliation(h.id, reason.trim() || null);
+      setNotice({ kind: 'success', text: `Reconciliation through ${formatDate(h.statementEndDate)} undone: ${released} transaction${released === 1 ? ' is' : 's are'} uncleared again.` });
+      await load(accountId);
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -445,20 +468,29 @@ export default function Reconcile({ accounts }) {
                   <th className="qb-grid-head text-right">Beginning balance</th>
                   <th className="qb-grid-head text-right">Ending balance</th>
                   <th className="qb-grid-head">Completed</th>
+                  <th className="qb-grid-head" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
+                    <td colSpan={5} className="qb-grid-cell text-qb-ink-muted">No completed reconciliations yet. Enter your statement details above to start.</td>
                   </tr>
                 )}
-                {history.map((h) => (
+                {history.map((h, i) => (
                   <tr key={h.id} className="qb-grid-row">
                     <td className="qb-grid-cell">{formatDate(h.statementEndDate)}</td>
                     <td className="qb-grid-cell num">{formatCents(h.beginningBalanceCents)}</td>
                     <td className="qb-grid-cell num">{formatCents(h.statementEndingBalanceCents)}</td>
                     <td className="qb-grid-cell text-qb-ink-muted">🔒 {formatDate(h.lockedAt?.slice(0, 10))}</td>
+                    <td className="qb-grid-cell cell-tight text-right">
+                      {/* Newest first: only the last reconciliation can be undone. */}
+                      {i === 0 && (
+                        <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => undoLast(h)} disabled={busy}>
+                          Undo Last Reconciliation…
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

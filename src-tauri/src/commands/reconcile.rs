@@ -11,6 +11,7 @@ handlers![
     set_lines_cleared,
     lock_reconciliation,
     cancel_reconciliation,
+    undo_last_reconciliation,
 ];
 
 #[tauri::command]
@@ -63,4 +64,12 @@ pub async fn lock_reconciliation(
 #[tauri::command]
 pub async fn cancel_reconciliation(db: State<'_, Db>, reconciliation_id: i64) -> Result<(), String> {
     reconcile::cancel(&db.pool().await, reconciliation_id).await
+}
+
+/// Undo Last Reconciliation: an audited release of the account's last reconciliation.
+#[tauri::command]
+pub async fn undo_last_reconciliation(app: AppHandle, db: State<'_, Db>, reconciliation_id: i64, reason: Option<String>) -> Result<i64, String> {
+    let released = reconcile::undo_last(&db.pool().await, reconciliation_id, reason.as_deref()).await?;
+    notify(&app);
+    Ok(released)
 }

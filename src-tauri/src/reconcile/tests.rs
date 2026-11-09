@@ -169,3 +169,77 @@ async fn a_bad_charge_posts_nothing() {
     assert_eq!(entries().await, before);
     assert!(account_state(&pool, checking).await.unwrap().in_progress.is_none());
 }
+
+async fn reconcile_through(pool: &SqlitePool, account: i64, end: NaiveDate, ending: i64) -> Reconciliation {
+    let rec = start(pool, account, end, ending).await.expect("starts");
+    let ids: Vec<i64> = unreconciled_lines(pool, account).await.unwrap().into_iter().filter(|l| l.entry_date <= end.to_string()).map(|l| l.line_id).collect();
+    set_lines_cleared(pool, rec.id, &ids, true).await.unwrap();
+    lock(pool, rec.id).await.expect("locks")
+}
+
+#[tokio::test]
+async fn undo_last_reconciliation_releases_its_lines_with_an_audit_row() {
+    let pool = test_pool().await;
+    let (checking, owner, rent) = (account_id(&pool, "1010").await, account_id(&pool, "3100").await, account_id(&pool, "6300").await);
+    post(&pool, d(8, 2), checking, owner, 100_000).await;
+    let august = reconcile_through(&pool, checking, d(8, 31), 100_000).await;
+    let fee = post(&pool, d(9, 10), rent, checking, 2_000).await;
+    let september = reconcile_through(&pool, checking, d(9, 30), 98_000).await;
+    let report_before = crate::accountant_reports::previous_reconciliation(&pool, august.id, true).await.unwrap();
+
+    // Only the last one can be undone.
+    let err = undo_last(&pool, august.id, None).await.expect_err("not the last");
+    assert!(err.starts_with("REC_UNDO_NOT_LAST"), "{err}");
+
+    assert_eq!(undo_last(&pool, september.id, Some("wrong statement")).await.unwrap(), 1);
+    // Its line is uncleared and its entry can be voided again; the locked row itself is unchanged.
+    let lines = unreconciled_lines(&pool, checking).await.unwrap();
+    assert_eq!(lines.iter().map(|l| (l.journal_entry_id, l.reconciliation_id)).collect::<Vec<_>>(), vec![(fee, None)]);
+    let still_locked: bool = sqlx::query_scalar("SELECT is_locked FROM reconciliations WHERE id = ?1").bind(september.id).fetch_one(&pool).await.unwrap();
+    assert!(still_locked);
+    let state = account_state(&pool, checking).await.unwrap();
+    assert_eq!((state.reconciled_balance_cents, state.last_statement_end_date.as_deref()), (100_000, Some("2026-08-31")));
+    assert_eq!(list_reconciliations(&pool, checking).await.unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), vec![august.id]);
+
+    // Audited in the Audit Log and sealed on the ledger audit trail.
+    let detail: String = sqlx::query_scalar("SELECT detail FROM audit_log WHERE action = 'UNDO_RECONCILIATION' AND reconciliation_id = ?1")
+        .bind(september.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(detail.contains("through 2026-09-30") && detail.contains("1 transaction uncleared") && detail.ends_with(": wrong statement"), "{detail}");
+    let sealed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger_audit_log WHERE action_type = 'EDIT' AND json_extract(payload_snapshot, '$.kind') = 'UNDO_RECONCILIATION'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(sealed, 1);
+    assert!(crate::audit_chain::verify(&pool).await.unwrap().problems.is_empty());
+
+    // The undo is final, and the earlier reconciliation's report still ties out as before.
+    assert!(undo_last(&pool, september.id, None).await.is_err());
+    assert!(sqlx::query("DELETE FROM reconciliation_undos").execute(&pool).await.is_err());
+    let report_after = crate::accountant_reports::previous_reconciliation(&pool, august.id, true).await.unwrap();
+    assert_eq!(serde_json::to_value(&report_after).unwrap(), serde_json::to_value(&report_before).unwrap());
+
+    // The same statement can be reconciled again.
+    let again = reconcile_through(&pool, checking, d(9, 30), 98_000).await;
+    assert!(again.is_locked);
+}
+
+#[tokio::test]
+async fn undo_waits_for_a_reconciliation_in_progress() {
+    let pool = test_pool().await;
+    let (checking, owner) = (account_id(&pool, "1010").await, account_id(&pool, "3100").await);
+    post(&pool, d(8, 2), checking, owner, 100_000).await;
+    let august = reconcile_through(&pool, checking, d(8, 31), 100_000).await;
+    let open = start(&pool, checking, d(9, 30), 100_000).await.unwrap();
+    let err = undo_last(&pool, august.id, None).await.expect_err("one in progress");
+    assert!(err.starts_with("REC_UNDO_IN_PROGRESS"), "{err}");
+    cancel(&pool, open.id).await.unwrap();
+    assert_eq!(undo_last(&pool, august.id, None).await.unwrap(), 1);
+    // A line of a reconciliation that wasn't undone still can't be released.
+    let other = reconcile_through(&pool, checking, d(8, 31), 100_000).await;
+    let line: i64 = sqlx::query_scalar("SELECT id FROM journal_lines WHERE reconciliation_id = ?1").bind(other.id).fetch_one(&pool).await.unwrap();
+    let err = sqlx::query("UPDATE journal_lines SET reconciliation_id = NULL, reconciled_at = NULL WHERE id = ?1").bind(line).execute(&pool).await.expect_err("locked");
+    assert!(err.to_string().contains("REC_LOCKED"), "{err}");
+}

@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Undo Last Reconciliation.** In Banking › Reconcile, the newest completed reconciliation can be
+  undone: its transactions are uncleared so the statement can be reconciled again. The
+  reconciliation stays on record and the undo, with an optional reason, goes into the Audit Log.
 - **Service charge and interest earned when you reconcile.** Starting a reconciliation now takes
   the statement's service charge and interest earned (amount, date, account and class). Each posts
   as a journal entry and is already ticked as cleared.

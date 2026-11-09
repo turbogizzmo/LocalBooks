@@ -18,6 +18,23 @@ LocalBooks locks the matched transactions so the reconciled balance can't change
 The cleared transactions are now locked: they can't be voided or changed. Past reconciliations are
 listed under **Reconciliation history**.
 
+## Undo the last reconciliation
+
+If you finished a reconciliation by mistake (the wrong statement, or a transaction ticked that
+wasn't on it), choose the account in **Banking › Reconcile** and click **Undo Last
+Reconciliation…** on the newest row of **Reconciliation history**. After you confirm (and,
+if you like, type why), its transactions are uncleared and can be ticked again, voided or changed,
+and you can reconcile that statement again.
+
+- Only the account's last reconciliation can be undone; undo again to step back one more.
+  Cancel a reconciliation in progress first.
+- Nothing is deleted. The reconciliation stays on record, and the undo is written to the
+  **Audit Log** (as **Reconciliation undone**, with your reason) and to the audit trail. It
+  can't itself be undone: reconcile the statement again instead.
+- A service charge or interest earned entered when it started stays posted. Void it if it was
+  wrong.
+- Earlier reconciliations and their reports don't change.
+
 ## Reprint a past reconciliation
 
 Go to **Reports › Accountant & Taxes › Previous Reconciliation**, choose the account and the
