@@ -49,6 +49,7 @@ features![
     accountant_reports,
     accounts,
     ach,
+    approvals,
     attachments,
     attachments_library,
     backups,

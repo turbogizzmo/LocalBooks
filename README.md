@@ -257,6 +257,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | 1099s | Reports › 1099 Summary, 1099-NEC and 1096; W-9… on a vendor | W-9 and TIN on each contractor, 1099 totals by box, the year's 1099-NEC forms with what's missing, the 1096 totals, and printed recipient copies | [guide](docs/guide/getting-started.md#w-9s-1099-nec-forms-and-the-1096) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
+| Approvals | Expenses › Approvals | Rules hold bills and purchase orders over an amount or from a vendor until an Admin approves them; rejections are kept with a note | [guide](docs/guide/bills.md#approvals-for-bills-and-purchase-orders) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
 | Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |

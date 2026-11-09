@@ -116,6 +116,8 @@ pub const KEPT_TABLES: &[&str] = &[
     "_sqlx_migrations",
     "account_types",
     "ach_originators",
+    "approval_requests",
+    "approval_rules",
     "bank_format_templates",
     "bank_payee_rules",
     "bank_rules",
