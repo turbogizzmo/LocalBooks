@@ -95,8 +95,8 @@ struct Registry {
     /// The company was just opened: the first LocalBooks window to ask gets its desktop back.
     restore_pending: bool,
     next_label: usize,
-    /// Reports received, counted, so [`flush_reports`] can wait for fresh ones.
-    reports: u64,
+    /// While [`flush_reports`] waits: the LocalBooks windows that have reported since it asked.
+    reported_since_flush: Option<std::collections::HashSet<String>>,
 }
 
 #[derive(Clone, Default)]
@@ -130,7 +130,9 @@ impl Registry {
 
     /// A LocalBooks window reports the windows inside it and which is active.
     fn report(&mut self, label: &str, children: Vec<ChildWindow>, active: Option<String>, frame: Option<Bounds>) {
-        self.reports = self.reports.wrapping_add(1);
+        if let Some(seen) = self.reported_since_flush.as_mut() {
+            seen.insert(label.to_string());
+        }
         let entry = self.entry(label);
         entry.children = children;
         entry.active = active;
@@ -418,21 +420,23 @@ pub async fn save_on_close(app: &AppHandle) {
 /// moment, so without this a company closed (or LocalBooks quit) right after a window was opened,
 /// closed or moved would save the windows as they were before.
 pub async fn flush_reports(app: &AppHandle) {
-    let open = app.webview_windows().len() as u64;
-    if open == 0 {
+    let open: std::collections::HashSet<String> = app.webview_windows().into_keys().collect();
+    if open.is_empty() {
         return;
     }
-    let before = registry(app).reports;
-    if app.emit(WINDOW_REPORT_FLUSH, ()).is_err() {
-        return;
-    }
-    let deadline = std::time::Instant::now() + FLUSH_WAIT;
-    while std::time::Instant::now() < deadline {
-        if registry(app).reports.wrapping_sub(before) >= open {
-            return;
+    // Each window must report after this point; a report from one window never counts for another.
+    registry(app).reported_since_flush = Some(std::collections::HashSet::new());
+    if app.emit(WINDOW_REPORT_FLUSH, ()).is_ok() {
+        let deadline = std::time::Instant::now() + FLUSH_WAIT;
+        while std::time::Instant::now() < deadline {
+            let all = registry(app).reported_since_flush.as_ref().is_some_and(|seen| open.iter().all(|l| seen.contains(l)));
+            if all {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
+    registry(app).reported_since_flush = None;
 }
 
 /// The next LocalBooks window to load the open company reopens its saved desktop (`true`), or none
