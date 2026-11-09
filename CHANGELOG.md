@@ -8,7 +8,7 @@ people using LocalBooks.
 
 - **Bill payment stubs.** A bill payment now has a form of its own listing every bill it pays.
   Print it, save it as a PDF or email it to the vendor right after Pay Bills, or later from the
-  bill's Actions menu, and change its look in Settings › Custom Forms › Bill payment.
+  bill's Actions menu, and change its look in Settings › Custom Forms › Bill payment stub.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

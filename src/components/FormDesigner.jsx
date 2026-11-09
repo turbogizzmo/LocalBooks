@@ -12,7 +12,7 @@ const KINDS = [
   { id: 'SALES_RECEIPT', label: 'Sales receipt' },
   { id: 'STATEMENT', label: 'Statement' },
   { id: 'CREDIT_MEMO', label: 'Credit memo' },
-  { id: 'BILL_PAYMENT', label: 'Bill payment' },
+  { id: 'BILL_PAYMENT', label: 'Bill payment stub' },
 ];
 const LAYOUTS = [
   ['CLASSIC', 'Classic', 'Company and title side by side over an accent rule'],

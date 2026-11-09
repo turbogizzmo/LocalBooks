@@ -87,7 +87,7 @@ paid on the same check (or with the same reference) is on one stub.
 - **Later**, open a paid bill's **Actions** menu and choose **Print payment stub**, **Save payment
   stub as PDF** or **Email payment stub** for that payment.
 
-Change how the stub looks in **Settings › Custom Forms › Bill payment**
+Change how the stub looks in **Settings › Custom Forms › Bill payment stub**
 (see [Custom forms](custom-forms.md)).
 
 ### Use vendor credits when paying
