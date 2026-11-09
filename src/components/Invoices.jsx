@@ -15,6 +15,7 @@ import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './F
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
 import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { duplicateDates } from '../lib/formStep.js';
+import { paymentTotals } from '../lib/paymentTotals.js';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -245,6 +246,8 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   });
   const totalApplied = rows.reduce((s, inv) => s + Math.max(0, appliedCents(inv)), 0);
   const receivedCents = parseMoneyToCents(received);
+  // The totals under the grid: amount due, applied, discounts, and what stays open or unapplied.
+  const totals = paymentTotals(rows, appliedCents, discountCents, received.trim() === '' ? null : receivedCents ?? null);
   const badRows = rows.filter((inv) => {
     const c = parseMoneyToCents(applied[inv.id] ?? '');
     return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c + Math.max(0, discountCents(inv)) > inv.balanceCents);
@@ -534,7 +537,38 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
             );
           })}
         </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="font-semibold">
+              <td className="qb-grid-cell" colSpan={5}>
+                Totals
+              </td>
+              <td className="qb-grid-cell num">{money(totals.original)}</td>
+              <td className="qb-grid-cell num">{money(totals.amountDue)}</td>
+              {offer.available && <td className="qb-grid-cell num">{money(totals.discounts)}</td>}
+              <td className="qb-grid-cell num">{money(totals.applied)}</td>
+            </tr>
+          </tfoot>
+        )}
       </table>
+      {rows.length > 0 && (
+        <dl className="ml-auto grid grid-cols-[auto_auto] gap-x-4 px-2 py-1 text-sm" aria-label="Payment totals">
+          <dt className="text-qb-ink-muted">Amount due</dt>
+          <dd className="num text-right">{money(totals.amountDue)}</dd>
+          <dt className="text-qb-ink-muted">Applied</dt>
+          <dd className="num text-right">{money(totals.applied)}</dd>
+          <dt className="text-qb-ink-muted">Discounts applied</dt>
+          <dd className="num text-right">{money(totals.discounts)}</dd>
+          <dt className="text-qb-ink-muted">Left due after this payment</dt>
+          <dd className="num text-right">{money(totals.leftDue)}</dd>
+          {totals.unapplied !== null && totals.unapplied !== 0 && (
+            <>
+              <dt className="text-qb-negative">{totals.unapplied > 0 ? 'Unapplied amount' : 'Applied more than received'}</dt>
+              <dd className="num text-right text-qb-negative">{money(Math.abs(totals.unapplied))}</dd>
+            </>
+          )}
+        </dl>
+      )}
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
