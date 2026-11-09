@@ -12,6 +12,7 @@ import { useFormClass } from './ClassSelect.jsx';
 import { isCategory } from './Bills.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { accountLabel } from './AccountSelect.jsx';
+import { isHeldForApproval } from '../lib/approvals.js';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
@@ -22,7 +23,7 @@ import { FormInfoPanel } from './InfoPanel.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
-function PurchaseOrderDocument({ company, order, lines, accounts }) {
+export function PurchaseOrderDocument({ company, order, lines, accounts }) {
   return (
     <article className="doc">
       <DocHeader company={company} title="Purchase Order" subtitle={`PO #${order.poNumber} · ${formatDate(order.poDate)}`} />
@@ -96,7 +97,18 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
     const posted = formClass.apply(lines).map(({ memo: description, ...l }) => ({ ...l, description }));
     setBusy(true);
     try {
-      const id = await api.createPurchaseOrder({ vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted });
+      const input = { vendorName: vendor.trim(), poDate, expectedDate: expected || null, memo: memo.trim() || null, lines: posted };
+      let id;
+      try {
+        id = await api.createPurchaseOrder(input);
+      } catch (err) {
+        // An approval rule holds this order: it waits under Expenses › Approvals.
+        if (!isHeldForApproval(err)) throw err;
+        await api.submitForApproval('PURCHASE_ORDER', input);
+        onSaved(`Purchase order for ${vendor.trim()} sent for approval: ${formatCents(total)}. It isn't an open order until it is approved under Expenses › Approvals.`, null);
+        clear();
+        return true;
+      }
       onSaved(`Purchase order for ${vendor.trim()} saved: ${formatCents(total)}. It does not post to the books until you turn it into a bill.`, mode === 'print' ? id : null);
       clear();
       return true;

@@ -10,7 +10,42 @@ Controls**.
   General › Company Preferences**, under **Automatic backups**.
 - **Right now:** click **Back up now**.
 - **To a file you choose** (a USB drive or cloud folder): click **Backup Company File…** and pick
-  where to save it. It's saved as a `.localbooks` file and checked after writing.
+  where to save it. It's saved as a `.localbooks` file and checked after writing. This copy isn't
+  encrypted; for copies that leave this computer, use [Offsite backup](#offsite-backup-encrypted).
+
+## Offsite backup (encrypted)
+
+Backups on the same disk as your books don't help if the computer is lost. **Offsite backup**
+keeps encrypted copies in a folder you choose: a folder your cloud storage keeps in sync, or a USB
+or network drive. Each copy is encrypted on this computer before it is saved, so whatever carries
+the folder elsewhere only ever sees scrambled data. LocalBooks itself sends nothing over the
+internet; it only writes the file.
+
+1. Under **Offsite backup**, click **Set up…** (Admins only).
+2. Choose the folder and how many copies to keep (10 to start).
+3. Enter a **backup password** twice: your sign-in password, the company's recovery key, or
+   another password of at least 8 characters. **Keep it safe: a copy can't be opened without it**,
+   by you or by LocalBooks.
+4. Click **Save**. The first copy is made straight away.
+
+After that a copy is made when LocalBooks is open and the newest copy is more than a day old, and
+the oldest copies beyond the number to keep are deleted from the folder. **Back up offsite now**
+makes one at any time. The screen shows when the last copy was made and the last test restore
+passed, and any error (for example a drive that isn't plugged in).
+
+The password itself is never stored. This computer keeps the key made from it in its credential
+store (the Keychain on a Mac), so copies need no password. On another computer, or if the key is
+removed, copies stop until you click **Change…** and enter the password again.
+
+**Test restore** opens a copy with the password and checks it like a restore would (that it's an
+undamaged, balanced LocalBooks file), without changing your books. Do it now and then, so you know
+your copies work. **Restore** replaces your books with the copy, after saving the current books as
+a snapshot, like any restore. To restore on a new computer, create or open any company, set up
+offsite backup with the same folder and password, and click **Restore** beside the copy, or use
+**Test another copy…** to check a copy from anywhere.
+
+Copies are named `<company>-<date>-<time>.lbbackup`. Turning offsite backup off leaves the copies
+in the folder.
 
 ## Restore a backup
 

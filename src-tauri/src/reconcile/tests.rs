@@ -249,29 +249,30 @@ async fn undo_waits_for_a_reconciliation_in_progress() {
 
 #[tokio::test]
 async fn a_statement_file_attaches_to_the_reconciliation() {
+    use crate::attachments_library::{add_record_file, content, delete, record_files, FileRef, Source};
     let pool = test_pool().await;
     let (checking, owner) = (account_id(&pool, "1010").await, account_id(&pool, "3100").await);
     post(&pool, d(8, 2), checking, owner, 100_000).await;
     let open = start(&pool, checking, d(8, 31), 100_000).await.unwrap();
-    let file = attach_statement(&pool, open.id, "/tmp/statements/August 2026.pdf", b"%PDF-1.7 synthetic").await.unwrap();
+    let file = add_record_file(&pool, "RECONCILIATION", open.id, "/tmp/statements/August 2026.pdf", b"%PDF-1.7 synthetic").await.unwrap();
     assert_eq!((file.file_name.as_str(), file.media_type.as_str(), file.size_bytes), ("August 2026.pdf", "application/pdf", 18));
-    assert_eq!(statement_content(&pool, file.id).await.unwrap(), ("August 2026.pdf".into(), b"%PDF-1.7 synthetic".to_vec()));
-    assert!(attach_statement(&pool, open.id, "empty.pdf", b"").await.unwrap_err().starts_with("ATTACH_EMPTY"));
+    let r = FileRef { source: Source::Record, id: file.id };
+    assert_eq!(content(&pool, r).await.unwrap(), ("August 2026.pdf".into(), "application/pdf".into(), b"%PDF-1.7 synthetic".to_vec()));
 
-    // It stays with the reconciliation once finished.
+    // It stays with the reconciliation once finished, and deletes reversibly like any attachment.
     let ids: Vec<i64> = unreconciled_lines(&pool, checking).await.unwrap().into_iter().map(|l| l.line_id).collect();
     set_lines_cleared(&pool, open.id, &ids, true).await.unwrap();
     lock(&pool, open.id).await.unwrap();
-    assert_eq!(statement_files(&pool, open.id).await.unwrap().len(), 1);
-    remove_statement(&pool, file.id).await.unwrap();
-    assert!(statement_files(&pool, open.id).await.unwrap().is_empty());
+    assert_eq!(record_files(&pool, "RECONCILIATION", open.id).await.unwrap().len(), 1);
+    delete(&pool, r).await.unwrap();
+    assert!(record_files(&pool, "RECONCILIATION", open.id).await.unwrap().is_empty());
 
     // Cancelling one in progress takes its files with it; an undone one takes no new ones.
     let next = start(&pool, checking, d(9, 30), 100_000).await.unwrap();
-    attach_statement(&pool, next.id, "september.png", b"png").await.unwrap();
+    add_record_file(&pool, "RECONCILIATION", next.id, "september.png", b"png").await.unwrap();
     cancel(&pool, next.id).await.unwrap();
-    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM reconciliation_statements").fetch_one(&pool).await.unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM record_attachments WHERE record_kind = 'RECONCILIATION' AND record_id = ?1").bind(next.id).fetch_one(&pool).await.unwrap();
     assert_eq!(left, 0);
     undo_last(&pool, open.id, None).await.unwrap();
-    assert!(attach_statement(&pool, open.id, "late.pdf", b"x").await.unwrap_err().starts_with("REC_UNDONE"));
+    assert!(add_record_file(&pool, "RECONCILIATION", open.id, "late.pdf", b"x").await.unwrap_err().starts_with("REC_UNDONE"));
 }
