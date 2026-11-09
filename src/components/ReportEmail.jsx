@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../lib/api.js';
 
+/** The attachment's name as the backend writes it (`forms::file_name`): unsafe characters become -. */
+export function pdfFileName(title) {
+  // eslint-disable-next-line no-control-regex
+  const clean = String(title).replace(/[/\\:*?"<>|\u0000-\u001f\u007f]/g, '-').trim().replace(/^\.+|\.+$/g, '');
+  return `${clean}.pdf`;
+}
+
 function composedText(outcome, fileName) {
   return outcome.kind === 'attached'
     ? `A new message is open in ${outcome.app} with ${fileName} attached. Review it there and send.`
@@ -11,7 +18,7 @@ function composedText(outcome, fileName) {
 
 /** `sheet` is the report as its Excel export builds it. */
 export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
-  const fileName = `${sheet.title}.pdf`;
+  const fileName = pdfFileName(sheet.title);
   const [draft, setDraft] = useState({ to: '', subject: [sheet.title, sheet.subtitle].filter(Boolean).join(' · '), body: `Attached: ${sheet.title}${sheet.subtitle ? ` (${sheet.subtitle})` : ''}.\n\n${sheet.company ?? ''}`.trim() });
   const [smtp, setSmtp] = useState(null);
   const [method, setMethod] = useState('MAIL_APP');

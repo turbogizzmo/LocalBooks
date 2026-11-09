@@ -215,17 +215,24 @@ export function ExportMenu({ onCsv, onXlsx, onNotice, printable = true, onPng = 
 let capturing = null;
 
 /** The sheet a report's Excel export (`onXlsx`) builds, without saving a file; null if it has none. */
-export async function captureSheet(onXlsx) {
-  let sheet = null;
-  capturing = (s) => {
-    sheet = s;
-  };
-  try {
-    await onXlsx();
-  } finally {
-    capturing = null;
-  }
-  return sheet;
+// Captures run one at a time, so overlapping exports (two windows, a double click) can't take
+// each other's sheet through the shared `capturing` callback.
+let captureQueue = Promise.resolve();
+export function captureSheet(onXlsx) {
+  const run = captureQueue.then(async () => {
+    let sheet = null;
+    capturing = (s) => {
+      sheet = s;
+    };
+    try {
+      await onXlsx();
+    } finally {
+      capturing = null;
+    }
+    return sheet;
+  });
+  captureQueue = run.catch(() => {});
+  return run;
 }
 
 export async function saveCsv(report, params, filename, onNotice) {
