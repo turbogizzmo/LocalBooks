@@ -73,7 +73,7 @@ const ENABLED = 'text-qb-ink hover:bg-qb-surface hover:shadow-panel';
 const DISABLED = 'cursor-not-allowed text-qb-ink-faint opacity-60';
 
 /** The keys that press a button, by its id, unless the button names its own. */
-const BUTTON_KEYS = { save: FORM_KEYS['save-new'], void: FORM_KEYS.delete, delete: FORM_KEYS.delete, memorize: FORM_KEYS.memorize, new: FORM_KEYS.new, print: FORM_KEYS.print, previous: FORM_KEYS.previous, next: FORM_KEYS.next };
+const BUTTON_KEYS = { save: FORM_KEYS['save-new'], void: FORM_KEYS.delete, delete: FORM_KEYS.delete, memorize: FORM_KEYS.memorize, new: FORM_KEYS.new, print: FORM_KEYS.print, previous: FORM_KEYS.previous, next: FORM_KEYS.next, duplicate: FORM_KEYS.duplicate };
 
 const ToolButton = forwardRef(function ToolButton({ item, onClick, ...rest }, ref) {
   const keys = item.keys ?? BUTTON_KEYS[item.id];
@@ -211,6 +211,22 @@ export function fileButtons({ onNew, onSave, saveLabel = 'Save', saveHint, saveD
       confirm: voidConfirm,
     },
   ];
+}
+
+/**
+ * Duplicate (Ctrl+O, also Edit › Duplicate Transaction): opens an unsaved copy of the saved
+ * transaction on the form, dated today, with a new number. Off on a new form, and while the form has
+ * changes not saved (the copy is of what was saved).
+ */
+export function duplicateButton({ onDuplicate, saved, dirty = false, busy = false, what = 'transaction' }) {
+  return {
+    id: 'duplicate',
+    label: 'Duplicate',
+    icon: 'NewForm',
+    hint: !saved ? `Open a saved ${what} first, then duplicate it` : dirty ? 'Save or revert your changes first' : `Start a new ${what} copied from this one, dated today`,
+    onClick: onDuplicate,
+    disabled: busy || !saved || dirty,
+  };
 }
 
 /**

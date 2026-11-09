@@ -10,10 +10,13 @@ import { SortTh, useSort } from './SortHead.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
+import { useTransactionReports } from './TransactionHistory.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
 import Attachments, { attachPicked, PendingAttachments, pickAttachments, useAttachmentRows } from './Attachments.jsx';
-import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import { duplicateDates } from '../lib/formStep.js';
+import { paymentTotals } from '../lib/paymentTotals.js';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -244,6 +247,8 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   });
   const totalApplied = rows.reduce((s, inv) => s + Math.max(0, appliedCents(inv)), 0);
   const receivedCents = parseMoneyToCents(received);
+  // The totals under the grid: amount due, applied, discounts, and what stays open or unapplied.
+  const totals = paymentTotals(rows, appliedCents, discountCents, received.trim() === '' ? null : receivedCents ?? null);
   const badRows = rows.filter((inv) => {
     const c = parseMoneyToCents(applied[inv.id] ?? '');
     return (applied[inv.id] ?? '').trim() !== '' && (c === null || c < 0 || c + Math.max(0, discountCents(inv)) > inv.balanceCents);
@@ -533,7 +538,38 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
             );
           })}
         </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="font-semibold">
+              <td className="qb-grid-cell" colSpan={5}>
+                Totals
+              </td>
+              <td className="qb-grid-cell num">{money(totals.original)}</td>
+              <td className="qb-grid-cell num">{money(totals.amountDue)}</td>
+              {offer.available && <td className="qb-grid-cell num">{money(totals.discounts)}</td>}
+              <td className="qb-grid-cell num">{money(totals.applied)}</td>
+            </tr>
+          </tfoot>
+        )}
       </table>
+      {rows.length > 0 && (
+        <dl className="ml-auto grid grid-cols-[auto_auto] gap-x-4 px-2 py-1 text-sm" aria-label="Payment totals">
+          <dt className="text-qb-ink-muted">Amount due</dt>
+          <dd className="num text-right">{money(totals.amountDue)}</dd>
+          <dt className="text-qb-ink-muted">Applied</dt>
+          <dd className="num text-right">{money(totals.applied)}</dd>
+          <dt className="text-qb-ink-muted">Discounts applied</dt>
+          <dd className="num text-right">{money(totals.discounts)}</dd>
+          <dt className="text-qb-ink-muted">Left due after this payment</dt>
+          <dd className="num text-right">{money(totals.leftDue)}</dd>
+          {totals.unapplied !== null && totals.unapplied !== 0 && (
+            <>
+              <dt className="text-qb-negative">{totals.unapplied > 0 ? 'Unapplied amount' : 'Applied more than received'}</dt>
+              <dd className="num text-right text-qb-negative">{money(Math.abs(totals.unapplied))}</dd>
+            </>
+          )}
+        </dl>
+      )}
       <div className="flex items-center gap-2 px-2 py-1">
         {error && <span className="text-sm text-qb-negative">{error}</span>}
         <div className="ml-auto flex gap-2">
@@ -549,7 +585,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   );
 }
 
-function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
+function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
   const today = todayIso();
@@ -696,6 +732,7 @@ function InvoiceList({ accounts, onNotice, data, error, onEdit }) {
                             hint: inv.amountPaidCents > 0 ? 'Its payments and credits stay applied to the edited version' : undefined,
                             onSelect: () => onEdit(inv),
                           },
+                          { label: 'Duplicate', hint: 'A new invoice copied from this one, dated today', onSelect: () => onDuplicate(inv) },
                           voidItem({
                             journalEntryId: inv.journalEntryId,
                             voided: inv.isVoided,
@@ -788,6 +825,9 @@ export default function Invoices({ accounts, intent }) {
     } else if (intent?.action === 'edit' && intent.data?.invoiceId) {
       // Opened in a window of its own from the list, or reopened with the desktop.
       loadForEdit({ id: intent.data.invoiceId }, false);
+    } else if (intent?.action === 'duplicate' && intent.data?.invoiceId) {
+      // Duplicate on a row of the invoice list.
+      loadForEdit({ id: intent.data.invoiceId }, false, true, true);
     } else if (intent?.action === 'from-estimate' && intent.data?.estimateId) {
       setReceiving(false);
       api.getEstimateDetail(intent.data.estimateId).then(
@@ -863,11 +903,27 @@ export default function Invoices({ accounts, intent }) {
   // customer suggestions before anyone has touched it. `viewLocked` is for the toolbar's Previous
   // and Next, which show a voided or paid invoice locked (Save off, a notice saying why) instead of
   // stopping at it.
-  const loadForEdit = (inv, focusCustomer = true, viewLocked = false) => {
+  // `asCopy` loads it as a new invoice copied from it (Duplicate).
+  const loadForEdit = (inv, focusCustomer = true, viewLocked = false, asCopy = false) => {
     api.getInvoiceDetail(inv.id).then(
       ({ invoice, items, details, formLines: storedForm }) => {
         // However it was opened (Edit…, a double-click, a register, a customer's transactions),
         // the same rules as saving apply.
+        if (asCopy) {
+          setReceiving(false);
+          sales.set(details);
+          setFromEstimate(null);
+          setTermsTouched(true);
+          setTermsId(details?.termsId ?? null);
+          setCurrency(invoice.currencyCode ?? '');
+          setRate(invoice.currencyCode ? formatRate(invoice.exchangeRateE6) : '');
+          setDiscountText(invoice.discountCents ? centsToInput(invoice.discountCents) : '');
+          tax.set(invoice.taxRateId ?? null);
+          setLines(linesFromDocument(items, storedForm, defaultAccountId));
+          setCustomer(invoice.customerName);
+          startCopy(invoice.invoiceNumber, invoice.issueDate, invoice.dueDate);
+          return;
+        }
         if (!viewLocked && invoice.isVoided) return setNotice({ kind: 'info', text: `Invoice #${invoice.invoiceNumber} is voided, so it can't be edited.` });
         setReceiving(false);
         sales.set(details);
@@ -895,6 +951,20 @@ export default function Invoices({ accounts, intent }) {
       (err) => setNotice({ kind: 'error', text: errorText(err) }),
     );
   };
+
+  // Duplicate: the invoice on the form becomes a new one, dated today and due as many days later as
+  // it was; it gets the next number when it posts.
+  const startCopy = (number, fromIssue, fromDue) => {
+    const { date, due } = duplicateDates(fromIssue, fromDue, todayIso());
+    setEditing(null);
+    setBaseline(null);
+    setIssueDate(date);
+    setDueDate(due ?? date);
+    setFiles([]);
+    setShowAttachments(false);
+    setNotice({ kind: 'info', text: `A copy of invoice #${number}, dated today: it gets the next invoice number when you save it.` });
+  };
+  const duplicateInvoice = () => editing && startCopy(editing.number, issueDate, dueDate);
 
   const reset = () => {
     setCustomer('');
@@ -925,6 +995,8 @@ export default function Invoices({ accounts, intent }) {
   const emailed = useEmailStatuses('INVOICE');
   // The posted invoice on the form, as the list has it, for the toolbar's Print, Email, Void and Attach.
   const current = editing ? (invoices.data ?? []).find((i) => i.id === editing.id) ?? null : null;
+  // History (Ctrl+H) and Journal (Ctrl+Y) of the invoice on the form.
+  const reports = useTransactionReports();
   const ordered = useMemo(() => [...(invoices.data ?? [])].sort((a, b) => a.invoiceNumber - b.invoiceNumber || a.id - b.id), [invoices.data]);
   const at = current ? ordered.indexOf(current) : -1;
   const step = (inv) => {
@@ -1123,6 +1195,10 @@ export default function Invoices({ accounts, intent }) {
     ],
     [
       { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring invoice', disabled: busy, onClick: () => save('memorize') },
+      duplicateButton({ onDuplicate: duplicateInvoice, saved: Boolean(editing), dirty, busy, what: 'invoice' }),
+    ],
+    [
+      ...reports.buttons({ journalEntryId: current?.journalEntryId, label: current ? `Invoice #${current.invoiceNumber}` : '' }),
       { id: 'receive', label: 'Receive Payments', icon: 'ReceivePayment', hint: 'Record a customer payment against open invoices', disabled: receiving, onClick: () => setReceiving(true) },
     ],
   ];
@@ -1158,6 +1234,7 @@ export default function Invoices({ accounts, intent }) {
       )}
       <div className="flex flex-none gap-2">
       <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
+        {reports.panel}
         <FormToolbar label="Invoice" groups={toolbarGroups} />
         {locked && (
           <Notice
@@ -1278,7 +1355,9 @@ export default function Invoices({ accounts, intent }) {
       <FormInfoPanel kind="customer" name={customer} names={customers.data} />
       </div>
 
-      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })} />
+      <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })}
+        onDuplicate={(inv) => openFromList('sales/invoices', 'duplicate', { invoiceId: inv.id })}
+      />
     </div>
   );
 }
