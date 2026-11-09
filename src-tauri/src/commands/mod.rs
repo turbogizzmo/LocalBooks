@@ -52,6 +52,8 @@ features![
     attachments,
     backups,
     bank_feeds,
+    bank_matching,
+    bank_rules,
     batch_invoices,
     bounced_checks,
     budgets,
@@ -68,6 +70,7 @@ features![
     desktop,
     editing,
     email,
+    envelopes,
     estimates,
     expenses,
     finance_charges,
@@ -80,6 +83,7 @@ features![
     item_prices,
     job_reports,
     journal,
+    list_order,
     list_reports,
     lists,
     mcp,
@@ -108,6 +112,7 @@ features![
     timesheet,
     users,
     vendor_1099,
+    vouchers,
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};

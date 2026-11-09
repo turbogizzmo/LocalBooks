@@ -102,7 +102,7 @@ export const topics = [
   {
     id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
     title: 'Take a customer’s early-payment discount',
-    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day, with nothing paid on it yet, takes the discount and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment reverses both.',
+    body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day takes the discount on its open balance (what is left of a part-paid one) and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment, or recording it as a bounced check, reverses both. An invoice in another currency takes its discount in that currency, at the invoice’s own exchange rate.',
     keywords: 'discount early payment terms 2% 10 net 30 sales discounts receive payments customer took discount',
     go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
     guide: 'customer-payments',
@@ -320,9 +320,9 @@ export const topics = [
   {
     id: 'attachments', area: 'accounting', views: ['accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
-    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy. Files stay with a transaction when you edit it.',
+    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it.',
     guide: 'attachments',
-    keywords: 'attachment attach receipt document file scan photo pdf paperclip',
+    keywords: 'attachment attach receipt document file scan photo pdf paperclip save all zip export every attachment',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
   {
