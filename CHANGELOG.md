@@ -13,6 +13,13 @@ people using LocalBooks.
 - **Print envelopes.** Print Envelope… on an invoice or sales receipt, on a form's row, and on a
   customer's or vendor's row prints an envelope with your return address and theirs. Set the
   envelope's size, font and position in Settings › Custom Forms › Envelope.
+- **Print Pay Bills' checks later.** Pay Bills has **Print later**, as Write Checks does: the payments
+  post now and their checks, one per vendor, wait in **File › Print Forms › Checks…**, where they
+  take their numbers when they print.
+- **Bounced sales receipts and foreign-currency payments.** Record Bounced Check now lists sales
+  receipts, which it charges back to the customer on a new invoice, and payments in another
+  currency, which bounce at the rates they were recorded at (the exchange gain or loss they
+  realized is reversed).
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

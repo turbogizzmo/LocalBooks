@@ -106,7 +106,27 @@ function useQueuePicker(rows) {
 export function PrintChecks({ accounts }) {
   const company = useCompany();
   const { data, error } = useLedgerQuery(api.listChecksToPrint);
-  const queued = useMemo(() => data ?? [], [data]);
+  const billChecks = useLedgerQuery(api.listBillChecksToPrint);
+  // Write Checks' checks and Pay Bills' checks, in one queue; ids are per kind, so each row's id
+  // says which (`x` a check, `b` a Pay Bills check).
+  const queued = useMemo(
+    () =>
+      [
+        ...(data ?? []).map((c) => ({ ...c, id: `x${c.id}`, expenseId: c.id })),
+        ...(billChecks.data ?? []).map((c) => ({
+          id: `b${c.id}`,
+          billCheckId: c.id,
+          payeeName: c.payeeName,
+          paymentAccountId: c.paymentAccountId,
+          expenseDate: c.paymentDate,
+          memo: c.memo,
+          totalCents: c.totalCents,
+          homeTotalCents: c.totalCents,
+          currencyCode: null,
+        })),
+      ].sort((a, b) => a.expenseDate.localeCompare(b.expenseDate)),
+    [data, billChecks.data],
+  );
   const banks = useMemo(() => [...new Set(queued.map((c) => c.paymentAccountId))], [queued]);
   const [bankId, setBankId] = useState(null);
   useEffect(() => {
@@ -144,7 +164,9 @@ export function PrintChecks({ accounts }) {
   const finish = async (okIds) => {
     setBusy(true);
     try {
-      const printed = printing.filter((c) => okIds.includes(c.id)).map((c) => ({ expenseId: c.id, checkNumber: c.checkNumber }));
+      const printed = printing
+        .filter((c) => okIds.includes(c.id))
+        .map((c) => (c.billCheckId ? { billCheckId: c.billCheckId, checkNumber: c.checkNumber } : { expenseId: c.expenseId, checkNumber: c.checkNumber }));
       await api.markChecksPrinted(printed);
       const left = printing.length - printed.length;
       setNotice({
@@ -188,7 +210,7 @@ export function PrintChecks({ accounts }) {
         />
       )}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
-      {error && <Notice kind="error" text={`Could not load the checks to print: ${error}`} />}
+      {(error || billChecks.error) && <Notice kind="error" text={`Could not load the checks to print: ${error ?? billChecks.error}`} />}
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
           <h2 className="mr-2 self-center text-md font-semibold">Select checks to print</h2>
@@ -230,10 +252,10 @@ export function PrintChecks({ accounts }) {
               </tr>
             </thead>
             <tbody>
-              {data && rows.length === 0 && (
+              {data && billChecks.data && rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="qb-grid-cell text-qb-ink-muted">
-                    No checks are waiting to print. Tick Print later on a check (Banking › Write Checks) to queue it here.
+                    No checks are waiting to print. Tick Print later on a check (Banking › Write Checks) or in Pay Bills to queue it here.
                   </td>
                 </tr>
               )}

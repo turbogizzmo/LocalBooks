@@ -115,12 +115,21 @@ pay it again. The customer fee goes on a new invoice, *Returned check charge*.
 Money from a deposit's **other funds** lines can bounce too: it goes back to the account the
 deposit credited.
 
+A **sales receipt** from a customer can bounce as well. It has no invoice to reopen, so LocalBooks
+charges it back: the bank goes down by the check (and the bank's fee), and a new invoice,
+*Returned check: sales receipt #…*, bills the customer for it, with the customer fee as a second
+line. The sale's income is unchanged; the customer pays the new invoice in Receive Payments.
+Voiding the bounced check voids that invoice too.
+
+A **foreign-currency payment** bounces at the rates it was recorded at: the bank goes down by the
+home-currency amount it received, Accounts Receivable goes back up by what the payment cleared, and
+the exchange gain or loss the payment realized is reversed. The invoice opens again for its
+foreign-currency amount.
+
 To undo it, open the bounced check's **Actions** menu on the Bounced Checks screen and choose
 **Void bounced check**: the bank and the fee go back, the payment counts toward the invoice again,
 and the fee invoice is voided (refused if the customer has already paid it). While a bounced check
 stands, its payment, the invoice and the deposit it was in can't be voided.
-
-Bounced sales receipts and foreign-currency payments aren't handled yet.
 
 ## Charge interest on overdue invoices (finance charges)
 

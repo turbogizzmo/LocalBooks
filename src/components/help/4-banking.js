@@ -62,8 +62,8 @@ export const topics = [
   {
     id: 'bounced-check', area: 'banking', views: ['banking/bounced-checks', 'sales/invoices', 'banking/transfers'],
     title: 'Record a bounced check',
-    body: 'When the bank returns a customer’s check, choose it in Banking › Record Bounced Check… and enter the bank’s fee and any fee you charge the customer. The invoice it paid opens again, the bank goes down by the check and the fee, and your fee goes on a new invoice; voiding the bounced check puts it all back.',
-    keywords: 'bounced check nsf returned insufficient funds rubber check fee',
+    body: 'When the bank returns a customer’s check, choose it in Banking › Record Bounced Check… and enter the bank’s fee and any fee you charge the customer. The invoice it paid opens again, the bank goes down by the check and the fee, and your fee goes on a new invoice; voiding the bounced check puts it all back. A bounced sales receipt is charged back to the customer on a new invoice, and a foreign-currency payment bounces at the rates it was recorded at.',
+    keywords: 'bounced check nsf returned insufficient funds rubber check fee sales receipt foreign currency',
     go: { label: 'Record a bounced check', view: 'banking/bounced-checks' },
     guide: 'customer-payments',
   },

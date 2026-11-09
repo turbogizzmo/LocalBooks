@@ -62,6 +62,10 @@ pub struct BillPaymentInput {
     pub payment_date: NaiveDate,
     pub amount_cents: i64,
     pub reference: Option<String>,
+    /// Pay Bills' "Print later": the check waits in File › Print Forms › Checks and gets its number
+    /// (`reference`, which must be empty) when it prints.
+    #[serde(default)]
+    pub to_be_printed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -392,13 +396,41 @@ pub async fn pay_vendor_bills(pool: &SqlitePool, inputs: Vec<BillPaymentInput>) 
         return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut queued = Vec::new();
     for input in &inputs {
-        if let Err(err) = write_bill_payment(&mut tx, input, "STANDARD").await {
-            return Err(rollback(tx, err).await);
+        match write_bill_payment(&mut tx, input, "STANDARD").await {
+            Ok(id) if input.to_be_printed => queued.push(id),
+            Ok(_) => {}
+            Err(err) => return Err(rollback(tx, err).await),
         }
+    }
+    if let Err(err) = group_queued_checks(&mut tx, &queued).await {
+        return Err(rollback(tx, err).await);
     }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     Ok(inputs.len())
+}
+
+/// Puts the queued bill payments Pay Bills just wrote on one check per vendor and bank account:
+/// each group shares the id of its first payment.
+pub(crate) async fn group_queued_checks(tx: &mut Transaction<'_, Sqlite>, payment_ids: &[i64]) -> Result<(), String> {
+    if payment_ids.is_empty() {
+        return Ok(());
+    }
+    let ids = serde_json::to_string(payment_ids).map_err(|e| e.to_string())?;
+    sqlx::query(
+        "WITH mine AS (SELECT p.id, b.vendor_id, p.payment_account_id FROM bill_payments p JOIN bills b ON b.id = p.bill_id
+                       WHERE p.id IN (SELECT value FROM json_each(?1)) AND p.to_be_printed = 1)
+         UPDATE bill_payments SET check_group_id = (
+             SELECT MIN(o.id) FROM mine m JOIN mine o ON o.vendor_id = m.vendor_id AND o.payment_account_id = m.payment_account_id
+             WHERE m.id = bill_payments.id)
+         WHERE id IN (SELECT id FROM mine)",
+    )
+    .bind(ids)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -481,16 +513,21 @@ pub(crate) async fn write_bill_payment(tx: &mut Transaction<'_, Sqlite>, input: 
         return Err("BILL_BAD_PAYMENT_ACCOUNT: pay bills from a Bank or Credit Card account".into());
     }
 
+    if input.to_be_printed && (kind != "STANDARD" || account_type.as_deref() != Some("BANK")) {
+        return Err("PRINT_NOT_A_CHECK: only a check from a bank account can be printed later".into());
+    }
     let payment_id: i64 = sqlx::query_scalar(
-        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference, kind)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+        "INSERT INTO bill_payments (bill_id, payment_date, amount_cents, payment_account_id, reference, kind, to_be_printed)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
     )
     .bind(input.bill_id)
     .bind(input.payment_date)
     .bind(input.amount_cents)
     .bind(input.payment_account_id)
-    .bind(clean(input.reference.as_deref()))
+    // A check waiting to print gets its number when it prints.
+    .bind(if input.to_be_printed { None } else { clean(input.reference.as_deref()) })
     .bind(kind)
+    .bind(input.to_be_printed)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

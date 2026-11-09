@@ -154,7 +154,7 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
     let bill: BillInput = serde_json::from_value(serde_json::json!({ "vendorName": "Lee Builder", "billNumber": "B-1", "billDate": "2026-04-01", "dueDate": "2026-05-01", "memo": null, "totalCents": 200_000,
         "lines": [{ "accountId": rent, "amountCents": 100_000, "memo": null }, { "accountId": contractors, "amountCents": 100_000, "memo": null }] })).unwrap();
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
-    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(4, 15), amount_cents: 100_000, reference: Some("102".into()) }).await.unwrap();
+    crate::expenses::pay_vendor_bill(&pool, crate::expenses::BillPaymentInput { bill_id: bill.id, payment_account_id: checking, payment_date: d(4, 15), amount_cents: 100_000, reference: Some("102".into()), to_be_printed: false }).await.unwrap();
 
     // No mapping yet: everything paid from the bank is nonemployee compensation, as before.
     let rows = vendors_1099(&pool, 2026, crate::tax_ids::Access::OPEN).await.unwrap();
