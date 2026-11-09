@@ -43,6 +43,10 @@ people using LocalBooks.
   forward and ending balance. In the entry row at the bottom, choosing another bank account records
   a transfer, and choosing Undeposited Funds on the deposit side deposits the payments waiting
   there.
+- **Save vouchers as PDF and email them.** Saved bills, checks, expenses, credits, deposits and
+  journal entries have **Print ▾ › Save as PDF…**, and **Email** sends the voucher's PDF to the
+  vendor or customer named on it, through your mail app or LocalBooks' email server, as invoices
+  are sent.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.

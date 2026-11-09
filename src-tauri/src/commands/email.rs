@@ -32,7 +32,7 @@ pub struct EmailInput {
 }
 
 impl EmailInput {
-    fn checked(self) -> Result<(Vec<String>, String, String), String> {
+    pub(super) fn checked(self) -> Result<(Vec<String>, String, String), String> {
         let to = mail_app::parse_recipients(&self.to)?;
         let subject = self.subject.split_whitespace().collect::<Vec<_>>().join(" ");
         if subject.chars().count() > 200 {
@@ -121,7 +121,7 @@ pub async fn send_smtp_test_email(app: AppHandle, db: State<'_, Db>, settings: S
     smtp::send_test(settings, &smtp_secrets(&app)?, password, &company.name).await
 }
 
-fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
+pub(super) fn smtp_secrets(app: &AppHandle) -> Result<SecretStore, String> {
     Ok(smtp::secret_store(&crate::data_dirs(app).map_err(|e| format!("SMTP_CONFIG: {e}"))?.1))
 }
 

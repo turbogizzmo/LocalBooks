@@ -108,6 +108,7 @@ features![
     timesheet,
     users,
     vendor_1099,
+    vouchers,
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
