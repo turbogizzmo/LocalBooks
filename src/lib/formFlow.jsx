@@ -137,6 +137,7 @@ const TOOLBAR_IDS = {
   next: ['next'],
   edit: ['edit'],
   'goto-transfer': ['goto-transfer'],
+  duplicate: ['duplicate'],
 };
 const TOOLBAR_COMMANDS = Object.keys(TOOLBAR_IDS);
 

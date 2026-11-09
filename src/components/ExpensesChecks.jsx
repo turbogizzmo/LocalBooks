@@ -3,7 +3,7 @@ import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useVendorRecall } from '../lib/recall.js';
 import NameField from './NameField.jsx';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
+import FormToolbar, { attachLaterButton, duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Notice from './Notice.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
@@ -18,7 +18,7 @@ import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import Attachments, { PendingAttachments, attachPicked, useAttachmentRows } from './Attachments.jsx';
 import { useVoucherPrinter } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
-import { formatDate } from '../lib/dates.js';
+import { formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import { useDirtySince, useEditIntent, useOpenFromList, useWindowContent } from '../lib/windows.js';
 import DateBox, { CheckNumberBox } from './DateBox.jsx';
@@ -36,8 +36,12 @@ const PAY_FROM = {
   CARD_CREDIT: (a) => a.accountType === 'CREDIT_CARD',
 };
 
-/** A new expense, check or card credit, or (with `editing` = { expense, lines }) a posted one being edited. */
-function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, onOpenSaved, onPrintCheck }) {
+/**
+ * A new expense, check or card credit, or (with `editing` = { expense, lines }) a posted one being
+ * edited, or (with `copyOf`, the same shape) a new one copied from a saved one by Duplicate: dated
+ * today, and a check takes the next check number.
+ */
+function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, copyOf = null, onDuplicate, onOpenSaved, onPrintCheck }) {
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -49,17 +53,19 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE' && !a.isSystem)?.id ?? null, [accounts]);
 
   const was = editing?.expense;
-  const [payee, setPayee] = useState(was?.payeeName ?? '');
-  const [accountId, setAccountId] = useState(was?.paymentAccountId ?? defaultPayFrom);
-  const [date, setDate] = useTransactionDate(was?.expenseDate);
+  // What the form starts from: the one being edited, or the one being duplicated.
+  const from = (editing ?? copyOf)?.expense;
+  const [payee, setPayee] = useState(from?.payeeName ?? '');
+  const [accountId, setAccountId] = useState(from?.paymentAccountId ?? defaultPayFrom);
+  const [date, setDate] = useTransactionDate(was?.expenseDate ?? (copyOf ? todayIso() : undefined));
   const [checkNumber, setCheckNumber] = useState(was ? (was.checkNumber ?? '') : '');
-  const method = usePaymentMethodChoice(was?.paymentMethod ?? 'CREDIT_CARD', was?.paymentMethodId ?? null);
-  const [memo, setMemo] = useState(was?.memo ?? '');
+  const method = usePaymentMethodChoice(from?.paymentMethod ?? 'CREDIT_CARD', from?.paymentMethodId ?? null);
+  const [memo, setMemo] = useState(from?.memo ?? '');
   const { homeCurrency } = useCompany();
-  const [currency, setCurrency] = useState(was?.currencyCode ?? '');
-  const [rate, setRate] = useState(was?.currencyCode ? formatRate(was.exchangeRateE6) : '');
+  const [currency, setCurrency] = useState(from?.currencyCode ?? '');
+  const [rate, setRate] = useState(from?.currencyCode ? formatRate(from.exchangeRateE6) : '');
   const rateE6 = currency ? parseRateE6(rate) : null;
-  const [rows, setRows] = useState(() => (editing ? splitRowsFrom(editing.lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
+  const [rows, setRows] = useState(() => (editing ?? copyOf ? splitRowsFrom((editing ?? copyOf).lines) : [blankSplit(defaultCategory), blankSplit(defaultCategory)]));
   const [busy, setBusy] = useState(false);
   // Files to attach once it posts, such as the receipt.
   const [files, setFiles] = useState([]);
@@ -76,7 +82,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
   const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
-  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
+  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) }, Boolean(copyOf));
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   // My Preferences › General › recall: a known payee's last check or expense fills the rows.
@@ -247,7 +253,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
               }
             : attachLaterButton({ setFiles, busy, what: 'it' }),
         ],
-        [{ id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring transaction', disabled: busy, onClick: () => save('memorize') }],
+        [
+          { id: 'memorize', label: 'Memorize', icon: 'Memorize', hint: 'Save as a recurring transaction', disabled: busy, onClick: () => save('memorize') },
+          duplicateButton({ onDuplicate: () => onDuplicate?.(editing), saved: Boolean(editing && onDuplicate), dirty, busy, what: EXPENSE_KINDS[kind].toLowerCase() }),
+        ],
       ]}
     />
   );
@@ -349,6 +358,19 @@ export default function ExpensesChecks({ accounts, intent }) {
   const [kind, setKind] = useState(initialKind);
   const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null); // { expense, lines }
+  // Duplicate: the saved one the new one on the form was copied from ({ expense, lines, n }).
+  const [copy, setCopy] = useState(null);
+  const duplicate = (from) => {
+    setEditing(null);
+    setKind(from.expense.kind);
+    setCopy({ ...from, n: Date.now() });
+    setNotice({ kind: 'info', text: `A copy${from.expense.payeeName ? ` of the one to ${from.expense.payeeName}` : ''}, dated today${from.expense.kind === 'CHECK' ? ' with the next check number' : ''}: change what you need and save it.` });
+  };
+  const duplicateRow = (expense) =>
+    api.getDocumentLines('expense', expense.id).then(
+      (lines) => duplicate({ expense, lines }),
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const [printing, setPrinting] = useState(null);
   const company = useCompany();
   const attachments = useAttachmentRows();
@@ -357,6 +379,7 @@ export default function ExpensesChecks({ accounts, intent }) {
       ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' })
       : api.getDocumentLines('expense', expense.id).then(
       (lines) => {
+        setCopy(null);
         setEditing({ expense, lines });
         setKind(expense.kind);
       },
@@ -413,8 +436,10 @@ export default function ExpensesChecks({ accounts, intent }) {
       )}
       {kind && (
         <ExpenseForm
-          key={editing ? `edit-${editing.expense.id}` : 'new'}
+          key={editing ? `edit-${editing.expense.id}` : copy ? `copy-${copy.n}` : 'new'}
           editing={editing}
+          copyOf={copy}
+          onDuplicate={duplicate}
           kind={kind}
           setKind={setKind}
           accounts={accounts}
@@ -423,8 +448,12 @@ export default function ExpensesChecks({ accounts, intent }) {
           onCancel={() => {
             setKind(null);
             setEditing(null);
+            setCopy(null);
           }}
-          onNew={() => setEditing(null)}
+          onNew={() => {
+            setEditing(null);
+            setCopy(null);
+          }}
           onPosted={(text) => setNotice({ kind: 'success', text })}
           onOpenSaved={startEdit}
           onPrintCheck={printCheck}
@@ -512,6 +541,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                       items={[
                         attachments.menuItem(x.journalEntryId),
                         { label: 'Edit…', disabled: x.isVoided, onSelect: () => openExpense(x) },
+                        { label: 'Duplicate', hint: 'A new one copied from this one, dated today', onSelect: () => duplicateRow(x) },
                         ...(x.kind === 'CHECK' ? [{ label: 'Print check', disabled: x.isVoided, onSelect: () => printCheck(x) }] : []),
                         // Only a check without a number can wait in the print queue; it gets one when it prints.
                         ...(x.kind === 'CHECK' && !x.isVoided && (x.toBePrinted || !x.checkNumber)

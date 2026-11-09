@@ -11,6 +11,7 @@ test('the desktop form keys name their commands', () => {
   assert.equal(ctrl('e'), 'edit');
   assert.equal(ctrl('g'), 'goto-transfer');
   assert.equal(ctrl('l'), 'open-list');
+  assert.equal(ctrl('o'), 'duplicate');
   assert.equal(ctrl('d'), 'delete');
   assert.equal(ctrl('m'), 'memorize');
   assert.equal(ctrl('Insert'), 'insert-line');
@@ -34,7 +35,7 @@ test('letters are read from the physical key, so Option+letter on a Mac still co
 });
 
 test('on a Mac, Cmd+N, Cmd+P, Cmd+E, Cmd+G and Cmd+L stay the system’s; Cmd+D still voids', () => {
-  for (const k of ['n', 'p', 'e', 'g', 'l', 'm']) assert.equal(formKeyCommand(key(k, { metaKey: true }), true), null, k);
+  for (const k of ['n', 'p', 'e', 'g', 'l', 'm', 'o']) assert.equal(formKeyCommand(key(k, { metaKey: true }), true), null, k);
   assert.equal(formKeyCommand(key('d', { metaKey: true }), true), 'delete');
   // Ctrl works on a Mac too.
   assert.equal(formKeyCommand(key('g', { ctrlKey: true }), true), 'goto-transfer');

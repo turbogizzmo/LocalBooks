@@ -48,7 +48,9 @@ pub fn add_company_items(app: &AppHandle, menu: &Menu<Wry>) -> tauri::Result<()>
     let close = MenuItem::with_id(app, CLOSE_COMPANY, "Close Company", false, None::<&str>)?;
     let items: [&dyn IsMenuItem<Wry>; COMPANY_ITEM_COUNT] = [
         &MenuItem::with_id(app, NEW_COMPANY, "New Company…", true, None::<&str>)?,
-        &MenuItem::with_id(app, OPEN_COMPANY, "Open or Restore Company…", true, Some("CmdOrCtrl+O"))?,
+        // Cmd+O on macOS; elsewhere Ctrl+O is Duplicate Transaction on a form (formKeys.js), as in
+        // the classic desktop software.
+        &MenuItem::with_id(app, OPEN_COMPANY, "Open or Restore Company…", true, cfg!(target_os = "macos").then_some("Cmd+O"))?,
         &MenuItem::with_id(app, OPEN_WINDOWLESS, "Open Company Without Restoring Windows…", true, Some("CmdOrCtrl+Alt+O"))?,
         &recent,
         &PredefinedMenuItem::separator(app)?,

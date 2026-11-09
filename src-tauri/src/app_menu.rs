@@ -79,6 +79,7 @@ const EDIT: &[Entry] = &[
     form_cmd("Copy Line (Ctrl+Alt+Y)", "form:copy-line"),
     form_cmd("Paste Line (Ctrl+Alt+V)", "form:paste-line"),
     form_cmd("Go To Transfer (Ctrl+G)", "form:goto-transfer"),
+    form_cmd("Duplicate Transaction (Ctrl+O)", "form:duplicate"),
     Entry::Sep,
     page("Use Register", "accounting/register"),
     keyed("Find…", "accounting/find", None, "CmdOrCtrl+F"),
@@ -561,7 +562,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(found, 7);
+        assert_eq!(found, 8);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stepTargets, byDateThenNumber, stepButtons } from './formStep.js';
+import { stepTargets, byDateThenNumber, stepButtons, duplicateDates } from './formStep.js';
 
 const rows = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
@@ -39,4 +39,12 @@ test('unsaved entries stop both buttons, and the hint says why', () => {
   assert.equal(blocked.previousDisabled && blocked.nextDisabled, true);
   assert.match(blocked.blockedHint, /Save or clear/);
   assert.equal(stepButtons(rows, 3, () => {}).nextDisabled, true);
+});
+
+test('a duplicate is dated today and keeps its terms’ days to the due date', () => {
+  assert.deepEqual(duplicateDates('2026-01-10', '2026-02-09', '2026-11-08'), { date: '2026-11-08', due: '2026-12-08' });
+  assert.deepEqual(duplicateDates('2026-03-01', '2026-03-01', '2026-11-08'), { date: '2026-11-08', due: '2026-11-08' });
+  // Across a year end.
+  assert.deepEqual(duplicateDates('2026-05-01', '2026-05-11', '2026-12-28'), { date: '2026-12-28', due: '2027-01-07' });
+  assert.deepEqual(duplicateDates('2026-05-01', null, '2026-11-08'), { date: '2026-11-08', due: null });
 });

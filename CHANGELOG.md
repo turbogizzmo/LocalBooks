@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Duplicate a transaction.** On a saved invoice, bill, check, expense, card credit or journal
+  entry, **Duplicate** on the toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or on its
+  row in the list, starts a new unsaved copy dated today: an invoice or journal entry gets the next
+  number when saved, a check the next check number, and a bill keeps its terms with its number left
+  blank. On Windows and Linux, Ctrl+O now duplicates instead of opening a company (use **File ›
+  Open or Restore Company…**); on a Mac ⌘O still opens a company and Control+O duplicates.
 - **More desktop shortcuts.** On forms, **Ctrl+L** opens the list of the box you're in, and
   **Ctrl+Alt+Y** / **Ctrl+Alt+V** copy a line and paste it above the line you're on (also Edit ›
   Copy Line and Paste Line). In a register, **Ctrl+E** opens the selected transaction to edit and
