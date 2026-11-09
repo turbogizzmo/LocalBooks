@@ -20,6 +20,7 @@ import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
+import { FormInfoPanel } from './InfoPanel.jsx';
 
 /** Estimate lines priced at 0.00: on with the estimate_lines rebuild in migration 0072. */
 const ZERO_LINES = false;
@@ -113,7 +114,8 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
   const flow = useFormFlow({ save: () => save('save'), clear, onClose: onCancel, busy });
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       <FormToolbar
         label="Estimate"
         groups={[
@@ -175,6 +177,9 @@ function EstimateForm({ accounts, onSaved, onCancel, forms, savedStep }) {
         </div>
       </div>
     </section>
+    {/* The chosen customer's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="customer" name={customer} names={customers.data} />
+    </div>
   );
 }
 
@@ -249,6 +254,7 @@ function EstimateList({ accounts, intent, navigate }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           form={{ kind: 'ESTIMATE', id: viewing.id }}
+          record={{ kind: 'ESTIMATE', id: viewing.id }}
           onNotice={setNotice}
           extra={[
             [

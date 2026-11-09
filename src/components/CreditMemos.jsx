@@ -20,6 +20,7 @@ import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 
 const isMoneyAccount = (a) => a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD';
 const isIncomeAccount = (a) => a.isActive && (a.accountType === 'INCOME' || a.accountType === 'OTHER_INCOME');
@@ -110,7 +111,8 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
   const dirty = useDirtySince(refund ? 'refund-receipt' : 'credit-memo', { customer, memo, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       <FormToolbar
         label={refund ? 'Refund receipt' : 'Credit memo'}
         groups={[
@@ -164,6 +166,9 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
         </div>
       </div>
     </section>
+    {/* The chosen customer's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="customer" name={customer} names={customers.data} />
+    </div>
   );
 }
 

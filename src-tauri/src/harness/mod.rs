@@ -12,7 +12,7 @@ mod accountant_reports;
 pub(crate) mod fixture;
 mod golden;
 mod graphs;
-mod job_costing;
+pub(crate) mod job_costing;
 mod ledger_props;
 mod list_reports;
 mod report_presets;

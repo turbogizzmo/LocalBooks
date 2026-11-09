@@ -855,7 +855,7 @@ pub async fn add_attachment(pool: &SqlitePool, journal_entry_id: i64, file_name:
 
 /// How many files each transaction has attached, by journal entry, for the registers' paperclip marks.
 pub async fn attachment_counts(pool: &SqlitePool) -> Result<std::collections::HashMap<i64, i64>, String> {
-    let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT journal_entry_id, COUNT(*) FROM attachments GROUP BY journal_entry_id")
+    let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT journal_entry_id, COUNT(*) FROM attachments WHERE deleted_at IS NULL GROUP BY journal_entry_id")
         .fetch_all(pool)
         .await
         .map_err(db_err)?;
@@ -864,7 +864,7 @@ pub async fn attachment_counts(pool: &SqlitePool) -> Result<std::collections::Ha
 
 pub async fn list_attachments(pool: &SqlitePool, journal_entry_id: i64) -> Result<Vec<AttachmentView>, String> {
     sqlx::query_as::<_, AttachmentView>(
-        "SELECT id, journal_entry_id, file_name, media_type, size_bytes, created_at FROM attachments WHERE journal_entry_id = ?1 ORDER BY id",
+        "SELECT id, journal_entry_id, file_name, media_type, size_bytes, created_at FROM attachments WHERE journal_entry_id = ?1 AND deleted_at IS NULL ORDER BY id",
     )
     .bind(journal_entry_id)
     .fetch_all(pool)
@@ -881,8 +881,10 @@ pub async fn attachment_content(pool: &SqlitePool, id: i64) -> Result<(String, V
         .ok_or_else(|| "ATTACH_NOT_FOUND: that attachment does not exist".into())
 }
 
+/// Deletes an attachment reversibly: it is hidden and kept, and the attachments library can restore
+/// it or remove it for good (`attachments_library`).
 pub async fn delete_attachment(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    sqlx::query("DELETE FROM attachments WHERE id = ?1").bind(id).execute(pool).await.map(|_| ()).map_err(db_err)
+    crate::attachments_library::delete(pool, crate::attachments_library::FileRef { source: crate::attachments_library::Source::Entry, id }).await
 }
 
 /// "1234.5" → 123450 cents; anything else is not an amount.
