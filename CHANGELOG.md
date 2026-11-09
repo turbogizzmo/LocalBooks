@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Renaming rules for downloaded payees.** When a downloaded description begins with, contains or
+  ends with some text, a renaming rule names its payee. LocalBooks offers a rule when you change a
+  payee, and **Rules…** in Bank Feeds lists them to search, edit and remove, along with the category
+  rules learned from your approvals.
 - **Downloaded bank transactions match what you already entered.** A downloaded line that agrees
   with a check, deposit, bill payment or transfer already in the books (amount, date, check
   number) is matched to it on import instead of waiting to be added twice. Lines entered later

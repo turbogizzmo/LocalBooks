@@ -112,6 +112,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "account_types",
     "ach_originators",
     "bank_format_templates",
+    "bank_payee_rules",
     "bank_rules",
     "budget_amounts",
     "budgets",

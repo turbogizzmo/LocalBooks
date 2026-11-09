@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 pub mod matching;
+pub mod payee_rules;
 pub mod suggest;
 
 use suggest::{Example, Query, SimilarTo, Suggester};
@@ -49,8 +50,10 @@ pub struct BankTransactionView {
     pub description: String,
     pub amount_cents: i64,
     pub suggestion: Option<CategorySuggestion>,
-    /// A payee learned from similar past expenses (money out only).
+    /// The payee (money out only): from a renaming rule, else learned from similar past expenses.
     pub payee: Option<String>,
+    /// `RULE` (a renaming rule) or `MODEL` (similar past expenses), when there is a payee.
+    pub payee_origin: Option<&'static str>,
     /// The transaction already entered that this line is, when exactly one agrees (see [`matching`]).
     pub suggested_match: Option<matching::MatchCandidate>,
 }
@@ -1020,12 +1023,16 @@ pub async fn list_pending(pool: &SqlitePool, suggester: &Suggester, file: &str) 
     drop(queries);
     let keys: Vec<(i64, String)> = rows.iter().map(|r| (r.0, r.3.clone())).collect();
     let matches = matching::suggested_matches(pool, &keys).await?;
+    let renames = payee_rules::list(pool).await?;
     Ok(rows
         .into_iter()
         .zip(ruled.into_iter().zip(predicted).zip(matches))
         .map(|((id, bank_account_id, date, description, amount_cents), ((ruled, predicted), suggested_match))| {
-            let (suggestion, payee) = combine(&rules, amount_cents, ruled, predicted);
-            BankTransactionView { suggestion, payee, suggested_match, id, bank_account_id, date: date.to_string(), description, amount_cents }
+            let (suggestion, learned) = combine(&rules, amount_cents, ruled, predicted);
+            let renamed = payee_rules::rename(&renames, &description).filter(|_| amount_cents < 0);
+            let payee_origin = if renamed.is_some() { Some("RULE") } else { learned.as_ref().map(|_| "MODEL") };
+            let payee = renamed.or(learned);
+            BankTransactionView { suggestion, payee, payee_origin, suggested_match, id, bank_account_id, date: date.to_string(), description, amount_cents }
         })
         .collect())
 }

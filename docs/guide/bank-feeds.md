@@ -150,6 +150,23 @@ a bill payment or a transfer. Matching it to that transaction records nothing ne
 - **Show matched** lists the matched lines with what each matched; **Unmatch** puts a line back
   under **For review**. Voiding the matched transaction puts its line back too.
 
+## Rename downloaded payees
+
+Banks write the same payee many ways (*AMZN MKTP US\*2K4*, *AMZN MKTP DE\*7Q1*). A **renaming rule**
+gives them one name: when a downloaded description **begins with**, **contains** or **ends with**
+some text (capitals and extra spaces don't matter), its **Payee** is the name you chose. When more
+than one rule fits, the one with the longest text wins. The note under **Payee** says *Named by a
+renaming rule*.
+
+- **When you change a payee** and approve the line, LocalBooks offers a rule: *Use this name next
+  time?* with the description's first words filled in. Adjust it and click **Save rule**, or **No
+  thanks**.
+- **Rules…** lists your renaming rules: search them, **Edit**, **Remove**, or **Add rule**. Its
+  **Category rules** tab lists the rules learned from your approvals (and the built-in vendor
+  list): change a rule's category or remove it.
+
+Rules only name lines still waiting for review; transactions already added keep their payee.
+
 ## How categories are suggested
 
 LocalBooks suggests a category for every transaction, in this order:

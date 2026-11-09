@@ -9,6 +9,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
+import BankRules, { RuleFields, suggestedPattern } from './BankRules.jsx';
 
 /** "Check #1042 · Landlord, 03/01/2026": an entered transaction a bank line matches. */
 export const matchLabel = (m) =>
@@ -65,6 +66,9 @@ export default function BankFeed({ accounts }) {
   const [showMatched, setShowMatched] = useState(false);
   const matched = useLedgerQuery(api.listMatchedBankTransactions);
   const [ticked, setTicked] = useState(() => new Set());
+  // Renaming rules: the rules list, and the rule offered after the user changes a payee.
+  const [showRules, setShowRules] = useState(false);
+  const [offer, setOffer] = useState(null); // { matchKind, pattern, payeeName, description }
   // SimpleFIN connections with at least one linked account, for the Sync button.
   const [syncable, setSyncable] = useState([]);
 
@@ -176,6 +180,11 @@ export default function BankFeed({ accounts }) {
     try {
       await api.approveBankTransaction(selected.id, categoryId, classId, payee.trim() || null);
       setFlashId(selected.id);
+      // A payee the user typed in place of the suggested one: offer a renaming rule for next time.
+      const typed = (payees[selected.id] ?? '').trim();
+      if (selected.amountCents < 0 && typed && typed !== (selected.payee ?? '')) {
+        setOffer({ id: 0, matchKind: 'BEGINS', pattern: suggestedPattern(selected.description), payeeName: typed, description: selected.description });
+      }
       setNotice({
         kind: 'success',
         text: `Approved ${formatCents(Math.abs(selected.amountCents))} "${selected.description}" → ${accountLabel(accounts, categoryId)}.`,
@@ -318,6 +327,9 @@ export default function BankFeed({ accounts }) {
             {busy ? 'Working…' : 'Sync banks'}
           </button>
         )}
+        <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setShowRules(true)} disabled={busy} title="Renaming rules for payees, and the category rules learned from your approvals">
+          Rules…
+        </button>
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setShowConnections(true)} disabled={busy}>
           {syncable.length > 0 ? 'Bank connections…' : 'Connect a bank…'}
         </button>
@@ -331,7 +343,31 @@ export default function BankFeed({ accounts }) {
         </div>
       </div>
 
+      {showRules && <BankRules accounts={accounts} onClose={() => setShowRules(false)} />}
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {offer && (
+        <div className="qb-panel flex flex-none flex-wrap items-center gap-1 px-2 py-1 text-sm" role="region" aria-label="Offer a renaming rule">
+          <span className="font-semibold">Use this name next time?</span>
+          <span className="text-qb-ink-muted">When a downloaded description</span>
+          <RuleFields rule={offer} onChange={setOffer} />
+          <button
+            type="button"
+            className="qb-btn qb-btn-primary h-row"
+            onClick={() =>
+              run(async () => {
+                await api.saveBankPayeeRule({ id: 0, matchKind: offer.matchKind, pattern: offer.pattern, payeeName: offer.payeeName });
+                setOffer(null);
+              }, `Saved: descriptions like "${offer.description}" will be named ${offer.payeeName.trim()}.`)
+            }
+            disabled={busy}
+          >
+            Save rule
+          </button>
+          <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setOffer(null)}>
+            No thanks
+          </button>
+        </div>
+      )}
       {error && <Notice kind="error" text={`Could not load bank lines: ${error}`} />}
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(320px,2fr)] gap-2">
@@ -545,7 +581,9 @@ export default function BankFeed({ accounts }) {
                     ))}
                   </datalist>
                   {selected.payee && payees[selected.id] === undefined && (
-                    <span className="mt-0.5 block text-xs text-qb-ink-muted">Suggested from similar past transactions</span>
+                    <span className="mt-0.5 block text-xs text-qb-ink-muted">
+                      {selected.payeeOrigin === 'RULE' ? 'Named by a renaming rule (Rules…)' : 'Suggested from similar past transactions'}
+                    </span>
                   )}
                 </label>
               )}

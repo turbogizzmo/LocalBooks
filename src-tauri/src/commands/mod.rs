@@ -53,6 +53,7 @@ features![
     backups,
     bank_feeds,
     bank_matching,
+    bank_rules,
     bounced_checks,
     budgets,
     classes,
