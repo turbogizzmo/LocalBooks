@@ -10,7 +10,7 @@
 export function partySummaryLines(kind, s) {
   if (!s) return [];
   const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
-  const lines = [[kind === 'customer' ? 'Open balance' : 'Balance owed', s.openBalanceCents, null]];
+  const lines = [[kind === 'customer' ? 'Open balance' : 'Balance you owe', s.openBalanceCents, null]];
   if (kind === 'customer') {
     if (s.activeEstimateCount > 0) lines.push(['Active estimates', s.activeEstimateCents, plural(s.activeEstimateCount, 'estimate')]);
     if (s.unbilledCostCount > 0) lines.push(['Unbilled costs', s.unbilledCostCents, plural(s.unbilledCostCount, 'cost')]);

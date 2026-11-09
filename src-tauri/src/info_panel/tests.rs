@@ -2,9 +2,9 @@ use super::*;
 use crate::harness::fixture::d;
 use crate::workflows::{PurchaseOrderInput, PurchaseOrderLineInput};
 
-/// Far enough past the fixture year that every document counts.
+/// Far past the fixture's dates, so every document counts however the fixture grows.
 fn later() -> NaiveDate {
-    d(2026, 12, 31)
+    d(2099, 12, 31)
 }
 
 #[tokio::test]

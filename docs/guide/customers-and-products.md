@@ -39,7 +39,7 @@ information panel opens beside the list:
 
 - **Customers:** the open balance, active estimates (pending or accepted, not yet invoiced),
   unbilled costs and unbilled mileage, then phone, email, notes and the five most recent
-  transactions (double-click one to open it).
+  transactions (click one to open it).
 - **Vendors:** the balance you owe, open purchase orders, phone, email, notes and recent
   transactions.
 - **Items:** the sales price and, for an item whose stock is tracked, on hand, on order (with the

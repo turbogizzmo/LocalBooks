@@ -16,10 +16,11 @@ const RECENT = 5;
  */
 export function useInfoPanel(place) {
   const [hidden, setHidden] = useState(() => infoPanelHidden(place));
-  const toggle = () => {
-    setInfoPanelHidden(place, !hidden);
-    setHidden(!hidden);
-  };
+  const toggle = () =>
+    setHidden((was) => {
+      setInfoPanelHidden(place, !was);
+      return !was;
+    });
   const button = (
     <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={toggle} aria-pressed={!hidden} title={hidden ? 'Show the information panel' : 'Hide the information panel'}>
       {hidden ? 'Show info' : 'Hide info'}
@@ -75,7 +76,7 @@ function Figures({ lines }) {
  * The information panel for a customer or vendor: its summary (open balance; active estimates and
  * unbilled costs for a customer; open purchase orders for a vendor), phone and email, notes and
  * recent transactions. The figures come from `get_party_summary`, which uses the same functions as
- * the lists and reports. Double-click a recent transaction to open it.
+ * the lists and reports. Click a recent transaction (or Enter on it) to open it.
  */
 export function PartyInfoPanel({ kind, id, onHide }) {
   const party = useLedgerQuery(() => api.getParty(kind, id));
@@ -105,11 +106,21 @@ export function PartyInfoPanel({ kind, id, onHide }) {
       {p && (
         <Section title="Contact">
           {p.companyName && <div>{p.companyName}</div>}
-          {p.phone ? <div>📞 {p.phone}</div> : <div className="text-qb-ink-faint">No phone</div>}
+          {p.phone ? (
+            <div>
+              <span className="text-qb-ink-muted">Phone: </span>
+              {p.phone}
+            </div>
+          ) : (
+            <div className="text-qb-ink-faint">No phone</div>
+          )}
           {p.email ? (
-            <a className="text-qb-link hover:underline" href={`mailto:${p.email}`}>
-              ✉ {p.email}
-            </a>
+            <div>
+              <span className="text-qb-ink-muted">Email: </span>
+              <a className="text-qb-link hover:underline" href={`mailto:${p.email}`}>
+                {p.email}
+              </a>
+            </div>
           ) : (
             <div className="text-qb-ink-faint">No email</div>
           )}
@@ -128,8 +139,8 @@ export function PartyInfoPanel({ kind, id, onHide }) {
               <button
                 type="button"
                 className="flex w-full items-baseline gap-1 rounded-sm px-0.5 text-left hover:bg-qb-row-hover"
-                onDoubleClick={() => openFromList(...transactionTarget(r))}
-                title="Double-click to open it"
+                onClick={() => openFromList(...transactionTarget(r))}
+                title="Open it"
               >
                 <span className="w-[72px] flex-none text-xs text-qb-ink-muted">{formatDate(r.date)}</span>
                 <span className="truncate">

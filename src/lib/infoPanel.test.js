@@ -16,7 +16,7 @@ test('a customer shows its balance, and estimates and unbilled work when there a
 
 test('a vendor shows what is owed and its open purchase orders', () => {
   assert.deepEqual(partySummaryLines('vendor', { ...none, openBalanceCents: 700, openPoCount: 1, openPoCents: 2_500 }), [
-    ['Balance owed', 700, null],
+    ['Balance you owe', 700, null],
     ['Open purchase orders', 2_500, '1 order'],
   ]);
   assert.deepEqual(partySummaryLines('vendor', null), []);
