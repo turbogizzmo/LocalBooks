@@ -98,6 +98,7 @@ features![
     merges,
     migration,
     mileage,
+    payout_feeds,
     payroll_import,
     offsite,
     preferences,

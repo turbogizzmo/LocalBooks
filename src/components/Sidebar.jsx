@@ -61,6 +61,7 @@ export const NAV = [
     icon: <Icon name="Banking" />,
     children: [
       { id: 'banking/feeds', label: 'Bank Feeds' },
+      { id: 'banking/payouts', label: 'Payout Feeds' },
       { id: 'banking/transfers', label: 'Deposits & Transfers' },
       { id: 'banking/reconcile', label: 'Reconcile' },
       { id: 'banking/bounced-checks', label: 'Bounced Checks' },
