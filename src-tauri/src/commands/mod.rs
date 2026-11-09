@@ -61,6 +61,7 @@ features![
     credits,
     custom_fields,
     custom_reports,
+    customer_groups,
     customer_statements,
     deposits,
     desktop,

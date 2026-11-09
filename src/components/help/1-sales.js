@@ -164,6 +164,14 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'customer-groups', area: 'sales', views: ['sales/customers', 'sales/statements'],
+    title: 'Customer groups and statement reminders',
+    body: 'Switch the Customer Center’s View to Groups to make groups of customers: picked by hand, or automatic, holding every customer who meets all its rules on balance, type, terms, rep, state, ZIP code, tax code, credit limit or status, so the members change when customers’ details do. A group can remind you to send its statements every so many days; Reminders lists it when due, and Customer Statements picks the group’s customers and marks them sent.',
+    keywords: 'customer group groups segment automatic rules smart list filter state zip balance rep terms type statement reminder schedule',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'invoice-available-credits', area: 'sales', views: ['sales/invoices', 'sales/credits'],
     title: 'Use a customer’s credits on a new invoice',
     body: 'When the customer has credit memos with credit left, the invoice shows Available credits under Balance due. Saving the invoice asks whether to apply them now: Apply credits uses them oldest first, up to the invoice total, as applying them from Credit Memos & Refunds would. Home-currency invoices only.',

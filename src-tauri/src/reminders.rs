@@ -455,7 +455,7 @@ pub struct ReminderItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReminderGroup {
-    /// `OVERDUE_INVOICES`, `BILLS_DUE`, `TODOS`, `RECURRING`, `EMAIL_QUEUE`, `TAX_DATES` or `BACKUP`.
+    /// `OVERDUE_INVOICES`, `BILLS_DUE`, `TODOS`, `RECURRING`, `EMAIL_QUEUE`, `GROUP_STATEMENTS`, `TAX_DATES` or `BACKUP`.
     pub key: &'static str,
     pub label: String,
     /// The items' amounts added up, for groups with amounts.
@@ -700,6 +700,20 @@ pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newe
     if s.email_queue.show {
         groups.push(group("EMAIL_QUEUE", "Forms to email".into(), email_queue(pool).await?));
     }
+    // Customer groups whose statements are due (Customer Center › Groups sets each schedule).
+    let statements: Vec<ReminderItem> = crate::customer_groups::statements_due(pool, as_of)
+        .await?
+        .into_iter()
+        .map(|(g, due)| ReminderItem {
+            id: Some(g.id),
+            label: format!("Statements for {}", g.name),
+            detail: format!("{} customer{}", g.member_count, if g.member_count == 1 { "" } else { "s" }),
+            date: Some(due.to_string()),
+            amount_cents: None,
+            entry_id: None,
+        })
+        .collect();
+    groups.push(group("GROUP_STATEMENTS", "Statements to send".into(), statements));
     if s.tax_dates.show {
         groups.push(group("TAX_DATES", format!("Tax dates (next {})", days_word(s.tax_dates.days)), tax_dates(pool, as_of, s.tax_dates.days).await?));
     }

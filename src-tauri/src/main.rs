@@ -24,6 +24,7 @@ mod credits;
 mod custom_fields;
 mod custom_reports;
 mod crypto;
+mod customer_groups;
 mod db;
 mod desktop;
 mod edits;

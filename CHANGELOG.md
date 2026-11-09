@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Customer groups.** The Customer Center has a Groups view: groups picked by hand, or automatic
+  ones that hold every customer meeting their rules (balance, type, terms, rep, state, ZIP code,
+  tax code, credit limit, status) and change as customers do. A group can remind you to send its
+  statements on a schedule, and Customer Statements can pick a group's customers.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

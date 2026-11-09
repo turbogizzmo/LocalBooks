@@ -76,6 +76,28 @@ progress, Closed or Not awarded. The status shows next to the job in the Custome
 can rename the five statuses in **Preferences › Jobs & Estimates**, for example *Awarded* to
 *Won*.
 
+## Customer groups
+
+In **Sales › Customers**, switch **View** to **Groups** to see and make customer groups.
+
+- **Pick the customers**: tick the customers that belong; the group keeps exactly that list.
+- **Automatic**: add rules, and the group holds every customer who meets all of them, worked out
+  from their details each time you look, so it changes by itself when a balance, address or other
+  detail does. A rule can look at the **open balance** (at least or at most an amount), **customer
+  type**, **terms**, **sales rep**, **state** or **ZIP code** (from the last line of the billing
+  address, such as `Salem, OR 97301`), **tax code** (or tax exempt), **credit limit** (over it, or
+  has one) and **status** (active or inactive).
+
+Click a group to list its customers right now; double-click it to change it.
+
+### Statement reminders
+
+Tick **Remind me to send this group's statements every … days** on a group. When they are due
+(and on the first day, if they have never been sent), **Reminders** lists **Statements for** the
+group. Click it to open **Sales › Customer Statements** with the group chosen: its customers with a
+statement in the period are ticked. Print or email them, then click **Mark sent** to start the wait
+for the next ones. In Customer Statements you can also pick any group under **Customer group**.
+
 ## Add a product or service
 
 Products and services make invoices and sales receipts quicker to fill in.

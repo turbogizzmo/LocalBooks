@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import CustomerGroups from './CustomerGroups.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
@@ -424,6 +425,7 @@ export default function PartyList({ kind, navigate }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [centerView, setCenterView] = useState('customers');
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -530,6 +532,33 @@ export default function PartyList({ kind, navigate }) {
     onNotice: setNotice,
   });
 
+  // Customers or Groups (Customer Center › View).
+  const viewSwitch = kind === 'customer' && (
+    <div className="flex flex-none gap-px overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="View">
+      {[
+        ['customers', 'Customers'],
+        ['groups', 'Groups'],
+      ].map(([id, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={centerView === id} onClick={() => setCenterView(id)} className={`px-2 py-0.5 font-semibold ${centerView === id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  if (kind === 'customer' && centerView === 'groups') {
+    return (
+      <div className="flex h-full flex-col gap-2 p-2">
+        <section className="qb-panel flex min-h-0 flex-1 flex-col">
+          <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
+            <h2 className="text-md font-semibold">Customer groups</h2>
+            {viewSwitch}
+          </div>
+          <CustomerGroups navigate={navigate} />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
@@ -546,6 +575,7 @@ export default function PartyList({ kind, navigate }) {
       <section className="qb-panel flex min-h-0 flex-1 flex-col">
         <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
           <h2 className="text-md font-semibold">{cfg.title}</h2>
+          {viewSwitch}
           <input className="qb-input h-row w-[220px] text-sm" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Find a ${cfg.noun}`} aria-label="Filter" />
           <label className="flex items-center gap-1 text-sm">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
