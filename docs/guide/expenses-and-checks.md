@@ -36,6 +36,8 @@ If you print checks on check stock, write them now and print them together later
 1. On **Write check**, tick **Print later**. **Check no.** shows *To print*: the check posts now,
    and gets its number when it prints. The box stays ticked for your next check until you untick
    it. An unnumbered check already posted can be queued from its **Actions** menu (**Print later**).
+   Checks from **Pay Bills** with **Print later** ticked wait in the same queue, one per vendor;
+   they keep their payment date when printed.
 2. Choose **File › Print Forms › Checks…** (or **Expenses › Print Checks**).
 3. Pick the **Bank account**. Check that **First check number** matches the number printed on the
    first check in the printer; the checks take numbers in order from it. Untick any you don't

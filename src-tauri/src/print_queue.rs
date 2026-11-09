@@ -7,8 +7,12 @@
 //!
 //! The flag is not posting: it lives on the document row, and the schema (migration 0066) allows a
 //! posted check's missing number to be filled in only while the check is queued.
+//!
+//! Pay Bills' checks queue too (migration 0083): one check is the bill payments Pay Bills wrote to
+//! one vendor from one bank account, sharing a `check_group_id`, and its number goes on each of them.
+//! They keep their date when printed (a bill payment is not re-dated).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::expenses::{ExpenseInput, ExpenseView};
@@ -39,8 +43,28 @@ impl Form {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrintedCheck {
+    /// The check written with Write Checks; 0 for a Pay Bills check.
+    #[serde(default)]
     pub expense_id: i64,
     pub check_number: String,
+    /// A Pay Bills check: its `check_group_id` (see [`queued_bill_checks`]).
+    #[serde(default)]
+    pub bill_check_id: Option<i64>,
+}
+
+/// A Pay Bills check waiting to print: the bill payments to one vendor written together.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BillCheckToPrint {
+    /// The check's `check_group_id`.
+    pub id: i64,
+    pub payee_name: String,
+    pub payment_account_id: i64,
+    pub payment_date: String,
+    pub total_cents: i64,
+    /// The bills it pays, such as "Bills 1043, 1044".
+    pub memo: Option<String>,
+    pub bill_count: i64,
 }
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
@@ -54,6 +78,27 @@ async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transacti
 /// Checks waiting to print, oldest first; only those written from `account_id` when given.
 pub async fn queued_checks(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
     crate::expenses::list_to_print(pool, account_id).await
+}
+
+/// Pay Bills checks waiting to print, oldest first; only those from `account_id` when given.
+pub async fn queued_bill_checks(pool: &SqlitePool, account_id: Option<i64>) -> Result<Vec<BillCheckToPrint>, String> {
+    sqlx::query_as::<_, BillCheckToPrint>(
+        "SELECT p.check_group_id AS id, MAX(v.name) AS payee_name, MAX(p.payment_account_id) AS payment_account_id,
+                MIN(p.payment_date) AS payment_date, SUM(p.amount_cents) AS total_cents,
+                CASE WHEN COUNT(b.bill_number) = 0 THEN NULL
+                     WHEN COUNT(b.bill_number) = 1 THEN 'Bill ' || MAX(b.bill_number)
+                     ELSE 'Bills ' || group_concat(b.bill_number, ', ') END AS memo,
+                COUNT(*) AS bill_count
+         FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN vendors v ON v.id = b.vendor_id
+         WHERE p.to_be_printed = 1 AND p.is_voided = 0 AND p.check_group_id IS NOT NULL
+           AND (?1 IS NULL OR p.payment_account_id = ?1)
+         GROUP BY p.check_group_id
+         ORDER BY MIN(p.payment_date), p.check_group_id",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
 }
 
 /// Invoices waiting to print, lowest number first.
@@ -169,7 +214,7 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
     let redate = crate::preferences::flag(pool, crate::preferences::tax_time::DATE_CHECKS_PRINTED).await?;
     run(pool, async |tx| {
         if redate {
-            for check in &mut printed {
+            for check in printed.iter_mut().filter(|c| c.bill_check_id.is_none()) {
                 let date: Option<(chrono::NaiveDate, bool)> = sqlx::query_as("SELECT expense_date, to_be_printed FROM expenses WHERE id = ?1 AND kind = 'CHECK' AND is_voided = 0")
                     .bind(check.expense_id)
                     .fetch_optional(&mut **tx)
@@ -189,16 +234,30 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
             if number.is_empty() || number.chars().count() > 20 {
                 return Err("PRINT_BAD_NUMBER: give each printed check a number of 1 to 20 characters".into());
             }
-            let row: Option<(String, bool, bool, i64)> =
-                sqlx::query_as("SELECT kind, to_be_printed, is_voided, payment_account_id FROM expenses WHERE id = ?1")
-                    .bind(check.expense_id)
-                    .fetch_optional(&mut **tx)
+            let account = match check.bill_check_id {
+                Some(group) => {
+                    let account: Option<i64> = sqlx::query_scalar(
+                        "SELECT MAX(payment_account_id) FROM bill_payments WHERE check_group_id = ?1 AND to_be_printed = 1 AND is_voided = 0",
+                    )
+                    .bind(group)
+                    .fetch_one(&mut **tx)
                     .await
                     .map_err(db_err)?;
-            let account = match row {
-                Some((kind, true, false, account)) if kind == "CHECK" => account,
-                Some(_) => return Err(format!("PRINT_NOT_QUEUED: check {} is no longer waiting to print", check.expense_id)),
-                None => return Err(format!("PRINT_NOT_FOUND: check {} does not exist", check.expense_id)),
+                    account.ok_or_else(|| format!("PRINT_NOT_QUEUED: bill payment check {group} is no longer waiting to print"))?
+                }
+                None => {
+                    let row: Option<(String, bool, bool, i64)> =
+                        sqlx::query_as("SELECT kind, to_be_printed, is_voided, payment_account_id FROM expenses WHERE id = ?1")
+                            .bind(check.expense_id)
+                            .fetch_optional(&mut **tx)
+                            .await
+                            .map_err(db_err)?;
+                    match row {
+                        Some((kind, true, false, account)) if kind == "CHECK" => account,
+                        Some(_) => return Err(format!("PRINT_NOT_QUEUED: check {} is no longer waiting to print", check.expense_id)),
+                        None => return Err(format!("PRINT_NOT_FOUND: check {} does not exist", check.expense_id)),
+                    }
+                }
             };
             if seen.iter().any(|(a, n)| *a == account && n == number) {
                 return Err(format!("PRINT_DUPLICATE_NUMBER: check number {number} is given to two checks"));
@@ -215,12 +274,15 @@ pub async fn mark_checks_printed_on(pool: &SqlitePool, mut printed: Vec<PrintedC
             if used {
                 return Err(format!("PRINT_NUMBER_USED: check number {number} is already used on this account; start from a later number"));
             }
-            sqlx::query("UPDATE expenses SET check_number = ?1, to_be_printed = 0 WHERE id = ?2")
-                .bind(number)
-                .bind(check.expense_id)
-                .execute(&mut **tx)
-                .await
-                .map_err(db_err)?;
+            match check.bill_check_id {
+                Some(group) => sqlx::query("UPDATE bill_payments SET reference = ?1, to_be_printed = 0 WHERE check_group_id = ?2 AND to_be_printed = 1")
+                    .bind(number)
+                    .bind(group),
+                None => sqlx::query("UPDATE expenses SET check_number = ?1, to_be_printed = 0 WHERE id = ?2").bind(number).bind(check.expense_id),
+            }
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
             seen.push((account, number.to_string()));
         }
         Ok(printed.len())

@@ -533,9 +533,14 @@ pub async fn pay_bills_with_credits(
         for credit in &credits {
             crate::credits::apply_vendor_credit_in_tx(&mut tx, credit).await?;
         }
+        let mut queued = Vec::new();
         for payment in &payments {
-            crate::expenses::write_bill_payment(&mut tx, payment, "STANDARD").await?;
+            let id = crate::expenses::write_bill_payment(&mut tx, payment, "STANDARD").await?;
+            if payment.to_be_printed {
+                queued.push(id);
+            }
         }
+        crate::expenses::group_queued_checks(&mut tx, &queued).await?;
         Ok::<(), String>(())
     }
     .await;

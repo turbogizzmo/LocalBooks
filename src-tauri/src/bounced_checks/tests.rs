@@ -191,7 +191,7 @@ async fn voiding_a_bounce_puts_everything_back() {
     .await
     .unwrap();
 
-    void(&pool, recorded.id).await.expect("bounce voids");
+    void(&pool, recorded.id, None).await.expect("bounce voids");
     assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "PAID");
     assert_eq!(balance(&pool, checking).await, 20_000);
     assert_eq!(balance(&pool, bank_fees).await, 0);
@@ -199,7 +199,7 @@ async fn voiding_a_bounce_puts_everything_back() {
     let fee_voided: bool = sqlx::query_scalar("SELECT is_voided FROM invoices WHERE invoice_number = ?1").bind(recorded.fee_invoice_number).fetch_one(&pool).await.unwrap();
     assert!(fee_voided);
     assert!(list(&pool).await.unwrap()[0].is_voided);
-    let again = void(&pool, recorded.id).await.unwrap_err();
+    let again = void(&pool, recorded.id, None).await.unwrap_err();
     assert!(again.starts_with("BOUNCE_ALREADY_VOIDED"), "{again}");
     // It can be recorded again after the void.
     assert_eq!(candidates(&pool).await.unwrap().len(), 1);
@@ -303,4 +303,112 @@ async fn the_bounce_row_is_protected_by_the_schema() {
     // The invoice's amount paid can't drift from its payments less live bounces.
     let drift = sqlx::query("UPDATE invoices SET amount_paid_cents = 10000, status = 'PAID' WHERE id = ?1").bind(invoice_id).execute(&pool).await.unwrap_err();
     assert!(drift.to_string().contains("INV_PAID_MISMATCH"), "{drift}");
+}
+
+async fn sales_receipt(pool: &SqlitePool, into: i64, cents: i64) -> i64 {
+    let services = account_id(pool, "4100").await;
+    let input: crate::sales::SalesReceiptInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Acme", "receiptDate": "2026-10-03", "depositAccountId": into, "paymentMethod": "CHECK", "reference": "881",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": services, "isTaxable": false }]
+    }))
+    .unwrap();
+    crate::sales::post_sales_receipt(pool, input).await.unwrap().id
+}
+
+async fn open_invoices(pool: &SqlitePool) -> Vec<(i64, i64)> {
+    sqlx::query_as("SELECT i.id, b.home_open_cents FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id WHERE i.is_voided = 0 AND b.home_open_cents <> 0")
+        .fetch_all(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_bounced_sales_receipt_takes_the_bank_down_and_bills_the_customer() {
+    let pool = test_pool().await;
+    let (checking, services, bank_fees, ar) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, account_id(&pool, "6050").await, ar(&pool).await);
+    let receipt = sales_receipt(&pool, checking, 40_000).await;
+    let listed = candidates(&pool).await.unwrap();
+    assert_eq!(listed.iter().map(|c| (c.kind.as_str(), c.id, c.amount_cents)).collect::<Vec<_>>(), [("SALES_RECEIPT", receipt, 40_000)]);
+
+    let recorded = record(
+        &pool,
+        BounceInput { bank_fee_cents: 1_500, bank_fee_account_id: Some(bank_fees), customer_fee_cents: 2_000, customer_fee_account_id: Some(services), ..bounce("SALES_RECEIPT", receipt) },
+    )
+    .await
+    .unwrap();
+    assert_eq!((recorded.kind.as_str(), recorded.receipt_number.is_some(), recorded.amount_cents), ("SALES_RECEIPT", true, 40_000));
+    assert_eq!(balance(&pool, checking).await, 40_000 - 40_000 - 1_500, "the money and the bank's fee leave the bank");
+    assert_eq!(balance(&pool, ar).await, 42_000, "the customer owes the check and the charge again");
+    assert_eq!(balance(&pool, services).await, 40_000 + 2_000, "the sale's income stays; only the charge is new");
+    let charge = open_invoices(&pool).await;
+    assert_eq!(charge.len(), 1);
+    assert_eq!(charge[0].1, 42_000);
+    assert!(candidates(&pool).await.unwrap().is_empty(), "it bounces once");
+    books_balance(&pool).await;
+
+    // The receipt can't be voided while its bounce is live, and the bounce's entry can't be voided
+    // on its own from a register (its charge-back would stay).
+    let receipt_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM sales_receipts WHERE id = ?1").bind(receipt).fetch_one(&pool).await.unwrap();
+    assert!(void_transaction(&pool, receipt_entry).await.unwrap_err().starts_with("VOID_BOUNCED"));
+    assert!(void_transaction(&pool, recorded.journal_entry_id).await.unwrap_err().starts_with("VOID_BOUNCE_CHARGE"));
+
+    void(&pool, recorded.id, Some("SALES_RECEIPT")).await.unwrap();
+    assert_eq!(balance(&pool, checking).await, 40_000);
+    assert_eq!(balance(&pool, ar).await, 0);
+    assert!(open_invoices(&pool).await.is_empty());
+    assert_eq!(candidates(&pool).await.unwrap().len(), 1, "it can bounce again");
+    books_balance(&pool).await;
+}
+
+#[tokio::test]
+async fn a_sales_receipt_banked_through_a_deposit_bounces_out_of_that_bank() {
+    let pool = test_pool().await;
+    let checking = account_id(&pool, "1010").await;
+    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    let receipt = sales_receipt(&pool, undeposited, 9_000).await;
+    assert!(candidates(&pool).await.unwrap().is_empty(), "still in Undeposited Funds");
+    post_bank_deposit(
+        &pool,
+        DepositInput { bank_account_id: checking, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "SALES_RECEIPT".into(), id: receipt }], other_lines: vec![], cash_back: None },
+    )
+    .await
+    .unwrap();
+    let recorded = record(&pool, bounce("SALES_RECEIPT", receipt)).await.unwrap();
+    assert_eq!(recorded.bank_account_id, checking);
+    assert_eq!(balance(&pool, checking).await, 0);
+    let deposit: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits").fetch_one(&pool).await.unwrap();
+    assert!(void_transaction(&pool, deposit).await.unwrap_err().starts_with("VOID_BOUNCED"));
+    books_balance(&pool).await;
+}
+
+#[tokio::test]
+async fn a_foreign_currency_payment_bounces_at_its_booked_rates() {
+    let pool = test_pool().await;
+    let (checking, services, ar) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await, ar(&pool).await);
+    let fx: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_EXPENSE' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    // €1,000.00 booked at 1.08 (A/R $1,080.00), paid at 1.10 ($1,100.00 into the bank, $20.00 gain).
+    let input: InvoiceInput = serde_json::from_value(serde_json::json!({ "customerName": "Acme", "issueDate": "2026-10-01", "dueDate": "2026-10-31",
+        "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": 100_000, "incomeAccountId": services, "isTaxable": false }],
+        "currency": { "code": "EUR", "exchangeRateE6": 1_080_000 } }))
+    .unwrap();
+    let invoice_id = create_and_post_invoice(&pool, input).await.unwrap().id;
+    record_payment(
+        &pool,
+        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id, deposit_account_id: checking, payment_date: d(5), amount_cents: 100_000, payment_method: "CHECK".into(), reference: None, exchange_rate_e6: Some(1_100_000) },
+    )
+    .await
+    .unwrap();
+    assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, fx).await), (110_000, 0, -2_000));
+    let payment: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments").fetch_one(&pool).await.unwrap();
+    let listed = candidates(&pool).await.unwrap();
+    assert_eq!((listed[0].currency_code.as_deref(), listed[0].amount_cents, listed[0].home_amount_cents), (Some("EUR"), 100_000, 110_000));
+
+    let recorded = record(&pool, bounce("PAYMENT", payment)).await.unwrap();
+    assert_eq!((recorded.amount_cents, recorded.currency_code.as_deref()), (100_000, Some("EUR")));
+    assert_eq!((balance(&pool, checking).await, balance(&pool, ar).await, balance(&pool, fx).await), (0, 108_000, 0), "the bank, A/R and the gain go back");
+    assert_eq!(open_invoices(&pool).await, [(invoice_id, 108_000)], "the invoice is open again for its home A/R");
+    assert_eq!(get_summary(&pool, invoice_id).await.unwrap().status, "UNPAID");
+    let aging = crate::report_center::aging(&pool, false, d(20)).await.unwrap();
+    assert_eq!(aging.rows.iter().map(|r| r.total_cents).sum::<i64>(), 108_000, "aging agrees with A/R");
+    books_balance(&pool).await;
 }

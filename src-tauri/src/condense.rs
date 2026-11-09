@@ -60,6 +60,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("billed_costs", &[]),
     ("bills", &["bill_date"]),
     ("bounced_checks", &["bounce_date"]),
+    ("bounced_sales_receipts", &["bounce_date"]),
     ("class_reclassifications", &[]),
     ("credit_applications", &["applied_date"]),
     ("credit_memo_lines", &[]),

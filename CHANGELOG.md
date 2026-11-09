@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Print Pay Bills' checks later.** Pay Bills has **Print later**, as Write Checks does: the payments
+  post now and their checks, one per vendor, wait in **File › Print Forms › Checks…**, where they
+  take their numbers when they print.
+- **Bounced sales receipts and foreign-currency payments.** Record Bounced Check now lists sales
+  receipts, which it charges back to the customer on a new invoice, and payments in another
+  currency, which bounce at the rates they were recorded at (the exchange gain or loss they
+  realized is reversed).
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

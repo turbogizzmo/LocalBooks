@@ -174,7 +174,7 @@ async fn pay_bills_uses_vendor_credits_when_turned_on() {
     );
 
     let credits: Vec<ApplyCreditInput> = uses.iter().map(|u| ApplyCreditInput { credit_id: u.credit_id, document_id: u.bill_id, amount_cents: u.amount_cents, applied_date: d(10, 9) }).collect();
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None };
+    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 9), amount_cents, reference: None, to_be_printed: false };
     // The first bill is paid off by the credit alone; the second needs 20.00 more.
     let too_much = pay_bills_with_credits(&pool, vec![pay(second, 3_000)], credits.clone(), Vec::new(), d(10, 9)).await.unwrap_err();
     assert!(too_much.starts_with("BILL_OVERPAYMENT"), "{too_much}");
@@ -318,7 +318,7 @@ async fn pay_bills_takes_early_payment_discounts_through_their_last_day() {
     assert_eq!(plan.discounts, vec![DiscountUse { bill_id: on_terms, amount_cents: 1_000 }], "2% of 500.00, on the 10th day; none on a bill without a discount");
     assert!(pay_bills_plan(&pool, &[on_terms], d(10, 12)).await.unwrap().discounts.is_empty(), "the discount has ended");
 
-    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None };
+    let pay = |bill_id, amount_cents| BillPaymentInput { bill_id, payment_account_id: bank, payment_date: d(10, 11), amount_cents, reference: None, to_be_printed: false };
     let late = pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts.clone(), d(10, 12)).await.unwrap_err();
     assert!(late.starts_with("BILL_NO_DISCOUNT"), "{late}");
     assert_eq!(pay_bills_with_credits(&pool, vec![pay(on_terms, 49_000)], Vec::new(), plan.discounts, d(10, 11)).await.unwrap(), 1);
