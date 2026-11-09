@@ -26,6 +26,10 @@ people using LocalBooks.
   now take files too. A file marked **Send with the form** goes along when LocalBooks emails the
   invoice, estimate, sales receipt or statement. Deleting a file is reversible: it can be restored
   from the library, and only an Admin can remove a deleted file for good, after a warning.
+- **Export to tax software.** For a company that files Schedule C, Export TXF… on the Income Tax
+  report saves the tax year's totals, line by line, as a TXF file that personal tax programs
+  import. It lists anything it can't carry (accounts with no tax line, depreciation, business use
+  of home) with the amount, for you to enter by hand.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.

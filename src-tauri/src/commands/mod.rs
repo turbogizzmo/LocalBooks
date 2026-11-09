@@ -115,6 +115,7 @@ features![
     statements,
     tax_and_time,
     timesheet,
+    txf,
     users,
     vendor_1099,
     vouchers,

@@ -35,7 +35,7 @@ re-check one against the code before you start it.
 | R14 | partial | L | Accountant workflows: no Accountant's Copy or review mode | An accountant can work on a copy and the changes merge back with an audit record |
 | R15 | wontfix | XL | Multi-user access (one user at a time by design) | Revisit only if testers ask; would change the storage model |
 | R16 | open | M | Payroll: nothing posts a payroll service's results | Imports a payroll service's journal export into balanced entries |
-| R17 | open | M | Tax software export (TXF / tax-line mapping) | Accounts map to tax lines; TXF export imports into a tax program |
+| R17 | done (#250) | M | Tax software export (TXF / tax-line mapping) | Accounts map to tax lines; TXF export imports into a tax program. Done: TXF v042 for Schedule C (`txf::tests`); TXF defines no codes for 1065/1120-S/1120/990 returns, so those export the Income Tax Summary instead |
 | R18 | open | L | No condensing or archiving of old years | Old years condense to opening balances with an archive copy; reports from the archive still tie out |
 | R19 | partial | M | Accessibility untested | Every screen is reachable and operable by keyboard; an automated a11y check runs in the e2e suite |
 | R20 | partial | S | US-only, and not stated anywhere | README and the tester page say it is US-only and what that means |
