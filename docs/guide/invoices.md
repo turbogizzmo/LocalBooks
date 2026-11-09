@@ -60,6 +60,16 @@ credit posts nothing, because the credit memo already reduced Accounts Receivabl
 what's paid on the invoice, the same as applying it from **Sales › Credit Memos & Refunds**. Credits
 are in the home currency, so an invoice in another currency doesn't offer them.
 
+### Service dates and the template
+
+- **Service Date**: each line of an invoice or sales receipt has a Service Date box for when the
+  work was done (a visit, a delivery, a week of work). Lines with one print it in a **Service
+  Date** column; the column is left off a form whose lines have none, and Settings › Custom Forms
+  can turn it off altogether.
+- **Template**: the header's **Template** box picks the form style the document prints, saves as
+  PDF and emails with (Settings › Custom Forms). Left on **Default style** (or **Customer's
+  style**, when the customer has one), it follows the customer as before. Estimates have it too.
+
 ### Addresses on sales receipts, estimates and credit memos
 
 Sales receipts (**Sold To**), estimates and credit memos have the same address, P.O. No. and FOB
@@ -67,6 +77,10 @@ boxes, filled in the same way. Each document keeps its own copy: changing a cust
 later leaves documents already saved as they were. Converting an estimate to an invoice, or
 editing an invoice, carries its addresses over. Invoices saved before this version had no copy
 and print the customer's current billing address.
+
+A saved credit memo or refund receipt opens as its printed form, with its Credit To address, P.O.
+No., lines and total; **Print**, **Save as PDF** and **Email** use the **Credit memo** layout in
+Settings › Custom Forms.
 
 ## Subtotals, discounts, charges and groups
 

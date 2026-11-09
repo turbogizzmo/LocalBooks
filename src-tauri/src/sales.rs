@@ -188,6 +188,9 @@ pub struct SalesLineInput {
     pub class_id: Option<i64>,
     #[serde(default)]
     pub is_taxable: bool,
+    /// When the work on this line was done (sales receipts; estimates don't keep it).
+    #[serde(default)]
+    pub service_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -465,8 +468,8 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         let amount = line_amount(line.quantity_e4, line.rate_cents)?;
         sqlx::query(
             "INSERT INTO sales_receipt_lines
-                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (sales_receipt_id, line_number, product_service_id, description, quantity_e4, rate_cents, amount_cents, income_account_id, class_id, is_taxable, service_date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(receipt_id)
         .bind(numbers[idx])
@@ -478,6 +481,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         .bind(line.income_account_id)
         .bind(line.class_id)
         .bind(line.is_taxable && tax.is_some())
+        .bind(line.service_date)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;

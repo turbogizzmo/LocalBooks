@@ -9,6 +9,7 @@ import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuan
 import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { myPreferences } from '../lib/myPreferences.js';
+import { formatDate } from '../lib/dates.js';
 
 let nextKey = 1;
 /** The item column's "Add new item…" entry. */
@@ -79,6 +80,7 @@ function toLine(item, form, defaultAccountId) {
             description: item.description,
             qty: formatQuantity(item.quantityE4).replace(/,/g, ''),
             rate: centsToInput(item.rateCents),
+            serviceDate: item.serviceDate ?? '',
           }
   );
 }
@@ -202,6 +204,7 @@ export function summarizeLines(lines, options) {
       incomeAccountId: line.accountId,
       classId: line.classId ?? null,
       isTaxable: Boolean(line.isTaxable),
+      serviceDate: line.serviceDate || null,
       amountCents: state.amount,
     }));
   const layout = layOut(payload, formLines);
@@ -223,7 +226,7 @@ const incomeOnly = (a) => a.classification === 'INCOME';
  * customer's level (`levelAuto`) until its level is picked by hand; a typed rate (`rateTyped`) is
  * never replaced.
  */
-export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false }) {
+export default function LineItemGrid({ lines, setLines, accounts, products, defaultAccountId, currency = null, withTax = false, customer = '', customers = null, itemTypes = false, allowZeroRate = false, serviceDates = false }) {
   const money = (cents) => formatMoney(cents, currency);
   const { amountOf } = summarizeLines(lines, { allowZeroRate });
   const groups = useLedgerQuery(api.listItemGroups).data ?? [];
@@ -401,7 +404,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
     update(index, { levelId, levelAuto: false, rateTyped: false, rate: (line.productId != null && rateAt(line.productId, levelId)) || line.rate });
   };
   // Columns a subtotal leaves empty: account, class, quantity, price level and rate.
-  const spareColumns = 3 + (withClasses ? 1 : 0) + (withLevels ? 1 : 0);
+  const spareColumns = 3 + (withClasses ? 1 : 0) + (withLevels ? 1 : 0) + (serviceDates ? 1 : 0);
   const levelName = (id) => pricing.levels.find((l) => l.id === id)?.name ?? '';
 
   return (
@@ -412,6 +415,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
         <col />
         <col className="w-[220px]" />
         {withClasses && <col className="w-[150px]" />}
+        {serviceDates && <col className="w-[132px]" />}
         <col className="w-[64px]" />
         {withLevels && <col className="w-[120px]" />}
         <col className="w-[100px]" />
@@ -426,6 +430,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           <th className="qb-grid-head">Description</th>
           <th className="qb-grid-head">Income account</th>
           {withClasses && <th className="qb-grid-head">Class</th>}
+          {serviceDates && <th className="qb-grid-head" title="When the work on the line was done; printed in its own column">Service Date</th>}
           <th className="qb-grid-head text-right">Qty</th>
           {withLevels && <th className="qb-grid-head" title="Fills in the rate; a typed rate always wins">Price level</th>}
           <th className="qb-grid-head text-right">Rate</th>
@@ -531,6 +536,18 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                           />
                         </td>
                       )}
+                      {serviceDates && (formLine ? <td className="qb-grid-cell" /> : (
+                        <td className="qb-grid-cell-edit">
+                          <input
+                            type="date"
+                            data-col="serviceDate"
+                            value={line.serviceDate ?? ''}
+                            onChange={(e) => update(i, { serviceDate: e.target.value })}
+                            onKeyDown={(e) => onKeyDown(e, i)}
+                            aria-label={`Service date ${i + 1}`}
+                          />
+                        </td>
+                      ))}
                       {formLine ? <td className="qb-grid-cell" /> : <td className="qb-grid-cell-edit">
                         <input
                           data-col="qty"
@@ -601,6 +618,11 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                       {withClasses && (
                         <td className="qb-grid-cell" {...cellProps('class')}>
                           {line.classId != null ? classLabel(classes, line.classId) : ''}
+                        </td>
+                      )}
+                      {serviceDates && (
+                        <td className="qb-grid-cell" {...cellProps('serviceDate')}>
+                          {line.serviceDate ? formatDate(line.serviceDate) : ''}
                         </td>
                       )}
                       <td className={`qb-grid-cell num ${bad('qty') ? 'bg-[#fdf0ef] text-qb-negative' : ''}`} {...cellProps('qty')}>

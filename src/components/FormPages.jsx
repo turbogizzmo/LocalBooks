@@ -57,7 +57,7 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
-const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement' };
+const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo' };
 
 /** "Emailed 10/21/2026 to ap@acme.com" (sent_at is UTC; shown as the local date). */
 export function sentText(record) {

@@ -68,7 +68,7 @@ async fn journal(pool: &SqlitePool, date: NaiveDate, description: &str, lines: V
 }
 
 fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable }
+    InvoiceLineInput { description: description.into(), quantity_e4, rate_cents, income_account_id: income, product_service_id: None, class_id: None, is_taxable, service_date: None }
 }
 
 async fn invoice(pool: &SqlitePool, customer: &str, issue: NaiveDate, terms: u64, lines: Vec<InvoiceLineInput>, tax_rate_id: Option<i64>, currency: Option<ForeignCurrency>) -> i64 {
@@ -250,7 +250,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
                         rate_cents: 3_500,
                         income_account_id: c.sales,
                         class_id: None,
-                        is_taxable: true,
+                        is_taxable: true, service_date: None,
                     }],
                     tax_rate_id: Some(tax),
                     discount_cents: 0,

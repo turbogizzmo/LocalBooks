@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
+  lines take a Service Date that prints in its own column; the Template box on a sales form picks
+  the form style it prints with; and credit memos and refund receipts now print as a form of their
+  own, with a Credit memo layout in Settings › Custom Forms.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
