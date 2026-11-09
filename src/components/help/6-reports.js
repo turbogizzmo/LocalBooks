@@ -130,6 +130,14 @@ export const topics = [
     guide: 'reconciling',
   },
   {
+    id: 'company-snapshot', area: 'reports', views: ['reports'],
+    title: 'See the business at a glance (Company Snapshot)',
+    body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, and top customers, items and vendors. Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
+    keywords: 'company snapshot dashboard widgets overview glance balances who owes vendors to pay trend top customers items vendors insights',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'income-tax-reports', area: 'reports', views: ['reports'],
     title: 'Total your books by income tax line',
     body: 'On Income Tax Summary, click Tax lines… to give each account the line of your Schedule C, 1065, 1120-S or 1120 its amounts go on; the report then totals each line for the tax year, and Income Tax Detail lists the transactions behind them. Accounts with activity but no line are listed under Unassigned, and lines brought in from QuickBooks that are not matched yet under Other tax lines.',

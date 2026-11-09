@@ -217,6 +217,8 @@ const REPORTS: &[Entry] = &[
     Entry::Sub(
         "Company & Financial",
         &[
+            report("Company Snapshot", "snapshot"),
+            Entry::Sep,
             report("Profit & Loss Standard", "pl"),
             report("Profit & Loss Detail", "preset:pl-detail"),
             report("Profit & Loss YTD Comparison", "list:pl-ytd"),

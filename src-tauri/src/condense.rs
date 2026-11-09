@@ -168,6 +168,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "ship_methods",
     "simplefin_accounts",
     "simplefin_connections",
+    "snapshot_widgets",
     "staging_account_map",
     "staging_import_batches",
     "staging_raw_transactions",

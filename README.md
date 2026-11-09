@@ -266,6 +266,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
 | Class tracking | Settings › Preferences; Accounting › Classes | A Class column on every form once tracking is on, with ＋ Add new class… in each class list | [guide](docs/guide/getting-started.md#track-classes) |
 | Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
+| Company Snapshot | Reports › Company Snapshot | Widgets you add, order and date: balances, who owes, vendors to pay, income and expense trend, top customers, items and vendors; each ties to its report | [guide](docs/guide/reports.md#company-snapshot) |
 | Condense Data | Settings › File & Data Controls | Replace closed years with monthly summary entries, keeping open items, with a verified read-only archive of the full history | [guide](docs/guide/backups-and-company-files.md#condense-data-archive-closed-years) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
