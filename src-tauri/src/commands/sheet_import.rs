@@ -1,6 +1,5 @@
 //! Importing a spreadsheet the user laid out: customers, vendors, transactions or journal entries,
-//! mapped column by
-//! column, checked row by row, then staged for the import review (Settings › Import & Migration).
+//! mapped column by column, checked row by row, then staged for the import review (Settings › Import & Migration).
 
 use super::migration::{IngestResult, QBW_PROGRESS};
 use super::prelude::*;
