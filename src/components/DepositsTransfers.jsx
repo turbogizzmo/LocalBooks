@@ -44,7 +44,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
   const [cashAccountId, setCashAccountId] = useState(null);
   const [cashMemo, setCashMemo] = useState('');
   const [cashAmount, setCashAmount] = useState('');
-  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount]), cashAccountId, cashAmount, cashMemo });
+  const dirty = useDirtySince('deposit', { memo, picked: [...picked], rows: rows.map((r) => [r.memo, r.amount, r.customerId, r.vendorId]), cashAccountId, cashAmount, cashMemo });
   const openFromList = useOpenFromList();
   const formClass = useFormClass(accounts);
 
@@ -195,7 +195,7 @@ function DepositForm({ accounts, onPosted, onCancel, savedStep }) {
         </tbody>
       </table>
       <div className="border-y border-qb-border bg-qb-canvas px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-qb-ink-muted">Add funds to this deposit</div>
-      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses />
+      <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isOtherFunds} categoryLabel="Account" withClasses withReceivedFrom />
       <div className="flex flex-wrap items-end gap-2 border-t border-qb-border px-2 py-1">
         <label>
           <span className="qb-label">Cash back goes to</span>

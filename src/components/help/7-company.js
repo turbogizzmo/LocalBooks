@@ -207,6 +207,14 @@ export const topics = [
     guide: 'whats-new',
   },
   {
+    id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],
+    title: 'Make the text larger or smaller, and color a register',
+    body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and LocalBooks keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',
+    keywords: 'text size font larger smaller bigger zoom magnify enlarge readable view register color colour tint',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers, the journal, an account register or Reconcile to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first (registers and Reconcile in date order), and each list remembers the order you choose.',
@@ -228,6 +236,13 @@ export const topics = [
     body: 'Preferences › General › My Preferences sets how typing works for you on this computer: Enter moves to the next field like Tab, name boxes open their list of matches as you type, amounts can be typed without a decimal point (1234 is 12.34), clipped text shows in full on hover, and new transactions start on today’s date or the last date you entered. It also turns on a beep when a transaction is recorded, the warnings before editing or voiding a posted transaction, and what happens to a typed description or price when the item on a line changes. Bring back all one-time messages shows again the messages you turned off. Accounting › My Preferences copies the first line’s memo to new journal entry lines.',
     keywords: 'enter key tab next field move between fields keyboard preferences general my preferences default date last entered date drop-down tooltip decimal point automatically place beep sound warn edit void bring back messages one-time keep custom item description price autofill memo journal',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
+    guide: 'getting-started',
+  },
+  {
+    id: 'amount-arithmetic', area: 'company', views: ['sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
+    title: 'Do arithmetic in an amount or quantity box',
+    body: 'Type + − * or / in any amount, rate or quantity box (100+25.50*2) and a small tape opens under it with each number and the running total; Enter, or leaving the box, puts the answer in it, and Esc closes the tape. Multiplying and dividing come before adding and subtracting, the answer is rounded once, half away from zero, to the cent (or to four decimals in a quantity box), and numbers in the arithmetic are always taken as typed, even with the decimal point placed automatically.',
+    keywords: 'calculator tape arithmetic add subtract multiply divide plus minus times sum math amount quantity box running total',
     guide: 'getting-started',
   },
   {

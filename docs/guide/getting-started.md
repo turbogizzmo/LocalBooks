@@ -150,6 +150,21 @@ choices back.
 **Preferences › Accounting › My Preferences** has **Autofill memo in journal entries**: a line you
 start below the first one takes the first line's memo, which you can still change. On by default.
 
+## Do arithmetic in an amount or quantity box
+
+Every amount, rate and quantity box on a form works as a calculator. Type a number, then `+`, `-`,
+`*` or `/` and the next number: a small tape opens under the box with each number you typed and the
+running total. Press **Enter** (or leave the box) to put the answer in it; **Esc** closes the tape
+and leaves what you typed.
+
+- `100+25.50*2` gives **151.00**: multiplying and dividing come first, as on paper, then adding and
+  subtracting from left to right.
+- The arithmetic is exact until the end, then rounded once to the cent, half away from zero:
+  `10/3` is 3.33 and `0.05/2` is 0.03. A quantity box keeps four decimals: `10/3` is 3.3333.
+- Numbers in the arithmetic are taken as typed, even with **Automatically place a decimal point**
+  on: `12*3` is 36.00.
+- `-` in front of the first number is a minus sign, so `-12` is just a negative amount.
+
 ## Warnings before saving (company preferences)
 
 These ask before a transaction is saved. Click **Save anyway** to record it as you entered it, or
@@ -261,6 +276,27 @@ for each list on this computer; click the sorted heading a third time to go back
 Registers and Reconcile start, and go back to, date order (oldest first). While a register is
 sorted by anything else, its **Balance** column is dimmed, because it is still the running balance
 in date order.
+
+## Make the text larger or smaller
+
+Each kind of window keeps its own text size: lists (customers, items, the chart of accounts and the
+like), registers, forms (invoices, bills, checks, journal entries and the other entry forms) and
+reports. With one open in front:
+
+- Click **A↑** or **A↓** at the right of the toolbar, choose **View › Larger Text** or
+  **View › Smaller Text**, or press **Cmd +** and **Cmd −** on a Mac (**Ctrl +** and **Ctrl −** on
+  Windows and Linux).
+- The size shows beside the buttons when it isn't the normal one; click it, choose
+  **View › Actual Text Size**, or press **Cmd 0** (**Ctrl 0**) to go back.
+
+Every window of that kind takes the new size at once, and LocalBooks keeps it on this computer for
+next time. The Home page and Settings keep the normal size.
+
+## Give a register a color
+
+In an account register, choose a **Color** (blue, green, yellow, orange, pink, purple or gray) to
+tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
+color is kept on this computer for that account in that company file; **Default** takes it away.
 
 ## Open a transaction from a register
 

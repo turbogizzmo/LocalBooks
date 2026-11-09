@@ -9,6 +9,12 @@ people using LocalBooks.
 - **Pay Bills: filter, sort and bill details.** Filter the list to one vendor and sort it by due
   date, discount date, vendor or amount due. Click a bill to see its terms, discount and credits
   used below the list, with **Go to Bill** to open it.
+- **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
+  quantity box and a small tape shows each number and the running total; Enter puts the answer in
+  the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
+- **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
+  Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
+  own, and LocalBooks remembers it. An account register can also be given a color.
 - **Sales lines in the familiar order.** On invoices, sales receipts, estimates and credit memos
   the line columns now run Item, Description, Qty, Rate, Class, then the income account (which the
   item fills in), Amount and Tax.
@@ -39,6 +45,10 @@ people using LocalBooks.
   **Ctrl+G** goes to the register of its other account; on a saved transfer, **Go To Transfer**
   (Ctrl+G) does the same. Page Up / Page Down, Ctrl+N, Ctrl+P and Ctrl+D now also work on saved
   sales receipts, estimates, credits, purchase orders, deposits and transfers.
+- **Deposits have a Received From name.** Each **Add funds** line of a bank deposit can name the
+  customer or vendor the money came from, and a name typed in a register's deposit row is matched
+  to your customers and vendors instead of only being kept in the memo. The register shows the
+  name as the payee, and the deposit is listed in that name's transactions and reports by name.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.
