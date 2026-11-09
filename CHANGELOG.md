@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Print envelopes.** Print Envelope… on an invoice or sales receipt, on a form's row, and on a
+  customer's or vendor's row prints an envelope with your return address and theirs. Set the
+  envelope's size, font and position in Settings › Custom Forms › Envelope.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

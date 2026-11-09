@@ -1657,7 +1657,7 @@ fn decode_logo(data_url: Option<&str>) -> Option<PdfImage> {
 
 /// The document to print: `document_id` is the invoice, estimate or sales receipt, or for a
 /// statement the customer (with `period`, last month by default). Without one, the sample.
-async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, symbol: &str) -> Result<FormDoc, String> {
+pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, symbol: &str) -> Result<FormDoc, String> {
     match (kind, document_id) {
         (_, None) => Ok(sample_doc(kind, symbol)),
         (FormKind::Invoice, Some(id)) => invoice_doc(pool, id, symbol).await,

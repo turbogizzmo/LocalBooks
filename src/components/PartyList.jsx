@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import { useEnvelopePrinter } from './FormPages.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
@@ -424,6 +425,8 @@ export default function PartyList({ kind, navigate }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  // Print Envelope on a row: the customer's billing address or the vendor's address.
+  const [envelopePortal, printEnvelope] = useEnvelopePrinter(setNotice);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -557,6 +560,7 @@ export default function PartyList({ kind, navigate }) {
           <ExportMenu printable={false} onNotice={setNotice} {...exports} />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+        {envelopePortal}
         {error && <Notice kind="error" text={error} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <form onSubmit={add}>
@@ -624,6 +628,7 @@ export default function PartyList({ kind, navigate }) {
                           { label: 'Duplicate…', onSelect: () => duplicate(p) },
                           { label: 'Show transactions', onSelect: () => showTransactions(p.id) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
+                          { label: 'Print Envelope…', onSelect: () => printEnvelope({ kind, id: p.id }) },
                           ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
