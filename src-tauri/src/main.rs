@@ -106,6 +106,7 @@ mod xlsx_export;
 
 #[cfg(test)]
 mod harness;
+mod sheet_import;
 
 use tauri::Manager;
 

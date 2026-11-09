@@ -101,6 +101,7 @@ features![
     sales_prefs,
     sales_tax,
     search,
+    sheet_import,
     statements,
     tax_and_time,
     timesheet,

@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Import customers, vendors or invoices from your own spreadsheet.** In the Desktop Migration
+  Wizard, choose a .csv or Excel file (or download a template), match its columns to LocalBooks'
+  fields, and check it: every row that would fail is listed with its row number before anything is
+  staged. Then review and post it like any other import; invoices become real invoices, owed by
+  their customers.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
