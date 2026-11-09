@@ -114,7 +114,7 @@ async fn sends_the_pdf_through_the_server() {
     send(
         &pool,
         &secrets,
-        Outgoing { to: vec!["ap@initech.test".into()], subject: "Invoice 1001 from Acme".into(), body: "Please find attached.".into(), file_name: "Invoice 1001.pdf".into(), pdf: b"%PDF-1.4 test".to_vec(), more: Vec::new() },
+        Outgoing { to: vec!["ap@initech.test".into()], subject: "Invoice 1001 from Acme".into(), body: "Please find attached.".into(), file_name: "Invoice 1001.pdf".into(), pdf: b"%PDF-1.4 test".to_vec(), more: vec![("Signed quote.png".into(), b"png bytes".to_vec(), "image/png")] },
     )
     .await
     .unwrap();
@@ -122,6 +122,8 @@ async fn sends_the_pdf_through_the_server() {
     assert!(text.contains("Subject: Invoice 1001 from Acme"), "{text}");
     assert!(text.contains("From: \"Acme Billing\" <billing@example.com>") || text.contains("From: Acme Billing <billing@example.com>"), "{text}");
     assert!(text.contains("To: ap@initech.test"), "{text}");
+    // A file marked Send with the form goes after the PDF.
+    assert!(text.contains("Signed quote.png") && text.contains("Content-Type: image/png"), "{text}");
     assert!(!text.contains("Bcc:"), "a blind copy is not shown in the message");
     assert!(text.contains("Please find attached."));
     assert!(text.contains("filename=\"Invoice 1001.pdf\""), "{text}");

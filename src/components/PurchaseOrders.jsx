@@ -18,6 +18,7 @@ import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 
 const STATUS = { OPEN: 'Open', CLOSED: 'Closed', BILLED: 'Billed' };
 
@@ -111,7 +112,8 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
   const dirty = useDirtySince('purchase-order', { vendor, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) });
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       <FormToolbar
         label="Purchase order"
         groups={[
@@ -150,6 +152,9 @@ function NewPurchaseOrder({ accounts, vendors, defaultCategory, onSaved, onCance
         </div>
       </div>
     </section>
+    {/* The chosen vendor's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="vendor" name={vendor} names={vendors} />
+    </div>
   );
 }
 
@@ -296,6 +301,7 @@ export default function PurchaseOrders({ accounts, intent }) {
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
           onPrint={() => print(viewing)}
+          record={{ kind: 'PURCHASE_ORDER', id: viewing.id }}
           onNotice={setNotice}
           extra={[
             [

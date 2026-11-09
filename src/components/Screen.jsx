@@ -41,6 +41,7 @@ import TimeTracking from './TimeTracking.jsx';
 import MileageTracking from './MileageTracking.jsx';
 import Todos from './Todos.jsx';
 import VendorCredits from './VendorCredits.jsx';
+import AttachmentsLibrary from './AttachmentsLibrary.jsx';
 
 export default function Screen({ view: chosenView, intent, navigate, accounts, isAdmin, companyName }) {
   // An Admin-only Settings tab shows anyone else their first tab instead (App also moves the window there).
@@ -88,6 +89,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'accounting/todos' && <Todos {...props} />}
       {view === 'accounting/budgets' && <Budgets accounts={list} navigate={navigate} />}
       {view === 'accounting/audit' && <AuditLog />}
+      {view === 'accounting/attachments' && <AttachmentsLibrary />}
       {view === 'accounting/fx-revaluation' && <FxRevaluation />}
       {view === 'reports' && <Reports navigate={navigate} intent={intent} />}
       {view.startsWith('settings/') && (
