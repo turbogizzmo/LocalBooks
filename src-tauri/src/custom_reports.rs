@@ -486,8 +486,9 @@ const ENTRY_JOINS: &str = "
     LEFT JOIN credit_memos crm ON crm.id = crf.credit_memo_id
     LEFT JOIN vendor_credit_refunds vrf ON COALESCE(ro.source_type, e.source_type) = 'JOURNAL' AND vrf.journal_entry_id = COALESCE(ro.id, e.id)
     LEFT JOIN vendor_credits vrc ON vrc.id = vrf.vendor_credit_id
-    LEFT JOIN customers pc ON pc.id = COALESCE(inv.customer_id, ipi.customer_id, sr.customer_id, cm.customer_id, crm.customer_id)
-    LEFT JOIN vendors pv ON pv.id = COALESCE(bl.vendor_id, bpb.vendor_id, vc.vendor_id, x.vendor_id, vrc.vendor_id)
+    LEFT JOIN v_deposit_party dpp ON COALESCE(ro.source_type, e.source_type) = 'DEPOSIT' AND dpp.deposit_id = COALESCE(ro.source_id, e.source_id)
+    LEFT JOIN customers pc ON pc.id = COALESCE(inv.customer_id, ipi.customer_id, sr.customer_id, cm.customer_id, crm.customer_id, dpp.customer_id)
+    LEFT JOIN vendors pv ON pv.id = COALESCE(bl.vendor_id, bpb.vendor_id, vc.vendor_id, x.vendor_id, vrc.vendor_id, dpp.vendor_id)
     LEFT JOIN sales_reps rep ON rep.id = COALESCE(inv.sales_rep_id, sr.sales_rep_id)";
 
 /// Open balances use the same arithmetic as `report_center::aging`; only the document's current
