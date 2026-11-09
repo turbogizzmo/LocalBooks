@@ -68,7 +68,7 @@ export const topics = [
   {
     id: 'pay-bills', area: 'expenses', views: ['expenses/bills', 'expenses/vendors'],
     title: 'Pay bills',
-    body: 'Pay bills lists every open bill so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them. Afterwards, Payment stubs lists each vendor paid: print, save or email them a stub of the bills the payment covers. A paid bill\'s Actions menu has the same stub actions later.',
+    body: 'Pay bills lists every open bill (Filter by a vendor, Sort by due date, discount date, vendor or amount; click one for its details and Go to Bill) so you can pay several at once, fully or partly, from a bank or credit card account. Each payment reduces Accounts Payable and the account it was paid from. Paying from a bank account writes one check per vendor, numbered from the account\'s next check number, and Print checks prints them. Afterwards, Payment stubs lists each vendor paid: print, save or email them a stub of the bills the payment covers. A paid bill\'s Actions menu has the same stub actions later.',
     keywords: 'pay vendor payable ap batch partial stub remittance',
     go: { label: 'Pay bills', view: 'expenses/bills', action: 'pay-bills' },
     guide: 'bills',

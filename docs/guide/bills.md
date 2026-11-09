@@ -51,7 +51,10 @@ changes. A voided bill, or one in a closed period, can't be edited.
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is
-   listed.
+   listed. **Filter by** shows one vendor's bills, and **Sort by** orders them by due date,
+   discount date, vendor or amount due. A ticked bill that a filter hides is still paid (the form
+   says how many). Click a bill to see its terms, discount and the credits used on it below the
+   list; **Go to Bill** opens it.
 2. Tick the bills to pay. Each ticked bill fills in its open balance; change the **Payment** amount
    to pay part of a bill.
 3. Choose the **Payment account** (a bank account or credit card) and the **Payment date**.

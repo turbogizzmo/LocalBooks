@@ -51,9 +51,9 @@ fn numbered(name: &str, n: usize) -> String {
 }
 
 /// How many attachments there are to save (one transaction's, or all): a cheap check before
-/// asking where to save them.
+/// asking where to save them. Deleted ones (in the Attachments Library's Show deleted) are left out.
 pub async fn count(pool: &SqlitePool, entry: Option<i64>) -> Result<usize, String> {
-    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments WHERE ?1 IS NULL OR journal_entry_id = ?1").bind(entry).fetch_one(pool).await.map_err(db_err)?;
+    let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM attachments WHERE (?1 IS NULL OR journal_entry_id = ?1) AND deleted_at IS NULL").bind(entry).fetch_one(pool).await.map_err(db_err)?;
     Ok(usize::try_from(n).unwrap_or(0))
 }
 
@@ -64,7 +64,7 @@ pub async fn write_zip<W: Write + Seek>(pool: &SqlitePool, entry: Option<i64>, o
     let rows: Vec<(i64, i64, String, String, i64, String)> = sqlx::query_as(
         "SELECT a.id, e.id, e.entry_date, e.source_type, e.entry_number, a.file_name
          FROM attachments a JOIN journal_entries e ON e.id = a.journal_entry_id
-         WHERE ?1 IS NULL OR a.journal_entry_id = ?1
+         WHERE (?1 IS NULL OR a.journal_entry_id = ?1) AND a.deleted_at IS NULL
          ORDER BY e.entry_date, e.entry_number, a.id",
     )
     .bind(entry)

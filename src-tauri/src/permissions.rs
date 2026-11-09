@@ -59,6 +59,8 @@ const OPEN: &[&str] = &[
 ];
 
 const ADMIN: &[&str] = &[
+    // Removing an attachment for good (deleting one is reversible and open to Standard users).
+    "purge_attachment",
     // Users and the recovery key.
     "list_users",
     "add_user",
@@ -142,6 +144,8 @@ const READ: &[&str] = &[
     "print_report",
     "finish_printing",
     "render_form",
+    "list_customer_groups",
+    "group_overdue_invoices",
     "list_report_schedules",
     "save_report_pdf",
     "report_sheet",
@@ -152,6 +156,7 @@ const READ: &[&str] = &[
     "render_envelope",
     "render_mailing_labels",
     "save_attachment",
+    "save_library_attachment",
     "save_all_attachments",
     "attachment_counts",
     "next_check_number",

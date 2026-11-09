@@ -80,6 +80,7 @@ export const NAV = [
       { id: 'accounting/todos', label: 'To Do List' },
       { id: 'accounting/budgets', label: 'Budgets' },
       { id: 'accounting/audit', label: 'Audit Log' },
+      { id: 'accounting/attachments', label: 'Attachments Library' },
       { id: 'accounting/fx-revaluation', label: 'Currency Revaluation' },
     ],
   },
