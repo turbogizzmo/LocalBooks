@@ -190,10 +190,11 @@ export function useUnsavedChanges(id, dirty) {
  * entries once they differ. Pass only what the person types (not defaults filled in later).
  * Returns whether it has.
  */
-export function useDirtySince(id, values) {
+export function useDirtySince(id, values, startDirty = false) {
   const now = JSON.stringify(values);
   const [baseline] = useState(now);
-  const dirty = now !== baseline;
+  // A form that opens with entries not saved anywhere (a duplicate) counts as changed from the start.
+  const dirty = startDirty || now !== baseline;
   useUnsavedChanges(id, dirty);
   return dirty;
 }
