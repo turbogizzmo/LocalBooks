@@ -108,8 +108,9 @@ export function pasteLineAt(lines, at, line, newKey) {
   return [...lines.slice(0, pos), { ...line, key: newKey() }, ...lines.slice(pos)];
 }
 
+/** A deep copy of a line: structuredClone where there is one, else a JSON round trip (lines hold only strings, numbers, booleans and null). */
 function structuredCopy(v) {
-  return JSON.parse(JSON.stringify(v));
+  return typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v));
 }
 
 /**
