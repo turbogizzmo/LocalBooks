@@ -49,7 +49,7 @@ export const topics = [
   {
     id: 'form-keys', area: 'company', views: ['sales/invoices', 'sales/all', 'sales/estimates', 'sales/credits', 'expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders', 'banking/transfers', 'accounting/journal'],
     title: 'Save & Close, Save & New, and the form and date keys',
-    body: 'Every transaction form ends in Save & Close (Alt+S), Save & New (Alt+N) and Clear; Ctrl+D voids, Ctrl+M memorizes, Ctrl+N starts a new one, Ctrl+P prints, Page Up and Page Down open the previous and next, and Ctrl+Insert and Ctrl+Delete insert and delete a line, also from the Edit menu. In any date box, t is today, + and - move a day, w and k jump to the week’s first and last day, m and h the month’s, and y and r the year’s; in a check number box, + and - step the number.',
+    body: 'Every transaction form ends in Save & Close (Alt+S), Save & New (Alt+N) and Clear; Ctrl+D voids, Ctrl+M memorizes, Ctrl+N starts a new one, Ctrl+P prints, Page Up and Page Down open the previous and next, Ctrl+L opens the list of the box you are in, and Ctrl+Insert and Ctrl+Delete insert and delete a line; Ctrl+Alt+Y copies a line and Ctrl+Alt+V pastes it above the one you are on. On a saved transfer, Ctrl+G opens the other account’s register at it. Ctrl+O (Duplicate on the toolbar, the Edit menu and a list row’s menu) starts a new invoice, bill, check, expense or journal entry copied from the saved one, dated today with a new number. In a register, Ctrl+E opens the selected transaction to edit and Ctrl+G goes to its other account. The line keys and Go To Transfer are also in the Edit menu; on a Mac use Control (Control+Option for the line copy keys). In any date box, t is today, + and - move a day, w and k jump to the week’s first and last day, m and h the month’s, and y and r the year’s; in a check number box, + and - step the number.',
     keywords: 'keyboard shortcuts save and close save and new clear alt+s alt+n ctrl+d ctrl+m ctrl+insert ctrl+delete insert line delete line void memorize date keys today tomorrow yesterday plus minus week month year check number next number',
     go: null,
     guide: 'getting-started',
@@ -215,6 +215,14 @@ export const topics = [
     guide: 'whats-new',
   },
   {
+    id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],
+    title: 'Make the text larger or smaller, and color a register',
+    body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and LocalBooks keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',
+    keywords: 'text size font larger smaller bigger zoom magnify enlarge readable view register color colour tint',
+    go: null,
+    guide: 'getting-started',
+  },
+  {
     id: 'sort-lists', area: 'company', views: [],
     title: 'Sort a list by any column',
     body: 'Click a column heading in a list such as invoices, bills, customers, the journal, an account register or Reconcile to sort by it, and click it again to reverse the order. An arrow marks the sorted column. Transactions start newest first (registers and Reconcile in date order), and each list remembers the order you choose.',
@@ -236,6 +244,13 @@ export const topics = [
     body: 'Preferences › General › My Preferences sets how typing works for you on this computer: Enter moves to the next field like Tab, name boxes open their list of matches as you type, amounts can be typed without a decimal point (1234 is 12.34), clipped text shows in full on hover, and new transactions start on today’s date or the last date you entered. It also turns on a beep when a transaction is recorded, the warnings before editing or voiding a posted transaction, and what happens to a typed description or price when the item on a line changes. Bring back all one-time messages shows again the messages you turned off. Accounting › My Preferences copies the first line’s memo to new journal entry lines.',
     keywords: 'enter key tab next field move between fields keyboard preferences general my preferences default date last entered date drop-down tooltip decimal point automatically place beep sound warn edit void bring back messages one-time keep custom item description price autofill memo journal',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
+    guide: 'getting-started',
+  },
+  {
+    id: 'amount-arithmetic', area: 'company', views: ['sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
+    title: 'Do arithmetic in an amount or quantity box',
+    body: 'Type + − * or / in any amount, rate or quantity box (100+25.50*2) and a small tape opens under it with each number and the running total; Enter, or leaving the box, puts the answer in it, and Esc closes the tape. Multiplying and dividing come before adding and subtracting, the answer is rounded once, half away from zero, to the cent (or to four decimals in a quantity box), and numbers in the arithmetic are always taken as typed, even with the decimal point placed automatically.',
+    keywords: 'calculator tape arithmetic add subtract multiply divide plus minus times sum math amount quantity box running total',
     guide: 'getting-started',
   },
   {
@@ -273,7 +288,7 @@ export const topics = [
   {
     id: 'menu-bar', area: 'company', views: [],
     title: 'Use the QuickBooks-style menu bar',
-    body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
+    body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group, with Memorized Reports and Transaction History and Journal for the open form. Lists › Currency List opens the currency preferences; Company has Email Setup, AI Access and the Audit Log; Customers has Invoice for Time & Expenses. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
     keywords: 'menu menus menu bar lists company customers vendors employees banking reports shortcut ctrl+i ctrl+w ctrl+r ctrl+j ctrl+t ctrl+f quickbooks desktop',
     go: null,
     guide: 'getting-started',
