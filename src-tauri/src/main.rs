@@ -17,6 +17,7 @@ mod banking;
 mod batch_invoices;
 mod billable_costs;
 mod bounced_checks;
+mod cash_forecast;
 mod classes;
 mod cleanup;
 mod closing;
