@@ -113,9 +113,9 @@ export function TableDocument({ company, title, subtitle, columns, rows }) {
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className={row.kind === 'total' ? 'doc-line-total' : row.kind === 'section' ? 'doc-line-section' : undefined}>
+            <tr key={row.key ?? `${row.kind ?? 'row'}-${i}`} className={row.kind === 'total' ? 'doc-line-total' : row.kind === 'section' ? 'doc-line-section' : undefined}>
               {row.cells.map((value, c) => (
-                <td key={c} className={columns[c].kind === 'money' ? 'doc-num' : undefined}>
+                <td key={columns[c].label} className={columns[c].kind === 'money' ? 'doc-num' : undefined}>
                   {cell(columns[c], value)}
                 </td>
               ))}

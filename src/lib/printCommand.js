@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { printDocument } from './api.js';
 
-/** Screens that print something of their own for File › Print (a register, say), oldest first. */
+/** Screens that print something of their own for File › Print (a register, say), newest last. */
 const printers = [];
 
 /**
@@ -21,7 +21,10 @@ export function usePrintCommand(ref, print) {
   }, [ref]);
 }
 
-/** File › Print…: the showing screen's own print, or else the window as it is. */
+/**
+ * File › Print…: the showing screen's own print (the one holding focus, else the newest showing),
+ * or else the window as it is.
+ */
 export function runPrintCommand() {
   const showing = printers.filter((p) => {
     const root = p.root();

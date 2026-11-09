@@ -8,7 +8,7 @@ import { PrintPortal, TableDocument, useCompany } from './PrintDocuments.jsx';
 import { usePrintCommand } from '../lib/printCommand.js';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { EntryLines, SOURCE_LABEL } from './JournalEntries.jsx';
-import { api, printDocument, useLedgerQuery } from '../lib/api.js';
+import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
 import { quickReport, reportShortcut, transactionJournal } from '../lib/quickReport.js';
@@ -162,6 +162,7 @@ export default function Register({ accounts, intent }) {
   const registerRows = () => [
       ...(data.startDate ? [{ kind: 'section', cells: [data.startDate, '', '', '', 'Balance forward', '', '', '', null, null, data.openingBalanceCents] }] : []),
       ...data.rows.map((r) => ({
+        key: r.lineId,
         cells: [
           r.entryDate,
           r.isReversal ? 'Void' : (SOURCE_LABEL[r.sourceType] ?? r.sourceType),
@@ -198,8 +199,16 @@ export default function Register({ accounts, intent }) {
     // Let React render the register into the print root before the dialog opens, and empty it
     // after: while it has content it is all that prints, from any window.
     await new Promise((resolve) => setTimeout(resolve, 80));
-    window.addEventListener('afterprint', () => setPrinting(false), { once: true });
-    await printDocument(`${registerTitle} – ${exportRange}`);
+    const done = () => setPrinting(false);
+    window.addEventListener('afterprint', done, { once: true });
+    try {
+      await printDocument(`${registerTitle} – ${exportRange}`);
+    } catch (err) {
+      // No dialog opened, so no afterprint: empty the print root now.
+      window.removeEventListener('afterprint', done);
+      done();
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
   };
   usePrintCommand(rootRef, print);
 

@@ -125,14 +125,16 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     if kind == "DEPOSIT" {
         if let Some((undeposited, _, true)) = single.as_ref().filter(|(_, t, _)| t == "OTHER_CURRENT_ASSET") {
             let amount = input.lines[0].amount_cents;
+            let on_or_before = |date: &str| date.parse::<NaiveDate>().is_ok_and(|d| d <= input.entry_date);
             let waiting: Vec<_> = crate::banking::list_undeposited(pool)
                 .await?
                 .into_iter()
-                .filter(|w| w.undeposited_account_id == *undeposited && w.date.as_str() <= input.entry_date.to_string().as_str())
+                .filter(|w| w.undeposited_account_id == *undeposited && on_or_before(&w.date))
                 .collect();
+            let together = waiting.iter().try_fold(0i64, |sum, w| sum.checked_add(w.amount_cents));
             let chosen: Vec<_> = match waiting.iter().find(|w| w.amount_cents == amount) {
                 Some(one) => vec![one],
-                None if waiting.iter().map(|w| w.amount_cents).sum::<i64>() == amount => waiting.iter().collect(),
+                None if together == Some(amount) => waiting.iter().collect(),
                 None => {
                     return Err(format!(
                         "REG_ENTRY_UNDEPOSITED_NO_MATCH: no payment waiting in Undeposited Funds is {}, and together they aren't either; choose them in Make Deposits",
