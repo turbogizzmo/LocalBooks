@@ -142,4 +142,4 @@ export function datesFor(id, start, end) {
 export const CENTER_TOOLS = ['process-multiple', 'scheduled-reports'];
 
 /** Whether a report center entry gets a preview on hover: every report, not the tools. */
-export const previewable = (id) => Boolean(id) && !CENTER_TOOLS.includes(id);
+export const previewable = (id) => typeof id === 'string' && id !== '' && !CENTER_TOOLS.includes(id);

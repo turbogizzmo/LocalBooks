@@ -48,7 +48,7 @@ test('the dates chosen in the center open the report on them', () => {
   assert.equal(datesFor('pl', '2026-04-01', '2026-03-31'), null);
 });
 
-test('every report has a preview, the report center tools do not', async () => {
+test('reports are previewable; the report center tools and non-ids are not', async () => {
   const { previewable } = await import('./reportCenter.js');
   assert.equal(previewable('pl'), true);
   assert.equal(previewable('preset:journal'), true);
@@ -56,4 +56,6 @@ test('every report has a preview, the report center tools do not', async () => {
   assert.equal(previewable('process-multiple'), false);
   assert.equal(previewable('scheduled-reports'), false);
   assert.equal(previewable(null), false);
+  assert.equal(previewable({ id: 'pl' }), false);
+  assert.equal(previewable(''), false);
 });

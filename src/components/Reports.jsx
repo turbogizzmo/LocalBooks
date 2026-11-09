@@ -625,11 +625,23 @@ export default function Reports({ navigate, intent }) {
   // A miniature of the report under the pointer (or keyboard focus), after a moment's pause.
   const [peek, setPeek] = useState(null);
   const peekTimer = useRef(null);
+  // The report open now, read when the pause ends (it may have changed meanwhile).
+  const reportRef = useRef(report);
+  reportRef.current = report;
   const peekAt = (id) => {
     clearTimeout(peekTimer.current);
-    peekTimer.current = setTimeout(() => setPeek(previewable(id) && id !== report ? id : null), id ? 450 : 0);
+    if (!previewable(id)) {
+      setPeek(null);
+      return;
+    }
+    peekTimer.current = setTimeout(() => setPeek(id !== reportRef.current ? id : null), 450);
   };
   useEffect(() => () => clearTimeout(peekTimer.current), []);
+  // Opening a report closes any preview of it.
+  useEffect(() => {
+    clearTimeout(peekTimer.current);
+    setPeek(null);
+  }, [report]);
   return (
     <div className="relative flex h-full gap-2 p-2">
       {peek && (
