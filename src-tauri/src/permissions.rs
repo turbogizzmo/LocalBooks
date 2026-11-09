@@ -91,6 +91,9 @@ const ADMIN: &[&str] = &[
     "update_database_directory",
     "export_company_file",
     "import_company_file",
+    "set_up_offsite_backup",
+    "turn_off_offsite_backup",
+    "restore_offsite_backup",
     "file_dentist_rebuild",
     "condense_company_file",
     "apply_forensic_correction",
@@ -155,6 +158,8 @@ const READ: &[&str] = &[
     "attachment_counts",
     "next_check_number",
     "backup_now",
+    "offsite_backup_now",
+    "test_offsite_restore",
     // Sales forms: a customer's Bill To / Ship To defaults and the credit-limit warning.
     "customer_sales_defaults",
     "check_credit_limit",

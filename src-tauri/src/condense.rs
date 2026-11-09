@@ -147,6 +147,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "ledger_import_unreadable",
     "mileage_rates",
     "mileage_trips",
+    "offsite_backup",
     "payment_methods",
     "price_level_items",
     "price_levels",

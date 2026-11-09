@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Encrypted offsite backups.** Settings › File & Data Controls › Offsite backup saves a copy of
+  your books, encrypted on this computer with a key from a password you choose (or your recovery
+  key), to a folder you pick, such as a synced cloud folder or a USB drive, once a day while
+  LocalBooks is open. Test restore checks a copy without touching your books; Restore brings one
+  back.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

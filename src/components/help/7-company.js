@@ -135,6 +135,14 @@ export const topics = [
     guide: 'backups-and-company-files',
   },
   {
+    id: 'offsite-backup', area: 'company', views: ['settings/data'],
+    title: 'Keep encrypted backups offsite',
+    body: 'Under Offsite backup in File & Data Controls, click Set up…, choose a folder (one your cloud storage keeps in sync, or a USB drive), how many copies to keep, and a backup password: your sign-in password, the recovery key or another password. Each copy is encrypted on this computer before it is saved, so the cloud sees only scrambled data. A copy is made daily while LocalBooks is open. Test restore checks a copy without changing your books; Restore replaces your books with it. A copy can’t be opened without the password.',
+    keywords: 'offsite backup encrypted encryption cloud synced drive usb folder password recovery key test restore lbbackup',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
+    guide: 'backups-and-company-files',
+  },
+  {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
     body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',
