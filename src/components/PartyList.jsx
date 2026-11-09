@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import StatementCharges from './StatementCharges.jsx';
+import { useEnvelopePrinter } from './FormPages.jsx';
+import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
+import { parentByName } from '../lib/listOrder.js';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
@@ -427,6 +430,8 @@ export default function PartyList({ kind, navigate }) {
   const [notice, setNotice] = useState(null);
   // Enter Statement Charges: the customer whose charge register is open.
   const [charging, setCharging] = useState(null);
+  // Print Envelope on a row: the customer's billing address or the vendor's address.
+  const [envelopePortal, printEnvelope] = useEnvelopePrinter(setNotice);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -514,6 +519,16 @@ export default function PartyList({ kind, navigate }) {
     email: (p) => p.email,
     balance: (p) => p.openBalanceCents || null,
   }, { storageKey: `${kind}-list` });
+  // Customers, without a sorted column: the custom order (drag a row), as a tree of jobs or flat.
+  const customers = kind === 'customer';
+  const parentOfCustomer = useMemo(() => {
+    const byName = new Map((data ?? []).map((p) => [p.name.toLowerCase(), p.id]));
+    return (p) => parentByName(p.name, byName);
+  }, [data]);
+  const customOrder = customers && !sorter.sort;
+  const listOrder = useListOrder('CUSTOMERS', customers ? rows : null, { parentOf: parentOfCustomer, dragEnabled: customOrder && !query.trim(), onNotice: setNotice });
+  const shownParties = customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: row.name.split(':').length - 1, hasChildren: false }));
+  const flatNames = customOrder && !listOrder.tree;
   const total = rows.reduce((s, p) => s + p.openBalanceCents, 0);
   const company = useCompany();
   const exports = tableExports({
@@ -554,6 +569,7 @@ export default function PartyList({ kind, navigate }) {
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
             Show inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
           </label>
+          {customOrder && <ListViewControls ctl={listOrder} label="customers" />}
           <span className="ml-auto text-sm text-qb-ink-muted">
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
@@ -561,6 +577,7 @@ export default function PartyList({ kind, navigate }) {
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {charging && <StatementCharges customer={charging} onClose={() => setCharging(null)} />}
+        {envelopePortal}
         {error && <Notice kind="error" text={error} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
           <form onSubmit={add}>
@@ -601,17 +618,19 @@ export default function PartyList({ kind, navigate }) {
                     </td>
                   </tr>
                 )}
-                {sorter.sorted.map((p) => (
+                {shownParties.map(({ row: p, ...item }) => (
                   <tr
                     key={p.id}
+                    {...listOrder.rowProps(p.id)}
                     className={`qb-grid-row cursor-pointer ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => showTransactions(p.id)}
                     onDoubleClick={() => openRecord(p.id)}
                     title="Click to see transactions, double-click to edit"
                   >
-                    <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (p.name.split(':').length - 1) * 16 }} title={p.name}>
-                      {p.name.split(':').at(-1)}
+                    <td className={`qb-grid-cell ${p.name.includes(':') ? '' : 'font-semibold'}`} style={{ paddingLeft: 6 + (flatNames ? 0 : item.depth) * 16 }} title={p.name}>
+                      {customOrder && <TreeToggle ctl={listOrder} item={{ id: p.id, ...item }} />}
+                      {flatNames ? p.name : p.name.split(':').at(-1)}
                       {p.name.includes(':') && <span className="ml-1 text-2xs uppercase tracking-wide text-qb-ink-muted">Job</span>}
                       {p.jobStatus && <span className="ml-1 text-2xs text-qb-info">· {jobStatus[p.jobStatus]}</span>}
                       {!p.isActive && <span className="ml-1 text-2xs font-normal uppercase tracking-wide">Inactive</span>}
@@ -628,6 +647,7 @@ export default function PartyList({ kind, navigate }) {
                           { label: 'Duplicate…', onSelect: () => duplicate(p) },
                           { label: 'Show transactions', onSelect: () => showTransactions(p.id) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
+                          { label: 'Print Envelope…', onSelect: () => printEnvelope({ kind, id: p.id }) },
                           ...(kind === 'customer'
                             ? [
                                 { label: 'Add job…', onSelect: () => addJob(p) },

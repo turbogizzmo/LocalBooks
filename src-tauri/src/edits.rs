@@ -235,6 +235,7 @@ pub async fn replace_journal_entry_flagged(pool: &SqlitePool, journal_entry_id: 
                 AND NOT EXISTS (SELECT 1 FROM vendor_credit_refunds WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM sales_tax_payments WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM bounced_checks WHERE journal_entry_id = e.id)
+                AND NOT EXISTS (SELECT 1 FROM bounced_sales_receipts WHERE journal_entry_id = e.id)
                 AND NOT EXISTS (SELECT 1 FROM fx_revaluations WHERE journal_entry_id = e.id OR reversal_entry_id = e.id)
              , e.is_adjusting FROM journal_entries e WHERE e.id = ?1",
         )

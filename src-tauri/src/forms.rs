@@ -163,6 +163,8 @@ pub struct FormTemplate {
     pub show_payments: bool,
     /// Statements: the aging summary under the amount due.
     pub show_aging: bool,
+    /// Statements: a P.O. No. column with the customer's purchase order number on each invoice and credit.
+    pub show_statement_po: bool,
     /// Sales forms: the rep, when the document has one.
     pub show_sales_rep: bool,
     /// Sales forms: the ship date, shipping method and FOB point, when the document has them.
@@ -212,6 +214,7 @@ impl Default for FormTemplate {
             amount_label: "Amount".into(),
             show_payments: true,
             show_aging: true,
+            show_statement_po: false,
             show_sales_rep: true,
             show_shipping: true,
             show_ship_to: true,
@@ -550,8 +553,8 @@ pub struct TotalRow {
 /// A statement's transactions and aging, already formatted.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatementTable {
-    /// Date, transaction, details, amount, running balance.
-    pub rows: Vec<[String; 5]>,
+    /// Date, transaction, P.O. number, details, amount, running balance.
+    pub rows: Vec<[String; 6]>,
     /// Current, 1–30, 31–60, 61–90 and over 90 days past due.
     pub aging: [String; 5],
 }
@@ -965,7 +968,7 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
     let money = |cents: i64| format_money(cents, None, symbol);
     let cust = customer(pool, Some(customer_id), &s.customer_name).await?;
     let iso = |d: NaiveDate| d.format("%Y-%m-%d").to_string();
-    let mut rows = vec![[format_date(&iso(period.start_date)), "Balance forward".to_string(), String::new(), String::new(), money(s.opening_balance_cents)]];
+    let mut rows = vec![[format_date(&iso(period.start_date)), "Balance forward".to_string(), String::new(), String::new(), String::new(), money(s.opening_balance_cents)]];
     for r in &s.rows {
         let transaction = match r.number.as_deref().filter(|n| !n.is_empty()) {
             Some(n) => format!("{} #{n}", statement_label(&r.source_type)),
@@ -976,7 +979,7 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
             Some(job) => job.to_string(),
             None => r.memo.clone().unwrap_or_default(),
         };
-        rows.push([format_date(&iso(r.date)), transaction, details, money(r.amount_cents), money(r.balance_cents)]);
+        rows.push([format_date(&iso(r.date)), transaction, r.po_number.clone().unwrap_or_default(), details, money(r.amount_cents), money(r.balance_cents)]);
     }
     let due = money(s.closing_balance_cents);
     let end = format_date(&iso(period.end_date));
@@ -1055,9 +1058,9 @@ pub fn sample_doc(kind: FormKind, symbol: &str) -> FormDoc {
     };
     let statement = (kind == FormKind::Statement).then(|| StatementTable {
         rows: vec![
-            ["10/01/2026".into(), "Balance forward".into(), String::new(), String::new(), money(0)],
-            ["10/01/2026".into(), "Invoice #1001".into(), String::new(), money(total), money(total)],
-            ["10/15/2026".into(), "Payment #2045".into(), String::new(), money(-100_000), money(total - 100_000)],
+            ["10/01/2026".into(), "Balance forward".into(), String::new(), String::new(), String::new(), money(0)],
+            ["10/01/2026".into(), "Invoice #1001".into(), "PO-4471".into(), String::new(), money(total), money(total)],
+            ["10/15/2026".into(), "Payment #2045".into(), String::new(), String::new(), money(-100_000), money(total - 100_000)],
         ],
         aging: [money(total - 100_000), money(0), money(0), money(0), money(0)],
     });
@@ -1450,26 +1453,29 @@ pub fn layout(doc: &FormDoc, company: &Company, tpl: &FormTemplate, logo: Option
     l.y = py.max(my) + if tpl.layout == FormLayout::Compact { 16.0 } else { 24.0 };
 
     if let Some(statement) = &doc.statement {
-        // Statement transactions: date, transaction, details, amount and running balance.
+        // Statement transactions: date, transaction, P.O. No. (when the template shows it), details,
+        // amount and running balance.
         let mut x = MARGIN;
         let mut col = |w: f32, label: &str, align: Align| {
             let c = Col { x, w, label: label.into(), align };
             x += w;
             c
         };
-        let details_w = right - MARGIN - 66.0 - 116.0 - 88.0 - 92.0;
-        let cols = vec![
-            col(66.0, "Date", Align::Left),
-            col(116.0, "Transaction", Align::Left),
-            col(details_w, "Details", Align::Left),
-            col(88.0, &tpl.amount_label, Align::Right),
-            col(92.0, "Balance", Align::Right),
-        ];
+        let po_w = if tpl.show_statement_po { 76.0 } else { 0.0 };
+        let details_w = right - MARGIN - 66.0 - 116.0 - po_w - 88.0 - 92.0;
+        let mut cols = vec![col(66.0, "Date", Align::Left), col(116.0, "Transaction", Align::Left)];
+        if tpl.show_statement_po {
+            cols.push(col(po_w, "P.O. No.", Align::Left));
+        }
+        cols.extend([col(details_w, "Details", Align::Left), col(88.0, &tpl.amount_label, Align::Right), col(92.0, "Balance", Align::Right)]);
         l.ensure(m.header_h + m.leading * 2.0 + m.row_pad, doc);
         table_header(&mut l, &cols, m);
         for (i, row) in statement.rows.iter().enumerate() {
             let cells: Vec<Vec<String>> = row
                 .iter()
+                .enumerate()
+                .filter(|(at, _)| *at != 2 || tpl.show_statement_po)
+                .map(|(_, text)| text)
                 .zip(&cols)
                 .map(|(text, c)| if c.align == Align::Left { l.wrap(text, false, m.body, c.w - 2.0 * CELL_PAD) } else { vec![text.clone()] })
                 .collect();
@@ -1658,7 +1664,7 @@ fn decode_logo(data_url: Option<&str>) -> Option<PdfImage> {
 
 /// The document to print: `document_id` is the invoice, estimate or sales receipt, or for a
 /// statement the customer (with `period`, last month by default). Without one, the sample.
-async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, symbol: &str) -> Result<FormDoc, String> {
+pub(crate) async fn document(pool: &SqlitePool, kind: FormKind, document_id: Option<i64>, period: Option<Period>, symbol: &str) -> Result<FormDoc, String> {
     match (kind, document_id) {
         (_, None) => Ok(sample_doc(kind, symbol)),
         (FormKind::Invoice, Some(id)) => invoice_doc(pool, id, symbol).await,

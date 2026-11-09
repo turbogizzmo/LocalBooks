@@ -59,6 +59,9 @@ const FILE: &[Entry] = &[
         &[page("Invoices…", "sales/print-invoices"), page("Checks…", "expenses/print-checks"), Entry::Sep, page("Statements…", "sales/statements")],
     ),
     page("Send Forms…", "sales/send-forms"),
+    // Prints what is showing: the open form, else a register's rows for its dates (printCommand.js),
+    // else the window. No accelerator: the page handles Ctrl+P itself (formKeys.js), as for Edit.
+    Entry::Cmd { label: "Print… (Ctrl+P)", command: "print", accel: None },
     Entry::Sep,
 ];
 

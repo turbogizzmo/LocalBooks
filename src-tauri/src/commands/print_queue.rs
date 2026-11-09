@@ -5,6 +5,7 @@ use crate::print_queue::{self, Form, PrintedCheck};
 
 handlers![
     list_checks_to_print,
+    list_bill_checks_to_print,
     list_invoices_to_print,
     set_to_be_printed,
     mark_checks_printed,
@@ -15,6 +16,11 @@ handlers![
 #[tauri::command]
 pub async fn list_checks_to_print(db: State<'_, Db>, account_id: Option<i64>) -> Result<Vec<ExpenseView>, String> {
     print_queue::queued_checks(&db.pool().await, account_id).await
+}
+
+#[tauri::command]
+pub async fn list_bill_checks_to_print(db: State<'_, Db>, account_id: Option<i64>) -> Result<Vec<print_queue::BillCheckToPrint>, String> {
+    print_queue::queued_bill_checks(&db.pool().await, account_id).await
 }
 
 #[tauri::command]

@@ -32,6 +32,8 @@ pub struct StatementRow {
     pub date: NaiveDate,
     pub source_type: String,
     pub number: Option<String>,
+    /// The customer's P.O. number on an invoice or credit memo.
+    pub po_number: Option<String>,
     pub party_name: String,
     pub memo: Option<String>,
     /// Charges positive, payments and credits negative.
@@ -88,6 +90,10 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
                     WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = l.source_id)
                     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = l.source_id)
                 END AS number,
+                CASE l.source_type
+                    WHEN 'INVOICE' THEN (SELECT po_number FROM invoices WHERE id = l.source_id)
+                    WHEN 'CREDIT_MEMO' THEN (SELECT po_number FROM credit_memos WHERE id = l.source_id)
+                END AS po_number,
                 CASE WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id)
                      THEN (SELECT description FROM invoice_items WHERE invoice_id = l.source_id ORDER BY line_number LIMIT 1)
                      ELSE l.memo END AS memo,
@@ -802,7 +808,7 @@ pub struct AttachmentView {
 
 pub const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
 
-fn media_type(name: &str) -> &'static str {
+pub(crate) fn media_type(name: &str) -> &'static str {
     match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
         Some("pdf") => "application/pdf",
         Some("png") => "image/png",

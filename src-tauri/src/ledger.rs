@@ -682,6 +682,9 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
             "SELECT 'VOID_BOUNCED: this payment is recorded as a bounced check; void the bounced check first'
              FROM bounced_checks WHERE ?2 = 'RECEIVE_PAYMENT' AND invoice_payment_id = ?1 AND is_voided = 0
              UNION ALL
+             SELECT 'VOID_BOUNCED: this sales receipt is recorded as a bounced check; void the bounced check first'
+             FROM bounced_sales_receipts WHERE ?2 = 'SALES_RECEIPT' AND sales_receipt_id = ?1 AND is_voided = 0
+             UNION ALL
              SELECT 'VOID_DEPOSITED: this payment is included in a bank deposit; void the deposit first'
              FROM deposit_lines
              WHERE is_voided = 0 AND (CASE ?2 WHEN 'RECEIVE_PAYMENT' THEN invoice_payment_id ELSE sales_receipt_id END) = ?1
@@ -707,6 +710,10 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
             "SELECT 'VOID_BOUNCED: a check in this deposit is recorded as bounced; void the bounced check first'
              FROM deposit_lines d JOIN bounced_checks b
                ON b.is_voided = 0 AND (b.deposit_line_id = d.id OR b.invoice_payment_id = d.invoice_payment_id)
+             WHERE d.deposit_id = ?1 AND d.is_voided = 0
+             UNION ALL
+             SELECT 'VOID_BOUNCED: a check in this deposit is recorded as bounced; void the bounced check first'
+             FROM deposit_lines d JOIN bounced_sales_receipts b ON b.is_voided = 0 AND b.sales_receipt_id = d.sales_receipt_id
              WHERE d.deposit_id = ?1 AND d.is_voided = 0
              LIMIT 1",
         )
@@ -844,6 +851,24 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
             recompute_paid(tx, "bills", "bill_payments", "bill_id", bill_id).await?;
         }
         "JOURNAL" => {
+            // A bounced sales receipt: its charge-back invoice is voided first (Record Bounced Check
+            // does both), so the customer isn't left owing the money twice.
+            let charge_live: Option<bool> = sqlx::query_scalar(
+                "SELECT i.is_voided = 0 FROM bounced_sales_receipts b JOIN invoices i ON i.id = b.charge_invoice_id
+                 WHERE b.journal_entry_id = ?1 AND b.is_voided = 0",
+            )
+            .bind(journal_entry_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(db_err)?;
+            if charge_live == Some(true) {
+                return Err("VOID_BOUNCE_CHARGE: void this bounced sales receipt from Customers › Record Bounced Check, which also voids the invoice that charged it back".into());
+            }
+            sqlx::query("UPDATE bounced_sales_receipts SET is_voided = 1 WHERE journal_entry_id = ?1 AND is_voided = 0")
+                .bind(journal_entry_id)
+                .execute(&mut **tx)
+                .await
+                .map_err(db_err)?;
             // A bounced check: its payment counts toward the invoice again.
             let bounced: Option<Option<i64>> = sqlx::query_scalar(
                 "UPDATE bounced_checks SET is_voided = 1 WHERE journal_entry_id = ?1 AND is_voided = 0 RETURNING invoice_id",

@@ -137,7 +137,7 @@ async fn printed_checks_take_the_print_date() {
     let acme = crate::sales::create_customer(&pool, "Acme", None).await.unwrap().id;
     crate::preferences::set(&pool, "expenses_billable_default", "true").await.unwrap();
     let queued = crate::print_queue::post_expense(&pool, check(checking, supplies, rent, acme, None), true).await.unwrap();
-    let printed = |id: i64, number: &str| vec![crate::print_queue::PrintedCheck { expense_id: id, check_number: number.into() }];
+    let printed = |id: i64, number: &str| vec![crate::print_queue::PrintedCheck { expense_id: id, check_number: number.into(), bill_check_id: None }];
 
     // Off: the check keeps its date.
     crate::print_queue::mark_checks_printed_on(&pool, printed(queued.id, "501"), d(9)).await.unwrap();

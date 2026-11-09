@@ -95,7 +95,7 @@ pub async fn list_completed(pool: &SqlitePool) -> Result<Vec<CompletedReconcilia
         "SELECT r.id, r.account_id, a.full_name AS account_name, r.statement_end_date, r.statement_ending_balance_cents, r.locked_at,
                 EXISTS (SELECT 1 FROM reconciliation_snapshots s WHERE s.reconciliation_id = r.id) AS has_snapshot
          FROM reconciliations r JOIN v_chart_of_accounts a ON a.id = r.account_id
-         WHERE r.is_locked = 1
+         WHERE r.is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)
          ORDER BY a.full_name COLLATE NOCASE, r.statement_end_date DESC",
     )
     .fetch_all(pool)
@@ -120,7 +120,7 @@ async fn rec_header(pool: &SqlitePool, reconciliation_id: i64) -> Result<RecHead
         "SELECT r.id, r.account_id, a.full_name AS account_name, a.account_type, a.normal_balance = 'DEBIT' AS debit_normal,
                 r.statement_end_date, r.statement_ending_balance_cents, r.beginning_balance_cents
          FROM reconciliations r JOIN v_chart_of_accounts a ON a.id = r.account_id
-         WHERE r.id = ?1 AND r.is_locked = 1",
+         WHERE r.id = ?1 AND r.is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id)",
     )
     .bind(reconciliation_id)
     .fetch_optional(pool)
@@ -393,7 +393,7 @@ pub async fn discrepancy(pool: &SqlitePool, account_id: Option<i64>, today: Naiv
                           JOIN chart_of_accounts a ON a.id = l.account_id JOIN account_types t ON t.code = a.account_type
                           WHERE l.reconciliation_id = r.id), 0) AS cleared_now_cents
          FROM reconciliations r JOIN v_chart_of_accounts ca ON ca.id = r.account_id
-         WHERE r.is_locked = 1 AND (?1 IS NULL OR r.account_id = ?1)
+         WHERE r.is_locked = 1 AND NOT EXISTS (SELECT 1 FROM reconciliation_undos u WHERE u.reconciliation_id = r.id) AND (?1 IS NULL OR r.account_id = ?1)
          ORDER BY ca.full_name COLLATE NOCASE, r.account_id, r.statement_end_date"
     ))
     .bind(account_id)
@@ -1166,7 +1166,7 @@ pub async fn collections(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accounta
                    COALESCE(i.home_total_cents, i.total_cents)
                    - COALESCE((SELECT SUM(COALESCE(p.ar_relief_cents, p.amount_cents)) FROM invoice_payments p
                                WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)
-                   + COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date <= ?1), 0)
+                   + COALESCE((SELECT SUM(COALESCE((SELECT p.ar_relief_cents FROM invoice_payments p WHERE p.id = b.invoice_payment_id), b.amount_cents)) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date <= ?1), 0)
                    - COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date <= ?1), 0)
                    AS open_cents
             FROM invoices i JOIN customers c ON c.id = i.customer_id

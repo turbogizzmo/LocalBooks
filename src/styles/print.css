@@ -4,7 +4,7 @@
  * Printable documents render into #print-root (a sibling of the app's #root). On screen it is
  * hidden; in print, whenever it has content, it is the only thing printed, so multi-page documents
  * paginate naturally instead of fighting the app's fixed-height, scrolling layout. Printing a screen
- * that has no document (Cmd+P on a register) falls back to the app itself with .no-print chrome
+ * that has no document (File › Print on a screen with no printout of its own) falls back to the app itself with .no-print chrome
  * removed and scroll areas expanded.
  */
 
@@ -382,4 +382,12 @@
 
 .check-muted {
   color: #6b6c72;
+}
+
+/* A printed register: many columns, so smaller type. */
+.doc-register {
+  font-size: 8pt;
+}
+.doc-register td {
+  vertical-align: top;
 }
