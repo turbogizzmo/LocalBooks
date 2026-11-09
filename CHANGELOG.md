@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Fix: the desktop is saved as it is.** Closing the company or quitting right after opening,
+  closing or moving a window now saves that change too; before, it could reopen as it was a moment
+  earlier.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
