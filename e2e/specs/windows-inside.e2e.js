@@ -36,14 +36,26 @@ describe('Windows inside LocalBooks', () => {
     await goTo('Journal Entries');
     await expect($(win('Invoices'))).toExist();
     await expect($(win('Journal Entries'))).toBeDisplayed();
-    expect(await activeTitle()).toBe('Journal Entries');
+    await browser.waitUntil(async () => (await activeTitle()) === 'Journal Entries', { timeoutMsg: 'Journal Entries is not the active window' });
   });
 
-  it('moves to the other window with Ctrl+F6, and back', async () => {
-    await browser.keys(['Control', 'F6']);
-    await browser.waitUntil(async () => (await activeTitle()) === 'Invoices', { timeoutMsg: 'Ctrl+F6 did not move to Invoices' });
-    await browser.keys(['Control', 'F6']);
-    await browser.waitUntil(async () => (await activeTitle()) === 'Journal Entries', { timeoutMsg: 'Ctrl+F6 did not move back to Journal Entries' });
+  it('moves through the windows with Ctrl+F6, and back with Ctrl+Shift+F6', async () => {
+    // The company may also open on a window of its own (Home), so Ctrl+F6 can pass through it on
+    // the way: each press moves to another window, and Invoices comes round within a few.
+    let seen = await activeTitle();
+    for (let i = 0; i < 4 && seen !== 'Invoices'; i += 1) {
+      const before = seen;
+      await browser.keys(['Control', 'F6']);
+      await browser.waitUntil(async () => (seen = await activeTitle()) !== before, { timeoutMsg: `Ctrl+F6 did not move on from ${before}` });
+    }
+    expect(seen).toBe('Invoices');
+    // With Shift, the window before: back to Journal Entries, or the one in between first.
+    for (let i = 0; i < 4 && seen !== 'Journal Entries'; i += 1) {
+      const before = seen;
+      await browser.keys(['Control', 'Shift', 'F6']);
+      await browser.waitUntil(async () => (seen = await activeTitle()) !== before, { timeoutMsg: `Ctrl+Shift+F6 did not move on from ${before}` });
+    }
+    expect(seen).toBe('Journal Entries');
   });
 
   it('tiles the windows side by side', async () => {
@@ -62,6 +74,7 @@ describe('Windows inside LocalBooks', () => {
 
   it('asks before closing a window with unsaved entries', async () => {
     const journal = win('Journal Entries');
+    await click(button('New journal entry', journal));
     await type(field('Memo', journal), 'Accrue December rent');
     const ask = '//*[@role="alertdialog"][contains(normalize-space(), "has entries that are not saved")]';
     await click($('//button[@aria-label="Close Journal Entries"]'));
