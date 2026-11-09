@@ -51,13 +51,18 @@ export default function BankRules({ accounts, onClose }) {
   const [editing, setEditing] = useState(null); // a rule being edited or added
   const [notice, setNotice] = useState(null);
   const needle = query.trim().toLowerCase();
+  // A new search drops an edit in progress, so its Save/Cancel row never vanishes behind the filter.
+  const search = (text) => {
+    setQuery(text);
+    setEditing(null);
+  };
   const kindLabel = (k) => MATCH_KINDS.find((m) => m.value === k)?.label ?? k;
   const shownRenames = useMemo(
     () => (renames.data ?? []).filter((r) => !needle || r.pattern.toLowerCase().includes(needle) || r.payeeName.toLowerCase().includes(needle)),
     [renames.data, needle],
   );
   const shownCategories = useMemo(
-    () => (categories.data ?? []).filter((r) => !needle || r.words.toLowerCase().includes(needle) || accountLabel(accounts, r.accountId).toLowerCase().includes(needle)),
+    () => (categories.data ?? []).filter((r) => !needle || r.words.toLowerCase().includes(needle) || (accountLabel(accounts, r.accountId) ?? '').toLowerCase().includes(needle)),
     [categories.data, needle, accounts],
   );
   const act = async (work, text) => {
@@ -89,7 +94,7 @@ export default function BankRules({ accounts, onClose }) {
               </button>
             ))}
           </div>
-          <input className="qb-input ml-auto w-[200px]" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search rules" />
+          <input className="qb-input ml-auto w-[200px]" placeholder="Search" value={query} onChange={(e) => search(e.target.value)} aria-label="Search rules" />
         </div>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {(renames.error || categories.error) && <Notice kind="error" text={renames.error ?? categories.error} />}

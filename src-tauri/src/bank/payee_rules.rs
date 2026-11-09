@@ -40,9 +40,15 @@ impl PayeeRule {
     }
 }
 
-/// The name the rules give a description: the matching rule with the longest text.
+/// The name the rules give a description: the matching rule with the longest text; between rules
+/// of the same length, the oldest (lowest id).
 pub fn rename(rules: &[PayeeRule], description: &str) -> Option<String> {
-    rules.iter().filter(|r| r.applies_to(description)).max_by_key(|r| (squeeze(&r.pattern).len(), -r.id)).map(|r| r.payee_name.clone())
+    rules
+        .iter()
+        .filter(|r| r.applies_to(description))
+        .map(|r| (squeeze(&r.pattern).len(), r))
+        .max_by(|(a_len, a), (b_len, b)| a_len.cmp(b_len).then_with(|| b.id.cmp(&a.id)))
+        .map(|(_, r)| r.payee_name.clone())
 }
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<PayeeRule>, String> {

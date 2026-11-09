@@ -181,8 +181,10 @@ export default function BankFeed({ accounts }) {
       await api.approveBankTransaction(selected.id, categoryId, classId, payee.trim() || null);
       setFlashId(selected.id);
       // A payee the user typed in place of the suggested one: offer a renaming rule for next time.
-      const typed = (payees[selected.id] ?? '').trim();
-      if (selected.amountCents < 0 && typed && typed !== (selected.payee ?? '')) {
+      // Rules ignore capitals and spacing, so a change of only those offers nothing.
+      const squeeze = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+      const typed = (payees[selected.id] ?? '').trim().replace(/\s+/g, ' ');
+      if (selected.amountCents < 0 && typed && squeeze(typed) !== squeeze(selected.payee ?? '')) {
         setOffer({ id: 0, matchKind: 'BEGINS', pattern: suggestedPattern(selected.description), payeeName: typed, description: selected.description });
       }
       setNotice({
