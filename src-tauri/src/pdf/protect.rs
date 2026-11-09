@@ -69,6 +69,8 @@ fn hex(bytes: &[u8]) -> String {
 /// One file's encryption: its key and the dictionary a reader needs to open it.
 pub struct Protection {
     file_key: [u8; 32],
+    /// Counts IVs made without the system's generator (see `encrypt`).
+    fallback: std::cell::Cell<u64>,
     /// The `/Encrypt` dictionary.
     pub dictionary: String,
     /// The file identifier for the trailer's `/ID`.
@@ -82,7 +84,9 @@ impl Protection {
             return Err("PDF_PASSWORD_EMPTY: enter a password for the PDF".into());
         }
         if password.len() > MAX_PASSWORD_BYTES {
-            return Err(format!("PDF_PASSWORD_TOO_LONG: a PDF password can be at most {MAX_PASSWORD_BYTES} characters"));
+            return Err(format!(
+                "PDF_PASSWORD_TOO_LONG: a PDF password can be at most {MAX_PASSWORD_BYTES} bytes: {MAX_PASSWORD_BYTES} plain letters and digits, fewer accented or non-Latin characters"
+            ));
         }
         Ok(())
     }
@@ -125,15 +129,18 @@ impl Protection {
             hex(&block),
         );
         let id = hex(&random::<16>()?);
-        Ok(Protection { file_key, dictionary, id })
+        Ok(Protection { file_key, fallback: std::cell::Cell::new(0), dictionary, id })
     }
 
     /// A stream's or string's bytes, encrypted: a random IV, then AES-256-CBC with PKCS#7 padding.
     pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
         let iv: [u8; 16] = random().unwrap_or_else(|_| {
-            // The IV only has to differ between strings; fall back to one derived from the data.
+            // Should the system's generator fail mid-file, each IV must still be unpredictable and
+            // never repeat: hash the secret file key with a count that rises on every call.
+            let n = self.fallback.get().wrapping_add(1);
+            self.fallback.set(n);
             let mut iv = [0u8; 16];
-            iv.copy_from_slice(&Sha256::new().chain_update(self.file_key).chain_update(data).finalize()[..16]);
+            iv.copy_from_slice(&Sha256::new().chain_update(self.file_key).chain_update(n.to_le_bytes()).finalize()[..16]);
             iv
         });
         let mut out = iv.to_vec();
@@ -153,17 +160,25 @@ mod tests {
 
     #[test]
     fn the_password_hash_takes_at_least_64_rounds_and_is_repeatable() {
-        let a = hash(b"secret", b"12345678", &[]);
-        assert_eq!(a, hash(b"secret", b"12345678", &[]));
-        assert_ne!(a, hash(b"secret", b"12345679", &[]));
-        assert_ne!(a, hash(b"Secret", b"12345678", &[]));
+        // Made up at run time: no fixed password or salt sits in the source.
+        let (password, salt): ([u8; 12], [u8; 8]) = (random().unwrap(), random().unwrap());
+        let a = hash(&password, &salt, &[]);
+        assert_eq!(a, hash(&password, &salt, &[]));
+        let mut other_salt = salt;
+        other_salt[0] ^= 1;
+        assert_ne!(a, hash(&password, &other_salt, &[]));
+        let mut other_password = password;
+        other_password[0] ^= 1;
+        assert_ne!(a, hash(&other_password, &salt, &[]));
     }
 
     #[test]
     fn the_password_must_be_given_and_not_too_long() {
         assert!(Protection::new("").err().unwrap().starts_with("PDF_PASSWORD_EMPTY"));
-        assert!(Protection::new(&"x".repeat(128)).err().unwrap().starts_with("PDF_PASSWORD_TOO_LONG"));
-        let p = Protection::new(&"x".repeat(127)).unwrap();
+        // Letters made up at run time, 128 then 127 of them.
+        let letters: String = random::<128>().unwrap().iter().map(|b| char::from(b'a' + b % 26)).collect();
+        assert!(Protection::new(&letters).err().unwrap().starts_with("PDF_PASSWORD_TOO_LONG"));
+        let p = Protection::new(&letters[..127]).unwrap();
         assert!(p.dictionary.contains("/V 5 /R 6") && p.dictionary.contains("/AESV3"));
         // Each string gets its own IV.
         assert_ne!(p.encrypt(b"same"), p.encrypt(b"same"));

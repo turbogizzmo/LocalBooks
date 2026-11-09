@@ -166,7 +166,7 @@ function ScheduleDialog({ schedule, onClose, onSaved }) {
           )}
           <label className="flex items-center gap-2">
             <span className="qb-label">As</span>
-            <select className="qb-input w-[160px]" value={draft.format} onChange={(e) => set('format')(e.target.value)}>
+            <select className="qb-input w-[160px]" value={draft.format} onChange={(e) => setDraft((d) => ({ ...d, format: e.target.value, ...(e.target.value === 'PDF' ? {} : { protectPdf: false, pdfPassword: null }) }))}>
               <option value="PDF">PDF</option>
               <option value="XLSX">Excel spreadsheet</option>
             </select>

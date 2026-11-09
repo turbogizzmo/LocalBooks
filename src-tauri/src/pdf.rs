@@ -564,7 +564,8 @@ fn write(pages: &[Page], image: Option<&PdfImage>, title: &str, protection: Opti
 
     w.object(pages_id, &format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), kids.len()));
     w.object(catalog, &format!("<< /Type /Catalog /Pages {pages_id} 0 R >>"));
-    let producer = string_object(b"LocalBooks", protection);
+    // Unprotected files keep the plain `(LocalBooks)` they always had.
+    let producer = protection.map_or_else(|| "(LocalBooks)".to_string(), |p| p.string(b"LocalBooks"));
     w.object(info, &format!("<< /Title {} /Producer {producer} /Creator {producer} >>", string_object(&info_bytes(title), protection)));
     let encrypt = protection.map(|p| {
         let id = w.reserve();
