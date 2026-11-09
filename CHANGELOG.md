@@ -47,6 +47,9 @@ people using LocalBooks.
   journal entries have **Print ▾ › Save as PDF…**, and **Email** sends the voucher's PDF to the
   vendor or customer named on it, through your mail app or LocalBooks' email server, as invoices
   are sent.
+- **A report center that's easier to search.** Type to find a report by name or by what it shows,
+  star reports into Favorites, see your Recent reports, read a line about each report, and choose
+  the dates reports open on before you run them.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
