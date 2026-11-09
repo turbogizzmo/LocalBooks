@@ -5,6 +5,8 @@ import { findNav, resolveView } from './Sidebar.jsx';
 import { api } from '../lib/api.js';
 import * as cw from '../lib/childWindows.js';
 import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND } from '../lib/windows.js';
+import { useMyPreferences } from '../lib/myPreferences.js';
+import { NORMAL_TEXT_SIZE, textSizeFor, windowKind } from '../lib/textSize.js';
 
 /**
  * Windows inside the LocalBooks window, the way QuickBooks Desktop for Windows shows forms,
@@ -262,6 +264,8 @@ function ChildFrame({ win, name, active, maximized, hidden, z, manager, children
   // While a title bar or edge is dragged, the window follows the pointer; the place is kept on release.
   const [draft, setDraft] = useState(null);
   const drag = useRef(null);
+  // View › Larger Text / Smaller Text: the size kept for this kind of window (textSize.js).
+  const zoom = textSizeFor(useMyPreferences().textSizes, windowKind(win.view));
   const bounds = draft ?? win.bounds;
 
   const begin = (edges) => (e) => {
@@ -304,7 +308,9 @@ function ChildFrame({ win, name, active, maximized, hidden, z, manager, children
           <WindowButtons name={name} onMinimize={() => manager.minimize(win.id)} onMaximize={() => manager.toggleMaximize(win.id)} onClose={() => manager.close(win.id)} light={active} />
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto scrollbar-thin" style={zoom === NORMAL_TEXT_SIZE ? undefined : { zoom: `${zoom}%` }} data-text-size={zoom}>
+        {children}
+      </div>
       {!maximized &&
         RESIZE_EDGES.map(([edges, place]) => (
           <div key={edges} className={`no-print absolute ${place}`} onPointerDown={begin(edges)} onPointerMove={move} onPointerUp={end} onPointerCancel={end} aria-hidden="true" />

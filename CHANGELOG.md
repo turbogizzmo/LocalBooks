@@ -17,6 +17,46 @@ people using LocalBooks.
   receipts, which it charges back to the customer on a new invoice, and payments in another
   currency, which bounce at the rates they were recorded at (the exchange gain or loss they
   realized is reversed).
+- **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
+  quantity box and a small tape shows each number and the running total; Enter puts the answer in
+  the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
+- **Larger or smaller text.** A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or
+  Cmd/Ctrl + and − change the text size of lists, registers, forms or reports, each kind on its
+  own, and LocalBooks remembers it. An account register can also be given a color.
+- **Sales lines in the familiar order.** On invoices, sales receipts, estimates and credit memos
+  the line columns now run Item, Description, Qty, Rate, Class, then the income account (which the
+  item fills in), Amount and Tax.
+- **Receive Payments shows its totals.** Under the open invoices, a Totals row and a summary of
+  the amount due, applied, discounts applied and what stays open; an amount received that doesn't
+  match what's applied shows as unapplied before you save.
+- **Ending balance and discount date on forms.** Write Checks, card charges and credits, Make
+  Deposits and Pay Bills show the chosen account's ending balance beside the account box, and
+  Enter Bills shows a **Discount date** next to the due date when the terms offer an early-payment
+  discount.
+- **The menu bar reaches more screens.** Lists › Currency List, Company › Email Setup, AI Access
+  (MCP) and Audit Log, Customers › Invoice for Time & Expenses, Reports › Memorized Reports ›
+  Memorized Report List, and Reports › Transaction History / Transaction Journal for the
+  transaction open on a form.
+- **Transaction History and Journal on forms.** A saved invoice, bill, check, expense, journal
+  entry, sales receipt, credit, deposit or transfer has **History** and **Journal** on its toolbar,
+  with **Ctrl+H** and **Ctrl+Y**, as registers already did; in the journal they act on the entry
+  you clicked.
+- **Duplicate a transaction.** On a saved invoice, bill, check, expense, card credit or journal
+  entry, **Duplicate** on the toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or on its
+  row in the list, starts a new unsaved copy dated today: an invoice or journal entry gets the next
+  number when saved, a check the next check number, and a bill keeps its terms with its number left
+  blank. On Windows and Linux, Ctrl+O now duplicates and **File › Open or Restore Company…** moves to
+  **Ctrl+Shift+O**; on a Mac ⌘O still opens a company and Control+O duplicates.
+- **More desktop shortcuts.** On forms, **Ctrl+L** opens the list of the box you're in, and
+  **Ctrl+Alt+Y** / **Ctrl+Alt+V** copy a line and paste it above the line you're on (also Edit ›
+  Copy Line and Paste Line). In a register, **Ctrl+E** opens the selected transaction to edit and
+  **Ctrl+G** goes to the register of its other account; on a saved transfer, **Go To Transfer**
+  (Ctrl+G) does the same. Page Up / Page Down, Ctrl+N, Ctrl+P and Ctrl+D now also work on saved
+  sales receipts, estimates, credits, purchase orders, deposits and transfers.
+- **Deposits have a Received From name.** Each **Add funds** line of a bank deposit can name the
+  customer or vendor the money came from, and a name typed in a register's deposit row is matched
+  to your customers and vendors instead of only being kept in the memo. The register shows the
+  name as the payee, and the deposit is listed in that name's transactions and reports by name.
 - **Cash back on deposits.** A bank deposit can keep part of the money as cash: choose the account
   it goes to (such as Petty Cash), a memo and the amount, and the bank gets the rest. The deposit's
   printed voucher shows it.

@@ -36,7 +36,7 @@ pub struct RegisterSplit {
     pub memo: Option<String>,
     #[serde(default)]
     pub class_id: Option<i64>,
-    /// The customer or job a payment or charge is for (job costing); deposits have no place for it.
+    /// The customer or job a payment or charge is for (job costing); a deposit's name is its payee.
     #[serde(default)]
     pub customer_id: Option<i64>,
 }
@@ -69,6 +69,24 @@ fn clean(text: Option<&str>) -> Option<&str> {
     text.map(str::trim).filter(|t| !t.is_empty())
 }
 
+/// The customer, else the vendor, with this name (case aside): a deposit's Received From.
+async fn received_from(pool: &SqlitePool, name: &str) -> Result<(Option<i64>, Option<i64>), String> {
+    let customer: Option<i64> = sqlx::query_scalar("SELECT id FROM customers WHERE name = ?1 COLLATE NOCASE ORDER BY id LIMIT 1")
+        .bind(name)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    if customer.is_some() {
+        return Ok((customer, None));
+    }
+    let vendor: Option<i64> = sqlx::query_scalar("SELECT id FROM vendors WHERE name = ?1 COLLATE NOCASE ORDER BY id LIMIT 1")
+        .bind(name)
+        .fetch_optional(pool)
+        .await
+        .map_err(db_err)?;
+    Ok((None, vendor))
+}
+
 /// Records the register row through the form it stands for.
 pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -> Result<RegisterEntryPosted, String> {
     let account_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
@@ -94,8 +112,14 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
     let memo = clean(input.memo.as_deref());
 
     if kind == "DEPOSIT" {
-        // Deposits have no name of their own: the payee is kept in the memo so it shows in the register.
-        let memo = match (clean(input.payee_name.as_deref()), memo) {
+        // The payee is the deposit's Received From: a customer or vendor of that name. A name that
+        // is on neither list is kept in the memo, so it still shows in the register.
+        let payee = clean(input.payee_name.as_deref());
+        let (customer_id, vendor_id) = match payee {
+            Some(name) => received_from(pool, name).await?,
+            None => (None, None),
+        };
+        let memo = match (payee.filter(|_| customer_id.is_none() && vendor_id.is_none()), memo) {
             (Some(payee), Some(memo)) => Some(format!("{payee} · {memo}")),
             (Some(payee), None) => Some(payee.to_string()),
             (None, memo) => memo.map(str::to_string),
@@ -103,7 +127,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         let other_lines = input
             .lines
             .iter()
-            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id })
+            .map(|l| DepositOtherLine { account_id: l.account_id, amount_cents: l.amount_cents, memo: l.memo.clone(), class_id: l.class_id, customer_id, vendor_id })
             .collect();
         let deposit = DepositInput { bank_account_id: input.account_id, deposit_date: input.entry_date, memo, items: Vec::new(), other_lines, cash_back: None };
         let deposit_id = crate::banking::post_bank_deposit(pool, deposit).await?;
