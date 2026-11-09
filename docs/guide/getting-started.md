@@ -159,6 +159,8 @@ These ask before a transaction is saved. Click **Save anyway** to record it as y
 |---|---|---|
 | **Checking** | A check number already used by another check from the same bank account (voided checks don't count) | On |
 | **Bills** | A bill number already used by another bill from the same vendor | On |
+| **Bills** | A new check or expense to a vendor that has unpaid bills: it doesn't pay them, so use **Pay Bills** for a bill | On |
+| **Sales & Customers** | A new sales receipt from a customer (or job) that has open invoices: it doesn't pay them, so use **Receive Payments** for an invoice | On |
 | **Accounting** | A date more than **N** days before today (0 turns it off) | 90 days |
 | **Accounting** | A date more than **N** days after today (0 turns it off) | 30 days |
 | **Accounting** | A transaction that posts to Retained Earnings, which LocalBooks updates itself at year end | On |
