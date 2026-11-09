@@ -6,7 +6,7 @@ import Notice from './Notice.jsx';
 import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { useDirtySince, useOpenFromList, WindowManagerContext } from '../lib/windows.js';
 import { reportShortcut, transactionJournal } from '../lib/quickReport.js';
-import { useVoucherPrinter } from './VoucherPrint.jsx';
+import { useVoucherActions } from './VoucherPrint.jsx';
 import { byDateThenNumber, stepButtons } from '../lib/formStep.js';
 import { SaveButtons, useFormFlow, useLineCommands } from '../lib/formFlow.jsx';
 import { pasteLineAt } from '../lib/formKeys.js';
@@ -47,7 +47,8 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [showAttachments, setShowAttachments] = useState(false);
-  const [voucherPortal, printVoucher] = useVoucherPrinter((n) => setError(n.text));
+  // Print ▾ (Print…, Save as PDF…) and Email for the saved voucher; errors show on the form.
+  const [voucherElements, voucherItems] = useVoucherActions((n) => setError(n.kind === 'error' ? n.text : null));
   // Closing the window (or stepping to another entry) asks first while there are entries not saved.
   const dirty = useDirtySince('journal', { date, memo, adjusting, rows: rows.map((r) => [r.accountId, r.debit, r.credit, r.memo]) }, Boolean(copyOf));
   const dateRef = useRef(null);
@@ -169,15 +170,12 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
             },
           }),
           [
-            {
-              id: 'print',
-              label: 'Print',
-              icon: 'Print',
-              hint: editing ? 'Print this journal entry' : 'Save the entry first, then print it',
-              disabled: !editing,
-              onClick: () =>
-                printVoucher({ entryId: editing.entry.id, title: 'Journal Entry', number: String(editing.entry.entryNumber), date: editing.entry.entryDate, memo: editing.entry.memo, voided: editing.entry.isVoided }),
-            },
+            ...voucherItems(
+              editing
+                ? { entryId: editing.entry.id, title: 'Journal Entry', number: String(editing.entry.entryNumber), date: editing.entry.entryDate, memo: editing.entry.memo, voided: editing.entry.isVoided }
+                : null,
+              { hint: 'Save the entry first, then print it' },
+            ),
             {
               id: 'attach',
               label: 'Attach File',
@@ -194,7 +192,7 @@ function JournalForm({ accounts, onPosted, onCancel, onNew, editing = null, copy
           reports.buttons({ journalEntryId: editing?.entry.id, label: editing ? `Journal Entry #${editing.entry.entryNumber}` : '' }),
         ]}
       />
-      {voucherPortal}
+      {voucherElements}
       {reports.panel}
       {showAttachments && editing && (
         <div className="border-b border-qb-border bg-qb-canvas">

@@ -40,6 +40,8 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 zeroize = "1"
+# Save All Attachments writes one zip file (attachment_export.rs); tests also read xlsx and zip files.
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_NetworkManagement_WNet", "Win32_System_LibraryLoader", "Win32_System_Mapi"] }
@@ -55,6 +57,5 @@ lto = true
 
 [dev-dependencies]
 calamine = { version = "0.38", features = ["dates"] }
-zip = { version = "9", default-features = false, features = ["deflate"] }
 insta = "1"
 proptest = { version = "1", default-features = false, features = ["std"] }

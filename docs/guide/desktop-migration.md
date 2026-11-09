@@ -419,7 +419,10 @@ installed? Export from my installed QuickBooks** below the file box instead: see
      credit memos, sales receipts, payments, deposits, bills, bill payments, checks, card charges, card credits,
      transfers, estimates and purchase orders, so open invoices and bills, customer and vendor
      balances, and A/R and A/P aging carry over. Anything that can't be a document posts as a
-     journal entry and is listed under **not brought in as LocalBooks documents**.
+     journal entry and is listed under **not brought in as LocalBooks documents**. A deposit that
+     moved payments out of Undeposited Funds into an account that isn't a bank (receipts written
+     off to an expense, say) comes in as a transfer out of Undeposited Funds: its payments no longer
+     wait to be deposited, and voiding the transfer puts them back.
    - **Journal import** turns every transaction into one journal entry. Account balances are the
      same, but invoices and payments aren't recreated.
 2. Click **Bring in … transactions…** (Full) or **Post … entries…** (Journal), check the count in the
