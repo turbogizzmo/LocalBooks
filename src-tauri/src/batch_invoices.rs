@@ -70,11 +70,9 @@ async fn recipients(pool: &SqlitePool, input: &BatchInput) -> Result<Vec<Recipie
     if let Some(group) = input.group_id {
         ids.extend(crate::customer_groups::get(pool, group).await?.member_ids);
     }
-    for id in &input.customer_ids {
-        if !ids.contains(id) {
-            ids.push(*id);
-        }
-    }
+    // In order, without repeats.
+    let mut seen: std::collections::HashSet<i64> = ids.iter().copied().collect();
+    ids.extend(input.customer_ids.iter().copied().filter(|id| seen.insert(*id)));
     let mut out = Vec::with_capacity(ids.len());
     for id in ids {
         let row: Option<Recipient> = sqlx::query_as(

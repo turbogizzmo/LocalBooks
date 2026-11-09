@@ -1,6 +1,6 @@
 // Customer Center › Groups (customer_groups.rs): groups picked by hand, or kept up to date by
 // rules on the customers' details, each with an optional statement reminder.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import RowMenu from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
@@ -316,12 +316,11 @@ function GroupDialog({ group, customers, names, onClose, onSaved }) {
 export default function CustomerGroups({ navigate, remindGroupId = null }) {
   const groups = useLedgerQuery(api.listCustomerGroups);
   const [batching, setBatching] = useState(null); // { groupId }
-  const [reminding, setReminding] = useState(null); // group id
-  const [askedReminders, setAskedReminders] = useState(null);
-  if (remindGroupId && askedReminders !== remindGroupId) {
-    setAskedReminders(remindGroupId);
-    setReminding(remindGroupId);
-  }
+  // Opened from Reminders: that group's payment reminders open at once.
+  const [reminding, setReminding] = useState(remindGroupId); // group id
+  useEffect(() => {
+    if (remindGroupId) setReminding(remindGroupId);
+  }, [remindGroupId]);
   const customers = useLedgerQuery(api.listCustomers).data ?? [];
   const names = useNames();
   const [editing, setEditing] = useState(null); // { group } (null group = new)

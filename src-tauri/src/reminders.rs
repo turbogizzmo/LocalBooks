@@ -455,7 +455,8 @@ pub struct ReminderItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReminderGroup {
-    /// `OVERDUE_INVOICES`, `BILLS_DUE`, `TODOS`, `RECURRING`, `EMAIL_QUEUE`, `GROUP_STATEMENTS`, `TAX_DATES` or `BACKUP`.
+    /// `OVERDUE_INVOICES`, `BILLS_DUE`, `TODOS`, `RECURRING`, `EMAIL_QUEUE`, `GROUP_STATEMENTS`, `PAYMENT_REMINDERS`,
+    /// `TAX_DATES` or `BACKUP`.
     pub key: &'static str,
     pub label: String,
     /// The items' amounts added up, for groups with amounts.

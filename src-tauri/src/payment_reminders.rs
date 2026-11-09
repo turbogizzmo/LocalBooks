@@ -53,7 +53,7 @@ pub async fn overdue(pool: &SqlitePool, group: &CustomerGroup, as_of: NaiveDate)
 /// later and marks the group's reminder sent on `as_of`. Returns how many were queued.
 pub async fn send(pool: &SqlitePool, group_id: i64, invoice_ids: &[i64], as_of: NaiveDate) -> Result<usize, String> {
     let group = customer_groups::get(pool, group_id).await?;
-    let open: Vec<i64> = overdue(pool, &group, as_of).await?.into_iter().map(|o| o.invoice_id).collect();
+    let open: std::collections::HashSet<i64> = overdue(pool, &group, as_of).await?.into_iter().map(|o| o.invoice_id).collect();
     if let Some(stray) = invoice_ids.iter().find(|id| !open.contains(id)) {
         return Err(format!("REMINDER_NOT_OVERDUE: invoice {stray} is not one of this group's overdue invoices"));
     }
