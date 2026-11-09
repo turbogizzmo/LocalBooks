@@ -268,7 +268,7 @@ pub const MAX_SENT_WITH_FORM_BYTES: i64 = 20 * 1024 * 1024;
 pub type SentFile = (String, Vec<u8>, &'static str);
 
 /// The files marked Send with the form for the form `kind` / `document_id`, oldest first: those on
-/// an invoice's or sales receipt's transaction, an estimate's own, and for a statement the
+/// an invoice's, sales receipt's or credit memo's transaction, an estimate's own, and for a statement the
 /// customer's. Deleted files are left out. Refused when they add up to more than
 /// [`MAX_SENT_WITH_FORM_BYTES`].
 pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, document_id: i64) -> Result<Vec<SentFile>, String> {
@@ -281,6 +281,10 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
         FormKind::SalesReceipt => {
             "SELECT a.file_name, a.content FROM attachments a JOIN sales_receipts r ON r.journal_entry_id = a.journal_entry_id
              WHERE r.id = ?1 AND a.send_with_form = 1 AND a.deleted_at IS NULL ORDER BY a.id"
+        }
+        FormKind::CreditMemo => {
+            "SELECT a.file_name, a.content FROM attachments a JOIN credit_memos c ON c.journal_entry_id = a.journal_entry_id
+             WHERE c.id = ?1 AND a.send_with_form = 1 AND a.deleted_at IS NULL ORDER BY a.id"
         }
         FormKind::Estimate => {
             "SELECT file_name, content FROM record_attachments
