@@ -231,6 +231,13 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'amount-arithmetic', area: 'company', views: ['sales/invoices', 'expenses/bills', 'expenses/expenses', 'accounting/journal'],
+    title: 'Do arithmetic in an amount or quantity box',
+    body: 'Type + − * or / in any amount, rate or quantity box (100+25.50*2) and a small tape opens under it with each number and the running total; Enter, or leaving the box, puts the answer in it, and Esc closes the tape. Multiplying and dividing come before adding and subtracting, the answer is rounded once, half away from zero, to the cent (or to four decimals in a quantity box), and numbers in the arithmetic are always taken as typed, even with the decimal point placed automatically.',
+    keywords: 'calculator tape arithmetic add subtract multiply divide plus minus times sum math amount quantity box running total',
+    guide: 'getting-started',
+  },
+  {
     id: 'save-anyway', area: 'company', views: ['settings/preferences', 'expenses/expenses', 'expenses/bills', 'accounting/journal', 'sales/invoices'],
     title: 'Why LocalBooks asks before saving (Save anyway)',
     body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, a posting to Retained Earnings (Accounting), or a new invoice or sales receipt for a customer with overdue invoices (Sales & Customers, off until an Admin turns it on). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',

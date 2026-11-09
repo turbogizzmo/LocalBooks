@@ -195,7 +195,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
               )}
               {withPricing && (
                 <td className="qb-grid-cell-edit">
-                  <input className="num" value={row.qty ?? ''} onChange={(e) => update(row.key, { qty: e.target.value })} inputMode="decimal" aria-invalid={evaluated.priced && evaluated.quantityE4 === null} aria-label={`Quantity ${i + 1}`} />
+                  <input className="num" value={row.qty ?? ''} onChange={(e) => update(row.key, { qty: e.target.value })} inputMode="decimal" data-quantity aria-invalid={evaluated.priced && evaluated.quantityE4 === null} aria-label={`Quantity ${i + 1}`} />
                 </td>
               )}
               {withPricing && (
