@@ -560,6 +560,7 @@ async fn write_ach_payments(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, i
                 payment_date: input.payment_date,
                 amount_cents: bill.amount_cents,
                 reference: Some(format!("ACH {trace}")),
+                to_be_printed: false,
             };
             let payment_id = crate::expenses::write_bill_payment(tx, &payment, "ACH").await?;
             sqlx::query("INSERT INTO ach_entry_payments (bill_payment_id, ach_entry_id) VALUES (?1, ?2)")

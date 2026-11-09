@@ -542,7 +542,7 @@ pub async fn list_all_sales(pool: &SqlitePool) -> Result<Vec<SalesTransaction>, 
          FROM invoices i JOIN v_invoice_balances b ON b.invoice_id = i.id WHERE i.status <> 'DRAFT'
          UNION ALL
          SELECT 'PAYMENT', p.id, i.invoice_number, p.payment_date, i.customer_name,
-                NULL, 0, p.amount_cents - p.discount_cents, 'CLOSED', p.journal_entry_id, p.is_voided, i.currency_code,
+                NULL, 0, p.amount_cents - p.discount_cents - p.foreign_discount_cents, 'CLOSED', p.journal_entry_id, p.is_voided, i.currency_code,
                 COALESCE(p.home_amount_cents, p.amount_cents - p.discount_cents), 0
          FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
          WHERE p.journal_entry_id IS NOT NULL

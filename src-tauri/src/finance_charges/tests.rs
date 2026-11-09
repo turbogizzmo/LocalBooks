@@ -161,7 +161,7 @@ async fn assessing_posts_an_invoice_to_ar_and_income_and_shows_in_aging_and_stat
     let customer_id = fc.customer_id.unwrap();
     let doc = crate::forms::statement_doc(&pool, customer_id, crate::forms::Period { start_date: d(9, 1), end_date: d(10, 31) }, "$").await.unwrap();
     let rows = doc.statement.unwrap().rows;
-    assert!(rows.iter().any(|r| r[1] == format!("Finance Charge #{}", fc.invoice_number) && r[3] == "$15.00"), "{rows:?}");
+    assert!(rows.iter().any(|r| r[1] == format!("Finance Charge #{}", fc.invoice_number) && r[4] == "$15.00"), "{rows:?}");
 }
 
 #[tokio::test]

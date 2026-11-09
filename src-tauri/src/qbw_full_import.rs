@@ -557,8 +557,13 @@ async fn write_payment(
 }
 
 /// A deposit sweeps the imported payments and receipts it was linked to out of Undeposited Funds.
-async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &SourceDocument, books: &Books, written: &Written) -> Result<(i64, usize), String> {
+async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &SourceDocument, books: &Books, written: &Written) -> Result<(i64, usize, &'static str), String> {
     let SourceDocument::Deposit { payments } = doc else { unreachable!() };
+    // Money moved out of Undeposited Funds into an account that isn't a bank (receipts written off
+    // to an expense, say) has no LocalBooks deposit: it posts as a transfer that clears them.
+    if !t.lines.iter().any(|l| l.1 < 0 && matches!(books.kind(l.0), "BANK" | "CREDIT_CARD")) {
+        return write_undeposited_transfer(tx, t, payments, books, written).await.map(|(entry, linked)| (entry, linked, "TRANSFER"));
+    }
     // The bank account is debited with what arrived; other debits are fees or cash back taken out
     // of the deposit. LocalBooks deposit lines are the money put in, so the deposit's total is
     // the gross amount and its entry (the file's own lines) carries the deductions.
@@ -651,7 +656,65 @@ async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, t: &Staged, doc: &Sourc
     }
     let entry = post(tx, t, describe(t), &t.lines, EntrySource::Deposit(id)).await?;
     sqlx::query("UPDATE deposits SET journal_entry_id = ?1 WHERE id = ?2").bind(entry).bind(id).execute(&mut **tx).await.map_err(db_err)?;
-    Ok((entry, linked))
+    Ok((entry, linked, "DEPOSIT"))
+}
+
+/// The linked payments a deposit's Undeposited Funds lines account for: (row, amount, receipt?),
+/// matched against each Undeposited Funds account's total as [`write_deposit`] does.
+fn swept_payments(t: &Staged, payments: &[crate::qbw_documents::Applied], books: &Books, written: &Written) -> Vec<(i64, i64, bool)> {
+    let mut pooled: Vec<(i64, i64)> = Vec::new();
+    for (account, cents, _, _) in t.lines.iter().filter(|l| l.1 > 0 && books.is_undeposited(l.0)) {
+        match pooled.iter_mut().find(|(a, _)| a == account) {
+            Some((_, sum)) => *sum += cents,
+            None => pooled.push((*account, *cents)),
+        }
+    }
+    let mut swept = Vec::new();
+    for p in payments {
+        let Some(rows) = written.deposited.get(&p.transaction_id) else { continue };
+        let sum: i64 = rows.iter().map(|r| r.1).sum();
+        let Some((_, left)) = pooled.iter_mut().find(|(a, _)| rows.iter().all(|r| r.2 == *a)) else { continue };
+        if sum > p.cents || sum > *left {
+            continue;
+        }
+        *left -= sum;
+        swept.extend(rows.iter().map(|&(row, amount, _, receipt)| (row, amount, receipt)));
+    }
+    swept
+}
+
+/// A "deposit" that moved Undeposited Funds into accounts that aren't banks: the file's own entry,
+/// posted as a journal entry, with the payments it cleared recorded against it (migration 0084).
+async fn write_undeposited_transfer(
+    tx: &mut Transaction<'_, Sqlite>,
+    t: &Staged,
+    payments: &[crate::qbw_documents::Applied],
+    books: &Books,
+    written: &Written,
+) -> Result<(i64, usize), String> {
+    if !t.lines.iter().any(|l| l.1 > 0 && books.is_undeposited(l.0)) {
+        return Err("it went into no bank account and took nothing out of Undeposited Funds".into());
+    }
+    if t.lines.iter().any(|l| l.1 < 0 && books.is_undeposited(l.0)) {
+        return Err("it puts money back into Undeposited Funds".into());
+    }
+    if t.lines.iter().any(|l| matches!(books.kind(l.0), "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")) {
+        return Err("it posts to receivables or payables".into());
+    }
+    let entry = post(tx, t, format!("Transfer out of Undeposited Funds: {}", describe(t)), &t.lines, EntrySource::Journal).await?;
+    let swept = swept_payments(t, payments, books, written);
+    for &(row, amount, receipt) in &swept {
+        let (payment, receipt) = if receipt { (None, Some(row)) } else { (Some(row), None) };
+        sqlx::query("INSERT INTO undeposited_transfers (journal_entry_id, invoice_payment_id, sales_receipt_id, amount_cents) VALUES (?1, ?2, ?3, ?4)")
+            .bind(entry)
+            .bind(payment)
+            .bind(receipt)
+            .bind(amount)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+    }
+    Ok((entry, swept.len()))
 }
 
 /// A bill, or a vendor credit when it debits payables. Its lines are the file's form lines; the
@@ -1087,9 +1150,13 @@ pub(crate) async fn post_all(
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },
                 Some(doc @ SourceDocument::Deposit { .. }) => match attempt!(write_deposit(tx, t, doc, &books, &written).await) {
-                    Ok((entry, _linked)) => {
-                        counts.deposits += 1;
-                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as: "DEPOSIT", fallback_reason: None, entries: 1 }
+                    Ok((entry, _linked, posted_as)) => {
+                        if posted_as == "DEPOSIT" {
+                            counts.deposits += 1;
+                        } else {
+                            counts.transfers += 1;
+                        }
+                        Outcome { source_id: t.source_id, entry_id: Some(entry), posted_as, fallback_reason: None, entries: 1 }
                     }
                     Err(reason) => fallback(tx, t, Some(reason), &mut counts).await?,
                 },

@@ -16,6 +16,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'report-center', area: 'reports', views: ['reports'],
+    title: 'Find a report: search, Favorites, Recent and dates',
+    body: 'Find a report narrows the report list to names and descriptions with every word typed, and each report has a line saying what it shows. Click ☆ beside a report to keep it under Favorites; Recent lists the last reports opened. Tick Open reports on these dates and pick a period, and Profit and Loss, the sales summaries, the Balance Sheet and the aging open on it.',
+    keywords: 'report center find search favorite star recent description date range period open reports list',
+    go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
     id: 'quickzoom', area: 'reports', views: ['reports'],
     title: 'See the transactions behind a number (QuickZoom)',
     body: 'Click an account or amount on the Profit and Loss, Balance Sheet or another statement to open its register for that column’s dates. On an aging summary, click a name to list its open invoices or bills; on a sales or vendor summary, click a line to open its detail report.',

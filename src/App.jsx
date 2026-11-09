@@ -23,6 +23,7 @@ import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
 import { changeTextSize, useMyPreferences } from './lib/myPreferences.js';
 import { KIND_LABEL, NORMAL_TEXT_SIZE, textSizeFor, textSizeStepForKey, windowKind } from './lib/textSize.js';
+import { runPrintCommand } from './lib/printCommand.js';
 import {
   guardWindowClose,
   isMainWindow,
@@ -185,6 +186,9 @@ export default function App() {
       if (payload === 'help') setHelpOpen(true);
       // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
       if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
+      // File › Print…: the open form's Print, else the screen's own printout (a register prints its
+      // rows), else the window.
+      if (payload === 'print' && !runFormCommand('print')) runPrintCommand();
       // View › Show or Hide Left Icon Bar: hides the left pane, or brings back the full menu; kept for next time.
       // View › Larger Text, Smaller Text, Actual Text Size: for every window of the active one's kind.
       const step = { 'text-larger': 1, 'text-smaller': -1, 'text-actual': 0 }[payload];
