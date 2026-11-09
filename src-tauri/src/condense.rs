@@ -158,6 +158,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "reconciliations",
     "recurring_templates",
     "reminder_settings",
+    "report_schedules",
     "sales_reps",
     "saved_reports",
     "ship_methods",
