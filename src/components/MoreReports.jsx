@@ -325,6 +325,10 @@ export function AgingReport({ payable, initial = null }) {
           ...(opened.has(r.partyName) ? itemRows(r.partyName) : []),
         ]),
         { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] },
+        // Goods received before their bills (Vendors › Receive Items): owed, but not in A/P yet.
+        ...(payable && data.receivedNotBilledCents
+          ? [{ cells: [<span key="rnb" className="text-qb-ink-muted">Items received, not billed</span>, '', '', '', '', '', formatCents(data.receivedNotBilledCents)] }]
+          : []),
       ]
     : [];
   return (

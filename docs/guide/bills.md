@@ -48,6 +48,32 @@ corrected bill, and the checks or ACH payments themselves don't change. The edit
 new total is less than what's applied (void a payment or remove a credit first) or if the vendor
 changes. A voided bill, or one in a closed period, can't be edited.
 
+## Receive items before the bill
+
+When goods arrive from a purchase order before the vendor's bill, receive them so the stock is on
+hand and can be sold. Choose **Vendors › Receive Items** (with inventory turned on in Preferences ›
+Items & Inventory), pick the open purchase order, and enter what came in: **Receive now** starts at
+what's still to come on each line, and you can change it for a short or split shipment. Enter the
+date and the packing slip number and click **Receive**.
+
+The receipt posts the goods' cost to the item's Inventory Asset account (or a line's expense account,
+for freight or a service) against **Items Received Not Billed**, a liability LocalBooks adds the first
+time you receive items. It doesn't post to Accounts Payable, so **Pay Bills** doesn't offer it and
+the vendor's balance doesn't change until the bill is entered; **A/P Aging Summary** shows the total
+as **Items received, not billed** under its own total. The purchase order shows what has been
+received, and closes once every line has come in. Receiving more than was ordered asks first.
+
+When the bill arrives, choose **Vendors › Enter Bill for Received Items** (or **Enter Bill** beside
+the receipt), enter the vendor's reference number, bill date and due date, and check each line's
+**Billed amount** against the vendor's prices. Saving posts the bill: it clears what the receipt put
+in Items Received Not Billed and puts the bill's total in Accounts Payable. When the vendor billed a
+different price, the difference goes to the line's expense account, or for stock to Inventory Asset
+for the units still on hand and to Cost of Goods Sold for any already sold.
+
+To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
+voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
+receipt isn't edited like other bills: void it and enter it again from the receipt.
+
 ## Pay one or more bills
 
 1. On **Expenses › Bills**, click **Pay bills** (or **+ New › Pay Bills**). Every open bill is

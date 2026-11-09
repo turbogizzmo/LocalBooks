@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Receive items before the bill.** **Vendors › Receive Items** brings goods from a purchase order
+  into stock when they arrive, even a part shipment, with their cost held in Items Received Not Billed
+  until the bill comes. **Enter Bill for Received Items** then posts the bill at the vendor's prices.
+  A/P Aging Summary shows what's received and not billed under its total.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
