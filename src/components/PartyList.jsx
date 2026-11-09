@@ -4,6 +4,7 @@ import RowMenu from './RowMenu.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import CustomerGroups from './CustomerGroups.jsx';
 import { BatchInvoiceDialog } from './BatchInvoices.jsx';
+import StatementCharges from './StatementCharges.jsx';
 import { useEnvelopePrinter } from './FormPages.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
@@ -435,6 +436,8 @@ export default function PartyList({ kind, navigate, intent = null }) {
     if (intent?.action === 'payment-reminders') setCenterView('groups');
   }, [intent]);
   const [batching, setBatching] = useState(false);
+  // Enter Statement Charges: the customer whose charge register is open.
+  const [charging, setCharging] = useState(null);
   // Print Envelope on a row: the customer's billing address or the vendor's address.
   const [envelopePortal, printEnvelope] = useEnvelopePrinter(setNotice);
   const [query, setQuery] = useState('');
@@ -623,6 +626,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
             }}
           />
         )}
+        {charging && <StatementCharges customer={charging} onClose={() => setCharging(null)} />}
         {envelopePortal}
         {error && <Notice kind="error" text={error} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
@@ -694,7 +698,12 @@ export default function PartyList({ kind, navigate, intent = null }) {
                           { label: 'Show transactions', onSelect: () => showTransactions(p.id) },
                           { label: 'QuickReport (Ctrl+Q)', onSelect: () => runQuickReport(p) },
                           { label: 'Print Envelope…', onSelect: () => printEnvelope({ kind, id: p.id }) },
-                          ...(kind === 'customer' ? [{ label: 'Add job…', onSelect: () => addJob(p) }] : []),
+                          ...(kind === 'customer'
+                            ? [
+                                { label: 'Add job…', onSelect: () => addJob(p) },
+                                { label: 'Enter statement charges…', hint: 'Charges billed on the next statement', onSelect: () => setCharging({ id: p.id, name: p.name }) },
+                              ]
+                            : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
                         ]}

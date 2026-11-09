@@ -53,5 +53,5 @@ pub async fn email_voucher_with_smtp(app: AppHandle, db: State<'_, Db>, doc: Vou
     let (to, subject, body) = email.checked()?;
     let pool = db.pool().await;
     let (file_name, pdf) = vouchers::pdf_file(&pool, &doc).await?;
-    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to, subject, body, file_name, pdf }).await
+    smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to, subject, body, file_name, pdf, more: Vec::new() }).await
 }

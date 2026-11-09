@@ -79,10 +79,14 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
         "SELECT l.entry_date AS date,
                 CASE WHEN je.reverses_entry_id IS NOT NULL THEN 'VOID'
                      WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM finance_charge_invoices WHERE invoice_id = l.source_id)
-                     THEN 'FINANCE_CHARGE' ELSE l.source_type END AS source_type,
+                     THEN 'FINANCE_CHARGE'
+                     WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id)
+                     THEN 'STATEMENT_CHARGE' ELSE l.source_type END AS source_type,
                 p.party_name,
                 CASE l.source_type
-                    WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = l.source_id)
+                    -- A statement charge has no invoice number of its own to show.
+                    WHEN 'INVOICE' THEN (SELECT CAST(invoice_number AS TEXT) FROM invoices WHERE id = l.source_id
+                                         AND NOT EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id))
                     WHEN 'CREDIT_MEMO' THEN (SELECT CAST(credit_number AS TEXT) FROM credit_memos WHERE id = l.source_id)
                     WHEN 'RECEIVE_PAYMENT' THEN (SELECT reference FROM invoice_payments WHERE id = l.source_id)
                 END AS number,
@@ -90,7 +94,10 @@ pub async fn customer_statement(pool: &SqlitePool, customer_id: i64, start_date:
                     WHEN 'INVOICE' THEN (SELECT po_number FROM invoices WHERE id = l.source_id)
                     WHEN 'CREDIT_MEMO' THEN (SELECT po_number FROM credit_memos WHERE id = l.source_id)
                 END AS po_number,
-                l.memo, l.debit_cents - l.credit_cents AS amount_cents
+                CASE WHEN l.source_type = 'INVOICE' AND EXISTS (SELECT 1 FROM statement_charge_invoices WHERE invoice_id = l.source_id)
+                     THEN (SELECT description FROM invoice_items WHERE invoice_id = l.source_id ORDER BY line_number LIMIT 1)
+                     ELSE l.memo END AS memo,
+                l.debit_cents - l.credit_cents AS amount_cents
          {ar_lines}
          WHERE {mine} AND l.entry_date BETWEEN ?2 AND ?3
          ORDER BY l.entry_date, l.entry_number, l.line_number"
