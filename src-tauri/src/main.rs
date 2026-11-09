@@ -67,6 +67,7 @@ mod mileage;
 mod nacha;
 mod preferences;
 mod price_levels;
+mod print_batches;
 mod print_queue;
 mod profile_lists;
 mod qbmac_import;

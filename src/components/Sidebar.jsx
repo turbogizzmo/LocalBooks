@@ -26,6 +26,8 @@ export const NAV = [
       { id: 'sales/bill-costs', label: 'Bill Costs' },
       { id: 'sales/send-forms', label: 'Send Forms' },
       { id: 'sales/print-invoices', label: 'Print Invoices' },
+      { id: 'sales/print-forms', label: 'Print Forms' },
+      { id: 'sales/mailing-labels', label: 'Mailing Labels' },
     ],
   },
   {
