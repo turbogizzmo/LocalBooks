@@ -24,6 +24,9 @@ export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
   const [method, setMethod] = useState('MAIL_APP');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Password-protect the PDF: it opens only with this password, which is not saved anywhere.
+  const [protect, setProtect] = useState(false);
+  const [password, setPassword] = useState('');
   const toRef = useRef(null);
   useEffect(() => {
     toRef.current?.focus();
@@ -46,12 +49,13 @@ export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
   const send = async () => {
     setBusy(true);
     setError(null);
+    const pdfPassword = protect ? password : null;
     try {
       if (method === 'SMTP') {
-        await api.emailReportWithSmtp(sheet, draft);
+        await api.emailReportWithSmtp(sheet, draft, pdfPassword);
         onNotice({ kind: 'success', text: `Sent ${fileName} to ${draft.to}.` });
       } else {
-        onNotice({ kind: 'success', text: composedText(await api.emailReportWithMailApp(sheet, draft), fileName) });
+        onNotice({ kind: 'success', text: composedText(await api.emailReportWithMailApp(sheet, draft, pdfPassword), fileName) });
       }
       onClose();
     } catch (err) {
@@ -81,6 +85,25 @@ export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
             <span className="rounded-xs border border-qb-border bg-qb-canvas px-1.5 py-0.5 font-semibold text-qb-ink">📎 {fileName}</span>
             <span>{method === 'SMTP' ? `sent from ${smtp.fromEmail}` : 'opens in your mail app as a new message for you to review and send'}</span>
           </div>
+          <div className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={protect} onChange={(e) => setProtect(e.target.checked)} />
+              Password-protect the PDF
+            </label>
+            {protect && (
+              <input
+                type="password"
+                className="qb-input h-row w-[200px]"
+                aria-label="PDF password"
+                placeholder="Password to open it"
+                autoComplete="new-password"
+                maxLength={127}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            )}
+          </div>
+          {protect && <p className="text-2xs text-qb-ink-muted">Tell the recipient the password another way (by phone or text), not in this email. LocalBooks doesn’t keep it.</p>}
           {smtp && (
             <div className="flex gap-3 text-xs" role="radiogroup" aria-label="How to send">
               <label className="flex items-center gap-1">
@@ -99,7 +122,7 @@ export default function ReportEmailDialog({ sheet, onClose, onNotice }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="qb-btn qb-btn-primary" onClick={send} disabled={busy || !draft.to.trim()}>
+          <button type="button" className="qb-btn qb-btn-primary" onClick={send} disabled={busy || !draft.to.trim() || (protect && !password)}>
             {method === 'SMTP' ? (busy ? 'Sending…' : 'Send') : busy ? 'Opening…' : 'Open in mail app'}
           </button>
         </div>
