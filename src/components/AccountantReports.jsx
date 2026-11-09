@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import Notice from './Notice.jsx';
 import { useCompany } from './PrintDocuments.jsx';
+import { formatCents } from '../lib/money.js';
 import { ExportMenu, PERIODS, longDate, resolvePeriod } from './ReportParts.jsx';
 import { ReportTable, reportExports } from './CustomReport.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -179,6 +181,7 @@ function IncomeTax({ initialDetail, navigate }) {
   const [detail, setDetail] = useState(initialDetail);
   const [taxLine, setTaxLine] = useState('');
   const [mapping, setMapping] = useState(false);
+  const [txf, setTxf] = useState(false);
   const form = chosenForm ?? prefs?.tax_form ?? null;
   const lines = (allLines ?? []).filter((t) => t.form === form);
 
@@ -254,6 +257,11 @@ function IncomeTax({ initialDetail, navigate }) {
       <button type="button" className={`qb-btn h-row ${mapping ? 'qb-btn-primary' : 'qb-btn-secondary'}`} aria-expanded={mapping} onClick={() => setMapping((m) => !m)}>
         Tax lines…
       </button>
+      {form === 'SCHEDULE_C' && (
+        <button type="button" className={`qb-btn h-row ${txf ? 'qb-btn-primary' : 'qb-btn-secondary'}`} aria-expanded={txf} disabled={!valid} onClick={() => setTxf((t) => !t)}>
+          Export TXF…
+        </button>
+      )}
     </>
   );
   return (
@@ -268,8 +276,86 @@ function IncomeTax({ initialDetail, navigate }) {
         empty="Nothing posted in these dates."
         toolbar={toolbar}
       />
+      {txf && valid && form === 'SCHEDULE_C' && <TxfExport start={start} end={end} onClose={() => setTxf(false)} />}
       {mapping && <TaxLineMapping form={form} formName={formName} allLines={allLines ?? []} onClose={() => setMapping(false)} />}
     </>
+  );
+}
+
+/**
+ * Tax software export (`txf.rs`): what the TXF file for the tax year carries, what it leaves out,
+ * and a Save button. TXF has reference numbers for Schedule C only.
+ */
+function TxfExport({ start, end, onClose }) {
+  const { data, error, reload } = useLedgerQuery(() => api.previewTxfExport(start, end));
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    reload();
+  }, [start, end, reload]);
+  const saveFile = async () => {
+    try {
+      const path = await saveDialog({ defaultPath: `schedule-c-${end.slice(0, 4)}.txf`, filters: [{ name: 'Tax Exchange Format', extensions: ['txf'] }] });
+      if (!path) return;
+      const out = await api.saveTxfExport(start, end, path);
+      setNotice({ kind: 'success', text: `Saved ${out.records.length} tax line${out.records.length === 1 ? '' : 's'} to ${path}. Import it in your tax program.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  return (
+    <section className="qb-panel no-print flex-none" aria-label="Export TXF">
+      <div className="flex flex-wrap items-center gap-2 border-b border-qb-border px-2 py-1">
+        <h2 className="text-md font-semibold">Export to tax software (TXF)</h2>
+        <span className="text-xs text-qb-ink-muted">{longDate(start)} – {longDate(end)}. Income is positive, expenses negative, as tax programs expect.</span>
+        <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" disabled={!data?.records?.length} onClick={saveFile}>Save TXF file…</button>
+        <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={onClose}>Close</button>
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
+      {error && <Notice kind="error" text={error} />}
+      <div className="max-h-[300px] overflow-auto scrollbar-thin">
+        <table className="qb-grid">
+          <thead>
+            <tr>
+              <th className="qb-grid-head">Schedule C line</th>
+              <th className="qb-grid-head w-[90px]">TXF code</th>
+              <th className="qb-grid-head w-[140px] text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.records ?? []).map((r) => (
+              <tr key={`${r.reference}-${r.description ?? ''}`} className="qb-grid-row">
+                <td className="qb-grid-cell">{r.taxLine}{r.description ? ` · ${r.description}` : ''}</td>
+                <td className="qb-grid-cell">N{r.reference}</td>
+                <td className="qb-grid-cell text-right tabular-nums">{formatCents(r.amountCents)}</td>
+              </tr>
+            ))}
+            {data && data.records.length === 0 && (
+              <tr><td className="qb-grid-cell text-qb-ink-muted" colSpan={3}>No Schedule C amounts in these dates.</td></tr>
+            )}
+          </tbody>
+        </table>
+        {data?.leftOut?.length > 0 && (
+          <table className="qb-grid mt-2">
+            <thead>
+              <tr>
+                <th className="qb-grid-head">Not in the file</th>
+                <th className="qb-grid-head">Why</th>
+                <th className="qb-grid-head w-[140px] text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.leftOut.map((l) => (
+                <tr key={l.accountName} className="qb-grid-row">
+                  <td className="qb-grid-cell">{l.accountName}</td>
+                  <td className="qb-grid-cell text-qb-ink-muted">{l.reason}</td>
+                  <td className="qb-grid-cell text-right tabular-nums">{formatCents(l.amountCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }
 

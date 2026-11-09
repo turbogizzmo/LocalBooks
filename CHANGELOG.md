@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Export to tax software.** For a company that files Schedule C, Export TXF… on the Income Tax
+  report saves the tax year's totals, line by line, as a TXF file that personal tax programs
+  import. It lists anything it can't carry (accounts with no tax line, depreciation, business use
+  of home) with the amount, for you to enter by hand.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

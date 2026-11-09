@@ -346,6 +346,21 @@ LocalBooks line under **Tax lines…**.
 The amounts come from your books on the accrual basis. They are a starting point for your return,
 not the return itself: your tax preparer may adjust them, for example for meals or depreciation.
 
+#### Export to tax software (TXF)
+
+With **Schedule C** as the tax form, **Export TXF…** on the Income Tax report writes the tax year's
+totals as a TXF (Tax Exchange Format) file, which personal tax programs import. The panel lists
+each Schedule C line with its TXF code and amount before you click **Save TXF file…**; in the file,
+income is positive and expenses negative, as tax programs expect. Each account on line **27a ·
+Other expenses** goes in as its own entry, described by the account's name.
+
+Under **Not in the file** the panel lists what the file leaves out, with the amount for you to
+enter by hand: accounts with no tax line or another form's line, and the two Schedule C lines TXF
+has no code for (13 · Depreciation, which goes through Form 4562, and 30 · Business use of home,
+Form 8829). TXF has no codes for a partnership's or corporation's own return, so the export is
+offered for Schedule C only; for Forms 1065, 1120-S and 1120, export the Income Tax Summary to
+Excel or CSV for your preparer instead.
+
 ### Collections Report
 
 Every invoice past its due date and still open on the **As of** date, grouped by customer. Each
