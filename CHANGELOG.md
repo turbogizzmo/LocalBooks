@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Post payroll from your payroll service.** In the Desktop Migration Wizard, Payroll takes a
+  payroll service's journal export (.csv or Excel), matches its columns and account names to yours
+  (remembering them for next time), shows every entry with its totals, and posts them only when
+  each one balances. The same file can't be posted twice.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

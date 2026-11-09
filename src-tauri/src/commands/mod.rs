@@ -87,6 +87,7 @@ features![
     mcp,
     migration,
     mileage,
+    payroll_import,
     preferences,
     price_levels,
     print_queue,
