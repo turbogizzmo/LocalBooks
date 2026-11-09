@@ -20,25 +20,27 @@ fn add(a: i64, b: i64) -> Result<i64, String> {
     a.checked_add(b).ok_or_else(|| "RPT_OVERFLOW: amount out of range".to_string())
 }
 
-/// `part / whole` as a percentage with one decimal ("38.2%"), or "" when `whole` is zero.
+/// `part / whole` as a percentage with one decimal ("38.2%"), or "" when `whole` is zero or the
+/// percentage is too large to show.
 pub(super) fn percent(part: i64, whole: i64) -> String {
     if whole == 0 {
         return String::new();
     }
     // Tenths of a percent, rounded half away from zero.
-    let tenths = mul_div_round(part, 1_000, whole).unwrap_or(0);
+    let Some(tenths) = mul_div_round(part, 1_000, whole) else { return String::new() };
     let sign = if tenths < 0 { "-" } else { "" };
-    format!("{sign}{}.{}%", tenths.abs() / 10, tenths.abs() % 10)
+    format!("{sign}{}.{}%", tenths.unsigned_abs() / 10, tenths.unsigned_abs() % 10)
 }
 
-/// `numerator / denominator` to two decimals ("4.21"), or "" when the denominator is zero.
+/// `numerator / denominator` to two decimals ("4.21"), or "" when the denominator is zero or the
+/// ratio is too large to show.
 pub(super) fn ratio(numerator: i64, denominator: i64) -> String {
     if denominator == 0 {
         return String::new();
     }
-    let hundredths = mul_div_round(numerator, 100, denominator).unwrap_or(0);
+    let Some(hundredths) = mul_div_round(numerator, 100, denominator) else { return String::new() };
     let sign = if hundredths < 0 { "-" } else { "" };
-    format!("{sign}{}.{:02}", hundredths.abs() / 100, hundredths.abs() % 100)
+    format!("{sign}{}.{:02}", hundredths.unsigned_abs() / 100, hundredths.unsigned_abs() % 100)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -97,7 +99,7 @@ pub(super) async fn inventory_turnover(pool: &SqlitePool, start: NaiveDate, end:
         vec![json!("TOTAL"), json!(totals.0), json!(totals.1), json!(average), json!(totals.2), json!(ratio(totals.2, average)), json!(days_on_hand(days, average, totals.2))],
     ));
     let notes = vec![format!(
-        "{} with stock tracked. Turnover is the cost of goods sold over the {days} days divided by the average of the beginning and ending value; days on hand is how long that average stock lasts at that rate.",
+        "{} with stock on hand or sold in the period. Turnover is the cost of goods sold over the {days} days divided by the average of the beginning and ending value; days on hand is how long that average stock lasts at that rate.",
         plural(shown, "item", "items")
     )];
     Ok(done(Some(start), end, columns, rows, shown, notes))
@@ -233,6 +235,9 @@ mod tests {
         assert_eq!(ratio(421, 100), "4.21");
         assert_eq!(ratio(2, 3), "0.67");
         assert_eq!(ratio(1, 0), "");
+        // Too large to show is blank, never a wrong 0.
+        assert_eq!(percent(i64::MAX, 1), "");
+        assert_eq!(ratio(i64::MAX, 1), "");
         assert_eq!(days_on_hand(365, 1_000, 4_000), "91");
         assert_eq!(days_on_hand(365, 1_000, 0), "");
     }
