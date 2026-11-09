@@ -298,6 +298,22 @@ In an account register, choose a **Color** (blue, green, yellow, orange, pink, p
 tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
 color is kept on this computer for that account in that company file; **Default** takes it away.
 
+## Put a list in your own order, flat or as a tree
+
+The chart of accounts, the item list and the customer list can be put in any order you like:
+drag a row up or down and drop it where you want it. A row moves among the rows beside it (the
+accounts under the same parent, a customer's jobs, the sub-items of an item), and takes its
+subaccounts, jobs or sub-items with it. LocalBooks keeps the order in the company file, so everyone
+who opens it sees the same order.
+
+- **Tree** shows subaccounts, jobs and sub-items (an item named `Parent:Child`) indented under
+  their parent, with ▾ to fold one away; **Expand all** and **Collapse all** open or fold them all.
+- **Flat** shows every row at the same level with its full name (`Checking:Payroll`).
+- **Usual order** forgets the order you dragged rows into.
+
+Rows can't be dragged while you are searching a list or have sorted it by a column heading; click
+the sorted heading until the arrow goes away to get back to your own order.
+
 ## Open a transaction from a register
 
 In an account register, click a row to see all of the transaction's lines underneath it.

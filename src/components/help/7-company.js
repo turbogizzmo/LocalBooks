@@ -215,6 +215,14 @@ export const topics = [
     guide: 'whats-new',
   },
   {
+    id: 'list-order', area: 'company', views: ['accounting/chart-of-accounts', 'sales/products', 'sales/customers'],
+    title: 'Put a list in your own order, flat or as a tree',
+    body: 'Drag a row in the chart of accounts, the item list or the customer list to put it where you want among the rows beside it; its subaccounts, jobs or sub-items move with it, and the order is kept in the company file (Usual order forgets it). Tree shows them indented under their parent with Expand all and Collapse all, and Flat lists every row with its full name.',
+    keywords: 'order reorder drag drop move up down arrange custom order tree flat hierarchy indent expand collapse subaccount job sub-item chart of accounts item list customer list',
+    go: { label: 'Go to the Chart of Accounts', view: 'accounting/chart-of-accounts' },
+    guide: 'getting-started',
+  },
+  {
     id: 'text-size', area: 'company', views: ['accounting/register', 'reports', 'sales/customers', 'sales/invoices'],
     title: 'Make the text larger or smaller, and color a register',
     body: 'A↑ and A↓ on the toolbar, View › Larger Text and Smaller Text, or Cmd/Ctrl + and − change the text size of every window of the kind in front (lists, registers, forms or reports), and LocalBooks keeps each kind’s size on this computer; Cmd/Ctrl 0 goes back to normal. In an account register, Color tints that account’s register so it’s easy to tell apart.',

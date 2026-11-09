@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+
+- **Lists in your own order.** Drag rows in the chart of accounts, the item list and the customer
+  list into the order you want; it's kept in the company file. Each can be shown as a tree (with
+  Expand all and Collapse all) or flat with full names.
 - **Print envelopes.** Print Envelope… on an invoice or sales receipt, on a form's row, and on a
   customer's or vendor's row prints an envelope with your return address and theirs. Set the
   envelope's size, font and position in Settings › Custom Forms › Envelope.
