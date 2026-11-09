@@ -9,6 +9,7 @@ import { Dialog } from './InventoryDialog.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
+import Attachments from './Attachments.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 
 const accountParent = (a) => a.parentId ?? null;
@@ -140,6 +141,12 @@ function AccountDialog({ account, template = null, accounts, types, onClose, onS
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
         </div>
+        {/* Files kept with the account (a loan agreement, a statement): saved at once, not with Save. */}
+        {editing && (
+          <div className="-mx-3 border-y border-qb-border bg-qb-canvas">
+            <Attachments record={{ kind: 'ACCOUNT', id: account.id }} what="this account" />
+          </div>
+        )}
         {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
         <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
           <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
