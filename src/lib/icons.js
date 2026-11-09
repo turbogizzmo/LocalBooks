@@ -1,5 +1,7 @@
 import { createElement } from 'react';
 import {
+  AArrowDown,
+  AArrowUp,
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -121,6 +123,9 @@ export const ICONS = {
   HomeAccounts: FolderTree,
   HomeItems: Package,
   HomeTodo: ListTodo,
+  // View › Larger Text / Smaller Text (the toolbar, App.jsx).
+  LargerText: AArrowUp,
+  SmallerText: AArrowDown,
   // Saved-document views (SavedDocView.jsx).
   CloseDoc: Lock,
   ReopenDoc: Undo2,

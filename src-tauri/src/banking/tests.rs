@@ -65,7 +65,7 @@ async fn deposit_sweeps_undeposited_funds_and_other_lines() {
         deposit_date: d(4),
         memo: Some("Branch deposit".into()),
         items: items.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect(),
-        other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None }],
+        other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 125, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: None,
     };
     let deposit_id = post_bank_deposit(&pool, deposit_input(waiting.iter().collect())).await.expect("deposit posts");
@@ -123,7 +123,7 @@ async fn cash_back_comes_out_of_what_the_bank_gets() {
         deposit_date: d(5),
         memo: None,
         items: vec![],
-        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: 50_000, memo: Some("Market stall".into()), class_id: None }],
+        other_lines: vec![DepositOtherLine { account_id: services, amount_cents: 50_000, memo: Some("Market stall".into()), class_id: None, customer_id: None, vendor_id: None }],
         cash_back: cash,
     };
     let back = |account_id, amount_cents| Some(CashBack { account_id, amount_cents, memo: Some("Float".into()) });

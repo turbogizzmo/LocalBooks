@@ -19,7 +19,9 @@ Receivable** (what customers owe you) and to the income account on each line.
      the line.
    - Enter **Qty** and **Rate**. Decimals are fine (for example 1.5 hours). **Amount** calculates
      itself.
-   - Check the **Income account** for each line.
+   - Check the **Income account** for each line. The columns run Product/Service, Description,
+     Qty, Rate, Class, then the income account (filled in from the item), Amount and Tax, as on
+     the desktop sales forms; the same order is on sales receipts, estimates and credit memos.
    - Press **Enter** to move to the next line, or click **Add line**.
 5. If you use sales reps, shipping methods or customer custom fields, fill in **Rep**, **Ship
    date**, **Ship via** and the custom fields at the top. The rep and custom fields fill in from
