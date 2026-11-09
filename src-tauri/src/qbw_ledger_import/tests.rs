@@ -270,6 +270,96 @@ async fn a_deposit_split_between_banks_still_banks_its_payments() {
     assert_eq!(balance(&pool, mapped("Undeposited Funds")).await, 0);
 }
 
+#[tokio::test]
+async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
+    use crate::qbw_documents::{Applied, DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let doc = |id: i64, kind: &'static str, date: &str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction {
+        kind,
+        document: Some(document),
+        ..txn(id, date, lines)
+    };
+    let payment = |cents| SourceDocument::Payment { customer_id: 100, reference: None, method: "CASH".into(), applied_to: vec![Applied { transaction_id: 20, cents }] };
+    let mut ledger = ledger();
+    ledger.accounts = vec![
+        account(1, "Riverside Bank", "BANK", None),
+        account(2, "Bad Debts", "EXPENSE", None),
+        account(4, "Accounts Receivable", "ACCOUNTS_RECEIVABLE", None),
+        account(6, "Consulting Income", "INCOME", None),
+        account(7, "Undeposited Funds", "OTHER_CURRENT_ASSET", None),
+    ];
+    ledger.unbalanced = vec![];
+    ledger.unreadable = vec![];
+    ledger.transactions = vec![
+        doc(
+            20,
+            "Invoice",
+            "2024-01-10",
+            &[(4, -9_000), (6, 9_000)],
+            SourceDocument::Invoice {
+                customer_id: 100,
+                number: Some("7".into()),
+                due_date: None,
+                lines: vec![DocumentLine { item_id: None, description: Some("Work".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }],
+                sales: Default::default(),
+            },
+        ),
+        doc(21, "Payment", "2024-01-12", &[(7, -6_000), (4, 6_000)], payment(6_000)),
+        doc(22, "Payment", "2024-01-13", &[(7, -3_000), (4, 3_000)], payment(3_000)),
+        doc(
+            23,
+            "Deposit",
+            "2024-01-14",
+            &[(2, -9_000), (7, 6_000), (7, 3_000)],
+            SourceDocument::Deposit { payments: vec![Applied { transaction_id: 21, cents: 6_000 }, Applied { transaction_id: 22, cents: 3_000 }] },
+        ),
+    ];
+    ledger.customers = vec![SourceParty {
+        id: 100,
+        name: "Acme Hosting".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: Some(0),
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &ledger).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.deposits, full.transfers, full.fell_back), (0, 1, 0), "{full:?}");
+    assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty(), "the transfer cleared both payments");
+
+    let undeposited: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'OTHER_CURRENT_ASSET' AND is_system = 1").fetch_one(&pool).await.unwrap();
+    assert_eq!(balance(&pool, undeposited).await, 0, "the trial balance matches the file");
+    let entry: i64 = sqlx::query_scalar("SELECT DISTINCT journal_entry_id FROM undeposited_transfers").fetch_one(&pool).await.unwrap();
+    let debited: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1").bind(entry).fetch_one(&pool).await.unwrap();
+    assert_eq!(debited, 9_000, "the file's own entry: 90.00 written off");
+
+    // A cleared payment can't go into a deposit too; voiding the transfer puts both back.
+    let payment: i64 = sqlx::query_scalar("SELECT MIN(invoice_payment_id) FROM undeposited_transfers").fetch_one(&pool).await.unwrap();
+    let bank: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'BANK' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let deposit = crate::banking::DepositInput {
+        bank_account_id: bank,
+        deposit_date: "2024-02-01".parse().unwrap(),
+        memo: None,
+        items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment }],
+        other_lines: vec![],
+        cash_back: None,
+    };
+    assert!(crate::banking::post_bank_deposit(&pool, deposit.clone()).await.unwrap_err().contains("ALREADY_DEPOSITED"));
+    crate::ledger::void_transaction(&pool, entry).await.unwrap();
+    assert_eq!(crate::banking::list_undeposited(&pool).await.unwrap().len(), 2);
+    crate::banking::post_bank_deposit(&pool, deposit).await.unwrap();
+}
+
 /// The purchase side of a full import: a bill paid by a bill payment dated before it, a check,
 /// a card charge, a card credit, and a refund into a bank account (no LocalBooks form, so a
 /// journal entry).

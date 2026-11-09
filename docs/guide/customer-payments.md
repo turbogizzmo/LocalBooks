@@ -61,7 +61,9 @@ last day in **Discount offered**. To let Receive Payments take it:
    automatically**.
 
 Receive Payments then shows a **Discount** column. When the payment date is on or before the
-discount's last day and nothing has been paid or credited on the invoice yet:
+discount's last day and no discount has been taken on the invoice yet, it offers the terms'
+discount on the invoice's open balance: the whole invoice, or what is left of one already
+part-paid (2% of the 150.00 left on a 200.00 invoice is 3.00):
 
 - With the automatic option on, ticking the invoice (or **Auto Apply**, when the money pays the
   rest of it in full) fills in the discount and sets the **Payment** to what is left. A customer
@@ -75,9 +77,14 @@ statement shows the payment and discount on one line. Only the money goes to Und
 into the bank deposit. Voiding the payment reverses the discount with it, and the invoice offers
 the discount again while its date allows.
 
-Not covered: an invoice that is already part-paid gets no discount (the terms' discount is for
-paying the whole invoice early), invoices in another currency take their discount with a credit
-memo, and a payment that took a discount can't be recorded as a bounced check (void it instead).
+A payment that took a discount can bounce like any other ([Record a bounced check](#record-a-bounced-check)):
+the bank goes down by the money it received, the discount is taken back off the discount account,
+and the invoice opens again for the whole amount the payment settled.
+
+An invoice in another currency takes its discount the same way, in its own currency. The money
+converts at the payment's exchange rate and the discount at the invoice's rate, so Accounts
+Receivable clears exactly what the invoice booked, and only the money carries an exchange gain or
+loss.
 
 ## Payments in another currency
 
@@ -115,12 +122,21 @@ pay it again. The customer fee goes on a new invoice, *Returned check charge*.
 Money from a deposit's **other funds** lines can bounce too: it goes back to the account the
 deposit credited.
 
+A **sales receipt** from a customer can bounce as well. It has no invoice to reopen, so LocalBooks
+charges it back: the bank goes down by the check (and the bank's fee), and a new invoice,
+*Returned check: sales receipt #…*, bills the customer for it, with the customer fee as a second
+line. The sale's income is unchanged; the customer pays the new invoice in Receive Payments.
+Voiding the bounced check voids that invoice too.
+
+A **foreign-currency payment** bounces at the rates it was recorded at: the bank goes down by the
+home-currency amount it received, Accounts Receivable goes back up by what the payment cleared, and
+the exchange gain or loss the payment realized is reversed. The invoice opens again for its
+foreign-currency amount.
+
 To undo it, open the bounced check's **Actions** menu on the Bounced Checks screen and choose
 **Void bounced check**: the bank and the fee go back, the payment counts toward the invoice again,
 and the fee invoice is voided (refused if the customer has already paid it). While a bounced check
 stands, its payment, the invoice and the deposit it was in can't be voided.
-
-Bounced sales receipts and foreign-currency payments aren't handled yet.
 
 ## Charge interest on overdue invoices (finance charges)
 

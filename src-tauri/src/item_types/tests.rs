@@ -19,7 +19,7 @@ async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 fn line(account: i64, rate_cents: i64, is_taxable: bool) -> InvoiceLineInput {
-    InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: account, product_service_id: None, class_id: None, is_taxable }
+    InvoiceLineInput { description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: account, product_service_id: None, class_id: None, is_taxable, service_date: None }
 }
 
 fn with_form(form_lines: Vec<FormLineInput>) -> SalesDetails {
@@ -117,7 +117,7 @@ async fn an_invoice_with_subtotals_posts_balanced_and_reads_back_in_order() {
 async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
-    let sale = |rate_cents| SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 20_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false };
+    let sale = |rate_cents| SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 20_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -150,7 +150,7 @@ async fn a_sales_receipt_with_a_subtotal_posts_balanced() {
 async fn an_estimate_carries_its_subtotals_to_its_invoice() {
     let pool = test_pool().await;
     let (ar, services) = (account_id(&pool, "1200").await, account_id(&pool, "4100").await);
-    let est_line = |rate_cents| SalesLineInput { product_service_id: None, description: "Phase".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false };
+    let est_line = |rate_cents| SalesLineInput { product_service_id: None, description: "Phase".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
@@ -345,7 +345,7 @@ async fn a_sales_receipt_with_a_discount_posts_balanced() {
     let pool = test_pool().await;
     let (checking, services) = (account_id(&pool, "1010").await, account_id(&pool, "4100").await);
     let discounts = discounts_given(&pool).await;
-    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: 8_000, income_account_id: services, class_id: None, is_taxable: false };
+    let sale = SalesLineInput { product_service_id: None, description: "Visit".into(), quantity_e4: 10_000, rate_cents: 8_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let receipt = post_sales_receipt(
         &pool,
         SalesReceiptInput {
@@ -450,7 +450,7 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     )
     .await
     .unwrap();
-    let est_line = |rate_cents, product| SalesLineInput { product_service_id: product, description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false };
+    let est_line = |rate_cents, product| SalesLineInput { product_service_id: product, description: "Work".into(), quantity_e4: 10_000, rate_cents, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     // 123.45 of work, 3% handling on it (3.70), a fixed 15.00 shipping line, then a subtotal.
     let estimate = crate::estimates::create_estimate(
         &pool,
@@ -542,7 +542,7 @@ async fn a_group_posts_its_items_and_can_print_as_one_line() {
         income_account_id: services,
         product_service_id: Some(p.id),
         class_id: None,
-        is_taxable: false,
+        is_taxable: false, service_date: None,
     };
     let heading = FormLineInput { item_group_id: Some(kit.id), description: "Installation, with cable".into(), ..FormLineInput::group(0, 2, false) };
     let inv = create_and_post_invoice(

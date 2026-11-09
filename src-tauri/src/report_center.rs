@@ -188,7 +188,7 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
                    COALESCE(i.home_total_cents, i.total_cents)
                    - COALESCE((SELECT SUM(COALESCE(p.ar_relief_cents, p.amount_cents)) FROM invoice_payments p
                                WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date <= ?1), 0)
-                   + COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date <= ?1), 0)
+                   + COALESCE((SELECT SUM(COALESCE((SELECT p.ar_relief_cents FROM invoice_payments p WHERE p.id = b.invoice_payment_id), b.amount_cents)) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date <= ?1), 0)
                    - COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date <= ?1), 0)
                    AS open_cents
             FROM invoices i JOIN customers c ON c.id = i.customer_id

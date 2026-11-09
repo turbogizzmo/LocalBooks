@@ -13,6 +13,7 @@ const ACTION_STYLE = {
   POST: { label: 'Posted', className: 'text-qb-ink' },
   VOID: { label: 'Voided', className: 'font-semibold text-qb-negative' },
   LOCK_RECONCILIATION: { label: 'Reconciled', className: 'font-semibold text-qb-green-active' },
+  UNDO_RECONCILIATION: { label: 'Reconciliation undone', className: 'font-semibold text-qb-negative' },
 };
 
 const TIMESTAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'medium' });
@@ -220,6 +221,7 @@ export default function AuditLog() {
             <option value="POST">Posted</option>
             <option value="VOID">Voided</option>
             <option value="LOCK_RECONCILIATION">Reconciliations</option>
+            <option value="UNDO_RECONCILIATION">Undone reconciliations</option>
           </select>
           <span className="ml-auto text-xs text-qb-ink-muted">Recorded by the database itself · cannot be edited or deleted</span>
           <button type="button" className="qb-btn-secondary" onClick={verify} disabled={verifying}>

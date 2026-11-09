@@ -178,7 +178,7 @@ async fn voiding_reverses_unwinds_documents_and_audits() {
             customer_name: "Acme".into(),
             issue_date: date(),
             due_date: date(),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 50_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
             discount_cents: 0,

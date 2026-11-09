@@ -57,7 +57,7 @@ export function FormSheet({ page, logo, className = '' }) {
   );
 }
 
-const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement' };
+const FORM_NAMES = { INVOICE: 'invoice', ESTIMATE: 'estimate', SALES_RECEIPT: 'sales receipt', STATEMENT: 'statement', CREDIT_MEMO: 'credit memo' };
 
 /** "Emailed 10/21/2026 to ap@acme.com" (sent_at is UTC; shown as the local date). */
 export function sentText(record) {
@@ -99,8 +99,12 @@ function composedText(outcome, fileName) {
     : `Your mail app opened a new message. Attach ${fileName}, shown in your file manager, then send.`;
 }
 
-/** Edits the email for a document, then hands it to the mail app with the PDF attached. */
-export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) {
+/**
+ * Edits the email for a document, then hands it to the mail app with the PDF attached. With
+ * `voucher` (a saved bill, check, deposit... as VoucherPrint.jsx draws it) it emails the voucher's
+ * PDF to the vendor or customer named on it instead of a customer form.
+ */
+export function EmailFormDialog({ kind, id, period = null, voucher = null, onClose, onNotice }) {
   const [draft, setDraft] = useState(null);
   const [history, setHistory] = useState([]);
   // Set when sending from LocalBooks (SMTP) is turned on: { fromEmail }.
@@ -112,7 +116,9 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.getEmailDraft(kind, id, period), api.getSmtpSettings(), api.getEmailHistory(kind, id)])
+    const drafted = voucher ? api.getVoucherEmailDraft(voucher) : api.getEmailDraft(kind, id, period);
+    const sentBefore = voucher ? Promise.resolve([]) : api.getEmailHistory(kind, id);
+    Promise.all([drafted, api.getSmtpSettings(), sentBefore])
       .then(([d, status, sent]) => {
         if (cancelled) return;
         setHistory(sent);
@@ -126,7 +132,7 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
     return () => {
       cancelled = true;
     };
-  }, [kind, id, period?.startDate, period?.endDate]);
+  }, [kind, id, period?.startDate, period?.endDate, voucher]);
   useEffect(() => {
     if (draft) toRef.current?.focus();
   }, [draft]);
@@ -143,10 +149,10 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
     try {
       const email = { to: draft.to, subject: draft.subject, body: draft.body };
       if (method === 'SMTP') {
-        await api.emailFormWithSmtp(kind, id, email, period);
+        await (voucher ? api.emailVoucherWithSmtp(voucher, email) : api.emailFormWithSmtp(kind, id, email, period));
         onNotice({ kind: 'success', text: `Sent ${draft.fileName} to ${draft.to}.` });
       } else {
-        const outcome = await api.emailFormWithMailApp(kind, id, email, period);
+        const outcome = await (voucher ? api.emailVoucherWithMailApp(voucher, email) : api.emailFormWithMailApp(kind, id, email, period));
         onNotice({ kind: 'success', text: composedText(outcome, draft.fileName) });
       }
       onClose();
@@ -161,7 +167,7 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
       <div role="dialog" aria-modal="true" aria-labelledby="email-form-title" className="w-[560px] rounded-xs bg-white shadow-popover">
         <div className="border-b border-qb-border px-3 py-1.5">
           <h2 id="email-form-title" className="text-md font-semibold">
-            Email {FORM_NAMES[kind] ?? 'form'}
+            Email {voucher ? voucher.title.toLowerCase() : (FORM_NAMES[kind] ?? 'form')}
           </h2>
         </div>
         {!draft ? (
@@ -222,6 +228,50 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
  * { print(kind, id, period), printMany([{ kind, id, period }]), savePdf(kind, id, period),
  * email(kind, id) }]; `period` is for statements. Results are reported through `onNotice`.
  */
+/**
+ * Prints envelopes: returns `[portal, printEnvelope]`. Render the portal; call
+ * `printEnvelope({ kind: 'customer' | 'vendor', id })` or `({ kind: 'form', form: 'INVOICE', id })`.
+ * The page is sized to the envelope while it prints.
+ */
+export function useEnvelopePrinter(onNotice) {
+  const [envelope, setEnvelope] = useState(null);
+
+  useEffect(() => {
+    if (!envelope) return undefined;
+    const style = document.createElement('style');
+    style.textContent = `@page { size: ${envelope.pageSize}; margin: 0; }`;
+    document.head.appendChild(style);
+    const clear = () => setEnvelope(null);
+    window.addEventListener('afterprint', clear);
+    const timer = setTimeout(() => printDocument(envelope.title), 80);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('afterprint', clear);
+      style.remove();
+    };
+  }, [envelope]);
+
+  const printEnvelope = useCallback(
+    async (target) => {
+      try {
+        setEnvelope(await api.renderEnvelope(target));
+      } catch (err) {
+        onNotice?.({ kind: 'error', text: errorText(err) });
+      }
+    },
+    [onNotice],
+  );
+
+  const portal = envelope && (
+    <PrintPortal>
+      {envelope.pages.map((page, i) => (
+        <FormSheet key={i} page={page} logo={null} className="envelope-sheet" />
+      ))}
+    </PrintPortal>
+  );
+  return [portal, printEnvelope];
+}
+
 export function useFormPrinter(onNotice) {
   // The forms to print, each { pages, logo }.
   const [forms, setForms] = useState(null);
@@ -264,6 +314,10 @@ export function useFormPrinter(onNotice) {
     [onNotice],
   );
 
+  // Print Envelope: addressed to the form's Bill To.
+  const [envelopePortal, printEnvelope] = useEnvelopePrinter(onNotice);
+  const envelope = useCallback((kind, id) => printEnvelope({ kind: 'form', form: kind, id }), [printEnvelope]);
+
   const [emailing, setEmailing] = useState(null);
   const email = useCallback((kind, id, period = null) => setEmailing({ kind, id, period }), []);
   const closeEmail = useCallback(() => setEmailing(null), []);
@@ -275,6 +329,7 @@ export function useFormPrinter(onNotice) {
           {forms.flatMap((form, f) => form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />))}
         </PrintPortal>
       )}
+      {envelopePortal}
       {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} period={emailing.period} onClose={closeEmail} onNotice={onNotice} />}
     </>
   );
@@ -289,7 +344,7 @@ export function useFormPrinter(onNotice) {
     },
     [onNotice],
   );
-  return [portal, { print, printMany, savePdf, email, setLater }];
+  return [portal, { print, printMany, savePdf, email, setLater, envelope }];
 }
 
 /** Row-menu entries for a document's form; `status` is its entry from useEmailStatuses. */
@@ -297,6 +352,7 @@ export function formMenuItems(kind, id, actions, status = null) {
   return [
     { label: 'Print…', onSelect: () => actions.print(kind, id) },
     { label: 'Save as PDF…', onSelect: () => actions.savePdf(kind, id) },
+    { label: 'Print Envelope…', onSelect: () => actions.envelope(kind, id) },
     { label: 'Email…', onSelect: () => actions.email(kind, id) },
     // Statements cover a period chosen when they are sent, so they are not queued.
     kind === 'STATEMENT'

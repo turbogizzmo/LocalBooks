@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { FormSheet } from './FormPages.jsx';
+import { EnvelopeDesigner } from './Envelopes.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
@@ -10,6 +11,7 @@ const KINDS = [
   { id: 'ESTIMATE', label: 'Estimate' },
   { id: 'SALES_RECEIPT', label: 'Sales receipt' },
   { id: 'STATEMENT', label: 'Statement' },
+  { id: 'CREDIT_MEMO', label: 'Credit memo' },
 ];
 const LAYOUTS = [
   ['CLASSIC', 'Classic', 'Company and title side by side over an accent rule'],
@@ -66,6 +68,7 @@ function useDocumentChoices(kind) {
   const estimates = useLedgerQuery(api.listEstimates);
   const sales = useLedgerQuery(api.listAllSales);
   const customers = useLedgerQuery(api.listCustomers);
+  const credits = useLedgerQuery(api.listCreditMemos);
   const rows = {
     INVOICE: () => (invoices.data ?? []).map((i) => ({ id: i.id, label: `Invoice ${i.invoiceNumber} · ${i.customerName} · ${formatDate(i.issueDate)}` })),
     ESTIMATE: () => (estimates.data ?? []).map((e) => ({ id: e.id, label: `Estimate ${e.estimateNumber} · ${e.customerName} · ${formatDate(e.estimateDate)}` })),
@@ -73,6 +76,7 @@ function useDocumentChoices(kind) {
       (sales.data ?? []).filter((r) => r.kind === 'SALES_RECEIPT').map((r) => ({ id: r.id, label: `Sales receipt ${r.number} · ${r.customerName} · ${formatDate(r.date)}` })),
     // A statement previews last month's statement for the customer.
     STATEMENT: () => (customers.data ?? []).map((c) => ({ id: c.id, label: `${c.name} · last month` })),
+    CREDIT_MEMO: () => (credits.data ?? []).map((m) => ({ id: m.id, label: `Credit ${m.creditNumber} · ${m.customerName} · ${formatDate(m.creditDate)}` })),
   }[kind]();
   return rows.slice(0, 50);
 }
@@ -157,6 +161,31 @@ function StyleBar({ styles, styleId, setStyleId, dirty, onChanged, onNotice }) {
  */
 export default function FormDesigner() {
   const [kind, setKind] = useState('INVOICE');
+  if (kind === 'ENVELOPE') return <EnvelopeDesigner tabs={(dirty) => <FormTabs kind={kind} choose={async (id) => (!dirty || (await askConfirm('Discard unsaved changes to the envelope?', { confirmLabel: 'Discard', danger: true }))) && setKind(id)} />} />;
+  return <TemplateDesigner kind={kind} setKind={setKind} />;
+}
+
+/** The Invoice, Estimate, Sales Receipt, Statement and Envelope tabs; `choose` may ask first. */
+function FormTabs({ kind, choose }) {
+  return (
+    <div className="flex gap-px overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Form">
+      {[...KINDS, { id: 'ENVELOPE', label: 'Envelope' }].map((k) => (
+        <button
+          key={k.id}
+          type="button"
+          role="tab"
+          aria-selected={kind === k.id}
+          onClick={() => choose(k.id)}
+          className={`px-3 py-0.5 font-semibold ${kind === k.id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TemplateDesigner({ kind, setKind }) {
   const styles = useLedgerQuery(api.listFormStyles);
   const [styleId, setStyleId] = useState(null);
   const [saved, setSaved] = useState(null);
@@ -260,23 +289,13 @@ export default function FormDesigner() {
         }}
       />
       <div className="flex flex-none flex-wrap items-center gap-2">
-        <div className="flex gap-px overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Form">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              role="tab"
-              aria-selected={kind === k.id}
-              onClick={async () => {
-                if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
-                setKind(k.id);
-              }}
-              className={`px-3 py-0.5 font-semibold ${kind === k.id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+        <FormTabs
+          kind={kind}
+          choose={async (id) => {
+            if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
+            setKind(id);
+          }}
+        />
         <label htmlFor="form-preview-doc" className="text-xs font-semibold text-qb-ink-muted">
           Preview with
         </label>
@@ -380,6 +399,7 @@ export default function FormDesigner() {
               <Section title="Statement">
                 <Check label="Shaded header row" checked={draft.shadeTableHeader || draft.layout === 'MODERN'} onChange={set('shadeTableHeader')} />
                 <Check label="Aging summary (current, 1–30, 31–60, 61–90, over 90 days)" checked={draft.showAging} onChange={set('showAging')} />
+                <Check label="P.O. No. column (the customer's purchase order number on invoices and credits)" checked={draft.showStatementPo} onChange={set('showStatementPo')} />
                 <Row label="Amount" htmlFor="form-amountLabel">
                   {text('amountLabel', { maxLength: 24 })}
                 </Row>
@@ -408,6 +428,7 @@ export default function FormDesigner() {
                   {text('amountLabel', { maxLength: 24 })}
                 </Row>
                 <Check label="Item custom fields marked for sales forms, under each line" checked={draft.showItemFields} onChange={set('showItemFields')} />
+                <Check label="Service Date column, when a line has one" checked={draft.showServiceDate} onChange={set('showServiceDate')} />
                 {kind === 'INVOICE' && <Check label="List payments and credits above the balance due" checked={draft.showPayments} onChange={set('showPayments')} />}
               </Section>
             )}
