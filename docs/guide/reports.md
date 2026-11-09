@@ -28,6 +28,11 @@ page, with the column headings repeated on each page.
 app instead**, a new message opens in your mail app for you to check and send. The **Reminders**
 list has **Email as PDF…** too.
 
+To password-protect the PDF, tick **Password-protect the PDF** and type a password. The PDF then
+opens only with that password (it is encrypted with 256-bit AES, which every current PDF reader
+opens). LocalBooks doesn't keep the password, so give it to the recipient another way, for example
+by phone, never in the same email.
+
 ## Scheduled reports
 
 **Reports › Scheduled Reports…** (under Memorized reports) sends chosen reports on a schedule, for
@@ -51,7 +56,16 @@ changing its next run; the list shows when each runs next and how its last run w
 Schedules run only while LocalBooks is open: it checks shortly after it starts and every few
 minutes after that. If a run fell due while LocalBooks was closed, it happens once, soon after
 LocalBooks next opens, for the latest date that was due; earlier missed dates are not sent one by
-one. The files can't be password-protected yet.
+one.
+
+### Password-protect scheduled PDFs
+
+When a schedule sends or saves PDFs, tick **Password-protect the PDFs** and type the password they
+should open with. The password is kept in this computer's credential store (Keychain on a Mac,
+Credential Manager on Windows), never in the company file, so a copy or backup of the company file
+doesn't carry it. To change it, open the schedule and type a new one; leave the box empty to keep
+the saved one. If the schedule is run on another computer, the password must be entered there
+again: until then its runs stop and say why.
 
 ## Profit and Loss
 

@@ -39,6 +39,9 @@ people using LocalBooks.
   an hour (they were kept for a day), and staged copies and unpacked QuickBooks backups left by an
   earlier run are cleared when LocalBooks starts and quits. Saving a report, form, voucher or
   attachments now says the file is a plain copy the company password doesn't protect.
+- **Password-protected report PDFs.** A report emailed as a PDF, and the PDFs a scheduled report
+  sends or saves, can open only with a password (256-bit AES). A schedule's password is kept in
+  this computer's credential store, not in the company file.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
