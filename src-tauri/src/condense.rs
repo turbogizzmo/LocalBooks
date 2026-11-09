@@ -99,6 +99,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("transaction_edits", &[]),
     ("transfers", &["transfer_date"]),
     ("undeposited_fund_matches", &[]),
+    ("undeposited_transfers", &[]),
     ("vendor_credit_applications", &["applied_date"]),
     ("vendor_credit_lines", &[]),
     ("vendor_credit_refunds", &["refund_date"]),

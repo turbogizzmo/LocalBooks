@@ -34,6 +34,10 @@ people using LocalBooks.
 - **P.O. No. on statements.** Printed customer statements can show a P.O. No. column with the
   customer's purchase order number on each invoice and credit (Settings › Custom Forms ›
   Statement).
+- **Company-file import clears payments moved out of Undeposited Funds.** A full import left
+  payments waiting to be deposited when the file's deposit moved them into an account that isn't a
+  bank (such as receipts written off to an expense). It now posts that deposit as a transfer out of
+  Undeposited Funds that clears those payments; balances still match the file.
 - **Arithmetic in amount and quantity boxes.** Type `+`, `-`, `*` or `/` in any amount, rate or
   quantity box and a small tape shows each number and the running total; Enter puts the answer in
   the box (`100+25.50*2` gives 151.00). Amounts round to the cent and quantities to four decimals.
