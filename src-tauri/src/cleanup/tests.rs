@@ -157,8 +157,8 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
         memo: Some("Bank feed: ACME CHECK 1001".into()),
         items: vec![],
         other_lines: vec![
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: 12_000, memo: None, class_id: None },
-            crate::banking::DepositOtherLine { account_id: services, amount_cents: 500, memo: Some("Interest".into()), class_id: None },
+            crate::banking::DepositOtherLine { account_id: services, amount_cents: 12_000, memo: None, class_id: None, customer_id: None, vendor_id: None },
+            crate::banking::DepositOtherLine { account_id: services, amount_cents: 500, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None },
         ],
         cash_back: None,
     };

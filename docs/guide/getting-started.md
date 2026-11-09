@@ -150,6 +150,21 @@ choices back.
 **Preferences › Accounting › My Preferences** has **Autofill memo in journal entries**: a line you
 start below the first one takes the first line's memo, which you can still change. On by default.
 
+## Do arithmetic in an amount or quantity box
+
+Every amount, rate and quantity box on a form works as a calculator. Type a number, then `+`, `-`,
+`*` or `/` and the next number: a small tape opens under the box with each number you typed and the
+running total. Press **Enter** (or leave the box) to put the answer in it; **Esc** closes the tape
+and leaves what you typed.
+
+- `100+25.50*2` gives **151.00**: multiplying and dividing come first, as on paper, then adding and
+  subtracting from left to right.
+- The arithmetic is exact until the end, then rounded once to the cent, half away from zero:
+  `10/3` is 3.33 and `0.05/2` is 0.03. A quantity box keeps four decimals: `10/3` is 3.3333.
+- Numbers in the arithmetic are taken as typed, even with **Automatically place a decimal point**
+  on: `12*3` is 36.00.
+- `-` in front of the first number is a minus sign, so `-12` is just a negative amount.
+
 ## Warnings before saving (company preferences)
 
 These ask before a transaction is saved. Click **Save anyway** to record it as you entered it, or
@@ -261,6 +276,27 @@ for each list on this computer; click the sorted heading a third time to go back
 Registers and Reconcile start, and go back to, date order (oldest first). While a register is
 sorted by anything else, its **Balance** column is dimmed, because it is still the running balance
 in date order.
+
+## Make the text larger or smaller
+
+Each kind of window keeps its own text size: lists (customers, items, the chart of accounts and the
+like), registers, forms (invoices, bills, checks, journal entries and the other entry forms) and
+reports. With one open in front:
+
+- Click **A↑** or **A↓** at the right of the toolbar, choose **View › Larger Text** or
+  **View › Smaller Text**, or press **Cmd +** and **Cmd −** on a Mac (**Ctrl +** and **Ctrl −** on
+  Windows and Linux).
+- The size shows beside the buttons when it isn't the normal one; click it, choose
+  **View › Actual Text Size**, or press **Cmd 0** (**Ctrl 0**) to go back.
+
+Every window of that kind takes the new size at once, and LocalBooks keeps it on this computer for
+next time. The Home page and Settings keep the normal size.
+
+## Give a register a color
+
+In an account register, choose a **Color** (blue, green, yellow, orange, pink, purple or gray) to
+tint it, so the checking register is easy to tell from savings or a credit card at a glance. The
+color is kept on this computer for that account in that company file; **Default** takes it away.
 
 ## Open a transaction from a register
 
@@ -433,11 +469,36 @@ While a form is open:
 | **Ctrl+Delete** | Delete the line you're on. |
 | **Ctrl+N** | Start a new form of the same kind, as the toolbar's **New** does. |
 | **Ctrl+P** | Print the form, on forms that print. |
-| **Page Up** / **Page Down** | Open the previous or next one, as the toolbar's **Previous** and **Next** do. In a list or a text box with more lines they scroll it instead. |
+| **Page Up** / **Page Down** | Open the previous or next one, as the toolbar's **Previous** and **Next** do. In a list or a text box with more lines they scroll it instead. On a saved transaction shown read-only (a sales receipt, estimate, credit, purchase order, deposit or transfer) they work too, as do **Ctrl+N**, **Ctrl+P** and **Ctrl+D**. |
+| **Ctrl+L** | Open the list of the box you're in: a customer or vendor box, or an account, item or other drop-down. |
+| **Ctrl+Alt+Y** | Copy Line: copy the line you're on. |
+| **Ctrl+Alt+V** | Paste Line: insert a copy of the copied line above the line you're on (at the end from outside the lines). A line copied from an item grid pastes into item grids, an expense line into expense grids and a journal line into journal entries. |
+| **Ctrl+G** | Go To Transfer: on a saved transfer, open the other account's register at the transfer. |
+| **Ctrl+O** | Duplicate Transaction: on a saved invoice, bill, check, expense or journal entry, start a new one copied from it (see below). |
 
-The first four are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too
-for D, Insert and Delete (Fn+Delete is Delete); **⌘M**, **⌘N** and **⌘P** stay the system's, so use
-**Control** with M, N and P.
+Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line, Go To Transfer and
+Duplicate Transaction are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
+Delete (Fn+Delete is Delete); **⌘M**, **⌘N**, **⌘P**, **⌘E**, **⌘G**, **⌘L** and **⌘O** stay the system's (⌘O opens
+a company), so use **Control** with those letters (**Control+Option** for Copy Line and Paste Line).
+
+### Duplicate a transaction
+
+To enter one much like one you already have, open the saved one and press **Duplicate** on the
+form's toolbar (**Ctrl+O**, or **Edit › Duplicate Transaction**), or choose **Duplicate** on its row
+in the list. The form then holds a new, unsaved copy: the same name, lines, memo and terms, dated
+today. An invoice and a journal entry get the next number when you save; a check takes the next
+check number; a bill's own number is left blank for the vendor's, and its due date is as many days
+after today as the original's was after its date. Change what you need and save it. The original
+isn't changed. Duplicate is off while the form has changes you haven't saved.
+
+Duplicate works on invoices, bills, checks, expenses, card credits and journal entries. Sales
+receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open
+read-only, so they don't offer it yet.
+
+In a register, click a transaction, then press **Ctrl+E** to open it on its form to edit, or
+**Ctrl+G** to go to the other side of it: the register of the one other account it posted to (a
+transfer's other bank account, a check's expense account). A transaction with several other
+accounts (**-Split-**) says so instead.
 
 ### Date keys
 
@@ -467,15 +528,15 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 | Menu | What's in it |
 |---|---|
 | **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
-| **Edit** | Undo, cut, copy and paste; **Delete or Void Transaction**, **Memorize Transaction**, **Insert Line** and **Delete Line** on the open form; Use Register; **Find…** (Find Transactions); Preferences |
+| **Edit** | Undo, cut, copy and paste; **Delete or Void Transaction**, **Memorize Transaction**, **Insert Line**, **Delete Line**, **Copy Line**, **Paste Line**, **Go To Transfer** and **Duplicate Transaction** on the open form; Use Register; **Find…** (Find Transactions); Preferences |
 | **View** | Show or hide the left icon bar (the left pane); Open Window List; One Window or Multiple Windows |
-| **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, sales reps and Ship Via, form templates, memorized (recurring) transactions |
-| **Company** | Home Page, users and passwords, closing date, bank feeds, budgets, general journal entries, reclassify, currency adjustment |
-| **Customers** | Customer Center, estimates, invoices, sales receipts, statements, finance charges, receive payments, credit memos and refunds, Change Item Prices |
+| **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, the profile lists (sales reps, types, terms, messages, payment methods, Ship Via), price levels, vehicles, **Currency List** (the home currency and exchange rates, in Preferences › Multiple Currencies), form templates, memorized (recurring) transactions |
+| **Company** | Home Page, To Do List, reminders, users and passwords, closing date, **Email Setup**, **AI Access (MCP)**, bank feeds, budgets, general journal entries, reclassify, clean up books, **Audit Log**, currency adjustment |
+| **Customers** | Customer Center, estimates, invoices, sales receipts, statements, finance charges, **Invoice for Time & Expenses**, receive payments, credit memos and refunds, Change Item Prices |
 | **Vendors** | Vendor Center, enter and pay bills, vendor credits, sales tax, purchase orders, 1099s |
 | **Employees** | Weekly timesheet and single time activity |
 | **Banking** | Write checks, credit card charges, registers, deposits, transfers, reconcile, bank feeds |
-| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets |
+| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
 
 The classic shortcuts work from anywhere:
 
