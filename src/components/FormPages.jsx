@@ -222,6 +222,50 @@ export function EmailFormDialog({ kind, id, period = null, onClose, onNotice }) 
  * { print(kind, id, period), printMany([{ kind, id, period }]), savePdf(kind, id, period),
  * email(kind, id) }]; `period` is for statements. Results are reported through `onNotice`.
  */
+/**
+ * Prints envelopes: returns `[portal, printEnvelope]`. Render the portal; call
+ * `printEnvelope({ kind: 'customer' | 'vendor', id })` or `({ kind: 'form', form: 'INVOICE', id })`.
+ * The page is sized to the envelope while it prints.
+ */
+export function useEnvelopePrinter(onNotice) {
+  const [envelope, setEnvelope] = useState(null);
+
+  useEffect(() => {
+    if (!envelope) return undefined;
+    const style = document.createElement('style');
+    style.textContent = `@page { size: ${envelope.pageSize}; margin: 0; }`;
+    document.head.appendChild(style);
+    const clear = () => setEnvelope(null);
+    window.addEventListener('afterprint', clear);
+    const timer = setTimeout(() => printDocument(envelope.title), 80);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('afterprint', clear);
+      style.remove();
+    };
+  }, [envelope]);
+
+  const printEnvelope = useCallback(
+    async (target) => {
+      try {
+        setEnvelope(await api.renderEnvelope(target));
+      } catch (err) {
+        onNotice?.({ kind: 'error', text: errorText(err) });
+      }
+    },
+    [onNotice],
+  );
+
+  const portal = envelope && (
+    <PrintPortal>
+      {envelope.pages.map((page, i) => (
+        <FormSheet key={i} page={page} logo={null} className="envelope-sheet" />
+      ))}
+    </PrintPortal>
+  );
+  return [portal, printEnvelope];
+}
+
 export function useFormPrinter(onNotice) {
   // The forms to print, each { pages, logo }.
   const [forms, setForms] = useState(null);
@@ -264,6 +308,10 @@ export function useFormPrinter(onNotice) {
     [onNotice],
   );
 
+  // Print Envelope: addressed to the form's Bill To.
+  const [envelopePortal, printEnvelope] = useEnvelopePrinter(onNotice);
+  const envelope = useCallback((kind, id) => printEnvelope({ kind: 'form', form: kind, id }), [printEnvelope]);
+
   const [emailing, setEmailing] = useState(null);
   const email = useCallback((kind, id, period = null) => setEmailing({ kind, id, period }), []);
   const closeEmail = useCallback(() => setEmailing(null), []);
@@ -275,6 +323,7 @@ export function useFormPrinter(onNotice) {
           {forms.flatMap((form, f) => form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />))}
         </PrintPortal>
       )}
+      {envelopePortal}
       {emailing && <EmailFormDialog kind={emailing.kind} id={emailing.id} period={emailing.period} onClose={closeEmail} onNotice={onNotice} />}
     </>
   );
@@ -289,7 +338,7 @@ export function useFormPrinter(onNotice) {
     },
     [onNotice],
   );
-  return [portal, { print, printMany, savePdf, email, setLater }];
+  return [portal, { print, printMany, savePdf, email, setLater, envelope }];
 }
 
 /** Row-menu entries for a document's form; `status` is its entry from useEmailStatuses. */
@@ -297,6 +346,7 @@ export function formMenuItems(kind, id, actions, status = null) {
   return [
     { label: 'Print…', onSelect: () => actions.print(kind, id) },
     { label: 'Save as PDF…', onSelect: () => actions.savePdf(kind, id) },
+    { label: 'Print Envelope…', onSelect: () => actions.envelope(kind, id) },
     { label: 'Email…', onSelect: () => actions.email(kind, id) },
     // Statements cover a period chosen when they are sent, so they are not queued.
     kind === 'STATEMENT'

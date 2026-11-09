@@ -66,6 +66,7 @@ features![
     desktop,
     editing,
     email,
+    envelopes,
     estimates,
     expenses,
     finance_charges,

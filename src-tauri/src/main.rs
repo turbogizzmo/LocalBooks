@@ -28,6 +28,7 @@ mod db;
 mod desktop;
 mod edits;
 mod email_log;
+mod envelopes;
 mod estimates;
 mod expenses;
 mod forensic;

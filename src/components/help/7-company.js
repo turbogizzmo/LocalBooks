@@ -71,6 +71,14 @@ export const topics = [
     guide: 'custom-forms',
   },
   {
+    id: 'print-envelope', area: 'company', views: ['settings/forms', 'sales/invoices', 'sales/customers', 'expenses/vendors'],
+    title: 'Print an envelope for a customer or vendor',
+    body: 'Print Envelope… on an invoice’s or sales receipt’s Print menu, on a form’s row in a list, or on a customer’s or vendor’s row prints an envelope with the company’s return address in the corner and the Bill To, billing address or vendor address in the middle. Settings › Custom Forms › Envelope sets the size (#10, #9, Monarch, DL or C5), font, whether to print the return address, and how far to move the address to suit your printer.',
+    keywords: 'envelope print address mailing return address #10 business envelope dl c5 monarch window customer vendor letter mail',
+    go: { label: 'Go to Custom Forms', view: 'settings/forms' },
+    guide: 'custom-forms',
+  },
+  {
     id: 'send-forms', area: 'sales', views: ['sales/send-forms', 'sales/invoices', 'sales/estimates'],
     title: 'Email forms in a batch (Email later and Send Forms)',
     body: 'Tick Email later when you save an invoice or estimate, or choose Email later in a row’s menu; Unsent only shows them. Sales › Send Forms sends the ones you select: all at once over SMTP, or one message per form in your mail app. Each send is added to the form’s sent history (✉ in the list).',
