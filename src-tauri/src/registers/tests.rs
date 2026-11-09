@@ -25,7 +25,12 @@ async fn registers_run_a_balance_from_the_opening_and_name_the_other_side() {
     // Go To Transfer (Ctrl+G) opens the other side's register: there is one only when it is one account.
     let others: Vec<Option<i64>> = reg.rows.iter().map(|r| r.split_account_id).collect();
     assert_eq!(others, [Some(rent), None]);
-    assert_eq!(reg.ending_balance_cents, 6_000);
+
+    // Two lines to the same other account name it, not -Split-, and Ctrl+G can go there.
+    post(d(3, 2), vec![JournalLine::debit(rent, 200), JournalLine::debit(rent, 300), JournalLine::credit(checking, 500)]).await.unwrap();
+    let march = account_register(&pool, checking, Some(d(3, 1)), None, false).await.unwrap();
+    assert_eq!((march.rows[0].split.as_deref(), march.rows[0].split_account_id), (Some("Rent & Lease"), Some(rent)));
+    assert_eq!(reg.ending_balance_cents, 6_000, "as of the February register");
 
     // Credit-normal accounts run positive the other way.
     let income = account_register(&pool, sales, None, None, false).await.unwrap();
