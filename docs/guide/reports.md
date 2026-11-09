@@ -67,6 +67,31 @@ doesn't carry it. To change it, open the schedule and type a new one; leave the 
 the saved one. If the schedule is run on another computer, the password must be entered there
 again: until then its runs stop and say why.
 
+## Company Snapshot
+
+**Reports › Company Snapshot** (also **Reports › Company & Financial › Company Snapshot**) is a
+page of widgets you choose, each a summary of one report:
+
+| Widget | Shows | Same figures as |
+|---|---|---|
+| Account balances | Each bank and credit card account; the total is what's in the bank | Balance Sheet |
+| Who owes you | The five customers owing most, with the overdue part, then Others | A/R Aging Summary |
+| Vendors to pay | The five vendors you owe most, with the overdue part, then Others | A/P Aging Summary |
+| Income and expense trend | Income and expense columns by month, and the net | Profit and Loss |
+| Top customers | The five largest by income, then Others | Sales by Customer Summary |
+| Top items | The five best-selling products and services, then Others | Sales by Product/Service Summary |
+| Top vendors | The five you spent most with, then Others | Expenses by Vendor Summary |
+
+- **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
+- Each widget has its own period: today (the balance widgets show balances as of the period's
+  last day; "today" also means the year to date for the others), this or last month, quarter or
+  fiscal year, or the last 12 months.
+- **Open …** under a widget opens its report for the same dates, with every line.
+
+The figures are worked out exactly as their reports work them out (the same calculation, dates and
+basis), so a widget's total always matches the report's. The page is kept in the company file, so
+everyone who opens it sees the same widgets.
+
 ## Profit and Loss
 
 1. Click **Reports**. **Profit and Loss** is the first report in the list.

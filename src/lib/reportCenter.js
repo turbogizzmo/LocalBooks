@@ -28,6 +28,7 @@ export const REPORT_DESCRIPTIONS = Object.freeze({
   'stock-status': 'On hand, on order and reorder point for each inventory item.',
   'missing-checks': 'Check numbers in a bank account, with gaps and repeats marked.',
   commented: 'Reports kept with comments on their figures, as they were when commented on.',
+  snapshot: 'Widgets you choose: balances, who owes, bills to pay, the income and expense trend and your top customers, items and vendors.',
   tb: 'Every account’s debit or credit balance on one date; the columns should agree.',
   gl: 'Every posted line, account by account, with running balances.',
   'prev-rec': 'A past bank reconciliation, as it was finished.',

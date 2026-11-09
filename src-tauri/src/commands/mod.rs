@@ -63,6 +63,7 @@ features![
     classes,
     cleanup,
     company_files,
+    company_snapshot,
     condense,
     credits,
     custom_fields,

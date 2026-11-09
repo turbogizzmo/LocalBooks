@@ -51,6 +51,9 @@ people using LocalBooks.
 - **Comment on report figures.** Click Comment on a report, then a figure, to explain it. The
   report is kept as shown under Reports › Commented Reports, and it prints with its comments,
   numbered beside their figures.
+- **Company Snapshot.** Reports › Company Snapshot is a page of widgets you add, move and date:
+  account balances, who owes you, vendors to pay, the income and expense trend, and your top
+  customers, items and vendors. Each figure matches its report, which opens from the widget.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.

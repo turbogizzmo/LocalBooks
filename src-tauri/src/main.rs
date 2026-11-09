@@ -24,6 +24,7 @@ mod cleanup;
 mod closing;
 mod commands;
 mod company_setup;
+mod company_snapshot;
 mod condense;
 mod credits;
 mod custom_fields;
