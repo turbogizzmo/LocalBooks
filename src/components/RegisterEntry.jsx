@@ -8,8 +8,9 @@ import { useTransactionDate } from '../lib/myPreferences.js';
 import { useDirtySince } from '../lib/windows.js';
 import DateBox from './DateBox.jsx';
 
+const isUndeposited = (a) => a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET';
 /** Accounts a register row can go to: not A/R or A/P (those need an invoice or bill) or Undeposited Funds. */
-const isEntryAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !(a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
+const isEntryAccount = (a) => !['ACCOUNTS_RECEIVABLE', 'ACCOUNTS_PAYABLE'].includes(a.accountType) && !isUndeposited(a);
 
 /** The two amount columns of each register that takes typed entries, in the register's order. */
 const SIDES = {
@@ -65,8 +66,12 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
     };
   }, [account.id, isBank, recorded]);
 
-  const { side, records } = sides[sideIndex];
+  const { side, records: formRecords } = sides[sideIndex];
   const isDeposit = side === 'DEPOSIT';
+  // One line to another bank account is a transfer; a bank deposit from Undeposited Funds banks the
+  // payments waiting there (registers/entry.rs).
+  const other = !splits && otherId !== null ? accounts.find((a) => a.id === otherId) : null;
+  const records = other?.accountType === 'BANK' ? 'transfer' : other && isUndeposited(other) ? 'deposit of payments waiting in Undeposited Funds' : formRecords;
   const split = splits ? summarizeSplits(splits) : null;
   // What the split lines add up to as typed, including lines still waiting for an account.
   const typedTotal = splits ? splits.reduce((sum, r) => sum + Math.max(parseMoneyToCents(r.amount) ?? 0, 0), 0) : 0;
@@ -124,7 +129,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
       });
       restore();
       setRecorded((n) => n + 1);
-      onRecorded?.(posted, `${records[0].toUpperCase()}${records.slice(1)}${isBank && side === 'PAYMENT' && number.trim() ? ` #${number.trim()}` : ''} recorded: ${formatCents(amountCents)}.`);
+      onRecorded?.(posted, `${records[0].toUpperCase()}${records.slice(1)}${records === formRecords && isBank && side === 'PAYMENT' && number.trim() ? ` #${number.trim()}` : ''} recorded: ${formatCents(amountCents)}.`);
       dateRef.current?.focus();
     } catch (err) {
       setError(errorText(err));
@@ -202,7 +207,7 @@ export default function RegisterEntry({ account, accounts, heads, onRecorded }) 
               accounts={accounts}
               value={otherId}
               onChange={setOtherId}
-              filter={(a) => isEntryAccount(a) && a.id !== account.id}
+              filter={(a) => (isEntryAccount(a) || (isBank && isDeposit && isUndeposited(a))) && a.id !== account.id}
               placeholder="Choose an account…"
               className="qb-input w-[230px]"
             />

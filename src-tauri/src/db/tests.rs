@@ -264,9 +264,16 @@ async fn a_company_closed_at_quit_stays_closed_at_the_next_launch() {
 
     // A file the operating system hands over still opens.
     let acme = tmp.0.join("Acme.localbooks");
-    Db::closed(cfg.clone()).create(&acme, "Acme", None).await.unwrap();
+    // Closed before it is reopened, as the app does: a pool that is only dropped closes its
+    // connections in the background, and on Windows one still holding the file made the reopen
+    // fail now and then, so the startup fell back to the usual company file (no name).
+    let creator = Db::closed(cfg.clone());
+    creator.create(&acme, "Acme", None).await.unwrap();
+    assert!(creator.close().await);
     let db = Db::startup_with_file(cfg.clone(), Some(acme)).await.unwrap();
-    assert_eq!(db.status().await.unwrap().company_name.as_deref(), Some("Acme"));
+    let status = db.status().await.unwrap();
+    assert_eq!(status.startup_warning, None, "the handed-over file opened");
+    assert_eq!(status.company_name.as_deref(), Some("Acme"));
 }
 
 #[tokio::test]

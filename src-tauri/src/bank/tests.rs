@@ -207,14 +207,14 @@ async fn overlapping_ofx_statements_import_each_transaction_once() {
     let pool = test_pool().await;
     let checking = account_id(&pool, "1010").await;
     let first = temp_file("sept.ofx", OFX_SGML.as_bytes());
-    assert_eq!(import_file(&pool, &first, checking, None).await.unwrap(), ImportSummary { imported: 3, duplicates: 0, skipped_zero: 0 });
+    assert_eq!(import_file(&pool, &first, checking, None).await.unwrap(), ImportSummary { imported: 3, matched: 0, duplicates: 0, skipped_zero: 0 });
 
     // The next download overlaps: two transactions again, plus one new one.
     let next = OFX_SGML
         .replacen("<STMTTRN>\r\n<TRNTYPE>DEBIT\r\n<DTPOSTED>20261001120000.000[-5:EST]\r\n<TRNAMT>-18.75\r\n<FITID>2026100101\r\n<NAME>JOES DINER &amp; GRILL\r\n<MEMO>POS PURCHASE\r\n", "", 1)
         .replace("</BANKTRANLIST>", "<STMTTRN>\r\n<DTPOSTED>20261004\r\n<TRNAMT>-60.00\r\n<FITID>2026100404\r\n<NAME>FUEL\r\n</BANKTRANLIST>");
     let second = temp_file("oct.ofx", next.as_bytes());
-    assert_eq!(import_file(&pool, &second, checking, None).await.unwrap(), ImportSummary { imported: 1, duplicates: 2, skipped_zero: 0 });
+    assert_eq!(import_file(&pool, &second, checking, None).await.unwrap(), ImportSummary { imported: 1, matched: 0, duplicates: 2, skipped_zero: 0 });
     assert_eq!(list_pending(&pool, &Suggester::default(), "test").await.unwrap().len(), 4);
     std::fs::remove_dir_all(first.parent().unwrap()).unwrap();
     std::fs::remove_dir_all(second.parent().unwrap()).unwrap();
@@ -327,9 +327,9 @@ async fn import_dedupes_and_approval_posts_and_learns() {
     .unwrap();
 
     let first = import_file(&pool, &path, checking, None).await.expect("imports");
-    assert_eq!(first, ImportSummary { imported: 2, duplicates: 0, skipped_zero: 1 });
+    assert_eq!(first, ImportSummary { imported: 2, matched: 0, duplicates: 0, skipped_zero: 1 });
     let again = import_file(&pool, &path, checking, None).await.expect("re-imports");
-    assert_eq!(again, ImportSummary { imported: 0, duplicates: 2, skipped_zero: 1 });
+    assert_eq!(again, ImportSummary { imported: 0, matched: 0, duplicates: 2, skipped_zero: 1 });
     std::fs::remove_dir_all(&dir).unwrap();
 
     let pending = list_pending(&pool, &Suggester::default(), "test").await.expect("pending");
@@ -397,10 +397,10 @@ async fn pdf_statement_is_checked_against_its_balances_and_imported_once() {
 
     // Choosing the columns remembers them for this bank's next statement.
     let summary = import_file(&pool, &path, checking, Some(mapping.clone())).await.unwrap();
-    assert_eq!(summary, ImportSummary { imported: 7, duplicates: 0, skipped_zero: 0 });
+    assert_eq!(summary, ImportSummary { imported: 7, matched: 0, duplicates: 0, skipped_zero: 0 });
     let again = inspect_file(&pool, &path, None, Some(checking)).await.unwrap();
     assert_eq!(again.mapping_source, Some("SAVED"));
-    assert_eq!(import_file(&pool, &path, checking, None).await.unwrap(), ImportSummary { imported: 0, duplicates: 7, skipped_zero: 0 });
+    assert_eq!(import_file(&pool, &path, checking, None).await.unwrap(), ImportSummary { imported: 0, matched: 0, duplicates: 7, skipped_zero: 0 });
 
     let pending = list_pending(&pool, &Suggester::default(), "test").await.unwrap();
     assert_eq!(pending.iter().map(|t| t.amount_cents).sum::<i64>(), 101_940);

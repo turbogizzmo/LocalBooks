@@ -492,7 +492,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
             income_account_id: income_account,
             product_service_id: Some(input.product_service_id),
             class_id: None,
-            is_taxable: item_taxable,
+            is_taxable: item_taxable, service_date: None,
         });
     }
 

@@ -17,7 +17,7 @@ fn d(day: u32) -> NaiveDate {
 async fn estimate_does_not_post_until_converted() {
     let pool = test_pool().await;
     let (services, ar) = (account_id(&pool, "4100").await, account_id(&pool, "1200").await);
-    let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services, class_id: None, is_taxable: false };
+    let line = |qty: i64, rate: i64| SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
     let estimate = create_estimate(
         &pool,
         EstimateInput { customer_name: "Initech".into(), estimate_date: d(1), expiration_date: Some(d(31)), memo: None, lines: vec![line(10, 12_500), line(1, 5_000)], tax_rate_id: None, discount_cents: 0, details: Default::default() },
@@ -57,7 +57,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
             estimate_date: d(1),
             expiration_date: None,
             memo: None,
-            lines: vec![SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 100_000, rate_cents: 12_500, income_account_id: services, class_id: None, is_taxable: false }],
+            lines: vec![SalesLineInput { product_service_id: None, description: "Design".into(), quantity_e4: 100_000, rate_cents: 12_500, income_account_id: services, class_id: None, is_taxable: false, service_date: None }],
             tax_rate_id: None,
             discount_cents: 0,
             details: Default::default(),
@@ -76,7 +76,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
         lines: detail
             .lines
             .iter()
-            .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id, class_id: None, is_taxable: false })
+            .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
@@ -97,7 +97,7 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
     // The invoice must still be for the estimate's customer.
     let other = create_estimate(
         &pool,
-        EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false }], tax_rate_id: None, discount_cents: 0, details: Default::default() },
+        EstimateInput { customer_name: "Initech".into(), estimate_date: d(2), expiration_date: None, memo: None, lines: vec![SalesLineInput { product_service_id: None, description: "Audit".into(), quantity_e4: 10_000, rate_cents: 5_000, income_account_id: services, class_id: None, is_taxable: false, service_date: None }], tax_rate_id: None, discount_cents: 0, details: Default::default() },
     )
     .await
     .unwrap();

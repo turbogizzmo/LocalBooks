@@ -757,7 +757,7 @@ async fn write_sync(
                 }
                 let text = if t.description.trim().is_empty() { t.payee.as_deref().unwrap_or("") } else { &t.description };
                 let fingerprint = format!("SFIN|{remote}|{}", t.id);
-                if insert_line(tx, *bank_account_id, date, &clean_description(text), amount, &fingerprint).await? {
+                if insert_line(tx, *bank_account_id, date, &clean_description(text), amount, &fingerprint).await?.is_some() {
                     summary.imported += 1;
                 } else {
                     summary.duplicates += 1;

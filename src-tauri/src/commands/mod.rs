@@ -52,6 +52,8 @@ features![
     attachments,
     backups,
     bank_feeds,
+    bank_matching,
+    bank_rules,
     bounced_checks,
     budgets,
     classes,
@@ -66,6 +68,7 @@ features![
     desktop,
     editing,
     email,
+    envelopes,
     estimates,
     expenses,
     finance_charges,
@@ -78,6 +81,7 @@ features![
     item_prices,
     job_reports,
     journal,
+    list_order,
     list_reports,
     lists,
     mcp,
@@ -94,6 +98,7 @@ features![
     reminders,
     repair,
     report_export,
+    report_mail,
     revaluation,
     sales,
     sales_header,
@@ -101,14 +106,18 @@ features![
     sales_prefs,
     sales_tax,
     search,
+    statement_charges,
+    sheet_import,
     statements,
     tax_and_time,
     timesheet,
     users,
     vendor_1099,
+    vouchers,
 ];
 
 pub use company_files::{close_company, company_changed, handle_hand_off, record_startup_failure, StartupFailure};
+pub use report_mail::run_due_schedules;
 pub use users::sign_out_after_idle;
 
 #[cfg(test)]
