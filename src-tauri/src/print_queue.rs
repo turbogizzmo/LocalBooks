@@ -87,7 +87,7 @@ pub async fn queued_bill_checks(pool: &SqlitePool, account_id: Option<i64>) -> R
                 MIN(p.payment_date) AS payment_date, SUM(p.amount_cents) AS total_cents,
                 CASE WHEN COUNT(b.bill_number) = 0 THEN NULL
                      WHEN COUNT(b.bill_number) = 1 THEN 'Bill ' || MAX(b.bill_number)
-                     ELSE 'Bills ' || group_concat(b.bill_number, ', ') END AS memo,
+                     ELSE 'Bills ' || group_concat(b.bill_number, ', ' ORDER BY p.id) END AS memo,
                 COUNT(*) AS bill_count
          FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN vendors v ON v.id = b.vendor_id
          WHERE p.to_be_printed = 1 AND p.is_voided = 0 AND p.check_group_id IS NOT NULL
