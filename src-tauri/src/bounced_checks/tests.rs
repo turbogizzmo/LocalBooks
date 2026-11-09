@@ -25,9 +25,9 @@ async fn books_balance(pool: &SqlitePool) {
     .await
     .unwrap();
     assert_eq!(unbalanced, 0);
-    let report = crate::file_dentist::checkup(pool, 0).await.unwrap();
+    let report = crate::file_repair::checkup(pool, 0).await.unwrap();
     let totals = report.checks.iter().find(|c| c.id == "TOTALS").expect("totals check");
-    assert_eq!(totals.status, crate::file_dentist::CheckStatus::Pass, "{:?}", totals.details);
+    assert_eq!(totals.status, crate::file_repair::CheckStatus::Pass, "{:?}", totals.details);
 }
 
 fn d(day: u32) -> NaiveDate {

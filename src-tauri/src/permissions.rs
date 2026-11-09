@@ -91,7 +91,7 @@ const ADMIN: &[&str] = &[
     "update_database_directory",
     "export_company_file",
     "import_company_file",
-    "file_dentist_rebuild",
+    "file_repair_rebuild",
     "condense_company_file",
     "apply_forensic_correction",
     // Bank connections (their access tokens).
@@ -127,7 +127,7 @@ const READ: &[&str] = &[
     "search_books",
     "find_transactions",
     "verify_ledger_integrity",
-    "file_dentist_checkup",
+    "file_repair_checkup",
     "propose_forensic_corrections",
     "simplefin_suggested_start",
     "report_csv",

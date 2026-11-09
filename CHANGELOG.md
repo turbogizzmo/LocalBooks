@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **File Check & Repair.** The company file check-up and rebuild in Settings is now called File
+  Check & Repair; it works as before.
+- **Imports list amounts that aren't whole cents.** When a company file stores an amount with a
+  fraction of a cent, the import review counts and lists each one, instead of leaving it out
+  without saying so.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

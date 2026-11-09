@@ -3,22 +3,22 @@
 use super::prelude::*;
 
 handlers![
-    file_dentist_checkup,
-    file_dentist_rebuild,
+    file_repair_checkup,
+    file_repair_rebuild,
     propose_forensic_corrections,
     apply_forensic_correction,
 ];
 
-/// File Dentist check-up of the live company file (read-only).
+/// File Check & Repair check-up of the live company file (read-only).
 #[tauri::command]
-pub async fn file_dentist_checkup(db: State<'_, Db>) -> Result<CheckupReport, String> {
-    file_dentist::checkup_live(&db).await
+pub async fn file_repair_checkup(db: State<'_, Db>) -> Result<CheckupReport, String> {
+    file_repair::checkup_live(&db).await
 }
 
-/// File Dentist rebuild: snapshot, restore this build's safeguards and indexes, compact, re-check.
+/// File Check & Repair rebuild: snapshot, restore this build's safeguards and indexes, compact, re-check.
 #[tauri::command]
-pub async fn file_dentist_rebuild(app: AppHandle, db: State<'_, Db>) -> Result<RebuildResult, String> {
-    let result = file_dentist::rebuild_live(&db).await?;
+pub async fn file_repair_rebuild(app: AppHandle, db: State<'_, Db>) -> Result<RebuildResult, String> {
+    let result = file_repair::rebuild_live(&db).await?;
     notify(&app);
     Ok(result)
 }
