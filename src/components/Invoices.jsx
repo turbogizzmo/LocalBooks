@@ -1161,6 +1161,7 @@ export default function Invoices({ accounts, intent }) {
         menu: [
           { label: 'Print…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.print(saved.kind, saved.id) },
           { label: 'Save as PDF…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.savePdf(saved.kind, saved.id) },
+          { label: 'Print Envelope…', disabled: !saved, hint: saved ? undefined : notSavedHint, onSelect: () => forms.envelope(saved.kind, saved.id) },
           !editing && { label: 'Post and print…', disabled: busy, onSelect: () => save('print') },
         ],
       },

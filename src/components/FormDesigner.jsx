@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Notice from './Notice.jsx';
 import { FormSheet } from './FormPages.jsx';
+import { EnvelopeDesigner } from './Envelopes.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { formatDate } from '../lib/dates.js';
@@ -157,6 +158,31 @@ function StyleBar({ styles, styleId, setStyleId, dirty, onChanged, onNotice }) {
  */
 export default function FormDesigner() {
   const [kind, setKind] = useState('INVOICE');
+  if (kind === 'ENVELOPE') return <EnvelopeDesigner tabs={(dirty) => <FormTabs kind={kind} choose={async (id) => (!dirty || (await askConfirm('Discard unsaved changes to the envelope?', { confirmLabel: 'Discard', danger: true }))) && setKind(id)} />} />;
+  return <TemplateDesigner kind={kind} setKind={setKind} />;
+}
+
+/** The Invoice, Estimate, Sales Receipt, Statement and Envelope tabs; `choose` may ask first. */
+function FormTabs({ kind, choose }) {
+  return (
+    <div className="flex gap-px overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Form">
+      {[...KINDS, { id: 'ENVELOPE', label: 'Envelope' }].map((k) => (
+        <button
+          key={k.id}
+          type="button"
+          role="tab"
+          aria-selected={kind === k.id}
+          onClick={() => choose(k.id)}
+          className={`px-3 py-0.5 font-semibold ${kind === k.id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TemplateDesigner({ kind, setKind }) {
   const styles = useLedgerQuery(api.listFormStyles);
   const [styleId, setStyleId] = useState(null);
   const [saved, setSaved] = useState(null);
@@ -260,23 +286,13 @@ export default function FormDesigner() {
         }}
       />
       <div className="flex flex-none flex-wrap items-center gap-2">
-        <div className="flex gap-px overflow-hidden rounded-xs border border-qb-border-strong text-sm" role="tablist" aria-label="Form">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              role="tab"
-              aria-selected={kind === k.id}
-              onClick={async () => {
-                if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
-                setKind(k.id);
-              }}
-              className={`px-3 py-0.5 font-semibold ${kind === k.id ? 'bg-qb-nav text-white' : 'bg-white hover:bg-qb-row-hover'}`}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+        <FormTabs
+          kind={kind}
+          choose={async (id) => {
+            if (dirty && !(await askConfirm('Discard unsaved changes to this form?', { confirmLabel: 'Discard', danger: true }))) return;
+            setKind(id);
+          }}
+        />
         <label htmlFor="form-preview-doc" className="text-xs font-semibold text-qb-ink-muted">
           Preview with
         </label>
