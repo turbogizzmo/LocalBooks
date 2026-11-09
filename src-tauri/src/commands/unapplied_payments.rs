@@ -4,7 +4,7 @@
 use super::prelude::*;
 use crate::invoices::{ReceivePaymentInput, ReceivedPayment};
 
-handlers![receive_customer_payment, write_off_customer_credit];
+handlers![receive_customer_payment, write_off_customer_credit, get_customer_credit];
 
 #[tauri::command]
 pub async fn receive_customer_payment(app: AppHandle, db: State<'_, Db>, input: ReceivePaymentInput) -> Result<ReceivedPayment, String> {
@@ -18,4 +18,9 @@ pub async fn write_off_customer_credit(app: AppHandle, db: State<'_, Db>, input:
     let memo = crate::credits::write_off_customer_credit(&db.pool().await, input).await?;
     notify(&app);
     Ok(memo)
+}
+
+#[tauri::command]
+pub async fn get_customer_credit(db: State<'_, Db>, customer_id: i64) -> Result<crate::credits::CustomerCredit, String> {
+    crate::credits::customer_credit(&db.pool().await, customer_id).await
 }

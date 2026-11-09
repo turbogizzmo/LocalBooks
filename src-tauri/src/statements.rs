@@ -188,7 +188,7 @@ async fn pl_movement(
 const DEFERRED_ENTRIES: &str = "WITH deferred AS (
         SELECT e.id FROM journal_entries e
         WHERE e.source_type IN ('INVOICE', 'BILL', 'VENDOR_CREDIT')
-           OR (e.source_type = 'CREDIT_MEMO' AND (SELECT refund_account_id IS NULL AND payment_account_id IS NULL FROM credit_memos WHERE id = e.source_id))
+           OR (e.source_type = 'CREDIT_MEMO' AND EXISTS (SELECT 1 FROM credit_memos m WHERE m.id = e.source_id AND m.refund_account_id IS NULL AND m.payment_account_id IS NULL))
     )";
 
 /// Cash-basis movement: everything paid at the time (sales receipts, expenses, checks, deposits,

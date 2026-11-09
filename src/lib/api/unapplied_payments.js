@@ -9,4 +9,6 @@ export default {
   receiveCustomerPayment: (input) => recordTransaction('receive_customer_payment', { input }),
   // input: { creditId, accountId (income), refundDate, amountCents, reference? }
   writeOffCustomerCredit: (input) => invoke('write_off_customer_credit', { input }),
+  // A customer's unused credit: { unappliedCents, remainingCents }
+  getCustomerCredit: (customerId) => invoke('get_customer_credit', { customerId }),
 };

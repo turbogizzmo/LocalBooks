@@ -175,3 +175,27 @@ async fn a_prepayment_can_be_refunded_or_written_off_and_bad_choices_post_nothin
     assert_eq!(balance(&pool, interest).await, -3_700);
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
 }
+
+#[tokio::test]
+async fn the_center_totals_unapplied_payments_and_credit_left_and_takes_only_undeposited_funds() {
+    let pool = test_pool().await;
+    let (checking, undeposited, services) = (account(&pool, "1010").await, account(&pool, "1300").await, account(&pool, "4100").await);
+    customer(&pool, "Lakeview").await;
+    let id: i64 = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Lakeview'").fetch_one(&pool).await.unwrap();
+    receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", undeposited, 4_000, "CREDIT", None)) }).await.unwrap();
+    let line = SalesLineInput { product_service_id: None, description: "Returned".into(), quantity_e4: 10_000, rate_cents: 1_500, income_account_id: services, class_id: None, is_taxable: false, service_date: None };
+    create_credit_memo(&pool, CreditMemoInput { customer_name: "Lakeview".into(), credit_date: d(11), memo: None, refund_account_id: None, lines: vec![line], tax_rate_id: None, header: Default::default() })
+        .await
+        .unwrap();
+    let credit = customer_credit(&pool, id).await.unwrap();
+    assert_eq!((credit.unapplied_cents, credit.remaining_cents), (4_000, 1_500));
+
+    // A current asset other than Undeposited Funds would never reach Make Deposits.
+    let other: i64 = sqlx::query_scalar("INSERT INTO chart_of_accounts (name, account_type) VALUES ('Prepaid Rent', 'OTHER_CURRENT_ASSET') RETURNING id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let err = receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", other, 100, "CREDIT", None)) }).await.unwrap_err();
+    assert!(err.starts_with("INV_BAD_DEPOSIT_ACCOUNT"), "{err}");
+    assert!(receive_payment(&pool, ReceivePaymentInput { payments: vec![], unapplied: Some(extra("Lakeview", checking, 100, "CREDIT", None)) }).await.is_ok());
+}

@@ -482,6 +482,27 @@ pub(crate) async fn refund_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite
     Ok(())
 }
 
+/// A customer's credit not yet used, for the Customer Center: unapplied payments and credit memos.
+#[derive(Debug, Clone, Default, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomerCredit {
+    pub unapplied_cents: i64,
+    pub remaining_cents: i64,
+}
+
+pub async fn customer_credit(pool: &SqlitePool, customer_id: i64) -> Result<CustomerCredit, String> {
+    sqlx::query_as(
+        "SELECT COALESCE(SUM(CASE WHEN m.payment_account_id IS NOT NULL THEN b.remaining_cents END), 0) AS unapplied_cents,
+                COALESCE(SUM(CASE WHEN m.payment_account_id IS NULL THEN b.remaining_cents END), 0) AS remaining_cents
+         FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
+         WHERE m.customer_id = ?1 AND m.is_voided = 0 AND m.refund_account_id IS NULL",
+    )
+    .bind(customer_id)
+    .fetch_one(pool)
+    .await
+    .map_err(db_err)
+}
+
 /// Money received from a customer that isn't applied to an invoice: an overpayment, a prepayment,
 /// or a payment from a customer with no open invoice (see `docs/plans/overpayments.md`).
 #[derive(Debug, Clone, Deserialize)]
@@ -525,13 +546,15 @@ pub(crate) async fn write_unapplied_payment(tx: &mut Transaction<'_, Sqlite>, in
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }
     let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "INV").await?;
-    let deposit_type: Option<String> = sqlx::query_scalar("SELECT account_type FROM chart_of_accounts WHERE id = ?1")
+    // A bank, or the Undeposited Funds system account (where Make Deposits finds it).
+    let deposit: Option<(String, bool)> = sqlx::query_as("SELECT account_type, is_system FROM chart_of_accounts WHERE id = ?1")
         .bind(input.deposit_account_id)
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_err)?;
-    match deposit_type.as_deref() {
-        Some("BANK") | Some("OTHER_CURRENT_ASSET") => {}
+    match deposit {
+        Some((kind, _)) if kind == "BANK" => {}
+        Some((kind, true)) if kind == "OTHER_CURRENT_ASSET" => {}
         Some(_) => return Err("INV_BAD_DEPOSIT_ACCOUNT: deposit to a Bank or Undeposited Funds account".into()),
         None => return Err("INV_BAD_DEPOSIT_ACCOUNT: deposit account does not exist".into()),
     }

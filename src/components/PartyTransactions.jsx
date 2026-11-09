@@ -16,10 +16,12 @@ import DateBox from './DateBox.jsx';
  * and credit memos with credit left. Shown only when there is some.
  */
 function CustomerCredits({ customerId }) {
-  const credits = useLedgerQuery(api.listCreditMemos).data ?? [];
-  const live = credits.filter((m) => m.customerId === customerId && !m.isVoided && m.refundAccountId === null && m.remainingCents > 0);
-  const unapplied = live.filter((m) => m.isPayment).reduce((s, m) => s + m.remainingCents, 0);
-  const remaining = live.filter((m) => !m.isPayment).reduce((s, m) => s + m.remainingCents, 0);
+  const { data: credit, reload } = useLedgerQuery(() => api.getCustomerCredit(customerId));
+  useEffect(() => {
+    reload();
+  }, [customerId, reload]);
+  const unapplied = credit?.unappliedCents ?? 0;
+  const remaining = credit?.remainingCents ?? 0;
   if (unapplied === 0 && remaining === 0) return null;
   return (
     <span className="text-xs" title="Apply, refund or write these off in Sales › Credit Memos & Refunds; a new invoice offers them too">

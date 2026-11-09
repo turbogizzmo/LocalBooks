@@ -297,7 +297,8 @@ function ApplyDialog({ memo, onClose, onDone }) {
  * With `writeOff` it writes the credit off to an income account instead.
  */
 export function RefundDialog({ title, remainingCents, accounts, direction, onRefund, onClose, writeOff = false }) {
-  const [accountId, setAccountId] = useState(() => (writeOff ? accounts.find(isIncomeAccount)?.id ?? null : accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null));
+  // The first account the box offers: a bank or card account for a refund, income for a write-off.
+  const [accountId, setAccountId] = useState(() => accounts.find((a) => a.isActive && (writeOff ? isIncomeAccount(a) : isMoneyAccount(a)))?.id ?? null);
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState(centsToInput(remainingCents));
   const [reference, setReference] = useState('');
