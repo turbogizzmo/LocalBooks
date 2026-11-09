@@ -37,6 +37,7 @@ import { addDays, todayIso } from '../lib/dates.js';
 import { useOpenFromList, useWindowContent, WindowManagerContext } from '../lib/windows.js';
 import DateBox from './DateBox.jsx';
 import { datesFor, describeReport, DATED_REPORTS, pushRecent, searchReports, toggleFavorite, withFavoritesAndRecent } from '../lib/reportCenter.js';
+import { CashFlowForecastReport } from './CashForecast.jsx';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -390,6 +391,7 @@ const REPORT_GROUPS = [
       ['bs', 'Balance Sheet'],
       ['bs-py', 'Balance Sheet Prev Year Comparison'],
       ['cf', 'Statement of Cash Flows'],
+      ['cash-forecast', 'Cash Flow Forecast'],
     ],
   },
   {
@@ -688,6 +690,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'plc' && <ProfitAndLoss key="plc" byClass navigate={navigate} />}
         {!askFirst && report === 'bs' && <BalanceSheet key={`bs${drill}`} navigate={navigate} initial={initial} />}
         {report === 'cf' && <CashFlowReport navigate={navigate} />}
+        {report === 'cash-forecast' && <CashFlowForecastReport />}
         {!askFirst && report === 'ar' && <AgingReport key={`ar${drill}`} payable={false} initial={initial} />}
         {!askFirst && report === 'ap' && <AgingReport key={`ap${drill}`} payable initial={initial} />}
         {!askFirst && report === 'sales-customer' && <SummaryReport key={`sc${drill}`} by="customer" initial={initial} onZoom={zoom} />}

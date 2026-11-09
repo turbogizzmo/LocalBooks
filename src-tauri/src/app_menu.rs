@@ -238,6 +238,7 @@ const REPORTS: &[Entry] = &[
             report("Balance Sheet Prev Year Comparison", "bs-py"),
             Entry::Sep,
             report("Statement of Cash Flows", "cf"),
+            report("Cash Flow Forecast", "cash-forecast"),
             report("Net Income Detail", "preset:net-income-detail"),
             Entry::Sep,
             report("Income & Expense Graph", "graph-ie"),
@@ -287,6 +288,8 @@ const REPORTS: &[Entry] = &[
             report("Job Estimates vs. Actuals Summary", "job-est"),
             report("Job Estimates vs. Actuals Detail", "job-est-detail"),
             report("Item Profitability", "item-profit"),
+            report("Invoice Profitability by Customer", "list:invoice-profit-customer"),
+            report("Invoice Profitability Detail", "list:invoice-profit-detail"),
             report("Item Estimates vs. Actuals", "item-est"),
             report("Profit & Loss by Job", "pl-job"),
             report("Estimates by Job", "est-by-job"),
@@ -347,6 +350,7 @@ const REPORTS: &[Entry] = &[
             report("Inventory Stock Status by Item", "stock-status"),
             Entry::Sep,
             report("Physical Inventory Worksheet", "list:physical-inventory"),
+            report("Inventory Turnover by Item", "list:inventory-turnover"),
         ],
     ),
     Entry::Sub(
@@ -394,7 +398,7 @@ const REPORTS: &[Entry] = &[
 ];
 
 /// Added to Help below LocalBooks Help.
-const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates")];
+const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates"), page("Save Diagnostics…", "settings/diagnostics")];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
 const MENUS: &[(&str, &[Entry])] =
