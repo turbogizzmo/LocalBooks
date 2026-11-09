@@ -20,6 +20,7 @@ use crate::ledger::{db_err, mul_div_round, QUANTITY_SCALE};
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::statements::LineKind;
 
+mod parity;
 mod profitability;
 
 // ------------------------------------------------------------------------------------------------
@@ -64,6 +65,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("invoice-profit-customer", "Invoice Profitability by Customer", "Sales and customers", Range, "fiscalYearToDate"),
         r("invoice-profit-detail", "Invoice Profitability Detail", "Sales and customers", Range, "fiscalYearToDate"),
         r("unpaid-bills-job", "Unpaid Bills by Job", "What you owe", AsOf, ""),
+        r("unbilled-costs-job", "Unbilled Costs by Job", "Jobs", Now, ""),
         r("open-po-detail", "Open Purchase Orders Detail", "Expenses and vendors", AsOf, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
         r("time-job-detail", "Time by Job Detail", "Jobs", Range, "thisMonth"),
@@ -71,13 +73,16 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("time-item", "Time by Item", "Jobs", Range, "thisMonth"),
         r("physical-inventory", "Physical Inventory Worksheet", "Inventory", Now, ""),
         r("inventory-turnover", "Inventory Turnover by Item", "Inventory", Range, "fiscalYearToDate"),
+        r("stock-status-vendor", "Inventory Stock Status by Vendor", "Inventory", Now, ""),
         r("audit-trail", "Audit Trail", custom_reports::ACCOUNTANT, Range, "thisMonth"),
+        r("closing-date-exceptions", "Closing Date Exceptions", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
         r("customer-phone", "Customer Phone List", LISTS, Now, ""),
         r("customer-contact", "Customer Contact List", LISTS, Now, ""),
         r("vendor-phone", "Vendor Phone List", LISTS, Now, ""),
         r("vendor-contact", "Vendor Contact List", LISTS, Now, ""),
         r("item-listing", "Item Listing", LISTS, Now, ""),
         r("account-listing", "Account Listing", LISTS, Now, ""),
+        r("terms-listing", "Terms Listing", LISTS, Now, ""),
     ]
 }
 
@@ -113,6 +118,10 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "vendor-contact" => contact_list(pool, NameKind::Vendor, today).await,
         "item-listing" => item_listing(pool, today).await,
         "account-listing" => account_listing(pool, today).await,
+        "terms-listing" => parity::terms_listing(pool, today).await,
+        "unbilled-costs-job" => parity::unbilled_costs_by_job(pool, today).await,
+        "stock-status-vendor" => parity::stock_status_by_vendor(pool, today).await,
+        "closing-date-exceptions" => parity::closing_date_exceptions(pool, start, end).await,
         _ => Err(format!("RPT_UNKNOWN: no report named {id}")),
     }
 }

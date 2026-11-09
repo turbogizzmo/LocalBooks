@@ -170,7 +170,10 @@ async fn list_reports() {
         if info.id == "audit-trail" {
             continue;
         }
-        assert!(report.report.line_count > 0, "{} has lines", info.id);
+        // The fixture closes no period and marks no cost billable; `t9_…` below fills those two.
+        if !matches!(info.id, "closing-date-exceptions" | "unbilled-costs-job") {
+            assert!(report.report.line_count > 0, "{} has lines", info.id);
+        }
         let shown = format!("{}\n{}", render(info.title, &report.report), report.notes.join("\n"));
         insta::assert_snapshot!(format!("list_{}", info.id.replace('-', "_")), shown);
     }
@@ -423,4 +426,105 @@ async fn t49_reports_tie_out_to_the_ledger() {
     // Mugs: nothing at the start, $72.00 at the end, $36.00 on average, $36.00 sold: turned over once.
     let mug_row = details(&turnover).find(|r| text(&r.cells[0]) == "Gift Mugs").unwrap();
     assert_eq!((text(&mug_row.cells[5]), text(&mug_row.cells[6])), ("1.00".to_string(), "365".to_string()));
+}
+
+/// Gap T9's last reports: each total or quantity is the one in the records it reads.
+#[tokio::test]
+async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
+    let pool = company().await;
+    let p = &pool;
+
+    // Terms Listing: every term in the Terms List, one row each.
+    let terms = run(p, "terms-listing").await;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM terms").fetch_one(p).await.unwrap();
+    assert_eq!(details(&terms).count() as i64, count);
+
+    // Unbilled Costs by Job: the billable bill and expense lines not yet invoiced, by job, with a
+    // total equal to those lines as posted to their expense accounts.
+    // A bill for the cafe and its patio job, its lines marked billable.
+    let office = account(p, "6250").await;
+    let job = |name: &'static str| {
+        let p = p.clone();
+        async move { sqlx::query_scalar::<_, i64>("SELECT id FROM customers WHERE name = ?1").bind(name).fetch_one(&p).await.unwrap() }
+    };
+    let (cafe, patio) = (job("Brightwater Cafe").await, job("Patio Menu").await);
+    let billable = |amount_cents, memo: &str, customer_id| BillLineInput {
+        account_id: office,
+        amount_cents,
+        memo: Some(memo.into()),
+        quantity_e4: None,
+        rate_cents: None,
+        product_service_id: None,
+        class_id: None,
+        customer_id: Some(customer_id),
+        billable: Some(true),
+    };
+    crate::expenses::post_vendor_bill(
+        p,
+        BillInput {
+            terms_id: None,
+            vendor_name: "Riverside Print Shop".into(),
+            bill_number: Some("RP-77".into()),
+            bill_date: d(2025, 12, 8),
+            due_date: d(2025, 12, 22),
+            memo: None,
+            total_cents: 5_000,
+            lines: vec![billable(3_000, "Menu card stock", cafe), billable(2_000, "Patio sign", patio)],
+        },
+    )
+    .await
+    .unwrap();
+    let unbilled = run(p, "unbilled-costs-job").await;
+    let posted: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(amount_cents), 0) FROM bill_lines WHERE is_billable = 1").fetch_one(p).await.unwrap();
+    assert_eq!(posted, 5_000, "the cafe's menu card stock and its patio job's sign");
+    assert_eq!(last(total(&unbilled)), posted);
+    let jobs: Vec<String> = unbilled.report.rows.iter().filter(|r| r.kind == RowKind::Section).map(|r| text(&r.cells[0])).collect();
+    assert_eq!(jobs, ["Brightwater Cafe", "Brightwater Cafe:Patio Menu"]);
+    let subtotals: Vec<i64> = unbilled.report.rows.iter().filter(|r| r.kind == RowKind::Subtotal).map(last).collect();
+    assert_eq!(subtotals, [3_000, 2_000]);
+
+    // Inventory Stock Status by Vendor: on hand as the stock ledger has it, under the preferred
+    // vendor, flagged to order at or below the reorder point.
+    sqlx::query("UPDATE products_services SET preferred_vendor_id = (SELECT id FROM vendors WHERE name = 'Lakeside Ceramics'), reorder_point_e4 = 150000 WHERE name = 'Gift Mugs'")
+        .execute(p)
+        .await
+        .unwrap();
+    let stock = run(p, "stock-status-vendor").await;
+    let mugs = details(&stock).find(|r| text(&r.cells[1]) == "Gift Mugs").expect("the mugs");
+    let on_hand: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(s.qty_change_e4), 0) FROM stock_ledger_entries s JOIN inventory_items i ON i.id = s.item_id JOIN products_services p ON p.id = i.product_id WHERE p.name = 'Gift Mugs'",
+    )
+    .fetch_one(p)
+    .await
+    .unwrap();
+    assert_eq!((cents(&mugs.cells[4]), on_hand), (120_000, 120_000), "twelve mugs");
+    assert_eq!(text(&mugs.cells[5]), "Order", "12 on hand is at or below the reorder point of 15");
+    let vendor = stock.report.rows.iter().find(|r| r.kind == RowKind::Section).map(|r| text(&r.cells[0]));
+    assert_eq!(vendor.as_deref(), Some("Lakeside Ceramics"));
+
+    // Closing Date Exceptions: none while the books stay closed; an entry made while the closing
+    // date was moved back is one, for the amount it posted.
+    let checking = account(p, "1010").await;
+    let close = |date: Option<chrono::NaiveDate>| {
+        let p = p.clone();
+        async move { crate::closing::set_closing_date(&p, &crate::closing::ClosingInput { lock_date: date, current_passcode: None, new_passcode: None }).await.unwrap() }
+    };
+    close(Some(d(2025, 11, 30))).await;
+    let none = list_reports::run(p, "closing-date-exceptions", Some(d(2025, 1, 1)), Some(d(2025, 12, 31)), today()).await.unwrap();
+    assert_eq!(none.report.line_count, 0);
+    close(None).await;
+    let line = |account_id, debit, credit| crate::ledger::JournalLine { account_id, debit: crate::money::Cents(debit), credit: crate::money::Cents(credit), memo: None, class_id: None };
+    let late = crate::ledger::post_journal_entry(
+        p,
+        crate::ledger::JournalEntry { id: None, date: d(2025, 11, 20), description: "Late office supplies".into(), lines: vec![line(office, 4_200, 0), line(checking, 0, 4_200)], currency: None },
+    )
+    .await
+    .unwrap();
+    close(Some(d(2025, 11, 30))).await;
+    let exceptions = list_reports::run(p, "closing-date-exceptions", Some(d(2025, 1, 1)), Some(d(2025, 12, 31)), today()).await.unwrap();
+    let rows: Vec<&ReportRow> = details(&exceptions).collect();
+    assert_eq!(rows.len(), 1, "{:?}", exceptions.notes);
+    assert_eq!(rows[0].journal_entry_id, Some(late));
+    let debits: i64 = sqlx::query_scalar("SELECT SUM(debit_cents) FROM journal_lines WHERE journal_entry_id = ?1").bind(late).fetch_one(p).await.unwrap();
+    assert_eq!((last(rows[0]), last(total(&exceptions))), (debits, 4_200));
 }

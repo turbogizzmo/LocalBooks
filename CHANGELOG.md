@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
+  Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
