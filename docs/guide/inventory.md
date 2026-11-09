@@ -52,3 +52,16 @@ The **Stock history** in the same window lists every purchase, sale, adjustment 
 > valued inconsistently (for example a positive value with stock below zero) is refused; void the
 > later transactions first, or adjust the quantity instead. Write-offs can only remove stock you
 > have on hand.
+
+## Reorder point and preferred vendor
+
+Open an item's record (double-click it in **Products & Services**, or **Edit…** on its row) to set:
+
+- **Preferred vendor**: who you usually buy it from. Any item can have one.
+- **Reorder point**: the quantity at which you want to order more. Only items whose stock is
+  tracked have one, since it compares with the quantity on hand. Leave it blank for none; 0 means
+  reorder when none is left.
+
+Both show on the item's information panel beside the list. When the quantity on hand is at or
+below the reorder point, the panel marks it **time to reorder**.
+

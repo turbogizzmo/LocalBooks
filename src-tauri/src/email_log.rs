@@ -64,6 +64,44 @@ pub async fn history(pool: &SqlitePool, kind: FormKind, document_id: i64) -> Res
         .map_err(db_err)
 }
 
+/// One form emailed to a customer, for the Emails list on the customer's information panel.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct SentToCustomer {
+    pub sent_at: String,
+    /// `INVOICE`, `ESTIMATE`, `SALES_RECEIPT` or `STATEMENT`.
+    pub form_type: String,
+    pub document_id: i64,
+    /// The document's number (none for a statement).
+    pub number: Option<i64>,
+    pub recipients: String,
+    pub method: String,
+    pub subject: String,
+}
+
+/// Everything emailed about customer `customer_id`, newest first: its invoices, estimates and sales
+/// receipts, and its statements (whose document id is the customer's own).
+pub async fn sent_to_customer(pool: &SqlitePool, customer_id: i64) -> Result<Vec<SentToCustomer>, String> {
+    sqlx::query_as(
+        "SELECT l.sent_at, l.form_type, l.document_id,
+                COALESCE(i.invoice_number, e.estimate_number, r.receipt_number) AS number,
+                l.recipients, l.method, l.subject
+         FROM form_email_log l
+         LEFT JOIN invoices i ON l.form_type = 'INVOICE' AND i.id = l.document_id
+         LEFT JOIN estimates e ON l.form_type = 'ESTIMATE' AND e.id = l.document_id
+         LEFT JOIN sales_receipts r ON l.form_type = 'SALES_RECEIPT' AND r.id = l.document_id
+         WHERE (l.form_type = 'INVOICE' AND i.customer_id = ?1)
+            OR (l.form_type = 'ESTIMATE' AND e.customer_id = ?1)
+            OR (l.form_type = 'SALES_RECEIPT' AND r.customer_id = ?1)
+            OR (l.form_type = 'STATEMENT' AND l.document_id = ?1)
+         ORDER BY l.id DESC",
+    )
+    .bind(customer_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)
+}
+
 /// Per form of one type: the last send and whether it is waiting in the queue.
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]

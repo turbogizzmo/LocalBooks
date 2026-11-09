@@ -12,6 +12,7 @@ import Notice from './Notice.jsx';
 import { AchFilesPanel, OriginatorDialog, chooseAchPath, nextBusinessDay } from './AchPayments.jsx';
 import { MemorizeDialog } from './Recurring.jsx';
 import RowMenu, { voidItem } from './RowMenu.jsx';
+import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
@@ -28,6 +29,7 @@ import DateBox, { CheckNumberBox } from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { useSalesPrefs } from '../lib/salesPrefs.js';
 import { byDateThenNumber, discountDate, duplicateDates, stepButtons } from '../lib/formStep.js';
+import { PAY_BILLS_SORTS, payBillsVendors, payBillsView } from '../lib/payBillsView.js';
 
 const COLS = 10;
 export const isCategory = (a) =>
@@ -252,7 +254,8 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   );
 
   return (
-    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel flex-none">
+    <div className="flex flex-none gap-2">
+    <section ref={flow.formRef} onKeyDown={flow.onKeyDown} className="qb-panel min-w-0 flex-1">
       {reports.panel}
       {voucherElements}
       {toolbar}
@@ -344,6 +347,9 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         <MemorizeDialog kind="BILL" payload={memorizing} date={billDate} defaultName={vendor.trim()} onClose={() => setMemorizing(null)} onSaved={(text) => { setMemorizing(null); onPosted(text); }} />
       )}
     </section>
+    {/* The chosen vendor's information panel (T56); it can be hidden. */}
+    <FormInfoPanel kind="vendor" name={vendor} names={vendors} />
+    </div>
   );
 }
 
@@ -363,6 +369,11 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const firstRef = useRef(null);
+  // Filter By (one vendor or all) and Sort By above the list; the bill clicked last shows below it.
+  const [filterVendor, setFilterVendor] = useState(null);
+  const [sortBy, setSortBy] = useState('due');
+  const [highlight, setHighlight] = useState(null);
+  const openFromList = useOpenFromList();
   // Pay by ACH file: the date vendors are paid, the account's originator details (undefined while
   // loading, null when not set up), and which vendors have bank details.
   const [method, setMethod] = useState('STANDARD');
@@ -436,6 +447,10 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
     setSelected((s) => ({ ...s, [bill.id]: on ? centsToInput(bill.balanceCents) : undefined }));
   };
   const picked = open.filter((b) => selected[b.id] !== undefined);
+  // The list as filtered and sorted; ticked bills a filter hides are still paid.
+  const shown = payBillsView(open, { vendorId: filterVendor, sortBy });
+  const hiddenPicked = picked.filter((b) => !shown.includes(b)).length;
+  const highlightedBill = shown.find((b) => b.id === highlight) ?? null;
   // Early-payment discounts the terms still offer, then vendor credits (oldest first), taken off the
   // ticked bills as Preferences › Bills says; not with ACH.
   const { autoCredits, autoDiscounts } = useSalesPrefs();
@@ -633,6 +648,34 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           {creditTotal > 0 && <div className="text-xs text-qb-ink-muted">after {formatCents(creditTotal)} of discounts and credits</div>}
         </div>
       </div>
+      <div className="flex flex-wrap items-end gap-2 border-b border-qb-border px-2 py-1">
+        <label>
+          <span className="qb-label">Filter by</span>
+          <select className="qb-input w-[200px]" value={filterVendor ?? ''} onChange={(e) => setFilterVendor(e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">All vendors</option>
+            {payBillsVendors(open).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="qb-label">Sort by</span>
+          <select className="qb-input w-[140px]" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            {PAY_BILLS_SORTS.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {hiddenPicked > 0 && (
+          <span className="self-center text-xs text-qb-ink-muted">
+            {hiddenPicked} ticked bill{hiddenPicked === 1 ? '' : 's'} from other vendors will be paid too
+          </span>
+        )}
+      </div>
       <table className="qb-grid">
         <colgroup>
           <col className="w-[32px]" />
@@ -662,10 +705,14 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
               <td colSpan={(autoCredits || autoDiscounts) && !ach ? 8 : 7} className="qb-grid-cell text-qb-ink-muted">No open bills to pay.</td>
             </tr>
           )}
-          {open.map((b, i) => {
+          {shown.map((b, i) => {
             const on = selected[b.id] !== undefined;
             return (
-              <tr key={b.id} className={`qb-grid-row ${on ? 'is-active' : ''}`}>
+              <tr
+                key={b.id}
+                className={`qb-grid-row ${on ? 'is-active' : ''} ${highlight === b.id ? 'outline outline-1 -outline-offset-1 outline-qb-green' : ''}`}
+                onClick={() => setHighlight(b.id)}
+              >
                 <td className="qb-grid-cell text-center">
                   <input ref={i === 0 ? firstRef : undefined} type="checkbox" className="accent-qb-green" checked={on} onChange={(e) => toggle(b, e.target.checked)} aria-label={`Pay ${b.vendorName}`} />
                 </td>
@@ -701,6 +748,31 @@ function PayBills({ bills, accounts, onDone, onCancel }) {
           })}
         </tbody>
       </table>
+      {highlightedBill && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-qb-border bg-qb-canvas px-2 py-1 text-sm" aria-label="Bill information">
+          <span className="font-semibold">
+            {highlightedBill.vendorName}
+            {highlightedBill.billNumber ? ` · Bill #${highlightedBill.billNumber}` : ''}
+          </span>
+          <span>Due {formatDate(highlightedBill.dueDate)}</span>
+          {highlightedBill.termsName && <span>Terms {highlightedBill.termsName}</span>}
+          <span>
+            Discount{' '}
+            {highlightedBill.discountUntil && highlightedBill.earlyDiscountCents > 0
+              ? `${formatCents(highlightedBill.earlyDiscountCents)} until ${formatDate(highlightedBill.discountUntil)}`
+              : 'none'}
+          </span>
+          <span>Discount &amp; credits used {formatCents(creditOn(highlightedBill))}</span>
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary ml-auto h-row"
+            title="Open this bill in a window of its own"
+            onClick={() => openFromList('expenses/bills', 'edit', { billId: highlightedBill.id })}
+          >
+            Go to Bill
+          </button>
+        </div>
+      )}
       {checks && payees.length > 1 && (
         <div className="px-2 py-1 text-xs text-qb-ink-muted">
           One check per vendor{lastCheck ? `, numbered ${firstCheck} to ${lastCheck}` : ''}. Each vendor's bills are paid together on one check.
