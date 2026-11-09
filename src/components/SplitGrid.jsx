@@ -6,7 +6,9 @@ import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
 let nextKey = 1;
-const noVendors = async () => [];
+// The same empty list every time, so a grid without Received From never re-renders for it.
+const NO_VENDORS = [];
+const noVendors = async () => NO_VENDORS;
 // `billable` is null until the row's Billable box is touched: the company default then decides
 // (Preferences › Time & Expenses › "Mark all expenses as billable").
 export const blankSplit = (accountId = null) => ({ key: nextKey++, accountId, productId: null, classId: null, customerId: null, vendorId: null, billable: null, memo: '', amount: '', qty: '', rate: '' });
