@@ -391,6 +391,30 @@ deposits, bills, bill credits, checks and card charges and credits become those 
 documents; journal entries post as journal entries. Customer payments and bill payments can't be
 imported from a spreadsheet yet, nor can sales tax or discounts on an invoice.
 
+## Payroll from a payroll service
+
+LocalBooks doesn't run payroll; your payroll service pays your people and files the taxes. To get
+each payroll into your books, export it from the service as a journal (most call it a journal entry
+or general ledger report) as a .csv or Excel file, then under step 1 open **Payroll: a payroll
+service's journal export** and click **Choose a payroll export…**.
+
+1. **Columns.** LocalBooks matches the file's columns from their headings: **Date** and
+   **Account** are required, with **Debit** and **Credit** columns or one signed **Amount**
+   (positive is a debit). **Entry** (a payroll ID, check date or batch) says which rows belong
+   together; without it, rows on the same date make one entry. **Memo** goes on each line. Change
+   any match in the table, and say whether dates are month or day first if the file can't tell.
+2. **Accounts.** Each account name in the file is matched to one of yours: the account you chose
+   for it last time, or an account with the same name or number. Choose an account for any that
+   isn't matched. Your choices are remembered for the next payroll.
+3. **Check.** Every entry is shown with its lines and totals. Rows with a bad date or amount, and
+   entries whose debits and credits differ, are listed as problems; summary rows with no date (like
+   a Total row) are skipped.
+4. **Post.** **Post N entries** (Admins only, like other imports) posts them all as journal entries, or none if anything is wrong
+   (for example a date in a closed period). The same file can't be posted twice; to redo an
+   import, void its entries in the journal, then import the file again.
+
+Past imports are listed under the button, with how many of their entries have been voided.
+
 ## 1. Choose a file
 
 1. Go to **Settings › Import & Migration** in the sidebar, or choose **File › Utilities ›

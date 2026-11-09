@@ -1,0 +1,34 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Invoice Profitability Detail, 2025-01-01 to 2025-12-31
+
+Date                           Invoice                          Income Cost of Goods  Gross Profit Margin
+Alder & Finch LLP
+  2025-01-10                   1001                          11,156.25          0.00     11,156.25 100.0%
+  2025-04-10                   1004                          11,050.00          0.00     11,050.00 100.0%
+  2025-07-10                   1007                          11,368.75          0.00     11,368.75 100.0%
+  2025-10-10                   1010                          11,262.50          0.00     11,262.50 100.0%
+Total Alder & Finch LLP                                      44,837.50          0.00     44,837.50 100.0%
+Bonn Studio GmbH
+  2025-09-15                   1013                           5,208.00          0.00      5,208.00 100.0%
+Total Bonn Studio GmbH                                        5,208.00          0.00      5,208.00 100.0%
+Brightwater Cafe
+  2025-02-10                   1002                          11,887.50          0.00     11,887.50 100.0%
+  2025-05-10                   1005                          11,781.25          0.00     11,781.25 100.0%
+  2025-08-10                   1008                          11,675.00          0.00     11,675.00 100.0%
+  2025-11-10                   1011                          11,993.75          0.00     11,993.75 100.0%
+  2025-11-14                   1014                           2,200.00          0.00      2,200.00 100.0%
+Total Brightwater Cafe                                       49,537.50          0.00     49,537.50 100.0%
+Cobalt Outfitters
+  2025-03-10                   1003                          10,743.75          0.00     10,743.75 100.0%
+  2025-06-10                   1006                          10,637.50          0.00     10,637.50 100.0%
+  2025-09-10                   1009                          10,531.25          0.00     10,531.25 100.0%
+  2025-12-10                   1012                          10,425.00          0.00     10,425.00 100.0%
+Total Cobalt Outfitters                                      42,337.50          0.00     42,337.50 100.0%
+TOTAL                                                       141,920.50          0.00    141,920.50 100.0%
+
+14 lines
+
+Income is what each invoice credited to income accounts; cost is the cost of goods its tracked stock was sold at. Products and services whose stock isn't tracked carry no cost.

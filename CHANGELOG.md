@@ -30,6 +30,14 @@ people using LocalBooks.
   now take files too. A file marked **Send with the form** goes along when LocalBooks emails the
   invoice, estimate, sales receipt or statement. Deleting a file is reversible: it can be restored
   from the library, and only an Admin can remove a deleted file for good, after a warning.
+- **Export to tax software.** For a company that files Schedule C, Export TXF… on the Income Tax
+  report saves the tax year's totals, line by line, as a TXF file that personal tax programs
+  import. It lists anything it can't carry (accounts with no tax line, depreciation, business use
+  of home) with the amount, for you to enter by hand.
+- **Post payroll from your payroll service.** In the Desktop Migration Wizard, Payroll takes a
+  payroll service's journal export (.csv or Excel), matches its columns and account names to yours
+  (remembering them for next time), shows every entry with its totals, and posts them only when
+  each one balances. The same file can't be posted twice.
 - **Choose a list's columns.** Columns ▾ on the customer, vendor and item lists, the chart of
   accounts and account registers shows, hides and reorders columns, with extra ones such as Terms
   and Preferred delivery to turn on. Each table remembers its columns.
@@ -50,6 +58,16 @@ people using LocalBooks.
 - **Pay Bills: filter, sort and bill details.** Filter the list to one vendor and sort it by due
   date, discount date, vendor or amount due. Click a bill to see its terms, discount and credits
   used below the list, with **Go to Bill** to open it.
+- **Inventory Turnover and Invoice Profitability reports.** Inventory Turnover by Item shows how
+  often each item's stock turned over and its days on hand; Invoice Profitability by Customer and
+  Detail show each invoice's income, cost of goods, gross profit and margin.
+- **Save diagnostics.** **Help › Save Diagnostics…** saves a zip you can send to whoever helps you:
+  LocalBooks' version, your operating system, the company file's schema, integrity check and row
+  counts, and a new local log of starts, stops, files opened and crashes. It holds no business data,
+  you can read it first, and nothing is sent anywhere.
+- **Cash Flow Forecast.** A new report shows your cash on hand and, week by week, the money open
+  invoices will bring in and open bills will take out, with the cash left each week. Its totals
+  match the A/R and A/P agings. The Dashboard shows the next eight weeks at a glance.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their
