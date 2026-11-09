@@ -21,6 +21,7 @@ const FONTS = [
 
 /** Settings › Custom Forms › Envelope: size, font, return address and where the address sits. */
 export function EnvelopeDesigner({ tabs }) {
+  // `tabs(dirty)` draws the form tabs, which ask before leaving unsaved changes.
   const [saved, setSaved] = useState(null);
   const [draft, setDraft] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -75,7 +76,7 @@ export function EnvelopeDesigner({ tabs }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-none flex-wrap items-center gap-2">
-        {tabs}
+        {tabs(dirty)}
         <span className="text-xs text-qb-ink-muted">One envelope layout for the whole company, used by Print Envelope on forms and in the customer and vendor lists.</span>
         <span className="ml-auto flex gap-1">
           <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy || !dirty} onClick={() => setDraft(saved)}>

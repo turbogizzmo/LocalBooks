@@ -197,10 +197,11 @@ pub fn layout(layout: &EnvelopeLayout, company: &forms::Company, to: &[String]) 
     let size = 12.0;
     let leading = 15.0;
     let widest = to.iter().map(|l| pdf::text_width(layout.font, false, size, l)).fold(0.0_f32, f32::max);
-    let mut x = (width * 0.42).min(width - 18.0 - widest).max(18.0) + layout.nudge_right as f32;
-    x = x.clamp(0.0, width);
-    let mut y = height * 0.5 + 12.0 + layout.nudge_down as f32;
-    y = y.clamp(size, height);
+    // The nudge moves the block, but never off the envelope: its widest line and its last line
+    // stay on the paper.
+    let x = ((width * 0.42).min(width - 18.0 - widest).max(18.0) + layout.nudge_right as f32).clamp(0.0, (width - widest).max(0.0));
+    let block = leading * to.len().saturating_sub(1) as f32;
+    let mut y = (height * 0.5 + 12.0 + layout.nudge_down as f32).clamp(size, (height - 6.0 - block).max(size));
     for line in to {
         ops.push(text(x, y, line, false, size, INK));
         y += leading;
@@ -287,6 +288,19 @@ mod tests {
         let before = texts(&plain).into_iter().find(|(_, _, s)| s == "Jordan Rivera").unwrap();
         assert_eq!(t[0].0, before.0 + 18.0);
         assert_eq!(t[0].1, before.1 - 9.0);
+    }
+
+    #[test]
+    fn a_nudge_never_pushes_the_address_off_the_envelope() {
+        let to: Vec<String> = ["Jordan Rivera", "Rivera Landscaping and Garden Design LLC", "412 Orchard Lane", "Springfield, OR 97477"].map(String::from).to_vec();
+        for (right, down) in [(72, 72), (-72, -72), (72, -72), (-72, 72)] {
+            let page = layout(&EnvelopeLayout { size: EnvelopeSize::Monarch, nudge_right: right, nudge_down: down, ..Default::default() }, &company(), &to);
+            for (x, y, text) in texts(&page).into_iter().filter(|(_, _, t)| to.contains(t)) {
+                let w = pdf::text_width(FontFamily::Helvetica, false, 12.0, &text);
+                assert!(x >= 0.0 && x + w <= page.width + 0.01, "{text} at {x} runs off a {} wide envelope", page.width);
+                assert!(y > 0.0 && y <= page.height, "{text} at {y} is off the envelope");
+            }
+        }
     }
 
     #[test]

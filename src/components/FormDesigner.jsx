@@ -158,7 +158,7 @@ function StyleBar({ styles, styleId, setStyleId, dirty, onChanged, onNotice }) {
  */
 export default function FormDesigner() {
   const [kind, setKind] = useState('INVOICE');
-  if (kind === 'ENVELOPE') return <EnvelopeDesigner tabs={<FormTabs kind={kind} choose={setKind} />} />;
+  if (kind === 'ENVELOPE') return <EnvelopeDesigner tabs={(dirty) => <FormTabs kind={kind} choose={async (id) => (!dirty || (await askConfirm('Discard unsaved changes to the envelope?', { confirmLabel: 'Discard', danger: true }))) && setKind(id)} />} />;
   return <TemplateDesigner kind={kind} setKind={setKind} />;
 }
 
