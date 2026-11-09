@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Accountant's Copy.** Make a copy of the books for your accountant with a dividing date and keep
+  working after it; their journal entries and new accounts come back in a changes file that
+  LocalBooks checks, posts all at once and records.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

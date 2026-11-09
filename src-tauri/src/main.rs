@@ -4,6 +4,7 @@
 #![deny(clippy::float_arithmetic)]
 
 mod accountant_reports;
+mod accountants_copy;
 mod accounts;
 mod app_menu;
 mod ach;
