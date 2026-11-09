@@ -1,6 +1,6 @@
 //! Temporary copies LocalBooks writes outside the company file, and when they go (gap R4).
 //!
-//! Two kinds of plain-text copy are made in the app's cache folder:
+//! Two kinds of plain copy are made in the app's cache folder:
 //!
 //! - **Mail staging** (`outgoing/<stamp>/`): a form, voucher or report PDF handed to the mail app.
 //!   The mail app reads it when it opens the draft, so it is kept for [`KEEP`] and then deleted.
