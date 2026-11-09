@@ -28,6 +28,7 @@ import {
   Vendors1099Report,
 } from './MoreReports.jsx';
 import { ItemPriceListReport } from './PriceLevels.jsx';
+import { Forms1099Nec } from './Forms1099.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { reportBasis, useCompanyPreferences, useCompanyPreferencesState } from '../lib/companyPreferences.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
@@ -425,6 +426,7 @@ const REPORT_GROUPS = [
     reports: [
       ['expenses-vendor', 'Expenses by Vendor Summary'],
       ['1099', '1099 Summary'],
+      ['1099-nec', '1099-NEC and 1096'],
     ],
   },
   {
@@ -706,6 +708,7 @@ export default function Reports({ navigate, intent }) {
         {report === 'missing-checks' && <MissingChecksReport navigate={navigate} />}
         {report === '1099' && <Vendors1099Report key="1099" />}
         {report === '1099-detail' && <Vendors1099Report key="1099-detail" detail />}
+        {report === '1099-nec' && <Forms1099Nec />}
         {isJobReport(report) && <JobReport key={report} report={report} navigate={navigate} />}
         {isMileageReport(report) && <MileageReport key={report} report={report} navigate={navigate} />}
         {isGraphReport(report) && <GraphReport key={report} report={report} navigate={navigate} onOpenReport={openReport} />}

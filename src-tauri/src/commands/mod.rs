@@ -72,6 +72,7 @@ features![
     estimates,
     expenses,
     finance_charges,
+    form_1099,
     forms,
     graphs,
     installed_quickbooks,

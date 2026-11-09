@@ -19,6 +19,7 @@ import { formatCents } from '../lib/money.js';
 import { todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import PartyTransactions from './PartyTransactions.jsx';
+import { W9Dialog } from './Forms1099.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { askText } from '../lib/dialogs.jsx';
 
@@ -182,6 +183,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   const files1099 = useLedgerQuery(api.getPreferences).data?.tax_1099_enabled !== 'false';
   // The account number this vendor knows the company by (Preferences › Checking puts it in check memos).
   const [accountNumber, setAccountNumber] = useState({ stored: null, draft: '' });
+  const [w9Open, setW9Open] = useState(false);
 
   useEffect(() => {
     if (kind === 'vendor') {
@@ -310,7 +312,21 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
               <label className="col-span-2 flex items-center gap-1.5 text-sm">
                 <input type="checkbox" className="accent-qb-green" checked={Boolean(form.is1099)} onChange={set('is1099')} />
                 Track payments for a 1099
+                <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row px-2" onClick={(e) => (e.preventDefault(), setW9Open(true))}>
+                  W-9…
+                </button>
               </label>
+            )}
+            {w9Open && (
+              <W9Dialog
+                vendorId={id}
+                vendorName={form.name}
+                onClose={(saved) => {
+                  setW9Open(false);
+                  // The W-9 may have changed the TIN: show it, and keep it when this form saves.
+                  if (saved) api.getParty(kind, id).then((p) => setForm((f) => ({ ...f, taxId: p.taxId, taxIdMasked: p.taxIdMasked, originalTaxId: p.taxId })), () => {});
+                }}
+              />
             )}
             {kind === 'customer' && salesTax.enabled && (
               <>

@@ -177,6 +177,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "users",
     "vehicles",
     "vendor_bank_accounts",
+    "vendor_w9",
     "vendors",
 ];
 

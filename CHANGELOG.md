@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **W-9s and 1099-NEC forms.** W-9… on a vendor keeps their W-9: legal name, tax classification,
+  TIN and its type (checked for numbers the IRS never issues), and the date it came in. Reports ›
+  1099-NEC and 1096 lists the year's forms with anything still missing, and prints a filer's
+  worksheet with the 1096 totals and each recipient's Copy B.
 - **Service dates, a template on the form, and printed credit memos.** Invoice and sales receipt
   lines take a Service Date that prints in its own column; the Template box on a sales form picks
   the form style it prints with; and credit memos and refund receipts now print as a form of their

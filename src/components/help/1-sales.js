@@ -328,8 +328,8 @@ export const topics = [
   {
     id: '1099', area: 'expenses', views: ['expenses/vendors', 'reports'],
     title: 'Prepare 1099s',
-    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties).',
-    keywords: '1099 1099-nec contractor tax id ein ssn year end vendor',
+    body: 'Mark contractors Track payments for a 1099 and add their tax ID on the vendor (Expenses › Vendors › Edit…). Map expense accounts to 1099 boxes in Preferences › Tax: 1099. Reports › 1099 Summary totals what you paid each of them in a calendar year by check, cash or bank transfer, per box, and 1099 Detail lists each payment. A box is reported from $600 for payments before 2026 and $2,000 from 2026 ($10 for royalties). Keep each contractor’s W-9 with W-9… on the vendor (name, classification, TIN and its type, date received). Reports › 1099-NEC and 1096 lists the year’s forms with anything missing, and Print forms… prints the filer’s worksheet with the 1096 totals and each recipient’s Copy B.',
+    keywords: '1099 1099-nec 1096 w-9 w9 tin itin contractor tax id ein ssn year end vendor copy b print iris',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
   },
   {
