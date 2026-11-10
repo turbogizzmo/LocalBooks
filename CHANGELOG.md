@@ -65,7 +65,10 @@ people using LocalBooks.
   an invoice, with its own design in Settings › Custom Forms. An accepted estimate becomes a sales
   order with **Create sales order**. Open Sales Orders by Customer and by Item and Pending Sales are
   in Reports › Sales, and Preferences › Sales & Customers can turn sales orders off.
-
+- **External Accountant users.** Add your accountant as an External Accountant user: they work
+  like a Standard user, can post adjusting entries dated on or before your closing date without
+  you moving it, and never see sensitive data such as full tax IDs. The Closing Date Exceptions
+  report now shows who entered each change.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
@@ -125,7 +128,8 @@ people using LocalBooks.
   too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
   your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
   chargebacks, so it matches the bank line.
-
+- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
+  Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

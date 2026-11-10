@@ -144,8 +144,9 @@ function ClosingDate() {
         )}
       </div>
       <p className="border-t border-qb-border px-2 py-1 text-xs text-qb-ink-muted">
-        Entries dated on or before the closing date cannot be posted or voided, from any screen. Changing or removing the date needs
-        the passcode. Every change is kept in the history below.
+        Entries dated on or before the closing date cannot be posted or voided, from any screen, except by an External Accountant
+        user. Changing or removing the date needs the passcode. Every change is kept in the history below, and anything posted or
+        voided in a closed period is listed, with who did it, in Reports › Closing Date Exceptions.
       </p>
       {state?.text && (
         <div className="px-2 pb-1">

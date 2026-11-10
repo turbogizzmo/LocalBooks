@@ -39,6 +39,9 @@ pub enum Role {
     Standard,
     /// Reads the books; changes nothing.
     ViewOnly,
+    /// The company's outside accountant: works like Standard, may post on or before the closing
+    /// date, and never sees sensitive data (the role can't hold the data key).
+    ExternalAccountant,
 }
 
 impl Role {
@@ -47,6 +50,7 @@ impl Role {
             Role::Admin => "ADMIN",
             Role::Standard => "STANDARD",
             Role::ViewOnly => "VIEW_ONLY",
+            Role::ExternalAccountant => "EXTERNAL_ACCOUNTANT",
         }
     }
 
@@ -55,6 +59,7 @@ impl Role {
             "ADMIN" => Ok(Role::Admin),
             "STANDARD" => Ok(Role::Standard),
             "VIEW_ONLY" => Ok(Role::ViewOnly),
+            "EXTERNAL_ACCOUNTANT" => Ok(Role::ExternalAccountant),
             other => Err(format!("USER_BAD_ROLE: unknown role '{other}'")),
         }
     }
@@ -278,11 +283,20 @@ pub async fn list(pool: &SqlitePool) -> Result<Vec<UserView>, String> {
     rows.iter().map(UserRow::view).collect()
 }
 
+/// Whether a user with `role` holds the data key: an Admin always, an External Accountant never.
+fn sensitive_for(role: Role, asked: bool) -> Result<bool, String> {
+    match role {
+        Role::Admin => Ok(true),
+        Role::ExternalAccountant if asked => Err("USER_EXTERNAL_NO_SENSITIVE: an External Accountant can't see sensitive data".into()),
+        _ => Ok(asked),
+    }
+}
+
 /// An Admin adds a user with a temporary password.
 pub async fn add(pool: &SqlitePool, admin: &Session, input: NewUserInput) -> Result<UserView, String> {
     let username = clean_username(&input.username)?;
     crypto::check_password_rules(&input.password)?;
-    let sensitive = input.can_see_sensitive || input.role == Role::Admin;
+    let sensitive = sensitive_for(input.role, input.can_see_sensitive)?;
     let key = if sensitive { Some(admin.admin_key()?) } else { None };
     let verifier = crypto::password_verifier(&input.password).await?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -312,7 +326,7 @@ pub async fn add(pool: &SqlitePool, admin: &Session, input: NewUserInput) -> Res
 
 /// An Admin changes another user: name, role, sensitive data, on or off, and optionally a password reset.
 pub async fn update(pool: &SqlitePool, admin: &Session, id: i64, input: UserUpdate) -> Result<UserView, String> {
-    let sensitive = input.can_see_sensitive || input.role == Role::Admin;
+    let sensitive = sensitive_for(input.role, input.can_see_sensitive)?;
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let current = row_by_id(&mut tx, id).await?;
     if id == admin.user.id && (input.role != Role::Admin || !input.is_active) {

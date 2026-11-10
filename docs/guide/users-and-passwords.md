@@ -33,9 +33,13 @@ sign-in screen.
      restores, bank connections and AI access.
    - **Standard**: all the day-to-day bookkeeping, but not those Admin areas.
    - **View only**: looks at the books and runs reports; changes nothing.
+   - **External Accountant**: for your outside accountant. Works like Standard, and may also post
+     and void entries dated on or before the [closing date](closing-the-books.md), for example
+     adjusting entries for a year you've closed. Never sees sensitive data. Everything they post in
+     a closed period is listed, with who did it, in **Reports › Closing Date Exceptions**.
 4. Tick **Can see sensitive data (vendor tax IDs and bank details)** if this person needs full tax IDs, for example
    to file 1099s, or needs to see and change vendors' bank details and pay bills by ACH file. Admins
-   always can.
+   always can; External Accountants never can.
 5. Enter a **Temporary password** twice and click **Add User**. Tell the user the password; they
    choose their own the first time they sign in.
 
