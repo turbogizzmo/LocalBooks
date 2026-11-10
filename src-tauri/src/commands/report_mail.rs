@@ -4,6 +4,7 @@
 use super::email::{smtp_secrets, EmailInput};
 use super::prelude::*;
 use crate::report_schedules::{self, Destination, Schedule};
+use crate::secrets::SecretStore;
 use crate::xlsx_export::Sheet;
 
 handlers![
@@ -17,25 +18,34 @@ handlers![
     run_report_schedule_now,
 ];
 
-async fn pdf_of(db: &Db, sheet: &Sheet) -> Result<(sqlx::SqlitePool, String, Vec<u8>), String> {
+/// `password`: the PDF opens only with it (blank: no password).
+async fn pdf_of(db: &Db, sheet: &Sheet, password: Option<&str>) -> Result<(sqlx::SqlitePool, String, Vec<u8>), String> {
     let pool = db.pool().await;
     let symbol = crate::preferences::currency_symbol(&pool).await?;
-    Ok((pool, crate::report_pdf::file_name(sheet), crate::report_pdf::to_pdf(sheet, &symbol)))
+    let password = password.filter(|p| !p.is_empty());
+    Ok((pool, crate::report_pdf::file_name(sheet), crate::report_pdf::to_protected_pdf(sheet, &symbol, password)?))
+}
+
+/// Where scheduled reports' PDF passwords are kept: the system credential store in the installed
+/// app, never the company file.
+fn report_passwords(app: &AppHandle) -> Result<SecretStore, String> {
+    let config = crate::data_dirs(app).map_err(|e| format!("SCHEDULE_CONFIG: {e}"))?.1;
+    Ok(SecretStore::for_this_computer(&config, "LocalBooks report passwords", "report-passwords.json", "the report PDF password"))
 }
 
 /// Sends the report as a PDF through the email server set up in Settings › Email.
 #[tauri::command]
-pub async fn email_report_with_smtp(app: AppHandle, db: State<'_, Db>, sheet: Sheet, email: EmailInput) -> Result<(), String> {
+pub async fn email_report_with_smtp(app: AppHandle, db: State<'_, Db>, sheet: Sheet, email: EmailInput, pdf_password: Option<String>) -> Result<(), String> {
     let (to, subject, body) = email.checked()?;
-    let (pool, file_name, pdf) = pdf_of(&db, &sheet).await?;
+    let (pool, file_name, pdf) = pdf_of(&db, &sheet, pdf_password.as_deref()).await?;
     smtp::send(&pool, &smtp_secrets(&app)?, smtp::Outgoing { to, subject, body, file_name, pdf, more: Vec::new() }).await
 }
 
 /// Opens a new message in the user's mail app with the report's PDF attached.
 #[tauri::command]
-pub async fn email_report_with_mail_app(app: AppHandle, db: State<'_, Db>, sheet: Sheet, email: EmailInput) -> Result<ComposeOutcome, String> {
+pub async fn email_report_with_mail_app(app: AppHandle, db: State<'_, Db>, sheet: Sheet, email: EmailInput, pdf_password: Option<String>) -> Result<ComposeOutcome, String> {
     let (to, subject, body) = email.checked()?;
-    let (_, file_name, bytes) = pdf_of(&db, &sheet).await?;
+    let (_, file_name, bytes) = pdf_of(&db, &sheet, pdf_password.as_deref()).await?;
     let outgoing = app.path().app_cache_dir().map_err(|e| format!("MAIL_STAGE: {e}"))?.join("outgoing");
     let message = mail_app::Compose { to, subject, body, attachment: Default::default() };
     tauri::async_runtime::spawn_blocking(move || {
@@ -48,8 +58,8 @@ pub async fn email_report_with_mail_app(app: AppHandle, db: State<'_, Db>, sheet
 
 /// Saves the report as a PDF where the user chooses. Returns the path, or None if cancelled.
 #[tauri::command]
-pub async fn save_report_pdf(app: AppHandle, db: State<'_, Db>, sheet: Sheet) -> Result<Option<String>, String> {
-    let (_, file_name, bytes) = pdf_of(&db, &sheet).await?;
+pub async fn save_report_pdf(app: AppHandle, db: State<'_, Db>, sheet: Sheet, pdf_password: Option<String>) -> Result<Option<String>, String> {
+    let (_, file_name, bytes) = pdf_of(&db, &sheet, pdf_password.as_deref()).await?;
     let Some(path) = super::report_export::choose_export_path(app, file_name).await? else { return Ok(None) };
     export_engine::write_atomically(&path, &bytes)?;
     Ok(Some(path.display().to_string()))
@@ -76,14 +86,14 @@ pub async fn list_report_schedules(db: State<'_, Db>) -> Result<Vec<Schedule>, S
 
 #[tauri::command]
 pub async fn save_report_schedule(app: AppHandle, db: State<'_, Db>, id: Option<i64>, schedule: Schedule) -> Result<Schedule, String> {
-    let saved = report_schedules::save(&db.pool().await, id, &schedule, Local::now().date_naive()).await?;
+    let saved = report_schedules::save(&db.pool().await, id, &schedule, Local::now().date_naive(), &report_passwords(&app)?).await?;
     notify(&app);
     Ok(saved)
 }
 
 #[tauri::command]
 pub async fn delete_report_schedule(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<(), String> {
-    report_schedules::delete(&db.pool().await, id).await?;
+    report_schedules::delete(&db.pool().await, id, &report_passwords(&app)?).await?;
     notify(&app);
     Ok(())
 }
@@ -103,7 +113,7 @@ pub async fn run_report_schedule_now(app: AppHandle, db: State<'_, Db>, id: i64)
 
 /// Makes and sends (or saves) one run's files; returns what happened, in words.
 async fn deliver(app: &AppHandle, pool: &sqlx::SqlitePool, schedule: &Schedule, run: NaiveDate) -> Result<String, String> {
-    let files = report_schedules::files_for(pool, schedule, run).await?;
+    let files = report_schedules::files_for(pool, schedule, run, &report_passwords(app)?).await?;
     let count = files.len();
     match schedule.destination {
         Destination::Folder => {

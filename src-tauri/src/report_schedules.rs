@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
 use crate::ledger::db_err;
+use crate::secrets::SecretStore;
 use crate::xlsx_export::{Column, ColumnKind, Row, RowKind, Sheet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +162,15 @@ pub struct Schedule {
     pub last_run_at: Option<String>,
     #[serde(default)]
     pub last_result: Option<String>,
+    /// The PDFs open only with a password, kept in this computer's credential store.
+    #[serde(default)]
+    pub protect_pdf: bool,
+    /// When saving: a new password for the PDFs (never sent back).
+    #[serde(default, skip_serializing)]
+    pub pdf_password: Option<String>,
+    /// The name the password is stored under (`pdf_password_key`).
+    #[serde(skip)]
+    pub pdf_password_key: Option<String>,
 }
 
 fn yes() -> bool {
@@ -214,10 +224,10 @@ fn check(s: &Schedule) -> Result<(), String> {
     Ok(())
 }
 
-type ScheduleRow = (i64, String, String, String, NaiveDate, Option<NaiveDate>, Option<NaiveDate>, String, Option<String>, Option<String>, String, bool, Option<String>, Option<String>);
+type ScheduleRow = (i64, String, String, String, NaiveDate, Option<NaiveDate>, Option<NaiveDate>, String, Option<String>, Option<String>, String, bool, Option<String>, Option<String>, Option<String>);
 
 fn from_row(r: ScheduleRow) -> Schedule {
-    let (id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result) = r;
+    let (id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result, pdf_password_key) = r;
     Schedule {
         id,
         name,
@@ -234,10 +244,14 @@ fn from_row(r: ScheduleRow) -> Schedule {
         next_run,
         last_run_at,
         last_result,
+        protect_pdf: pdf_password_key.is_some(),
+        pdf_password: None,
+        pdf_password_key,
     }
 }
 
-const SELECT: &str = "SELECT id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result FROM report_schedules";
+const SELECT: &str =
+    "SELECT id, name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, last_run_at, last_result, pdf_password_key FROM report_schedules";
 
 pub async fn list(pool: &SqlitePool) -> Result<Vec<Schedule>, String> {
     let rows: Vec<ScheduleRow> = sqlx::query_as(&format!("{SELECT} ORDER BY name COLLATE NOCASE, id")).fetch_all(pool).await.map_err(db_err)?;
@@ -249,9 +263,44 @@ pub async fn get(pool: &SqlitePool, id: i64) -> Result<Schedule, String> {
     row.map(from_row).ok_or_else(|| "SCHEDULE_NOT_FOUND: that schedule no longer exists".into())
 }
 
-/// Adds or changes a schedule; its next run starts again from the start date (or today).
-pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: NaiveDate) -> Result<Schedule, String> {
+/// A new random name to store a schedule's PDF password under.
+fn new_password_key() -> Result<String, String> {
+    let mut bytes = [0u8; 16];
+    getrandom::getrandom(&mut bytes).map_err(|e| format!("SCHEDULE_RANDOM: {e}"))?;
+    Ok(format!("report-schedule-{}", bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()))
+}
+
+/// Adds or changes a schedule; its next run starts again from the start date (or today). A PDF
+/// password goes to `passwords` (the computer's credential store), never into the company file.
+pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: NaiveDate, passwords: &SecretStore) -> Result<Schedule, String> {
     check(s)?;
+    let existing = match id {
+        Some(id) => get(pool, id).await?.pdf_password_key,
+        None => None,
+    };
+    let new_password = s.pdf_password.as_deref().filter(|p| !p.is_empty());
+    let key = if s.protect_pdf {
+        if s.format != FileFormat::Pdf {
+            return Err("SCHEDULE_PDF_PASSWORD: only PDF files can have a password".into());
+        }
+        let key = match &existing {
+            Some(key) => key.clone(),
+            None => new_password_key()?,
+        };
+        match new_password {
+            Some(password) => {
+                crate::pdf::Protection::check_password(password)?;
+                passwords.put(&key, password).await?;
+            }
+            None if passwords.get(&key).await?.is_none() => {
+                return Err("SCHEDULE_PDF_PASSWORD: enter the password the PDFs will open with".into());
+            }
+            None => {}
+        }
+        Some(key)
+    } else {
+        None
+    };
     let reports = serde_json::to_string(&s.reports).map_err(|e| format!("SCHEDULE_SAVE: {e}"))?;
     // The first run: the start date, or the first scheduled date from today on.
     let mut next = s.start_date;
@@ -273,7 +322,7 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: Naive
         Some(id) => {
             let done = sqlx::query(
                 "UPDATE report_schedules SET name = ?1, reports_json = ?2, frequency = ?3, start_date = ?4, end_date = ?5, next_run = ?6, destination = ?7,
-                        recipients = ?8, folder = ?9, format = ?10, is_active = ?11 WHERE id = ?12",
+                        recipients = ?8, folder = ?9, format = ?10, is_active = ?11, pdf_password_key = ?13 WHERE id = ?12",
             )
             .bind(s.name.trim())
             .bind(&reports)
@@ -287,6 +336,7 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: Naive
             .bind(format)
             .bind(s.is_active)
             .bind(id)
+            .bind(&key)
             .execute(pool)
             .await
             .map_err(db_err)?;
@@ -296,8 +346,8 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: Naive
             id
         }
         None => sqlx::query_scalar(
-            "INSERT INTO report_schedules (name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
+            "INSERT INTO report_schedules (name, reports_json, frequency, start_date, end_date, next_run, destination, recipients, folder, format, is_active, pdf_password_key)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id",
         )
         .bind(s.name.trim())
         .bind(&reports)
@@ -310,17 +360,26 @@ pub async fn save(pool: &SqlitePool, id: Option<i64>, s: &Schedule, today: Naive
         .bind(folder)
         .bind(format)
         .bind(s.is_active)
+        .bind(&key)
         .fetch_one(pool)
         .await
         .map_err(db_err)?,
     };
+    // A password no longer used leaves the credential store.
+    if let Some(old) = existing.filter(|old| key.as_ref() != Some(old)) {
+        passwords.delete(&old).await?;
+    }
     get(pool, id).await
 }
 
-pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), String> {
+pub async fn delete(pool: &SqlitePool, id: i64, passwords: &SecretStore) -> Result<(), String> {
+    let key = get(pool, id).await?.pdf_password_key;
     let done = sqlx::query("DELETE FROM report_schedules WHERE id = ?1").bind(id).execute(pool).await.map_err(db_err)?;
     if done.rows_affected() == 0 {
         return Err("SCHEDULE_NOT_FOUND: that schedule no longer exists".into());
+    }
+    if let Some(key) = key {
+        passwords.delete(&key).await?;
     }
     Ok(())
 }
@@ -408,15 +467,21 @@ pub type ReportFile = (String, Vec<u8>, &'static str);
 const XLSX_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /// The schedule's reports for a run on `run`, as files.
-pub async fn files_for(pool: &SqlitePool, schedule: &Schedule, run: NaiveDate) -> Result<Vec<ReportFile>, String> {
+pub async fn files_for(pool: &SqlitePool, schedule: &Schedule, run: NaiveDate, passwords: &SecretStore) -> Result<Vec<ReportFile>, String> {
     let symbol = crate::preferences::currency_symbol(pool).await?;
+    let password = match (&schedule.pdf_password_key, schedule.format) {
+        (Some(key), FileFormat::Pdf) => Some(passwords.get(key).await?.ok_or(
+            "SCHEDULE_PDF_PASSWORD: this schedule's PDF password isn't on this computer. Open the schedule and enter it again",
+        )?),
+        _ => None,
+    };
     let mut out = Vec::with_capacity(schedule.reports.len());
     for report in &schedule.reports {
         let sheet = sheet_for(pool, report, run).await?;
         let stem = crate::report_pdf::file_name(&sheet);
         let stem = stem.trim_end_matches(".pdf");
         out.push(match schedule.format {
-            FileFormat::Pdf => (format!("{stem} {run}.pdf"), crate::report_pdf::to_pdf(&sheet, &symbol), "application/pdf"),
+            FileFormat::Pdf => (format!("{stem} {run}.pdf"), crate::report_pdf::to_protected_pdf(&sheet, &symbol, password.as_deref())?, "application/pdf"),
             FileFormat::Xlsx => (format!("{stem} {run}.xlsx"), crate::xlsx_export::to_xlsx(&sheet, &symbol)?, XLSX_TYPE),
         });
     }
