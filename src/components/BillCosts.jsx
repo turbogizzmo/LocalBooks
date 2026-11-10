@@ -3,7 +3,7 @@ import Notice from './Notice.jsx';
 import DateBox from './DateBox.jsx';
 import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents, formatQuantity } from '../lib/money.js';
+import { formatCents, formatMoney, formatQuantity } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 
 const key = (c) => `${c.source}:${c.lineId}`;
@@ -216,7 +216,10 @@ export default function BillCosts({ navigate }) {
                   <td className="qb-grid-cell">{c.vendorName ?? '—'}</td>
                   <td className="qb-grid-cell">{c.accountName}</td>
                   <td className="qb-grid-cell">{c.memo ?? ''}</td>
-                  <td className="qb-grid-cell num">{formatCents(c.amountCents)}</td>
+                  <td className="qb-grid-cell num" title={c.currencyCode ? `${formatMoney(c.foreignAmountCents, c.currencyCode)} at the expense's rate` : undefined}>
+                    {formatCents(c.amountCents)}
+                    {c.currencyCode && <div className="text-2xs text-qb-ink-muted">{formatMoney(c.foreignAmountCents, c.currencyCode)}</div>}
+                  </td>
                   <td className="qb-grid-cell num text-qb-ink-muted">{badMarkup ? '—' : formatCents(markupOf(c.amountCents, milli))}</td>
                 </tr>
               ))}

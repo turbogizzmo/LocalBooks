@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Billable costs in other currencies.** Sales › Bill Costs lists costs on expenses in another
+  currency and bills them at their home amount, at the expense's own exchange rate. Editing an
+  invoice that billed costs can move a reimbursed line to another expense account.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
