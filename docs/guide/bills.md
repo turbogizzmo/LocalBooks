@@ -60,6 +60,13 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Purchase orders for a job
+
+On a purchase order (**Expenses › Purchase Orders**), the **Customer:Job** column names the
+customer or job a line is for, as on a bill. When the order becomes a bill, each line keeps its job,
+so the cost shows up in job reports and can be billed to the customer. **Reports › Jobs › Open
+Purchase Orders by Job** lists the lines still on order under each job.
+
 ## Approvals for bills and purchase orders
 
 A company can have bills and purchase orders approved before they count. Under **Expenses ›

@@ -77,6 +77,7 @@ const CUSTOMER_COLUMNS: &[(&str, &str)] = &[
     ("time_activities", "customer_id"),
     ("mileage_trips", "customer_id"),
     ("todos", "customer_id"),
+    ("purchase_order_lines", "customer_id"),
 ];
 const VENDOR_COLUMNS: &[(&str, &str)] = &[
     ("bills", "vendor_id"),

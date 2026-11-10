@@ -1,0 +1,16 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Open Purchase Orders by Job, all dates to 2025-12-31
+
+                               Date          Num                       Vendor                    Item                      Description               Expected             Amount
+No customer or job
+                               2025-12-05    1                         Riverside Print Shop      Poster Prints             Poster stock              2025-12-19            80.00
+                               2025-12-05    1                         Riverside Print Shop                                Rush delivery             2025-12-19            15.00
+Total No customer or job                                                                                                                                                   95.00
+TOTAL                                                                                                                                                                      95.00
+
+2 lines
+
+Open purchase order lines as of 2025-12-31, by the customer or job on each line. Purchase orders do not post to the books.

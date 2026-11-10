@@ -72,6 +72,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("open-so-customer", "Open Sales Orders by Customer", "Sales and customers", Now, ""),
         r("open-so-item", "Open Sales Orders by Item", "Sales and customers", Now, ""),
         r("pending-sales", "Pending Sales", "Sales and customers", Now, ""),
+        r("open-po-job", "Open Purchase Orders by Job", "Jobs", AsOf, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
         r("time-job-detail", "Time by Job Detail", "Jobs", Range, "thisMonth"),
         r("time-name", "Time by Name", "Jobs", Range, "thisMonth"),
@@ -121,6 +122,7 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "open-so-customer" => sales_orders::open_by_customer(pool, today).await,
         "open-so-item" => sales_orders::open_by_item(pool, today).await,
         "pending-sales" => sales_orders::pending(pool, today).await,
+        "open-po-job" => open_po_by_job(pool, end).await,
         "time-job-summary" => time_summary(pool, TimeBy::Job, start, end).await,
         "time-job-detail" => time_by_job_detail(pool, start, end).await,
         "time-name" => time_summary(pool, TimeBy::Name, start, end).await,
@@ -728,6 +730,75 @@ async fn open_po_detail(pool: &SqlitePool, as_of: NaiveDate) -> Result<Accountan
     }
     rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(total)]));
     let notes = vec![format!("{} open as of {as_of}. Purchase orders do not post to the books.", plural(orders, "purchase order", "purchase orders"))];
+    Ok(done(None, as_of, columns, rows, lines.len(), notes))
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct PoJobLine {
+    customer_id: Option<i64>,
+    job: Option<String>,
+    vendor: String,
+    po_number: i64,
+    po_date: NaiveDate,
+    expected_date: Option<NaiveDate>,
+    item: Option<String>,
+    description: Option<String>,
+    amount_cents: i64,
+}
+
+/// The lines of the purchase orders still open as of `as_of`, under the customer or job on each
+/// line (lines for no one under "No customer or job", last). Its total is Open Purchase Orders
+/// Detail's: the same lines, grouped another way.
+async fn open_po_by_job(pool: &SqlitePool, as_of: NaiveDate) -> Result<AccountantReport, String> {
+    let lines: Vec<PoJobLine> = sqlx::query_as(&format!(
+        "{CUSTOMER_NAMES}
+         SELECT l.customer_id, cn.full_name AS job, v.name AS vendor, p.po_number, p.po_date, p.expected_date, ps.name AS item, l.description, l.amount_cents
+         FROM purchase_orders p JOIN vendors v ON v.id = p.vendor_id
+         JOIN purchase_order_lines l ON l.purchase_order_id = p.id
+         LEFT JOIN products_services ps ON ps.id = l.product_service_id
+         LEFT JOIN cn ON cn.id = l.customer_id
+         WHERE p.status = 'OPEN' AND p.po_date <= ?1
+         ORDER BY l.customer_id IS NULL, cn.full_name COLLATE NOCASE, l.customer_id, p.po_date, p.po_number, l.line_number"
+    ))
+    .bind(as_of)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let columns = vec![
+        head("", ColumnKind::Text),
+        head("Date", ColumnKind::Date),
+        head("Num", ColumnKind::Text),
+        head("Vendor", ColumnKind::Text),
+        head("Item", ColumnKind::Text),
+        head("Description", ColumnKind::Text),
+        head("Expected", ColumnKind::Date),
+        head("Amount", ColumnKind::Money),
+    ];
+    let w = columns.len();
+    let mut rows = Vec::new();
+    let mut total: i64 = 0;
+    let mut i = 0;
+    while i < lines.len() {
+        // Grouped by the customer or job itself, so two that share a name (as during a merge) stay apart.
+        let customer = lines[i].customer_id;
+        let name = lines[i].job.clone().unwrap_or_else(|| "No customer or job".into());
+        rows.push(section(0, w, &name));
+        let mut sub: i64 = 0;
+        while i < lines.len() && lines[i].customer_id == customer {
+            let l = &lines[i];
+            rows.push(row(
+                RowKind::Detail,
+                1,
+                vec![Value::Null, json!(l.po_date), json!(l.po_number.to_string()), json!(l.vendor), json!(l.item), json!(l.description), json!(l.expected_date), json!(l.amount_cents)],
+            ));
+            sub = sub.checked_add(l.amount_cents).ok_or("RPT_OVERFLOW: open purchase orders")?;
+            i += 1;
+        }
+        rows.push(labeled(RowKind::Subtotal, 0, w, &format!("Total {name}"), &[json!(sub)]));
+        total = total.checked_add(sub).ok_or("RPT_OVERFLOW: open purchase orders")?;
+    }
+    rows.push(labeled(RowKind::Total, 0, w, "TOTAL", &[json!(total)]));
+    let notes = vec![format!("Open purchase order lines as of {as_of}, by the customer or job on each line. Purchase orders do not post to the books.")];
     Ok(done(None, as_of, columns, rows, lines.len(), notes))
 }
 
