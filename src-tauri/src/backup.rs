@@ -73,6 +73,7 @@ fn describe(path: &Path, kind: &str) -> Result<BackupFile, String> {
 }
 
 async fn open_read_only(path: &Path) -> Result<SqlitePool, String> {
+    crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).read_only(true).create_if_missing(false);
     SqlitePoolOptions::new()
         .max_connections(1)

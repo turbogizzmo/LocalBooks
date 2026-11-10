@@ -1137,6 +1137,7 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
             items: Vec::new(),
             other_lines: vec![DepositOtherLine { account_id: category_account_id, amount_cents: amount, memo: Some(description.clone()), class_id, customer_id: None, vendor_id: None }],
             cash_back: None,
+            deductions: Vec::new(),
         };
         (write_deposit(tx, &deposit).await?.1, "INFLOW")
     };
