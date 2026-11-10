@@ -61,6 +61,21 @@ pub fn database_len(real: i64) -> i64 {
     }
 }
 
+/// A file control (outside SQLite's own numbers) that reads or writes the key header through the
+/// connection's own file handle. Opening and closing another handle on a database SQLite has open
+/// would drop this process's POSIX locks on it, so a live file's header is only ever touched this
+/// way. The argument is a [`HeaderIo`].
+pub const FCNTL_HEADER_IO: c_int = 0x4C42_4801;
+
+/// The argument of [`FCNTL_HEADER_IO`]: `len` bytes at `offset` (inside the header) to or from `buf`.
+#[repr(C)]
+pub struct HeaderIo {
+    pub write: bool,
+    pub offset: i64,
+    pub len: c_int,
+    pub buf: *mut c_void,
+}
+
 /// One open file: our methods first (SQLite reads `pMethods` from here), then the default VFS's
 /// own file object right after it in the same allocation.
 #[repr(C)]
@@ -191,6 +206,12 @@ unsafe extern "C" fn x_open(_: *mut ffi::sqlite3_vfs, name: ffi::sqlite3_filenam
     let Some(open) = (*inner).xOpen else { return ffi::SQLITE_CANTOPEN };
     let rc = open(inner, name, real, flags, out_flags);
     if rc != ffi::SQLITE_OK {
+        // SQLite won't call our xClose (pMethods is null), so close whatever the inner open left.
+        if !(*real).pMethods.is_null() {
+            if let Some(close) = (*(*real).pMethods).xClose {
+                close(real);
+            }
+        }
         return rc;
     }
     if flags & ffi::SQLITE_OPEN_MAIN_DB != 0 {
@@ -258,9 +279,24 @@ unsafe extern "C" fn io_check_reserved_lock(file: *mut ffi::sqlite3_file, out: *
     call!(file, xCheckReservedLock, out)
 }
 
+/// SAFETY (FCNTL_HEADER_IO): `arg` points to a live [`HeaderIo`] whose `buf` holds `len` bytes.
 unsafe extern "C" fn io_file_control(file: *mut ffi::sqlite3_file, op: c_int, arg: *mut c_void) -> c_int {
     // Memory-mapped reads are off without xFetch (methods version 2), so only the size hint, a size
     // in database terms, needs translating.
+    if op == FCNTL_HEADER_IO {
+        if !shifted(file) {
+            return ffi::SQLITE_NOTFOUND;
+        }
+        let io = &*arg.cast::<HeaderIo>();
+        if io.offset < 0 || io.len < 0 || io.offset + i64::from(io.len) > HEADER_LEN {
+            return ffi::SQLITE_RANGE;
+        }
+        if !io.write {
+            return call!(file, xRead, io.buf, io.len, io.offset);
+        }
+        let rc = call!(file, xWrite, io.buf.cast_const(), io.len, io.offset);
+        return if rc == ffi::SQLITE_OK { call!(file, xSync, ffi::SQLITE_SYNC_FULL) } else { rc };
+    }
     if op == ffi::SQLITE_FCNTL_SIZE_HINT && shifted(file) {
         let mut hint = real_offset(*arg.cast::<ffi::sqlite3_int64>());
         return call!(file, xFileControl, op, std::ptr::addr_of_mut!(hint).cast::<c_void>());

@@ -33,8 +33,9 @@ pub fn open_options(path: &Path, page_key: Option<&[u8; 32]>) -> Result<SqliteCo
     let options = SqliteConnectOptions::new().filename(path).vfs(vfs::VFS_NAME);
     Ok(match page_key {
         Some(key) => {
-            let hex: String = key.iter().map(|b| format!("{b:02X}")).collect();
-            options.pragma("key", format!("\"x'{hex}'\""))
+            // sqlx keeps its own copy for the pool's life; at least ours is wiped.
+            let pragma = zeroize::Zeroizing::new(format!("\"x'{}'\"", key.iter().map(|b| format!("{b:02X}")).collect::<String>()));
+            options.pragma("key", pragma.as_str().to_owned())
         }
         None => options,
     })

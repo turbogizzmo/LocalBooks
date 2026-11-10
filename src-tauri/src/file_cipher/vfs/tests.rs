@@ -86,6 +86,13 @@ async fn an_encrypted_file_keeps_its_header_and_hides_its_data() {
     // The header can change while the database stays readable.
     header::write(&path, &Header { page_size: 4096, slots: vec![] }).unwrap();
     let books = pool(&path, Some(&KEY), 1).await.unwrap();
+    // While it is open, the header is read and written through the connection's own handle.
+    let mut conn = books.acquire().await.unwrap();
+    assert_eq!(header::read_open(&mut conn).await.unwrap(), Header { page_size: 4096, slots: vec![] });
+    let renamed = Header { page_size: 4096, slots: vec![] };
+    header::write_open(&mut conn, &renamed).await.unwrap();
+    assert_eq!(header::read_open(&mut conn).await.unwrap(), renamed);
+    drop(conn);
     assert_eq!(count(&books).await.unwrap(), 2000);
     let check: String = sqlx::query_scalar("PRAGMA integrity_check").fetch_one(&books).await.unwrap();
     assert_eq!(check, "ok");
@@ -114,6 +121,9 @@ async fn plain_files_pass_through_unchanged() {
     let books = pool(&path, None, 2).await.unwrap();
     sqlx::query("CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL) STRICT").execute(&books).await.unwrap();
     sqlx::query("INSERT INTO customers (name) VALUES (?1)").bind(MARKER).execute(&books).await.unwrap();
+    let mut conn = books.acquire().await.unwrap();
+    assert!(header::read_open(&mut conn).await.unwrap_err().starts_with("FILE_NOT_ENCRYPTED"), "a plain file has no header to read");
+    drop(conn);
     checkpoint(&books).await;
     books.close().await;
     let bytes = std::fs::read(&path).unwrap();
