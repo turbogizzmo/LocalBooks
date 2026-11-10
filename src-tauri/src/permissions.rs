@@ -110,6 +110,7 @@ const ADMIN: &[&str] = &[
     "ingest_raw_qbw",
     "ingest_report_exports",
     "stage_import_sheet",
+    "post_payment_sheet",
     "export_from_installed_quickbooks",
     "set_qbw_mapping",
     "auto_create_qbw_accounts",

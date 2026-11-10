@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Payments, sales tax and discounts from a spreadsheet.** A customer payments or bill payments
+  sheet pays invoices and bills already in your books: every row is checked against them first,
+  and Post payments records them all at once. Invoice and sales receipt sheets take a sales tax
+  and a discount for each document.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

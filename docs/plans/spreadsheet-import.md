@@ -110,9 +110,26 @@ entry's debits must equal its credits, or the entry's first row lists the differ
 resolver as `GENERAL JOURNAL` blocks; an account the books don't have takes a type from its name,
 and the review matches it to one of the books' accounts.
 
+## Sales tax and discounts (part 3)
+
+Invoices and sales receipts take **Sales tax** and **Discount**: amounts for the whole document,
+which the rows that give them must agree on. The builder adds two splits to the document's block:
+the tax to *Sales Tax Payable* (a current liability) and the discount to *Discounts Given* (income,
+the other way from the item lines). The full import already reads a line to a liability account as
+the document's sales tax and an income line the other way as its discount, so they land on the
+invoice as `tax_cents` and `discount_cents`. The review maps both accounts to the books' own.
+
+## Payments (part 3)
+
+A payments sheet pays invoices and bills that are already in the books, which the staged resolver
+can't (it applies payments only within one import). So customer and bill payments are not staged:
+`sheet_import/payments.rs` reads the rows, checks each against the books (the invoice by number, or
+the vendor's bill by number and vendor; open, home currency, the named customer's, enough left once
+the sheet's earlier rows are counted; the account a bank, Undeposited Funds or for bills a card),
+and posts every row in one transaction through `invoices::record_payments` and
+`expenses::write_bill_payment`, the code Receive Payments and Pay Bills use. Checking a payments
+sheet runs the same checks, so the list of problems is complete before anything posts.
+
 ## Later
 
-Customer payments and bill payments are left out: the resolver applies a payment only to invoices in
-the same import, oldest first, but a payments sheet pays invoices already in the books. That needs a
-column naming the invoice or bill each row pays and an application against the books' open
-documents. Sales tax and discounts on sales are not columns yet.
+A sales tax rate (rather than an amount) and a payment's early-payment discount are not columns.

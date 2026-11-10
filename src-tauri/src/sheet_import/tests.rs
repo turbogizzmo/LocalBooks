@@ -1,6 +1,6 @@
 use super::*;
 
-const ALL_KINDS: [SheetKind; 12] = [
+const ALL_KINDS: [SheetKind; 14] = [
     SheetKind::Customers,
     SheetKind::Vendors,
     SheetKind::Invoices,
@@ -13,6 +13,8 @@ const ALL_KINDS: [SheetKind; 12] = [
     SheetKind::CardCharges,
     SheetKind::CardCredits,
     SheetKind::JournalEntries,
+    SheetKind::CustomerPayments,
+    SheetKind::BillPayments,
 ];
 
 fn sheet(csv: &str) -> Sheet {
@@ -277,4 +279,111 @@ async fn purchase_and_journal_sheets_post() {
     .await
     .unwrap();
     assert_eq!(checking, -58_000);
+}
+
+/// Payments sheets pay invoices and bills already in the books; every row is checked against the
+/// books first, and they post all together or not at all.
+#[tokio::test]
+async fn payments_sheets_pay_what_is_in_the_books() {
+    let pool = crate::db::test_pool().await;
+    let income: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
+    let invoice = |customer: &str, cents: i64| {
+        let pool = pool.clone();
+        let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+            "customerName": customer, "issueDate": "2026-03-01", "dueDate": "2026-03-31",
+            "lines": [{ "description": "Work", "quantityE4": 10_000, "rateCents": cents, "incomeAccountId": income }]
+        }))
+        .unwrap();
+        async move { crate::invoices::create_and_post_invoice(&pool, input).await.unwrap().invoice_number }
+    };
+    let (a, b) = (invoice("Rivera", 30_000).await, invoice("Chen", 10_000).await);
+    let check = |kind: SheetKind, csv: String| {
+        let pool = pool.clone();
+        async move {
+            let s = sheet(&csv);
+            payments::check_against_books(&pool, kind, &s, &suggest(kind, &s.headers), None).await.unwrap()
+        }
+    };
+    let bad = format!(
+        "Date,Customer,Invoice no.,Amount\n03/10/2026,Rivera,{a},200.00\n03/11/2026,Rivera,{a},150.00\n03/12/2026,Rivera,{b},10.00\n03/12/2026,Rivera,9999,10.00\n"
+    );
+    let found = check(SheetKind::CustomerPayments, bad).await;
+    let messages: Vec<(usize, String)> = found.problems.iter().map(|p| (p.row, p.message.clone())).collect();
+    assert_eq!(
+        messages,
+        [
+            (3, format!("Invoice {a} has $100.00 left to pay, less than $150.00")),
+            (4, format!("Invoice {b} is Chen's, not Rivera's")),
+            (5, "Invoice 9999 isn't in the books".into()),
+        ]
+    );
+
+    // A clean sheet posts: Rivera's invoice paid in two parts into Undeposited Funds, Chen's into Checking.
+    let good = format!("Date,Customer,Invoice no.,Amount,Deposit to,Payment method,Reference no.\n03/10/2026,Rivera,{a},200.00,,Check,5521\n03/11/2026,Rivera,{a},100.00,,Check,5530\n03/12/2026,chen,{b},100.00,Checking,ACH,\n");
+    assert!(check(SheetKind::CustomerPayments, good.clone()).await.problems.is_empty());
+    let s = sheet(&good);
+    let posted = payments::post(&pool, SheetKind::CustomerPayments, &s, &suggest(SheetKind::CustomerPayments, &s.headers), None).await.unwrap();
+    assert_eq!((posted.payments, posted.total_cents), (3, 40_000));
+    let statuses: Vec<String> = sqlx::query_scalar("SELECT status FROM invoices ORDER BY invoice_number").fetch_all(&pool).await.unwrap();
+    assert_eq!(statuses, ["PAID", "PAID"]);
+    assert_eq!(crate::banking::list_undeposited(&pool).await.unwrap().len(), 2);
+    // Posting the same sheet again finds nothing left to pay, and posts nothing.
+    let err = payments::post(&pool, SheetKind::CustomerPayments, &s, &suggest(SheetKind::CustomerPayments, &s.headers), None).await.unwrap_err();
+    assert!(err.starts_with("SHEET_PROBLEMS"), "{err}");
+
+    // Bill payments name the vendor's bill and the account they're paid from.
+    let expense: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_type = 'EXPENSE' ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+    let bill: crate::expenses::BillInput = serde_json::from_value(serde_json::json!({
+        "vendorName": "Paper Co", "billNumber": "B-7", "billDate": "2026-03-02", "dueDate": "2026-03-20", "memo": null, "totalCents": 7_000,
+        "lines": [{ "accountId": expense, "amountCents": 7_000, "memo": null }]
+    }))
+    .unwrap();
+    crate::expenses::post_vendor_bill(&pool, bill).await.unwrap();
+    let bills = "Date,Vendor,Bill no.,Amount,Pay from,Check no.\n03/15/2026,Paper Co,B-7,70.00,Checking,1042\n03/15/2026,Paper Co,B-8,5.00,Checking,\n03/15/2026,Paper Co,B-7,1.00,Sales,\n";
+    let found = check(SheetKind::BillPayments, bills.into()).await;
+    let messages: Vec<String> = found.problems.iter().map(|p| p.message.clone()).collect();
+    assert_eq!(messages, ["Bill B-8 from Paper Co isn't in the books", "Bill B-7 from Paper Co has $0.00 left to pay, less than $1.00"]);
+    let s = sheet("Date,Vendor,Bill no.,Amount,Pay from,Check no.\n03/15/2026,Paper Co,B-7,70.00,Checking,1042\n");
+    payments::post(&pool, SheetKind::BillPayments, &s, &suggest(SheetKind::BillPayments, &s.headers), None).await.unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM bills").fetch_one(&pool).await.unwrap();
+    assert_eq!(status, "PAID");
+    assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
+
+    // Payments sheets aren't staged.
+    assert!(to_ledger(SheetKind::BillPayments, &s, &suggest(SheetKind::BillPayments, &s.headers), None).is_err());
+}
+
+/// An invoice's sales tax and discount come from their own columns, for the whole invoice, and
+/// the full import keeps them on the invoice.
+#[tokio::test]
+async fn invoices_take_sales_tax_and_a_discount() {
+    use crate::qbw_ledger_import::{auto_map_accounts, import_lists, post_batch, stage_as, ImportMode, PostLedgerInput};
+    let csv = "Invoice no.,Date,Customer,Amount,Income account,Sales tax,Discount\n\
+               2001,03/02/2026,Rivera,100.00,Sales,8.00,10.00\n\
+               2001,03/02/2026,Rivera,50.00,Sales,8.00,\n\
+               2002,03/03/2026,Chen,40.00,Sales,,\n";
+    let s = sheet(csv);
+    let m = suggest(SheetKind::Invoices, &s.headers);
+    let c = check(SheetKind::Invoices, &s, &m, None);
+    assert!(c.problems.is_empty(), "{:?}", c.problems);
+    assert_eq!((c.records, c.total_cents), (2, 15_000 + 800 - 1_000 + 4_000));
+
+    // Rows that disagree on the document's tax, or a discount bigger than the lines, are listed.
+    let bad = sheet("Invoice no.,Date,Customer,Amount,Income account,Sales tax,Discount\n1,03/02/2026,A,10.00,Sales,1.00,\n1,03/02/2026,A,10.00,Sales,2.00,\n2,03/02/2026,B,5.00,Sales,,6.00\n3,03/02/2026,C,5.00,Sales,-1,\n");
+    let messages: Vec<String> = check(SheetKind::Invoices, &bad, &m, None).problems.into_iter().map(|p| p.message).collect();
+    assert_eq!(
+        messages,
+        ["Invoice 1's sales tax is $1.00 on row 2, not $2.00", "Invoice 2's discount of $6.00 is more than its lines, $5.00", "Write the sales tax as zero or more"]
+    );
+
+    let pool = crate::db::test_pool().await;
+    let ledger = to_ledger(SheetKind::Invoices, &s, &m, None).unwrap();
+    let batch = stage_as(&pool, std::path::Path::new("/sheets/tax.csv"), 1, &ledger, Some("SHEET")).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    import_lists(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.invoices, full.fell_back), (2, 0), "{full:?}");
+    let rows: Vec<(i64, i64, i64, i64)> =
+        sqlx::query_as("SELECT invoice_number, total_cents, tax_cents, discount_cents FROM invoices ORDER BY invoice_number").fetch_all(&pool).await.unwrap();
+    assert_eq!(rows, [(2001, 14_800, 800, 1_000), (2002, 4_000, 0, 0)]);
 }

@@ -359,8 +359,8 @@ Kept your customers, vendors, sales, bills or adjusting entries in a spreadsheet
    |---|---|
    | Customers | **Name**; Company, Email, Phone, Billing address, Terms (such as Net 30), Notes, Active (yes or no) |
    | Vendors | **Name**; Company, Email, Phone, Address, Terms, Tax ID, 1099 (yes or no), Notes, Active |
-   | Invoices | **Invoice no.**, **Date**, **Customer**, **Income account**; Due date, Item, Description, Quantity, Rate, Amount, Memo |
-   | Sales receipts | **Date**, **Income account**; Receipt no., Customer, Deposit to (Undeposited Funds when empty), Payment method, the line columns |
+   | Invoices | **Invoice no.**, **Date**, **Customer**, **Income account**; Due date, Sales tax, Discount, Item, Description, Quantity, Rate, Amount, Memo |
+   | Sales receipts | **Date**, **Income account**; Receipt no., Customer, Deposit to (Undeposited Funds when empty), Payment method, Sales tax, Discount, the line columns |
    | Credit memos | **Credit no.**, **Date**, **Customer**, **Income account**; the line columns |
    | Deposits | **Date**, **Bank account**, **From account**; Deposit no., the line columns |
    | Bills | **Date**, **Vendor**, **Expense account**; Bill no., Due date, the line columns |
@@ -368,6 +368,13 @@ Kept your customers, vendors, sales, bills or adjusting entries in a spreadsheet
    | Checks | **Date**, **Bank account**, **Expense account**; Check no., Payee, the line columns |
    | Credit card charges or credits | **Date**, **Card account**, **Expense account**; Ref no., Payee, the line columns |
    | Journal entries | **Entry no.**, **Date**, **Account**, and **Debit** or **Credit** on each row; Memo, Name |
+   | Customer payments | **Date**, **Customer**, **Invoice no.**, **Amount**; Deposit to (Undeposited Funds when empty), Payment method, Reference no. |
+   | Bill payments | **Date**, **Vendor**, **Bill no.**, **Amount**, **Pay from** (a bank or credit card account); Check no. |
+
+   **Sales tax** and **Discount** on an invoice or sales receipt are for the whole document: give
+   them on any of its rows (rows that give them must agree). The discount comes off the lines and
+   the tax goes on top; in the review they post to *Sales Tax Payable* and *Discounts Given*,
+   which you match to your own accounts.
 
    On a transaction, each row is a line, and every line needs an **Amount**, or a Quantity and
    Rate. Say whether dates like 03/04/2026 are month first or day first, or leave LocalBooks to
@@ -388,8 +395,20 @@ the account its row names; an account LocalBooks doesn't have yet is listed in s
 one of yours or create. A customer, vendor or payee who isn't in your books yet is added with the
 import (a payee as a vendor). In a **Full import**, invoices, sales receipts, credit memos,
 deposits, bills, bill credits, checks and card charges and credits become those LocalBooks
-documents; journal entries post as journal entries. Customer payments and bill payments can't be
-imported from a spreadsheet yet, nor can sales tax or discounts on an invoice.
+documents, with the sales tax and discount on their invoices and sales receipts; journal entries
+post as journal entries.
+
+### Payments from a spreadsheet
+
+A **Customer payments** or **Bill payments** sheet pays invoices and bills that are already in
+your books, so it skips the review. Each row names the invoice number (or the vendor's bill number)
+it pays and the amount. **Check the rows** also checks every row against your books: the invoice
+or bill must be there, be that customer's or vendor's, be open, be in your home currency, and have
+enough left to pay once the sheet's earlier rows for it are counted; the deposit or payment account
+must be a bank (or Undeposited Funds, or a credit card for bill payments). When every row passes,
+**Post payments** records them all at once, as Receive Payments and Pay Bills would. If anything
+fails, nothing is posted. A payment in a foreign currency needs its exchange rate, so enter it in
+Receive Payments instead.
 
 ## Payroll from a payroll service
 
