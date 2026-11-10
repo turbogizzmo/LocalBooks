@@ -139,7 +139,7 @@ export const topics = [
   {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
-    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen, except by an External Accountant user. Add a passcode to require it for moving or removing the date; every change is kept in the closing history. Closing Date Exceptions, under the date, lists everything posted or voided in a closed period and who did it.',
+    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen, except by an External Accountant user. Add a passcode to require it for moving or removing the date; every change is kept in the closing history. Reports › Closing Date Exceptions lists everything posted in a closed period, and who entered it.',
     keywords: 'lock close year end period tax password passcode books',
     go: { label: 'Go to the closing date', view: 'settings/preferences', action: 'closing' },
     guide: 'closing-the-books',

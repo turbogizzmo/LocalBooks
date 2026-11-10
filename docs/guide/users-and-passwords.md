@@ -36,7 +36,7 @@ sign-in screen.
    - **External Accountant**: for your outside accountant. Works like Standard, and may also post
      and void entries dated on or before the [closing date](closing-the-books.md), for example
      adjusting entries for a year you've closed. Never sees sensitive data. Everything they post in
-     a closed period is listed under **Closing Date Exceptions**.
+     a closed period is listed, with who did it, in **Reports › Closing Date Exceptions**.
 4. Tick **Can see sensitive data (vendor tax IDs and bank details)** if this person needs full tax IDs, for example
    to file 1099s, or needs to see and change vendors' bank details and pay bills by ACH file. Admins
    always can; External Accountants never can.

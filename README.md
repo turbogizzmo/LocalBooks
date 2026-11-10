@@ -159,8 +159,8 @@ original date. The ledger checks this before every post, and a database trigger 
 backstop. Moving or removing the date requires the passcode, which is stored as a salted
 PBKDF2-HMAC-SHA256 hash. Every change is appended to `closing_locks`, whose rows can't be edited or
 deleted. An External Accountant user may post and void in a closed period (the trigger lets one write
-transaction through, and the ledger clears that before commit), and **Closing Date Exceptions**
-lists every such change with who made it.
+transaction through, and the ledger clears that before commit), and the **Closing Date Exceptions**
+report lists every such change with who made it.
 
 ### Online snapshots with `VACUUM INTO`
 

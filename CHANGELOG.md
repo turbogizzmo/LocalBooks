@@ -6,11 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
-- **External Accountant users and Closing Date Exceptions.** Add your accountant as an External
-  Accountant user: they work like a Standard user, can post adjusting entries dated on or before
-  your closing date without you moving it, and never see sensitive data such as full tax IDs.
-  Under the closing date, Closing Date Exceptions lists everything posted or voided in a closed
-  period, with who did it and when.
+- **External Accountant users.** Add your accountant as an External Accountant user: they work
+  like a Standard user, can post adjusting entries dated on or before your closing date without
+  you moving it, and never see sensitive data such as full tax IDs. The Closing Date Exceptions
+  report now shows who entered each change.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

@@ -80,7 +80,7 @@ async fn current(tx: &mut sqlx::SqliteConnection) -> Result<Option<(Option<Naive
 }
 
 /// Refuses an entry dated on or before the closing date in force, unless an External Accountant
-/// is signed in (their postings appear in [`exceptions`]).
+/// is signed in (their postings appear in the Closing Date Exceptions report, with who made them).
 pub async fn check_open(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Result<(), String> {
     let closed = matches!(current(&mut **tx).await?, Some((Some(lock_date), _)) if date <= lock_date);
     let exception = closed && crate::permissions::may_post_in_closed_period();
@@ -126,53 +126,6 @@ pub async fn status(pool: &SqlitePool) -> Result<ClosingStatus, String> {
     .map_err(db_err)?;
     let (lock_date, passcode_protected) = history.first().map(|c| (c.lock_date, c.passcode_protected)).unwrap_or((None, false));
     Ok(ClosingStatus { lock_date, passcode_protected, history })
-}
-
-/// A posting or void dated on or before the closing date that was in force when it was made.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
-#[serde(rename_all = "camelCase")]
-pub struct ClosingException {
-    pub audit_id: i64,
-    /// `POST` or `VOID`.
-    pub action: String,
-    /// When it was made.
-    pub made_at: String,
-    /// Who made it, as the audit trail records it.
-    pub made_by: Option<String>,
-    pub journal_entry_id: i64,
-    pub entry_date: NaiveDate,
-    pub source_type: String,
-    pub memo: Option<String>,
-    pub amount_cents: i64,
-    /// The closing date in force at the time.
-    pub closing_date: NaiveDate,
-}
-
-/// Closing Date Exceptions: every posting or void, newest first (a void once, not again for its
-/// reversing entry), dated on or before the closing
-/// date in force when it was made (an External Accountant's work, or a closing date moved back to
-/// let a change in). Entries made before a closing date was set later aren't exceptions.
-pub async fn exceptions(pool: &SqlitePool) -> Result<Vec<ClosingException>, String> {
-    sqlx::query_as(
-        "WITH made AS (
-             SELECT a.id AS audit_id, a.action_type AS action, a.timestamp AS made_at, a.actor AS made_by, a.target_entity_id AS journal_entry_id,
-                    (SELECT c.lock_date FROM closing_locks c WHERE c.set_at <= a.timestamp ORDER BY c.id DESC LIMIT 1) AS closing_date
-             FROM ledger_audit_log a JOIN journal_entries j ON j.id = a.target_entity_id
-             -- Only entries dated on or before some closing date can be exceptions; a void's
-             -- reversing entry is the VOID row of the entry it reverses, not a posting of its own.
-             WHERE a.action_type IN ('POST', 'VOID')
-               AND j.entry_date <= (SELECT MAX(lock_date) FROM closing_locks)
-               AND NOT (a.action_type = 'POST' AND j.reverses_entry_id IS NOT NULL))
-         SELECT m.audit_id, m.action, m.made_at, m.made_by, m.journal_entry_id, e.entry_date, e.source_type, e.memo,
-                COALESCE((SELECT SUM(l.debit_cents) FROM journal_lines l WHERE l.journal_entry_id = e.id), 0) AS amount_cents,
-                m.closing_date
-         FROM made m JOIN journal_entries e ON e.id = m.journal_entry_id
-         WHERE m.closing_date IS NOT NULL AND e.entry_date <= m.closing_date
-         ORDER BY m.audit_id DESC",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(db_err)
 }
 
 #[derive(Debug, Clone, Deserialize)]

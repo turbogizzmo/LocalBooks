@@ -85,18 +85,21 @@ async fn closed_periods_refuse_posts_and_voids_until_reopened_with_the_passcode(
 }
 
 #[tokio::test]
-async fn an_external_accountant_posts_in_a_closed_period_and_it_is_listed_as_an_exception() {
+async fn an_external_accountant_posts_in_a_closed_period_and_the_report_says_who() {
     let pool = test_pool().await;
+    let d = |t: &str| t.parse::<NaiveDate>().unwrap();
+    let report = |pool: &SqlitePool| {
+        let pool = pool.clone();
+        async move { crate::list_reports::run(&pool, "closing-date-exceptions", Some(d("2026-01-01")), Some(d("2026-12-31")), d("2026-12-31")).await.unwrap() }
+    };
     post(&pool, "2026-02-10").await.unwrap();
-    assert!(exceptions(&pool).await.unwrap().is_empty());
     set_closing_date(&pool, &lock(Some("2026-03-31"), None, None)).await.unwrap();
-    assert!(exceptions(&pool).await.unwrap().is_empty(), "entries made before the closing date was set aren't exceptions");
+    assert_eq!(report(&pool).await.report.line_count, 0, "entries made before the closing date was set aren't exceptions");
     assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE);
 
     crate::permissions::set_signed_in_role(Some(crate::users::Role::ExternalAccountant));
     crate::audit_chain::set_signed_in(Some("cpa".into()));
     let adjusting = post(&pool, "2026-03-15").await.expect("an External Accountant posts in the closed period");
-    void_transaction(&pool, adjusting).await.unwrap();
     crate::permissions::set_signed_in_role(None);
     crate::audit_chain::set_signed_in(None);
     post(&pool, "2026-04-02").await.unwrap();
@@ -109,11 +112,11 @@ async fn an_external_accountant_posts_in_a_closed_period_and_it_is_listed_as_an_
     let refused = sqlx::query("UPDATE journal_entries SET status = 'POSTED' WHERE id = ?1").bind(draft).execute(&pool).await.unwrap_err().to_string();
     assert!(refused.contains("PERIOD_CLOSED"), "{refused}");
 
-    let found = exceptions(&pool).await.unwrap();
-    let rows: Vec<(&str, i64, String, i64)> = found.iter().map(|e| (e.action.as_str(), e.journal_entry_id, e.entry_date.to_string(), e.amount_cents)).collect();
-    assert!(rows.contains(&("POST", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
-    assert!(rows.contains(&("VOID", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
-    assert_eq!(rows.len(), 2, "the void is listed once, not again for its reversing entry: {rows:?}");
-    assert!(found.iter().all(|e| e.made_by.as_deref().is_some_and(|by| by.starts_with("cpa as ")) && e.closing_date.to_string() == "2026-03-31"), "{found:?}");
-    assert!(found.windows(2).all(|w| w[0].audit_id > w[1].audit_id), "newest first");
+    // Closing Date Exceptions lists it, with who entered it.
+    let found = report(&pool).await;
+    let rows: Vec<_> = found.report.rows.iter().filter(|r| r.kind == crate::custom_reports::RowKind::Detail).collect();
+    assert_eq!(rows.len(), 1, "{:?}", found.notes);
+    assert_eq!(rows[0].journal_entry_id, Some(adjusting));
+    let by = found.report.columns.iter().position(|c| c.label == "Entered By").unwrap();
+    assert!(rows[0].cells[by].as_str().is_some_and(|who| who.starts_with("cpa as ")), "{:?}", rows[0].cells);
 }

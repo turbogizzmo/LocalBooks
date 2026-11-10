@@ -61,6 +61,6 @@ on or before the closing date without moving it; everyone else still can't.
 
 ## Closing Date Exceptions
 
-Under the closing date, **Closing Date Exceptions** lists everything posted or voided in a period
-that was already closed at the time: when, by whom, the entry's date, type, memo and amount, and
-the closing date then in force. Entries made before a closing date was set aren't listed.
+**Reports › Accountant & Taxes › Closing Date Exceptions** lists everything posted in a period
+after it was closed, with when it was entered and **who entered it**: an External Accountant's
+adjusting entries, or changes made while the closing date was moved back.

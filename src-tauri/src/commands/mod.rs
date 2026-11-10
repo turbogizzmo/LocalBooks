@@ -63,7 +63,6 @@ features![
     cash_forecast,
     classes,
     cleanup,
-    closing_exceptions,
     company_files,
     company_snapshot,
     condense,
