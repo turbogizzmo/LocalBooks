@@ -48,6 +48,9 @@ people using LocalBooks.
   what is already on order, and Vendors › Inventory Activities gathers the inventory screens:
   the item list, Adjust Quantity/Value on Hand, Change Item Prices, purchase orders and the stock
   reports.
+- **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
+  waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
+  is ever locked out, and other users can still sign in.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
