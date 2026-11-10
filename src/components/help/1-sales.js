@@ -318,9 +318,10 @@ export const topics = [
   {
     id: 'sales-tax', area: 'sales', views: ['sales/tax', 'sales/invoices', 'sales/all', 'sales/products', 'sales/customers'],
     title: 'Charge and pay sales tax',
-    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (from the customer, or none if they are exempt); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed.',
-    keywords: 'sales tax vat gst tax rate taxable exempt pay sales tax liability agency',
+    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (from the customer, or none if they are exempt); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed. Where several agencies tax one sale, add each rate with its agency, then New combined rate… to add them up; a sale at it posts each agency’s share to its own account, and the sales tax return by agency lists each agency’s taxable sales, tax and payments for the period, on accrual or cash.',
+    keywords: 'sales tax vat gst tax rate taxable exempt pay sales tax liability agency combined rate state county city jurisdiction return filing',
     go: { label: 'Go to Sales Tax', view: 'sales/tax' },
+    guide: 'getting-started',
   },
   {
     id: 'credit-memo', area: 'sales', views: ['sales/credits', 'sales/invoices', 'sales/customers'],

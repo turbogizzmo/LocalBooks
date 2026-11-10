@@ -139,7 +139,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
         taxable += line_amount(line.quantity_e4, line.rate_cents)?;
     }
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "CM").await?;
-    let tax_cents = tax.map_or(0, |t| t.cents);
+    let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
     let total = total.checked_add(tax_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("CM_TOO_LARGE: the credit is too large")?;
     if let Some(account) = input.refund_account_id {
         check_money_account(tx, account, "CM").await?;
@@ -157,7 +157,7 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
     .bind(clean(input.memo.as_deref()))
     .bind(input.refund_account_id)
     .bind(total)
-    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .fetch_one(&mut **tx)
     .await
@@ -224,12 +224,16 @@ pub(crate) async fn write_credit_memo(tx: &mut Transaction<'_, Sqlite>, input: &
         None => system_account(tx, "ACCOUNTS_RECEIVABLE").await?,
     };
     let mut lines: Vec<JournalLine> = debits.into_iter().map(|((a, class), c)| JournalLine::debit(a, c).with_class(class)).collect();
-    lines.extend(tax.and_then(|t| t.line(true)));
+    lines.extend(tax.as_ref().map(|t| t.lines(true)).unwrap_or_default());
     lines.push(JournalLine::credit(credit_account, total));
     let kind = if input.refund_account_id.is_some() { "Refund receipt" } else { "Credit memo" };
     let entry = JournalEntry { id: None, date: input.credit_date, description: format!("{kind} #{number} - {customer}"), lines, currency: None };
     crate::sales_header::write(tx, "credit_memos", memo_id, &input.header).await?;
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::CreditMemo(memo_id)).await?;
+    // A combined rate's split by component, for the sales tax return.
+    if let Some(t) = &tax {
+        t.record_parts(tx, entry_id).await?;
+    }
     sqlx::query("UPDATE credit_memos SET journal_entry_id = ?1 WHERE id = ?2").bind(entry_id).bind(memo_id).execute(&mut **tx).await.map_err(db_err)?;
     Ok(memo_id)
 }

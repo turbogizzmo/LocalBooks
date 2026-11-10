@@ -32,6 +32,9 @@ people using LocalBooks.
 - **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
   and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
   order.
+- **Combined sales tax rates and a return per agency.** A combined rate adds up the state, county
+  and city rates; a sale at it posts each agency's share to its own account. Sales › Sales Tax shows
+  the sales tax return by agency for the period, on accrual or cash.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
