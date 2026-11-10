@@ -52,6 +52,9 @@ pub async fn decrypt_company_file(app: AppHandle, db: State<'_, Db>, password: S
 
 #[tauri::command]
 pub async fn list_unencrypted_backups(db: State<'_, Db>) -> Result<Vec<crate::backup::BackupFile>, String> {
+    // The command gate already requires an Admin (permissions.rs); checked here too.
+    let (_, slot) = db.pool_and_session().await?;
+    Session::require_admin(slot.lock().await.as_ref())?;
     if !db.is_encrypted().await {
         return Ok(Vec::new());
     }
@@ -61,6 +64,8 @@ pub async fn list_unencrypted_backups(db: State<'_, Db>) -> Result<Vec<crate::ba
 /// Deletes the backups made before encryption (they hold the books in plain). How many went.
 #[tauri::command]
 pub async fn delete_unencrypted_backups(db: State<'_, Db>) -> Result<usize, String> {
+    let (_, slot) = db.pool_and_session().await?;
+    Session::require_admin(slot.lock().await.as_ref())?;
     if !db.is_encrypted().await {
         return Err("DECRYPT_NOT_ON: this company file isn't encrypted".into());
     }

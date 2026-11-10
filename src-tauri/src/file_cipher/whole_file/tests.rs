@@ -61,7 +61,8 @@ async fn turning_encryption_on_and_off() {
     assert!(encrypt(&db, &ann, EncryptInput { understood: false, ..turn_on("ann password 1", bob) }).await.unwrap_err().starts_with("ENCRYPT_NOT_CONFIRMED"));
     assert!(encrypt(&db, &ann, EncryptInput { temporary_passwords: vec![], ..turn_on("ann password 1", bob) }).await.unwrap_err().starts_with("ENCRYPT_NEEDS_PASSWORDS"));
     assert!(encrypt(&db, &ann, turn_on("wrong password", bob)).await.unwrap_err().starts_with("ENCRYPT_WRONG_PASSWORD"));
-    assert!(!header::is_encrypted(&path) && contains(&std::fs::read(&path).unwrap(), MARKER.as_bytes()), "nothing changed");
+    let plain_bytes = [std::fs::read(&path).unwrap(), std::fs::read(crate::wal_guard::wal_path(&path)).unwrap_or_default()].concat();
+    assert!(!header::is_encrypted(&path) && contains(&plain_bytes, MARKER.as_bytes()), "nothing changed: still a plain file");
 
     let (session, recovery) = encrypt(&db, &ann, turn_on("ann password 1", bob)).await.unwrap();
     assert_eq!(session.user.username, "ann");
@@ -86,6 +87,12 @@ async fn turning_encryption_on_and_off() {
     db.relock().await;
     let ann = user_slots::recover(&db, recovery.as_str(), "ann", "ann password 2").await.unwrap();
 
+    // The plain backup from before can't quietly turn encryption off by being restored.
+    let refused = crate::backup::restore(&db, Path::new(&plain_backup.path)).await.unwrap_err();
+    assert!(refused.starts_with("RESTORE_UNENCRYPTED"), "{refused}");
+    assert!(db.is_encrypted().await && header::is_encrypted(&path), "still encrypted");
+    let encrypted_backup = crate::backup::backup_now(&db).await.unwrap();
+
     // And off again.
     let back = decrypt(&db, &ann, "ann password 2").await.unwrap();
     assert_eq!(back.user.username, "ann");
@@ -94,6 +101,10 @@ async fn turning_encryption_on_and_off() {
     assert_eq!(company_name(&db).await, MARKER);
     db.relock().await;
     assert!(!db.is_locked().await, "a plain file doesn't lock");
+    // An encrypted backup over the now plain books needs its key, which left with the encryption.
+    let err = crate::backup::restore(&db, Path::new(&encrypted_backup.path)).await.unwrap_err();
+    assert!(err.contains("FILE_ENCRYPTED_LOCKED"), "{err}");
+    assert!(!header::is_encrypted(&path), "the books stayed plain");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

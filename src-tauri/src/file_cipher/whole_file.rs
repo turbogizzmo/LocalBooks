@@ -21,7 +21,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use sqlx::{ConnectOptions, Connection, SqliteConnection};
+use sqlx::{ConnectOptions, Connection};
 
 use super::header::Header;
 use super::{encrypt_into, keyring, keys, open_options};
@@ -74,30 +74,23 @@ fn remove_with_sidecars(path: &Path) {
     }
 }
 
-/// Row counts of every table, to check an exported copy against the live books.
-async fn row_counts(conn: &mut SqliteConnection) -> Result<Vec<(String, i64)>, String> {
-    let tables: Vec<String> = sqlx::query_scalar("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut counts = Vec::with_capacity(tables.len());
-    for table in tables {
-        let n: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', "\"\""))).fetch_one(&mut *conn).await.map_err(|e| e.to_string())?;
-        counts.push((table, n));
+/// Checks an exported copy (opened with `options`): it passes `integrity_check` and holds exactly
+/// the rows the books held when it was made (Condense's content digest, every row of every table).
+async fn check_copy(expected_digest: &str, options: sqlx::sqlite::SqliteConnectOptions) -> Result<(), String> {
+    let copy = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect_with(options).await.map_err(|e| e.to_string())?;
+    let checked = async {
+        let check: String = sqlx::query_scalar("PRAGMA integrity_check").fetch_one(&copy).await.map_err(|e| e.to_string())?;
+        if check != "ok" {
+            return Err(format!("the copy failed its integrity check ({check})"));
+        }
+        if crate::condense::content_digest(&copy).await? != expected_digest {
+            return Err("the copy doesn't hold the same rows as the books (if someone was entering something, try again)".into());
+        }
+        Ok(())
     }
-    Ok(counts)
-}
-
-async fn check_copy(live: &sqlx::SqlitePool, copy: &mut SqliteConnection) -> Result<(), String> {
-    let check: String = sqlx::query_scalar("PRAGMA integrity_check").fetch_one(&mut *copy).await.map_err(|e| e.to_string())?;
-    if check != "ok" {
-        return Err(format!("the copy failed its integrity check ({check})"));
-    }
-    let mut conn = live.acquire().await.map_err(|e| e.to_string())?;
-    if row_counts(&mut conn).await? != row_counts(copy).await? {
-        return Err("the copy doesn't have the same rows as the books".into());
-    }
-    Ok(())
+    .await;
+    crate::db::close_pool(&copy).await;
+    checked
 }
 
 /// Turns whole-file encryption on for the open company file. Returns the Admin's new session (on
@@ -146,10 +139,7 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
         encrypt_into(&live_path, &staged, &key, &header).await?;
 
         let prepared = async {
-            let mut copy = open_options(&staged, Some(&key))?.connect().await.map_err(|e| e.to_string())?;
-            let checked = check_copy(&pool, &mut copy).await;
-            let _ = copy.close().await;
-            checked?;
+            check_copy(&digest, open_options(&staged, Some(&key))?).await?;
             // The copy's own changes, through a pool so the user functions work as they always do.
             let copy_pool = sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect_with(open_options(&staged, Some(&key))?.foreign_keys(true)).await.map_err(|e| e.to_string())?;
             let changed = async {
@@ -187,7 +177,11 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
 
     // The swap needs a copy of the current books to fall back on; it is plain, so it goes afterwards.
     let fallback = db.backups_dir().join(format!("pre-encryption-{}.db", stamp()));
-    crate::backup::snapshot(&pool, &live_path, &fallback).await?;
+    if let Err(e) = crate::backup::snapshot(&pool, &live_path, &fallback).await {
+        // The copy holds the new slots and recovery key: it doesn't outlive a failed attempt.
+        remove_with_sidecars(&staged);
+        return Err(format!("ENCRYPT_FAILED: {e}; nothing was changed"));
+    }
     keyring::register(&file_id, key.clone());
     let swapped = db.swap_in_unchanged(&staged, &fallback, &digest).await.map_err(changed_while_copying);
     if let Err(e) = swapped {
@@ -196,7 +190,10 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
         let _ = std::fs::remove_file(&fallback);
         return Err(format!("ENCRYPT_FAILED: {e}"));
     }
-    let _ = std::fs::remove_file(&fallback);
+    if let Err(e) = std::fs::remove_file(&fallback) {
+        // Still this company's, so Settings lists it with the other unencrypted backups to delete.
+        eprintln!("LocalBooks: could not delete the unencrypted copy made before encryption ({}): {e}", fallback.display());
+    }
     let session = super::user_slots::sign_in(db, &admin.user.username, &input.password).await?;
     Ok((session, recovery))
 }
@@ -226,10 +223,7 @@ pub async fn decrypt(db: &Db, admin: &Session, password: &str) -> Result<Session
         .await;
         let _ = conn.close().await;
         result?;
-        let mut copy = sqlx::sqlite::SqliteConnectOptions::new().filename(&staged).connect().await.map_err(|e| e.to_string())?;
-        let checked = check_copy(&pool, &mut copy).await;
-        let _ = copy.close().await;
-        checked
+        check_copy(&digest, sqlx::sqlite::SqliteConnectOptions::new().filename(&staged)).await
     }
     .await;
     if let Err(e) = exported {
@@ -238,7 +232,10 @@ pub async fn decrypt(db: &Db, admin: &Session, password: &str) -> Result<Session
     }
     // The fallback is a copy of the encrypted books, so it stays encrypted; kept like any backup.
     let fallback = db.backups_dir().join(format!("pre-decryption-{}.db", stamp()));
-    crate::backup::snapshot(&pool, &live_path, &fallback).await?;
+    if let Err(e) = crate::backup::snapshot(&pool, &live_path, &fallback).await {
+        remove_with_sidecars(&staged);
+        return Err(format!("DECRYPT_FAILED: {e}; nothing was changed"));
+    }
     if let Err(e) = db.swap_in_unchanged(&staged, &fallback, &digest).await.map_err(changed_while_copying) {
         remove_with_sidecars(&staged);
         return Err(format!("DECRYPT_FAILED: {e}"));

@@ -258,6 +258,10 @@ fn stamp() -> String {
 
 /// Replaces the live company file with a verified, upgraded copy of `source`.
 pub async fn restore(db: &Db, source: &Path) -> Result<RestoreResult, String> {
+    // A plain backup over encrypted books would quietly turn encryption off (gap R1).
+    if db.is_encrypted().await && !crate::file_cipher::header::is_encrypted(source) {
+        return Err("RESTORE_UNENCRYPTED: this backup isn't encrypted, and restoring it would turn off encryption of these books. Turn off encryption first (Settings › Users & Passwords), or restore a backup made since it was turned on".into());
+    }
     let info = inspect(source).await?;
     let dir = db.backups_dir().to_path_buf();
     let live_path = db.path().await?;
