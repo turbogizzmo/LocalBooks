@@ -13,6 +13,7 @@ const COMPANIES = {
   'users-from-scratch': 'No Users.localbooks',
   'seeded-users': 'Edge Cases.localbooks',
   'taxed-invoice-edit': 'Edge Cases.localbooks',
+  'windows-inside': 'No Users.localbooks',
   accessibility: 'Edge Cases.localbooks',
 };
 

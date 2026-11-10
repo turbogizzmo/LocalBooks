@@ -257,7 +257,14 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
   };
 
   // The first account shown (by section): the list's Tab stop.
-  const firstAccountId = SECTIONS.flatMap((section) => shown.filter((x) => x.row.classification === section.id && matches(x.row)))[0]?.row.id ?? null;
+  let firstAccountId = null;
+  for (const section of SECTIONS) {
+    const hit = shown.find((x) => x.row.classification === section.id && matches(x.row));
+    if (hit) {
+      firstAccountId = hit.row.id;
+      break;
+    }
+  }
   return (
     <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog && (

@@ -225,6 +225,8 @@ export default function AllSales({ accounts, intent }) {
     status: (r) => (r.isVoided ? 'VOIDED' : r.kind === 'INVOICE' ? r.status : r.kind === 'PAYMENT' ? 'Closed' : 'Paid'),
   }, { storageKey: 'all-sales' });
   const visible = sorter.sorted;
+  // The first sales receipt shown: the list's Tab stop (only receipts open from the list).
+  const firstReceipt = visible.find((x) => x.kind === 'SALES_RECEIPT');
   // Saved sales receipts open read-only in the form's place; Previous / Next step through them.
   const receipts = useMemo(() => byDateThenNumber(rows.filter((r) => r.kind === 'SALES_RECEIPT'), (r) => r.date, (r) => r.number), [rows]);
   const saved = useSavedDoc(receipts);
@@ -333,7 +335,6 @@ export default function AllSales({ accounts, intent }) {
                 </tr>
               )}
               {visible.map((r) => {
-                const firstReceipt = visible.find((x) => x.kind === 'SALES_RECEIPT');
                 const isOverdue = !r.isVoided && r.kind === 'INVOICE' && r.balanceCents > 0 && r.dueDate < today;
                 const what = `${KIND_LABEL[r.kind]} #${r.number}${r.customerName ? ` for ${r.customerName}` : ''} (${formatMoney(r.totalCents, r.currencyCode)}).`;
                 return (

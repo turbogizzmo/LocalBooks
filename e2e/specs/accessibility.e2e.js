@@ -12,14 +12,20 @@ import { goTo, signIn, waitForApp } from '../lib/ui.js';
 
 const AXE = fs.readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 
-/** The page's violations of WCAG 2.1 A and AA, as axe reports them. */
+/**
+ * The page's violations of WCAG 2.1 A and AA, as axe reports them. axe is injected once per page
+ * load (switching pages in LocalBooks doesn't reload it); any failure inside comes back as an
+ * `axe-error` violation, so it fails the check with its message.
+ */
 async function violations() {
-  await browser.execute(AXE);
-  return browser.executeAsync((done) => {
-    window.axe
-      .run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] })
-      .then((r) => done(r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, url: v.helpUrl, nodes: v.nodes.slice(0, 5).map((n) => n.target.join(' ')) }))))
-      .catch((e) => done([{ id: 'axe-error', impact: 'critical', help: String(e), url: '', nodes: [] }]));
+  if (!(await browser.execute(() => typeof window.axe === 'object'))) await browser.execute(AXE);
+  return browser.execute(async () => {
+    try {
+      const r = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] });
+      return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, url: v.helpUrl, nodes: v.nodes.slice(0, 5).map((n) => n.target.join(' ')) }));
+    } catch (e) {
+      return [{ id: 'axe-error', impact: 'critical', help: String(e), url: '', nodes: [] }];
+    }
   });
 }
 
@@ -51,7 +57,8 @@ describe('Accessibility', () => {
     await goTo('Invoices');
     // The list's rows take focus (the first by Tab, the rest with ↑ ↓); Enter on one opens the
     // invoice, as a double-click does.
-    expect(await $('[data-row-nav][tabindex="0"]').isExisting()).toBe(true);
+    // (Each open list has one; earlier pages stay open in their windows.)
+    expect((await $$('[data-row-nav][tabindex="0"]')).length).toBeGreaterThan(0);
     const row = $('//tr[@data-row-nav][.//td[starts-with(normalize-space(), "1003")]]');
     await row.waitForExist();
     await browser.execute((el) => el.focus(), row);
