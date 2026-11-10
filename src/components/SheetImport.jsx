@@ -26,8 +26,17 @@ const GROUPS = [
       ['CARD_CREDITS', 'Credit card credits', 'card credit', 'card credits'],
     ],
   ],
+  [
+    'Payments (against invoices and bills already in the books)',
+    [
+      ['CUSTOMER_PAYMENTS', 'Customer payments', 'payment', 'payments'],
+      ['BILL_PAYMENTS', 'Bill payments', 'bill payment', 'bill payments'],
+    ],
+  ],
   ['Accountant', [['JOURNAL_ENTRIES', 'Journal entries', 'journal entry', 'journal entries']]],
 ];
+// Payments are posted against the books directly; the other kinds go to the import review.
+const PAYMENTS = ['CUSTOMER_PAYMENTS', 'BILL_PAYMENTS'];
 const KINDS = GROUPS.flatMap(([, kinds]) => kinds);
 const LISTS = ['CUSTOMERS', 'VENDORS'];
 const SHEET_EXTENSIONS = ['csv', 'txt', 'xlsx', 'xls', 'xlsm', 'ods'];
@@ -55,6 +64,7 @@ export default function SheetImport({ busy, onStage }) {
   const [check, setCheck] = useState(null);
   const [error, setError] = useState(null);
   const [working, setWorking] = useState(false);
+  const [posted, setPosted] = useState(null);
   const disabled = busy || working;
 
   const attempt = async (fn) => {
@@ -101,8 +111,16 @@ export default function SheetImport({ busy, onStage }) {
 
   const order = dateOrder || null;
   const runCheck = async () => {
+    setPosted(null);
     const c = await attempt(() => api.checkImportSheet(path, kind, mapping, order));
     if (c) setCheck(c);
+  };
+  // A payments sheet posts every row at once, against the invoices or bills it names.
+  const postPayments = async () => {
+    const done = await attempt(() => api.postPaymentSheet(path, kind, mapping, order));
+    if (!done) return;
+    setCheck(null);
+    setPosted(`Posted ${done.payments.toLocaleString()} ${done.payments === 1 ? 'payment' : 'payments'}, ${formatCents(done.totalCents)} in total.`);
   };
 
   const template = async () => {
@@ -126,6 +144,13 @@ export default function SheetImport({ busy, onStage }) {
             you can fix the file before anything is staged. Nothing is added to your books until you post it in the review below. No sheet yet? Download the template: its
             columns match without any changes.
           </p>
+          {PAYMENTS.includes(kind) && (
+            <p className="text-xs text-qb-ink-muted">
+              Each row of a payments sheet names the invoice or bill it pays. Checking the rows also checks them against your books: the invoice or bill must be there, be that
+              customer’s or vendor’s, be open in your home currency, and have enough left to pay. Post payments then records every row at once, as Receive Payments and Pay
+              Bills would, or nothing if a row would fail.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-sm">
               <span className="font-semibold">The sheet holds</span>
@@ -207,19 +232,25 @@ export default function SheetImport({ busy, onStage }) {
                 <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-4" disabled={disabled} onClick={runCheck}>
                   Check the rows
                 </button>
-                {clean && (
+                {clean && !PAYMENTS.includes(kind) && (
                   <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4" disabled={disabled} onClick={() => onStage(path, () => api.stageImportSheet(path, kind, mapping, order))}>
                     Continue to the review
                   </button>
                 )}
+                {clean && PAYMENTS.includes(kind) && (
+                  <button type="button" className="qb-btn qb-btn-primary h-row-lg px-4" disabled={disabled} onClick={postPayments}>
+                    Post payments
+                  </button>
+                )}
               </div>
+              {posted && <Notice kind="success" text={posted} />}
               {check && clean && <Notice kind="success" text={`Every row reads. ${readyText(kind, check)}`} />}
               {check && !clean && check.problems.length === 0 && <Notice kind="info" text="The sheet has no rows to import." />}
               {check && check.problems.length > 0 && (
                 <div role="alert" className="border border-qb-border">
                   <p className="border-b border-qb-border bg-qb-canvas px-2 py-1 text-xs font-semibold">
                     {check.problems.length.toLocaleString()} problem{check.problems.length === 1 ? '' : 's'} to fix in the file or the matching above, then check again. Nothing has been
-                    staged.
+                    {PAYMENTS.includes(kind) ? ' posted.' : ' staged.'}
                   </p>
                   <ul className="max-h-60 overflow-auto text-sm scrollbar-thin">
                     {check.problems.map((p, i) => (

@@ -69,6 +69,10 @@ people using LocalBooks.
   like a Standard user, can post adjusting entries dated on or before your closing date without
   you moving it, and never see sensitive data such as full tax IDs. The Closing Date Exceptions
   report now shows who entered each change.
+- **Payments, sales tax and discounts from a spreadsheet.** A customer payments or bill payments
+  sheet pays invoices and bills already in your books: every row is checked against them first,
+  and Post payments records them all at once. Invoice and sales receipt sheets take a sales tax
+  and a discount for each document.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
