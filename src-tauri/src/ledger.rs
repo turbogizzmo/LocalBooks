@@ -613,7 +613,8 @@ pub(crate) async fn void_for_replacement(tx: &mut Transaction<'_, Sqlite>, journ
 }
 
 async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, replacing: bool) -> Result<(), String> {
-    let header: Option<(i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>)> = sqlx::query_as(
+    type HeaderRow = (i64, NaiveDate, Option<String>, String, Option<i64>, String, bool, Option<i64>);
+    let header: Option<HeaderRow> = sqlx::query_as(
         "SELECT entry_number, entry_date, memo, source_type, source_id, status, is_voided, reverses_entry_id
          FROM journal_entries WHERE id = ?1",
     )
@@ -778,7 +779,8 @@ async fn void_entry(tx: &mut Transaction<'_, Sqlite>, journal_entry_id: i64, rep
         return Err(format!("VOID_RECLASS_ORDER: entry #{later_number} reclassifies the same lines again; void it first"));
     }
 
-    let lines: Vec<(i64, Cents, Cents, Option<String>, Option<i64>)> = sqlx::query_as(
+    type LineRow = (i64, Cents, Cents, Option<String>, Option<i64>);
+    let lines: Vec<LineRow> = sqlx::query_as(
         "SELECT account_id, debit_cents, credit_cents, memo, class_id FROM journal_lines WHERE journal_entry_id = ?1 ORDER BY line_number",
     )
     .bind(journal_entry_id)

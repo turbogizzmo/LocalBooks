@@ -303,7 +303,8 @@ pub(crate) async fn apply_customer_credit_in_tx(tx: &mut Transaction<'_, Sqlite>
     if voided || refund.is_some() {
         return Err("CM_NOT_AVAILABLE: a voided credit memo or a refund receipt has no credit to apply".into());
     }
-    let invoice: Option<(Option<i64>, i64, i64, bool, String, Option<String>)> = sqlx::query_as(
+    type InvoiceRow = (Option<i64>, i64, i64, bool, String, Option<String>);
+    let invoice: Option<InvoiceRow> = sqlx::query_as(
         "SELECT customer_id, total_cents, amount_paid_cents, is_voided, status, currency_code FROM invoices WHERE id = ?1",
     )
     .bind(input.document_id)

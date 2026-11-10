@@ -1,9 +1,8 @@
 # Clippy gate on every pull request and push to main.
 #
-# Fails on the lint groups that find bugs (correctness, suspicious, perf) and on floating-point
-# arithmetic outside the modules that allow it (`#![deny(clippy::float_arithmetic)]` in main.rs).
-# Style and complexity lints stay warnings: the code predates them, and fixing them all at once
-# would touch nearly every file other branches are working in.
+# Fails on any warning, Clippy's or the compiler's (gap A6), and on floating-point arithmetic
+# outside the modules that allow it (`#![deny(clippy::float_arithmetic)]` in main.rs). A lint that
+# doesn't fit one item is allowed on that item with a `reason`, never for the whole crate.
 
 name: Lint
 
@@ -54,7 +53,7 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets --locked -- -D clippy::correctness -D clippy::suspicious -D clippy::perf
+        run: cargo clippy --all-targets --locked -- -D warnings
 
   # Unit tests for the screens' pure helpers (src/**/*.test.js), on Node's built-in test runner, then
   # the screens' lint: a name or component used but never defined (eslint.config.js, gap A15).

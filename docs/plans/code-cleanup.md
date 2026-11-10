@@ -11,10 +11,16 @@ and the order.
   warnings it skipped (`Some(x).filter` → `bool::then`, a `matches!`, two literal patterns, a doc
   list) and lopdf's deprecated `load_mem_with_password` in two tests. **53** warnings are left, all for
   A6b: 45 `type_complexity`, `enum_variant_names` (custom_reports), `too_many_arguments`
-  (inventory), and 6 dead-code items (`bank::payee_rules::suggested_pattern`,
-  `party_contacts::statement_contact`, `reconcile::start`, `report_pdf::to_pdf`, used only by tests;
+  (inventory), and 6 dead-code items (`bank::payee_rules::suggested_pattern`, `reconcile::start` and
+  `report_pdf::to_pdf`, used only by tests; `party_contacts::statement_contact`, used nowhere;
   `CustomerFacts::name`; a Shopify constant). Each dead item is either connected to the screen
   it was written for or kept as test-only with `#[cfg(test)]`. That is a decision, not a mechanical fix.
+- **A6b and A6c, done** in one PR (#PRNUM): the 45 complex types became local `type` aliases next to
+  their query, `record_movement` takes a `Movement` struct, `Cleared::Cleared` keeps its name (it is
+  the JSON value) with the lint allowed on that enum, and the dead code went: three test-only
+  helpers (`suggested_pattern`, `reconcile::start`, `report_pdf::to_pdf`) are `#[cfg(test)]`, and
+  `statement_contact`, `CustomerFacts::name` and Shopify's `PAGE` were removed, as nothing read
+  them. `lint.yml` and `AGENTS.md` now run `cargo clippy --all-targets --locked -- -D warnings`.
 
 ## A6: Clippy warnings
 

@@ -456,7 +456,8 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
 
     let mut lines = Vec::with_capacity(input.trip_ids.len());
     for (n, trip_id) in input.trip_ids.iter().enumerate() {
-        let trip: Option<(String, i64, Option<String>, Option<i64>, bool, Option<i64>, Option<bool>, String)> = sqlx::query_as(
+        type TripRow = (String, i64, Option<String>, Option<i64>, bool, Option<i64>, Option<bool>, String);
+        let trip: Option<TripRow> = sqlx::query_as(
             "SELECT t.trip_date, t.miles_e4, t.notes, t.customer_id, t.billable, t.invoice_id, i.is_voided, v.name
              FROM mileage_trips t JOIN vehicles v ON v.id = t.vehicle_id LEFT JOIN invoices i ON i.id = t.invoice_id
              WHERE t.id = ?1",

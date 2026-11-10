@@ -519,7 +519,8 @@ async fn post_occurrence(tx: &mut Transaction<'_, Sqlite>, kind: &str, payload: 
 /// one go), moving each template's next date along its schedule. Returns how many were entered.
 pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<usize, String> {
     run(pool, async |tx| {
-        let templates: Vec<(i64, String, String, String, i64, NaiveDate, Option<NaiveDate>)> = sqlx::query_as(
+        type TemplateRow = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>);
+        let templates: Vec<TemplateRow> = sqlx::query_as(
             "SELECT id, kind, payload, frequency, every, next_date, end_date FROM recurring_templates
              WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2)",
         )
