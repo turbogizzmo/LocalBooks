@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickList } from './listCommands.js';
+import { pickList } from './listPick.js';
 
 // A stand-in for a DOM element: `contains` is true for itself and for what it holds, as Element.contains is.
 const node = (shown, children = []) => {

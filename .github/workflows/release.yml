@@ -105,11 +105,9 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'macos')
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-latest]
-    runs-on: ${{ matrix.platform }}
+    # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
+    # required check "Test (macos-latest)".
+    runs-on: macos-latest
     # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
     timeout-minutes: 75
     steps:
@@ -131,7 +129,7 @@ jobs:
         uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: src-tauri -> target
-          shared-key: test-${{ matrix.platform }}
+          shared-key: test-macos-latest
 
       - name: Run ledger test suite
         working-directory: src-tauri

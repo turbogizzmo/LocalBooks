@@ -3,6 +3,9 @@
 // registers with `useListCommands(ref, handlers)`; the menu reaches the list that has focus, or else
 // the visible one registered last, as the form commands do (formFlow.jsx).
 import { useEffect, useRef } from 'react';
+import { pickList } from './listPick.js';
+
+export { pickList };
 
 export const LIST_COMMANDS = ['new', 'edit', 'delete', 'toggle-active', 'show-all'];
 
@@ -20,12 +23,6 @@ export function useListCommands(ref, handlers) {
       if (at >= 0) openLists.splice(at, 1);
     };
   }, [ref]);
-}
-
-/** Picks the list a command goes to: the one holding focus, else the last visible one. */
-export function pickList(lists, active) {
-  const visible = lists.map((l) => ({ l, root: l.root() })).filter(({ root }) => root?.isConnected && root.getClientRects().length > 0);
-  return (visible.find(({ root }) => root.contains(active)) ?? visible[visible.length - 1])?.l ?? null;
 }
 
 /** Runs a list command; false when no list is on screen or the list has no such command. */
