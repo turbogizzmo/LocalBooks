@@ -4,6 +4,18 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.14.1
+
+Two fixes to amounts posted in 0.14.0:
+
+- **Paying a combined sales tax rate pays each agency.** The payment now splits among the combined
+  rate's rates and pays down each one's liability account; the sales tax return lists each share
+  under its own agency. A combined-rate payment you recorded in 0.14.0 went entirely to its first
+  rate's account: void it and record it again to spread it across the agencies.
+  [Sales tax rates and the return](getting-started.md#sales-tax-rates-combined-rates-and-the-sales-tax-return)
+- **Duplicating a credit memo keeps its discounts**, subtotals and groups, so the copy credits the
+  same amount as the original. Check any credit memo you duplicated in 0.14.0.
+
 ## 0.14.0
 
 A large release: everything below, plus over a hundred smaller changes in the release notes.
