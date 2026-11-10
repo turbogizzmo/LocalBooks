@@ -29,6 +29,9 @@ people using LocalBooks.
   Transactions, Print and Excel menus. The Edit menu's New, Edit, Delete, Make Inactive / Active and
   Show All act on the list on screen, and a customer, vendor or item that was never used can now be
   deleted.
+- **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
+  and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
+  order.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

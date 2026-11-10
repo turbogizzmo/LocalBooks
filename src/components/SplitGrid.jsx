@@ -3,6 +3,7 @@ import { useLineCommands } from '../lib/formFlow.jsx';
 import { pasteLineAt } from '../lib/formKeys.js';
 import AccountSelect from './AccountSelect.jsx';
 import ClassSelect, { showsClassColumn, useClassTracking } from './ClassSelect.jsx';
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 
@@ -76,6 +77,22 @@ export function summarizeSplits(rows) {
 }
 
 /**
+ * The columns between # and Amount, in their usual order. Customize Columns hides and reorders them
+ * (the account, description, quantity and rate always show); each appears only on forms that have it.
+ */
+const SPLIT_COLUMNS = [
+  { id: 'stock', label: 'Stock item', width: 'w-[150px]' },
+  { id: 'from', label: 'Received from', width: 'w-[180px]' },
+  { id: 'category', label: 'Account', width: 'w-[260px]', required: true },
+  { id: 'description', label: 'Description', width: '', required: true },
+  { id: 'job', label: 'Customer:Job', width: 'w-[170px]', title: 'The customer or job this cost is for (job costing)' },
+  { id: 'bill', label: 'Bill?', width: 'w-[34px]', title: 'Billable: invoice this cost to the customer from Sales › Bill Costs' },
+  { id: 'class', label: 'Class', width: 'w-[150px]' },
+  { id: 'qty', label: 'Qty', width: 'w-[70px]', num: true, required: true },
+  { id: 'rate', label: 'Rate', width: 'w-[96px]', num: true, required: true },
+];
+
+/**
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
  * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
  * column (once the company has classes) for documents whose lines carry one. `withJobs` adds a
@@ -119,38 +136,131 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
     grid: 'splits',
   });
 
+  // The columns between # and Amount as the person arranged them (Customize Columns), of those
+  // this form has.
+  const offered = { stock: withStock, from: withReceivedFrom, job: withJobs, bill: withJobs, class: withClasses, qty: withPricing, rate: withPricing };
+  const cols = useColumns('split-lines', SPLIT_COLUMNS, (id) => offered[id] ?? true);
+  const middle = cols.columns;
+  const headLabel = (c) => (c.id === 'category' ? categoryLabel : c.label);
+  /** One row's cell in column `id`. */
+  const cell = (id, row, i, evaluated) => {
+    switch (id) {
+      case 'stock':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <select value={row.productId ?? ''} onChange={(e) => pickItem(row.key, e.target.value ? Number(e.target.value) : null)} aria-label={`Stock item ${i + 1}`}>
+              <option value="">—</option>
+              {stockItems.map((item) => (
+                <option key={item.productId} value={item.productId}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </td>
+        );
+      case 'from':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <select value={nameValue(row)} onChange={(e) => pickName(row.key, e.target.value)} aria-label={`Received from ${i + 1}`}>
+              <option value="">—</option>
+              <optgroup label="Customers">
+                {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
+                  <option key={`c${c.id}`} value={`c:${c.id}`}>
+                    {c.name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Vendors">
+                {vendors.filter((v) => v.isActive !== false || v.id === row.vendorId).map((v) => (
+                  <option key={`v${v.id}`} value={`v:${v.id}`}>
+                    {v.name}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </td>
+        );
+      case 'category':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <AccountSelect className="" accounts={accounts} filter={filter} value={row.accountId} onChange={(accountId) => update(row.key, { accountId })} placeholder="Select category" aria-label={`${categoryLabel} ${i + 1}`} disabled={Boolean(row.productId)} title={row.productId ? 'A stock item posts to its inventory account' : undefined} />
+          </td>
+        );
+      case 'description':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input value={row.memo} onChange={(e) => update(row.key, { memo: e.target.value })} placeholder="What was this for?" aria-label={`Description ${i + 1}`} />
+          </td>
+        );
+      case 'job':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <select value={row.customerId ?? ''} onChange={(e) => update(row.key, { customerId: e.target.value ? Number(e.target.value) : null })} aria-label={`Customer or job ${i + 1}`}>
+              <option value="">—</option>
+              {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </td>
+        );
+      case 'bill':
+        return (
+          <td key={id} className="qb-grid-cell text-center">
+            {row.customerId ? (
+              <input
+                type="checkbox"
+                className="accent-qb-green"
+                checked={row.billable ?? billableByDefault}
+                onChange={(e) => update(row.key, { billable: e.target.checked })}
+                aria-label={`Billable ${i + 1}`}
+                title="Invoice this cost to the customer from Sales › Bill Costs"
+              />
+            ) : null}
+          </td>
+        );
+      case 'class':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <ClassSelect className="" classes={classes} value={row.classId ?? null} onChange={(classId) => update(row.key, { classId })} aria-label={`Class ${i + 1}`} />
+          </td>
+        );
+      case 'qty':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input className="num" value={row.qty ?? ''} onChange={(e) => update(row.key, { qty: e.target.value })} inputMode="decimal" data-quantity aria-invalid={evaluated.priced && evaluated.quantityE4 === null} aria-label={`Quantity ${i + 1}`} />
+          </td>
+        );
+      case 'rate':
+        return (
+          <td key={id} className="qb-grid-cell-edit">
+            <input className="num" value={row.rate ?? ''} onChange={(e) => update(row.key, { rate: e.target.value })} inputMode="decimal" data-money aria-invalid={evaluated.priced && (evaluated.rateCents === null || evaluated.rateCents <= 0)} aria-label={`Rate ${i + 1}`} />
+          </td>
+        );
+      default:
+        return <td key={id} className="qb-grid-cell" />;
+    }
+  };
+
   return (
     <table ref={tableRef} className="qb-grid" data-line-grid>
       <colgroup>
         <col className="w-[28px]" />
-        {withStock && <col className="w-[150px]" />}
-        {withReceivedFrom && <col className="w-[180px]" />}
-        <col className="w-[260px]" />
-        <col />
-        {withJobs && <col className="w-[170px]" />}
-        {withJobs && <col className="w-[34px]" />}
-        {withClasses && <col className="w-[150px]" />}
-        {withPricing && <col className="w-[70px]" />}
-        {withPricing && <col className="w-[96px]" />}
+        {middle.map((c) => (
+          <col key={c.id} className={c.width} />
+        ))}
         <col className="w-[120px]" />
         <col className="w-[28px]" />
       </colgroup>
       <thead>
         <tr>
           <th className="qb-grid-head text-right">#</th>
-          {withStock && <th className="qb-grid-head">Stock item</th>}
-          {withReceivedFrom && <th className="qb-grid-head">Received from</th>}
-          <th className="qb-grid-head">{categoryLabel}</th>
-          <th className="qb-grid-head">Description</th>
-          {withJobs && <th className="qb-grid-head" title="The customer or job this cost is for (job costing)">Customer:Job</th>}
-          {withJobs && (
-            <th className="qb-grid-head text-center" title="Billable: invoice this cost to the customer from Sales › Bill Costs">
-              Bill?
+          {middle.map((c) => (
+            <th key={c.id} className={`qb-grid-head ${c.num ? 'text-right' : ''} ${c.id === 'bill' ? 'text-center' : ''}`} title={c.title}>
+              {headLabel(c)}
             </th>
-          )}
-          {withClasses && <th className="qb-grid-head">Class</th>}
-          {withPricing && <th className="qb-grid-head text-right">Qty</th>}
-          {withPricing && <th className="qb-grid-head text-right">Rate</th>}
+          ))}
           <th className="qb-grid-head text-right">Amount</th>
           <th className="qb-grid-head" aria-label="Remove" />
         </tr>
@@ -163,86 +273,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
           return (
             <tr key={row.key} data-row={i} className="qb-grid-row">
               <td className="qb-grid-cell text-right text-qb-ink-faint">{i + 1}</td>
-              {withStock && (
-                <td className="qb-grid-cell-edit">
-                  <select value={row.productId ?? ''} onChange={(e) => pickItem(row.key, e.target.value ? Number(e.target.value) : null)} aria-label={`Stock item ${i + 1}`}>
-                    <option value="">—</option>
-                    {stockItems.map((item) => (
-                      <option key={item.productId} value={item.productId}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              )}
-              {withReceivedFrom && (
-                <td className="qb-grid-cell-edit">
-                  <select value={nameValue(row)} onChange={(e) => pickName(row.key, e.target.value)} aria-label={`Received from ${i + 1}`}>
-                    <option value="">—</option>
-                    <optgroup label="Customers">
-                      {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
-                        <option key={`c${c.id}`} value={`c:${c.id}`}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Vendors">
-                      {vendors.filter((v) => v.isActive !== false || v.id === row.vendorId).map((v) => (
-                        <option key={`v${v.id}`} value={`v:${v.id}`}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </td>
-              )}
-              <td className="qb-grid-cell-edit">
-                <AccountSelect className="" accounts={accounts} filter={filter} value={row.accountId} onChange={(accountId) => update(row.key, { accountId })} placeholder="Select category" aria-label={`${categoryLabel} ${i + 1}`} disabled={Boolean(row.productId)} title={row.productId ? 'A stock item posts to its inventory account' : undefined} />
-              </td>
-              <td className="qb-grid-cell-edit">
-                <input value={row.memo} onChange={(e) => update(row.key, { memo: e.target.value })} placeholder="What was this for?" aria-label={`Description ${i + 1}`} />
-              </td>
-              {withJobs && (
-                <td className="qb-grid-cell-edit">
-                  <select value={row.customerId ?? ''} onChange={(e) => update(row.key, { customerId: e.target.value ? Number(e.target.value) : null })} aria-label={`Customer or job ${i + 1}`}>
-                    <option value="">—</option>
-                    {customers.filter((c) => c.isActive || c.id === row.customerId).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              )}
-              {withJobs && (
-                <td className="qb-grid-cell text-center">
-                  {row.customerId ? (
-                    <input
-                      type="checkbox"
-                      className="accent-qb-green"
-                      checked={row.billable ?? billableByDefault}
-                      onChange={(e) => update(row.key, { billable: e.target.checked })}
-                      aria-label={`Billable ${i + 1}`}
-                      title="Invoice this cost to the customer from Sales › Bill Costs"
-                    />
-                  ) : null}
-                </td>
-              )}
-              {withClasses && (
-                <td className="qb-grid-cell-edit">
-                  <ClassSelect className="" classes={classes} value={row.classId ?? null} onChange={(classId) => update(row.key, { classId })} aria-label={`Class ${i + 1}`} />
-                </td>
-              )}
-              {withPricing && (
-                <td className="qb-grid-cell-edit">
-                  <input className="num" value={row.qty ?? ''} onChange={(e) => update(row.key, { qty: e.target.value })} inputMode="decimal" data-quantity aria-invalid={evaluated.priced && evaluated.quantityE4 === null} aria-label={`Quantity ${i + 1}`} />
-                </td>
-              )}
-              {withPricing && (
-                <td className="qb-grid-cell-edit">
-                  <input className="num" value={row.rate ?? ''} onChange={(e) => update(row.key, { rate: e.target.value })} inputMode="decimal" data-money aria-invalid={evaluated.priced && (evaluated.rateCents === null || evaluated.rateCents <= 0)} aria-label={`Rate ${i + 1}`} />
-                </td>
-              )}
+              {middle.map((c) => cell(c.id, row, i, evaluated))}
               {evaluated.priced ? (
                 <td className={`qb-grid-cell num font-semibold ${amountBad ? 'text-qb-negative' : ''}`} title="Quantity × rate">
                   {cents !== null ? money(cents) : '—'}
@@ -262,10 +293,13 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
         })}
         <tr>
           <td />
-          <td className="px-2 py-0.5" colSpan={(withPricing ? 4 : 2) + (withStock ? 1 : 0) + (withClasses ? 1 : 0) + (withJobs ? 2 : 0) + (withReceivedFrom ? 1 : 0)}>
-            <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
-              ＋ Add split row
-            </button>
+          <td className="px-2 py-0.5" colSpan={middle.length}>
+            <span className="flex items-center gap-3">
+              <button type="button" className="text-sm font-semibold text-qb-info hover:underline" onClick={() => setRows((rs) => [...rs, blankSplit(defaultAccountId)])}>
+                ＋ Add split row
+              </button>
+              <ColumnsMenu cols={cols} compact />
+            </span>
             {footer}
           </td>
           <td className="qb-grid-cell num font-semibold">{currency ? money(total) : formatCents(total)}</td>
