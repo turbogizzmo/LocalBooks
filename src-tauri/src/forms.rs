@@ -894,7 +894,7 @@ pub async fn sales_order_doc(pool: &SqlitePool, order_id: i64, symbol: &str) -> 
     };
     let total = subtotal.checked_add(tax).ok_or_else(overflow)?;
     let money = |cents: i64| format_money(cents, None, symbol);
-    let cust = customer(pool, Some(customer_id), &name).await?;
+    let cust = customer(pool, Some(customer_id), &name, false).await?;
     let sales = crate::sales_orders::details_view(pool, order_id).await?;
     let mut meta = vec![("Order date".to_string(), format_date(&date), false)];
     if let Some(expected) = &expected {
