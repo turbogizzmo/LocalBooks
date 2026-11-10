@@ -289,7 +289,7 @@ export const topics = [
   {
     id: 'whats-new', area: 'company', views: [],
     title: 'What’s new in LocalBooks',
-    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently early-payment discounts on Receive Payments, every report in the Reports menu, and Ctrl+N, Ctrl+P and Page Up / Page Down on forms.',
+    body: 'The newest features in plain words, release by release, each with a link to its steps: most recently sales orders, receiving items before the bill, discounts and charges on purchase forms, Company Snapshot, merging duplicates and working with your accountant.',
     keywords: 'new whats new what’s new release notes changes changelog latest version update features',
     go: null,
     guide: 'whats-new',

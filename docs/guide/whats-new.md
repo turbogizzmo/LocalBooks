@@ -4,6 +4,36 @@ The newest changes first, in plain words, with a link to the steps for each. Loc
 new version when it starts (or check in **Settings › Updates**). The full list, including fixes, is in
 the [release notes](https://github.com/turbogizzmo/LocalBooks/blob/main/CHANGELOG.md).
 
+## 0.14.0
+
+A large release: everything below, plus over a hundred smaller changes in the release notes.
+
+- **Sales orders.** Record what a customer has ordered before you ship it, then invoice it all at
+  once or in parts. An accepted estimate becomes a sales order, and sales orders print and email
+  like invoices. [Sales orders](sales-orders.md)
+- **Receive items before the bill.** Bring goods in from a purchase order when they arrive and
+  enter the bill later; each line's job carries over to the bill.
+  [Receive items before the bill](bills.md#receive-items-before-the-bill)
+- **Discounts, subtotals and charges on every purchase form and on credit memos.**
+  [Discounts and charges](bills.md#discounts-and-charges-on-bills-checks-credits-and-orders)
+- **Approvals for bills and purchase orders.** [Approvals](bills.md#approvals-for-bills-and-purchase-orders)
+- **Payouts from Stripe, PayPal and Shopify Payments**, with their fees, fetched on a schedule if you
+  like. [Payouts from PayPal](bank-feeds.md#payouts-from-paypal)
+- **Company Snapshot**: a page of widgets you choose for income, expenses, balances and to-dos.
+  [Company Snapshot](reports.md#company-snapshot)
+- **Work with your accountant**: an Accountant's Copy with a dividing date, and an External
+  Accountant user. [Accountant's Copy](closing-the-books.md#work-with-your-accountant-at-the-same-time-accountants-copy)
+- **Merge duplicate customers, vendors, items and accounts.**
+  [Merge two customers, vendors or items](customers-and-products.md#merge-two-customers-vendors-or-items)
+- **The Document Inbox** for receipts and bills, and the **Attachments Library**.
+  [The Document Inbox](attachments.md#the-document-inbox)
+- **Encrypted offsite backups**, and a reminder when a backup hasn't left this computer.
+  [Offsite backup](backups-and-company-files.md#offsite-backup-encrypted)
+- **Go back to the previous version** from Help if a new version gives you trouble.
+  [Go back to the previous version](troubleshooting.md#go-back-to-the-previous-version)
+- **Safer company-file imports**: payroll, cost of goods sold and discount lines come in from
+  QuickBooks Desktop files, and amounts from a damaged file are checked.
+
 ## 0.13.0
 
 - **Take a customer's early-payment discount on Receive Payments.** An invoice on terms such as
