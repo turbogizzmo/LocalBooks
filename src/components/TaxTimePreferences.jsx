@@ -185,6 +185,12 @@ export function ItemsCompany({ field }) {
     <Group title="Inventory and purchase orders" id="inventory-preferences">
       {field({ label: 'Inventory', prefKey: 'inventory_enabled', hint: 'Off hides Purchase Orders and tracking stock on products; items already tracked keep their stock', children: flag('Inventory and purchase orders are active') })}
       {field({
+        label: 'Item categories',
+        prefKey: 'item_categories',
+        hint: 'Off hides the category tree on Products & Services and the category filters on forms and item reports; items keep their categories',
+        children: flag('Group items into categories'),
+      })}
+      {field({
         label: 'Not enough stock',
         prefKey: 'negative_stock',
         hint: 'When an invoice or sales receipt would take a tracked item below zero',

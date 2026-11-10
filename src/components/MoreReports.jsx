@@ -8,6 +8,16 @@ import { accountLabel, useCompanyPreferences } from '../lib/companyPreferences.j
 import { formatCents, formatQuantity } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
+import { useCategoryFilter } from './ItemCategories.jsx';
+
+/** Item reports filtered by category (when categories are on): the rows kept, and the control. */
+function useItemRows(rows, wanted = true) {
+  const products = useLedgerQuery(() => (wanted ? api.listProducts() : Promise.resolve([]))).data;
+  const filter = useCategoryFilter(products, wanted);
+  return { kept: (rows ?? []).filter((r) => filter.keeps(r.name ?? r.label)), control: filter.control, active: filter.active };
+}
+
+const sumOf = (rows, key) => rows.reduce((s, r) => s + (r[key] ?? 0), 0);
 
 /**
  * Report period controls (preset, from, to), following the fiscal year like the statements do.
@@ -374,11 +384,15 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
     return match ? () => onZoom(cfg.zoom.preset, { title: `${cfg.zoom.title}: ${label}`, filters: cfg.zoom.filter(match.id), startDate: data.startDate, endDate: data.endDate }) : undefined;
   };
   const withQty = by === 'product';
+  // Sales by item: a category filter keeps that category's items, and the total is theirs.
+  const items = useItemRows(data?.rows, by === 'product');
+  const shown = items.kept;
+  const total = items.active ? sumOf(shown, 'amountCents') : (data?.totalCents ?? 0);
   const columns = [{ label: cfg.column }, ...(withQty ? [{ label: 'Quantity', align: 'right' }, { label: 'Avg price', align: 'right' }] : []), { label: 'Amount', align: 'right' }, { label: '% of total', align: 'right' }];
-  const pct = (cents) => (data?.totalCents ? `${((cents / data.totalCents) * 100).toFixed(1)}%` : '');
+  const pct = (cents) => (total ? `${((cents / total) * 100).toFixed(1)}%` : '');
   const rows = data
     ? [
-        ...data.rows.map((r) => ({
+        ...shown.map((r) => ({
           onClick: zooms ? zoomTo(r.label) : undefined,
           cells: [
             r.label,
@@ -387,7 +401,7 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
             pct(r.amountCents),
           ],
         })),
-        { kind: 'grand', cells: ['TOTAL', ...(withQty ? ['', ''] : []), formatCents(data.totalCents), data.totalCents ? '100.0%' : ''] },
+        { kind: 'grand', cells: ['TOTAL', ...(withQty ? ['', ''] : []), formatCents(total), total ? '100.0%' : ''] },
       ]
     : [];
   return (
@@ -397,7 +411,12 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
       columns={columns}
       rows={rows}
       error={error}
-      toolbar={p.controls}
+      toolbar={
+        <>
+          {p.controls}
+          {items.control}
+        </>
+      }
       footer={
         (by === 'product'
           ? 'Invoices and sales receipts less credit memos, by document date'
@@ -405,7 +424,7 @@ export function SummaryReport({ by, initial = null, onZoom = null }) {
             ? 'Invoices and sales receipts by the rep on each form, by document date (credit memos carry no rep)'
             : 'Accrual basis · posted transactions only') + (zooms ? ' · click a line for its transactions' : '')
       }
-      onCsvRows={() => [...data.rows.map((r) => [r.label, ...(withQty ? [((r.quantityE4 ?? 0) / 10_000).toString(), ''] : []), plainAmount(r.amountCents), '']), ['TOTAL', ...(withQty ? ['', ''] : []), plainAmount(data.totalCents), '']]}
+      onCsvRows={() => [...shown.map((r) => [r.label, ...(withQty ? [((r.quantityE4 ?? 0) / 10_000).toString(), ''] : []), plainAmount(r.amountCents), '']), ['TOTAL', ...(withQty ? ['', ''] : []), plainAmount(total), '']]}
     />
   );
 }
@@ -701,22 +720,25 @@ export function InventoryValuationReport() {
   useEffect(() => {
     reload();
   }, [asOf, reload]);
+  const items = useItemRows(data?.rows);
+  const assetTotal = items.active ? sumOf(items.kept, 'assetValueCents') : (data?.totalAssetValueCents ?? 0);
+  const retailTotal = items.active ? sumOf(items.kept, 'retailValueCents') : (data?.totalRetailValueCents ?? 0);
   const rows = data
     ? [
-        ...data.rows.map((r) => ({
+        ...items.kept.map((r) => ({
           cells: [
             r.name,
             r.description ?? '',
             formatQuantity(r.qtyOnHandE4),
             r.averageCostCents == null ? '' : formatCents(r.averageCostCents),
             formatCents(r.assetValueCents),
-            pctOf(r.assetValueCents, data.totalAssetValueCents),
+            pctOf(r.assetValueCents, assetTotal),
             formatCents(r.salesPriceCents),
             formatCents(r.retailValueCents),
-            pctOf(r.retailValueCents, data.totalRetailValueCents),
+            pctOf(r.retailValueCents, retailTotal),
           ],
         })),
-        { kind: 'grand', cells: ['TOTAL', '', '', '', formatCents(data.totalAssetValueCents), data.totalAssetValueCents ? '100.0%' : '', '', formatCents(data.totalRetailValueCents), data.totalRetailValueCents ? '100.0%' : ''] },
+        { kind: 'grand', cells: ['TOTAL', '', '', '', formatCents(assetTotal), assetTotal ? '100.0%' : '', '', formatCents(retailTotal), retailTotal ? '100.0%' : ''] },
       ]
     : [];
   return (
@@ -736,11 +758,16 @@ export function InventoryValuationReport() {
       ]}
       rows={rows}
       error={error}
-      toolbar={<AsOf value={asOf} onChange={setAsOf} />}
+      toolbar={
+        <>
+          <AsOf value={asOf} onChange={setAsOf} />
+          {items.control}
+        </>
+      }
       footer="Moving average cost · stock movements dated on or before the report date, so the total agrees with the inventory asset accounts · track products under Sales › Products & Services"
       onCsvRows={() => [
-        ...data.rows.map((r) => [r.name, r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), plainAmount(r.averageCostCents), plainAmount(r.assetValueCents), '', plainAmount(r.salesPriceCents), plainAmount(r.retailValueCents), '']),
-        ['TOTAL', '', '', '', plainAmount(data.totalAssetValueCents), '', '', plainAmount(data.totalRetailValueCents), ''],
+        ...items.kept.map((r) => [r.name, r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), plainAmount(r.averageCostCents), plainAmount(r.assetValueCents), '', plainAmount(r.salesPriceCents), plainAmount(r.retailValueCents), '']),
+        ['TOTAL', '', '', '', plainAmount(assetTotal), '', '', plainAmount(retailTotal), ''],
       ]}
     />
   );
@@ -815,7 +842,8 @@ export function StockStatusReport() {
   useEffect(() => {
     reload();
   }, [p.start, p.end, reload]);
-  const rows = (data?.rows ?? []).map((r) => ({
+  const items = useItemRows(data?.rows);
+  const rows = items.kept.map((r) => ({
     cells: [
       r.name,
       r.sku ?? '',
@@ -843,10 +871,15 @@ export function StockStatusReport() {
       ]}
       rows={rows}
       error={error}
-      toolbar={p.controls}
+      toolbar={
+        <>
+          {p.controls}
+          {items.control}
+        </>
+      }
       footer="On hand at the end of the period · On PO: open purchase orders (Next deliv is the earliest expected date) · Sold and Sales/week: units sold in the period, less voided sales"
       onCsvRows={() =>
-        data.rows.map((r) => [r.name, r.sku ?? '', r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), (r.qtyOnOrderE4 / 10_000).toString(), r.nextDelivery ?? '', (r.qtySoldE4 / 10_000).toString(), (r.salesPerWeekE4 / 10_000).toString()])
+        items.kept.map((r) => [r.name, r.sku ?? '', r.description ?? '', (r.qtyOnHandE4 / 10_000).toString(), (r.qtyOnOrderE4 / 10_000).toString(), r.nextDelivery ?? '', (r.qtySoldE4 / 10_000).toString(), (r.salesPerWeekE4 / 10_000).toString()])
       }
     />
   );
