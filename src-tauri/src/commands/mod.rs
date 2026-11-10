@@ -85,6 +85,7 @@ features![
     info_panel,
     inventory,
     invoices,
+    item_details,
     item_groups,
     item_prices,
     job_reports,

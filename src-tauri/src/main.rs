@@ -59,6 +59,7 @@ mod instance;
 mod info_panel;
 mod inventory;
 mod invoices;
+mod item_details;
 mod item_prices;
 mod item_types;
 mod job_reports;

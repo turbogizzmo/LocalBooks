@@ -123,6 +123,11 @@ pub struct ProductView {
     /// Set when the charge or discount is a percentage of the line above (parts per million).
     #[sqlx(default)]
     pub percent_ppm: Option<i64>,
+    /// What purchase forms say for it, and what it costs to buy (`item_details`).
+    #[sqlx(default)]
+    pub purchase_description: Option<String>,
+    #[sqlx(default)]
+    pub purchase_cost_cents: Option<i64>,
 }
 
 /// What kind of item a product is, given alongside its `ProductInput` (left out, an item).
@@ -321,7 +326,8 @@ fn party_err(e: sqlx::Error, name: &str) -> String {
 
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
-        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm
+        "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm,
+                p.purchase_description, p.purchase_cost_cents
          FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
          ORDER BY p.name COLLATE NOCASE",
     )

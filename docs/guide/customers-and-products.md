@@ -185,6 +185,34 @@ account. You can still change them on the form.
 
 To keep count of a product you stock, see [Track inventory](inventory.md).
 
+### More on an item's record
+
+Double-click an item (or **Edit…** on its row) for the rest of its record:
+
+- **Subitem of** puts it under another item, as `Parent:Item`; the list shows it under its parent
+  when you choose the tree view.
+- **Description on purchase forms** and **Cost**: what you call it and pay for it when you buy it.
+  Both are optional, and both come in from IIF files (`PURCHASEDESC`, `PURCHASECOST`) and company
+  files that have them. **Customize Columns** can show **Purchase description** and **Cost** on the
+  list.
+
+### Find, tick and paste items
+
+- The row above the list searches it: type in **Look for**, choose the field in **in** (all fields,
+  name, description or purchase description), and click **Search**. **Reset** shows every item again.
+- Tick the box beside items to work on several at once: **Make inactive** or **Make active** for
+  all the ticked items.
+- **Add/Edit Multiple…** takes rows copied from a spreadsheet, with the columns Name, Description,
+  Price, Income account, Purchase description and Cost. A name already on the list changes that
+  item (only the cells you fill in); a new name adds one. Every row is checked first and the ones
+  that can't be saved are listed; nothing is saved until all of them read.
+
+### Pick several items on a form
+
+In the **Product/Service** box on an invoice, sales receipt, estimate or credit memo, choose **Find
+& Select Items…**. Look for items by name or description, tick the ones you want and click **Add
+lines**: each becomes a line with a quantity of 1 at the customer's price.
+
 ## Discounts, other charges and groups
 
 Besides services and parts, an item can be a **Discount** or an **Other charge**, and items can be

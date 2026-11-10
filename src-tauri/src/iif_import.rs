@@ -402,6 +402,8 @@ pub fn read(bytes: &[u8]) -> Result<Ledger, String> {
                     taxable: row.yes("TAXABLE"),
                     active: !row.yes("HIDDEN"),
                     custom_fields: Vec::new(),
+                    purchase_description: row.text("PURCHASEDESC"),
+                    purchase_cost_cents: row.get("PURCHASECOST").and_then(|p| parse_amount_cents(p).ok()).map(i64::abs),
                 });
                 item_fields.push((items.len() - 1, custom_values(&row, 5)));
             }

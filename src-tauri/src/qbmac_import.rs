@@ -623,6 +623,8 @@ fn items(book: &Book, known: &HashSet<i64>) -> Vec<SourceItem> {
                 taxable: i.taxable,
                 active: !i.hidden,
                 custom_fields: Vec::new(),
+                purchase_description: None,
+                purchase_cost_cents: None,
             })
         })
         .collect();

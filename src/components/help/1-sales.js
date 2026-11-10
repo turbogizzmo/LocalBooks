@@ -237,8 +237,8 @@ export const topics = [
   {
     id: 'products', area: 'sales', views: ['sales/products', 'sales/invoices'],
     title: 'Set up products and services',
-    body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list.',
-    keywords: 'item service product price rate catalog add new item quick add',
+    body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list. Edit… on an item sets Subitem of, the description on purchase forms and the cost. Above the list, Look for searches by field; tick items to make several inactive at once; Add/Edit Multiple… adds or changes items from rows pasted from a spreadsheet. On a form, Find & Select Items… in the item box adds several items at once.',
+    keywords: 'item service product price rate catalog add new item quick add subitem sub-item purchase description cost search find tick multiple paste excel add edit multiple items find and select items',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'customers-and-products',
   },

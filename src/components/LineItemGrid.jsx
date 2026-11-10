@@ -5,6 +5,7 @@ import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import { usePriceLevels } from './PriceLevels.jsx';
 import NewItemDialog from './NewItemDialog.jsx';
+import FindItemsDialog from './FindItems.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatMoney, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 import { documentOrder, layOut, parsePercentPpm, percentText } from '../lib/itemTypes.js';
@@ -15,6 +16,7 @@ import { formatDate } from '../lib/dates.js';
 let nextKey = 1;
 /** The item column's "Add new item…" entry. */
 const NEW_ITEM = '__new';
+const FIND_ITEMS = '__find';
 /** The item column's fixed Subtotal entry: a subtotal is a line kind, not an item to set up. */
 const SUBTOTAL = '__subtotal';
 /** Item column values for groups: "group:<id>". */
@@ -335,8 +337,33 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   };
   // The line whose item column chose "＋ Add new item…", while its dialog is open.
   const [adding, setAdding] = useState(null);
+  // Find & Select Items: the line the picked items start at.
+  const [finding, setFinding] = useState(null);
+  const pickable = (p) => p.isActive && (itemTypes || !(p.itemType === 'DISCOUNT' || p.percentPpm));
+  // The items picked in Find & Select: the first fills the line the box was on (when it is
+  // blank), the rest follow it, each priced for the customer.
+  const addFound = (index, ids) => {
+    const found = ids.map((id) => products.find((p) => p.id === id)).filter((p) => p && p.itemType !== 'DISCOUNT' && !p.percentPpm);
+    const made = found.map((product) => ({
+      ...blankLine(product.incomeAccountId ?? defaultAccountId),
+      productId: product.id,
+      description: product.description ?? product.name,
+      isTaxable: Boolean(product.isTaxable),
+      qty: '1',
+      rate: rateAt(product.id, customerLevel) ?? (product.rateCents > 0 ? centsToInput(product.rateCents) : ''),
+      levelId: customerLevel,
+      levelAuto: true,
+      rateTyped: false,
+    }));
+    const line = lines[index];
+    const blank = line && line.productId == null && !line.description?.trim() && !line.rate?.trim();
+    setLines((ls) => [...ls.slice(0, blank ? index : index + 1), ...made, ...ls.slice(index + 1)]);
+    setFinding(null);
+    setActive(null);
+  };
   const pickProduct = async (index, productId, known = null) => {
     if (productId === NEW_ITEM) return setAdding(index);
+    if (productId === FIND_ITEMS) return setFinding(index);
     const line = lines[index];
     if (typeof productId === 'string' && productId.startsWith(GROUP)) return expandGroup(index, Number(productId.slice(GROUP.length)));
     if (productId === SUBTOTAL) return update(index, { kind: 'SUBTOTAL', productId: null, description: 'Subtotal', qty: '', rate: '', isTaxable: false });
@@ -516,7 +543,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                         value={line.kind === 'SUBTOTAL' ? SUBTOTAL : line.kind === 'GROUP' ? `${GROUP}${line.groupId}` : (line.productId ?? '')}
                         onChange={(e) => {
                           const v = e.target.value;
-                          pickProduct(i, v === '' ? null : [NEW_ITEM, SUBTOTAL].includes(v) || v.startsWith(GROUP) ? v : Number(v));
+                          pickProduct(i, v === '' ? null : [NEW_ITEM, FIND_ITEMS, SUBTOTAL].includes(v) || v.startsWith(GROUP) ? v : Number(v));
                         }}
                         onKeyDown={(e) => onKeyDown(e, i)}
                       >
@@ -533,6 +560,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
                             </option>
                           ))}
                         {itemTypes && <option value={SUBTOTAL}>Subtotal</option>}
+                        <option value={FIND_ITEMS}>Find &amp; Select Items…</option>
                         <option value={NEW_ITEM}>＋ Add new item…</option>
                       </select>
                     </td>
@@ -711,6 +739,7 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
           );
         })}
       </tbody>
+      {finding !== null && <FindItemsDialog products={products.filter((p) => pickable(p) && p.itemType !== 'DISCOUNT' && !p.percentPpm)} onClose={() => setFinding(null)} onAdd={(ids) => addFound(finding, ids)} />}
       {adding !== null && (
         // A portal: the dialog renders on <body>, not in the table.
         <NewItemDialog

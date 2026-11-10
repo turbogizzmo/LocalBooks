@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **More on items.** An item's record takes Subitem of, a description for purchase forms and a cost
+  (also brought in from IIF files). The item list has a search row, tick boxes to make several
+  items inactive or active at once, and Add/Edit Multiple for rows pasted from a spreadsheet. The
+  item box on sales forms has Find & Select Items to add several lines at once.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

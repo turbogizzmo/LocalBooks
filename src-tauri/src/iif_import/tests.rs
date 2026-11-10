@@ -556,3 +556,12 @@ async fn bringing_in_the_lists_brings_the_classes() {
     assert_eq!(tracking(&pool).await, "true");
     assert_eq!(class_of_lines(&pool, "journal_lines").await[1], Some("Remodel:Kitchen".into()));
 }
+
+#[test]
+fn an_item_brings_its_purchase_description_and_cost() {
+    let file = "!INVITEM\tNAME\tINVITEMTYPE\tDESC\tPURCHASEDESC\tACCNT\tPRICE\tPURCHASECOST\n\
+INVITEM\tMulch\tPART\tBark mulch, per yard\tMulch from the yard supplier\tSales\t40\t22.50\n";
+    let ledger = read(file.as_bytes()).unwrap();
+    let mulch = &ledger.items[0];
+    assert_eq!((mulch.purchase_description.as_deref(), mulch.purchase_cost_cents), (Some("Mulch from the yard supplier"), Some(2_250)));
+}

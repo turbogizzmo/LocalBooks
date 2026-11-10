@@ -12,7 +12,7 @@ import { CustomFieldInputs } from './SalesLists.jsx';
 import { useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
-import { formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
+import { centsToInput, formatCents, formatQuantity, parseMoneyToCents } from '../lib/money.js';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import { todayIso } from '../lib/dates.js';
 import { parsePercentPpm, percentText } from '../lib/itemTypes.js';
@@ -21,19 +21,112 @@ import { SortTh, useSort } from './SortHead.jsx';
 import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
+import { PASTE_COLUMNS, parsePastedItems } from '../lib/pasteItems.js';
 
 /** Customize Columns: the item list's columns in their usual order. */
 const ITEM_COLUMNS = [
   { id: 'name', label: 'Name', required: true },
   { id: 'description', label: 'Description' },
+  { id: 'purchaseDescription', label: 'Purchase description', hidden: true },
   { id: 'rate', label: 'Rate' },
+  { id: 'cost', label: 'Cost', hidden: true },
   { id: 'income', label: 'Income account' },
   { id: 'onHand', label: 'On hand' },
   { id: 'avgCost', label: 'Avg cost' },
   { id: 'value', label: 'Stock value' },
 ];
-const ITEM_COLUMN_WIDTH = { name: 'w-[220px]', rate: 'w-[112px]', income: 'w-[220px]', onHand: 'w-[90px]', avgCost: 'w-[100px]', value: 'w-[110px]' };
-const RIGHT_ITEM_COLUMNS = new Set(['rate', 'onHand', 'avgCost', 'value']);
+const ITEM_COLUMN_WIDTH = { name: 'w-[220px]', rate: 'w-[112px]', cost: 'w-[100px]', income: 'w-[220px]', onHand: 'w-[90px]', avgCost: 'w-[100px]', value: 'w-[110px]' };
+const RIGHT_ITEM_COLUMNS = new Set(['rate', 'cost', 'onHand', 'avgCost', 'value']);
+/** The search row's "in" box: which field the words are looked for in. */
+const SEARCH_FIELDS = [
+  ['all', 'All fields', (p) => [p.name, p.description, p.purchaseDescription]],
+  ['name', 'Name', (p) => [p.name]],
+  ['description', 'Description', (p) => [p.description]],
+  ['purchaseDescription', 'Purchase description', (p) => [p.purchaseDescription]],
+];
+/** Add/Edit Multiple Items: paste rows from a spreadsheet; names already on the list are changed. */
+function PasteItemsDialog({ onClose, onDone }) {
+  const [text, setText] = useState('');
+  const [problems, setProblems] = useState([]);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const rows = parsePastedItems(text);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.pasteItems(rows);
+      if (result.problems.length > 0) {
+        setProblems(result.problems);
+        setBusy(false);
+        return;
+      }
+      onDone(`Added ${result.added} and changed ${result.updated} item${result.added + result.updated === 1 ? '' : 's'}.`);
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog title="Add/Edit Multiple Items" onClose={onClose}>
+      <div className="flex w-[720px] max-w-full flex-col gap-2 px-3 py-2 text-xs">
+        <p className="text-qb-ink-muted">
+          Copy rows from a spreadsheet with the columns {PASTE_COLUMNS.map(([, l]) => l).join(', ')}, in that order, and paste them below. A name already on the list changes that item (only the cells you
+          fill in); a new name adds an item. Nothing is saved until every row reads.
+        </p>
+        <textarea
+          className="qb-input h-[110px] py-1 font-mono"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setProblems([]);
+          }}
+          placeholder={'Bolt\tHex bolt\t0.60\tSales\tHex bolt, box of 100\t0.12'}
+          aria-label="Pasted rows"
+          autoFocus
+        />
+        {rows.length > 0 && (
+          <div className="max-h-[200px] overflow-auto border border-qb-border scrollbar-thin">
+            <table className="qb-grid">
+              <thead>
+                <tr>
+                  <th className="qb-grid-head w-[36px]">Row</th>
+                  {PASTE_COLUMNS.map(([id, label]) => (
+                    <th key={id} className="qb-grid-head">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className={problems.some((p) => p.row === i + 1) ? 'bg-qb-negative-tint' : ''}>
+                    <td className="qb-grid-cell text-qb-ink-faint">{i + 1}</td>
+                    {PASTE_COLUMNS.map(([id]) => (
+                      <td key={id} className="qb-grid-cell">{r[id]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {problems.length > 0 && (
+          <ul className="text-qb-negative" role="alert">
+            {problems.map((p) => (
+              <li key={`${p.row}-${p.message}`}>Row {p.row}: {p.message}</li>
+            ))}
+          </ul>
+        )}
+        {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
+        <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>Cancel</button>
+          <button type="button" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={busy || rows.length === 0} onClick={save}>
+            Save {rows.length > 0 ? rows.length : ''} row{rows.length === 1 ? '' : 's'}
+          </button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
 
@@ -66,8 +159,16 @@ export function readRate(itemType, text) {
 const rateLabel = (p) => (p.percentPpm ? percentText(p.percentPpm) : p.rateCents ? formatCents(p.rateCents) : '');
 const typeLabel = (p) => (p.itemType && p.itemType !== 'ITEM' ? ITEM_TYPES.find((t) => t.value === p.itemType)?.label : null);
 
-function ProductDialog({ product, accounts, onClose, onSaved }) {
-  const [name, setName] = useState(product.name);
+function ProductDialog({ product, products = [], accounts, onClose, onSaved }) {
+  // Subitem of: a sub-item's name is "Parent:Item"; the box edits the last part.
+  const split = product.name.lastIndexOf(':');
+  const [parent, setParent] = useState(split > 0 ? product.name.slice(0, split) : '');
+  const [name, setName] = useState(split > 0 ? product.name.slice(split + 1) : product.name);
+  const fullName = parent ? `${parent}:${name.trim()}` : name;
+  const parents = products.filter((p) => p.id !== product.id && p.name !== product.name && !p.name.startsWith(`${product.name}:`) && (p.isActive || p.name === parent));
+  const [purchaseDescription, setPurchaseDescription] = useState(product.purchaseDescription ?? '');
+  const [cost, setCost] = useState(product.purchaseCostCents == null ? '' : centsToInput(product.purchaseCostCents));
+  const costCents = cost.trim() === '' ? null : parseMoneyToCents(cost);
   const [description, setDescription] = useState(product.description ?? '');
   const [itemType, setItemType] = useState(product.itemType || 'ITEM');
   const [rate, setRate] = useState(product.percentPpm ? percentText(product.percentPpm) : product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
@@ -102,11 +203,16 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
     e.preventDefault();
     if (read.error) return setError(read.error);
     if (tracked && reorderRead.error) return setError(reorderRead.error);
+    if (!name.trim()) return setError('Enter the item’s name.');
+    if (cost.trim() !== '' && (costCents === null || costCents < 0)) return setError('Enter the cost as an amount of zero or more, or leave it blank.');
     setBusy(true);
     try {
-      if (await mergeOffer.check(name)) return setBusy(false);
-      const input = { name, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
+      if (await mergeOffer.check(fullName)) return setBusy(false);
+      const input = { name: fullName, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
       const saved = await api.updateProduct(product.id, input, read.kind);
+      if ((purchaseDescription.trim() || null) !== (product.purchaseDescription ?? null) || costCents !== (product.purchaseCostCents ?? null)) {
+        await api.setItemPurchaseDetails(product.id, purchaseDescription.trim() || null, costCents);
+      }
       if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       const reorderE4 = tracked ? reorderRead.e4 : null;
       if (purchasing && (reorderE4 !== (purchasing.reorderPointE4 ?? null) || vendorId !== (purchasing.preferredVendorId ?? null))) {
@@ -125,7 +231,16 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Name</span>
-            <input className="qb-input" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="qb-input" value={name} onChange={(e) => setName(e.target.value.replace(/:/g, ''))} />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Subitem of</span>
+            <select className="qb-input" value={parent} onChange={(e) => setParent(e.target.value)} title="A sub-item is listed under its parent and named Parent:Item">
+              <option value="">None (a top-level item)</option>
+              {parents.map((p) => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">{itemType === 'ITEM' ? 'Rate' : 'Amount or %'}</span>
@@ -142,6 +257,14 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">Description on sales forms</span>
             <input className="qb-input" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Description on purchase forms</span>
+            <input className="qb-input" value={purchaseDescription} maxLength={4000} onChange={(e) => setPurchaseDescription(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Cost</span>
+            <input className="qb-input num" value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" placeholder="0.00" aria-invalid={cost.trim() !== '' && (costCents === null || costCents < 0)} />
           </label>
           <label className="col-span-2 flex flex-col gap-0.5">
             <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Discount account (debited)' : 'Income account'}</span>
@@ -212,7 +335,9 @@ export default function Products({ accounts, intent }) {
   const sorter = useSort(data, {
     name: (p) => p.name,
     description: (p) => p.description,
+    purchaseDescription: (p) => p.purchaseDescription,
     rate: (p) => p.rateCents || null,
+    cost: (p) => p.purchaseCostCents,
     income: (p) => accountLabel(accounts, p.incomeAccountId),
     onHand: (p) => items.get(p.id)?.qtyOnHandE4,
     avgCost: (p) => items.get(p.id)?.averageCostCents,
@@ -226,6 +351,14 @@ export default function Products({ accounts, intent }) {
       case 'name':
         return (
           <td key={c.id} className="qb-grid-cell font-semibold" style={customOrder && listOrder.tree ? { paddingLeft: 8 + item.depth * 16 } : undefined}>
+            <input
+              type="checkbox"
+              className="mr-1 align-middle accent-qb-green"
+              checked={ticked.has(p.id)}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => tick(p.id)}
+              aria-label={`Tick ${p.name}`}
+            />
             {customOrder && <TreeToggle ctl={listOrder} item={{ id: p.id, ...item }} />}
             {customOrder && listOrder.tree ? p.name.slice(p.name.lastIndexOf(':') + 1) : p.name}
             {typeLabel(p) && <span className="ml-1 text-2xs font-normal uppercase tracking-wide text-qb-ink-muted">{typeLabel(p)}</span>}
@@ -234,6 +367,10 @@ export default function Products({ accounts, intent }) {
         );
       case 'description':
         return <td key={c.id} className="qb-grid-cell text-qb-ink-muted" title={p.description ?? ''}>{p.description ?? ''}</td>;
+      case 'purchaseDescription':
+        return <td key={c.id} className="qb-grid-cell text-qb-ink-muted" title={p.purchaseDescription ?? ''}>{p.purchaseDescription ?? ''}</td>;
+      case 'cost':
+        return <td key={c.id} className="qb-grid-cell num">{p.purchaseCostCents == null ? '' : formatCents(p.purchaseCostCents)}</td>;
       case 'rate':
         return <td key={c.id} className="qb-grid-cell num">{rateLabel(p)}</td>;
       case 'income':
@@ -280,7 +417,35 @@ export default function Products({ accounts, intent }) {
   }, [data]);
   const customOrder = !sorter.sort;
   const listOrder = useListOrder('ITEMS', data, { parentOf: parentOfItem, dragEnabled: customOrder, onNotice: setNotice, defaultView: 'flat' });
-  const shownItems = (customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: 0, hasChildren: false }))).filter((x) => showInactive || x.row.isActive);
+  // The search row: words looked for in a field, applied by Search and cleared by Reset.
+  const [lookFor, setLookFor] = useState({ text: '', field: 'all' });
+  const [search, setSearch] = useState(null);
+  const matches = (p) => {
+    if (!search) return true;
+    const values = SEARCH_FIELDS.find(([id]) => id === search.field)[2](p);
+    const words = search.text.toLowerCase().split(/\s+/).filter(Boolean);
+    return words.every((w) => values.some((v) => (v ?? '').toLowerCase().includes(w)));
+  };
+  const shownItems = (customOrder ? listOrder.visible : sorter.sorted.map((row) => ({ row, id: row.id, depth: 0, hasChildren: false }))).filter((x) => (showInactive || x.row.isActive) && matches(x.row));
+  // Ticked items, for actions on several at once.
+  const [ticked, setTicked] = useState(new Set());
+  const tick = (id) =>
+    setTicked((t) => {
+      const next = new Set(t);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const [pasting, setPasting] = useState(false);
+  const setTickedActive = async (active) => {
+    try {
+      const changed = await api.setItemsActive([...ticked], active);
+      setTicked(new Set());
+      setNotice({ kind: 'success', text: `${changed} item${changed === 1 ? '' : 's'} made ${active ? 'active' : 'inactive'}.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
@@ -383,6 +548,7 @@ export default function Products({ accounts, intent }) {
       {dialog?.mode === 'edit' && (
         <ProductDialog
           product={dialog.product}
+          products={data ?? []}
           accounts={accounts}
           onClose={() => setDialog(null)}
           onSaved={(text) => {
@@ -402,6 +568,15 @@ export default function Products({ accounts, intent }) {
           }}
         />
       )}
+      {pasting && (
+        <PasteItemsDialog
+          onClose={() => setPasting(false)}
+          onDone={(text) => {
+            setPasting(false);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
       {grouping && <ItemGroups products={data ?? []} onClose={() => setGrouping(false)} />}
       {changingPrices && <ChangePrices onClose={() => setChangingPrices(false)} />}
       {pricingLevels && !changingPrices && <PriceLevels onClose={() => setPricingLevels(false)} />}
@@ -411,6 +586,9 @@ export default function Products({ accounts, intent }) {
           <h2 className="text-md font-semibold">Products & Services</h2>
           <span className="ml-2 min-w-0 truncate text-xs text-qb-ink-muted">Picking one on an invoice or sales receipt fills its description, rate and income account. Track stock to keep quantity and cost.</span>
           <span className="ml-auto" />
+          <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setPasting(true)} title="Paste rows from a spreadsheet to add or change many items">
+            Add/Edit Multiple…
+          </button>
           <button type="button" className="qb-btn qb-btn-secondary mr-2 h-row flex-none" onClick={() => setGrouping(true)}>
             Groups…
           </button>
@@ -433,6 +611,55 @@ export default function Products({ accounts, intent }) {
           </div>
           <ColumnsMenu cols={cols} />
         </div>
+        <form
+          className="flex flex-none flex-wrap items-center gap-2 border-b border-qb-border px-2 py-1 text-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearch(lookFor.text.trim() ? { ...lookFor } : null);
+          }}
+          aria-label="Search the items"
+        >
+          <label className="flex items-center gap-1">
+            Look for
+            <input className="qb-input h-row w-[200px]" value={lookFor.text} onChange={(e) => setLookFor((l) => ({ ...l, text: e.target.value }))} aria-label="Look for" />
+          </label>
+          <label className="flex items-center gap-1">
+            in
+            <select className="qb-input h-row" value={lookFor.field} onChange={(e) => setLookFor((l) => ({ ...l, field: e.target.value }))} aria-label="In field">
+              {SEARCH_FIELDS.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="qb-btn qb-btn-secondary h-row px-2">
+            Search
+          </button>
+          <button
+            type="button"
+            className="qb-btn qb-btn-secondary h-row px-2"
+            onClick={() => {
+              setLookFor({ text: '', field: 'all' });
+              setSearch(null);
+            }}
+          >
+            Reset
+          </button>
+          {search && <span className="text-xs text-qb-ink-muted">{shownItems.length} found</span>}
+          {ticked.size > 0 && (
+            <span className="ml-auto flex items-center gap-2 text-xs">
+              <strong>{ticked.size} ticked</strong>
+              <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => setTickedActive(false)}>
+                Make inactive
+              </button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row px-2" onClick={() => setTickedActive(true)}>
+                Make active
+              </button>
+              <button type="button" className="text-qb-link hover:underline" onClick={() => setTicked(new Set())}>
+                Clear
+              </button>
+            </span>
+          )}
+        </form>
         {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
         {error && <Notice kind="error" text={error} />}
         <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
