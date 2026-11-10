@@ -19,7 +19,8 @@ use crate::ledger::db_err;
 /// The error a save gets for a typed number already in use.
 pub const DOC_NUMBER_TAKEN: &str = "DOC_NUMBER_TAKEN";
 
-/// The highest number a form may have, so the next one is always in range.
+/// The highest number a person may type. The next number is not capped, so a file whose imported
+/// numbers are higher still numbers new forms.
 pub const MAX_DOC_NUMBER: i64 = 999_999_999;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,9 +91,6 @@ pub async fn next_number(conn: &mut SqliteConnection, kind: DocKind) -> Result<i
         .fetch_one(conn)
         .await
         .map_err(db_err)?;
-    if next > MAX_DOC_NUMBER {
-        return Err(format!("DOC_NUMBER_RANGE: {} numbers have reached {MAX_DOC_NUMBER}; type a lower number that isn't used", kind.noun()));
-    }
     Ok(next)
 }
 
@@ -110,7 +108,7 @@ pub async fn take_number(conn: &mut SqliteConnection, kind: DocKind, wanted: Opt
 /// before the save's other warnings; saving checks again.
 pub async fn check_number(conn: &mut SqliteConnection, kind: DocKind, wanted: i64) -> Result<(), String> {
     if !(1..=MAX_DOC_NUMBER).contains(&wanted) {
-        return Err(format!("DOC_NUMBER_RANGE: a {} number is a whole number from 1 to {MAX_DOC_NUMBER}", kind.noun().to_lowercase()));
+        return Err(format!("DOC_NUMBER_RANGE: {} # is a whole number from 1 to {MAX_DOC_NUMBER}", kind.noun()));
     }
     let owner: Option<(Option<String>, String)> = sqlx::query_as(kind.owner_sql()).bind(wanted).fetch_optional(&mut *conn).await.map_err(db_err)?;
     let Some((customer, date)) = owner else { return Ok(()) };

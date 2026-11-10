@@ -81,8 +81,9 @@ async fn numbers_out_of_range_are_refused() {
         assert!(err.starts_with("DOC_NUMBER_RANGE:"), "{bad}: {err}");
     }
     create_and_post_invoice(&pool, invoice(Some(MAX_DOC_NUMBER), "Acme", income)).await.unwrap();
-    let err = create_and_post_invoice(&pool, invoice(None, "Acme", income)).await.unwrap_err();
-    assert!(err.starts_with("DOC_NUMBER_RANGE:"), "{err}");
+    // The next number isn't capped: numbering carries on past the highest a person may type.
+    let after = create_and_post_invoice(&pool, invoice(None, "Acme", income)).await.unwrap();
+    assert_eq!(after.invoice_number, MAX_DOC_NUMBER + 1);
 }
 
 #[tokio::test]
