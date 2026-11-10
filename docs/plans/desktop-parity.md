@@ -43,7 +43,7 @@ Pain = how likely a tester is to hit it (H/M/L). Effort S/M/L as in `docs/gaps.m
 ### Menus
 
 - **File:** Print Forms has only Statements; a print-later queue for checks, invoices and labels
-  is missing (T8). File Dentist exists in Settings but not as File › Utilities › Verify / Rebuild
+  is missing (T8). File Check & Repair exists in Settings but not as File › Utilities › Verify / Rebuild
   (S). Portable file, Accountant's Copy and multi-user are R14 / R15.
 - **Edit:** acting on the open form (Void, Delete line, Insert line, Memorize, Duplicate, Go To
   Transfer) isn't in the menu (T4).

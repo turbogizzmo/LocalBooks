@@ -3,14 +3,15 @@ import { errorText } from '../lib/api.js';
 import { myPreferences } from '../lib/myPreferences.js';
 
 /**
- * Small ▾ action menu for register rows. Items with `confirm` open a blocking confirmation dialog
+ * Small ▾ action menu for register rows; with `text`, a toolbar button of that name (the list
+ * toolbars' New Transactions, Print and Excel menus). Items with `confirm` open a blocking confirmation dialog
  * before running; errors from the action are shown inside the dialog.
  *
  * item: { label, onSelect: async () => void, danger?, disabled?, hint?, confirm?: { title, body, confirmLabel, unless? } }
  * `confirm.unless()` returning true skips the question (a My Preference turned off); the dialog
  * still opens to show the action's progress and any error.
  */
-export default function RowMenu({ items, label = 'Actions' }) {
+export default function RowMenu({ items, label = 'Actions', text = null }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, right: 0 });
   // The button's top and bottom edges when the menu opened, to place the menu below or above it.
@@ -71,11 +72,12 @@ export default function RowMenu({ items, label = 'Actions' }) {
         type="button"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={toggle}
-        className="inline-grid h-[18px] w-[18px] place-items-center rounded-xs text-qb-ink-muted hover:bg-qb-border hover:text-qb-ink"
+        className={text ? 'qb-btn qb-btn-secondary flex h-row flex-none items-center gap-1 px-2' : 'inline-grid h-[18px] w-[18px] place-items-center rounded-xs text-qb-ink-muted hover:bg-qb-border hover:text-qb-ink'}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={label}
+        aria-label={text ? undefined : label}
       >
+        {text}
         <svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true">
           <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
         </svg>

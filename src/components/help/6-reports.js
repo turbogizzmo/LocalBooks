@@ -41,8 +41,8 @@ export const topics = [
   },
   {
     id: 'report-center', area: 'reports', views: ['reports'],
-    title: 'Find a report: search, Favorites, Recent and dates',
-    body: 'Find a report narrows the report list to names and descriptions with every word typed, and each report has a line saying what it shows. Click ☆ beside a report to keep it under Favorites; Recent lists the last reports opened. Tick Open reports on these dates and pick a period, and Profit and Loss, the sales summaries, the Balance Sheet and the aging open on it.',
+    title: 'Find a report: previews, search, Favorites, Recent and dates',
+    body: 'Rest the pointer on a report in the list to see a small picture of it from your books before you open it. Find a report narrows the report list to names and descriptions with every word typed, and each report has a line saying what it shows. Click ☆ beside a report to keep it under Favorites; Recent lists the last reports opened. Tick Open reports on these dates and pick a period, and Profit and Loss, the sales summaries, the Balance Sheet and the aging open on it.',
     keywords: 'report center find search favorite star recent description date range period open reports list',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',

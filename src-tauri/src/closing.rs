@@ -83,7 +83,8 @@ async fn current(tx: &mut sqlx::SqliteConnection) -> Result<Option<(Option<Naive
 pub async fn check_open(tx: &mut Transaction<'_, Sqlite>, date: NaiveDate) -> Result<(), String> {
     match current(&mut **tx).await? {
         Some((Some(lock_date), _)) if date <= lock_date => Err(CLOSED_MESSAGE.to_string()),
-        _ => Ok(()),
+        // An Accountant's Copy's dividing date: the client's side of it, or the copy's.
+        _ => crate::accountants_copy::check_posting(tx, date).await,
     }
 }
 

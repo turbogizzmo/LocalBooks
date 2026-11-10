@@ -366,7 +366,7 @@ release checklist item to re-read it and the README's Known limitations.
 ### 7.4 Database durability — **Done**
 
 - WAL with `synchronous = FULL` locally, rollback journal with exclusive locking on network drives
-  (`db.rs:429–455`); File Dentist checks and repairs (`file_dentist.rs`); integrity checks on every
+  (`db.rs:429–455`); File Check & Repair checks and repairs (`file_repair.rs`); integrity checks on every
   backup and restore. No gap found.
 
 ## 8. Accessibility — **Partial**, size M

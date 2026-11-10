@@ -40,8 +40,6 @@ async fn the_customer_record_keeps_its_new_details() {
         company_name: Some("Acme Inc".into()),
         address: Some("1 Main St\nSpringfield".into()),
         shipping_address: Some("\n  Dock 4 \n 200 Mill Rd \n\n".into()),
-        contact_name: Some(" Ann Lee ".into()),
-        alt_contact_name: Some("Bo Park".into()),
         phone: Some("555-0100".into()),
         alt_phone: Some("555-0101".into()),
         fax: Some("555-0102".into()),
@@ -52,6 +50,12 @@ async fn the_customer_record_keeps_its_new_details() {
         ..Default::default()
     };
     let id = customer(&pool, "Acme", input.clone()).await;
+    // The contact and alternate contact come from the contact list (party_contacts).
+    let contacts = [
+        crate::party_contacts::ContactInput { name: " Ann Lee ".into(), for_invoices: true, ..Default::default() },
+        crate::party_contacts::ContactInput { name: "Bo Park".into(), ..Default::default() },
+    ];
+    crate::party_contacts::save_contacts(&pool, "customer", id, &contacts).await.unwrap();
     let acme = get_party(&pool, "customer", id, Access::OPEN).await.unwrap();
     assert_eq!(acme.address.as_deref(), Some("1 Main St\nSpringfield"), "today's address stays the billing address");
     assert_eq!(acme.shipping_address.as_deref(), Some("Dock 4\n200 Mill Rd"));

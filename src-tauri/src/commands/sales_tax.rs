@@ -10,6 +10,8 @@ handlers![
     pay_sales_tax,
     list_sales_tax_payments,
     get_tax_liability,
+    save_combined_rate,
+    get_sales_tax_return,
 ];
 
 #[tauri::command]
@@ -53,4 +55,23 @@ pub async fn list_sales_tax_payments(db: State<'_, Db>) -> Result<Vec<SalesTaxPa
 #[tauri::command]
 pub async fn get_tax_liability(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate) -> Result<TaxLiabilityReport, String> {
     sales_tax::tax_liability(&db.pool().await, start_date, end_date).await
+}
+
+/// Saves a combined rate (new when `id` is null): its component rates, each with its own agency.
+#[tauri::command]
+pub async fn save_combined_rate(app: AppHandle, db: State<'_, Db>, id: Option<i64>, input: sales_tax::combined::CombinedRateInput) -> Result<TaxRateView, String> {
+    let rate = sales_tax::combined::save_combined_rate(&db.pool().await, id, &input).await?;
+    notify(&app);
+    Ok(rate)
+}
+
+/// The sales tax return per agency for a period, on `basis` (the company's when not given).
+#[tauri::command]
+pub async fn get_sales_tax_return(db: State<'_, Db>, start_date: NaiveDate, end_date: NaiveDate, basis: Option<String>) -> Result<sales_tax::combined::SalesTaxReturn, String> {
+    let pool = db.pool().await;
+    let basis = match basis {
+        Some(b) => sales_tax::Basis::parse(&b),
+        None => sales_tax::basis(&pool).await?,
+    };
+    sales_tax::combined::sales_tax_return(&pool, start_date, end_date, basis).await
 }
