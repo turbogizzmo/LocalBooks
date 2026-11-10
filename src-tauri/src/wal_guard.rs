@@ -30,8 +30,13 @@ fn valid_page_size(size: u32) -> Option<u32> {
 }
 
 /// The database's page size, or None when `path` isn't (yet) a SQLite database or its header
-/// holds a size SQLite would reject anyway.
+/// holds a size SQLite would reject anyway. An encrypted company file (gap R1) starts with
+/// LocalBooks' key header instead, and SQLCipher encrypts the database's own header, so its page
+/// size comes from the key header.
 fn db_page_size(path: &Path) -> Option<u32> {
+    if crate::file_cipher::header::is_encrypted(path) {
+        return crate::file_cipher::header::read(path).ok().and_then(|h| valid_page_size(h.page_size));
+    }
     let header: [u8; 18] = head(path)?;
     if &header[..16] != DB_MAGIC {
         return None;
@@ -160,6 +165,21 @@ mod tests {
         std::fs::write(wal_path(&path), wal_header(1024)).unwrap();
         let err = crate::db::open(&path).await.map(|_| ()).unwrap_err();
         assert!(err.starts_with("FILE_WAL_MISMATCH"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_encrypted_file_is_checked_by_its_key_header() {
+        let dir = dir().join("encrypted");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = dir.join("books.db");
+        let header = crate::file_cipher::header::Header { page_size: 4096, slots: Vec::new() };
+        crate::file_cipher::header::create(&db, &header).unwrap();
+        std::fs::write(wal_path(&db), wal_header(4096)).unwrap();
+        assert!(check(&db).is_ok(), "a log with the header's page size");
+        std::fs::write(wal_path(&db), wal_header(1024)).unwrap();
+        assert!(check(&db).unwrap_err().starts_with("FILE_WAL_MISMATCH"), "a log with another page size");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

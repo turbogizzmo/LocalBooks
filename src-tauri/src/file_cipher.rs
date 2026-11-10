@@ -1,13 +1,45 @@
-//! Page encryption for whole company files (gap R1): the SQLite library under sqlx is SQLCipher,
-//! built through `libsqlite3-sys`'s `bundled-sqlcipher` features (see `Cargo.toml`). This is phase 1
-//! of `docs/plans/encryption-at-rest.md`: the library is in place, and nothing sets a key yet, so
-//! every company file, backup and import is still plain SQLite, read and written exactly as before.
+//! Page encryption for whole company files (gap R1, `docs/plans/encryption-at-rest.md`).
+//!
+//! - Phase 1: the SQLite library under sqlx is SQLCipher, built through `libsqlite3-sys`'s
+//!   `bundled-sqlcipher` features (see `Cargo.toml`).
+//! - Phase 2: an encrypted file is `[key header][SQLCipher database]`. [`header`] reads and writes
+//!   the key header; [`vfs`] lets SQLite see the database behind it. [`open_options`] opens either
+//!   kind of file.
+//!
+//! Nothing turns encryption on yet: every company file, backup and import is still plain SQLite,
+//! read and written exactly as before.
 //!
 //! SQLCipher encrypts each database page (and each WAL and journal page) when a connection sets
 //! `PRAGMA key` before anything else; sqlx runs a `key` pragma first for that reason. A file opened
 //! without a key is ordinary SQLite.
 
+use std::path::Path;
+
+use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
+
+// Phase 3 opens company files through these; until then only the tests and the WAL guard do.
+#[cfg_attr(not(test), allow(dead_code))]
+pub mod header;
+#[cfg_attr(not(test), allow(dead_code))]
+pub mod vfs;
+
+/// Connection options for `path` through the [`vfs`], with SQLCipher's `key` when the file is
+/// encrypted. `page_key` is the raw 256-bit page key. A plain file opens as plain SQLite through
+/// the same VFS (it passes through), so callers needn't know which kind they have.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn open_options(path: &Path, page_key: Option<&[u8; 32]>) -> Result<SqliteConnectOptions, String> {
+    vfs::register()?;
+    let options = SqliteConnectOptions::new().filename(path).vfs(vfs::VFS_NAME);
+    Ok(match page_key {
+        Some(key) => {
+            // sqlx keeps its own copy for the pool's life; at least ours is wiped.
+            let pragma = zeroize::Zeroizing::new(format!("\"x'{}'\"", key.iter().map(|b| format!("{b:02X}")).collect::<String>()));
+            options.pragma("key", pragma.as_str().to_owned())
+        }
+        None => options,
+    })
+}
 
 /// The SQLCipher version linked into this build ("4.5.7 community"), for the diagnostics bundle.
 /// None if the library is plain SQLite.
