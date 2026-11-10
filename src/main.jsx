@@ -33,7 +33,7 @@ async function firstScreen() {
   const status = await api.getStorageStatus().catch(() => undefined);
   if (status === null) return <NoCompanyOpen />;
   const signIn = await api.getSignInState().catch(() => null);
-  // "Remember me on this Mac": once per opening of the file, never after a sign-out or idle lock.
+  // "Remember me on this computer": once per opening of the file, never after a sign-out or idle lock.
   if (signIn?.usersEnabled && !signIn.user && (await api.signInRemembered().catch(() => null))) return app();
   if (signIn?.usersEnabled && (!signIn.user || signIn.user.mustChangePassword)) {
     return <SignIn companyName={status?.companyName} user={signIn.user} />;

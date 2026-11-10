@@ -3,7 +3,7 @@
 //! `LocalBooks --check-file <company file> [--backups-dir <folder>] [--output <file.json>]`
 //!
 //! Opens the company file without a window, the way a launch with that file does (the restore
-//! checks, then the schema upgrade with its verified pre-upgrade copy), runs File Dentist's
+//! checks, then the schema upgrade with its verified pre-upgrade copy), runs File Check & Repair's
 //! check-up, prints a JSON result and exits: 0 when every check passes, 1 on any problem, 2 on bad
 //! arguments. Nothing else runs: no window, no hand-off to a running copy, no automatic backup, no
 //! MCP server, no audit-trail anchors in the keychain.
@@ -19,7 +19,7 @@ use serde::Serialize;
 
 use crate::backup::{self, BackupFile, CompanyFileInfo};
 use crate::db::{self, Db, MIGRATOR};
-use crate::file_dentist::{self, CheckStatus, CheckupReport};
+use crate::file_repair::{self, CheckStatus, CheckupReport};
 
 const FLAG: &str = "--check-file";
 
@@ -110,7 +110,7 @@ async fn run(file: &Path, backups: &Path, out: &mut CheckOutput) -> Result<(), S
     let config = db::DbConfig { config_dir: backups.to_path_buf(), default_path: backups.join("unused.localbooks"), backups_dir: backups.to_path_buf() };
     let database = Db::closed(config);
     database.mount(file).await?;
-    let report = file_dentist::checkup_live(&database).await;
+    let report = file_repair::checkup_live(&database).await;
     database.shutdown().await;
     let report = report?;
 
@@ -141,7 +141,7 @@ async fn run(file: &Path, backups: &Path, out: &mut CheckOutput) -> Result<(), S
 
     // WARN is only ever SPACE (unused pages), which is housekeeping, not a problem with the books.
     for c in report.checks.iter().filter(|c| c.status == CheckStatus::Fail) {
-        out.problems.push(format!("File Dentist {}: {}", c.id, c.summary));
+        out.problems.push(format!("File Check & Repair {}: {}", c.id, c.summary));
     }
     out.checkup = Some(report);
     Ok(())
