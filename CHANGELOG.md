@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Diagnostics say why starting was slow.** The log in Help › Save Diagnostics now records how
+  long LocalBooks took to start and which steps were slow, such as opening the company file.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
