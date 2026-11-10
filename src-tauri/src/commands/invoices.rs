@@ -24,13 +24,17 @@ pub async fn create_invoice(
     input: InvoiceInput,
     to_be_printed: Option<bool>,
     confirmed: Option<Vec<String>>,
+    paid: Option<invoices::PaidNow>,
 ) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
     guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
-    // The invoice can wait in the print queue (File › Print Forms › Invoices).
-    let invoice = match to_be_printed {
-        Some(true) => crate::print_queue::create_invoice(&pool, input, true).await?,
-        _ => invoices::create_and_post_invoice(&pool, input).await?,
+    // The invoice can wait in the print queue (File › Print Forms › Invoices), and can carry the
+    // payment taken when it was written; both are saved with it.
+    let queued = to_be_printed == Some(true);
+    let invoice = if queued || paid.is_some() {
+        crate::print_queue::create_invoice(&pool, input, queued, paid.as_ref()).await?
+    } else {
+        invoices::create_and_post_invoice(&pool, input).await?
     };
     notify(&app);
     Ok(invoice)

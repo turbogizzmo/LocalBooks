@@ -171,7 +171,7 @@ pub async fn unapplied(pool: &SqlitePool) -> Result<UnappliedReview, String> {
     .map_err(db_err)?;
     for (party_id, party_name) in customers {
         let credits: Vec<OpenCredit> = sqlx::query_as(
-            "SELECT m.id, 'Credit memo #' || m.credit_number AS label, m.credit_date AS date, m.memo, m.total_cents, b.remaining_cents
+            "SELECT m.id, CASE WHEN m.payment_account_id IS NULL THEN 'Credit memo #' || m.credit_number ELSE 'Unapplied payment' END AS label, m.credit_date AS date, m.memo, m.total_cents, b.remaining_cents
              FROM credit_memos m JOIN v_credit_memo_balances b ON b.credit_memo_id = m.id
              WHERE m.customer_id = ?1 AND b.remaining_cents > 0 AND m.journal_entry_id IS NOT NULL ORDER BY m.credit_date, m.id",
         )
