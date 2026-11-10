@@ -252,3 +252,72 @@ fn price_levels_read_as_the_file_stores_them() {
     // An unknown type that lists items is per item.
     assert_eq!(price_level_of("X".into(), false, Some(0), None, &[(7, Some(100))]).kind, LevelKind::PerItem);
 }
+
+/// Synthetic pages for `repair_pages`: a table list, a column list whose second column's row
+/// sits in sector 7 with one wrong byte, and a page of rows of that table.
+mod catalog_repair {
+    use super::*;
+    use crate::qbw_pages::{RowSpan, Sector7, ROW_AREA_END};
+
+    fn page(number: u64, owner: u32, rows: &[(usize, Vec<u8>)]) -> LogicalPage {
+        let mut bytes = vec![0u8; ROW_AREA_END];
+        let mut spans = Vec::new();
+        for (start, row) in rows {
+            bytes[*start..*start + row.len()].copy_from_slice(row);
+            spans.push(RowSpan { start: *start as u16, len: row.len() as u16, chained: true });
+        }
+        LogicalPage { number, kind: 0, owner, bytes, rows: spans, sector7: Sector7::BestEffort, q: 0, r7: 0, c_exact: None }
+    }
+
+    fn with_len(mut row: Vec<u8>) -> Vec<u8> {
+        let len = row.len() as u16;
+        row[..2].copy_from_slice(&len.to_le_bytes());
+        row
+    }
+
+    fn table_row(table: u32, name: &str) -> Vec<u8> {
+        let mut r = vec![0u8; 55];
+        r[4..8].copy_from_slice(&table.to_le_bytes());
+        r[54] = name.len() as u8;
+        r.extend_from_slice(name.as_bytes());
+        with_len(r)
+    }
+
+    fn column_row(table: u32, id: u32, name: &str, nullable: u8) -> Vec<u8> {
+        let mut r = vec![0u8; 39];
+        r[4..8].copy_from_slice(&table.to_le_bytes());
+        r[8..12].copy_from_slice(&id.to_le_bytes());
+        r[12..14].copy_from_slice(&2u16.to_le_bytes()); // a 4-byte integer
+        r[14] = 1;
+        r[15] = nullable;
+        r[16..20].copy_from_slice(&4u32.to_le_bytes());
+        r[38] = name.len() as u8;
+        r.extend_from_slice(name.as_bytes());
+        with_len(r)
+    }
+
+    #[test]
+    fn a_damaged_catalog_page_is_re_solved_before_its_table_is_read() {
+        let widget = 700;
+        let good = column_row(widget, 2, "size_id", b'N');
+        let mut damaged = good.clone();
+        damaged[15] = 0x9B; // the nullable flag, garbled by a wrong sector-7 decode
+        let data = with_len([vec![0u8; 3], 41i32.to_le_bytes().to_vec(), 7i32.to_le_bytes().to_vec()].concat());
+        let mut pages = vec![
+            page(10, 1, &[(200, table_row(widget, "abmc_widget"))]),
+            page(11, 2, &[(200, column_row(widget, 1, "widget_id", b'N')), (S7_START + 40, damaged)]),
+            page(12, widget, &[(300, data.clone())]),
+        ];
+        let fixed = page(11, 2, &[(200, column_row(widget, 1, "widget_id", b'N')), (S7_START + 40, good)]);
+        assert_eq!(read_catalog(&pages).columns[&widget].len(), 1, "the damaged definition is not read");
+
+        // Stands in for the decoder: page 11 has a better decode; nothing else does.
+        let refine = |p: &LogicalPage, score: &dyn Fn(&LogicalPage) -> usize| (p.number == 11 && score(&fixed) > score(p)).then(|| fixed.clone());
+        let (catalog, refined) = repair_pages(&mut pages, &refine);
+        assert_eq!(refined, 1);
+        let cols = &catalog.columns[&widget];
+        assert_eq!(cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["widget_id", "size_id"]);
+        let row = walk_row(&data, cols).expect("the table's row now reads");
+        assert_eq!((row["widget_id"].as_int(), row["size_id"].as_int()), (Some(41), Some(7)));
+    }
+}
