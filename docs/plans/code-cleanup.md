@@ -61,6 +61,14 @@ Each step is re-measured just before it opens, since feature PRs will have added
 
 ## A7: `Cents` in documents and commands
 
+**Status.** Stage 1 (#335): the sales tax payment input. Stage 2a (this branch): the invoice inputs
+(`InvoiceLineInput.rate_cents`, `InvoiceInput.discount_cents`, `PaidNow.amount_cents`,
+`PaymentInput.amount_cents` and `discount_cents`). Each input is read once with `.get()` where it
+enters the ledger code; the invoice total and the memorized-invoice summary now use checked
+arithmetic. Most of the diff is call sites that build these structs, rewritten from the compiler's
+error spans. Next: sales receipts, estimates and credits (`sales`, `estimates`, `credits`,
+`item_types`).
+
 `Cents` (`money.rs`) is used today by `ledger` (journal lines and entry totals), `payroll_import`
 and `item_prices`. Everywhere else an amount is a bare `i64` named `*_cents`:
 

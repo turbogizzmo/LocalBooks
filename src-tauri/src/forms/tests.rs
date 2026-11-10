@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, InvoiceInput, InvoiceLineInput};
 use chrono::NaiveDate;
+use crate::money::Cents;
 
 fn texts(pages: &[Page]) -> Vec<String> {
     pages
@@ -123,10 +124,10 @@ async fn real_invoices_render_saved_templates_to_pdf() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Design (hours)".into(), quantity_e4: 15_000, rate_cents: 10_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput { description: "Design (hours)".into(), quantity_e4: 15_000, rate_cents: Cents(10_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -326,10 +327,10 @@ async fn sales_forms_print_rep_shipping_and_custom_fields() {
             customer_name: "Initech".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: 500, income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput { description: "Widget".into(), quantity_e4: 20_000, rate_cents: Cents(500), income_account_id: services, product_service_id: Some(widget), class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: SalesDetails {
                 sales_rep_id: Some(rep.id),
                 ship_date: Some(d(2)),
@@ -363,7 +364,7 @@ async fn taxable_lines_print_with_a_t() {
     let pool = test_pool().await;
     let services: i64 = sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = '4100'").fetch_one(&pool).await.unwrap();
     let rate = crate::sales_tax::create_tax_rate(&pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
-    let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: 1_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None };
+    let line = |d: &str, taxable: bool| InvoiceLineInput { description: d.into(), quantity_e4: 10_000, rate_cents: Cents(1_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: taxable, service_date: None };
     let day = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
     let input = |tax: Option<i64>| InvoiceInput {
         customer_name: "Acme".into(),
@@ -372,7 +373,7 @@ async fn taxable_lines_print_with_a_t() {
         lines: vec![line("Widget", true), line("Labor", false)],
         currency: None,
         tax_rate_id: tax,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let taxed = create_and_post_invoice(&pool, input(Some(rate.id))).await.unwrap();

@@ -9,6 +9,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 use crate::expenses::{BillInput, BillLineInput, ExpenseInput};
 use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, DISPLAY_SOURCE_TYPE, MAX_LINE_CENTS};
+use crate::money::Cents;
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
@@ -425,7 +426,9 @@ fn summary(kind: &str, payload: &str) -> (i64, Option<String>) {
         Ok(Dated::Expense(e)) => (e.lines.iter().map(|l| l.amount_cents).sum(), e.payee_name),
         Ok(Dated::Bill(b)) => (b.total_cents, Some(b.vendor_name)),
         Ok(Dated::Invoice(i)) => (
-            i.lines.iter().map(|l| crate::invoices::line_amount(l.quantity_e4, l.rate_cents).unwrap_or(0)).sum::<i64>() - i.discount_cents,
+            Cents::checked_sum(i.lines.iter().map(|l| Cents(crate::invoices::line_amount(l.quantity_e4, l.rate_cents.get()).unwrap_or(0))))
+                .and_then(|t| t.checked_sub(i.discount_cents))
+                .map_or(0, Cents::get),
             Some(i.customer_name),
         ),
         Err(_) => (0, None),

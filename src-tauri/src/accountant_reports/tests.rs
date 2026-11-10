@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use super::*;
 use crate::db::test_pool;
 use crate::ledger::{JournalEntry, JournalLine};
+use crate::money::Cents;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, day).unwrap()
@@ -269,7 +270,7 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
     let line = |amount: i64| crate::invoices::InvoiceLineInput {
         description: "Work".into(),
         quantity_e4: 10_000,
-        rate_cents: amount,
+        rate_cents: Cents(amount),
         income_account_id: sales,
         product_service_id: None,
         class_id: None,
@@ -282,7 +283,7 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
         lines: vec![line(amount)],
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     crate::invoices::create_and_post_invoice(&pool, invoice("Cobalt", d(2025, 1, 1), d(2025, 1, 31), 10_000)).await.unwrap();

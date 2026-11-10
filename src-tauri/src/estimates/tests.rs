@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
@@ -76,11 +77,11 @@ async fn an_estimate_loaded_into_the_invoice_form_converts_only_when_the_invoice
         lines: detail
             .lines
             .iter()
-            .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: l.rate_cents, income_account_id: account, product_service_id: l.product_service_id, class_id: None, is_taxable: false, service_date: None })
+            .map(|l| InvoiceLineInput { description: l.description.clone(), quantity_e4: 80_000, rate_cents: Cents(l.rate_cents), income_account_id: account, product_service_id: l.product_service_id, class_id: None, is_taxable: false, service_date: None })
             .collect(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     // A failed post leaves the estimate open.

@@ -1,5 +1,6 @@
 use super::*;
 use crate::db::test_pool;
+use crate::money::Cents;
 
 async fn account(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1").bind(number).fetch_one(pool).await.unwrap()
@@ -57,12 +58,12 @@ async fn credit_memos_reduce_receivables_apply_to_invoices_and_refund() {
 
     // The invoice can still be paid; the credit counts toward what is paid.
     let pay = crate::invoices::PaymentInput {
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         payment_method_id: None,
         invoice_id: inv,
         deposit_account_id: checking,
         payment_date: d(7),
-        amount_cents: 35_000,
+        amount_cents: Cents(35_000),
         payment_method: "CHECK".into(),
         reference: None,
         exchange_rate_e6: None,

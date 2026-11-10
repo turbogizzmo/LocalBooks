@@ -34,6 +34,7 @@ use crate::closing::ClosingInput;
 use crate::expenses::{BillInput, BillLineInput, BillPaymentInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput, PaymentInput};
 use crate::ledger::{mul_div_round, to_home_cents, ForeignCurrency, JournalEntry, JournalLine};
+use crate::money::Cents;
 
 /// Days covered by generated dates: 2025-01-01 through 2026-12-31, so fiscal years roll over.
 const SPAN: u16 = 730;
@@ -411,12 +412,12 @@ async fn apply(pool: &SqlitePool, a: &Accounts, m: &mut Model, op: &Op) -> Resul
             let result = crate::invoices::record_payment(
                 pool,
                 PaymentInput {
-                    discount_cents: 0,
+                    discount_cents: Cents::ZERO,
                     payment_method_id: None,
                     invoice_id,
                     deposit_account_id: deposit_account,
                     payment_date: date(day),
-                    amount_cents: amount,
+                    amount_cents: Cents(amount),
                     payment_method: "CHECK".into(),
                     reference: None,
                     exchange_rate_e6: rate,
@@ -703,7 +704,7 @@ async fn post_invoice(
             .map(|(quantity_e4, rate_cents)| InvoiceLineInput {
                 description: "Work".into(),
                 quantity_e4: *quantity_e4,
-                rate_cents: *rate_cents,
+                rate_cents: Cents(*rate_cents),
                 income_account_id: income,
                 product_service_id: None,
                 class_id: None,
@@ -712,7 +713,7 @@ async fn post_invoice(
             .collect(),
         currency: fx_rate.map(|rate| ForeignCurrency { code: "EUR".into(), exchange_rate_e6: rate }),
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     let result = match replacing {

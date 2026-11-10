@@ -1,6 +1,7 @@
 use super::*;
 use crate::db::test_pool;
 use crate::invoices::{create_and_post_invoice, record_payment, InvoiceInput, InvoiceLineInput, PaymentInput};
+use crate::money::Cents;
 
 async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
     sqlx::query_scalar("SELECT id FROM chart_of_accounts WHERE account_number = ?1")
@@ -111,10 +112,10 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
             customer_name: "acme corp".into(),
             issue_date: d(1),
             due_date: d(31),
-            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: 40_000, income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            lines: vec![InvoiceLineInput{ description: "Work".into(), quantity_e4: 10000, rate_cents: Cents(40_000), income_account_id: services, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )
@@ -123,7 +124,7 @@ async fn all_sales_lists_invoices_payments_and_receipts() {
     create_customer(&pool, "Acme Corp", None).await.expect_err("duplicate (case-insensitive) customer");
     record_payment(
         &pool,
-        PaymentInput { discount_cents: 0, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: 15_000, payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
+        PaymentInput { discount_cents: Cents::ZERO, payment_method_id: None, invoice_id: invoice.id, deposit_account_id: checking, payment_date: d(5), amount_cents: Cents(15_000), payment_method: "ACH".into(), reference: None, exchange_rate_e6: None },
     )
     .await
     .unwrap();

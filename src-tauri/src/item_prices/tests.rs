@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::inventory::{adjust, track_product, AdjustInput, TrackInput};
 use crate::sales::{create_product, ProductInput};
+use crate::money::Cents;
 
 const PCT: fn(i64) -> Adjustment = |percent_milli| Adjustment::Percent { percent_milli };
 const AMT: fn(i64) -> Adjustment = |amount_cents| Adjustment::Amount { amount_cents };
@@ -139,7 +140,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
             lines: vec![crate::invoices::InvoiceLineInput {
                 description: "Consulting".into(),
                 quantity_e4: 10_000,
-                rate_cents: 15_000,
+                rate_cents: Cents(15_000),
                 income_account_id: services,
                 product_service_id: Some(c.consulting),
                 class_id: None,
@@ -147,7 +148,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
             }],
             currency: None,
             tax_rate_id: None,
-            discount_cents: 0,
+            discount_cents: Cents::ZERO,
             details: Default::default(),
         },
     )

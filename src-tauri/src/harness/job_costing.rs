@@ -21,6 +21,7 @@ use crate::expenses::{BillInput, BillLineInput, ExpenseInput, SplitLineInput};
 use crate::invoices::{InvoiceInput, InvoiceLineInput};
 use crate::job_reports::{self, Breakdown, JobFilter, JobReport, JobReportKind, JobReportParams};
 use crate::sales::{SalesLineInput, SalesReceiptInput};
+use crate::money::Cents;
 
 const LAKEVIEW: &str = "Kestrel Homes:Lakeview Remodel";
 const MAPLE: &str = "Kestrel Homes:Maple St Addition";
@@ -70,7 +71,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     let invoice_line = |l: SalesLineInput| InvoiceLineInput {
         description: l.description,
         quantity_e4: l.quantity_e4,
-        rate_cents: l.rate_cents,
+        rate_cents: Cents(l.rate_cents),
         income_account_id: l.income_account_id,
         product_service_id: l.product_service_id,
         class_id: None,
@@ -134,7 +135,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
         lines: lines.into_iter().map(invoice_line).collect(),
         currency: None,
         tax_rate_id: None,
-        discount_cents: 0,
+        discount_cents: Cents::ZERO,
         details: Default::default(),
     };
     crate::invoices::create_and_post_invoice(p, invoice(MAPLE, d(2025, 11, 15), vec![sale(labor, "Framing, first draw", 30, 8_500, services)])).await.expect("invoice");
