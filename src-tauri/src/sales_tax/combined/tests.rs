@@ -122,3 +122,46 @@ async fn a_credit_memo_at_a_combined_rate_takes_back_each_part() {
     assert!(err.starts_with("INV_INACTIVE_TAX") && err.contains("City"), "{err}");
     drop(tx);
 }
+
+#[tokio::test]
+async fn paying_a_combined_rate_pays_each_part_and_its_agency() {
+    let pool = test_pool().await;
+    let (checking, services) = (account(&pool, "1010").await, account(&pool, "4100").await);
+    let state_payable = account(&pool, "2200").await;
+    let city_payable = new_liability(&pool, "2210", "City Sales Tax Payable").await;
+    let county_payable = new_liability(&pool, "2220", "County Sales Tax Payable").await;
+    let rate = |name: &str, ppm: i64, agency: &str, account: i64| TaxRateInput { name: name.into(), rate_ppm: ppm, agency_name: Some(agency.into()), liability_account_id: Some(account) };
+    let state = create_tax_rate(&pool, rate("State", 60_000, "State DOR", state_payable)).await.unwrap();
+    let city = create_tax_rate(&pool, rate("City", 15_000, "City Clerk", city_payable)).await.unwrap();
+    let county = create_tax_rate(&pool, rate("County", 5_000, "County Treasurer", county_payable)).await.unwrap();
+    let combined = save_combined_rate(&pool, None, &CombinedRateInput { name: "State+City+County".into(), component_ids: vec![state.id, city.id, county.id] }).await.unwrap();
+
+    // A $100.00 taxable invoice at 8%: $6.00 state, $1.50 city, $0.50 county.
+    let invoice: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+        "customerName": "Brightwater Cafe", "issueDate": "2026-07-01", "dueDate": "2026-07-31", "taxRateId": combined.id,
+        "lines": [{ "description": "Catering", "quantityE4": 10_000, "rateCents": 10_000, "incomeAccountId": services, "isTaxable": true }]
+    }))
+    .unwrap();
+    crate::invoices::create_and_post_invoice(&pool, invoice).await.unwrap();
+
+    // Paying the combined rate's $8.00 pays each component's account, in one entry.
+    let id = pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(combined.id), liability_account_id: None, account_id: checking, payment_date: d(7, 31), amount_cents: Cents::from(800), reference: Some("1001".into()) }).await.unwrap();
+    assert_eq!((owed(&pool, state_payable).await, owed(&pool, city_payable).await, owed(&pool, county_payable).await), (0, 0, 0));
+    let entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM sales_tax_payments WHERE id = ?1").bind(id).fetch_one(&pool).await.unwrap();
+    let credits: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM journal_lines WHERE journal_entry_id = ?1 AND credit_cents > 0").bind(entry).fetch_one(&pool).await.unwrap();
+    assert_eq!(credits, 1, "one bank line for the one check");
+
+    let r = sales_tax_return(&pool, d(7, 1), d(7, 31), Basis::Accrual).await.unwrap();
+    let agencies: Vec<(&str, i64, i64)> = r.agencies.iter().map(|a| (a.agency_name.as_str(), a.tax_cents, a.paid_cents)).collect();
+    assert_eq!(agencies, vec![("City Clerk", 150, 150), ("County Treasurer", 50, 50), ("State DOR", 600, 600)]);
+    assert_eq!((r.tax_cents, r.paid_cents), (800, 800));
+
+    // An amount that doesn't divide evenly still adds up to the cent: $1.00 → 75 + 19 + 6.
+    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(combined.id), liability_account_id: None, account_id: checking, payment_date: d(8, 1), amount_cents: Cents::from(100), reference: None }).await.unwrap();
+    assert_eq!((owed(&pool, state_payable).await, owed(&pool, city_payable).await, owed(&pool, county_payable).await), (-75, -19, -6));
+
+    // Voiding the payment takes it off every agency's return.
+    crate::ledger::void_transaction(&pool, entry).await.unwrap();
+    let r = sales_tax_return(&pool, d(7, 1), d(7, 31), Basis::Accrual).await.unwrap();
+    assert_eq!(r.agencies.iter().map(|a| a.paid_cents).collect::<Vec<_>>(), vec![0, 0, 0]);
+}
