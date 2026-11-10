@@ -456,6 +456,7 @@ entering, all in one program window. The menus use QuickBooks' names.
 
 | Keys | What they do |
 |---|---|
+| **Tab** and **Shift+Tab** | Move through the active window's fields and buttons; past the last one, back to its first (they don't move into another window) |
 | **Ctrl+F6** or **Ctrl+Tab** | Go to the next window (add **Shift** for the one before) |
 | **Esc** or **Ctrl+F4** | Close the active window (⌘W on a Mac) |
 
