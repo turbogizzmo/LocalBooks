@@ -62,6 +62,19 @@ credit posts nothing, because the credit memo already reduced Accounts Receivabl
 what's paid on the invoice, the same as applying it from **Sales › Credit Memos & Refunds**. Credits
 are in the home currency, so an invoice in another currency doesn't offer them.
 
+### Take a payment with the invoice
+
+When the customer pays all or part of the invoice as you write it (a deposit at the counter, or
+payment on delivery), tick **Payment received** next to **Save & Post to Ledger**. Enter the amount
+(it starts at the invoice total), the payment method, a reference number and the account it's
+deposited to. When you save, LocalBooks records the payment together with the invoice, dated the
+invoice date: both are saved or, if the payment can't be (more than the invoice total, or an account
+money can't be deposited to), neither is. The invoice comes back **Paid** or **Partial**, and the
+payment is an ordinary one: it shows in **Receive Payments** and on the customer's history, goes to
+**Make Deposits** when it went to Undeposited Funds, and is voided from there if the check bounces.
+**Payment received** is offered on new home-currency invoices; to take a payment on an invoice in
+another currency, from an estimate or after saving, use **Receive Payments**.
+
 ### Service dates and the template
 
 - **Service Date**: click **Service dates** beside the Description heading of an invoice or sales

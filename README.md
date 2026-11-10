@@ -263,6 +263,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
 | Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once, with one numbered, printable check per vendor | [guide](docs/guide/bills.md) |
+| Receive Items | Vendors › Receive Items | Receive goods from a purchase order before the bill (part shipments too), held in Items Received Not Billed; enter the bill for them at the vendor's prices later | [guide](docs/guide/bills.md#receive-items-before-the-bill) |
 | Bounced checks | Banking › Record Bounced Check… | Reopens the invoice a returned check paid, takes the check and bank fee out of the bank, and invoices a returned-check fee | [guide](docs/guide/customer-payments.md#record-a-bounced-check) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
@@ -295,6 +296,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
+| Payout feeds | Banking › Payout Feeds | Stripe payouts as deposits of their gross sales, less fees, refunds and chargebacks, with a read-only key in the OS credential store | [guide](docs/guide/bank-feeds.md#payouts-from-stripe) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
 | Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
@@ -348,6 +350,8 @@ its entry form with focus in the first field.
 | Imported (.qbw) invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
 | Sale of a tracked product (added to the invoice or sales receipt entry) | Cost of Goods Sold, at moving average cost | Inventory Asset |
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
+| Item receipt line for a tracked product | Inventory Asset (quantity and value added) | Items Received Not Billed |
+| Bill entered for an item receipt | Items Received Not Billed (the receipt's amount), and any price difference to Inventory Asset or Cost of Goods Sold | Accounts Payable (the bill's amount) |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
 | Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |
