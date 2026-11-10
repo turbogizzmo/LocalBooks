@@ -37,9 +37,9 @@ export const topics = [
   },
   {
     id: 'payout-feeds', area: 'banking', views: ['banking/payouts', 'banking/feeds'],
-    title: 'Bring in Stripe payouts with their fees',
-    body: 'Banking › Payout Feeds: an Admin connects a Stripe account with a restricted, read-only key (read access to Balance and Payouts) and chooses the bank, sales, fees, refunds and chargebacks accounts. The key stays in this computer’s credential store. Get payouts fetches paid payouts; Record deposit posts each one as a deposit of its gross sales, less fees, refunds and chargebacks, so the bank amount is the payout and the bank line matches it.',
-    keywords: 'stripe payout payouts processor card fees merchant refunds chargebacks disputes gross net deposit restricted key',
+    title: 'Bring in Stripe and PayPal payouts with their fees',
+    body: 'Banking › Payout Feeds: an Admin connects a Stripe account with a restricted, read-only key (read access to Balance and Payouts) and chooses the bank, sales, fees, refunds and chargebacks accounts. The key stays in this computer’s credential store. A PayPal business account connects with a REST app’s client id and secret (Transaction search turned on); each withdrawal to the bank is a payout of everything since the one before it. Get payouts fetches paid payouts; Record deposit posts each one as a deposit of its gross sales, less fees, refunds and chargebacks, so the bank amount is the payout and the bank line matches it.',
+    keywords: 'stripe paypal withdrawal payout payouts processor card fees merchant refunds chargebacks disputes gross net deposit restricted key',
     go: { label: 'Go to Payout Feeds', view: 'banking/payouts' },
     guide: 'bank-feeds',
   },

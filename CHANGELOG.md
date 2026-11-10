@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
+  too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
+  your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
+  chargebacks, so it matches the bank line.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

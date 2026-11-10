@@ -13,23 +13,38 @@ const ROLES = [
   ['chargebackAccountId', 'Chargebacks', (a) => a.accountType !== 'BANK'],
 ];
 const STATUS = { NEW: 'New', RECORDED: 'Recorded', IGNORED: 'Ignored' };
+const PROCESSOR = { STRIPE: 'Stripe', PAYPAL: 'PayPal' };
 
-/** Connect (or change) a Stripe account: the restricted key and the accounts each part posts to. */
-function FeedForm({ accounts, feed, onDone, onCancel }) {
+/**
+ * Connect (or change) a processor account: its read-only credentials (a Stripe restricted key, or a
+ * PayPal app's client id and secret) and the accounts each part posts to.
+ */
+function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onDone, onCancel }) {
+  const paypal = processor === 'PAYPAL';
   const [form, setForm] = useState(() => ({
-    name: feed?.name ?? 'Stripe',
+    name: feed?.name ?? PROCESSOR[processor],
     key: '',
+    clientId: '',
+    secret: '',
+    sandbox: false,
     ...Object.fromEntries(ROLES.map(([k]) => [k, feed?.[k] ?? null])),
   }));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const ready = form.name.trim() && ROLES.every(([k]) => form[k]) && (feed || form.key.trim());
+  const credentialsReady = paypal ? form.clientId.trim() && form.secret.trim() : form.key.trim();
+  const ready = form.name.trim() && ROLES.every(([k]) => form[k]) && (feed || credentialsReady);
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
       const input = { name: form.name, ...Object.fromEntries(ROLES.map(([k]) => [k, form[k]])) };
-      onDone(feed ? await api.updatePayoutFeed(feed.id, input) : await api.connectStripeFeed(form.key, input));
+      onDone(
+        feed
+          ? await api.updatePayoutFeed(feed.id, input)
+          : paypal
+            ? await api.connectPaypalFeed({ clientId: form.clientId, secret: form.secret, sandbox: form.sandbox }, input)
+            : await api.connectStripeFeed(form.key, input),
+      );
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -38,7 +53,14 @@ function FeedForm({ accounts, feed, onDone, onCancel }) {
   };
   return (
     <div className="flex flex-col gap-2 border-t border-qb-border px-2 py-2 text-sm">
-      {!feed && (
+      {!feed && paypal && (
+        <p className="text-xs text-qb-ink-muted">
+          At developer.paypal.com, create a REST app for your business account with <span className="font-semibold">Transaction search</span> turned on, and paste its client id and
+          secret here. LocalBooks only reads your transactions with them, keeps them in this computer’s credential store, calls PayPal only when you get payouts, and sends
+          nothing anywhere else.
+        </p>
+      )}
+      {!feed && !paypal && (
         <p className="text-xs text-qb-ink-muted">
           In your Stripe Dashboard, create a <span className="font-semibold">restricted key</span> with read access to Balance and Payouts, and paste it here. LocalBooks keeps it in this
           computer’s credential store, calls Stripe only when you click Get payouts, and sends nothing anywhere else.
@@ -49,7 +71,23 @@ function FeedForm({ accounts, feed, onDone, onCancel }) {
           <span className="qb-label">Name</span>
           <input className="qb-input" value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </label>
-        {!feed && (
+        {!feed && paypal && (
+          <>
+            <label className="flex flex-col gap-0.5">
+              <span className="qb-label">Client id</span>
+              <input className="qb-input font-mono" autoComplete="off" spellCheck={false} value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="qb-label">Secret</span>
+              <input className="qb-input font-mono" type="password" autoComplete="off" spellCheck={false} value={form.secret} onChange={(e) => setForm({ ...form, secret: e.target.value })} />
+            </label>
+            <label className="flex items-center gap-1 self-end text-xs">
+              <input type="checkbox" checked={form.sandbox} onChange={(e) => setForm({ ...form, sandbox: e.target.checked })} />
+              Sandbox app (for trying it out)
+            </label>
+          </>
+        )}
+        {!feed && !paypal && (
           <label className="flex flex-col gap-0.5">
             <span className="qb-label">Restricted key (rk_live_…)</span>
             <input className="qb-input font-mono" type="password" autoComplete="off" spellCheck={false} value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
@@ -65,7 +103,7 @@ function FeedForm({ accounts, feed, onDone, onCancel }) {
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
       <div className="flex gap-2">
         <button type="button" className="qb-btn qb-btn-primary h-row" disabled={!ready || busy} onClick={save}>
-          {feed ? 'Save' : busy ? 'Checking the key…' : 'Connect'}
+          {feed ? 'Save' : busy ? (paypal ? 'Checking the app…' : 'Checking the key…') : 'Connect'}
         </button>
         <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy} onClick={onCancel}>Cancel</button>
       </div>
@@ -126,7 +164,7 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
     <section className="qb-panel flex flex-col">
       <div className="flex h-row-lg items-center gap-2 border-b border-qb-border px-2">
         <h2 className="text-md font-semibold">{feed.name}</h2>
-        <span className="text-xs text-qb-ink-muted">Stripe · last fetched {feed.lastFetchedAt ? formatDate(feed.lastFetchedAt.slice(0, 10)) : 'never'}</span>
+        <span className="text-xs text-qb-ink-muted">{PROCESSOR[feed.processor] ?? feed.processor}{feed.accountRef === 'SANDBOX' ? ' (sandbox)' : ''} · last fetched {feed.lastFetchedAt ? formatDate(feed.lastFetchedAt.slice(0, 10)) : 'never'}</span>
         <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" disabled={busy} onClick={fetchNow}>
           {busy ? 'Working…' : 'Get payouts'}
         </button>
@@ -198,12 +236,13 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
 }
 
 /**
- * Banking › Payout Feeds (`payout_feeds.rs`, design in docs/plans/payout-feeds.md): Stripe payouts
+ * Banking › Payout Feeds (`payout_feeds.rs`, design in docs/plans/payout-feeds.md): Stripe and PayPal payouts
  * as deposits of their gross sales, less fees, refunds and chargebacks.
  */
 export default function PayoutFeeds({ accounts, isAdmin = true }) {
   const { data: feeds, error, reload } = useLedgerQuery(api.listPayoutFeeds);
-  const [connecting, setConnecting] = useState(false);
+  // The processor being connected, or null.
+  const [connecting, setConnecting] = useState(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto">
       <section className="qb-panel">
@@ -211,13 +250,16 @@ export default function PayoutFeeds({ accounts, isAdmin = true }) {
           <h2 className="text-md font-semibold">Payout Feeds</h2>
           <span className="text-xs text-qb-ink-muted">A processor’s payout becomes a deposit of the gross sales, less its fees, refunds and chargebacks</span>
           {isAdmin && !connecting && (
-            <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setConnecting(true)}>Connect Stripe…</button>
+            <span className="ml-auto flex gap-1">
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setConnecting('STRIPE')}>Connect Stripe…</button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setConnecting('PAYPAL')}>Connect PayPal…</button>
+            </span>
           )}
         </div>
         {error && <Notice kind="error" text={error} />}
-        {connecting && <FeedForm accounts={accounts} onDone={() => (setConnecting(false), reload())} onCancel={() => setConnecting(false)} />}
+        {connecting && <FeedForm key={connecting} accounts={accounts} processor={connecting} onDone={() => (setConnecting(null), reload())} onCancel={() => setConnecting(null)} />}
         {feeds && feeds.length === 0 && !connecting && (
-          <p className="px-2 py-1.5 text-sm text-qb-ink-muted">Off. Nothing is fetched until an Admin connects a Stripe account with a read-only key.</p>
+          <p className="px-2 py-1.5 text-sm text-qb-ink-muted">Off. Nothing is fetched until an Admin connects a Stripe account or a PayPal app with read-only credentials.</p>
         )}
       </section>
       {(feeds ?? []).map((f) => (

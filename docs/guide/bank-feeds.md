@@ -131,7 +131,30 @@ matches this deposit (see [Match transactions you already entered](#match-transa
 **Ignore** leaves out a payout you already entered by hand. To undo a recorded payout, void its
 deposit.
 
-PayPal and Shopify Payments aren't connected yet.
+## Payouts from PayPal
+
+PayPal works the same way, except that PayPal has no "payout" of its own: your PayPal balance
+collects payments, fees, refunds and chargebacks, and a **withdrawal** to your bank takes it out.
+Each withdrawal comes in as a payout made of everything since the withdrawal before it.
+
+**Connect** (Admins): at developer.paypal.com, log in with your business account, create a **REST
+app** under Apps & Credentials (Live), and make sure its **Transaction search** feature is on. In
+LocalBooks click **Connect PayPal…**, paste the app's **client id** and **secret**, and choose the
+accounts as for Stripe. Tick **Sandbox app** only to try it with PayPal's test environment.
+LocalBooks uses the credentials only to read your transactions, checks them with PayPal, and keeps
+them in this computer's credential store, never in the company file.
+
+**Get payouts** reads the last 90 days of PayPal activity (afterwards, since the last fetch), plus a
+month before, to know where the first withdrawal starts. A withdrawal is listed as not kept when:
+
+- the withdrawal before it is more than a month earlier (enter that one by hand);
+- it took only part of your balance, so what it carried can't be told apart from what stayed;
+- it is in another currency.
+
+PayPal can take up to three hours to show a new transaction, so a withdrawal made in the last few
+hours may come in on the next fetch.
+
+Shopify Payments isn't connected yet.
 
 ## When LocalBooks asks which columns are which
 

@@ -1,9 +1,9 @@
-//! Payout feeds from payment processors (Stripe): connect, fetch payouts, record them as deposits.
+//! Payout feeds from payment processors (Stripe, PayPal): connect, fetch payouts, record them as deposits.
 
 use super::prelude::*;
-use crate::payout_feeds::{self, FeedInput, FetchResult, Payout, PayoutFeed, STRIPE_API};
+use crate::payout_feeds::{self, Apis, FeedInput, FetchResult, PayPalCredentials, Payout, PayoutFeed, STRIPE_API};
 
-handlers![list_payout_feeds, connect_stripe_feed, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
+handlers![list_payout_feeds, connect_stripe_feed, connect_paypal_feed, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
 
 fn feed_secrets(app: &AppHandle) -> Result<SecretStore, String> {
     Ok(payout_feeds::secret_store(&crate::data_dirs(app).map_err(|e| format!("PAYOUT_CONFIG: {e}"))?.1))
@@ -19,6 +19,16 @@ pub async fn list_payout_feeds(db: State<'_, Db>) -> Result<Vec<PayoutFeed>, Str
 pub async fn connect_stripe_feed(app: AppHandle, db: State<'_, Db>, key: String, input: FeedInput) -> Result<PayoutFeed, String> {
     let key = zeroize::Zeroizing::new(key);
     let feed = payout_feeds::connect_stripe(&db.pool().await, &feed_secrets(&app)?, STRIPE_API, &key, &input).await?;
+    notify(&app);
+    Ok(feed)
+}
+
+/// Connects a PayPal REST app (client id and secret, kept in the credential store).
+#[tauri::command]
+pub async fn connect_paypal_feed(app: AppHandle, db: State<'_, Db>, credentials: PayPalCredentials, input: FeedInput) -> Result<PayoutFeed, String> {
+    let apis = Apis::live();
+    let api = if credentials.sandbox { &apis.paypal_sandbox } else { &apis.paypal_live };
+    let feed = payout_feeds::connect_paypal(&db.pool().await, &feed_secrets(&app)?, api, &credentials, &input, chrono::Utc::now()).await?;
     notify(&app);
     Ok(feed)
 }
@@ -40,7 +50,7 @@ pub async fn disconnect_payout_feed(app: AppHandle, db: State<'_, Db>, id: i64) 
 /// Asks the processor for payouts since the last fetch. The only time LocalBooks calls it.
 #[tauri::command]
 pub async fn fetch_payouts(app: AppHandle, db: State<'_, Db>, id: i64) -> Result<FetchResult, String> {
-    let result = payout_feeds::fetch(&db.pool().await, &feed_secrets(&app)?, STRIPE_API, id, chrono::Utc::now()).await?;
+    let result = payout_feeds::fetch(&db.pool().await, &feed_secrets(&app)?, &Apis::live(), id, chrono::Utc::now()).await?;
     notify(&app);
     Ok(result)
 }
