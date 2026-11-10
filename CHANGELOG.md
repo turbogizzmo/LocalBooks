@@ -14,6 +14,8 @@ people using LocalBooks.
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
   in a file only your account can read rather than a system keychain. **Remember me on this Mac** is
   now **Remember me on this computer**, since it works on Windows and Linux too.
+- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
+  Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

@@ -1,0 +1,13 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Inventory Stock Status by Vendor, all dates to 2025-12-31
+
+                               Item                      Description                  Reorder Pt       On Hand Order                             On PO
+No preferred vendor
+                               Gift Mugs                 Logo mugs                                          12                                       0
+
+1 lines
+
+1 item tracked, grouped by preferred vendor; 0 items are at or below the reorder point counting what is on open purchase orders. On Hand as of 2025-12-31.

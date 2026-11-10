@@ -1,0 +1,12 @@
+---
+source: src/harness/list_reports.rs
+expression: shown
+---
+Closing Date Exceptions, 2025-01-01 to 2025-12-31
+
+Date                           Type                          Entry No. Memo                      Entered                   Date Closed Since                Amount
+TOTAL                                                                                                                                                         0.00
+
+0 lines
+
+No closing date is set (Company › Set Closing Date), so nothing is an exception.

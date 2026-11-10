@@ -449,11 +449,14 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Unpaid Bills by Job** | What you owe | Bills with a balance as of a date, under the customer or job on their lines. A bill for several jobs is split by its lines' amounts; lines with no job are under **No customer or job** |
 | **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
 | **Open Purchase Orders by Job** | Jobs | The same open lines under the customer or job on each line, lines for no one last; its total matches Open Purchase Orders Detail |
+| **Unbilled Costs by Job** | Jobs | Billable lines of checks, expenses and bills not yet on an invoice, under each customer or job, with a total per job (**Customers › Bill Costs** puts them on an invoice) |
 | **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
 | **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
+| **Inventory Stock Status by Vendor** | Inventory | Each tracked item under its preferred vendor, with its reorder point, quantity on hand and quantity on open purchase orders; **Order** marks the items at or below the reorder point even counting what is on order |
 | **Inventory Turnover by Item** | Inventory | For each tracked item over the period: inventory value at the start and end, their average, the cost of goods sold, how many times the average stock **turned over** (cost of goods sold ÷ average value) and the **days on hand** that implies. The ending values match Inventory Valuation |
 | **Invoice Profitability by Customer** and **Detail** | Sales and customers | Each customer's invoices (or each invoice, under its customer): the income it posted, the cost of goods it sold, gross profit and margin. The totals tie out to the income and Cost of Goods Sold those invoices posted. A product or service whose stock isn't tracked carries no cost here |
 | **Audit Trail** | Accountant & Taxes | Every record of the audit trail made in the period: when, which user, what was posted, voided or changed, and the amount. The note under it says whether the trail's chain checks out |
+| **Closing Date Exceptions** | Accountant & Taxes | Entries dated on or before the closing date that were entered after their date was closed: made while the closing date was moved back, with when each was entered and since when its date had been closed |
 | **Customer Phone List** · **Vendor Phone List** | Lists | Each active customer (jobs as *Customer:Job*) or vendor with their phone number |
 | **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
 | **Item Listing** | Lists | Each active product or service with its description, type, SKU, income account, price and quantity on hand |
@@ -465,6 +468,7 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Memorized Transaction Listing** | Accountant & Taxes | Every memorized (recurring) transaction: its type, how often, the next date, when it ends and whether it is paused |
 | **Realized Gains & Losses** | Accountant & Taxes | Gains and losses from paying foreign-currency invoices and bills, by transaction, as posted to **Exchange Gain or Loss** |
 | **Unrealized Gains & Losses** | Accountant & Taxes | Home currency adjustments (**Accounting › Currency Revaluation**) and their reversals, as posted to **Unrealized Exchange Gain or Loss** |
+| **Terms Listing** | Lists | Every term in the Terms List with its days until due, its early-payment discount and whether it's active |
 
 These reports can't be customized or memorized.
 
