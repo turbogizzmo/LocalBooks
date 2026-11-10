@@ -4,7 +4,7 @@ import { Copy, Minus, Square, X } from 'lucide-react';
 import { findNav, resolveView } from './Sidebar.jsx';
 import { api } from '../lib/api.js';
 import * as cw from '../lib/childWindows.js';
-import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND } from '../lib/windows.js';
+import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND, WINDOW_REPORT_FLUSH } from '../lib/windows.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
 import { NORMAL_TEXT_SIZE, textSizeFor, windowKind } from '../lib/textSize.js';
 
@@ -166,20 +166,45 @@ export function useChildWindows(windowMode, initial) {
 
   // Each change is reported, so the LocalBooks window is titled after the active window, the Window
   // menu lists them, and they are what the desktop saves.
+  const report = useCallback(
+    (s) =>
+      api
+        .reportChildWindows(
+          s.windows.map((w) => ({
+            id: w.id,
+            name: windowName(w),
+            page: cw.currentPage(w),
+            bounds: w.bounds,
+            minimized: w.minimized,
+            maximized: w.maximized || windowMode === 'one',
+          })),
+          s.activeId,
+        )
+        .catch(() => {}),
+    [windowMode],
+  );
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const children = state.windows.map((w) => ({
-        id: w.id,
-        name: windowName(w),
-        page: cw.currentPage(w),
-        bounds: w.bounds,
-        minimized: w.minimized,
-        maximized: w.maximized || windowMode === 'one',
-      }));
-      api.reportChildWindows(children, state.activeId).catch(() => {});
-    }, 120);
+    const timer = setTimeout(() => report(state), 120);
     return () => clearTimeout(timer);
-  }, [state, windowMode]);
+  }, [state, report]);
+  // Before the desktop is saved (Close Company, quitting), report now rather than after the pause,
+  // so a window opened, closed or moved just before is saved as it is (`windows::flush_reports`).
+  useEffect(() => {
+    let unlisten;
+    let cancelled = false;
+    try {
+      getCurrentWebviewWindow()
+        .listen(WINDOW_REPORT_FLUSH, () => report(stateRef.current))
+        .then((fn) => (cancelled ? fn() : (unlisten = fn)))
+        .catch(() => {});
+    } catch {
+      // Outside the app shell nothing saves a desktop.
+    }
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [report]);
 
   return { state, areaRef, area, open, focus, close, closeAll, minimize, toggleMaximize, setBounds, setContent, cycle, arrange, redirect };
 }

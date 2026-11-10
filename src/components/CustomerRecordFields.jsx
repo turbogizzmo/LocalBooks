@@ -17,12 +17,10 @@ function Text({ form, setForm, name, title, ...props }) {
   );
 }
 
-/** The two contacts, alternate phone, fax and website. */
+/** Alternate phone, fax and website (the contacts themselves are in `PartyContacts`). */
 export function CustomerContactFields({ form, setForm }) {
   return (
     <>
-      <Text form={form} setForm={setForm} name="contactName" title="Contact" maxLength={100} />
-      <Text form={form} setForm={setForm} name="altContactName" title="Alt. contact" maxLength={100} />
       <Text form={form} setForm={setForm} name="altPhone" title="Alt. phone" type="tel" maxLength={40} />
       <Text form={form} setForm={setForm} name="fax" title="Fax" type="tel" maxLength={40} />
       <div className="col-span-2">
@@ -103,8 +101,6 @@ export function customerRecordPayload(form) {
   if (creditLimitCents != null && creditLimitCents < 0) throw new Error('The credit limit cannot be negative.');
   return {
     shippingAddress: form.shippingAddress,
-    contactName: form.contactName,
-    altContactName: form.altContactName,
     altPhone: form.altPhone,
     fax: form.fax,
     website: form.website,
