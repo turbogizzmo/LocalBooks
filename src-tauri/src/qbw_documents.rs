@@ -18,6 +18,7 @@
 //!
 //! Signs follow the ledger lines: negative is a debit, positive a credit.
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -187,7 +188,15 @@ fn quantity_and_rate(row: &Row, amount_cents: i64) -> (i64, i64) {
 /// Form lines of a document: the lines with an amount that do not post to receivables or
 /// payables, in their order on the form, and the lines of the `subtotals` items (no amount).
 /// `classes` gives each class id its `Parent:Child` path (see `qbw_company::read_classes`).
-fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, String>, subtotals: &HashSet<i64>) -> Vec<DocumentLine> {
+/// Lines whose amount is larger than the books can hold are damaged values: they are left out and
+/// counted in `too_large`, so the read reports them as rejected.
+fn form_lines(
+    too_large: &Cell<usize>,
+    rows: &[&Row],
+    arap: &dyn Fn(i64) -> bool,
+    classes: &HashMap<i64, String>,
+    subtotals: &HashSet<i64>,
+) -> Vec<DocumentLine> {
     let mut sorted: Vec<&&Row> = rows.iter().collect();
     sorted.sort_by_key(|r| (r.get("txn_line_order").as_int().unwrap_or(i64::MAX), r.get("target_id").as_int().unwrap_or(0)));
     sorted
@@ -207,8 +216,12 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, 
                 });
             }
             let account_id = r.get("account_id").as_int()?;
-            // A zero line adds nothing; one larger than the books can hold is a damaged value.
-            let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0 && c.unsigned_abs() <= crate::ledger::MAX_LINE_CENTS.unsigned_abs())?;
+            // A zero line adds nothing.
+            let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0)?;
+            if cents.unsigned_abs() > crate::ledger::MAX_LINE_CENTS.unsigned_abs() {
+                too_large.set(too_large.get() + 1);
+                return None;
+            }
             if arap(account_id) {
                 return None;
             }
@@ -227,14 +240,16 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, 
         .collect()
 }
 
-/// Reads the documents, keyed by transaction id. `arap` says whether a source account is a
-/// receivables or payables account.
+/// Reads the documents, keyed by transaction id, and how many form lines were left out because
+/// their amount is too large. `arap` says whether a source account is a receivables or payables
+/// account.
 pub fn read_documents(
     pages: &[LogicalPage],
     catalog: &Catalog,
     arap: &dyn Fn(i64) -> bool,
     classes: &HashMap<i64, String>,
-) -> HashMap<i64, SourceDocument> {
+) -> (HashMap<i64, SourceDocument>, usize) {
+    let too_large = Cell::new(0);
     // Subtotal lines are kept on sales forms, where LocalBooks has subtotals too.
     let subtotals = crate::qbw_company::subtotal_items(pages, catalog);
     let none = HashSet::new();
@@ -291,7 +306,7 @@ pub fn read_documents(
         let refs: Vec<&Row> = rows.iter().collect();
         out.insert(
             tid,
-            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes, &subtotals), sales: sales_of(h) },
+            SourceDocument::Invoice { customer_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&too_large, &refs, arap, classes, &subtotals), sales: sales_of(h) },
         );
     }
     let memo_headers = headers_of("abmc_credit_memo_header");
@@ -304,7 +319,7 @@ pub fn read_documents(
             SourceDocument::CreditMemo {
                 customer_id,
                 number: text(h, "doc_num"),
-                lines: form_lines(&refs, arap, classes, &none),
+                lines: form_lines(&too_large, &refs, arap, classes, &none),
                 applied_to: applied.remove(&(3, tid)).unwrap_or_default(),
             },
         );
@@ -320,7 +335,7 @@ pub fn read_documents(
                 customer_id: h.get("customer_id").as_int(),
                 number: text(h, "doc_num"),
                 method: method_of(h),
-                lines: form_lines(&refs, arap, classes, &subtotals),
+                lines: form_lines(&too_large, &refs, arap, classes, &subtotals),
                 sales: sales_of(h),
             },
         );
@@ -337,7 +352,7 @@ pub fn read_documents(
         let Some(h) = bill_headers.get(&tid) else { continue };
         let Some(vendor_id) = h.get("vendor_id").as_int() else { continue };
         let refs: Vec<&Row> = rows.iter().collect();
-        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&refs, arap, classes, &none) });
+        out.insert(tid, SourceDocument::Bill { vendor_id, number: text(h, "doc_num"), due_date: h.get("due_date").as_date(), lines: form_lines(&too_large, &refs, arap, classes, &none) });
     }
     for table in ["abmc_bill_check_header", "abmc_bill_ccard_header"] {
         for (tid, h) in headers_of(table) {
@@ -357,7 +372,7 @@ pub fn read_documents(
     // Lines of non-posting documents, as positive amounts.
     let positive = |rows: &[Row]| -> Vec<DocumentLine> {
         let refs: Vec<&Row> = rows.iter().collect();
-        form_lines(&refs, &|_| false, classes, &none).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
+        form_lines(&too_large, &refs, &|_| false, classes, &none).into_iter().map(|l| DocumentLine { cents: l.cents.abs(), ..l }).collect()
     };
     let estimate_headers = headers_of("abmc_estimate_header");
     for (tid, rows) in lines_of("abmc_estimate_lineitem") {
@@ -398,7 +413,7 @@ pub fn read_documents(
         payments.sort_by_key(|p| p.transaction_id);
         out.insert(tid, SourceDocument::Deposit { payments });
     }
-    out
+    (out, too_large.get())
 }
 
 #[cfg(test)]

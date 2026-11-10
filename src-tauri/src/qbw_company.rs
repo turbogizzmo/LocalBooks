@@ -363,15 +363,19 @@ fn add_inventory_cost(
     known_accounts: &HashSet<i64>,
     quality: &mut LedgerQuality,
 ) {
-    // A row read twice (the same record from a re-solved page) is one row, not two.
-    let mut seen: HashSet<(Option<i64>, Option<i64>, i64, i64, i64)> = HashSet::new();
+    // A row read twice (the same record from a re-solved page) is one row, not two. Only rows
+    // that carry their record id can be told to be the same; rows without one are all kept.
+    let mut seen: HashSet<(i64, Option<i64>, i64, i64, i64)> = HashSet::new();
     let mut by_line: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
     for r in cost_rows {
         let (Some(target), Some(account_id), Some(cents)) = (r.get("target_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
             continue;
         };
-        let record = (r.get("inventory_record_id").as_int(), r.get("target_type").as_int(), target, account_id, cents);
-        if cents != 0 && seen.insert(record) {
+        let first = match r.get("inventory_record_id").as_int() {
+            Some(record) => seen.insert((record, r.get("target_type").as_int(), target, account_id, cents)),
+            None => true,
+        };
+        if cents != 0 && first {
             by_line.entry(target).or_default().push((account_id, cents));
         }
     }
@@ -1027,7 +1031,11 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     unbalanced.sort_by_key(|t| (t.date, t.id));
     let arap: HashSet<i64> =
         accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
-    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
+    let (mut documents, too_large) = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
+    if too_large > 0 {
+        quality.rejected_lines += too_large;
+        *quality.rejected_by_reason.entry("form line amount too large").or_default() += too_large;
+    }
     for t in &mut balanced {
         t.document = documents.remove(&t.id);
     }

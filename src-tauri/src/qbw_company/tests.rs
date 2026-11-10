@@ -382,7 +382,7 @@ fn cost_record(record: i64, target_type: i64, target: i64, account: i64, cents: 
 #[test]
 fn inventory_cost_rows_are_counted_once_and_summed_with_checks() {
     let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
-    let form_lines: HashMap<i64, (i64, Option<String>)> = [601, 602, 603, 604].into_iter().map(|t| (t, (1, None))).collect();
+    let form_lines: HashMap<i64, (i64, Option<String>)> = [601, 602, 603, 604, 605].into_iter().map(|t| (t, (1, None))).collect();
     let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
     let rows = [
         // Line 601's pair, then the same two records again (read twice from a re-solved page).
@@ -404,12 +404,18 @@ fn inventory_cost_rows_are_counted_once_and_summed_with_checks() {
         cost_record(16, 2, 604, 30, -100),
         cost_record(16, 1, 604, 6, 50),
         cost_record(17, 1, 604, 6, 50),
+        // Line 605 drew the same cost twice; its rows carry no record id, so nothing says they are
+        // one row read twice and all four are kept.
+        cost_row(605, 30, -500),
+        cost_row(605, 6, 500),
+        cost_row(605, 30, -500),
+        cost_row(605, 6, 500),
     ];
     let mut quality = LedgerQuality::default();
     add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality);
 
     let cents: Vec<i64> = txns[&1].lines[2..].iter().map(|l| l.cents).collect();
-    assert_eq!(cents, [-2_000, 2_000, -300, 300, -450, 450]);
+    assert_eq!(cents, [-2_000, 2_000, -300, 300, -450, 450, -500, 500, -500, 500]);
     assert_eq!(txns[&1].imbalance_cents(), 0);
     assert_eq!((quality.rejected_lines, quality.rejected_by_reason["inventory cost is not pairs that net to zero"]), (7, 7));
 }

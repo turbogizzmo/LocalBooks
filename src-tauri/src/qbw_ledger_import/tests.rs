@@ -1292,8 +1292,9 @@ async fn receipts_and_discounts_the_form_cannot_show_as_they_were() {
     assert_eq!(kinds, ["SUBTOTAL"]);
 }
 
-/// Migration 0151 relabels the fixed asset items that older desktop company file batches staged
-/// as "Other charge", and leaves other formats' other charges alone.
+/// Migration 0151 relabels the fixed asset items that desktop company file batches staged by the
+/// older reader (before migration 0150) labelled "Other charge". Batches the corrected reader
+/// staged, where "Other charge" is a real other charge, and other formats are left alone.
 #[tokio::test]
 async fn older_desktop_batches_get_their_fixed_assets_back() {
     let pool = test_pool().await;
@@ -1312,10 +1313,17 @@ async fn older_desktop_batches_get_their_fixed_assets_back() {
     }];
     let desktop = stage(&pool, Path::new("/books/Old.QBB"), 1, &l).await.unwrap();
     let iif = stage(&pool, Path::new("/books/Lists.iif"), 1, &l).await.unwrap();
+    let newer = stage(&pool, Path::new("/books/New.qbw"), 1, &l).await.unwrap();
+    for batch in [desktop, iif] {
+        sqlx::query("UPDATE ledger_import_batches SET imported_at = '2020-01-01T00:00:00.000Z' WHERE id = ?1").bind(batch).execute(&pool).await.unwrap();
+    }
     sqlx::raw_sql(include_str!("../../migrations/0151_staged_item_kinds.sql")).execute(&pool).await.unwrap();
     let kind = |batch: i64| {
         let pool = pool.clone();
         async move { sqlx::query_scalar::<_, String>("SELECT item_kind FROM ledger_import_items WHERE batch_id = ?1").bind(batch).fetch_one(&pool).await.unwrap() }
     };
-    assert_eq!((kind(desktop).await.as_str(), kind(iif).await.as_str()), ("Fixed asset", "Other charge"));
+    assert_eq!(
+        (kind(desktop).await.as_str(), kind(iif).await.as_str(), kind(newer).await.as_str()),
+        ("Fixed asset", "Other charge", "Other charge")
+    );
 }
