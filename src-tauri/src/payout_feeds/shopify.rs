@@ -46,7 +46,25 @@ fn endpoint(api: Option<&str>, shop: &str) -> String {
     }
 }
 
+/// Most times a throttled query is tried again, waiting longer each time.
+const THROTTLE_RETRIES: u32 = 5;
+
+/// [`graphql_once`], waiting and trying again when Shopify says the app is going too fast.
 async fn graphql(http: &reqwest::Client, base: &str, token: &str, query: &str, variables: Value) -> Result<Value, String> {
+    let mut wait = std::time::Duration::from_secs(2);
+    for _ in 0..THROTTLE_RETRIES {
+        match graphql_once(http, base, token, query, variables.clone()).await {
+            Err(e) if e.starts_with("PAYOUT_BUSY") => {
+                tokio::time::sleep(wait).await;
+                wait = (wait * 2).min(std::time::Duration::from_secs(30));
+            }
+            other => return other,
+        }
+    }
+    Err("PAYOUT_BUSY: Shopify asked LocalBooks to slow down; try again in a few minutes".into())
+}
+
+async fn graphql_once(http: &reqwest::Client, base: &str, token: &str, query: &str, variables: Value) -> Result<Value, String> {
     let url = api_url(base, &format!("/admin/api/{API_VERSION}/graphql.json"))?;
     let response = http
         .post(url)
@@ -94,7 +112,7 @@ pub struct ShopifyTxn {
     pub at: DateTime<Utc>,
     /// Gross, signed: money in is positive.
     pub amount_cents: i64,
-    /// What Shopify took, positive (net = amount − fee).
+    /// What Shopify took, positive: amount − net, so its sign never depends on how a fee is written.
     pub fee_cents: i64,
     pub payout_id: Option<String>,
     pub order: String,
@@ -106,7 +124,7 @@ pub fn read_txn(node: &Value) -> Result<ShopifyTxn, String> {
         kind: text(node, "type"),
         at,
         amount_cents: money(node, "amount")?,
-        fee_cents: money(node, "fee")?,
+        fee_cents: money(node, "amount")?.checked_sub(money(node, "net")?).ok_or("PAYOUT_TOO_LARGE: the payout's amounts are out of range")?,
         payout_id: node.pointer("/associatedPayout/id").and_then(Value::as_str).map(str::to_string),
         order: node.pointer("/associatedOrder/name").and_then(Value::as_str).unwrap_or_default().to_string(),
     })
@@ -162,10 +180,11 @@ const PAYOUTS_QUERY: &str = "query($after: String) { shopifyPaymentsAccount { pa
 
 const TRANSACTIONS_QUERY: &str = "query($after: String) { shopifyPaymentsAccount { balanceTransactions(first: 100, after: $after, sortKey: PROCESSED_AT, reverse: true) {
   pageInfo { hasNextPage endCursor }
-  nodes { type transactionDate test amount { amount } fee { amount } associatedPayout { id } associatedOrder { name } } } } }";
+  nodes { type transactionDate test amount { amount } net { amount } associatedPayout { id } associatedOrder { name } } } } }";
 
-/// Walks a newest-first connection under `shopifyPaymentsAccount.<field>` until `stop` says a node
-/// is too old (or the pages end).
+/// Walks a newest-first connection under `shopifyPaymentsAccount.<field>`, keeping every node, until
+/// a whole page is too old by `stop` (or the pages end). A page that is only partly old is read to
+/// its end: the sort's date and the one `stop` reads can differ.
 async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, field: &str, stop: impl Fn(&Value) -> bool) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     let mut after: Option<String> = None;
@@ -173,14 +192,8 @@ async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, fiel
         let data = graphql(http, base, token, query, json!({ "after": after })).await?;
         let conn = data.pointer(&format!("/shopifyPaymentsAccount/{field}")).ok_or_else(|| "PAYOUT_PERMISSION: this store has no Shopify Payments account LocalBooks can read".to_string())?;
         let nodes = conn.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
-        let mut done = false;
-        for n in nodes {
-            if stop(&n) {
-                done = true;
-                break;
-            }
-            out.push(n);
-        }
+        let done = !nodes.is_empty() && nodes.iter().all(&stop);
+        out.extend(nodes.into_iter().filter(|n| !stop(n)));
         let more = conn.pointer("/pageInfo/hasNextPage").and_then(Value::as_bool).unwrap_or(false);
         after = conn.pointer("/pageInfo/endCursor").and_then(Value::as_str).map(str::to_string);
         if done || !more || after.is_none() {
@@ -188,6 +201,15 @@ async fn walk(http: &reqwest::Client, base: &str, token: &str, query: &str, fiel
         }
     }
     Err("PAYOUT_TOO_MANY: Shopify has more than LocalBooks reads in one go; get payouts more often so each fetch is smaller".into())
+}
+
+/// A payout's numeric id, which GraphQL may send as a string or a number.
+fn legacy_id(p: &Value) -> String {
+    match p.get("legacyResourceId") {
+        Some(Value::String(s)) => s.clone(),
+        Some(v @ Value::Number(_)) => v.to_string(),
+        _ => String::new(),
+    }
 }
 
 fn issued(n: &Value) -> Option<DateTime<Utc>> {
@@ -245,8 +267,7 @@ pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: Option<&str>, 
     let mut result = FetchResult { new_payouts: 0, refused: Vec::new() };
     let mut wanted = Vec::new();
     for p in payouts {
-        let id = text(&p, "legacyResourceId");
-        let id = if id.is_empty() { p.get("legacyResourceId").map(Value::to_string).unwrap_or_default() } else { id };
+        let id = legacy_id(&p);
         if text(&p, "status") != "PAID" || text(&p, "transactionType") == "WITHDRAWAL" || seen(pool, f.id, &id).await? {
             continue;
         }
@@ -275,8 +296,7 @@ pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: Option<&str>, 
     }
     for p in wanted {
         let gid = text(&p, "id");
-        let id = text(&p, "legacyResourceId");
-        let id = if id.is_empty() { p.get("legacyResourceId").map(Value::to_string).unwrap_or_default() } else { id };
+        let id = legacy_id(&p);
         let net = money(&p, "net")?;
         let mut txns = by_payout.remove(&gid).unwrap_or_default();
         txns.sort_by_key(|t| t.at);

@@ -17,13 +17,15 @@ fn a_store_address_is_read_however_it_is_typed() {
     }
 }
 
+/// A balance transaction; `fee` is what Shopify took, sent as `net = amount − fee`.
 fn node(kind: &str, at: &str, amount: &str, fee: &str, payout: Option<&str>, order: &str) -> Value {
+    let net = parse_shopify_amount(amount).unwrap() - parse_shopify_amount(fee).unwrap();
     json!({
         "type": kind,
         "transactionDate": at,
         "test": false,
         "amount": { "amount": amount },
-        "fee": { "amount": fee },
+        "net": { "amount": format!("{}{}.{:02}", if net < 0 { "-" } else { "" }, net.abs() / 100, net.abs() % 100) },
         "associatedPayout": payout.map(|p| json!({ "id": p })),
         "associatedOrder": if order.is_empty() { Value::Null } else { json!({ "name": order }) },
     })
@@ -58,12 +60,15 @@ fn a_payout_breaks_down_into_gross_fees_refunds_and_chargebacks() {
 // ---- a mock Shopify on 127.0.0.1 ---------------------------------------------------------------
 
 async fn mock_shopify(requests: Arc<Mutex<Vec<String>>>) -> String {
+    // The first transactions query is throttled once; the transactions come over two pages.
+    let throttled = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     tokio::spawn(async move {
         loop {
             let Ok((mut socket, _)) = listener.accept().await else { break };
             let requests = requests.clone();
+            let throttled = throttled.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0u8; 32768];
                 let mut n = 0;
@@ -95,11 +100,16 @@ async fn mock_shopify(requests: Arc<Mutex<Vec<String>>>) -> String {
                             { "id": "gid://shopify/ShopifyPaymentsPayout/501", "legacyResourceId": "501", "issuedAt": "2026-03-09T00:00:00Z", "status": "PAID", "transactionType": "DEPOSIT", "net": { "amount": "243.05", "currencyCode": "USD" } },
                             { "id": "gid://shopify/ShopifyPaymentsPayout/400", "legacyResourceId": "400", "issuedAt": "2025-01-01T00:00:00Z", "status": "PAID", "transactionType": "DEPOSIT", "net": { "amount": "1.00", "currencyCode": "USD" } }
                         ] } } } }))
+                } else if request.contains("balanceTransactions(first") && !throttled.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    (200, json!({ "errors": [{ "message": "Throttled", "extensions": { "code": "THROTTLED" } }] }))
                 } else if request.contains("balanceTransactions(first") {
                     let mut nodes = payout_501();
                     nodes.push(node("CHARGE", "2026-03-08T10:00:00Z", "5.00", "0.15", Some("gid://shopify/ShopifyPaymentsPayout/502"), "#1050"));
                     nodes.sort_by(|a, b| b["transactionDate"].as_str().cmp(&a["transactionDate"].as_str()));
-                    (200, json!({ "data": { "shopifyPaymentsAccount": { "balanceTransactions": { "pageInfo": { "hasNextPage": false, "endCursor": null }, "nodes": nodes } } } }))
+                    let second = request.contains("\"after\":\"page2\"");
+                    let (a, b) = nodes.split_at(nodes.len() / 2);
+                    let page_info = if second { json!({ "hasNextPage": false, "endCursor": null }) } else { json!({ "hasNextPage": true, "endCursor": "page2" }) };
+                    (200, json!({ "data": { "shopifyPaymentsAccount": { "balanceTransactions": { "pageInfo": page_info, "nodes": if second { b } else { a } } } } }))
                 } else {
                     (200, json!({ "errors": [{ "message": "unexpected query", "extensions": { "code": "BAD_REQUEST" } }] }))
                 };
