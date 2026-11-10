@@ -6,9 +6,6 @@ people using LocalBooks.
 
 ## [Unreleased]
 
-- **A guide to the FTC Safeguards Rule.** Tax preparers and bookkeepers who must keep a security
-  program can read, duty by duty, what LocalBooks does to help and what stays their job (Help ›
-  The FTC Safeguards Rule and LocalBooks).
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
