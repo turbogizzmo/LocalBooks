@@ -56,7 +56,7 @@ pub async fn set_payout_auto_fetch(app: AppHandle, db: State<'_, Db>, id: i64, h
 /// archive: the same rule as Get payouts by hand.
 pub async fn run_due_payout_fetches(app: &AppHandle) {
     let Some(db) = app.try_state::<Db>() else { return };
-    if !db.is_open().await || db.check(crate::permissions::Need::Write, false).is_err() {
+    if !payout_feeds::may_auto_fetch(&db).await {
         return;
     }
     let Ok(store) = feed_secrets(app) else { return };

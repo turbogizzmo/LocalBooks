@@ -212,3 +212,51 @@ async fn a_feed_set_to_fetch_automatically_is_fetched_when_its_interval_has_pass
     set_auto_fetch(&pool, f.id, None).await.unwrap();
     assert!(fetch_due(&pool, &store, &apis, at("2026-03-12T12:00:00Z")).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn automatic_fetches_wait_for_someone_who_may_change_the_books() {
+    let dir = std::env::temp_dir().join(format!("localbooks-autofetch-{}", crate::mcp_server::new_token()));
+    let db = crate::db::Db::open_at(dir.join("books.localbooks"), crate::db::test_config(&dir)).await.unwrap();
+    db.refresh_gate().await;
+    assert!(may_auto_fetch(&db).await, "a file without users: yes");
+
+    let (pool, slot) = db.pool_and_session().await.unwrap();
+    let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+    let viewer = crate::users::add(&pool, &session, crate::users::NewUserInput {
+        username: "viewer".into(),
+        display_name: None,
+        role: crate::users::Role::ViewOnly,
+        can_see_sensitive: false,
+        password: "viewer temp pw".into(),
+    })
+    .await
+    .unwrap();
+    db.refresh_gate().await;
+    assert!(!may_auto_fetch(&db).await, "users on and nobody signed in: no");
+
+    *slot.lock().await = Some(session);
+    db.refresh_gate().await;
+    assert!(may_auto_fetch(&db).await, "an Admin signed in: yes");
+
+    let mut viewing = crate::users::sign_in(&pool, "viewer", "viewer temp pw").await.unwrap();
+    viewing.user.must_change_password = false;
+    assert_eq!(viewing.user.id, viewer.id);
+    *slot.lock().await = Some(viewing);
+    db.refresh_gate().await;
+    assert!(!may_auto_fetch(&db).await, "a View-only user signed in: no");
+}
+
+#[tokio::test]
+async fn a_payout_kept_by_a_fetch_running_at_the_same_time_is_kept_once() {
+    let pool = test_pool().await;
+    let (input, _) = setup(&pool).await;
+    let api = mock_stripe(Arc::new(Mutex::new(Vec::new()))).await;
+    let (store, _dir) = temp_store("race");
+    let f = connect_stripe(&pool, &store, &api, "rk_test_good", &input).await.unwrap();
+    let b = stripe_breakdown(24_305, &transactions()).unwrap();
+    let day = NaiveDate::from_ymd_opt(2026, 3, 9).unwrap();
+    assert!(keep(&pool, f.id, "po_1", day, "USD", &b).await.unwrap());
+    assert!(!keep(&pool, f.id, "po_1", day, "USD", &b).await.unwrap(), "the second is a no-op, not an error");
+    let now = DateTime::parse_from_rfc3339("2026-03-10T12:00:00Z").unwrap().with_timezone(&Utc);
+    assert_eq!(fetch(&pool, &store, &Apis::all(&api), f.id, now).await.unwrap().new_payouts, 0);
+}

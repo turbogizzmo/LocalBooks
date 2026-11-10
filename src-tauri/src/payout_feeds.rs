@@ -319,6 +319,13 @@ pub async fn update_feed(pool: &SqlitePool, id: i64, input: &FeedInput) -> Resul
     feed(pool, id).await
 }
 
+/// Whether an automatic fetch may run now: a company file is open, it isn't an archive, and someone
+/// who may change the books is signed in (or the file has no users). The same rule as Get payouts;
+/// it doesn't count as the signed-in user's activity, so it never keeps an idle session open.
+pub async fn may_auto_fetch(db: &crate::db::Db) -> bool {
+    db.is_open().await && db.check(crate::permissions::Need::Write, false).is_ok()
+}
+
 /// The intervals an Admin can choose for fetching automatically.
 pub const AUTO_FETCH_HOURS: [i64; 4] = [1, 6, 12, 24];
 
@@ -507,11 +514,13 @@ pub(crate) async fn seen(pool: &SqlitePool, feed_id: i64, payout_id: &str) -> Re
     sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payouts WHERE feed_id = ?1 AND processor_payout_id = ?2)").bind(feed_id).bind(payout_id).fetch_one(pool).await.map_err(db_err)
 }
 
-/// Keeps a payout's breakdown, NEW.
-pub(crate) async fn keep(pool: &SqlitePool, feed_id: i64, payout_id: &str, arrival: NaiveDate, currency: &str, b: &Breakdown) -> Result<(), String> {
+/// Keeps a payout's breakdown, NEW; false when it was already kept (by a fetch running at the same
+/// time: the automatic one and Get payouts can overlap).
+pub(crate) async fn keep(pool: &SqlitePool, feed_id: i64, payout_id: &str, arrival: NaiveDate, currency: &str, b: &Breakdown) -> Result<bool, String> {
     sqlx::query(
         "INSERT INTO payouts (feed_id, processor_payout_id, arrival_date, currency, net_cents, gross_cents, fee_cents, refund_cents, chargeback_cents, other_cents, details_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         ON CONFLICT (feed_id, processor_payout_id) DO NOTHING",
     )
     .bind(feed_id)
     .bind(payout_id)
@@ -527,7 +536,7 @@ pub(crate) async fn keep(pool: &SqlitePool, feed_id: i64, payout_id: &str, arriv
     .execute(pool)
     .await
     .map_err(db_err)
-    .map(|_| ())
+    .map(|done| done.rows_affected() == 1)
 }
 
 /// The reason part of an error ("PAYOUT_MISMATCH: the payout's…" → "the payout's…").
@@ -555,8 +564,9 @@ async fn fetch_stripe(pool: &SqlitePool, f: &PayoutFeed, api: &str, key: &str, s
         let transactions = stripe_list(&client, api, key, "/v1/balance_transactions", &[("payout", id.clone())]).await?;
         match stripe_breakdown(int(&p, "amount"), &transactions) {
             Ok(b) => {
-                keep(pool, feed_id, &id, arrival, &currency, &b).await?;
-                result.new_payouts += 1;
+                if keep(pool, feed_id, &id, arrival, &currency, &b).await? {
+                    result.new_payouts += 1;
+                }
             }
             Err(e) => result.refused.push(format!("{id}: {}", reason(&e))),
         }

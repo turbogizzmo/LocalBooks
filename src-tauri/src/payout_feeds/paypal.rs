@@ -346,8 +346,9 @@ pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: &str, stored: 
         match paypal_breakdown(net, &carried) {
             Ok(b) => {
                 let arrival: NaiveDate = w.txn.at.date_naive();
-                keep(pool, f.id, &id, arrival, &home, &b).await?;
-                result.new_payouts += 1;
+                if keep(pool, f.id, &id, arrival, &home, &b).await? {
+                    result.new_payouts += 1;
+                }
             }
             Err(e) => result.refused.push(format!("{id}: {}", reason(&e))),
         }

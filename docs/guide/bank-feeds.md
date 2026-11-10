@@ -178,7 +178,8 @@ Each feed is fetched only when you click **Get payouts** until an Admin changes 
 feed to every hour, 6 hours, 12 hours or once a day. LocalBooks then fetches it on that schedule
 while it is open and someone who can change the books is signed in; the line beside **Fetch** says
 when it last did and what it found, or why it couldn't. New payouts still wait for you to click
-**Record deposit**.
+**Record deposit**. On a Mac, after LocalBooks is updated the Keychain may ask once whether
+LocalBooks can read the feed's key; choose **Always Allow** so automatic fetches can run.
 
 ## When LocalBooks asks which columns are which
 
