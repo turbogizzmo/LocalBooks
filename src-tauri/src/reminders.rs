@@ -95,7 +95,7 @@ impl Default for ReminderSettings {
 }
 
 impl ReminderSettings {
-    fn categories(&self) -> [(&'static str, Category); 8] {
+    fn categories(&self) -> [(&'static str, Category); 9] {
         [
             ("overdue invoices", self.overdue_invoices),
             ("bills due", self.bills_due),
