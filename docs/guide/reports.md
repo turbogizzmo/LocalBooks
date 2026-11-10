@@ -127,6 +127,14 @@ or purchase order opens on its form, and a card opens its register.
 It shows income, cost of goods sold, gross profit, expenses and net income. Fiscal periods follow
 **First month of fiscal year** in Settings.
 
+**Columns** splits the report: **Months** or **Quarters** give a column for each part of the
+period and a total; **Class** gives a column for each class (when the company has classes), with
+lines that have no class in **Unclassified**; **Customer:Job** gives a column for each customer and
+each job, with lines that name no customer in their own column. Each row's columns add up to the
+total, the plain Profit and Loss amount. Columns by class or customer are on the accrual basis, so
+**Basis** is set to Accrual while they show. For columns by vendor, or by customer with the jobs
+added in, use **Customize…** on a summary report (see [Columns by name](#customize-a-report)).
+
 ## Balance Sheet
 
 1. Click **Balance Sheet** in the list.

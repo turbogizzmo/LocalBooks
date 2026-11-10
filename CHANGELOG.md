@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Profit and Loss columns by class or customer.** On the Profit and Loss, **Columns** now also
+  offers **Class** and **Customer:Job**: a column for each class, or for each customer and job,
+  beside the total.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
