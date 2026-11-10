@@ -15,6 +15,10 @@ people using LocalBooks.
   invoices and other transactions on those pages come in. And if an account's imported balance
   still differs from the balance QuickBooks stored, step 2 of the import lists it with the
   file's balance, the imported balance and the difference, before and after you post.
+- **More check lines come in from older company files.** When the part of a QuickBooks
+  Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
+  some tables' rows at all, such as the check lines of a file upgraded from an older version.
+  LocalBooks now repairs that part first, so those transactions import.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
