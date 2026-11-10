@@ -384,8 +384,11 @@ current fiscal year as Net Income. The fiscal year start month is a preference.
 
 Platform notes:
 
-- **macOS:** Xcode Command Line Tools (`xcode-select --install`).
-- **Windows:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10/11).
+- **macOS:** Xcode Command Line Tools (`xcode-select --install`). SQLCipher uses Apple's
+  CommonCrypto; leave `OPENSSL_DIR` unset, or the build links a Homebrew OpenSSL that other Macs
+  don't have (`npm run build:mac` unsets it).
+- **Windows:** Microsoft C++ Build Tools, WebView2 (preinstalled on Windows 10/11) and Perl
+  ([Strawberry Perl](https://strawberryperl.com)), which builds the OpenSSL that SQLCipher uses.
 - **Linux:** `webkit2gtk-4.1`, `libssl`, `librsvg` and build essentials (package names per distro in the Tauri guide).
 
 ### Run in development

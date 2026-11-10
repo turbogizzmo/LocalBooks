@@ -57,6 +57,7 @@ mod frontend_checks;
 mod iif_import;
 mod installed_qb;
 mod export_engine;
+mod file_cipher;
 mod file_menu;
 mod file_repair;
 mod finance_charges;

@@ -7,7 +7,8 @@
 //
 // Needs `npm ci` (for node_modules) and the crates of src-tauri/Cargo.lock (cargo fetches them).
 // Shipped means: Rust crates reachable from localbooks through normal (not dev or build)
-// dependencies on any target platform, and npm packages in package-lock.json not marked dev.
+// dependencies on any target platform (plus build dependencies that compile C code into the app,
+// COMPILED_IN), and npm packages in package-lock.json not marked dev.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
@@ -36,6 +37,21 @@ const SHIPPED_SUBFOLDERS = {
 };
 
 /**
+ * Licenses of code a crate compiles in from a subfolder rather than its top level: libsqlite3-sys
+ * builds SQLCipher from `sqlcipher/`, whose BSD license asks binaries to reproduce it.
+ */
+const BUNDLED_LICENSES = {
+  'libsqlite3-sys': [['sqlcipher/LICENSE', 'SQLCipher']],
+  'openssl-src': [['openssl/LICENSE.txt', 'OpenSSL']],
+};
+
+/**
+ * Build dependencies whose C code ends up inside the app: openssl-src compiles the OpenSSL that the
+ * Windows build of SQLCipher links (Cargo.toml).
+ */
+const COMPILED_IN = new Set(['openssl-src']);
+
+/**
  * License and NOTICE files at the top of a package directory, in name order, plus any file in
  * scripts/notices/extra/<name>/ that the published package leaves out (see the README there).
  */
@@ -49,6 +65,11 @@ function legalFiles(dir, name) {
   const files = read(dir, (file) => file);
   for (const folder of SHIPPED_SUBFOLDERS[name] ?? []) {
     if (existsSync(join(dir, folder))) files.push(...read(join(dir, folder), (file) => `${folder}/${file}`));
+  }
+  for (const [file, what] of BUNDLED_LICENSES[name] ?? []) {
+    const text = existsSync(join(dir, file)) ? clean(readFileSync(join(dir, file), 'utf8')) : '';
+    if (!text) throw new Error(`${name}: ${file} (${what}) is missing; update BUNDLED_LICENSES`);
+    files.push({ name: `${file} (${what}, compiled into this crate)`, notice: false, text });
   }
   const extra = join(supplements, 'extra', name);
   if (existsSync(extra)) {
@@ -73,7 +94,8 @@ function rustPackages() {
   while (queue.length) {
     const node = nodes.get(queue.pop());
     for (const dep of node.deps) {
-      if (seen.has(dep.pkg) || !dep.dep_kinds.some((k) => k.kind === null)) continue;
+      const shipped = dep.dep_kinds.some((k) => k.kind === null) || (COMPILED_IN.has(dep.name.replace(/_/g, '-')) && dep.dep_kinds.some((k) => k.kind === 'build'));
+      if (seen.has(dep.pkg) || !shipped) continue;
       seen.add(dep.pkg);
       queue.push(dep.pkg);
     }

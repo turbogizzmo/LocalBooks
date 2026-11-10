@@ -31,6 +31,10 @@ people using LocalBooks.
 - **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
   waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
   is ever locked out, and other users can still sign in.
+- **Ready for encrypting the whole company file.** LocalBooks' database engine now includes
+  SQLCipher, the groundwork for an optional setting that encrypts the whole company file and its
+  backups. Nothing changes in your files yet, and Help › Save diagnostics lists the SQLCipher
+  version.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
