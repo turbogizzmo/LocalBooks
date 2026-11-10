@@ -195,11 +195,16 @@ pub struct SalesTaxReturn {
 }
 
 /// A document with tax: its entry, rate, sign (−1 for a credit memo), tax, taxable amount, total,
-/// and how much of it counts in the period (the total, or on cash what was settled in it).
-type TaxedDoc = (i64, i64, i64, i64, i64, i64, i64);
+/// how much of it counts in the period (the total, or on cash what was settled in it), its
+/// non-taxable amount and the discount taken off its whole subtotal.
+type TaxedDoc = (i64, i64, i64, i64, i64, i64, i64, i64, i64);
 
 const TAXABLE_INVOICE: &str = "(SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 1)
     + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 1)";
+
+/// An invoice's non-taxable amount and its whole-form discount, the last two columns of [`TaxedDoc`].
+const OTHER_INVOICE: &str = "(SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_items WHERE invoice_id = i.id AND is_taxable = 0)
+    + (SELECT COALESCE(SUM(amount_cents), 0) FROM invoice_form_lines WHERE invoice_id = i.id AND kind = 'DISCOUNT' AND is_taxable = 0), i.discount_cents";
 
 /// The sales tax return for a period, per agency, on `basis`. Sales receipts and credit memos count
 /// by their date; invoices by theirs (accrual) or, on cash, in proportion to what was paid or
@@ -211,14 +216,15 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
     }
     let invoices = match basis {
         Basis::Accrual => format!(
-            "SELECT i.journal_entry_id, i.tax_rate_id, 1, i.tax_cents, {TAXABLE_INVOICE}, i.total_cents, i.total_cents
+            "SELECT i.journal_entry_id, i.tax_rate_id, 1, i.tax_cents, {TAXABLE_INVOICE}, i.total_cents, i.total_cents, {OTHER_INVOICE}
              FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.tax_rate_id IS NOT NULL AND i.issue_date BETWEEN ?1 AND ?2"
         ),
         Basis::Cash => format!(
             "SELECT i.journal_entry_id, i.tax_rate_id, 1, i.tax_cents, {TAXABLE_INVOICE}, i.total_cents,
                     COALESCE((SELECT SUM(p.amount_cents) FROM invoice_payments p WHERE p.invoice_id = i.id AND p.is_voided = 0 AND p.payment_date BETWEEN ?1 AND ?2), 0)
                   + COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.invoice_id = i.id AND a.is_voided = 0 AND a.applied_date BETWEEN ?1 AND ?2), 0)
-                  - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0)
+                  - COALESCE((SELECT SUM(b.amount_cents) FROM bounced_checks b WHERE b.invoice_id = i.id AND b.is_voided = 0 AND b.bounce_date BETWEEN ?1 AND ?2), 0),
+                    {OTHER_INVOICE}
              FROM invoices i WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.currency_code IS NULL AND i.tax_rate_id IS NOT NULL AND i.total_cents > 0 AND i.issue_date <= ?2"
         ),
     };
@@ -228,12 +234,16 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
          SELECT r.journal_entry_id, r.tax_rate_id, 1, r.tax_cents,
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 1)
                 + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 1),
-                1, 1
+                1, 1,
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_lines WHERE sales_receipt_id = r.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM sales_receipt_form_lines WHERE sales_receipt_id = r.id AND kind = 'DISCOUNT' AND is_taxable = 0),
+                r.discount_cents
          FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.tax_rate_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
          UNION ALL
          SELECT m.journal_entry_id, m.tax_rate_id, -1, m.tax_cents,
-                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1),
-                1, 1
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 1),
+                1, 1, 0, 0
          FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.tax_rate_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2"
     );
     let docs: Vec<TaxedDoc> = sqlx::query_as(&sql).bind(start).bind(end).fetch_all(pool).await.map_err(db_err)?;
@@ -258,10 +268,11 @@ pub async fn sales_tax_return(pool: &SqlitePool, start: NaiveDate, end: NaiveDat
 
     // Per rate (component): taxable sales and tax.
     let mut sums: std::collections::BTreeMap<i64, (i64, i64)> = std::collections::BTreeMap::new();
-    for (entry, rate_id, sign, tax, taxable, total, counted) in docs {
+    for (entry, rate_id, sign, tax, taxable, total, counted, other, discount) in docs {
         if counted == 0 {
             continue;
         }
+        let (taxable, _) = super::after_discount(taxable, other, discount)?;
         let split: Vec<(i64, i64)> = parts.get(&entry).cloned().unwrap_or_else(|| vec![(rate_id, tax)]);
         let taxable = share(taxable, counted, total)?.checked_mul(sign).ok_or_else(overflow)?;
         for (component, cents) in split {

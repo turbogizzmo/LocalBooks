@@ -249,6 +249,11 @@ accounts…** on the report opens the list.
 **Sales › Sales Tax** holds the rates you charge. Each **rate** has a percentage, the **agency** you
 pay it to, and the liability account it builds up in (Sales Tax Payable unless you choose another).
 
+A new sales form starts with the customer's own rate (on the customer's record, **Default sales
+tax**), none for a tax-exempt customer, and for a customer left on **Company default** the
+**Default rate** chosen at the top of Sales › Sales Tax. With no default rate chosen, the company's
+only rate is used if it has just one; otherwise the form starts with no tax.
+
 Where one sale is taxed by several agencies (a state, a county and a city, say), add each as its own
 rate with its agency, then **New combined rate…**: name it and tick the rates it adds up. Its
 percentage is theirs added together, and you choose it on sales forms like any rate. When you post a
