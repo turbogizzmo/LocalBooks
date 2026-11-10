@@ -59,6 +59,23 @@ Close LocalBooks on the other computer, or wait a few minutes if it crashed.
 - **"Cannot reach the email server":** check the server name, the security setting and the port
   (STARTTLS on 587 or SSL/TLS on 465 are the usual pairs).
 
+## Go back to the previous version
+
+If a new version of LocalBooks has a problem, choose **Help › Reinstall Previous Version…** (or
+**Settings › Updates**) and click **Find the previous version**.
+
+- LocalBooks looks up the release before this one on LocalBooks' GitHub releases page and checks
+  that it can open your company file. A new version sometimes changes the company file in a way an
+  older one can't read. If so, LocalBooks says it can't go back, and why. To go back anyway, restore
+  the copy saved before this version changed the file (**Settings › File & Data**, kind *Before
+  upgrade*); anything entered since then is not in that copy.
+- **Back up and reinstall…** saves a backup of your company file first. It then downloads the older
+  version and installs it only if its signature matches the key built into LocalBooks, as with any
+  update. Click **Restart now** to use it.
+- To come back to the newest version later, check for updates.
+
+Only an Admin can reinstall an older version.
+
 ## Save diagnostics for whoever is helping you
 
 Choose **Help › Save Diagnostics…** (or **Settings › Diagnostics**) and click **Save

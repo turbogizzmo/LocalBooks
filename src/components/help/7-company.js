@@ -28,6 +28,14 @@ export const screens = {
  */
 export const topics = [
   {
+    id: 'previous-version', area: 'company', views: ['settings/updates'],
+    title: 'Go back to the previous version',
+    body: 'Help › Reinstall Previous Version… finds the release before this one and checks it can open your company file (a newer version may have changed the file in a way an older one can’t read; then it says so). Back up and reinstall… backs up the books, downloads that version, installs it only if its signature matches LocalBooks’ key, and asks you to restart. Admins only.',
+    keywords: 'rollback roll back downgrade previous older version reinstall undo update problem',
+    go: { label: 'Go to Updates', view: 'settings/updates' },
+    guide: 'troubleshooting',
+  },
+  {
     id: 'save-diagnostics', area: 'company', views: ['settings/diagnostics', 'settings/updates'],
     title: 'Save diagnostics for whoever is helping you',
     body: 'Help › Save Diagnostics… (or Settings › Diagnostics) saves a zip file where you choose: LocalBooks’ version, your operating system, the company file’s size, schema version and integrity check, how many rows each table has, and LocalBooks’ log of when it started, stopped, which file it opened and any crash. It holds no customers, vendors or amounts, and LocalBooks never sends it anywhere. Show what’s in it lets you read it first.',

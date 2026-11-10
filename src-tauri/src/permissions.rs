@@ -59,6 +59,8 @@ const OPEN: &[&str] = &[
 ];
 
 const ADMIN: &[&str] = &[
+    // Going back to the previous release changes the app for everyone using these books.
+    "reinstall_previous_release",
     // Removing an attachment for good (deleting one is reversible and open to Standard users).
     "purge_attachment",
     // Users and the recovery key.

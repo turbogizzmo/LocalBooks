@@ -36,6 +36,9 @@ people using LocalBooks.
 - **Report columns by class, customer, job or vendor.** In a customized summary report, Columns by
   name gives a column for each class, customer, Customer:Job or vendor, with a total, for example a
   profit and loss by job.
+- **Go back to the previous version.** Help › Reinstall Previous Version… backs up your books and
+  reinstalls the release before this one through the signed updater. If that version couldn't open
+  your company file, it says so and leaves the version as it is.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
