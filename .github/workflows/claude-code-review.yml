@@ -1,0 +1,50 @@
+# Claude Code Review: one review comment when a PR is opened, marked ready or reopened.
+#
+# Not on every push (no `synchronize`): reviewing each push is what used up the Copilot allowance.
+# Runs only for the repository owner's non-draft PRs. Authenticates with the owner's Claude
+# subscription token (secret CLAUDE_CODE_OAUTH_TOKEN, made with `claude setup-token`).
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  review:
+    name: Claude Code Review
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Review
+        uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Read AGENTS.md first: its rules (integer-cent money, only ledger.rs writes journal rows,
+            append-only migrations, clean-room) are part of what counts as a bug here.
+
+            Look for real problems only: bugs, broken logic, wrong accounting results, security
+            issues, and data loss. Skip style, naming and formatting nitpicks. Use `gh pr view` and
+            `gh pr diff` to read the PR.
+
+            Post exactly ONE comment with `gh pr comment`, listing each problem with its file and
+            line and why it matters. If you find nothing worth fixing, say so in one line.
+          claude_args: >-
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
