@@ -13,7 +13,7 @@ const ROLES = [
   ['chargebackAccountId', 'Chargebacks', (a) => a.accountType !== 'BANK'],
 ];
 const STATUS = { NEW: 'New', RECORDED: 'Recorded', IGNORED: 'Ignored' };
-const PROCESSOR = { STRIPE: 'Stripe', PAYPAL: 'PayPal' };
+const PROCESSOR = { STRIPE: 'Stripe', PAYPAL: 'PayPal', SHOPIFY: 'Shopify Payments' };
 
 /**
  * Connect (or change) a processor account: its read-only credentials (a Stripe restricted key, or a
@@ -21,17 +21,20 @@ const PROCESSOR = { STRIPE: 'Stripe', PAYPAL: 'PayPal' };
  */
 function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onDone, onCancel }) {
   const paypal = processor === 'PAYPAL';
+  const shopify = processor === 'SHOPIFY';
   const [form, setForm] = useState(() => ({
     name: feed?.name ?? PROCESSOR[processor],
     key: '',
     clientId: '',
     secret: '',
+    shop: '',
+    token: '',
     sandbox: false,
     ...Object.fromEntries(ROLES.map(([k]) => [k, feed?.[k] ?? null])),
   }));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const credentialsReady = paypal ? form.clientId.trim() && form.secret.trim() : form.key.trim();
+  const credentialsReady = paypal ? form.clientId.trim() && form.secret.trim() : shopify ? form.shop.trim() && form.token.trim() : form.key.trim();
   const ready = form.name.trim() && ROLES.every(([k]) => form[k]) && (feed || credentialsReady);
   const save = async () => {
     setBusy(true);
@@ -43,7 +46,9 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
           ? await api.updatePayoutFeed(feed.id, input)
           : paypal
             ? await api.connectPaypalFeed({ clientId: form.clientId, secret: form.secret, sandbox: form.sandbox }, input)
-            : await api.connectStripeFeed(form.key, input),
+            : shopify
+              ? await api.connectShopifyFeed(form.shop, form.token, input)
+              : await api.connectStripeFeed(form.key, input),
       );
     } catch (err) {
       setError(errorText(err));
@@ -60,7 +65,15 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
           nothing anywhere else.
         </p>
       )}
-      {!feed && !paypal && (
+      {!feed && shopify && (
+        <p className="text-xs text-qb-ink-muted">
+          In your Shopify admin, under Settings › Apps and sales channels › Develop apps, create an app, give its Admin API only the{' '}
+          <span className="font-semibold">read_shopify_payments_payouts</span> and <span className="font-semibold">read_shopify_payments_accounts</span> scopes, install it, and paste
+          its Admin API access token with your store’s address. LocalBooks keeps the token in this computer’s credential store, calls only your store’s Admin API when you get
+          payouts, and sends nothing anywhere else.
+        </p>
+      )}
+      {!feed && !paypal && !shopify && (
         <p className="text-xs text-qb-ink-muted">
           In your Stripe Dashboard, create a <span className="font-semibold">restricted key</span> with read access to Balance and Payouts, and paste it here. LocalBooks keeps it in this
           computer’s credential store, calls Stripe only when you click Get payouts, and sends nothing anywhere else.
@@ -87,7 +100,19 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
             </label>
           </>
         )}
-        {!feed && !paypal && (
+        {!feed && shopify && (
+          <>
+            <label className="flex flex-col gap-0.5">
+              <span className="qb-label">Store address</span>
+              <input className="qb-input" autoComplete="off" spellCheck={false} placeholder="my-store.myshopify.com" value={form.shop} onChange={(e) => setForm({ ...form, shop: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="qb-label">Admin API access token</span>
+              <input className="qb-input font-mono" type="password" autoComplete="off" spellCheck={false} value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
+            </label>
+          </>
+        )}
+        {!feed && !paypal && !shopify && (
           <label className="flex flex-col gap-0.5">
             <span className="qb-label">Restricted key (rk_live_…)</span>
             <input className="qb-input font-mono" type="password" autoComplete="off" spellCheck={false} value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
@@ -103,7 +128,7 @@ function FeedForm({ accounts, feed, processor = feed?.processor ?? 'STRIPE', onD
       {error && <Notice kind="error" text={error} onDismiss={() => setError(null)} />}
       <div className="flex gap-2">
         <button type="button" className="qb-btn qb-btn-primary h-row" disabled={!ready || busy} onClick={save}>
-          {feed ? 'Save' : busy ? (paypal ? 'Checking the app…' : 'Checking the key…') : 'Connect'}
+          {feed ? 'Save' : busy ? (paypal || shopify ? 'Checking the app…' : 'Checking the key…') : 'Connect'}
         </button>
         <button type="button" className="qb-btn qb-btn-secondary h-row" disabled={busy} onClick={onCancel}>Cancel</button>
       </div>
@@ -164,7 +189,7 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
     <section className="qb-panel flex flex-col">
       <div className="flex h-row-lg items-center gap-2 border-b border-qb-border px-2">
         <h2 className="text-md font-semibold">{feed.name}</h2>
-        <span className="text-xs text-qb-ink-muted">{PROCESSOR[feed.processor] ?? feed.processor}{feed.accountRef === 'SANDBOX' ? ' (sandbox)' : ''} · last fetched {feed.lastFetchedAt ? formatDate(feed.lastFetchedAt.slice(0, 10)) : 'never'}</span>
+        <span className="text-xs text-qb-ink-muted">{PROCESSOR[feed.processor] ?? feed.processor}{feed.accountRef === 'SANDBOX' ? ' (sandbox)' : feed.processor === 'SHOPIFY' ? ` · ${feed.accountRef}` : ''} · last fetched {feed.lastFetchedAt ? formatDate(feed.lastFetchedAt.slice(0, 10)) : 'never'}</span>
         <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" disabled={busy} onClick={fetchNow}>
           {busy ? 'Working…' : 'Get payouts'}
         </button>
@@ -236,7 +261,7 @@ function FeedPanel({ feed, accounts, isAdmin, onChanged }) {
 }
 
 /**
- * Banking › Payout Feeds (`payout_feeds.rs`, design in docs/plans/payout-feeds.md): Stripe and PayPal payouts
+ * Banking › Payout Feeds (`payout_feeds.rs`, design in docs/plans/payout-feeds.md): Stripe, PayPal and Shopify Payments payouts
  * as deposits of their gross sales, less fees, refunds and chargebacks.
  */
 export default function PayoutFeeds({ accounts, isAdmin = true }) {
@@ -253,13 +278,14 @@ export default function PayoutFeeds({ accounts, isAdmin = true }) {
             <span className="ml-auto flex gap-1">
               <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setConnecting('STRIPE')}>Connect Stripe…</button>
               <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setConnecting('PAYPAL')}>Connect PayPal…</button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setConnecting('SHOPIFY')}>Connect Shopify…</button>
             </span>
           )}
         </div>
         {error && <Notice kind="error" text={error} />}
         {connecting && <FeedForm key={connecting} accounts={accounts} processor={connecting} onDone={() => (setConnecting(null), reload())} onCancel={() => setConnecting(null)} />}
         {feeds && feeds.length === 0 && !connecting && (
-          <p className="px-2 py-1.5 text-sm text-qb-ink-muted">Off. Nothing is fetched until an Admin connects a Stripe account or a PayPal app with read-only credentials.</p>
+          <p className="px-2 py-1.5 text-sm text-qb-ink-muted">Off. Nothing is fetched until an Admin connects a Stripe account, a PayPal app or a Shopify store with read-only credentials.</p>
         )}
       </section>
       {(feeds ?? []).map((f) => (

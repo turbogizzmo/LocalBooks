@@ -74,8 +74,31 @@ withdrawal before it is outside the history read (the fetch reads a month furthe
 listed as not kept, with the reason. The client id and secret are kept together in the credential
 store; `payout_feeds.account_ref` says whether they are live or sandbox credentials.
 
+## Shopify Payments
+
+A store's custom app with only the `read_shopify_payments_payouts` and
+`read_shopify_payments_accounts` scopes has an Admin API access token (kept in the credential
+store; the store's `….myshopify.com` address is `payout_feeds.account_ref`). LocalBooks speaks the
+GraphQL Admin API (version 2026-10; the REST API is legacy):
+
+- `shopifyPaymentsAccount.payouts`, newest first, until one was issued before the fetch window;
+  only `PAID` payouts to the bank (`DEPOSIT`) are kept.
+- `shopifyPaymentsAccount.balanceTransactions`, newest first, back to two months before the oldest
+  payout wanted, grouped by `associatedPayout`; test transactions are left out.
+
+| Balance transaction type | Becomes |
+|---|---|
+| CHARGE | a sale, gross; its `fee` is a processor fee |
+| REFUND, REFUND_FAILURE, REFUND_ADJUSTMENT | refunds |
+| DISPUTE_WITHDRAWAL, DISPUTE_REVERSAL | chargebacks |
+| CHARGEBACK_FEE, CHARGEBACK_FEE_REFUND, STRIPE_FEE | processor fees |
+| TRANSFER… | the payout itself, skipped |
+| anything else (reserves, holds, adjustments, credits) | other, by sign |
+
+Each transaction's `amount − fee` is what it added; they must add up to the payout's `net`.
+
 ## Limits of this change
 
-Stripe first; PayPal came next (above), and Shopify Payments stays on the T68 row. No automatic schedule; no matching of a charge
+Stripe first; PayPal and Shopify Payments came next (above). No automatic schedule; no matching of a charge
 to an open invoice (charges post to the sales account; the user applies them to invoices as
 needed). Payout reversals (failed payouts) are not fetched.

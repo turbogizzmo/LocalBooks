@@ -1,9 +1,9 @@
-//! Payout feeds from payment processors (Stripe, PayPal): connect, fetch payouts, record them as deposits.
+//! Payout feeds from payment processors (Stripe, PayPal, Shopify Payments): connect, fetch payouts, record them as deposits.
 
 use super::prelude::*;
 use crate::payout_feeds::{self, Apis, FeedInput, FetchResult, PayPalCredentials, Payout, PayoutFeed, STRIPE_API};
 
-handlers![list_payout_feeds, connect_stripe_feed, connect_paypal_feed, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
+handlers![list_payout_feeds, connect_stripe_feed, connect_paypal_feed, connect_shopify_feed, update_payout_feed, disconnect_payout_feed, fetch_payouts, list_payouts, record_payout, set_payout_ignored];
 
 fn feed_secrets(app: &AppHandle) -> Result<SecretStore, String> {
     Ok(payout_feeds::secret_store(&crate::data_dirs(app).map_err(|e| format!("PAYOUT_CONFIG: {e}"))?.1))
@@ -29,6 +29,16 @@ pub async fn connect_paypal_feed(app: AppHandle, db: State<'_, Db>, credentials:
     let apis = Apis::live();
     let api = if credentials.sandbox { &apis.paypal_sandbox } else { &apis.paypal_live };
     let feed = payout_feeds::connect_paypal(&db.pool().await, &feed_secrets(&app)?, api, &credentials, &input, chrono::Utc::now()).await?;
+    notify(&app);
+    Ok(feed)
+}
+
+/// Connects a Shopify store's Shopify Payments: its address and a custom app's Admin API access
+/// token with read-only payout scopes (kept in the credential store).
+#[tauri::command]
+pub async fn connect_shopify_feed(app: AppHandle, db: State<'_, Db>, shop: String, token: String, input: FeedInput) -> Result<PayoutFeed, String> {
+    let token = zeroize::Zeroizing::new(token);
+    let feed = payout_feeds::connect_shopify(&db.pool().await, &feed_secrets(&app)?, None, &shop, &token, &input).await?;
     notify(&app);
     Ok(feed)
 }

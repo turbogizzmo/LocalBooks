@@ -110,6 +110,7 @@ const ADMIN: &[&str] = &[
     // Payout feeds: connecting a processor account and its key.
     "connect_stripe_feed",
     "connect_paypal_feed",
+    "connect_shopify_feed",
     "update_payout_feed",
     "disconnect_payout_feed",
     "file_repair_rebuild",

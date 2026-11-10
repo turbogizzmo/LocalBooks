@@ -154,7 +154,22 @@ month before, to know where the first withdrawal starts. A withdrawal is listed 
 PayPal can take up to three hours to show a new transaction, so a withdrawal made in the last few
 hours may come in on the next fetch.
 
-Shopify Payments isn't connected yet.
+## Payouts from Shopify Payments
+
+If your Shopify store takes payments through Shopify Payments, each payout to your bank comes in
+the same way.
+
+**Connect** (Admins): in your Shopify admin, go to **Settings › Apps and sales channels › Develop
+apps**, create an app, and under **Admin API** give it only the
+**read_shopify_payments_payouts** and **read_shopify_payments_accounts** scopes. Install it and
+copy its **Admin API access token** (it's shown once). In LocalBooks click **Connect Shopify…**,
+enter your store's address (such as `my-store.myshopify.com`) and the token, and choose the
+accounts as for Stripe. LocalBooks checks the token can read your Shopify Payments account, keeps
+it in this computer's credential store, and talks only to your store's Admin API.
+
+**Get payouts** fetches paid payouts to your bank from the last 90 days (afterwards, since the last
+fetch), each with the sales, refunds, disputes and adjustments that make it up. Scheduled payouts
+wait until they are paid. Test-mode transactions are left out.
 
 ## When LocalBooks asks which columns are which
 
