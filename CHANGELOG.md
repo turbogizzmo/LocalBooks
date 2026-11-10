@@ -57,6 +57,11 @@ people using LocalBooks.
 - **A guide to the FTC Safeguards Rule.** Tax preparers and bookkeepers who must keep a security
   program can read, duty by duty, what LocalBooks does to help and what stays their job (Help ›
   The FTC Safeguards Rule and LocalBooks).
+- **File Check & Repair.** The company file check-up and rebuild in Settings is now called File
+  Check & Repair; it works as before.
+- **Imports list amounts that aren't whole cents.** When a company file stores an amount with a
+  fraction of a cent, the import review counts and lists each one, instead of leaving it out
+  without saying so.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

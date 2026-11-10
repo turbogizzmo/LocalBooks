@@ -994,3 +994,17 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     reverse_batch(&pool, batch).await.unwrap();
     discard_batch(&pool, batch).await.unwrap();
 }
+
+/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
+#[tokio::test]
+async fn the_summary_lists_amounts_that_are_not_whole_cents() {
+    let pool = crate::db::test_pool().await;
+    let mut odd = ledger();
+    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
+    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
+
+    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
+    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
+}

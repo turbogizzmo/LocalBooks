@@ -9,7 +9,7 @@
 #                `codesign --verify` of the app is reported (unsigned for now, so never a failure).
 #   Upgrade      the test companies are seeded by the PREVIOUS release (its seeder, built from its
 #                tag), then the new release's hidden `--check-file` opens a copy of each: upgrade
-#                with its pre-upgrade copy, then File Dentist's check-up. Balances must not change.
+#                with its pre-upgrade copy, then the file check-up. Balances must not change.
 #   Launch       the installed app is started on a copy of each seeded company; it must still be
 #                running after 30 s with no crash report, quit, and leave that file upgraded (with a
 #                pre-upgrade copy), intact and with unchanged balances.
@@ -17,7 +17,7 @@
 # A pull request that changes the release check runs it against the newest release.
 #
 # Releases older than `--check-file` (v0.6.0 and earlier) skip the Upgrade step; the launch still
-# checks their upgrade, without File Dentist. How to read the results: docs/testing/release-check.md.
+# checks their upgrade, without File Check & Repair. How to read the results: docs/testing/release-check.md.
 
 name: Release check
 
@@ -246,7 +246,7 @@ jobs:
       - name: Upgrade with --check-file (not in this release)
         if: ${{ !cancelled() && needs.plan.outputs.check_mode != 'true' }}
         run: |
-          msg="$TAG predates --check-file: the upgrade is checked by the launch below (pre-upgrade copy, integrity, links, balances), without File Dentist."
+          msg="$TAG predates --check-file: the upgrade is checked by the launch below (pre-upgrade copy, integrity, links, balances), without File Check & Repair."
           echo "::notice::$msg"
           printf '### Upgrade with `--check-file`\n\n⚠️ %s\n\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
 

@@ -60,9 +60,9 @@ in the folder.
 > the backup was taken isn't kept. To undo just one desktop migration import, use **Reverse posted
 > entries** on the import screen instead.
 
-## Check and repair the file (File Dentist)
+## Check and repair the file (File Check & Repair)
 
-**File Dentist** checks the company file for damage and repairs what can be repaired safely.
+**File Check & Repair** checks the company file for damage and repairs what can be repaired safely.
 
 1. Click **Run Check-up**. It only reads, so it's safe any time. It checks:
    - the file structure
@@ -105,7 +105,7 @@ Before you start:
    - saves a verified **archive** of the books as they are (Archive (read-only) in the snapshot
      list) and a plain **Before condense** backup;
    - builds the condensed file off to the side;
-   - checks the condensed file against the archive: File Dentist's check-up, both audit trails, the
+   - checks the condensed file against the archive: the file check-up, both audit trails, the
      trial balance at the cut-off, balances by account, class and month, A/R and A/P aging and
      inventory valuation at the cut-off and today, cleared balances and uncleared lines, and every
      list;
