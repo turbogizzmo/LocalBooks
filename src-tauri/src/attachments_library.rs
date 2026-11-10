@@ -219,7 +219,7 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
 pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
     sqlx::query_as(&format!(
         "SELECT file_name, media_type,
-                CASE WHEN media_type LIKE 'image/%' THEN content
+                CASE WHEN media_type LIKE 'image/%' OR media_type = 'application/pdf' THEN content
                      WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
          FROM {} WHERE id = ?1",
         file.source.table()

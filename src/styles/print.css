@@ -75,6 +75,13 @@
   #print-root .form-sheet:last-child {
     break-after: auto;
   }
+  /* A file printed after its form (Send with the form): a page of its own, kept on it. */
+  #print-root .attachment-sheet {
+    display: block;
+    height: auto;
+    max-height: 10in;
+    object-fit: contain;
+  }
 
   /* Several checks print one per sheet. */
   #print-root .check {

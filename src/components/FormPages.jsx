@@ -3,6 +3,29 @@ import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatDate } from '../lib/dates.js';
 import { PrintPortal } from './PrintDocuments.jsx';
 import { savedCopyText } from '../lib/plainCopy.js';
+import { bytesOf, renderPdf } from '../lib/pdfPages.js';
+
+/**
+ * The files marked Send with the form, as pictures to print after the form: a picture as it is, a
+ * PDF page by page. Other kinds can't be printed here; `skipped` names them.
+ */
+export async function printFilePages(kind, id) {
+  const files = await api.getFormPrintFiles(kind, id);
+  const pages = [];
+  const skipped = [];
+  for (const f of files) {
+    if (f.mediaType.startsWith('image/')) pages.push({ url: `data:${f.mediaType};base64,${f.dataBase64}`, name: f.fileName });
+    else if (f.mediaType === 'application/pdf') {
+      try {
+        const { pages: drawn } = await renderPdf(bytesOf(f.dataBase64), { scale: 2 });
+        drawn.forEach((p, i) => pages.push({ url: p.url, name: `${f.fileName}, page ${i + 1}` }));
+      } catch {
+        skipped.push(f.fileName);
+      }
+    } else skipped.push(f.fileName);
+  }
+  return { pages, skipped };
+}
 
 // The standard PDF fonts, as the screen and the print dialog show them.
 const FONT_STACKS = {
@@ -294,7 +317,17 @@ export function useFormPrinter(onNotice) {
   const printMany = useCallback(
     async (list) => {
       try {
-        setForms(await Promise.all(list.map((f) => api.renderForm(f.kind, f.id, f.period ?? null))));
+        // Each form, followed by the files marked Send with the form (pictures and PDF pages). One
+        // form at a time, so a large batch with many PDF pages doesn't swamp the window.
+        const rendered = [];
+        for (const f of list) {
+          const form = await api.renderForm(f.kind, f.id, f.period ?? null);
+          const files = await printFilePages(f.kind, f.id);
+          rendered.push({ ...form, attached: files.pages, skipped: files.skipped });
+        }
+        const skipped = rendered.flatMap((r) => r.skipped);
+        if (skipped.length) onNotice({ kind: 'info', text: `Printed without ${skipped.join(', ')}: only pictures and PDFs print with a form. Email sends every file marked Send with the form.` });
+        setForms(rendered);
       } catch (err) {
         onNotice({ kind: 'error', text: errorText(err) });
       }
@@ -327,7 +360,10 @@ export function useFormPrinter(onNotice) {
     <>
       {forms && (
         <PrintPortal>
-          {forms.flatMap((form, f) => form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />))}
+          {forms.flatMap((form, f) => [
+            ...form.pages.map((page, i) => <FormSheet key={`${f}-${i}`} page={page} logo={form.logo} />),
+            ...(form.attached ?? []).map((a, i) => <img key={`${f}-a${i}`} src={a.url} alt={a.name} className="form-sheet attachment-sheet" />),
+          ])}
         </PrintPortal>
       )}
       {envelopePortal}

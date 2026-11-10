@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import PdfPreview from './PdfPreview.jsx';
+import { bytesOf } from '../lib/pdfPages.js';
+import { useEffect, useMemo, useState } from 'react';
 import Notice from './Notice.jsx';
 import { SOURCE_LABEL } from './JournalEntries.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -10,8 +12,8 @@ import { useOpenFromList } from '../lib/windows.js';
 /**
  * Company › Attachments Library (T58): every file kept in the company file, on transactions and on
  * customers, vendors, items, accounts, estimates, purchase orders and reconciliations. Search by
- * file name, keywords or what it is attached to; click one to preview it (pictures and text), set
- * its keywords and whether it goes with the form when emailed, save a copy or delete it.
+ * file name, keywords or what it is attached to; click one to preview it (pictures, PDFs and text),
+ * set its keywords and whether it goes with the form when emailed or printed, save a copy or delete it.
  *
  * Deleting is reversible (R9): a deleted file moves to Show deleted, where it can be restored, or
  * removed for good after a warning (Admins only).
@@ -66,7 +68,7 @@ export default function AttachmentsLibrary() {
                 <th className="qb-grid-head">Keywords</th>
                 <th className="qb-grid-head">Attached to</th>
                 <th className="qb-grid-head text-right">Size</th>
-                <th className="qb-grid-head" title="Sent with the form when it is emailed">
+                <th className="qb-grid-head" title="Sent with the form when it is emailed, and printed after it">
                   With form
                 </th>
               </tr>
@@ -120,8 +122,9 @@ function FilePanel({ file, onNotice, onChanged }) {
   const [keywords, setKeywords] = useState(file.keywords ?? '');
   const [withForm, setWithForm] = useState(file.sendWithForm);
   const openFromList = useOpenFromList();
-  // Only pictures and text are previewed; other files aren't requested at all.
-  const previewable = file.mediaType.startsWith('image/') || file.mediaType.startsWith('text/');
+  // Only pictures, PDFs and text are previewed; other files aren't requested at all.
+  const previewable = file.mediaType.startsWith('image/') || file.mediaType.startsWith('text/') || file.mediaType === 'application/pdf';
+  const pdfBytes = useMemo(() => (preview?.dataBase64 && preview.mediaType === 'application/pdf' ? bytesOf(preview.dataBase64) : null), [preview]);
   useEffect(() => {
     let live = true;
     if (!previewable) {
@@ -167,7 +170,8 @@ function FilePanel({ file, onNotice, onChanged }) {
           {preview?.dataBase64 && preview.mediaType.startsWith('text/') && (
             <pre className="max-h-[320px] w-full overflow-auto whitespace-pre-wrap text-xs">{decodeText(preview.dataBase64)}</pre>
           )}
-          {preview && !(preview.dataBase64 && (preview.mediaType.startsWith('image/') || preview.mediaType.startsWith('text/'))) && (
+          {pdfBytes && <PdfPreview bytes={pdfBytes} name={file.fileName} />}
+          {preview && !(preview.dataBase64 && (preview.mediaType.startsWith('image/') || preview.mediaType.startsWith('text/') || pdfBytes)) && (
             <span className="px-2 text-center text-qb-ink-muted">No preview for this kind of file here. Save a copy to open it.</span>
           )}
         </div>
@@ -199,9 +203,9 @@ function FilePanel({ file, onNotice, onChanged }) {
               <span className="qb-label">Keywords</span>
               <input className="qb-input" value={keywords} onChange={(e) => setKeywords(e.target.value)} maxLength={500} placeholder="e.g. W-9 2025, signed" />
             </label>
-            <label className="flex items-center gap-1" title="Sent along with the invoice, estimate or sales receipt when it is emailed">
+            <label className="flex items-center gap-1" title="Sent along with the invoice, estimate or sales receipt when it is emailed (by LocalBooks or your mail app), and printed after it">
               <input type="checkbox" className="accent-qb-green" checked={withForm} onChange={(e) => setWithForm(e.target.checked)} />
-              Send with the form when it is emailed
+              Send with the form when it is emailed or printed
             </label>
             <button type="button" className="qb-btn qb-btn-primary h-row self-start px-2" disabled={!changed} onClick={() => run(() => api.setAttachmentDetails(ref, keywords.trim() || null, withForm), 'Saved.')}>
               Save details

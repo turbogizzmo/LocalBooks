@@ -39,6 +39,9 @@ people using LocalBooks.
 - **Go back to the previous version.** Help › Reinstall Previous Version… backs up your books and
   reinstalls the release before this one through the signed updater. If that version couldn't open
   your company file, it says so and leaves the version as it is.
+- **PDF previews, and attachments on printouts and mail-app emails.** The Attachments Library and
+  the Document Inbox show PDFs page by page. Files marked Send with the form now print after the
+  form and go with it when the email opens in your mail app, not only when LocalBooks sends it.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
