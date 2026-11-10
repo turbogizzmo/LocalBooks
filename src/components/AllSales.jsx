@@ -7,7 +7,7 @@ import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import PaymentMethodTiles from './PaymentMethodTiles.jsx';
 import AccountSelect from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import { useFormClass } from './ClassSelect.jsx';
 import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
@@ -19,7 +19,7 @@ import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './F
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { usePaymentMethodChoice } from './ProfileFields.jsx';
 import { useDirtySince, useOpenFromList } from '../lib/windows.js';
-import { formatCents, formatMoney } from '../lib/money.js';
+import { centsToInput, formatCents, formatMoney } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
 import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
@@ -30,20 +30,24 @@ import { FormInfoPanel } from './InfoPanel.jsx';
 
 const KIND_LABEL = { INVOICE: 'Invoice', PAYMENT: 'Payment', SALES_RECEIPT: 'Sales Receipt' };
 
-function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedStep }) {
+/**
+ * `copyOf` (from Duplicate, `api.getCopySource`) starts the receipt as a copy of a saved one: its
+ * customer, lines, deposit account, payment method, memo, tax and discount, dated today.
+ */
+function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedStep, copyOf = null }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   // Undeposited Funds, or the first bank account, as Preferences › Payments says.
   const { undepositedDefault, loaded: prefsLoaded } = useSalesPrefs();
   const defaultDeposit = useMemo(() => (prefsLoaded ? defaultDepositAccount(accounts, undepositedDefault) : null), [accounts, undepositedDefault, prefsLoaded]);
-  const [customer, setCustomer] = useState('');
+  const [customer, setCustomer] = useState(copyOf?.name ?? '');
   const [date, setDate] = useTransactionDate();
-  const method = usePaymentMethodChoice('CASH');
+  const method = usePaymentMethodChoice(copyOf?.paymentMethod ?? 'CASH', copyOf?.paymentMethodId ?? null);
   const [reference, setReference] = useState('');
-  const [depositId, setDepositId] = useState(defaultDeposit);
-  const [memo, setMemo] = useState('');
-  const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+  const [depositId, setDepositId] = useState(copyOf?.accountId ?? defaultDeposit);
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, copyOf.formLines, defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files picked before posting; attached once the receipt posts.
@@ -54,6 +58,14 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
   const dirty = useDirtySince('sales-receipt', { customer, reference, memo, lines: lines.map((l) => [l.productId, l.description, l.qty, l.rate]) });
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data, { billLabel: 'Sold To' });
+  // A copy keeps the original's tax rate, rep and shipping.
+  useEffect(() => {
+    if (!copyOf) return;
+    tax.set(copyOf.taxRateId ?? null);
+    if (copyOf.details) sales.set(copyOf.details);
+    // Once, for the copy the form was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (depositId === null && defaultDeposit !== null) setDepositId(defaultDeposit);
@@ -64,7 +76,7 @@ function SalesReceiptForm({ accounts, onPosted, onCancel, onNew, forms, savedSte
   }, [defaultIncome]);
 
   const { filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
-  const [discountText, setDiscountText] = useState('');
+  const [discountText, setDiscountText] = useState(copyOf?.discountCents ? centsToInput(copyOf.discountCents) : '');
   const discountCents = parseDiscount(discountText, linesTotal);
   const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
 
@@ -195,6 +207,8 @@ export default function AllSales({ accounts, intent }) {
   }, [intent]);
   const [formKey, setFormKey] = useState(0);
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved receipt the new one on the form starts from.
+  const [copyOf, setCopyOf] = useState(null);
   const today = todayIso();
   const since = addDays(today, -30);
 
@@ -233,6 +247,17 @@ export default function AllSales({ accounts, intent }) {
     saved.open(r);
     setComposing(true);
   };
+  const duplicate = (r) =>
+    api.getCopySource('SALES_RECEIPT', r.id).then(
+      (copy) => {
+        saved.close();
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setComposing(true);
+        setNotice({ kind: 'info', text: `A copy of sales receipt #${r.number}, dated today: it gets the next number when you save it.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -253,6 +278,7 @@ export default function AllSales({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           form={{ kind: 'SALES_RECEIPT', id: viewing.id }}
           entryId={viewing.journalEntryId}
           onNotice={setNotice}
@@ -273,10 +299,18 @@ export default function AllSales({ accounts, intent }) {
           key={formKey}
           accounts={accounts}
           forms={forms}
-          onNew={() => setFormKey((k) => k + 1)}
-          onCancel={() => setComposing(false)}
+          copyOf={copyOf}
+          onNew={() => {
+            setCopyOf(null);
+            setFormKey((k) => k + 1);
+          }}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(false);
+          }}
           onPosted={(text) => {
             setNotice({ kind: 'success', text });
+            setCopyOf(null);
             setFormKey((k) => k + 1);
           }}
         />
@@ -363,7 +397,7 @@ export default function AllSales({ accounts, intent }) {
                       <RowMenu
                         items={[
                           ...(r.kind === 'INVOICE' ? formMenuItems('INVOICE', r.id, forms, emailed.get(r.id)) : []),
-                          ...(r.kind === 'SALES_RECEIPT' ? [{ label: 'Open', onSelect: () => openReceipt(r) }, ...formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id))] : []),
+                          ...(r.kind === 'SALES_RECEIPT' ? [{ label: 'Open', onSelect: () => openReceipt(r) }, { label: 'Duplicate', hint: 'A new sales receipt copied from this one, dated today', onSelect: () => duplicate(r) }, ...formMenuItems('SALES_RECEIPT', r.id, forms, receiptsEmailed.get(r.id))] : []),
                           attachments.menuItem(r.journalEntryId),
                           voidItem({ journalEntryId: r.journalEntryId, voided: r.isVoided, description: what, onVoid: voidRow }),
                         ]}

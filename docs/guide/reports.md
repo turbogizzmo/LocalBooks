@@ -5,6 +5,10 @@
 The list on the left of **Reports** has every report, grouped by what it is about, with a line
 under each name saying what it shows.
 
+- **Preview**: rest the pointer on a report's name (or move to it with Tab) and a small picture of
+  it appears beside the list: the report itself, from your books, as it would open. It shows what
+  the report looks like before you open it; nothing in the picture can be clicked. A report with
+  nothing to show yet in your books shows its empty layout.
 - **Find a report**: type part of a name or of what a report shows (`aging`, `cash`, `who owes`);
   the list narrows to the reports with every word you typed.
 - **Favorites**: point at a report and click its ☆ to star it; starred reports are listed under
@@ -173,8 +177,9 @@ Click an amount to see where it came from:
   - on a customer or vendor in the Customers or Vendors list: every transaction with them;
   - on a product or service in Products & Services: every line it is on, with quantity and rate.
 
-  It is also in each row's **Actions** menu, and a **QuickReport** button sits on registers and on
-  a name's transactions panel.
+  It is also in each row's **Actions** menu and in **Reports › QuickReport**, which acts on what is
+  selected in the list or register in front. A **QuickReport** button sits on registers and on a
+  name's transactions panel.
 - **Transaction History** (**Ctrl+H**) lists the transactions linked to the one you clicked in a
   register or a name's transactions panel: an invoice and the payments and credits applied to it, a
   payment and its invoice and deposit, a deposit and the payments in it, a bill and its bill

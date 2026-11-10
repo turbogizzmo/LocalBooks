@@ -3,6 +3,26 @@
 LocalBooks keeps your books in a single company file on your computer. These steps set up the
 details that appear on invoices and reports and decide how your fiscal year works.
 
+## Made for US businesses
+
+LocalBooks is built for businesses in the United States. You can use it elsewhere for plain
+double-entry books, but these parts follow US rules and formats only:
+
+- **Sales tax** is US-style: a rate (and the agency it's owed to) on each invoice or receipt, added
+  on top of the price. There is no VAT or GST: no tax-inclusive prices, no input tax credits and no
+  VAT or GST return.
+- **1099s and W-9s** are the IRS forms (1099-NEC and 1096). The **tax calendar**, tax-line mapping
+  and **TXF export** cover US federal returns only (Schedule C, 1065, 1120-S, 1120).
+- **Payroll:** LocalBooks calculates no pay or withholding in any country. Payroll import posts the
+  journal your payroll service exports.
+- **Bank and payment files:** ACH payment files use the US NACHA format and nine-digit US routing
+  numbers, and printed checks follow US check layouts with the amount in English words.
+- **Dates and numbers** show the US way: dates as month/day/year (10/13/2026) and amounts as
+  1,234.56. There is no setting for day/month/year dates or a decimal comma, and the screens are in
+  English only.
+- **Currency:** dollars by default. You can choose another home currency (Settings ›
+  Preferences Console › Multiple Currencies), but the tax features above still follow US rules.
+
 ## Create a new company
 
 **File › New Company…** opens a short setup assistant, modeled on QuickBooks' own:
@@ -224,6 +244,25 @@ credit cards) in operating, fixed and other assets in investing, and long-term l
 equity in financing. Bank accounts are the cash itself, so they can't be moved. **Classify
 accounts…** on the report opens the list.
 
+## Sales tax rates, combined rates and the sales tax return
+
+**Sales › Sales Tax** holds the rates you charge. Each **rate** has a percentage, the **agency** you
+pay it to, and the liability account it builds up in (Sales Tax Payable unless you choose another).
+
+Where one sale is taxed by several agencies (a state, a county and a city, say), add each as its own
+rate with its agency, then **New combined rate…**: name it and tick the rates it adds up. Its
+percentage is theirs added together, and you choose it on sales forms like any rate. When you post a
+sale at a combined rate, LocalBooks works out the tax at the combined percentage, splits it into one
+line per agency's rate (each its own rate's share, any rounding cent going to the largest), and
+credits each to its rate's liability account. If a rate in it changes later, the combined rate
+follows for new sales; sales already posted keep the split they were posted with.
+
+**Sales tax return by agency**, under the liability report on the same dates, is what you file:
+for each agency, each of its rates with the taxable sales and the tax for the period, and what you
+paid that agency in it. Choose **Accrual** (tax owed when you invoice) or **Cash** (when you're
+paid; an invoice counts in proportion to what was paid on it in the period); it starts on the basis
+set in Preferences › Sales Tax. A payment counts for the agency of the rate it was recorded against.
+
 ## Sales tax, time, 1099 and inventory preferences
 
 These company preferences (Admins only) change how LocalBooks works out tax, time and stock.
@@ -374,6 +413,15 @@ it, and use ▲ and ▼ to move it earlier or later; the table changes as you go
 until you turn them on, such as **Terms**, **Tax**, **Preferred delivery** and **Job status** on
 the customer list. The first column (the name, the account or the date) always shows.
 **Default columns** puts a table back the way it came.
+
+**Reconcile** has the same button above its lines (the amounts and the cleared tick always show).
+The line grids on forms have a smaller **Columns ▾** link: in the **Description** heading on
+invoices, sales receipts, estimates and credit memos, where it hides or reorders **Service Date**,
+**Price level**, **Class** and **Income account** and moves **Qty** and **Rate** among them (the item
+and description stay first and the amount last, so subtotals and groups line up); and beside
+**＋ Add split row** on bills, checks, expenses, vendor credits, purchase orders and deposits, for
+every column before the amount. A hidden column still keeps what was in it; show it again to
+change it. The sales forms share one layout, and so do the purchase and banking forms.
 
 LocalBooks keeps each table's columns on this computer for you, in **My Preferences**, so they stay
 the same the next time you open it.
@@ -555,7 +603,7 @@ While a form is open:
 | **Ctrl+Alt+Y** | Copy Line: copy the line you're on. |
 | **Ctrl+Alt+V** | Paste Line: insert a copy of the copied line above the line you're on (at the end from outside the lines). A line copied from an item grid pastes into item grids, an expense line into expense grids and a journal line into journal entries. |
 | **Ctrl+G** | Go To Transfer: on a saved transfer, open the other account's register at the transfer. |
-| **Ctrl+O** | Duplicate Transaction: on a saved invoice, bill, check, expense or journal entry, start a new one copied from it (see below). |
+| **Ctrl+O** | Duplicate Transaction: on any saved transaction, start a new one copied from it (see below). |
 
 Delete or Void, Memorize, Insert Line, Delete Line, Copy Line, Paste Line, Go To Transfer and
 Duplicate Transaction are also in the **Edit** menu. **Ctrl+A** stays Select All. On a Mac, **⌘** works too for D, Insert and
@@ -572,9 +620,13 @@ check number; a bill's own number is left blank for the vendor's, and its due da
 after today as the original's was after its date. Change what you need and save it. The original
 isn't changed. Duplicate is off while the form has changes you haven't saved.
 
-Duplicate works on invoices, bills, checks, expenses, card credits and journal entries. Sales
-receipts, estimates, credit memos, vendor credits, purchase orders, deposits and transfers open
-read-only, so they don't offer it yet.
+Duplicate works on invoices, bills, checks, expenses, card credits and journal entries, and on
+sales receipts, estimates, credit memos and refund receipts, vendor credits, purchase orders,
+deposits and transfers. Those last ones open read-only; **Duplicate** on their toolbar (or row menu)
+puts the copy in a new form. A sales receipt keeps its deposit account and payment method but not
+its check number; a vendor credit leaves the vendor's reference blank for the new one; a deposit
+brings its other lines and cash back, while the payments waiting in Undeposited Funds are ticked
+afresh (each payment is deposited once).
 
 In a register, click a transaction, then press **Ctrl+E** to open it on its form to edit, or
 **Ctrl+G** to go to the other side of it: the register of the one other account it posted to (a
@@ -608,7 +660,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 
 | Menu | What's in it |
 |---|---|
-| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
+| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard), **Utilities › Export** (lists to an IIF file, names and addresses to a text file) and Condense Data; print and send forms |
 | **Edit** | Undo, cut, copy and paste; **Delete or Void Transaction**, **Memorize Transaction**, **Insert Line**, **Delete Line**, **Copy Line**, **Paste Line**, **Go To Transfer** and **Duplicate Transaction** on the open form; Use Register; **Find…** (Find Transactions); Preferences |
 | **View** | Show or hide the left icon bar (the left pane); Open Window List; One Window or Multiple Windows |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, the profile lists (sales reps, types, terms, messages, payment methods, Ship Via), price levels, vehicles, **Currency List** (the home currency and exchange rates, in Preferences › Multiple Currencies), form templates, memorized (recurring) transactions |
@@ -617,7 +669,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 | **Vendors** | Vendor Center, enter and pay bills, vendor credits, sales tax, purchase orders, 1099s |
 | **Employees** | Weekly timesheet and single time activity |
 | **Banking** | Write checks, credit card charges, registers, deposits, transfers, reconcile, bank feeds |
-| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
+| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **QuickReport** for the account, name or item selected in the list or register in front; **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
 
 The classic shortcuts work from anywhere:
 
