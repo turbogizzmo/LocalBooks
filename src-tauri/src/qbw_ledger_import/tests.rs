@@ -353,6 +353,7 @@ async fn a_deposit_into_a_non_bank_account_clears_its_payments_as_a_transfer() {
         items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment }],
         other_lines: vec![],
         cash_back: None,
+        deductions: Vec::new(),
     };
     assert!(crate::banking::post_bank_deposit(&pool, deposit.clone()).await.unwrap_err().contains("ALREADY_DEPOSITED"));
     crate::ledger::void_transaction(&pool, entry).await.unwrap();
