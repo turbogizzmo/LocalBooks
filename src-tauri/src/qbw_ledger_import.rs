@@ -528,7 +528,8 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
-    let balance_differences = balance_differences(&accounts)?;
+    // A file of lists only has stored balances but no lines to compare them with.
+    let balance_differences = if transaction_count == 0 { Vec::new() } else { balance_differences(&accounts)? };
     Ok(LedgerBatchSummary {
         balance_differences,
         lists_only: transaction_count == 0,

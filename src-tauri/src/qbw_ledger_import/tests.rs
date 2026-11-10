@@ -1016,4 +1016,14 @@ async fn balances_that_differ_from_the_file_are_listed() {
     l.accounts.iter_mut().for_each(|a| a.stored_balance_cents = None);
     let batch = stage(&pool, Path::new("/books/Other.qbw"), 1, &l).await.unwrap();
     assert!(batch_summary(&pool, batch).await.unwrap().balance_differences.is_empty(), "no stored balance, nothing to compare");
+
+    // A file of lists only has balances but nothing to post: nothing is listed as differing.
+    let mut lists = ledger();
+    lists.transactions.clear();
+    lists.unbalanced.clear();
+    lists.unreadable.clear();
+    lists.accounts[0].stored_balance_cents = Some(-9_900);
+    let batch = stage(&pool, Path::new("/books/Lists.qbw"), 1, &lists).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert!(summary.lists_only && summary.balance_differences.is_empty());
 }

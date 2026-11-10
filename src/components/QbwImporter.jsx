@@ -576,7 +576,7 @@ function BalanceDifferences({ items, posted }) {
         </strong>
         {posted
           ? '. Your books carry the imported balance: compare these accounts with the original program’s balance sheet and enter what is missing by hand.'
-          : '. Usually a transaction listed above could not be read; check these accounts against the original program’s balance sheet after posting.'}
+          : '. A line that could not be read, or a kind of transaction LocalBooks does not read yet (such as inventory cost or payroll), leaves an account short. Check these accounts against the original program’s balance sheet after posting.'}
       </p>
       <BalanceDifferenceList items={items} />
     </div>
@@ -658,8 +658,9 @@ function LedgerReview({ summary, accounts, busy, run }) {
   const fallbacks = summary.fallbacks ?? [];
   const used = usedAccounts(summary);
   const unmapped = used.filter((a) => !a.accountId).length;
-  const matched = summary.accountsMatchingStored;
   const withStored = summary.accountsWithStoredBalance;
+  // Counted from the list below, so the two always agree.
+  const matched = withStored - (summary.balanceDifferences?.length ?? 0);
   const step2 = unmapped === 0 ? 'done' : 'active';
   const step3 = summary.listsOnly
     ? summary.listsAdded
