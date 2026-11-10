@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
+import { layoutMessage } from '../lib/itemTypes.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
@@ -11,7 +12,7 @@ import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu, { voidItem } from './RowMenu.jsx';
 import { Dialog } from './InventoryDialog.jsx';
 import { useFormClass } from './ClassSelect.jsx';
-import { taxOn, useFormTax } from './SalesTax.jsx';
+import { documentTotals, useFormTax } from './SalesTax.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, parseMoneyToCents } from '../lib/money.js';
 import { formatDate, todayIso } from '../lib/dates.js';
@@ -52,9 +53,9 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
     if (refundFrom === null && defaultBank !== null) setRefundFrom(defaultBank);
   }, [defaultBank, refundFrom]);
 
-  const { filled, invalidCount, total: subtotal, payload } = summarizeLines(lines);
-  const taxCents = taxOn(payload, tax.rate, (l) => l.amountCents);
-  const total = subtotal + taxCents;
+  // Subtotals, discounts, percent charges and groups lay out as they do on an invoice.
+  const { filled, invalidCount, payload, formLines, layoutError } = summarizeLines(lines);
+  const { tax: taxCents, total } = documentTotals(payload, tax.rate, 0, formLines);
 
   const clear = () => {
     setCustomer('');
@@ -71,6 +72,8 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
     if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a quantity and a rate above zero.`);
+    if (layoutError) return setError(layoutMessage(layoutError));
+    if (total <= 0) return setError('The credit must be more than zero after discounts.');
     if (refund && refundFrom === null) return setError('Choose the account the refund is paid from.');
     const postedLines = formClass.apply(payload);
     const warning = formClass.missing(postedLines);
@@ -83,6 +86,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
         memo: memo.trim() || null,
         refundAccountId: refund ? refundFrom : null,
         lines: postedLines,
+        formLines,
         taxRateId: tax.rateId,
         ...(({ billTo, shipTo, poNumber, fob }) => ({ billTo, shipTo, poNumber, fob }))(sales.payload()),
       });
@@ -146,7 +150,7 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
         </div>
       </div>
       {sales.addresses}
-      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={(products.data ?? []).filter((p) => p.qtyOnHandE4 == null)} defaultAccountId={defaultIncome} withTax={tax.enabled} />
+      <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={(products.data ?? []).filter((p) => p.qtyOnHandE4 == null)} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes />
       <div className="flex items-center gap-2 px-2 py-1">
         <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
           Add line

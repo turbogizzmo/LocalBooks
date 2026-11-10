@@ -206,7 +206,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let credited = invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)])).await.expect("invoice to credit");
     let credit = credits::create_credit_memo(
         &pool,
-        CreditMemoInput {
+        CreditMemoInput { form_lines: Vec::new(),
             customer_name: "Zed's 50% Off <Outlet>".into(),
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),

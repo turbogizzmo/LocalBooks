@@ -101,7 +101,8 @@ Settings › Custom Forms.
 
 ## Subtotals, discounts, charges and groups
 
-The **Product/Service** list on invoices, sales receipts and estimates also offers:
+The **Product/Service** list on invoices, sales receipts, estimates, credit memos and refund
+receipts also offers:
 
 - **Subtotal**: adds up the lines above it, back to the previous subtotal. It posts nothing.
 - A **discount item**: takes its amount or percentage off the line right above it. Put a
@@ -118,6 +119,9 @@ The **Discount** box next to the total still works as before: it comes off every
 line discounts and before tax. A taxable discount line lowers the taxable amount; a non-taxable one
 doesn't. Subtotals, discounts, charges and group headings print in their places and come back when
 you edit the invoice or turn an estimate into an invoice.
+
+On a credit memo or refund receipt, a discount line lowers the credit: its account is credited
+back, the reverse of the same line on an invoice. The credit has to stay above zero.
 
 ## Invoice in another currency
 

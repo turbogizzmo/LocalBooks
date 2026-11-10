@@ -481,8 +481,10 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
          FROM sales_receipts r WHERE r.is_voided = 0 AND r.journal_entry_id IS NOT NULL AND r.receipt_date BETWEEN ?1 AND ?2
          UNION ALL
          SELECT m.tax_rate_id, -1, m.tax_cents,
-                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1),
+                (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 1)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 1),
                 (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_lines WHERE credit_memo_id = m.id AND is_taxable = 0)
+                + (SELECT COALESCE(SUM(amount_cents), 0) FROM credit_memo_form_lines WHERE credit_memo_id = m.id AND kind = 'DISCOUNT' AND is_taxable = 0)
          FROM credit_memos m WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2",
     )
     .bind(start_date)

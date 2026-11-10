@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
+  discount lines, percentage charges and groups, as invoices do. They print in their places, and a
+  discount lowers the credit and the sales tax given back.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

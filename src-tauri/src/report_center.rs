@@ -314,6 +314,10 @@ pub async fn sales_by_product(pool: &SqlitePool, start_date: NaiveDate, end_date
             SELECT cl.product_service_id, -cl.quantity_e4, -cl.amount_cents
             FROM credit_memo_lines cl JOIN credit_memos m ON m.id = cl.credit_memo_id
             WHERE m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2
+            UNION ALL
+            SELECT fl.product_service_id, 0, -fl.amount_cents
+            FROM credit_memo_form_lines fl JOIN credit_memos m ON m.id = fl.credit_memo_id
+            WHERE fl.kind = 'DISCOUNT' AND m.is_voided = 0 AND m.journal_entry_id IS NOT NULL AND m.credit_date BETWEEN ?1 AND ?2
          ) x LEFT JOIN products_services p ON p.id = x.product
          GROUP BY x.product
          HAVING SUM(x.amount) <> 0 OR SUM(x.qty) <> 0
