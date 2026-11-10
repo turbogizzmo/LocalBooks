@@ -396,7 +396,7 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
         .bind(liability)
         .bind(input.account_id)
         .bind(input.payment_date)
-        .bind(input.amount_cents)
+        .bind(amount)
         .bind(input.reference.as_deref().map(str::trim).filter(|r| !r.is_empty()))
         .bind(entry_id)
         .fetch_one(&mut *tx)
