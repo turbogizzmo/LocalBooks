@@ -23,7 +23,7 @@
 //!    summary replaced. [`crate::ledger::verify_ledger_audit`] accepts a summarized entry's absence
 //!    only when that record lists it, and checks that its snapshots add up to the summary. The copy
 //!    gets a new audit-trail identity (the archive keeps the old one, so both verify).
-//! 4. **Verify, then switch.** The copy must pass File Dentist's check-up and match the archive:
+//! 4. **Verify, then switch.** The copy must pass the file check-up and match the archive:
 //!    balances per account, class and month; A/R and A/P aging and inventory valuation at the
 //!    cut-off and today; cleared balances and uncleared lines; every list. Only then is it swapped in,
 //!    and only if the books did not change while it was being built.
@@ -43,7 +43,7 @@ use sqlx::{Connection, SqliteConnection, SqlitePool};
 
 use crate::backup::{self, BackupFile};
 use crate::db::Db;
-use crate::file_dentist::{self, CheckStatus};
+use crate::file_repair::{self, CheckStatus};
 use crate::ledger::{self, db_err};
 
 /// Tables of transactions, each with the columns that date a row. A row dated after the cut-off
@@ -70,6 +70,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("deposit_deductions", &[]),
     ("deposit_lines", &[]),
     ("deposits", &["deposit_date"]),
+    ("document_tax_parts", &[]),
     ("estimate_form_lines", &[]),
     ("estimate_lines", &[]),
     ("estimates", &["estimate_date"]),
@@ -117,6 +118,8 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
 pub const KEPT_TABLES: &[&str] = &[
     "_sqlx_migrations",
     "account_types",
+    "accountants_copies",
+    "accountants_copy_info",
     "ach_originators",
     "approval_requests",
     "approval_rules",
@@ -142,6 +145,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "form_templates",
     "inbox_documents",
     "inventory_items",
+    "item_categories",
     "item_group_members",
     "item_groups",
     "item_receipt_bills",
@@ -163,6 +167,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "mileage_trips",
     "name_merges",
     "offsite_backup",
+    "party_contacts",
     "payment_methods",
     "payout_feeds",
     "payouts",
@@ -190,6 +195,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "staging_import_batches",
     "staging_raw_transactions",
     "system_preferences",
+    "tax_rate_components",
     "tax_rates",
     "terms",
     "time_activities",
@@ -447,7 +453,7 @@ async fn plan(conn: &mut SqliteConnection, cutoff: NaiveDate) -> Result<Plan, St
             let child_table = nodes.table(&child);
             for (rowid, value) in links {
                 let Some(parent_node) = target.get(&value).and_then(|r| nodes.node(parent_table, *r)) else {
-                    return Err(format!("CONDENSE_BROKEN_LINK: a row in {child} points to a missing row in {parent}; run File Dentist first"));
+                    return Err(format!("CONDENSE_BROKEN_LINK: a row in {child} points to a missing row in {parent}; run File Check & Repair first"));
                 };
                 match child_table.and_then(|t| nodes.node(t, rowid)) {
                     Some(child_node) => groups.union(child_node, parent_node),
@@ -726,7 +732,7 @@ struct ArchiveRecord {
 }
 
 /// Opens `path` on one connection with foreign-key enforcement off: the condense removes whole
-/// groups, and `PRAGMA foreign_key_check` (File Dentist's LINKS check) confirms nothing dangles.
+/// groups, and `PRAGMA foreign_key_check` (File Check & Repair's LINKS check) confirms nothing dangles.
 async fn open_private(path: &Path) -> Result<SqliteConnection, String> {
     crate::wal_guard::check(path)?;
     let options = SqliteConnectOptions::new().filename(path).foreign_keys(false).create_if_missing(false);
@@ -1043,9 +1049,9 @@ pub async fn content_digest(pool: &SqlitePool) -> Result<String, String> {
 pub async fn verify(archive: &SqlitePool, condensed: &SqlitePool, condensed_size: u64, cutoff: NaiveDate, today: NaiveDate) -> Result<CondenseVerification, String> {
     let mut checks = Vec::new();
 
-    let report = file_dentist::checkup(condensed, condensed_size).await?;
+    let report = file_repair::checkup(condensed, condensed_size).await?;
     let failing: Vec<String> = report.checks.iter().filter(|c| c.status == CheckStatus::Fail).map(|c| format!("{}: {}", c.title, c.summary)).collect();
-    checks.push(verify_check("CHECKUP", "File Dentist check-up of the condensed file", failing, "Passed"));
+    checks.push(verify_check("CHECKUP", "File Check & Repair check-up of the condensed file", failing, "Passed"));
 
     for (id, title, pool) in [("AUDIT_CONDENSED", "Audit trail of the condensed file", condensed), ("AUDIT_ARCHIVE", "Audit trail of the archive", archive)] {
         let audit = ledger::verify_ledger_audit(pool).await?;

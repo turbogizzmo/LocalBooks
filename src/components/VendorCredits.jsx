@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
 import { accountLabel } from './AccountSelect.jsx';
-import SplitGrid, { blankSplit, summarizeSplits } from './SplitGrid.jsx';
+import SplitGrid, { blankSplit, splitRowsFromCopy, summarizeSplits } from './SplitGrid.jsx';
 import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
 import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import Notice from './Notice.jsx';
@@ -26,14 +26,16 @@ import { FormInfoPanel } from './InfoPanel.jsx';
 const isCategory = (a) =>
   !a.isSystem && (a.classification === 'EXPENSE' || ['FIXED_ASSET', 'OTHER_ASSET', 'OTHER_CURRENT_ASSET'].includes(a.accountType));
 
-function VendorCreditForm({ accounts, onPosted, onCancel, savedStep }) {
+/** `copyOf` (from Duplicate) starts the credit as a copy of a saved one, dated today; the vendor's
+ * reference is left for the new credit. */
+function VendorCreditForm({ accounts, onPosted, onCancel, savedStep, copyOf = null }) {
   const vendors = useLedgerQuery(api.listVendors);
   const defaultCategory = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'EXPENSE')?.id ?? null, [accounts]);
-  const [vendor, setVendor] = useState('');
+  const [vendor, setVendor] = useState(copyOf?.name ?? '');
   const [reference, setReference] = useState('');
   const [date, setDate] = useTransactionDate();
-  const [memo, setMemo] = useState('');
-  const [rows, setRows] = useState(() => [blankSplit(null)]);
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [rows, setRows] = useState(() => (copyOf ? splitRowsFromCopy(copyOf.lines) : [blankSplit(null)]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files picked before posting; attached once it posts.
@@ -46,7 +48,7 @@ function VendorCreditForm({ accounts, onPosted, onCancel, savedStep }) {
   }, [defaultCategory]);
 
   const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
-  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines);
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, copyOf?.sourceId ? { doc: 'VENDOR_CREDIT', id: copyOf.sourceId } : null);
   const total = laid.error ? splitTotal : laid.total;
 
   const clear = () => {
@@ -269,6 +271,9 @@ export default function VendorCredits({ accounts, intent }) {
   const [composing, setComposing] = useState(intent?.action === 'vendor-credit');
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved credit the new one starts from.
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     if (intent?.action === 'vendor-credit') setComposing(true);
@@ -287,6 +292,18 @@ export default function VendorCredits({ accounts, intent }) {
     saved.open(c);
     setComposing(true);
   };
+  const duplicate = (c) =>
+    api.getCopySource('VENDOR_CREDIT', c.id).then(
+      (copy) => {
+        saved.close();
+        // The copy's discounts and charges come from the original (`sourceId`).
+        setCopyOf({ ...copy, sourceId: c.id });
+        setFormKey((k) => k + 1);
+        setComposing(true);
+        setNotice({ kind: 'info', text: `A copy of the vendor credit from ${c.vendorName}, dated today. Enter the vendor's reference for the new one.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
@@ -297,6 +314,7 @@ export default function VendorCredits({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           entryId={viewing.journalEntryId}
           voucher={{
             entryId: viewing.journalEntryId,
@@ -333,7 +351,20 @@ export default function VendorCredits({ accounts, intent }) {
         />
       )}
       {composing && !viewing && (
-        <VendorCreditForm accounts={accounts} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(false)} onPosted={(text) => setNotice({ kind: 'success', text })} />
+        <VendorCreditForm
+          key={formKey}
+          copyOf={copyOf}
+          accounts={accounts}
+          savedStep={(blocked) => saved.fromNew(blocked)}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(false);
+          }}
+          onPosted={(text) => {
+            setCopyOf(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
       )}
       {dialog?.mode === 'apply' && <ApplyToBills credit={dialog.credit} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.mode === 'refund' && (
@@ -402,6 +433,7 @@ export default function VendorCredits({ accounts, intent }) {
                       label={`Actions for the ${c.vendorName} credit`}
                       items={[
                         { label: 'Open', onSelect: () => openCredit(c) },
+                        { label: 'Duplicate', hint: 'A new vendor credit copied from this one, dated today', onSelect: () => duplicate(c) },
                         { label: 'Apply to bills…', disabled: c.isVoided || c.remainingCents === 0, onSelect: () => setDialog({ mode: 'apply', credit: c }) },
                         { label: 'Record vendor refund…', disabled: c.isVoided || c.remainingCents === 0, onSelect: () => setDialog({ mode: 'refund', credit: c }) },
                         voidItem({

@@ -126,6 +126,9 @@ pub struct ProductView {
     /// An Other Charge or Discount item's account on purchase forms (`purchase_lines`).
     #[sqlx(default)]
     pub expense_account_id: Option<i64>,
+    /// The item's category (`item_categories`); `None` is Uncategorized.
+    #[sqlx(default)]
+    pub category_id: Option<i64>,
 }
 
 /// What kind of item a product is, given alongside its `ProductInput` (left out, an item).
@@ -346,7 +349,7 @@ fn party_err(e: sqlx::Error, name: &str) -> String {
 pub async fn list_products(pool: &SqlitePool) -> Result<Vec<ProductView>, String> {
     sqlx::query_as::<_, ProductView>(
         "SELECT p.id, p.name, p.description, p.rate_cents, p.income_account_id, p.is_active, p.is_taxable, i.qty_on_hand_e4, p.item_type, p.percent_ppm,
-                p.expense_account_id
+                p.expense_account_id, p.category_id
          FROM products_services p LEFT JOIN inventory_items i ON i.product_id = p.id
          ORDER BY p.name COLLATE NOCASE",
     )
@@ -448,7 +451,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "SR").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "SR").await?;
-    let tax_cents = tax.map_or(0, |t| t.cents);
+    let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
     let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= crate::ledger::MAX_LINE_CENTS).ok_or("SR_TOO_LARGE: the receipt total must be above zero and in range")?;
     let customer_id = match clean(input.customer_name.as_deref()) {
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
@@ -468,7 +471,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     .bind(clean(input.reference.as_deref()))
     .bind(clean(input.memo.as_deref()))
     .bind(total)
-    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
     .bind(method_id)
@@ -534,7 +537,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
     lines.extend(crate::item_types::discount_debits(form, &layout));
     lines.extend(discount.and_then(|d| d.line()));
-    lines.extend(tax.and_then(|t| t.line(false)));
+    lines.extend(tax.as_ref().map(|t| t.lines(false)).unwrap_or_default());
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
@@ -548,6 +551,10 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         currency: None,
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::SalesReceipt(receipt_id)).await?;
+    // A combined rate's split by component, for the sales tax return.
+    if let Some(t) = &tax {
+        t.record_parts(tx, entry_id).await?;
+    }
     cost.record(tx, input.receipt_date, entry_id).await?;
 
     sqlx::query("UPDATE sales_receipts SET journal_entry_id = ?1 WHERE id = ?2")
