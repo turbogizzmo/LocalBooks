@@ -104,6 +104,10 @@ uncommitted work alone.
 - [ ] Docs travel with the feature: user guide (`docs/guide/`), in-app Help
       (`src/components/help/`), README feature row, and `site/index.html` where relevant
       (`docs_checks.rs` enforces the links).
+- [ ] Every new screen, setting and menu command is explained: a new page in `NAV` has its own
+      entry in a Help file's `screens` (`help` text and a `guide`), a new Preferences setting is in
+      `docs/guide/preferences.md` with its default, a new Settings section is in the guide, and a
+      new menu command is in `docs/guide/menus.md`. `docs_checks.rs` fails CI for each of these.
 - [ ] A change people will notice has an entry in `CHANGELOG.md` under the next version, written
       for the people using LocalBooks (it becomes the release notes).
 - [ ] `docs/gaps.md` is updated: the row you finished is marked `done` with the PR, and any new

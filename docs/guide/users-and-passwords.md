@@ -11,7 +11,7 @@ people you allow can read them.
 2. Enter **Your user name**, optionally **Your name**, and **Your password** twice (at least 8
    characters; a short phrase is easier to remember than a code).
 3. Click **Turn On Users**. You become the first **Admin**.
-4. LocalBooks shows a **recovery key**: eight groups of four letters and digits. Write it down or
+4. LocalBooks says **Users are on. Save your recovery key** and shows the **recovery key**: eight groups of four letters and digits. Write it down or
    store it in a password manager, somewhere apart from this computer, tick **I have saved the
    recovery key somewhere safe** and click **Continue**.
 

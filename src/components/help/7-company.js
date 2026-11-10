@@ -19,6 +19,34 @@ export const screens = {
     help: 'The Desktop Migration Wizard: bring your books in from QuickBooks Desktop, QuickBooks for Mac, Quicken or GnuCash through a staging sandbox, check them against the original, then post them.',
     guide: 'desktop-migration',
   },
+  'settings/preferences': {
+    help: 'Preferences by category, each with My Preferences (yours, on this computer) and Company Preferences (everyone’s, Admins only): fiscal year, warnings, class tracking, the closing date, payments, bills, sales tax, 1099s, time and more. Each setting saves as soon as you leave it.',
+    guide: 'preferences',
+  },
+  'settings/forms': {
+    help: 'How printed and emailed forms look: invoices, estimates, sales receipts, sales orders, credit memos, statements, bill payment stubs and envelopes. Pick a layout, fonts, colors, columns and messages, with a live preview, and keep several styles.',
+    guide: 'custom-forms',
+  },
+  'settings/email': {
+    help: 'How forms and reports are emailed: through your own mail app, or from LocalBooks through your email provider’s SMTP server. The password stays in this computer’s credential store, never in the company file.',
+    guide: 'custom-forms',
+  },
+  'settings/data': {
+    help: 'Back up, restore and test-restore the books, offsite backups, the company file’s location, File Check & Repair, Condense data, Accountant’s Copy and Save All Attachments.',
+    guide: 'backups-and-company-files',
+  },
+  'settings/ai': {
+    help: 'Let an AI assistant on this computer read a few summaries of your books through the Model Context Protocol (MCP). It can’t change anything and answers only on this computer; off until an Admin turns it on.',
+    guide: 'ai-assistant',
+  },
+  'settings/users': {
+    help: 'Turn on users so everyone signs in with their own password and role, add and change users, sign out after a period of no use, and keep the recovery key that opens the books if the Admin password is lost.',
+    guide: 'users-and-passwords',
+  },
+  'settings/updates': {
+    help: 'The version you are using, whether LocalBooks checks for a newer one when it starts, Check for updates, and going back to the previous version if a new one has a problem.',
+    guide: 'troubleshooting',
+  },
 };
 
 /**
@@ -54,7 +82,7 @@ export const topics = [
   {
     id: 'new-company', area: 'company', views: ['settings/data'],
     title: 'Create a new company with a suggested chart of accounts',
-    body: 'File › New Company… asks for your company details and tax form, then suggests a chart of accounts for your industry from the same 33 industries QuickBooks offers, numbered QuickBooks-style; check or uncheck accounts before saving. Skip uses LocalBooks’ standard chart instead, and either way the accounts can be changed later in the Chart of Accounts.',
+    body: 'File › New Company… asks for your company details and tax form, then suggests a chart of accounts for your industry from 33 industries, with account numbers; check or uncheck accounts before saving. Skip uses LocalBooks’ standard chart instead, and either way the accounts can be changed later in the Chart of Accounts.',
     keywords: 'new company setup interview easystep industry chart of accounts starter accounts tax form entity sole proprietor llc partnership corporation s corp nonprofit 990',
     go: { label: 'Go to File & Data Controls', view: 'settings/data' },
     guide: 'getting-started',
@@ -80,7 +108,7 @@ export const topics = [
     body: 'Preferences (Settings › Preferences Console, or Edit › Preferences) lists categories on the left, each with My Preferences (yours, on this computer) and Company Preferences (everyone’s, Admins only). Company name, address and logo are under General › Company Preferences; fiscal year start and tax form under Accounting; currency symbol and home currency under Multiple Currencies. Each saves as soon as you leave the field. Settings that live on their own screen, such as sales tax rates or email, are linked from their category.',
     keywords: 'company name address logo fiscal year currency settings preferences tax form edit preferences categories my preferences company preferences',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
-    guide: 'getting-started',
+    guide: 'preferences',
   },
   {
     id: 'custom-forms', area: 'company', views: ['settings/forms', 'sales/invoices', 'sales/estimates', 'sales/all', 'sales/statements', 'sales/customers'],
@@ -189,6 +217,7 @@ export const topics = [
     title: 'Export lists to an IIF file, or addresses to a text file',
     body: 'File › Utilities › Export › Lists to IIF Files saves the chart of accounts, customers and jobs, vendors, items and classes as an IIF file, which Import / Convert (and the desktop products) read, to start another company with the same lists. Addresses to Text File saves each active customer’s and vendor’s name, address, phone and email as tab-separated text for mail merges and labels.',
     keywords: 'export lists iif file utilities chart of accounts customers vendors items addresses text file mail merge labels tab delimited',
+    guide: 'backups-and-company-files',
   },
   {
     id: 'backup-safety', area: 'company', views: ['settings/data', 'dashboard'],
@@ -329,7 +358,7 @@ export const topics = [
   {
     id: 'class-tracking', area: 'company', views: ['settings/preferences', 'accounting/classes'],
     title: 'Track classes on transactions',
-    body: 'Turn on Track classes on transactions in Settings › Preferences › Accounting › Company Preferences, under Class tracking. Forms then have a Class column on each line (or one Class box for the whole transaction). Choose ＋ Add new class… in the class list to add one as you go, or manage the list in Accounting › Classes.',
+    body: 'Turn on Track classes on transactions in Settings › Preferences Console › Accounting › Company Preferences, under Class tracking. Forms then have a Class column on each line (or one Class box for the whole transaction). Choose ＋ Add new class… in the class list to add one as you go, or manage the list in Accounting › Classes.',
     keywords: 'class classes class tracking department location division column quick add new class profit and loss by class',
     go: { label: 'Go to class tracking', view: 'settings/preferences', action: 'class-tracking' },
     guide: 'getting-started',
@@ -352,7 +381,7 @@ export const topics = [
   {
     id: 'save-anyway', area: 'company', views: ['settings/preferences', 'expenses/expenses', 'expenses/bills', 'accounting/journal', 'sales/invoices'],
     title: 'Why LocalBooks asks before saving (Save anyway)',
-    body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, a posting to Retained Earnings (Accounting), or a new invoice or sales receipt for a customer with overdue invoices (Sales & Customers, off until an Admin turns it on). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',
+    body: 'Company Preferences can warn before a transaction is saved: a check number already used on that bank account (Checking), a bill number already used for that vendor (Bills), a date more than 90 days before or 30 days after today, a posting to Retained Earnings (Accounting), or a new invoice or sales receipt for a customer with overdue invoices (Sales & Customers, off until an Admin turns it on). Click Save anyway to record it as entered, or Cancel to change it. Admins set the number of days, or turn each warning off, in Settings › Preferences Console. General › Company Preferences also sets four-digit years and whether hours show as 1:30 or 1.50.',
     keywords: 'duplicate check number bill number warning save anyway date past future retained earnings four digit years hours decimal time format overdue customer',
     go: { label: 'Go to Preferences', view: 'settings/preferences' },
     guide: 'getting-started',
@@ -383,11 +412,11 @@ export const topics = [
   },
   {
     id: 'menu-bar', area: 'company', views: [],
-    title: 'Use the QuickBooks-style menu bar',
+    title: 'Use the menu bar',
     body: 'The menu bar has the classic Lists, Company, Customers, Vendors, Employees, Banking and Reports menus; each item opens its screen or form, and Reports lists every report by group, with Memorized Reports and Transaction History and Journal for the open form. Lists › Currency List opens the currency preferences; Company has Email Setup, AI Access and the Audit Log; Customers has Invoice for Time & Expenses. Shortcuts: Ctrl+I invoice, Ctrl+W write checks (not on a Mac), Ctrl+R register, Ctrl+J Customer Center, Ctrl+T memorized transactions, Ctrl+F find (⌘ on a Mac).',
     keywords: 'menu menus menu bar lists company customers vendors employees banking reports shortcut ctrl+i ctrl+w ctrl+r ctrl+j ctrl+t ctrl+f quickbooks desktop',
     go: null,
-    guide: 'getting-started',
+    guide: 'menus',
   },
   {
     id: 'windows', area: 'company', views: [],
@@ -400,7 +429,7 @@ export const topics = [
   {
     id: 'desktop-view', area: 'company', views: ['settings/preferences'],
     title: 'Reopen your windows with the company (Desktop View)',
-    body: 'When a company opens, LocalBooks reopens the windows you had, as QuickBooks does. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). Where each window sat, and whether it was minimized or maximized, comes back too; a saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
+    body: 'When a company opens, LocalBooks reopens the windows you had. Choose how in Edit › Preferences › Desktop View: Save when closing company (the default), Save current desktop, Don\'t save the desktop, or Keep previously saved desktop (on a Mac also Window › Workspace: AutoSave, Manual, Save Workspace). Where each window sat, and whether it was minimized or maximized, comes back too; a saved screen that no longer exists is left out. To open a company once without its windows, hold Alt (Option on a Mac) while clicking Open, or choose File › Open Company Without Restoring Windows….',
     keywords: 'desktop view saved desktop save when closing company save current desktop dont save keep previously saved workspace autosave restore windows reopen preferences',
     go: { label: 'Go to Desktop View', view: 'settings/preferences' },
     guide: 'getting-started',
@@ -408,7 +437,7 @@ export const topics = [
   {
     id: 'left-pane', area: 'company', views: ['settings/preferences'],
     title: 'Show only open windows, or hide the left pane',
-    body: 'In Edit › Preferences › Desktop View, under Left pane, choose Full menu (every page, the default), Open windows only (just the windows open now, like QuickBooks\' Open Window List; open pages from the menu bar or search, and click Menu at the top of the pane to get the full menu back), or Hidden for the most room. View › Show or Hide Left Icon Bar switches between the full menu and hidden, and LocalBooks remembers your choice.',
+    body: 'In Edit › Preferences › Desktop View, under Left pane, choose Full menu (every page, the default), Open windows only (just the windows open now, as in the Open Window List; open pages from the menu bar or search, and click Menu at the top of the pane to get the full menu back), or Hidden for the most room. View › Show or Hide Left Icon Bar switches between the full menu and hidden, and LocalBooks remembers your choice.',
     keywords: 'left pane sidebar icon bar hide show open windows only open window list menu more room',
     go: { label: 'Go to Desktop View', view: 'settings/preferences' },
     guide: 'getting-started',
@@ -420,5 +449,19 @@ export const topics = [
     keywords: 'start on startup home page optional open on screen invoices dashboard skip home first screen no windows',
     go: { label: 'Go to Desktop View', view: 'settings/preferences' },
     guide: 'getting-started',
+  },
+  {
+    id: 'file-check-repair', area: 'company', views: ['settings/data'],
+    title: 'Check and repair the company file',
+    body: 'File Check & Repair in File & Data Controls runs a check-up that only reads: the file structure, schema, double-entry safeguards, record links, that debits equal credits, the posting history and stored totals. When a check says Rebuild fixes this, Rebuild… saves a snapshot, restores the safeguards and indexes and compacts the file; it never changes your transactions.',
+    keywords: 'file check repair verify rebuild damaged corrupt integrity check-up company file problem',
+    guide: 'backups-and-company-files',
+  },
+  {
+    id: 'sign-in-waits', area: 'company', views: ['settings/users'],
+    title: 'Why sign-in makes you wait after wrong passwords',
+    body: 'After four wrong passwords for a user name, each next try waits a little longer, from 30 seconds up to 5 minutes; wrong recovery keys wait the same way. Nobody is ever locked out, and other users can still sign in.',
+    keywords: 'wrong password wait locked out sign in delay recovery key brute force tries',
+    guide: 'users-and-passwords',
   },
 ];

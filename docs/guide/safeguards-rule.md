@@ -49,7 +49,7 @@ starting point.
 
 Only authorized people may get at customer information, and each only to what their job needs.
 **LocalBooks:** turn on users ([Users, passwords and sensitive data](users-and-passwords.md)).
-Everyone signs in with their own password, and the roles Admin, Standard and View only limit what
+Everyone signs in with their own password, and the roles Admin, Standard, View only and External Accountant limit what
 each can change. Vendor tax IDs and bank details are shown in full only to users allowed to see
 sensitive data. Everyone is signed out after 15 minutes idle by default; an Admin can change that
 limit or turn it off under **Sign out when idle**, so keep it on.

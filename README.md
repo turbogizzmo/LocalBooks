@@ -264,16 +264,23 @@ under [`docs/guide/`](docs/guide/README.md).
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
 | Approvals | Expenses › Approvals | Rules hold bills and purchase orders over an amount or from a vendor until an Admin approves them; rejections are kept with a note | [guide](docs/guide/bills.md#approvals-for-bills-and-purchase-orders) |
-| Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
+| Attachments | Transactions, customers, vendors, items, accounts, estimates, purchase orders, reconciliations | Keep receipts and documents (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits; files marked Send with the form go with emailed and printed forms | [guide](docs/guide/attachments.md) |
+| Attachments Library | Accounting › Attachments Library | Every attached file with its date and keywords; search, preview, save, delete and restore | [guide](docs/guide/attachments.md#the-attachments-library) |
+| Document Inbox | Expenses › Document Inbox | Receipts and bills kept until you enter them, with a preview; Enter as bill, expense or check fills the form from a PDF’s text | [guide](docs/guide/attachments.md#the-document-inbox) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
 | Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
-| Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
+| File Check & Repair | Settings › File & Data Controls | A read-only check-up of the company file, and a rebuild that restores safeguards and indexes without touching transactions | [guide](docs/guide/backups-and-company-files.md#check-and-repair-the-file-file-check--repair) |
+| Export lists | File › Utilities › Export | The chart of accounts, customers, vendors, items and classes as an IIF file, or addresses as a text file | [guide](docs/guide/backups-and-company-files.md#export-lists-and-addresses) |
+| Updates, diagnostics, going back | Settings › Updates; Help › Save Diagnostics… · Reinstall Previous Version… | Signed updates, a diagnostics zip with no business data, and reinstalling the previous release | [guide](docs/guide/troubleshooting.md) |
+| Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections; downloaded lines matched to what you already entered, renaming rules for payees, and category rules learned from your approvals | [guide](docs/guide/bank-feeds.md) |
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once, with one numbered, printable check per vendor | [guide](docs/guide/bills.md) |
+| Vendor credits | Expenses › Vendor Credits | Credits from vendors, applied in Pay Bills or refunded | [guide](docs/guide/bills.md#vendor-credits) |
+| Purchase orders | Expenses › Purchase Orders | Non-posting orders to vendors, with jobs, discounts and charges per line; print, close, or turn into a bill | [guide](docs/guide/purchase-orders.md) |
 | Receive Items | Vendors › Receive Items | Receive goods from a purchase order before the bill (part shipments too), held in Items Received Not Billed; enter the bill for them at the vendor's prices later | [guide](docs/guide/bills.md#receive-items-before-the-bill) |
 | Bounced checks | Banking › Record Bounced Check… | Reopens the invoice a returned check paid, takes the check and bank fee out of the bank, and invoices a returned-check fee | [guide](docs/guide/customer-payments.md#record-a-bounced-check) |
-| Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
+| Budgets & comparisons | Accounting › Budgets; Reports | Budgets by account for a fiscal year; Budget Overview, Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/budgets.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
-| Class tracking | Settings › Preferences; Accounting › Classes | A Class column on every form once tracking is on, with ＋ Add new class… in each class list | [guide](docs/guide/getting-started.md#track-classes) |
+| Class tracking | Settings › Preferences Console; Accounting › Classes | A Class column on every form once tracking is on, with ＋ Add new class… in each class list | [guide](docs/guide/getting-started.md#track-classes) |
 | Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
 | Company Snapshot | Reports › Company Snapshot | Widgets you add, order and date: balances, who owes, vendors to pay, income and expense trend, top customers, items and vendors; each ties to its report | [guide](docs/guide/reports.md#company-snapshot) |
 | Condense Data | Settings › File & Data Controls | Replace closed years with monthly summary entries, keeping open items, with a verified read-only archive of the full history | [guide](docs/guide/backups-and-company-files.md#condense-data-archive-closed-years) |
@@ -282,8 +289,13 @@ under [`docs/guide/`](docs/guide/README.md).
 | Custom fields | Sales › Reps, Ship Via & Fields | Up to 15 custom fields per customer, vendor and item list, printable on sales forms | [guide](docs/guide/customers-and-products.md) |
 | Custom forms & email | Settings › Custom Forms · Email; Sales › Send Forms | Invoice and estimate designer, PDFs, mail app or SMTP, sent history, Email later queue | [guide](docs/guide/custom-forms.md) |
 | Custom reports | Reports | Detail reports (P&L and Balance Sheet Detail, aging details, Open Invoices, customer and vendor balances, sales, purchases and income by name or item, Check and Deposit Detail, 1099 Detail, Journal, Transaction Lists by date, customer and vendor, Transaction Detail by Account, P&L and expenses by month, Voided Transactions) you can filter, regroup and save as memorized reports; Process Multiple Reports runs several at once | [guide](docs/guide/reports.md#customize-a-report) |
-| Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/custom-forms.md) |
+| Customer statements | Sales › Customer Statements | Statements with running balance and aging, printed or emailed | [guide](docs/guide/customer-statements.md) |
+| Credit memos & refunds | Sales › Credit Memos & Refunds | Credit memos with discount and charge lines, refund receipts, applying credit to invoices, refunding or writing off what is left | [guide](docs/guide/credit-memos-and-refunds.md) |
 | Customers, products & vendors | Sales › Customers · Products & Services; Expenses › Vendors | Lists with balances; click a name to see its transactions; products fill in invoice lines; add a new customer, vendor or item right from a form as you type | [guide](docs/guide/customers-and-products.md) |
+| Customer groups & batch invoices | Sales › Customers › Groups | Groups picked by hand or by rules; invoice a whole group at once, and send its statements and payment reminders on a schedule | [guide](docs/guide/customers-and-products.md#customer-groups) |
+| Item categories | Sales › Products & Services | Categories and sub-categories of items, with a category filter on forms and item reports | [guide](docs/guide/customers-and-products.md#item-categories) |
+| Merge duplicates | Edit… on a customer, vendor, item or account | Rename one to the other’s name to merge them; history moves to the one kept, posted amounts never change | [guide](docs/guide/customers-and-products.md#merge-two-customers-vendors-or-items) |
+| Other Names | Expenses › Other Names | People and businesses who are neither customers nor vendors, such as an owner taking a draw | [guide](docs/guide/customers-and-products.md#other-names) |
 | Dashboard | Dashboard | Home: a map of the everyday work with waiting counts, banking and company shortcuts, account balances. Insights: assets vs. liabilities (12 months), live trial balance, A/R aging | [guide](docs/guide/getting-started.md#start-from-the-home-page) |
 | Deposits & transfers | Banking › Deposits & Transfers | Bank deposits from Undeposited Funds, transfers between accounts, Pay Down Credit Card | [guide](docs/guide/deposits-and-transfers.md) |
 | Desktop Migration Wizard | Settings › Import & Migration; File › Utilities › Import / Convert… | `.qbw`, QuickBooks for Mac 2012, IIF, QIF, QuickBooks report and GnuCash import, and lists, transactions or journal entries from a spreadsheet you laid out, through a staging sandbox; payroll posted from a payroll service's journal export | [guide](docs/guide/desktop-migration.md) |
@@ -295,35 +307,39 @@ under [`docs/guide/`](docs/guide/README.md).
 | Find Transactions | Accounting › Find Transactions; Edit › Find… | Search by text, dates, number, amount, type, name and account | [guide](docs/guide/journal-entries-and-voids.md#find-a-transaction) |
 | Form toolbar | Every transaction form | Find, New, Save, Void, Print, Email, Attach File and Memorize across the top of each form, showing only what it can do; Previous and Next on invoices | [guide](docs/guide/getting-started.md#use-the-toolbar-on-a-form) |
 | Graphs | Reports › Graphs | Income and expense, net worth, receivables, payables, sales and budget vs. actual charts that open the report behind each bar; table view, PNG, print, Excel and CSV | [guide](docs/guide/reports.md#graphs) |
-| Inventory | Sales › Products & Services | Tracked stock at moving-average cost, adjustments, valuation and stock status | [guide](docs/guide/inventory.md) |
-| Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid, full and partial payments, payment-method tiles; double-click an invoice to edit it | [guide](docs/guide/invoices.md) |
+| Inventory | Sales › Products & Services; Vendors › Inventory Activities | Tracked stock at moving-average cost, reorder points and preferred vendors, adjustments, valuation, stock status and turnover | [guide](docs/guide/inventory.md) |
+| Invoices & payments | Sales › Invoices · All Sales | Inline line-item grid; Payment received on a new invoice; full, partial and over-payments, prepayments kept as credit; payment-method tiles; double-click an invoice to edit it | [guide](docs/guide/invoices.md) |
+| Statement charges | Enter statement charges… on a customer | Charges billed on the next statement instead of an invoice, in A/R and the aging | [guide](docs/guide/invoices.md#bill-on-the-statement-instead-statement-charges) |
 | Job costing | Reports › Jobs; Customer:Job on bill, expense and vendor credit lines | Job and item profitability, estimates vs. actuals, Profit and Loss by Job, estimates by job, progress invoicing | [guide](docs/guide/reports.md#job-costing-reports) |
-| Menu bar | Menu bar | Classic desktop menus (Lists, Company, Customers, Vendors, Employees, Banking, Reports) that open each form and report, with Ctrl+I, Ctrl+W, Ctrl+R, Ctrl+J, Ctrl+T and Ctrl+F | [guide](docs/guide/getting-started.md#find-things-in-the-menu-bar) |
+| Menu bar | Menu bar | Classic desktop menus (Lists, Company, Customers, Vendors, Employees, Banking, Reports) that open each form and report, with Ctrl+I, Ctrl+W, Ctrl+R, Ctrl+J, Ctrl+T and Ctrl+F | [guide](docs/guide/menus.md) |
 | Mileage | Employees › Mileage; + New › Mileage Trip | Vehicles, dated mileage rates you enter, trips by odometer or miles, billing trips on an invoice, mileage by vehicle and by job | [guide](docs/guide/mileage.md) |
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
-| New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
+| Memorized transactions | Accounting › Recurring Transactions; Ctrl+M, Ctrl+T | Memorize a transaction with a schedule; due ones show in Reminders and are entered with Enter all due or Enter now | [guide](docs/guide/memorized-transactions.md) |
+| New Company setup | File › New Company… | Guided setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
 | Payout feeds | Banking › Payout Feeds | Stripe and Shopify Payments payouts and PayPal withdrawals as deposits of their gross sales, less fees, refunds and chargebacks, with read-only credentials in the OS credential store, fetched by hand or on a schedule | [guide](docs/guide/bank-feeds.md#payouts-from-stripe) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
 | Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
-| Preferences | Settings › Preferences Console (Edit › Preferences) | Categories with My and Company tabs; company details, logo, fiscal year, currencies, tax calendar; warnings before saving (duplicate check and bill numbers, far-off dates, Retained Earnings) with Save anyway; typing amounts without a decimal point; report defaults (cash or accrual, aging basis, item names, account numbers, Statement of Cash Flows sections); defaults for sales forms, payments, bills and sending forms | [guide](docs/guide/getting-started.md#find-your-way-around-preferences) |
+| Preferences | Settings › Preferences Console (Edit › Preferences) | Categories with My and Company tabs; company details, logo, fiscal year, currencies, tax calendar; warnings before saving (duplicate check and bill numbers, far-off dates, Retained Earnings) with Save anyway; typing amounts without a decimal point; report defaults (cash or accrual, aging basis, item names, account numbers, Statement of Cash Flows sections); defaults for sales forms, payments, bills and sending forms | [guide](docs/guide/preferences.md) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
-| Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
+| Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, inventory to reorder, backup and backup safety, group statements and payment reminders), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
 | Report comments | Any report › Comment; Reports › Commented Reports | Comment on a figure; the report is kept as shown, listed, and prints with its numbered comments | [guide](docs/guide/reports.md#comment-on-a-figure) |
-| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
+| Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; Find in report; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
+| Cash Flow Forecast | Reports; Dashboard | Cash on hand and, week by week, what open invoices bring in and open bills take out | [guide](docs/guide/reports.md#cash-flow-forecast) |
+| Emailed and scheduled reports | Any report’s Export menu; Reports › Scheduled Reports… | Email a report, list or register as a PDF (optionally password-protected); send or save chosen reports every day, week, month or quarter | [guide](docs/guide/reports.md#scheduled-reports) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
 | Bill To / Ship To | Sales forms | Bill To, Ship To, P.O. No. and FOB on invoices, sales receipts, estimates and credit memos, kept per document and filled from the customer | [guide](docs/guide/invoices.md) |
 | Credit limits | Customers › Edit… | A customer's credit limit, contacts, shipping address and account details; invoices over the limit ask before saving | [guide](docs/guide/customers-and-products.md) |
 | QuickReport | Ctrl+Q in a register or the account, name and item lists; Ctrl+H, Ctrl+Y | A report of the selected account's, name's or item's transactions; Transaction History and Transaction Journal for one transaction | [guide](docs/guide/reports.md#quickreport-transaction-history-and-transaction-journal) |
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
-| Sales tax | Sales › Sales Tax | Rates by agency, combined rates split by agency, accrual or cash basis, a filing period and reminder, the liability report and a sales tax return per agency | [guide](docs/guide/getting-started.md#sales-tax-rates-combined-rates-and-the-sales-tax-return) |
+| Sales tax | Sales › Sales Tax | Rates by agency, combined rates split by agency, accrual or cash basis, a filing period and reminder, the liability report and a sales tax return per agency | [guide](docs/guide/sales-tax.md) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
 | Users & passwords | Settings › Users & Passwords | Optional users with roles (including External Accountant), sign-in, idle sign-out, recovery key, encrypted vendor tax IDs and bank details | [guide](docs/guide/users-and-passwords.md) |
 | FTC Safeguards Rule map | Help › The FTC Safeguards Rule and LocalBooks | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
-| Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
+| Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | Windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
 ### `+ New` quick-create matrix
 
@@ -611,7 +627,7 @@ cd src-tauri
 cargo test
 ```
 
-The suite (107 tests, plus 4 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
+The suite (over 900 tests, plus about 30 opt-in diagnostics) runs against real SQLite databases with every migration applied, on macOS,
 Windows, and Linux in CI. It covers
 balanced and unbalanced posting, rollback on failure, partial payments and aging, reconciliation
 locking, voiding and document unwinding, split bills, deposits, transfers, estimates, time limits,
@@ -635,15 +651,18 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
   Dates show as MM/DD/YYYY and amounts as 1,234.56, with no other formats, and the screens are in
   English. A non-US business can keep plain double-entry books in another home currency, but none of
   its tax rules are built in. See [Made for US businesses](docs/guide/getting-started.md#made-for-us-businesses).
-- **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
-  payroll tax filings.
+- **No payroll processing.** Employees exist for time tracking only: LocalBooks doesn't calculate
+  paychecks, withholding or payroll taxes. Paychecks and payroll liability payments already in a
+  QuickBooks Desktop company file come in with it, and a payroll service's journal export can be
+  posted (see [Payroll from a payroll service](docs/guide/desktop-migration.md#payroll-from-a-payroll-service)).
 - **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
   have no cost column, so estimates vs. actuals compare revenue, and an estimate becomes a single
   invoice (no partial progress invoices).
 - **Mileage billing** makes a new invoice for the trips you choose; trips can't be added to an
   invoice you're already writing. Mileage rates aren't built in: enter the official rate yourself.
-- **Sales tax** is one rate (and agency) per invoice or receipt; there are no multi-jurisdiction
-  returns.
+- **Sales tax** is one rate per invoice or receipt. A combined rate adds up several agencies'
+  rates (state, county, city) and posts each agency's share, and Sales › Sales Tax shows the return
+  by agency; there is no per-line tax rate.
 - **Foreign currency** covers invoices (with their payments) and expenses/checks. Bills, sales
   receipts, and estimates are home-currency only, and bank accounts are always home currency. Open
   foreign-currency invoices can be revalued at period end (Accounting › Currency Revaluation).
@@ -654,11 +673,11 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 - **Tax calendar** covers federal due dates for Schedule C, 1065, 1120-S and 1120 only. Weekends roll to
   Monday; holidays, extensions, disaster relief and state deadlines are not applied. Confirm dates
   with the IRS or your tax advisor.
-- **The .qbw import is partial.** OpenQBW 0.1 decodes invoice line items only. It does not
-  read account names, customers, vendors, bills, checks, payments, or memos. Some amount encodings
-  are still undecoded; those lines are counted and shown, not guessed. Compressed backups (`.qbb`)
-  and portable files (`.qbm`) must be restored to a `.qbw` in the program that created them first.
-  Review imported totals against that program's reports.
+- **Company-file imports can miss what the file doesn't decode.** LocalBooks reads `.qbw` company
+  files, `.qbb` backups and `.qbm` portable files directly, with the full ledger from newer files.
+  Amounts it can't decode, or that aren't whole cents, are counted and listed, not guessed, and
+  step 2 of the import lists any account whose balance differs from the one the file stored.
+  Review imported totals against the original program's reports.
 - **IIF and QIF imports.** IIF files don't link payments to invoices, so payments apply to the
   oldest open invoices, as QuickBooks does. QIF investment accounts are skipped. A file with lists
   but no transactions adds its accounts, customers, vendors and items and posts nothing.

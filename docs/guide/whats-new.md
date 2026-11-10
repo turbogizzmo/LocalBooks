@@ -18,7 +18,8 @@ A large release: everything below, plus over a hundred smaller changes in the re
   [Discounts and charges](bills.md#discounts-and-charges-on-bills-checks-credits-and-orders)
 - **Approvals for bills and purchase orders.** [Approvals](bills.md#approvals-for-bills-and-purchase-orders)
 - **Payouts from Stripe, PayPal and Shopify Payments**, with their fees, fetched on a schedule if you
-  like. [Payouts from PayPal](bank-feeds.md#payouts-from-paypal)
+  like. [Payouts from Stripe](bank-feeds.md#payouts-from-stripe), [PayPal](bank-feeds.md#payouts-from-paypal),
+  [Shopify Payments](bank-feeds.md#payouts-from-shopify-payments) and [Fetch payouts automatically](bank-feeds.md#fetch-payouts-automatically)
 - **Company Snapshot**: a page of widgets you choose for income, expenses, balances and to-dos.
   [Company Snapshot](reports.md#company-snapshot)
 - **Work with your accountant**: an Accountant's Copy with a dividing date, and an External
@@ -50,7 +51,7 @@ A large release: everything below, plus over a hundred smaller changes in the re
 
 ## 0.12.0
 
-- **Preferences, laid out by category.** Settings › Preferences lists Accounting, Bills, Checking,
+- **Preferences, laid out by category.** Settings › Preferences Console lists Accounting, Bills, Checking,
   General, Sales & Customers, Sales Tax and the rest, each with **My Preferences** and **Company
   Preferences**: report basis, sales tax on the cash basis, 1099 boxes, inventory switches, check
   defaults and more. [Find your way around Preferences](getting-started.md#find-your-way-around-preferences)

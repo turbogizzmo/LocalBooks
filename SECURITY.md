@@ -81,7 +81,7 @@ file can see and change everything, as in earlier versions.
   [`users.rs`](src-tauri/src/users.rs); `signing_in_checks_the_password_and_unlocks_the_key` and
   `turned_off_users_cannot_sign_in` in [`users/tests.rs`](src-tauri/src/users/tests.rs)).
   Passwords need at least 8 characters.
-- **Roles:** Admin, Standard and View only, checked by LocalBooks before every command runs (the
+- **Roles:** Admin, Standard, View only and External Accountant, checked by LocalBooks before every command runs (the
   `guarded` wrapper in [`main.rs`](src-tauri/src/main.rs) and [`permissions.rs`](src-tauri/src/permissions.rs)).
   A command not yet classified is treated as a change, so View-only users cannot run it
   (`commands_are_classified` and `every_role_gets_what_it_should` in

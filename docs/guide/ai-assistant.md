@@ -6,7 +6,10 @@ receivables. The assistant can't post, void or change anything.
 
 ## Turn it on
 
-1. Go to **Settings › AI Access (MCP)** and click **Turn on**.
+Access is off until an Admin turns it on.
+
+1. Go to **Settings › AI Access (MCP)**. Under **Local AI access (Model Context Protocol)**, click
+   **Turn on**. **Turn off** stops it again.
 2. The status shows **● Running at http://127.0.0.1:8321/mcp**.
 
 ## Connect Claude Code

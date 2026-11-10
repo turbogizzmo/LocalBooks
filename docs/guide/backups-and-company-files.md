@@ -28,7 +28,7 @@ internet; it only writes the file.
    by you or by LocalBooks.
 4. Click **Save**. The first copy is made straight away.
 
-After that a copy is made when LocalBooks is open and the newest copy is more than a day old, and
+After that a copy is made when LocalBooks is open and the newest copy is more than 20 hours old (so a copy is made about once a day), and
 the oldest copies beyond the number to keep are deleted from the folder. **Back up offsite now**
 makes one at any time. The screen shows when the last copy was made and the last test restore
 passed, and any error (for example a drive that isn't plugged in).
@@ -105,8 +105,7 @@ off: restore the most recent backup that passes the check-up.
 ## Condense data (archive closed years)
 
 When a company file has years of history, **Condense data** in File & Data Controls replaces the
-closed years' detail with one summary journal entry per month, the way QuickBooks' Condense Data
-does. Your full history isn't lost: it stays in an **archive** you can open read-only at any time.
+closed years' detail with one summary journal entry per month. Your full history isn't lost: it stays in an **archive** you can open read-only at any time.
 
 Before you start:
 
@@ -180,6 +179,10 @@ Both ask where to save the file and write nothing anywhere else.
 - **File › Open Previous Company** and the **No Company Open** screen list the company files you
   opened most recently first, with when you last opened each one. Select a file to see where it is
   and when it last changed.
+- Don't know where it is? On the **No Company Open** screen, click **Find a company file**.
+  LocalBooks searches your home folder, synced folders and connected drives and lists every company
+  file it finds with its **Location** and when it was **Last modified**. Double-click one to open
+  it.
 - It opens in place for this session. The window title and the top bar show which file is open, and
   your usual company file is unchanged.
 - To open a company **without restoring windows**, hold **Option** (Mac) or **Alt** (Windows and
@@ -205,6 +208,9 @@ To bring a QuickBooks, Quicken or GnuCash file into the books you have open inst
 **File › Utilities › Import / Convert…**).
 
 ## Keep the books on a network or synced drive
+
+**Company file location**, at the top of **Settings › File & Data Controls**, shows where the books
+are and whether that folder is on this computer, a network drive or a synced (cloud) folder.
 
 1. Click **Change Company File Location…** and choose the **Folder**, for example on a network drive
    or in Dropbox.

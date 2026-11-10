@@ -21,9 +21,11 @@ export const screens = {
   },
   'sales/tax': {
     help: 'Turn on sales tax, set up the rates you charge, see taxable sales and tax owed for any period, and record payments to the tax agency.',
+    guide: 'sales-tax',
   },
   'sales/credits': {
     help: 'Credit memos give a customer credit to apply to their open invoices or refund later; refund receipts pay money back straight away.',
+    guide: 'credit-memos-and-refunds',
   },
   'sales/customers': {
     help: 'Everyone you sell to, with their open receivable balance. Add a customer here or while creating an invoice.',
@@ -43,8 +45,10 @@ export const screens = {
   },
   'sales/statements': {
     help: 'Statements list each customer’s invoices, payments and credits for a period with a running balance, the amount due and its aging. Select customers and print them, or open one to save it as PDF or email it.',
+    guide: 'customer-statements',
   },
   'sales/send-forms': {
+    help: 'Invoices, estimates and sales receipts marked Email later, waiting to be sent. Check each address, tick the ones to send and click Send selected, or use Review and email… on one; sent forms leave the list, and any that fail stay with the reason.',
     guide: 'custom-forms',
   },
   'sales/profile-lists': {
@@ -62,6 +66,10 @@ export const screens = {
   'sales/print-invoices': {
     help: 'Invoices marked Print later, waiting to print. Tick the ones to print and print them in one go with their form designs; the ones you confirm printed leave the queue.',
     guide: 'invoices',
+  },
+  'sales/lists': {
+    help: 'Sales reps (with initials, for forms and Sales by Rep), Ship Via methods for sales forms, and the custom fields that customers, vendors and items carry. Make one inactive to hide it without losing its history.',
+    guide: 'customers-and-products',
   },
 };
 
@@ -305,7 +313,7 @@ export const topics = [
   {
     id: 'finance-charges', area: 'sales', views: ['sales/finance-charges', 'sales/invoices', 'sales/statements', 'settings/preferences'],
     title: 'Charge interest on overdue invoices',
-    body: 'Set an annual rate, minimum charge, grace days and income account under Settings › Finance charges, then open Sales › Assess Finance Charges. Each ticked customer gets a finance charge invoice for interest on their overdue balance, which appears in A/R aging and on statements.',
+    body: 'Set an annual rate, minimum charge, grace days and income account under Settings › Preferences Console › Finance Charge, then open Sales › Assess Finance Charges. Each ticked customer gets a finance charge invoice for interest on their overdue balance, which appears in A/R aging and on statements.',
     keywords: 'finance charge late fee interest overdue past due assess penalty',
     go: { label: 'Assess finance charges', view: 'sales/finance-charges' },
     guide: 'customer-payments',
@@ -354,9 +362,10 @@ export const topics = [
   {
     id: 'credit-memo', area: 'sales', views: ['sales/credits', 'sales/invoices', 'sales/customers'],
     title: 'Give a customer credit or a refund',
-    body: 'Sales › Credit Memos & Refunds: a credit memo reduces what the customer owes and can be applied to their open invoices or refunded by check later; a refund receipt pays the money back straight away. Applying a credit marks the invoice paid by that amount.',
+    body: 'Sales › Credit Memos & Refunds: a credit memo reduces what the customer owes and can be applied to their open invoices or refunded later; a refund receipt pays the money back straight away. Applying a credit marks the invoice paid by that amount.',
     keywords: 'credit memo refund return customer credit refund receipt apply credit',
     go: { label: 'New credit memo', view: 'sales/credits', action: 'credit-memo' },
+    guide: 'credit-memos-and-refunds',
   },
   {
     id: 'vendor-credit', area: 'expenses', views: ['expenses/credits', 'expenses/bills', 'expenses/vendors'],
@@ -364,6 +373,7 @@ export const topics = [
     body: 'Expenses › Vendor Credits records credit a vendor gave you for returns or overcharges. Apply it to that vendor’s open bills, or record the refund when they send money back.',
     keywords: 'vendor credit supplier credit return refund debit memo',
     go: { label: 'New vendor credit', view: 'expenses/credits', action: 'vendor-credit' },
+    guide: 'bills',
   },
   {
     id: 'statements', area: 'sales', views: ['sales/statements', 'sales/customers', 'sales/invoices'],
@@ -371,6 +381,7 @@ export const topics = [
     body: 'Sales › Customer Statements lists customers with a balance or activity in the period. Click one to preview their statement (balance forward, each invoice, payment and credit, the amount due and its aging), tick several to print them together, or use Print…, Save as PDF… or Email… above the preview to send one.',
     keywords: 'statement customer statement balance forward account summary aging dunning email',
     go: { label: 'Go to Customer Statements', view: 'sales/statements' },
+    guide: 'customer-statements',
   },
   {
     id: 'jobs', area: 'sales', views: ['sales/customers', 'sales/invoices'],
@@ -382,9 +393,10 @@ export const topics = [
   {
     id: 'purchase-orders', area: 'expenses', views: ['expenses/purchase-orders', 'expenses/bills'],
     title: 'Order from a vendor with a purchase order',
-    body: 'Expenses › Purchase Orders records what you ordered without posting anything. When the bill arrives, choose Create bill… to post it with the same lines; close an order you no longer expect.',
+    body: 'Expenses › Purchase Orders records what you ordered without posting anything. A line can name the customer or job it is for and take discount and charge lines; an order over an approval rule waits for an Admin. Receive the goods first with Receive Items, or choose Create Bill to post the bill with the same lines, and close an order you no longer expect.',
     keywords: 'purchase order po order vendor supplier non-posting receive items',
     go: { label: 'New purchase order', view: 'expenses/purchase-orders', action: 'purchase-order' },
+    guide: 'purchase-orders',
   },
   {
     id: 'recurring', area: 'accounting', views: ['accounting/recurring', 'expenses/expenses', 'expenses/bills', 'sales/invoices', 'accounting/journal'],
@@ -392,6 +404,7 @@ export const topics = [
     body: 'Fill in an expense, check, bill, invoice or journal entry and choose Memorize… to save it with a schedule. Accounting › Recurring Transactions enters everything that is due in one step; a reminder appears at the top of the window when something is due.',
     keywords: 'recurring memorize memorized repeat schedule subscription rent monthly automatic',
     go: { label: 'Go to Recurring Transactions', view: 'accounting/recurring' },
+    guide: 'memorized-transactions',
   },
   {
     id: 'budgets', area: 'accounting', views: ['accounting/budgets', 'reports'],
@@ -411,8 +424,8 @@ export const topics = [
   {
     id: 'attachments', area: 'accounting', views: ['accounting/attachments', 'accounting/journal', 'accounting/register', 'expenses/bills', 'expenses/expenses', 'sales/invoices', 'sales/all', 'banking/transfers'],
     title: 'Attach receipts and documents',
-    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it. Customers, vendors, items, accounts, estimates and purchase orders take files too. Accounting › Attachments Library lists every file: search, preview, keywords, Send with the form when it is emailed, and Delete, which can be restored (Show deleted).',
-    guide: 'attachments The Attachments Library previews pictures, PDFs and text; files marked Send with the form go with it when it is emailed or printed. To bring in paper, scan to a PDF or photo with your scanner’s own app and drop it on the Document Inbox.',
+    body: 'Keep a copy of a vendor’s invoice, a receipt or a contract in the company file (up to 25 MB each). On a new bill, expense or check, click Attach the vendor’s invoice… or Attach a receipt… before you post. For anything already posted, choose Attach file… in the row’s Actions menu; a 📎 marks rows with files. Click a file name to save a copy, or Save all… for every file on the transaction; Settings › File & Data Controls › Save All Attachments… saves every attachment in the company file to one zip file, a folder per transaction. Files stay with a transaction when you edit it. Customers, vendors, items, accounts, estimates and purchase orders take files too. Accounting › Attachments Library lists every file: search, preview, keywords, Send with the form when it is emailed, and Delete, which can be restored (Show deleted). The Attachments Library previews pictures, PDFs and text; files marked Send with the form go with it when it is emailed or printed. To bring in paper, scan to a PDF or photo with your scanner’s own app and drop it on the Document Inbox.',
+    guide: 'attachments',
     keywords: 'attachment attach receipt document file scan scanner photo pdf preview paperclip save all zip export every attachment print send with form',
     go: { label: 'Go to Journal Entries', view: 'accounting/journal' },
   },
@@ -430,5 +443,19 @@ export const topics = [
     keywords: 'search find lookup locate amount check number invoice number advanced filter',
     go: { label: 'Go to Find Transactions', view: 'accounting/find' },
     guide: 'journal-entries-and-voids',
+  },
+  {
+    id: 'merge-records', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products', 'accounting/chart-of-accounts'],
+    title: 'Merge duplicate customers, vendors, items or accounts',
+    body: 'Open the one you don’t want with Edit…, change its name to the other’s and save; LocalBooks offers Merge into …. A customer’s, vendor’s or item’s transactions, files and settings move to the one you keep, and an account’s balance moves with one journal entry. Posted amounts never change, the merged one stays as inactive, and each merge is in the audit trail.',
+    keywords: 'merge duplicate combine same name twice customer vendor item account rename',
+    guide: 'customers-and-products',
+  },
+  {
+    id: 'group-qty', area: 'sales', views: ['sales/invoices', 'sales/all', 'sales/estimates'],
+    title: 'Change how many of an item group you sell',
+    body: 'An item group on an invoice, sales receipt or estimate has a heading line with its own Qty. Change it and every item in the group changes in proportion: a Qty of 2 doubles each item’s quantity and amount.',
+    keywords: 'group item group bundle kit qty quantity heading proportion',
+    guide: 'invoices',
   },
 ];

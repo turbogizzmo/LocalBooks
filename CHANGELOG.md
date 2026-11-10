@@ -6,6 +6,13 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Help for every screen, setting and menu command.** F1 now explains every page in the sidebar,
+  including Approvals, Payout Feeds, the Attachments Library, Reps, Ship Via & Fields and each
+  Settings tab. New step-by-step guides cover credit memos and refunds, customer statements,
+  purchase orders, vendor credits, sales tax, memorized transactions, budgets and reclassifying, and
+  two references list every Preferences setting with its default and every menu-bar command. Several
+  out-of-date statements in Help and the guides are corrected.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
