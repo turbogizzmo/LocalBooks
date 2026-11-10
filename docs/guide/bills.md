@@ -128,6 +128,9 @@ in Items Received Not Billed and puts the bill's total in Accounts Payable. When
 different price, the difference goes to the line's expense account, or for stock to Inventory Asset
 for the units still on hand and to Cost of Goods Sold for any already sold.
 
+A purchase order line's **Customer:Job** shows on the receipt and carries to the bill line, which is
+billable when Preferences › Time & Expenses marks expenses billable, as on a bill entered by hand.
+
 The purchase order's discounts and charges come over to the bill too, listed under the lines: a
 percent is taken of each bill's line for that order line, so every part shipment gets its share, and
 a fixed amount goes on the bill once, after the first line from that order line that can take it.

@@ -9,6 +9,8 @@ people using LocalBooks.
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.
+- **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
+  job, and the bill entered for the received items carries it, ready to bill to the customer.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.

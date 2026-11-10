@@ -56,7 +56,7 @@ export const topics = [
   {
     id: 'receive-items', area: 'expenses', views: ['expenses/item-receipts', 'expenses/purchase-orders'],
     title: 'Receive items before the bill',
-    body: 'Vendors › Receive Items brings goods from an open purchase order into stock before the bill comes; their cost waits in Items Received Not Billed, not Accounts Payable. When the bill arrives, Enter Bill for Received Items posts it at the vendor’s prices, and any price difference goes to the stock, Cost of Goods Sold or the line’s expense account.',
+    body: 'Vendors › Receive Items brings goods from an open purchase order into stock before the bill comes; their cost waits in Items Received Not Billed, not Accounts Payable. When the bill arrives, Enter Bill for Received Items posts it at the vendor’s prices, and any price difference goes to the stock, Cost of Goods Sold or the line’s expense account. Each line’s Customer:Job from the purchase order carries through to the bill.',
     keywords: 'item receipt receive items received not billed packing slip partial shipment enter bill for received items purchase order',
     go: { label: 'Go to Receive Items', view: 'expenses/item-receipts' },
     guide: 'bills',
