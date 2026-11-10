@@ -123,6 +123,13 @@ export const topics = [
     guide: 'getting-started',
   },
   {
+    id: 'us-only', area: 'company', views: ['settings/preferences'],
+    title: 'Made for US businesses',
+    body: 'LocalBooks follows US rules and formats. Sales tax is a rate and agency on each invoice or receipt, added on top of the price; there is no VAT or GST. 1099-NEC, 1096 and W-9s are the IRS forms, and the tax calendar, tax lines and TXF export cover US federal returns. ACH files use US routing numbers and checks print in US layouts. Dates show as month/day/year and amounts as 1,234.56, with no other formats. LocalBooks runs no payroll in any country: payroll import posts your payroll service\'s journal. A business elsewhere can keep plain double-entry books in another home currency (Settings › Preferences Console › Multiple Currencies), without its own tax rules.',
+    keywords: 'us usa united states only country international canada uk australia vat gst hst foreign locale date format dd/mm/yyyy decimal comma language english',
+    guide: 'getting-started',
+  },
+  {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
     body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
