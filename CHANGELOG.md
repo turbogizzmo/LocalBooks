@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Safer company-file imports.** Amounts read from a damaged QuickBooks Desktop file are now
+  added with overflow checks, a cost row read twice counts once, and a sales receipt that also
+  moves inventory finds the account its money went into. Batches staged by an earlier version
+  label their fixed asset items correctly when you bring in their lists.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.

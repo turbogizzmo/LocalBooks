@@ -207,7 +207,8 @@ fn form_lines(rows: &[&Row], arap: &dyn Fn(i64) -> bool, classes: &HashMap<i64, 
                 });
             }
             let account_id = r.get("account_id").as_int()?;
-            let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0)?;
+            // A zero line adds nothing; one larger than the books can hold is a damaged value.
+            let cents = r.get("amount_amt").as_cents().filter(|c| *c != 0 && c.unsigned_abs() <= crate::ledger::MAX_LINE_CENTS.unsigned_abs())?;
             if arap(account_id) {
                 return None;
             }
