@@ -55,16 +55,24 @@ pub async fn export_accountant_changes(db: State<'_, Db>, destination: PathBuf) 
     accountants_copy::export(&db.pool().await, &destination).await
 }
 
+/// Reads a changes file off the async runtime's threads.
+async fn read_changes(path: PathBuf) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || std::fs::read(&path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("ACCOUNTANT_CHANGES_UNREADABLE: {e}"))
+}
+
 #[tauri::command]
 pub async fn preview_accountant_changes(db: State<'_, Db>, path: PathBuf) -> Result<ImportPreview, String> {
-    let bytes = std::fs::read(&path).map_err(|e| format!("ACCOUNTANT_CHANGES_UNREADABLE: {e}"))?;
+    let bytes = read_changes(path).await?;
     accountants_copy::preview(&db.pool().await, &bytes).await
 }
 
 #[tauri::command]
 pub async fn import_accountant_changes(app: AppHandle, db: State<'_, Db>, path: PathBuf) -> Result<CopyRecord, String> {
     let by = who(&db).await?;
-    let bytes = std::fs::read(&path).map_err(|e| format!("ACCOUNTANT_CHANGES_UNREADABLE: {e}"))?;
+    let bytes = read_changes(path).await?;
     let record = accountants_copy::import(&db.pool().await, &bytes, &by).await?;
     notify(&app);
     Ok(record)

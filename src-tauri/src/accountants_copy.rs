@@ -227,6 +227,8 @@ pub async fn changes(pool: &SqlitePool) -> Result<ChangesFile, String> {
             continue;
         }
         if voided {
+            let what = if memo.is_empty() { "a journal entry".to_string() } else { format!("journal entry \"{memo}\"") };
+            left_out.push(format!("{what} dated {date}, voided in the copy (it and its void stay behind)"));
             continue;
         }
         if let Some(original) = reverses {

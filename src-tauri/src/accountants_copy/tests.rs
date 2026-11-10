@@ -70,6 +70,7 @@ async fn the_accountants_changes_come_back_with_an_audit_record() {
     db::close_pool(&copy).await;
     assert_eq!(file.accounts.len(), 1);
     assert_eq!(file.entries.len(), 1, "the voided mistake and its reversal stay behind");
+    assert_eq!(file.left_out, vec![format!("journal entry \"Oops\" dated {}, voided in the copy (it and its void stay behind)", d(3, 30))]);
     assert!(file.entries[0].adjusting);
 
     // The client previews and imports.
