@@ -1,4 +1,6 @@
 import ReportEmailDialog from './ReportEmail.jsx';
+import { Marker, useFigureComments } from './ReportComments.jsx';
+import { statementSnapshot } from '../lib/reportComments.js';
 import { useEffect, useRef, useState } from 'react';
 import { PrintPortal, StatementDocument, useCompany } from './PrintDocuments.jsx';
 import { api, errorText, printDocument } from '../lib/api.js';
@@ -384,7 +386,7 @@ export const longDate = (iso) => LONG_DATE.format(new Date(`${iso}T00:00:00Z`));
  * `onAccount`, clicking the line opens the account's transactions (QuickZoom); clicking an amount
  * passes its column index too, so a period column opens that period.
  */
-export function StatementLine({ line, columns, onAccount }) {
+export function StatementLine({ line, columns, onAccount, comment = null }) {
   const indent = { paddingLeft: `${8 + line.depth * 16}px` };
   const strong = line.kind !== 'account';
   const rule =
@@ -404,27 +406,36 @@ export function StatementLine({ line, columns, onAccount }) {
       <td className={`py-0.5 pr-2 ${columns ? 'whitespace-nowrap' : ''} ${strong ? 'font-semibold' : ''} ${line.kind === 'net' ? 'text-md' : ''} ${drills ? 'hover:text-qb-info hover:underline' : ''}`} style={indent}>
         {line.label}
       </td>
-      {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => (
-        <td
-          key={c}
-          className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'bg-qb-canvas' : ''}`}
-          onClick={
-            drills
-              ? (e) => {
-                  e.stopPropagation();
-                  onAccount(line, columns ? c : null);
-                }
-              : undefined
-          }
-          title={drills ? 'Show the transactions behind this amount' : undefined}
-        >
-          {cents !== null && cents !== undefined && (
-            <div className={`num ${strong || columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''} ${drills ? 'hover:text-qb-info hover:underline' : ''}`}>
-              {formatColumnAmount(columns?.[c], cents)}
-            </div>
-          )}
-        </td>
-      ))}
+      {(columns ? line.amountsCents : [line.amountCents]).map((cents, c) => {
+        const shown = cents !== null && cents !== undefined;
+        // While commenting, a click on an amount opens the comment box instead of the register.
+        const figure = comment ? comment(c, shown ? formatColumnAmount(columns?.[c], cents) : '') : { marker: null, props: {} };
+        const commenting = Boolean(figure.props['data-commentable']);
+        return (
+          <td
+            key={c}
+            className={`${columns ? 'w-[120px]' : 'w-[160px]'} py-0.5 pr-2 align-bottom ${columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'bg-qb-canvas' : ''} ${commenting ? 'cursor-cell outline-dashed outline-1 outline-qb-border' : ''}`}
+            onClick={
+              commenting
+                ? figure.props.onClick
+                : drills
+                  ? (e) => {
+                      e.stopPropagation();
+                      onAccount(line, columns ? c : null);
+                    }
+                  : undefined
+            }
+            title={commenting ? figure.props.title : drills ? 'Show the transactions behind this amount' : undefined}
+          >
+            {shown && (
+              <div className={`num ${strong || columns?.[c]?.isTotal || columns?.[c]?.kind === 'subtotal' ? 'font-semibold' : ''} ${rule} ${line.kind === 'net' ? 'text-md' : ''} ${drills && !commenting ? 'hover:text-qb-info hover:underline' : ''}`}>
+                {formatColumnAmount(columns?.[c], cents)}
+                <Marker n={figure.marker} />
+              </div>
+            )}
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -432,6 +443,8 @@ export function StatementLine({ line, columns, onAccount }) {
 /** An on-screen statement; `columns` (from Profit and Loss by Class) gives one amount column each. */
 export function Statement({ title, subtitle, lines, footer, columns = null, onAccount = null }) {
   const company = useCompany();
+  const comments = useFigureComments({ title, subtitle, snapshot: () => statementSnapshot(lines, columns) });
+  const marker = (i, c) => comments.cell(i, c, null).marker;
   const wide = columns && columns.length > 2;
   return (
     <article className={`mx-auto w-full ${wide ? 'max-w-[1240px] overflow-x-auto' : 'max-w-[760px]'} bg-white px-6 py-4 shadow-panel`}>
@@ -441,10 +454,12 @@ export function Statement({ title, subtitle, lines, footer, columns = null, onAc
           <h2 className="text-xl font-semibold">{title}</h2>
           <div className="text-sm text-qb-ink-muted">{subtitle}</div>
         </div>
+        <div className="no-print self-end">{comments.toggle}</div>
         {company.logo && <img src={company.logo} alt={`${company.name} logo`} className="max-h-[56px] max-w-[180px] object-contain" />}
       </header>
+      {comments.editor}
       <PrintPortal>
-        <StatementDocument company={company} title={title} subtitle={subtitle} lines={lines} footer={footer} columns={columns} />
+        <StatementDocument company={company} title={title} subtitle={subtitle} lines={lines} footer={footer} columns={columns} marker={marker} />
       </PrintPortal>
       <table className="w-full border-collapse text-base">
         <thead>
@@ -457,7 +472,7 @@ export function Statement({ title, subtitle, lines, footer, columns = null, onAc
         </thead>
         <tbody>
           {lines.map((line, i) => (
-            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} onAccount={onAccount} />
+            <StatementLine key={`${i}-${line.label}`} line={line} columns={columns} onAccount={onAccount} comment={(c, text) => comments.cell(i, c + 1, text)} />
           ))}
         </tbody>
       </table>
