@@ -414,9 +414,9 @@ function BillForm({ receipt, onCancel, onSaved }) {
       {laid && !laid.error && laid.lines.length > 0 && (
         <p className="px-2 py-1 text-xs text-qb-ink-muted">The purchase order&apos;s discounts and charges come over to this bill.</p>
       )}
-      {laid && !laid.error && carried.filter((f) => !laid.lines.includes(f)).map((f, i) => (
-        <p key={`h${i}`} className="px-2 py-1 text-xs text-qb-ink-muted">
-          {`${f.description || 'Discount'} (${formatCents(f.amountCents)}) is more than line ${f.afterLine} on this bill, so it waits for a later bill for that order line. If no more is coming, enter it as a vendor credit.`}
+      {laid && !laid.error && laid.held.map(({ line: f, afterLines }) => (
+        <p key={`h${f.source}`} className="px-2 py-1 text-xs text-qb-ink-muted">
+          {`${f.description || 'Discount'} (${formatCents(f.amountCents)}) is more than ${afterLines.length > 1 ? 'lines' : 'line'} ${afterLines.join(' and ')} on this bill, so it waits for a later bill for that order line. If no more is coming, enter it as a vendor credit.`}
         </p>
       ))}
     </section>

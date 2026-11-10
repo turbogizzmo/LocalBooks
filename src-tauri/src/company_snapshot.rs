@@ -215,7 +215,7 @@ fn top(summary: &SummaryReport) -> (Vec<WidgetLine>, i64, i64) {
     (lines, summary.total_cents - shown, summary.total_cents)
 }
 
-async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: NaiveDate) -> Result<(Vec<WidgetLine>, i64, Vec<TrendPoint>, i64, &'static str), String> {
+async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: NaiveDate, viewer: crate::reminders::Viewer) -> Result<(Vec<WidgetLine>, i64, Vec<TrendPoint>, i64, &'static str), String> {
     Ok(match kind {
         WidgetKind::AccountBalances => {
             let bs = crate::statements::balance_sheet(pool, end).await?;
@@ -264,10 +264,13 @@ async fn figures(pool: &SqlitePool, kind: WidgetKind, start: NaiveDate, end: Nai
         WidgetKind::Notes => (Vec::new(), 0, Vec::new(), 0, ""),
         WidgetKind::Todos => {
             let open: Vec<(String, Option<String>)> = sqlx::query_as(
+                // The viewer's own and unassigned to-dos, as the To Do list's reminders show them.
                 "SELECT title, due_date FROM todos WHERE is_done = 0 AND (due_date IS NULL OR due_date <= ?1)
+                   AND (?2 IS NULL OR assigned_user_id IS NULL OR assigned_user_id = ?2)
                  ORDER BY due_date IS NULL, due_date, id",
             )
             .bind(end)
+            .bind(viewer.user_id)
             .fetch_all(pool)
             .await
             .map_err(db_err)?;
@@ -326,15 +329,16 @@ struct Row {
     note: Option<String>,
 }
 
-/// The snapshot page for `today`: every widget in order, with its figures.
-pub async fn snapshot(pool: &SqlitePool, today: NaiveDate) -> Result<Vec<Widget>, String> {
+/// The snapshot page for `today`: every widget in order, with its figures. The to-dos widget lists
+/// the `viewer`'s own and unassigned to-dos; the page and its notes are the company's.
+pub async fn snapshot(pool: &SqlitePool, today: NaiveDate, viewer: crate::reminders::Viewer) -> Result<Vec<Widget>, String> {
     let rows: Vec<Row> = sqlx::query_as("SELECT id, kind, period, note FROM snapshot_widgets ORDER BY position, id").fetch_all(pool).await.map_err(db_err)?;
     let fiscal_month = crate::preferences::fiscal_start_month(pool).await?;
     let mut out = Vec::with_capacity(rows.len());
     for r in rows {
         let (Some(kind), Some(period)) = (WidgetKind::from_code(&r.kind), Period::from_code(&r.period)) else { continue };
         let (start, end) = period.dates(today, fiscal_month);
-        let (lines, others_cents, trend, total_cents, report) = figures(pool, kind, start, end).await?;
+        let (lines, others_cents, trend, total_cents, report) = figures(pool, kind, start, end, viewer).await?;
         out.push(Widget { id: r.id, kind, period, start_date: start, end_date: end, lines, others_cents, trend, total_cents, note: r.note, report });
     }
     Ok(out)

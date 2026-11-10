@@ -600,7 +600,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
 /// received from their order lines (`po_lines`, in receipt line order). A percent line applies to
 /// every bill's line for that order line; a fixed amount goes on the first live bill that has the
 /// order line (and [`crate::purchase_lines::fit_carried`] holds back a fixed discount the line can't take).
-async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>, po_lines: &[Option<i64>]) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>, po_lines: &[Option<i64>]) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     let Some(order) = order else { return Ok(Vec::new()) };
     let views: Vec<crate::purchase_lines::PurchaseFormLineView> = sqlx::query_as(
         "SELECT after_line, kind, description, product_service_id, percent_ppm, amount_cents, account_id, class_id
@@ -617,16 +617,15 @@ async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>
         sqlx::query_as("SELECT id, line_number FROM purchase_order_lines WHERE purchase_order_id = ?1").bind(order).fetch_all(&mut **tx).await.map_err(db_err)?;
     let inputs = crate::purchase_lines::inputs_of(&views);
     let mut out = Vec::new();
-    let mut fixed_here: Vec<i64> = Vec::new();
     for (i, po_line) in po_lines.iter().enumerate() {
         let Some(po_line) = *po_line else { continue };
         let Some(&(_, number)) = numbers.iter().find(|(id, _)| *id == po_line) else { continue };
-        for (view, input) in views.iter().zip(&inputs) {
+        for (source, (view, input)) in views.iter().zip(&inputs).enumerate() {
             if view.after_line != number {
                 continue;
             }
             if input.percent_ppm.is_none() {
-                // Already on a live bill for this order line (an earlier part shipment), or on this one.
+                // Already on a live bill for this order line (an earlier part shipment).
                 let carried: bool = sqlx::query_scalar(
                     "SELECT EXISTS (
                          SELECT 1 FROM purchase_form_lines f
@@ -644,20 +643,21 @@ async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>
                 .fetch_one(&mut **tx)
                 .await
                 .map_err(db_err)?;
-                if carried || fixed_here.contains(&po_line) {
+                if carried {
                     continue;
                 }
-                fixed_here.push(po_line);
             }
-            out.push(crate::purchase_lines::PurchaseFormLineInput { after_line: i + 1, ..input.clone() });
+            // A fixed one after each receipt line from its order line; `fit_carried` keeps one.
+            out.push(crate::purchase_lines::CarriedLine { line: crate::purchase_lines::PurchaseFormLineInput { after_line: i + 1, ..input.clone() }, source });
         }
     }
     Ok(out)
 }
 
 /// What Enter Bill for Received Items shows it will take from the receipt's purchase order: the
-/// discounts and charges [`carried_form_lines`] places, before the billed amounts are known.
-pub async fn receipt_bill_form_lines(pool: &SqlitePool, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+/// discounts and charges [`carried_form_lines`] places, before the billed amounts are known (the
+/// dialog fits them to its amounts as [`crate::purchase_lines::fit_carried`] does).
+pub async fn receipt_bill_form_lines(pool: &SqlitePool, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     let mut tx = pool.begin().await.map_err(db_err)?;
     let order: Option<Option<i64>> = sqlx::query_scalar("SELECT purchase_order_id FROM item_receipts WHERE id = ?1").bind(item_receipt_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
     let order = order.ok_or("RECEIPT_NOT_FOUND: that item receipt does not exist")?;

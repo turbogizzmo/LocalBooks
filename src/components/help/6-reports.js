@@ -148,7 +148,7 @@ export const topics = [
   {
     id: 'company-snapshot', area: 'reports', views: ['reports'],
     title: 'See the business at a glance (Company Snapshot)',
-    body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, top customers, items and vendors, income and expense breakdowns, year over year, your open to-dos, and notes you type. Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
+    body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, top customers, items and vendors, income and expense breakdowns, year over year, your open to-dos (your own and unassigned ones), and notes you type (everyone who opens the company sees the same page and notes). Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
     keywords: 'company snapshot dashboard widgets overview glance balances who owes vendors to pay trend top customers items vendors insights breakdown year over year to-dos todos notes',
     go: { label: 'Go to Reports', view: 'reports' },
     guide: 'reports',

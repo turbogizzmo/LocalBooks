@@ -123,9 +123,9 @@ for the units still on hand and to Cost of Goods Sold for any already sold.
 
 The purchase order's discounts and charges come over to the bill too, listed under the lines: a
 percent is taken of each bill's line for that order line, so every part shipment gets its share, and
-a fixed amount goes on the first bill that has that order line. A fixed discount more than a part
-shipment's line waits for a later bill whose line can take it; the bill says so. If no more is
-coming, enter the discount as a vendor credit.
+a fixed amount goes on the bill once, after the first line from that order line that can take it.
+A fixed discount more than every such line on a bill (a part shipment) waits for a later bill whose
+line can take it; the bill says so. If no more is coming, enter the discount as a vendor credit.
 
 To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
