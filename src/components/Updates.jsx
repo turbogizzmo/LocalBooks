@@ -226,7 +226,7 @@ function PreviousVersion() {
         </button>
       </div>
       {plan && !plan.previous && <p className="mt-1 text-qb-ink-muted">There is no earlier release than {plan.currentVersion}.</p>}
-      {plan?.previous && plan.blocked && <Notice kind="error" text={plan.blocked} />}
+      {plan?.previous && plan.blocked && <Notice kind="error" text={errorText(plan.blocked)} />}
       {plan?.previous && !plan.blocked && (
         <div className="mt-1 flex items-center gap-2">
           <span>
