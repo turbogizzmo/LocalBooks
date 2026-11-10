@@ -78,6 +78,7 @@ pub async fn replace_invoice(pool: &SqlitePool, invoice_id: i64, input: InvoiceI
         crate::mileage::follow_replaced_invoice(tx, invoice_id, new_id).await?;
         audit(tx, "INVOICE", (invoice_id, old), (new_id, new_entry), &moved).await?;
         crate::billable_costs::follow_replaced_invoice(tx, invoice_id, new_id).await?;
+        crate::sales_orders::follow_replaced_invoice(tx, invoice_id, new_id).await?;
         Ok(new_id)
     })
     .await

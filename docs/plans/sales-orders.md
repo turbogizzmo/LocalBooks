@@ -27,17 +27,17 @@ It holds:
   the rest of every line ("the customer cancelled the rest"); reopening it undoes that.
 
 Amounts are integer cents and quantities × 10,000, as everywhere else. A sales order is in the
-company's home currency; a foreign-currency customer's order is refused (`SO_CURRENCY`) until
-foreign-currency sales orders are a row of their own.
+company's home currency, and so are the invoices made from it (`SO_CURRENCY` refuses a
+foreign-currency one) until foreign-currency sales orders are a row of their own.
 
 ## Schema (one migration, number claimed in the PR that builds it)
 
 - `sales_orders`: the header, `STRICT`, with `is_closed` for an order closed by hand.
 - `sales_order_lines`: the lines, with `invoiced_qty_e4` and `closed_qty_e4`, and a check that
   `invoiced_qty_e4 + closed_qty_e4 <= quantity_e4`.
-- `sales_order_invoiced`: one row per invoice line made from an order line (order line, invoice,
-  invoice line number, quantity), so each invoice traces back to its order and each order shows its
-  invoices.
+- `sales_order_invoiced`: one row per order line and invoice (order line, invoice, quantity), so
+  each invoice traces back to its order and each order shows its invoices. It names the invoice,
+  not one of its lines, because an edited invoice is a new invoice with new line ids.
 - Triggers keep `invoiced_qty_e4` honest: a link row adds its quantity, and **voiding the
   invoice's journal entry** takes it back off (an `AFTER UPDATE OF is_voided ON journal_entries`
   trigger, so every void path does it). A voided invoice's quantities become open again.
@@ -46,8 +46,7 @@ foreign-currency sales orders are a row of their own.
 
 ## From sales order to invoice
 
-**Create Invoice** on an order (or **Sales › Create Invoices** with a customer that has open orders,
-which offers them) asks: **all that is left**, or **selected quantities**, where each line shows
+**Create Invoice** on an order asks: **all that is left**, or **selected quantities**, where each line shows
 ordered, invoiced, left, and a **To invoice** box. The invoice form then opens with those lines,
 their rates, tax rate and details. The user can change rates, add lines that aren't on the order
 (freight, a discount), and remove lines before posting.
@@ -104,8 +103,8 @@ All run, export and print like other reports, and tie out to the order lines.
   kind of unposted sale, since a sales order covers the same need and keeps every invoice a posted
   one. If testers ask for pending invoices, they get a row of their own.
 
-The reports are added to the report screen's list of cases wherever it lives when they're built
-(#276 moves that list into its own component).
+The reports are tabs on the Sales Orders screen, so they don't touch the report screen's list of
+cases while #276 moves it; they join the Report Center once that has merged.
 
 ## Screens and the rest
 
@@ -121,11 +120,13 @@ The reports are added to the report screen's list of cases wherever it lives whe
 ## Building it
 
 1. This note (its own PR).
-2. Core: the migration; `sales_orders.rs` (save, list, detail, close and reopen, delete, invoice
-   from an order with partial quantities, the void trigger); commands; the form and list; Open Sales
-   Orders by Customer and by Item and Pending Sales; On Sales Order and Available in Stock Status
-   and the information panel; Help, guide, README, CHANGELOG.
-3. Printing and email, Create Sales Order from an estimate, and the preference.
+2. Core (migration 0153): `sales_orders.rs` (save, list, detail, close and reopen, delete, invoice
+   from an order with partial quantities, the void trigger, edits following); commands; the form,
+   list and invoice-part dialog; Open Sales Orders by Customer and by Item and Pending Sales; On
+   Sales Order and Available in Stock Status and the information panel; Help, guide, README,
+   CHANGELOG.
+3. Printing and email, Create Sales Order from an estimate, the preference, offering a customer's
+   open orders in Create Invoices, and the reports in the Report Center.
 
 ## Tests the build must pass
 

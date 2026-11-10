@@ -130,6 +130,7 @@ features![
     sales,
     sales_header,
     sales_lists,
+    sales_orders,
     sales_prefs,
     sales_tax,
     search,

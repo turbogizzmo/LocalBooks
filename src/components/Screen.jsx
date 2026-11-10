@@ -13,6 +13,7 @@ import CreditMemos from './CreditMemos.jsx';
 import Dashboard from './Dashboard.jsx';
 import DepositsTransfers from './DepositsTransfers.jsx';
 import Estimates from './Estimates.jsx';
+import SalesOrders from './SalesOrders.jsx';
 import ExpensesChecks from './ExpensesChecks.jsx';
 import FinanceCharges from './FinanceCharges.jsx';
 import BillCosts from './BillCosts.jsx';
@@ -58,6 +59,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/all' && <AllSales {...props} />}
       {view === 'sales/invoices' && <Invoices {...props} />}
       {view === 'sales/estimates' && <Estimates {...props} />}
+      {view === 'sales/orders' && <SalesOrders {...props} />}
       {view === 'sales/credits' && <CreditMemos {...props} />}
       {view === 'sales/customers' && <PartyList kind="customer" navigate={navigate} intent={intent} />}
       {view === 'sales/products' && <Products accounts={list} intent={intent} />}

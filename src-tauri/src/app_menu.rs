@@ -181,6 +181,7 @@ const CUSTOMERS: &[Entry] = &[
     keyed("Customer Center", "sales/customers", None, "CmdOrCtrl+J"),
     Entry::Sep,
     form("Create Estimates", "sales/estimates", "estimate"),
+    form("Create Sales Orders", "sales/orders", "sales-order"),
     keyed("Create Invoices", "sales/invoices", Some("invoice"), "CmdOrCtrl+I"),
     form("Enter Sales Receipts", "sales/all", "sales-receipt"),
     page("Create Statements…", "sales/statements"),

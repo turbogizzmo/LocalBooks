@@ -118,6 +118,7 @@ mod revaluation;
 mod sales;
 mod sales_header;
 mod sales_lists;
+mod sales_orders;
 mod sales_prefs;
 mod sales_tax;
 mod tax_ids;

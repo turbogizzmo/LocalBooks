@@ -35,6 +35,11 @@ people using LocalBooks.
   SQLCipher, the groundwork for an optional setting that encrypts the whole company file and its
   backups. Nothing changes in your files yet, and Help › Save diagnostics lists the SQLCipher
   version.
+- **Sales orders.** Record what a customer has ordered before you ship it, in **Sales › Sales
+  Orders**. An order doesn't touch your books; invoice it all at once or in parts as you ship, and
+  it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
+  and an item's information panel now show what is on sales orders and what is available, and the
+  Open by customer, Open by item and Pending sales reports list what is still to ship.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
