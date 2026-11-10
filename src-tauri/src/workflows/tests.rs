@@ -92,7 +92,7 @@ async fn recurring_purchase_orders_search_attachments_and_budgets() {
     let (checking, rent, supplies, services) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "6250").await, account(&pool, "4100").await);
     let rent_check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-01",
         "checkNumber": null, "paymentMethod": null, "memo": "Monthly rent", "lines": [{ "accountId": rent, "amountCents": 120_000, "memo": null }] });
-    let id = save_recurring(&pool, None, RecurringInput { name: "Rent".into(), kind: "EXPENSE".into(), payload: rent_check, frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: Some(d(4, 30)) }).await.unwrap();
+    let id = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Rent".into(), kind: "EXPENSE".into(), payload: rent_check, frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: Some(d(4, 30)) }).await.unwrap();
     assert_eq!(enter_due(&pool, d(3, 15), None).await.unwrap(), 2, "January 31 and February 28");
     assert_eq!(balance(&pool, rent).await, 240_000);
     let listed = list_recurring(&pool).await.unwrap();
@@ -190,8 +190,8 @@ async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
     let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
-    let monthly = save_recurring(&pool, None, RecurringInput { name: "Month end".into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: None }).await.unwrap();
-    let quarterly = save_recurring(&pool, None, RecurringInput { name: "Quarter end".into(), kind: "EXPENSE".into(), payload: check, frequency: "QUARTERLY".into(), every: 1, next_date: d(11, 30).with_year(2025).unwrap(), end_date: None }).await.unwrap();
+    let monthly = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Month end".into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: d(1, 31), end_date: None }).await.unwrap();
+    let quarterly = save_recurring(&pool, None, RecurringInput { anchor_day: None, name: "Quarter end".into(), kind: "EXPENSE".into(), payload: check, frequency: "QUARTERLY".into(), every: 1, next_date: d(11, 30).with_year(2025).unwrap(), end_date: None }).await.unwrap();
     enter_due(&pool, d(5, 31), None).await.unwrap();
     let runs = |id: i64| {
         let pool = pool.clone();
@@ -206,7 +206,26 @@ async fn a_monthly_schedule_from_the_31st_keeps_to_month_end_after_a_short_month
     // Saved again on June 30 (renamed, same next date), it still goes to July 31.
     let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
         "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
-    save_recurring(&pool, Some(monthly), RecurringInput { name: "Rent at month end".into(), kind: "EXPENSE".into(), payload: check, frequency: "MONTHLY".into(), every: 1, next_date: d(6, 30), end_date: None }).await.unwrap();
+    save_recurring(&pool, Some(monthly), RecurringInput { anchor_day: None, name: "Rent at month end".into(), kind: "EXPENSE".into(), payload: check, frequency: "MONTHLY".into(), every: 1, next_date: d(6, 30), end_date: None }).await.unwrap();
     enter_due(&pool, d(7, 31), Some(monthly)).await.unwrap();
     assert_eq!(runs(monthly).await.last().copied(), Some(d(7, 31)));
+}
+
+#[tokio::test]
+async fn memorizing_a_transaction_from_the_31st_keeps_its_day_though_it_first_repeats_on_the_28th() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let check = serde_json::json!({ "kind": "CHECK", "payeeName": "Landlord", "paymentAccountId": checking, "expenseDate": "2026-01-31",
+        "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": rent, "amountCents": 1_000, "memo": null }] });
+    // Memorize on a January 31 check: Next date is February 28, the day kept is the 31st.
+    let memorized = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Rent".into(), kind: "EXPENSE".into(), payload: check.clone(), frequency: "MONTHLY".into(), every: 1, next_date: d(2, 28), end_date: None }).await.unwrap();
+    // A Next date typed over to the 15th doesn't match the 31st, so the 15th is kept.
+    let typed = save_recurring(&pool, None, RecurringInput { anchor_day: Some(31), name: "Typed".into(), kind: "EXPENSE".into(), payload: check, frequency: "MONTHLY".into(), every: 1, next_date: d(2, 15), end_date: None }).await.unwrap();
+    enter_due(&pool, d(4, 30), None).await.unwrap();
+    let runs = |id: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, NaiveDate>("SELECT run_date FROM recurring_runs WHERE template_id = ?1 ORDER BY run_date").bind(id).fetch_all(&pool).await.unwrap() }
+    };
+    assert_eq!(runs(memorized).await, vec![d(2, 28), d(3, 31), d(4, 30)]);
+    assert_eq!(runs(typed).await, vec![d(2, 15), d(3, 15), d(4, 15)]);
 }

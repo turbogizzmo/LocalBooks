@@ -337,6 +337,11 @@ pub struct RecurringInput {
     pub next_date: NaiveDate,
     #[serde(default)]
     pub end_date: Option<NaiveDate>,
+    /// The day of the month later dates fall on: the memorized transaction's own day, when the next
+    /// date is that day moved to a shorter month (a Jan 31 transaction first repeats on Feb 28).
+    /// Left out, or not matching the next date, it is the next date's day.
+    #[serde(default)]
+    pub anchor_day: Option<u32>,
 }
 
 fn one() -> i64 {
@@ -468,7 +473,7 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
     // Later dates fall on the next date's day of the month (or the month's last day). Saving a
     // template without moving its next date keeps the day it already has (a schedule from the 31st
     // sitting on February 28 stays a month-end schedule).
-    let anchor = i64::from(input.next_date.day());
+    let anchor = i64::from(anchor_day(input.next_date, input.anchor_day));
     let unique = |e: sqlx::Error| {
         let msg = db_err(e);
         if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
@@ -526,6 +531,16 @@ async fn post_occurrence(tx: &mut Transaction<'_, Sqlite>, kind: &str, payload: 
             let id = crate::invoices::write_invoice(tx, &i).await?;
             sqlx::query_scalar("SELECT journal_entry_id FROM invoices WHERE id = ?1").bind(id).fetch_one(&mut **tx).await.map_err(db_err)
         }
+    }
+}
+
+/// The day of the month a schedule falls on: `chosen` when `next` is that day, or the last day of a
+/// month too short for it; otherwise `next`'s own day.
+fn anchor_day(next: NaiveDate, chosen: Option<u32>) -> u32 {
+    let last = next.with_day(1).and_then(|first| first.checked_add_months(Months::new(1))).and_then(|d| d.pred_opt()).map_or(31, |d| d.day());
+    match chosen {
+        Some(day) if (1..=31).contains(&day) && day.min(last) == next.day() => day,
+        _ => next.day(),
     }
 }
 

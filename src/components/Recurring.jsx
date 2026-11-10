@@ -52,7 +52,10 @@ export function MemorizeDialog({ kind, payload, date, defaultName, onClose, onSa
   const save = async () => {
     setBusy(true);
     try {
-      await api.saveRecurring(null, { name: name.trim(), kind, payload, frequency, every: n, nextDate, endDate: endDate || null });
+      // The memorized transaction's own day of the month: a Jan 31 rent first repeats on Feb 28 and
+      // then goes back to the 31st (the backend keeps it only when Next date is that day or month end).
+      const anchorDay = frequency === 'WEEKLY' ? null : Number((date ?? todayIso()).slice(8, 10));
+      await api.saveRecurring(null, { name: name.trim(), kind, payload, frequency, every: n, nextDate, endDate: endDate || null, anchorDay });
       onSaved(`“${name.trim()}” memorized: ${scheduleText(frequency, n).toLowerCase()}, next on ${formatDate(nextDate)}. Enter it from Accounting › Recurring Transactions.`);
     } catch (err) {
       setError(errorText(err));
