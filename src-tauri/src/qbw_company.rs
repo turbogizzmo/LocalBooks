@@ -128,6 +128,39 @@ pub struct LedgerQuality {
     /// Accounts whose total from the decoded lines equals the balance the file stores.
     pub accounts_matching_stored: usize,
     pub accounts_with_stored_balance: usize,
+    /// Stored amounts that are not a whole number of cents, each described ("Invoice line,
+    /// transaction 812: 10.005"). They are left out of what is imported (a stored balance counts as
+    /// zero, a line or payment link is skipped), so the summary lists them.
+    pub fractional_amounts: Vec<String>,
+}
+
+/// The amount columns the import reads as cents, and what each row is, for [`fractional_amounts`].
+const AMOUNT_COLUMNS: &[(&str, &str, &str, &str)] = &[
+    ("abmc_account_internal", "ending_balance_amt", "account_id", "Stored balance of account"),
+    ("abmc_customer_internal", "end_balance_amt", "customer_id", "Stored balance of customer"),
+    ("abmc_vendor_internal", "end_balance_amt", "vendor_id", "Stored balance of vendor"),
+    ("abmc_invoice_lineitem", "amount_amt", "transaction_id", "Invoice line, transaction"),
+    ("abmc_credit_memo_lineitem", "amount_amt", "transaction_id", "Credit memo line, transaction"),
+    ("abmc_sales_receipt_lineitem", "amount_amt", "transaction_id", "Sales receipt line, transaction"),
+    ("abmc_bill_lineitem", "amount_amt", "transaction_id", "Bill line, transaction"),
+    ("abmc_estimate_lineitem", "amount_amt", "transaction_id", "Estimate line, transaction"),
+    ("abmc_purchase_order_lineitem", "amount_amt", "transaction_id", "Purchase order line, transaction"),
+    ("abmc_transaction_link", "amount_amt", "transaction_id", "Payment applied, transaction"),
+];
+
+/// Every amount the import reads as cents that the file stores as a double with a fraction of a
+/// cent: described, in table order, so the import summary can count and list them.
+pub(crate) fn fractional_amounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<String> {
+    let mut found = Vec::new();
+    for (table, column, id_column, what) in AMOUNT_COLUMNS {
+        for r in rows_of(pages, catalog, table) {
+            if let Some(value) = r.get(column).fractional_amount() {
+                let id = r.get(id_column).as_int().map(|i| i.to_string()).unwrap_or_else(|| "?".into());
+                found.push(format!("{what} {id}: {value}"));
+            }
+        }
+    }
+    found
 }
 
 /// What became of a line row that did not decode in full.
@@ -920,6 +953,7 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
             *totals.entry(line.account_id).or_default() += line.cents;
         }
     }
+    quality.fractional_amounts = fractional_amounts(&pages, &catalog);
     for account in &accounts {
         if let Some(stored) = account.stored_balance_cents {
             quality.accounts_with_stored_balance += 1;

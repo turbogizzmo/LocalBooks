@@ -24,8 +24,11 @@ posted lives in Rust and in the schema; the screens only display and collect inp
 | Run the app on test companies | the `run-localbooks` skill in `.claude/skills/` |
 | Release build (macOS) | `npm run build:mac` |
 
-CI (`.github/workflows/`) runs the Rust tests on macOS, Windows and Linux, end-to-end tests on
-Windows and Linux, Clippy, and the JS unit tests and lint, on every pull request. A PR merges only when all of them are green.
+CI (`.github/workflows/`) runs the Rust tests on Windows and Linux, end-to-end tests on Windows
+and Linux, Clippy, and the JS unit tests and lint, on every pull request. The Rust tests on macOS
+(the slowest, with few runners) run on `batch/*` PRs, PRs labelled `macos`, pushes to `main` and
+tags. Feature PRs merge through a batch PR, so every change passes macOS before it lands. A PR
+merges only when all of its checks are green.
 
 ## Non-negotiable rules
 

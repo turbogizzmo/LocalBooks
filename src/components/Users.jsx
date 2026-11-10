@@ -160,9 +160,9 @@ function SignInForm({ busy, run, onForgot }) {
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" className="mt-0.5" checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={busy} />
         <span>
-          Remember me on this Mac
+          Remember me on this computer
           <span className="block text-2xs text-qb-ink-faint">
-            Opens this company as you without asking. Anyone who can use this Mac account could open your books, so leave it off on a shared computer.
+            Opens this company as you without asking. Anyone who can use your account on this computer could open your books, so leave it off on a shared computer.
           </span>
         </span>
       </label>
@@ -716,14 +716,14 @@ export function UsersSettings() {
           {changed && <Notice kind="success" text="Your password was changed." onDismiss={() => setChanged(false)} />}
           {state.rememberedHere && (
             <div className="flex items-center gap-2 text-sm">
-              <span>This Mac remembers a sign-in for this company and opens it without asking.</span>
+              <span>This computer remembers a sign-in for this company and opens it without asking.</span>
               <button
                 type="button"
                 className="qb-btn qb-btn-secondary h-row flex-none px-2 text-xs"
                 disabled={busy}
                 onClick={() => run(async () => (await api.forgetRememberedSignIn(), setState((s) => ({ ...s, rememberedHere: false }))))}
               >
-                Forget on This Mac
+                Forget on This Computer
               </button>
             </div>
           )}
