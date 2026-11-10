@@ -29,6 +29,23 @@ export const splitRowsFrom = (lines) =>
     rate: l.quantityE4 && l.rateCents ? centsToInput(l.rateCents) : '',
   }));
 
+/** Split rows for a document copied by Duplicate (`api.getCopySource`): its lines' accounts, items,
+ * quantities and amounts, classes, customers and payers. */
+export const splitRowsFromCopy = (lines) =>
+  lines.map((l) => ({
+    ...blankSplit(l.accountId),
+    productId: l.productServiceId ?? null,
+    classId: l.classId ?? null,
+    customerId: l.customerId ?? null,
+    vendorId: l.vendorId ?? null,
+    // A copy doesn't say whether a line was billable: the company default decides, as on a new line.
+    billable: null,
+    memo: l.description ?? '',
+    amount: l.quantityE4 ? '' : centsToInput(l.amountCents),
+    qty: l.quantityE4 ? formatQuantity(l.quantityE4).replace(/,/g, '') : '',
+    rate: l.quantityE4 && l.rateCents ? centsToInput(l.rateCents) : '',
+  }));
+
 /**
  * A row's pricing: with a quantity (up to 4 decimals) and a rate, the amount is
  * round_half_up(quantity × rate), exactly as the ledger computes it; otherwise the typed amount.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
-import LineItemGrid, { blankLine, summarizeLines } from './LineItemGrid.jsx';
+import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { attachLaterButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import { attachPicked, PendingAttachments } from './Attachments.jsx';
@@ -29,16 +29,17 @@ const kindOf = (m) => (m.isPayment ? 'Unapplied payment' : m.refundAccountId !==
 const nameOf = (m) => (m.isPayment ? `unapplied payment${m.paymentReference ? ` (${m.paymentReference})` : ''}` : `credit memo #${m.creditNumber}`);
 
 /** Credit memo (credit kept for the customer) or refund receipt (money paid back now). */
-function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
+/** `copyOf` (from Duplicate) starts the credit memo or refund receipt as a copy of a saved one, dated today. */
+function CreditForm({ accounts, refund, onPosted, onCancel, savedStep, copyOf = null }) {
   const products = useLedgerQuery(api.listProducts);
   const customers = useLedgerQuery(api.listCustomers);
   const defaultIncome = useMemo(() => accounts.find((a) => a.isActive && a.classification === 'INCOME')?.id ?? null, [accounts]);
   const defaultBank = useMemo(() => accounts.find((a) => a.isActive && a.accountType === 'BANK')?.id ?? null, [accounts]);
-  const [customer, setCustomer] = useState('');
+  const [customer, setCustomer] = useState(copyOf?.name ?? '');
   const [date, setDate] = useTransactionDate();
-  const [memo, setMemo] = useState('');
-  const [refundFrom, setRefundFrom] = useState(defaultBank);
-  const [lines, setLines] = useState(() => Array.from({ length: 3 }, () => blankLine(defaultIncome)));
+  const [memo, setMemo] = useState(copyOf?.memo ?? '');
+  const [refundFrom, setRefundFrom] = useState(copyOf?.accountId ?? defaultBank);
+  const [lines, setLines] = useState(() => (copyOf ? linesFromDocument(copyOf.lines, [], defaultIncome) : Array.from({ length: 3 }, () => blankLine(defaultIncome))));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // Files picked before posting; attached once it posts.
@@ -48,6 +49,12 @@ function CreditForm({ accounts, refund, onPosted, onCancel, savedStep }) {
   const tax = useFormTax(customer, customers.data);
   // Only its Bill To / Ship To / P.O. No. / FOB row is used here.
   const sales = useSalesDetails(customer, customers.data);
+  // A copy keeps the original's tax rate.
+  useEffect(() => {
+    if (copyOf) tax.set(copyOf.taxRateId ?? null);
+    // Once, for the copy the form was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (defaultIncome !== null) setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
@@ -365,6 +372,9 @@ export default function CreditMemos({ accounts, intent }) {
   const [composing, setComposing] = useState(intent?.action === 'credit-memo' ? 'credit' : intent?.action === 'refund-receipt' ? 'refund' : null);
   const [dialog, setDialog] = useState(null); // { mode: 'apply' | 'refund' | 'writeOff', memo }
   const [notice, setNotice] = useState(null);
+  // Duplicate: the saved credit memo or refund receipt the new one starts from.
+  const [copyOf, setCopyOf] = useState(null);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     if (intent?.action === 'credit-memo') setComposing('credit');
@@ -387,6 +397,17 @@ export default function CreditMemos({ accounts, intent }) {
     setComposing(m.refundAccountId !== null ? 'refund' : 'credit');
     saved.open(m);
   };
+  const duplicate = (m) =>
+    api.getCopySource('CREDIT_MEMO', m.id).then(
+      (copy) => {
+        saved.close();
+        setComposing(m.refundAccountId !== null ? 'refund' : 'credit');
+        setCopyOf(copy);
+        setFormKey((k) => k + 1);
+        setNotice({ kind: 'info', text: `A copy of ${m.refundAccountId !== null ? 'refund receipt' : 'credit memo'} #${m.creditNumber}, dated today: it gets the next number when you save it.` });
+      },
+      (err) => setNotice({ kind: 'error', text: errorText(err) }),
+    );
   const viewingRefund = viewing?.refundAccountId !== null;
   const viewingLabel = viewingRefund ? 'Refund receipt' : 'Credit memo';
 
@@ -399,6 +420,7 @@ export default function CreditMemos({ accounts, intent }) {
           step={saved.step}
           onFind={() => openFromList('accounting/find', 'find', { text: '' })}
           onNew={saved.close}
+          onDuplicate={() => duplicate(viewing)}
           entryId={viewing.journalEntryId}
           // Drawn, printed and emailed as its credit memo form (Settings › Custom Forms › Credit Memo).
           form={{ kind: 'CREDIT_MEMO', id: viewing.id }}
@@ -430,7 +452,21 @@ export default function CreditMemos({ accounts, intent }) {
         />
       )}
       {composing && !viewing && (
-        <CreditForm key={composing} accounts={accounts} refund={composing === 'refund'} savedStep={(blocked) => saved.fromNew(blocked)} onCancel={() => setComposing(null)} onPosted={(text) => setNotice({ kind: 'success', text })} />
+        <CreditForm
+          key={`${composing}-${formKey}`}
+          copyOf={copyOf}
+          accounts={accounts}
+          refund={composing === 'refund'}
+          savedStep={(blocked) => saved.fromNew(blocked)}
+          onCancel={() => {
+            setCopyOf(null);
+            setComposing(null);
+          }}
+          onPosted={(text) => {
+            setCopyOf(null);
+            setNotice({ kind: 'success', text });
+          }}
+        />
       )}
       {dialog?.mode === 'apply' && <ApplyDialog memo={dialog.memo} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.mode === 'refund' && (
@@ -522,6 +558,7 @@ export default function CreditMemos({ accounts, intent }) {
                         label={`Actions for credit ${m.creditNumber}`}
                         items={[
                           { label: 'Open', disabled: m.isPayment, onSelect: () => openMemo(m) },
+                          { label: 'Duplicate', hint: 'A new one copied from this one, dated today', disabled: m.isPayment, onSelect: () => duplicate(m) },
                           { label: 'Apply to invoices…', disabled: refund || m.isVoided, onSelect: () => setDialog({ mode: 'apply', memo: m }) },
                           { label: 'Refund credit…', disabled: refund || m.isVoided || m.remainingCents === 0, onSelect: () => setDialog({ mode: 'refund', memo: m }) },
                           { label: 'Write off credit…', disabled: refund || m.isVoided || m.remainingCents === 0, onSelect: () => setDialog({ mode: 'writeOff', memo: m }) },

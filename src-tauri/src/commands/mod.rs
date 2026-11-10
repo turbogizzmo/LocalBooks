@@ -75,6 +75,7 @@ features![
     desktop,
     diagnostics,
     document_inbox,
+    duplicates,
     editing,
     email,
     envelopes,
