@@ -210,12 +210,15 @@ These keys use **Ctrl** on a Mac too, since ⌘Q quits and ⌘H hides the app.
 
 Set up a budget first under **Accounting › Budgets**:
 
-1. Choose **New budget…**, name it, and pick the fiscal year.
+1. Choose **New budget…**, name it, and pick the fiscal year. Each year is listed by its months
+   (for example **Jul 2026 – Jun 2027**), starting from the first month of your fiscal year in
+   Preferences › Accounting, and the current one is marked **(this year)**.
 2. With **Accounts** set to **Profit and Loss**, enter what you expect each income and expense
    account to bring in or cost each month. **Copy across** repeats the first month.
 3. For a balance sheet budget, set **Accounts** to **Balance Sheet** and enter the **balance** you
    expect each account to have at the end of each month (not the change).
-4. Choose **Save**.
+4. Choose **Save**. Amounts are kept only once saved: closing Budgets, quitting, or starting a
+   new budget with amounts not saved asks before discarding them.
 
 Then, under **Reports › Budgets**:
 

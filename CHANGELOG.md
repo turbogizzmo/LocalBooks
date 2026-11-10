@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Budgets keep what you type.** Closing Budgets, quitting LocalBooks or choosing New budget…
+  with amounts not yet saved now asks first, instead of losing them.
+- **Clearer fiscal years for new budgets.** New budget… lists each fiscal year by its months (for
+  example "Jul 2026 – Jun 2027") and marks the current one. Before, a bare year could create the
+  budget for the wrong fiscal year when it doesn't start in January.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
