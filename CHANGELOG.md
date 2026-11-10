@@ -11,6 +11,10 @@ people using LocalBooks.
   each job.
 - **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
   job, and the bill entered for the received items carries it, ready to bill to the customer.
+- **More on items.** An item's record takes Subitem of, a description for purchase forms and a cost
+  (also brought in from IIF files). The item list has a search row, tick boxes to make several
+  items inactive or active at once, and Add/Edit Multiple for rows pasted from a spreadsheet. The
+  item box on sales forms has Find & Select Items to add several lines at once.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.

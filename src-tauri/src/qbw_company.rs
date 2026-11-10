@@ -239,6 +239,9 @@ pub struct SourceItem {
     pub active: bool,
     /// Custom fields with a value, as (label, value).
     pub custom_fields: Vec<(String, String)>,
+    /// What purchase forms say for it, and what it costs to buy.
+    pub purchase_description: Option<String>,
+    pub purchase_cost_cents: Option<i64>,
     /// A percent discount or charge, in parts per million of the line it applies to.
     pub percent_ppm: Option<i64>,
 }
@@ -810,6 +813,8 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
                 taxable: r.get("sales_tax_code_id").as_int().is_some_and(|c| taxable_codes.contains(&c)),
                 active: r.get("is_hidden_bool").as_int() != Some(1) && r.get("is_deleted_bool").as_int() != Some(1),
                 custom_fields: r.get("item_abm_id").as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
+                purchase_description: text(r, "purchase_description").or_else(|| text(r, "purchase_desc")),
+                purchase_cost_cents: r.get("purchase_cost_amt").as_cents().map(i64::abs),
             })
         })
         .collect();

@@ -66,6 +66,7 @@ mod info_panel;
 mod inventory;
 mod item_receipts;
 mod invoices;
+mod item_details;
 mod item_categories;
 mod item_prices;
 mod item_types;
