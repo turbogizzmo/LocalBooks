@@ -117,7 +117,8 @@ key** with **Read** access to **Balance** and **Payouts** (nothing else). In Loc
 
 LocalBooks checks the key with Stripe, then keeps it in this computer's credential store (the
 Keychain on a Mac), never in the company file. Nothing is fetched until you connect, and then only
-when you click **Get payouts**; LocalBooks talks only to Stripe and sends nothing anywhere else.
+when you click **Get payouts** (or on a schedule you choose, below); LocalBooks talks only to Stripe
+and sends nothing anywhere else.
 
 **Get payouts** fetches paid payouts from the last 90 days (afterwards, since the last fetch). Each
 shows its sales, fees, refunds, chargebacks and what reached the bank; click it to see each sale,
@@ -170,6 +171,15 @@ it in this computer's credential store, and talks only to your store's Admin API
 **Get payouts** fetches paid payouts to your bank from the last 90 days (afterwards, since the last
 fetch), each with the sales, refunds, disputes and adjustments that make it up. Scheduled payouts
 wait until they are paid. Test-mode transactions are left out.
+
+### Fetch payouts automatically
+
+Each feed is fetched only when you click **Get payouts** until an Admin changes **Fetch** on the
+feed to every hour, 6 hours, 12 hours or once a day. LocalBooks then fetches it on that schedule
+while it is open and someone who can change the books is signed in; the line beside **Fetch** says
+when it last did and what it found, or why it couldn't. New payouts still wait for you to click
+**Record deposit**. On a Mac, after LocalBooks is updated the Keychain may ask once whether
+LocalBooks can read the feed's key; choose **Always Allow** so automatic fetches can run.
 
 ## When LocalBooks asks which columns are which
 

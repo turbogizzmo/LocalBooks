@@ -303,8 +303,9 @@ pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: Option<&str>, 
         let arrival = issued(&p).map_or_else(|| Utc::now().date_naive(), |t| t.date_naive());
         match shopify_breakdown(net, &txns) {
             Ok(b) => {
-                keep(pool, f.id, &id, arrival, &home, &b).await?;
-                result.new_payouts += 1;
+                if keep(pool, f.id, &id, arrival, &home, &b).await? {
+                    result.new_payouts += 1;
+                }
             }
             Err(e) => result.refused.push(format!("{id}: {}", reason(&e))),
         }

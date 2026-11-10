@@ -174,3 +174,89 @@ async fn deposits_refuse_deductions_that_leave_nothing_in_the_bank() {
     crate::banking::post_bank_deposit(&pool, deposit(vec![fee(35, input.fee_account_id, "FEE")])).await.unwrap();
     assert_eq!(balance(&pool, bank).await, 965);
 }
+
+#[tokio::test]
+async fn a_feed_set_to_fetch_automatically_is_fetched_when_its_interval_has_passed() {
+    let pool = test_pool().await;
+    let (input, _) = setup(&pool).await;
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let api = mock_stripe(requests.clone()).await;
+    let apis = Apis::all(&api);
+    let (store, _dir) = temp_store("auto");
+    let f = connect_stripe(&pool, &store, &api, "rk_test_good", &input).await.unwrap();
+    let at = |t: &str| DateTime::parse_from_rfc3339(t).unwrap().with_timezone(&Utc);
+
+    // Off until an Admin picks an interval: nothing is fetched.
+    assert!(fetch_due(&pool, &store, &apis, at("2026-03-10T12:00:00Z")).await.unwrap().is_empty());
+    assert!(set_auto_fetch(&pool, f.id, Some(5)).await.unwrap_err().starts_with("PAYOUT_AUTO"));
+    assert_eq!(set_auto_fetch(&pool, f.id, Some(6)).await.unwrap().auto_fetch_hours, Some(6));
+    let calls = requests.lock().unwrap().len();
+
+    let done = fetch_due(&pool, &store, &apis, at("2026-03-10T12:00:00Z")).await.unwrap();
+    assert_eq!(done, vec![AutoFetch { feed_id: f.id, new_payouts: 1, error: None }]);
+    let line = feed(&pool, f.id).await.unwrap().last_auto_result.unwrap();
+    assert!(line.starts_with("2026-03-10 12:00 UTC: 1 new payout. Not kept:"), "{line}");
+    assert!(requests.lock().unwrap().len() > calls);
+
+    // Not again until six hours have passed; then again, finding nothing new.
+    assert!(fetch_due(&pool, &store, &apis, at("2026-03-10T17:59:00Z")).await.unwrap().is_empty());
+    assert_eq!(fetch_due(&pool, &store, &apis, at("2026-03-10T18:00:00Z")).await.unwrap()[0].new_payouts, 0);
+
+    // A failing try is kept on the screen and waits for the next interval too.
+    let (empty, _other) = temp_store("auto-empty");
+    let failed = fetch_due(&pool, &empty, &apis, at("2026-03-11T01:00:00Z")).await.unwrap();
+    assert!(failed[0].error.as_deref().is_some_and(|e| e.starts_with("PAYOUT_KEY_MISSING")));
+    assert!(feed(&pool, f.id).await.unwrap().last_auto_result.unwrap().contains("not fetched: this computer doesn't have the feed's key"));
+    assert!(fetch_due(&pool, &empty, &apis, at("2026-03-11T02:00:00Z")).await.unwrap().is_empty(), "no retry before the interval");
+
+    set_auto_fetch(&pool, f.id, None).await.unwrap();
+    assert!(fetch_due(&pool, &store, &apis, at("2026-03-12T12:00:00Z")).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn automatic_fetches_wait_for_someone_who_may_change_the_books() {
+    let dir = std::env::temp_dir().join(format!("localbooks-autofetch-{}", crate::mcp_server::new_token()));
+    let db = crate::db::Db::open_at(dir.join("books.localbooks"), crate::db::test_config(&dir)).await.unwrap();
+    db.refresh_gate().await;
+    assert!(may_auto_fetch(&db).await, "a file without users: yes");
+
+    let (pool, slot) = db.pool_and_session().await.unwrap();
+    let (session, _) = crate::users::turn_on(&pool, "Owner", None, "owner password").await.unwrap();
+    let viewer = crate::users::add(&pool, &session, crate::users::NewUserInput {
+        username: "viewer".into(),
+        display_name: None,
+        role: crate::users::Role::ViewOnly,
+        can_see_sensitive: false,
+        password: "viewer temp pw".into(),
+    })
+    .await
+    .unwrap();
+    db.refresh_gate().await;
+    assert!(!may_auto_fetch(&db).await, "users on and nobody signed in: no");
+
+    *slot.lock().await = Some(session);
+    db.refresh_gate().await;
+    assert!(may_auto_fetch(&db).await, "an Admin signed in: yes");
+
+    let mut viewing = crate::users::sign_in(&pool, "viewer", "viewer temp pw").await.unwrap();
+    viewing.user.must_change_password = false;
+    assert_eq!(viewing.user.id, viewer.id);
+    *slot.lock().await = Some(viewing);
+    db.refresh_gate().await;
+    assert!(!may_auto_fetch(&db).await, "a View-only user signed in: no");
+}
+
+#[tokio::test]
+async fn a_payout_kept_by_a_fetch_running_at_the_same_time_is_kept_once() {
+    let pool = test_pool().await;
+    let (input, _) = setup(&pool).await;
+    let api = mock_stripe(Arc::new(Mutex::new(Vec::new()))).await;
+    let (store, _dir) = temp_store("race");
+    let f = connect_stripe(&pool, &store, &api, "rk_test_good", &input).await.unwrap();
+    let b = stripe_breakdown(24_305, &transactions()).unwrap();
+    let day = NaiveDate::from_ymd_opt(2026, 3, 9).unwrap();
+    assert!(keep(&pool, f.id, "po_1", day, "USD", &b).await.unwrap());
+    assert!(!keep(&pool, f.id, "po_1", day, "USD", &b).await.unwrap(), "the second is a no-op, not an error");
+    let now = DateTime::parse_from_rfc3339("2026-03-10T12:00:00Z").unwrap().with_timezone(&Utc);
+    assert_eq!(fetch(&pool, &store, &Apis::all(&api), f.id, now).await.unwrap().new_payouts, 0);
+}

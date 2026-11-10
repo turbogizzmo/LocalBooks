@@ -40,6 +40,12 @@ people using LocalBooks.
   it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
   and an item's information panel now show what is on sales orders and what is available, and the
   Open by customer, Open by item and Pending sales reports list what is still to ship.
+- **Payouts fetched on a schedule.** An Admin can set each payout feed in Banking › Payout Feeds
+  to fetch every hour, 6 hours, 12 hours or once a day while LocalBooks is open. New payouts wait
+  for you to record them, and the feed shows what its last automatic fetch found.
+- **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
+  too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
+  of its sales, less Shopify's fees, refunds and chargebacks.
 - **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
   too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
   your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
