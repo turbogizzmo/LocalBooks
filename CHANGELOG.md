@@ -28,7 +28,9 @@ people using LocalBooks.
   Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
   some tables' rows at all, such as the check lines of a file upgraded from an older version.
   LocalBooks now repairs that part first, so those transactions import.
-
+- **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
+  waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
+  is ever locked out, and other users can still sign in.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
@@ -88,6 +90,7 @@ people using LocalBooks.
   too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
   your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
   chargebacks, so it matches the bank line.
+
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
