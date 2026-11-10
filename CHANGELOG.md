@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Inventory to reorder.** Reminders lists tracked items at or below their reorder point, with
+  what is already on order, and Vendors › Inventory Activities gathers the inventory screens:
+  the item list, Adjust Quantity/Value on Hand, Change Item Prices, purchase orders and the stock
+  reports.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

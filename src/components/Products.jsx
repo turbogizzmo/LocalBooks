@@ -190,6 +190,48 @@ function ProductDialog({ product, accounts, onClose, onSaved }) {
   );
 }
 
+/** Adjust Quantity/Value on Hand from the menu bar: which tracked item to adjust. */
+function PickAdjustDialog({ products, items, onClose, onPick }) {
+  const names = new Map(products.map((p) => [p.id, p.name]));
+  const tracked = items.filter((i) => names.has(i.productId)).sort((a, b) => names.get(a.productId).localeCompare(names.get(b.productId)));
+  const [chosen, setChosen] = useState(tracked[0]?.id ?? null);
+  return (
+    <Dialog title="Adjust quantity or value on hand" onClose={onClose}>
+      <form
+        className="flex flex-col gap-2 px-3 py-2 text-xs"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const item = tracked.find((i) => i.id === chosen);
+          if (item) onPick(item);
+        }}
+      >
+        {tracked.length === 0 ? (
+          <p className="text-qb-ink-muted">No items are tracked in stock yet. Choose Track stock… on an item first.</p>
+        ) : (
+          <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-qb-ink-muted">Item</span>
+            <select className="qb-input" value={chosen ?? ''} onChange={(e) => setChosen(Number(e.target.value))} autoFocus>
+              {tracked.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {names.get(i.productId)} · {formatQuantity(i.qtyOnHandE4)} on hand
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="flex justify-end gap-2 border-t border-qb-border pt-2">
+          <button type="button" className="qb-btn qb-btn-secondary h-row-lg px-3" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="qb-btn qb-btn-primary h-row-lg px-3" disabled={tracked.length === 0}>
+            Next
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 export default function Products({ accounts, intent }) {
   const { data, error } = useLedgerQuery(api.listProducts);
   // A click selects an item; Ctrl+Q opens its QuickReport (every line it is on).
@@ -284,6 +326,8 @@ export default function Products({ accounts, intent }) {
   // Customers › Change Item Prices (menu bar) opens the price changer.
   useEffect(() => {
     if (intent?.action === 'change-prices') setChangingPrices(true);
+    // Vendors › Inventory Activities › Adjust Quantity/Value on Hand: pick the item first.
+    if (intent?.action === 'adjust-stock') setDialog({ mode: 'pick-adjust' });
     if (intent?.action === 'price-levels') setPricingLevels(true);
   }, [intent]);
   useEffect(() => {
@@ -389,6 +433,14 @@ export default function Products({ accounts, intent }) {
             setDialog(null);
             setNotice({ kind: 'success', text });
           }}
+        />
+      )}
+      {dialog?.mode === 'pick-adjust' && (
+        <PickAdjustDialog
+          products={data ?? []}
+          items={stock.data ?? []}
+          onClose={() => setDialog(null)}
+          onPick={(item) => setDialog({ mode: 'adjust', item })}
         />
       )}
       {dialog?.mode === 'adjust' && (

@@ -17,6 +17,7 @@ const GO = {
   GROUP_STATEMENTS: ['sales/statements', null, 'Customer Statements'],
   PAYMENT_REMINDERS: ['sales/customers', null, 'Customers'],
   TAX_DATES: ['settings', 'preferences', 'Tax calendar'],
+  INVENTORY_REORDER: ['sales/products', null, 'Item list'],
   BACKUP: ['settings', 'data', 'Back up'],
 };
 
@@ -28,6 +29,7 @@ const CATEGORIES = [
   { key: 'recurring', label: 'Recurring transactions to enter', days: 'Days ahead to look for scheduled dates' },
   { key: 'emailQueue', label: 'Forms to email (Email later)' },
   { key: 'taxDates', label: 'Tax dates', days: 'Days ahead to look for federal due dates' },
+  { key: 'inventoryReorder', label: 'Inventory to reorder (tracked items at or below their reorder point)' },
   { key: 'backup', label: 'Backup', days: 'Days since the last backup before it is due' },
 ];
 
