@@ -19,9 +19,12 @@ permissions:
 jobs:
   review:
     name: Claude Code Review
+    # Batch PRs (`batch/*`) only combine PRs that were each reviewed already, and their diffs are
+    # over GitHub's 300-file limit, so the reviewer can't read them and quits without a comment.
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.user.login == github.repository_owner
+      github.event.pull_request.user.login == github.repository_owner &&
+      !startsWith(github.head_ref, 'batch/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
