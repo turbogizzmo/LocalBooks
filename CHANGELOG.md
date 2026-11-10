@@ -19,6 +19,10 @@ people using LocalBooks.
   Charge item or straight to an account. A purchase order's discounts and charges print on it and
   carry over to its bill. Other Charge and Discount items can have their own expense account for
   these forms.
+- **Payroll and cost of goods sold come in from QuickBooks Desktop files.** Importing a company
+  file now brings its paychecks and payroll liability payments, so payroll expense and liability
+  accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost
+  of what they sold, moving it from Inventory Asset to Cost of Goods Sold as QuickBooks did.
 - **Company-file imports read more of older files, and say which balances don't match.**
   LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
   invoices and other transactions on those pages come in. And if an account's imported balance
@@ -54,6 +58,7 @@ people using LocalBooks.
   an invoice, with its own design in Settings › Custom Forms. An accepted estimate becomes a sales
   order with **Create sales order**. Open Sales Orders by Customer and by Item and Pending Sales are
   in Reports › Sales, and Preferences › Sales & Customers can turn sales orders off.
+
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

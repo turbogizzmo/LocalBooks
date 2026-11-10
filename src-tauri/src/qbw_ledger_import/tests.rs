@@ -995,6 +995,81 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     discard_batch(&pool, batch).await.unwrap();
 }
 
+/// Forms that sold inventory carry its cost (cost of goods sold debit, inventory credit) in the
+/// same transaction. A full import still makes them an invoice and a sales receipt, and their
+/// entries move the cost.
+#[tokio::test]
+async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
+    use crate::qbw_documents::{DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-03-01", lines) };
+    let sold = vec![DocumentLine { item_id: None, description: Some("Tile".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None }];
+    let mut l = ledger();
+    l.accounts.extend([
+        account(6, "Materials Income", "INCOME", None),
+        account(30, "Cost of Goods Sold", "COST_OF_GOODS_SOLD", None),
+        account(31, "Inventory Asset", "OTHER_CURRENT_ASSET", None),
+    ]);
+    l.unbalanced.clear();
+    l.unreadable.clear();
+    l.transactions = vec![
+        doc(40, "Invoice", &[(4, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::Invoice {
+            customer_id: 100,
+            number: Some("7".into()),
+            due_date: None,
+            lines: sold.clone(),
+            sales: Default::default(),
+        }),
+        doc(41, "Sales receipt", &[(1, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::SalesReceipt {
+            customer_id: Some(100),
+            number: Some("8".into()),
+            method: "CASH".into(),
+            lines: sold,
+            sales: Default::default(),
+        }),
+    ];
+    l.customers = vec![SourceParty {
+        id: 100,
+        name: "Hillside Builders".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: None,
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.invoices, full.sales_receipts, full.fell_back), (1, 1, 0), "{full:?}");
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+    assert_eq!(balance(&pool, mapped("Cost of Goods Sold")).await, 11_000);
+    assert_eq!(balance(&pool, mapped("Inventory Asset")).await, -11_000);
+    assert_eq!(balance(&pool, mapped("Riverside Bank")).await, 9_000, "the receipt's money went to the bank");
+}
+
+/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
+#[tokio::test]
+async fn the_summary_lists_amounts_that_are_not_whole_cents() {
+    let pool = crate::db::test_pool().await;
+    let mut odd = ledger();
+    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
+    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
+
+    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
+    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
+}
+
 /// An account the file says holds more than its transactions add up to (here a transaction that
 /// could not be read completely) is listed with its expected and imported balance, not hidden.
 #[tokio::test]
@@ -1026,18 +1101,4 @@ async fn balances_that_differ_from_the_file_are_listed() {
     let batch = stage(&pool, Path::new("/books/Lists.qbw"), 1, &lists).await.unwrap();
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert!(summary.lists_only && summary.balance_differences.is_empty());
-}
-
-/// Amounts the file stores with a fraction of a cent are left out, and the summary lists each one.
-#[tokio::test]
-async fn the_summary_lists_amounts_that_are_not_whole_cents() {
-    let pool = crate::db::test_pool().await;
-    let mut odd = ledger();
-    odd.quality.fractional_amounts = vec!["Invoice line, transaction 812: 10.005".into(), "Stored balance of account 3: 0.125".into()];
-    let batch = stage(&pool, std::path::Path::new("/books/Odd.qbw"), 1, &odd).await.unwrap();
-    let summary = batch_summary(&pool, batch).await.unwrap();
-    assert_eq!(summary.fractional_amounts, odd.quality.fractional_amounts);
-
-    let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
-    assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
 }
