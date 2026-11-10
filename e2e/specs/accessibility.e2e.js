@@ -59,7 +59,7 @@ describe('Accessibility', () => {
     // invoice, as a double-click does.
     // (Each open list has one; earlier pages stay open in their windows.)
     expect((await $$('[data-row-nav][tabindex="0"]')).length).toBeGreaterThan(0);
-    const row = $('//tr[@data-row-nav][.//td[starts-with(normalize-space(), "1003")]]');
+    const row = await $('//tr[@data-row-nav][.//td[starts-with(normalize-space(), "1003")]]');
     await row.waitForExist();
     await browser.execute((el) => el.focus(), row);
     await browser.keys('Enter');

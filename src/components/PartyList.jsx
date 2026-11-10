@@ -777,7 +777,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
                     className={`qb-grid-row cursor-pointer ${p.id === selected ? 'is-active' : ''} ${p.isActive ? '' : 'text-qb-ink-faint'}`}
                     aria-selected={p.id === selected}
                     onClick={() => showTransactions(p.id)}
-                    {...rowKeys({ first: p === shownParties[0]?.row, open: () => openRecord(p.id), select: () => showTransactions(p.id) })}
+                    {...rowKeys({ first: p === shownParties[0]?.row, open: () => openRecord(p.id), select: () => setSelected(p.id) })}
                     title="Click to see transactions, double-click to edit"
                   >
                     {cols.columns.map((c) => cell(c, p, item))}
