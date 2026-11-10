@@ -37,6 +37,15 @@ import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../li
 const INITIAL_ROWS = 4;
 
 export const depositFilter = (a) => a.accountType === 'BANK' || (a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
+// Where an unapplied amount goes when it isn't kept as credit: refunded from a bank or card
+// account, or written off to income.
+const refundFilter = (a) => a.isActive && (a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD');
+const writeOffFilter = (a) => a.isActive && (a.accountType === 'INCOME' || a.accountType === 'OTHER_INCOME');
+const KEEP_CHOICES = [
+  ['CREDIT', 'Leave the credit to use later'],
+  ['REFUND', 'Refund the amount to the customer'],
+  ['WRITE_OFF', 'Write off the extra amount'],
+];
 
 export function StatusBadge({ status, overdue, voided }) {
   if (voided) return <span className="font-semibold text-qb-ink-faint line-through decoration-1">Voided</span>;
@@ -168,13 +177,18 @@ function PaymentRow({ invoice, accounts, onDone, colSpan }) {
  * Receive Payment: one customer payment applied across that customer's open invoices. How a typed
  * amount is spread (an exact match, else oldest first; oldest first; or not at all), whether ticking
  * invoices works out the amount, where it is deposited, and whether early-payment discounts are
- * taken follow Preferences › Payments.
+ * taken follow Preferences › Payments. Money left over (an overpayment, or a payment from a
+ * customer with nothing open) is kept as their credit, refunded or written off.
  */
 function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const { homeCurrency } = useCompany();
   const prefs = useSalesPrefs();
+  const parties = useLedgerQuery(api.listCustomers);
   const open = invoices.filter((i) => !i.isVoided && (i.status === 'UNPAID' || i.status === 'PARTIAL'));
-  const customers = [...new Set(open.map((i) => i.customerName))].sort((a, b) => a.localeCompare(b));
+  // Every active customer can pay, not only those with open invoices (a prepayment).
+  const customers = [...new Set([...open.map((i) => i.customerName), ...(parties.data ?? []).filter((c) => c.isActive).map((c) => c.name)])].sort((a, b) =>
+    a.localeCompare(b),
+  );
   const [customer, setCustomer] = useState('');
   // One payment is in one currency; the customer's open invoices are filtered to it.
   const [currency, setCurrency] = useState('');
@@ -189,6 +203,9 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   const [date, setDate] = useState(todayIso());
   const method = usePaymentMethodChoice('CHECK');
   const [reference, setReference] = useState('');
+  // What happens to an unapplied amount: kept as credit, refunded or written off, and the account.
+  const [keepAs, setKeepAs] = useState('CREDIT');
+  const [keepAccount, setKeepAccount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const customerRef = useRef(null);
@@ -247,6 +264,7 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   });
   const totalApplied = rows.reduce((s, inv) => s + Math.max(0, appliedCents(inv)), 0);
   const receivedCents = parseMoneyToCents(received);
+  const unappliedCents = received.trim() === '' || receivedCents === null ? 0 : receivedCents - totalApplied;
   // The totals under the grid: amount due, applied, discounts, and what stays open or unapplied.
   const totals = paymentTotals(rows, appliedCents, discountCents, received.trim() === '' ? null : receivedCents ?? null);
   const badRows = rows.filter((inv) => {
@@ -303,6 +321,12 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   };
 
   const customerBalance = customerInvoices.filter((i) => (i.currencyCode ?? '') === currency).reduce((s, i) => s + i.balanceCents, 0);
+  // Refund or write-off starts on the first account it allows, as the account box shows it.
+  const chooseKeep = (id) => {
+    setKeepAs(id);
+    const filter = id === 'REFUND' ? refundFilter : id === 'WRITE_OFF' ? writeOffFilter : null;
+    setKeepAccount(filter ? accounts.find(filter)?.id ?? null : null);
+  };
   const clear = () => {
     setCustomer('');
     setCurrency('');
@@ -310,6 +334,8 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
     setDiscounts({});
     setReceived('');
     setReference('');
+    setKeepAs('CREDIT');
+    setKeepAccount(null);
     setError(null);
     customerRef.current?.focus();
   };
@@ -327,18 +353,37 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
         exchangeRateE6: currency ? rateE6 : null,
         discountCents: Math.max(0, discountCents(inv)),
       }));
-    if (inputs.length === 0) return setError('Enter a payment amount for at least one invoice.');
+    const extra = unappliedCents > 0 ? unappliedCents : 0;
+    if (inputs.length === 0 && extra === 0) return setError('Enter the amount received, or a payment amount for at least one invoice.');
     if (currency && rateE6 === null) return setError('Enter the exchange rate for this payment.');
     if (badDiscounts.length > 0) return setError('A discount is more than that invoice\'s terms offer on this date, or has no payment with it.');
     if (badRows.length > 0) return setError('A payment amount (with its discount) is more than that invoice\'s open balance.');
-    if (receivedCents !== null && received.trim() !== '' && receivedCents !== totalApplied) {
-      return setError(`Amount received ${money(receivedCents)} does not match the ${money(totalApplied)} applied to invoices.`);
+    if (receivedCents !== null && received.trim() !== '' && receivedCents < totalApplied) {
+      return setError(`Amount received ${money(receivedCents)} is less than the ${money(totalApplied)} applied to invoices.`);
     }
+    if (extra > 0 && currency) return setError('A foreign-currency payment can\'t leave an unapplied amount; apply all of it to invoices.');
+    if (extra > 0 && keepAs !== 'CREDIT' && keepAccount === null) {
+      return setError(keepAs === 'REFUND' ? 'Choose the account the refund is paid from.' : 'Choose the income account to write the amount off to.');
+    }
+    const unapplied = extra > 0
+      ? {
+          customerName: customer,
+          depositAccountId: accountId,
+          paymentDate: date,
+          amountCents: extra,
+          ...method.payload(),
+          reference: reference || null,
+          keepAs,
+          accountId: keepAs === 'CREDIT' ? null : keepAccount,
+        }
+      : null;
     setBusy(true);
     try {
-      await api.recordInvoicePayments(inputs);
+      await api.receiveCustomerPayment({ payments: inputs, unapplied });
       const discountNote = totalDiscount > 0 ? `, with ${money(totalDiscount)} of early-payment discounts` : '';
-      onDone(`Received ${money(totalApplied)} from ${customer} across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}${discountNote}.`);
+      const applied = inputs.length > 0 ? ` across ${inputs.length} invoice${inputs.length === 1 ? '' : 's'}${discountNote}` : '';
+      const kept = extra > 0 ? ` ${money(extra)} ${keepAs === 'CREDIT' ? 'is kept as their credit' : keepAs === 'REFUND' ? 'was refunded' : 'was written off'}.` : '';
+      onDone(`Received ${money(totalApplied + extra)} from ${customer}${applied}.${kept}`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -483,7 +528,14 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
           {!customer && (
             <tr>
               <td colSpan={offer.available ? 9 : 8} className="qb-grid-cell text-qb-ink-muted">
-                {customers.length ? 'Choose a customer to see their open invoices.' : 'There are no open invoices to receive payment against.'}
+                {customers.length ? 'Choose a customer to see their open invoices.' : 'Add a customer first.'}
+              </td>
+            </tr>
+          )}
+          {customer && rows.length === 0 && (
+            <tr>
+              <td colSpan={offer.available ? 9 : 8} className="qb-grid-cell text-qb-ink-muted">
+                {customer} has no open invoices. Enter the amount received to keep it as their credit, refund it or write it off.
               </td>
             </tr>
           )}
@@ -552,6 +604,32 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
           </tfoot>
         )}
       </table>
+      {unappliedCents > 0 && (
+        <fieldset className="mx-2 my-1 flex flex-wrap items-center gap-x-4 gap-y-1 border border-qb-border px-2 py-1 text-sm" aria-label="Unapplied amount">
+          <legend className="px-1 font-semibold">
+            Unapplied amount <span className="num">{money(unappliedCents)}</span>
+            {rows.length === 0 ? ' (nothing open to apply it to)' : ''}
+          </legend>
+          {KEEP_CHOICES.map(([id, label]) => (
+            <label key={id} className="flex items-center gap-1">
+              <input type="radio" name="keep-as" className="accent-qb-green" checked={keepAs === id} onChange={() => chooseKeep(id)} />
+              {label}
+            </label>
+          ))}
+          {keepAs !== 'CREDIT' && (
+            <label className="flex items-center gap-1">
+              <span className="text-qb-ink-muted">{keepAs === 'REFUND' ? 'Refund from' : 'Write off to'}</span>
+              <AccountSelect
+                accounts={accounts}
+                filter={keepAs === 'REFUND' ? refundFilter : writeOffFilter}
+                value={keepAccount}
+                onChange={setKeepAccount}
+                className="qb-input w-[190px]"
+              />
+            </label>
+          )}
+        </fieldset>
+      )}
       {rows.length > 0 && (
         <dl className="ml-auto grid grid-cols-[auto_auto] gap-x-4 px-2 py-1 text-sm" aria-label="Payment totals">
           <dt className="text-qb-ink-muted">Amount due</dt>
@@ -881,6 +959,8 @@ export default function Invoices({ accounts, intent }) {
   useEffect(() => {
     if (intent?.action === 'invoice') {
       setReceiving(false);
+      // New Transactions › Invoice on the customer list starts with that customer.
+      if (intent.data?.customerName) setCustomer(intent.data.customerName);
       customerRef.current?.focus();
     } else if (intent?.action === 'receive-payment') {
       setReceiving(true);

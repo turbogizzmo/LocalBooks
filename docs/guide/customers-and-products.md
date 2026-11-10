@@ -31,6 +31,25 @@ details, notes with **Date Stamp**, and their recent transactions. **Make inacti
 **Actions** menu hides it from the payee list and keeps its history. **Reports › List › Other Names
 Phone List** prints their phone numbers.
 
+### Work with the list from the menus
+
+The customer, vendor and item lists (**Sales › Products & Services**) have three menus over the
+list:
+
+- **New Transactions**: the forms for that list, such as an invoice, sales receipt or credit memo
+  for customers, a bill, check or purchase order for vendors. An invoice opened from the customer
+  list starts with the customer you clicked.
+- **Print**: prints the list on screen, or opens the list reports (phone and contact lists, the item
+  listing and price list).
+- **Excel**: saves the list as an Excel workbook or a CSV file.
+
+The **Edit** menu works on the list on screen too: **New in List** goes to the new-name row, **Edit
+in List** opens the name you clicked, **Make Inactive / Active** switches it, and **Show All
+(inactive too)** shows or hides inactive names. **Delete from List** (also **Delete…** on a row's
+**Actions** menu) deletes a customer, vendor or item that has never been used: no transactions,
+jobs, groups, stock or other records. Anything used can't be deleted; make it inactive instead,
+which keeps its history. A delete is recorded in the audit trail.
+
 ### Copy a customer or vendor
 
 To add a name that shares most of another's details (a second location, a sister company), open
@@ -96,8 +115,15 @@ the customer's **Actions** menu and choose **Edit…**. A customer's record also
   billing address in the shipping box. New invoices, sales receipts, estimates and credit memos
   fill their Bill To and Ship To from these. A job (a name like `Acme:Kitchen`) whose boxes are
   blank uses its customer's addresses.
-- **Contact** and **Alt. contact**, **Alt. phone**, **Fax** and **Website**. The contact prints in
-  the address blocks, under the company name.
+- **Contacts**: as many people as you need, each with a **Role** (pick one such as *Billing* or
+  *Accounts payable*, or type your own), **Email**, **Phone** and **Mobile**. Click **Add
+  contact** for another, ↑ and ↓ to reorder, × to remove. Tick **Invoices** on the contact for
+  invoices: their name prints in Bill To and Ship To on new sales forms, under the company name,
+  and emailed invoices, estimates, sales receipts and credit memos go to their email (the
+  customer's own email when they have none). Tick **Statements** on the contact for statements:
+  their name prints on the customer's statements and emailed statements go to them. One contact
+  can do both. A vendor's record has contacts too, with a **Main** contact.
+- **Alt. phone**, **Fax** and **Website**.
 - **Account no.**, the customer's account number.
 - **Credit limit**. An invoice that would take the customer over it asks before saving (see
   [Credit limits](invoices.md#credit-limits)). Leave it blank for no limit.
@@ -198,6 +224,26 @@ Choosing the product on an invoice or sales receipt then fills in its descriptio
 account. You can still change them on the form.
 
 To keep count of a product you stock, see [Track inventory](inventory.md).
+
+## Item categories
+
+Categories group your products and services, for example *Tools* with the sub-categories *Power*
+and *Hand*. They post nothing; they help you find items.
+
+- On **Sales › Products & Services**, the **Categories** panel on the left lists **All items**,
+  **Uncategorized** and each category, with how many items it holds (counting its
+  sub-categories). Click one to show only its items. **New…** adds a category; a category's
+  **Actions** menu adds a sub-category, renames it, makes it inactive (its items keep it) or
+  deletes it (only once no item or sub-category uses it).
+- To put an item in a category, choose **Move to a different category…** on its **Actions** menu,
+  or pick the **Category** on **Edit…**. An item you add while a category is chosen goes in it.
+- On invoices, sales receipts, estimates and credit memos, the **Product/Service** heading has a
+  category box: choose one to list only its items.
+- **Sales by Product/Service Summary**, **Inventory Valuation Summary** and **Inventory Stock
+  Status by Item** have the same category box, and their totals follow it.
+
+Don't need them? Turn off **Item categories** in **Preferences › Items & Inventory**. That hides
+the panel and the category boxes; items keep their categories for when you turn them on again.
 
 ## Discounts, other charges and groups
 

@@ -197,7 +197,9 @@ pub async fn aging(pool: &SqlitePool, payable: bool, as_of: NaiveDate) -> Result
             FROM invoices i JOIN customers c ON c.id = i.customer_id
             WHERE i.is_voided = 0 AND i.journal_entry_id IS NOT NULL AND i.issue_date <= ?1
             UNION ALL
-            SELECT c.name, 'Credit Memo', CAST(m.credit_number AS TEXT), m.credit_date, m.credit_date,
+            SELECT c.name, CASE WHEN m.payment_account_id IS NULL THEN 'Credit Memo' ELSE 'Payment' END,
+                   CASE WHEN m.payment_account_id IS NULL THEN CAST(m.credit_number AS TEXT) ELSE COALESCE(m.payment_reference, '') END,
+                   m.credit_date, m.credit_date,
                    -(m.total_cents
                      - COALESCE((SELECT SUM(a.amount_cents) FROM credit_applications a WHERE a.credit_memo_id = m.id AND a.is_voided = 0 AND a.applied_date <= ?1), 0)
                      - COALESCE((SELECT SUM(r.amount_cents) FROM credit_refunds r JOIN journal_entries e ON e.id = r.journal_entry_id

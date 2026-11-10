@@ -8,6 +8,7 @@ import { centsToInput, formatCents, mulDivRound, parseMoneyToCents } from '../li
 import { formatDate, periodRange, todayIso } from '../lib/dates.js';
 import DateBox from './DateBox.jsx';
 import { layOut } from '../lib/itemTypes.js';
+import { CombinedRateDialog, SalesTaxReturn } from './SalesTaxCombined.jsx';
 
 /** Sales tax as set up for the company: on or off, and the rates. */
 export function useSalesTax() {
@@ -307,6 +308,7 @@ export default function SalesTax({ accounts, intent }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {dialog?.mode === 'combined' && <CombinedRateDialog rate={dialog.rate} rates={rates ?? []} onClose={() => setDialog(null)} onSaved={done} />}
       {dialog?.mode === 'rate' && <RateDialog rate={dialog.rate} accounts={accounts} onClose={() => setDialog(null)} onSaved={done} />}
       {dialog?.mode === 'pay' && <PayDialog rates={(rates ?? []).filter((r) => r.isActive)} accounts={accounts} owedCents={report?.owedCents ?? 0} onClose={() => setDialog(null)} onPaid={done} />}
       {prefs && (
@@ -328,7 +330,10 @@ export default function SalesTax({ accounts, intent }) {
         <section className="qb-panel flex min-h-0 flex-col">
           <div className="flex h-row-lg flex-none items-center gap-2 border-b border-qb-border px-2">
             <h2 className="text-md font-semibold">Tax rates</h2>
-            <button type="button" className="qb-btn qb-btn-primary ml-auto h-row" onClick={() => setDialog({ mode: 'rate', rate: null })}>
+            <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setDialog({ mode: 'combined', rate: null })}>
+              New combined rate
+            </button>
+            <button type="button" className="qb-btn qb-btn-primary h-row" onClick={() => setDialog({ mode: 'rate', rate: null })}>
               New rate
             </button>
           </div>
@@ -350,16 +355,22 @@ export default function SalesTax({ accounts, intent }) {
                   </tr>
                 )}
                 {(rates ?? []).map((r) => (
-                  <tr key={r.id} className={`qb-grid-row ${r.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ mode: 'rate', rate: r })}>
+                  <tr key={r.id} className={`qb-grid-row ${r.isActive ? '' : 'text-qb-ink-faint'}`} onDoubleClick={() => setDialog({ mode: r.isGroup ? 'combined' : 'rate', rate: r })}>
                     <td className="qb-grid-cell font-semibold">{r.name}</td>
                     <td className="qb-grid-cell num">{ratePercent(r.ratePpm)}</td>
-                    <td className="qb-grid-cell">{r.agencyName ?? ''}</td>
+                    <td className="qb-grid-cell">
+                      {r.isGroup ? (
+                        <span className="text-qb-ink-muted">Combined: {r.componentIds.map((id) => (rates ?? []).find((x) => x.id === id)?.name ?? '?').join(' + ')}</span>
+                      ) : (
+                        (r.agencyName ?? '')
+                      )}
+                    </td>
                     <td className="qb-grid-cell text-sm">{r.isActive ? 'Active' : 'Inactive'}</td>
                     <td className="qb-grid-cell cell-tight text-center">
                       <RowMenu
                         label={`Actions for ${r.name}`}
                         items={[
-                          { label: 'Edit…', onSelect: () => setDialog({ mode: 'rate', rate: r }) },
+                          { label: 'Edit…', onSelect: () => setDialog({ mode: r.isGroup ? 'combined' : 'rate', rate: r }) },
                           {
                             label: r.isActive ? 'Make inactive' : 'Make active',
                             onSelect: () => api.setTaxRateActive(r.id, !r.isActive).then(() => setNotice({ kind: 'success', text: `${r.name} is ${r.isActive ? 'inactive' : 'active'}.` }), (err) => setNotice({ kind: 'error', text: errorText(err) })),
@@ -464,6 +475,9 @@ export default function SalesTax({ accounts, intent }) {
             </table>
           </div>
         </section>
+      </div>
+      <div className="h-[300px] flex-none">
+        <SalesTaxReturn start={start} end={end} companyBasis={prefs?.sales_tax_basis} />
       </div>
     </div>
   );

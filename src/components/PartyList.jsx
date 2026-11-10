@@ -9,12 +9,15 @@ import StatementCharges from './StatementCharges.jsx';
 import { useEnvelopePrinter } from './FormPages.jsx';
 import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
-import { ExportMenu, longDate, tableExports } from './ReportParts.jsx';
+import { longDate, tableExports } from './ReportParts.jsx';
+import ListMenus from './ListMenus.jsx';
+import { useListCommands } from '../lib/listCommands.js';
 import { Dialog } from './InventoryDialog.jsx';
 import { ratePercent, useSalesTax } from './SalesTax.jsx';
 import { CustomFieldInputs } from './SalesLists.jsx';
 import { ProfileEntrySelect, TermsSelect } from './ProfileFields.jsx';
 import { CustomerPriceLevelField } from './PriceLevels.jsx';
+import PartyContacts, { contactsPayload, usePartyContacts } from './PartyContacts.jsx';
 import { CustomerAccountFields, CustomerAddressFields, CustomerContactFields, customerRecordForm, customerRecordPayload } from './CustomerRecordFields.jsx';
 import { JOB_STATUSES, useSalesPrefs } from '../lib/salesPrefs.js';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
@@ -25,7 +28,7 @@ import PartyTransactions from './PartyTransactions.jsx';
 import { W9Dialog } from './Forms1099.jsx';
 import { PartyInfoPanel, useInfoPanel } from './InfoPanel.jsx';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
-import { askText } from '../lib/dialogs.jsx';
+import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { useMergeOffer } from './MergeOffer.jsx';
 import Attachments from './Attachments.jsx';
 
@@ -194,7 +197,7 @@ function BankDetailsFields({ bank, setBank }) {
   );
 }
 
-/** The full customer or vendor record: contact details, default terms, type and (vendors) 1099 status. */
+/** The full customer or vendor record: contact details and contacts, default terms, type and (vendors) 1099 status. */
 export function PartyDialog({ kind, id, onClose, onSaved }) {
   const noun = CONFIG[kind].noun;
   const [form, setForm] = useState(null);
@@ -204,6 +207,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
   const { data: formStyles } = useLedgerQuery(api.listFormStyles);
   const reps = useLedgerQuery(api.listSalesReps).data ?? [];
   const [fields, setFields] = useState([]);
+  const contactList = usePartyContacts(kind, id);
   // Vendors' bank details: `view` as stored, `draft` while being changed (undefined = unchanged).
   const [bank, setBank] = useState({ view: null, draft: undefined });
   // Preferences › Tax: 1099 › "Do you file 1099s?" off hides the 1099 box.
@@ -262,6 +266,7 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
         jobStatus: form.jobStatus || null,
         customFields: fields.map(({ fieldId, value }) => ({ fieldId, value })),
       });
+      if (contactList.contacts) await api.savePartyContacts(kind, id, contactsPayload(contactList.contacts));
       if (kind === 'vendor' && accountNumber.draft.trim() !== (accountNumber.stored ?? '')) {
         await api.setVendorAccountNumber(id, accountNumber.draft);
       }
@@ -294,6 +299,8 @@ export function PartyDialog({ kind, id, onClose, onSaved }) {
             {field('Company name', 'companyName')}
             {field('Email', 'email', { type: 'email' })}
             {field('Phone', 'phone', { type: 'tel' })}
+            {contactList.contacts && <PartyContacts kind={kind} contacts={contactList.contacts} setContacts={contactList.setContacts} />}
+            {contactList.error && <Notice kind="error" text={contactList.error} />}
             {kind === 'customer' && <CustomerContactFields form={form} setForm={setForm} />}
             {kind === 'customer' ? (
               <CustomerAddressFields form={form} setForm={setForm} />
@@ -547,6 +554,27 @@ export default function PartyList({ kind, navigate, intent = null }) {
   };
 
   const nameRef = useRef(null);
+  // Edit › New, Edit, Delete, Make Inactive and Show All act on this list and its selected name.
+  const listRef = useRef(null);
+  const chosen = () => (data ?? []).find((p) => p.id === selected) ?? null;
+  const needChoice = () => setNotice({ kind: 'info', text: `Click a ${cfg.noun} in the list first.` });
+  const removeRecord = async (p) => {
+    if (!(await askConfirm(`Delete ${p.name}? Only a ${cfg.noun} with no transactions or other records can be deleted; this can't be undone.`, { confirmLabel: 'Delete', danger: true }))) return;
+    try {
+      await api.deleteListRecord(kind, p.id);
+      setSelected(null);
+      setNotice({ kind: 'success', text: `Deleted ${p.name}.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: errorText(err) });
+    }
+  };
+  useListCommands(listRef, {
+    new: () => nameRef.current?.focus(),
+    edit: () => (chosen() ? openRecord(chosen().id) : needChoice()),
+    delete: () => (chosen() ? removeRecord(chosen()) : needChoice()),
+    'toggle-active': () => (chosen() ? setActive(chosen(), !chosen().isActive) : needChoice()),
+    'show-all': () => setShowInactive((on) => !on),
+  });
   // Jobs are customers named "Customer:Job"; ordering by each part keeps a job under its customer.
   const byPath = (a, b) => {
     const pa = a.name.split(':');
@@ -674,7 +702,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div ref={listRef} className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {editing && (
         <PartyDialog
           kind={kind}
@@ -705,7 +733,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
           <span className="ml-auto text-sm text-qb-ink-muted">
             {rows.length} {cfg.noun}s · open <span className="num font-semibold text-qb-ink">{formatCents(total)}</span>
           </span>
-          <ExportMenu printable={false} onNotice={setNotice} {...exports} />
+          <ListMenus kind={kind} selected={chosen()} exports={exports} />
           <ColumnsMenu cols={cols} />
           {info.button}
         </div>
@@ -797,6 +825,7 @@ export default function PartyList({ kind, navigate, intent = null }) {
                             : []),
                           ...(navigate ? [{ label: 'New to-do…', onSelect: () => navigate('accounting/todos', 'todo', kind === 'customer' ? { customerId: p.id } : { vendorId: p.id }) }] : []),
                           p.isActive ? { label: 'Make inactive', onSelect: () => setActive(p, false) } : { label: 'Make active', onSelect: () => setActive(p, true) },
+                          { label: 'Delete…', hint: 'Only one with no transactions or other records', onSelect: () => removeRecord(p) },
                         ]}
                       />
                     </td>
