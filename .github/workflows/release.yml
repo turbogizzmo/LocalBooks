@@ -65,7 +65,8 @@ jobs:
       matrix:
         platform: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.platform }}
-    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
+    # The suite took 20 to 40 minutes here in Nov 2026, before SQLite's memory statistics were
+    # turned off (src-tauri/.cargo/config.toml); 75 leaves room until new timings are in.
     timeout-minutes: 75
     steps:
       - name: Checkout
@@ -87,6 +88,9 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: test-${{ matrix.platform }}
+          # Only main, tags and manual runs save: each pull request's 600-850 MB copy was scoped to
+          # that PR alone and pushed main's caches out of the 10 GB limit (Nov 2026).
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Run ledger test suite
         working-directory: src-tauri
@@ -108,8 +112,8 @@ jobs:
     # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
     # required check "Test (macos-latest)".
     runs-on: macos-latest
-    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
-    timeout-minutes: 75
+    # The full suite took 70 to 85 minutes on the macOS runner in Nov 2026, so 75 left no room.
+    timeout-minutes: 110
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -130,6 +134,9 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: test-macos-latest
+          # Saving the macOS cache once hung for 30 minutes after the tests passed and timed the
+          # job out (batch #330). Pull requests read the cache; only main, tags and manual runs save it.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Run ledger test suite
         working-directory: src-tauri
@@ -198,6 +205,8 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: build-${{ matrix.platform }}
+          # A tag's cache can only be read by that same tag, so saving it only takes space from main.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install frontend dependencies
         # No install scripts: the only ones (esbuild, fsevents) are optional, and none should run in

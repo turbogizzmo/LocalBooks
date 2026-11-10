@@ -1,0 +1,10 @@
+# Cargo settings for every build in src-tauri: `cargo test`, `tauri dev` and release builds.
+
+[env]
+# SQLite's memory statistics take one process-wide mutex on every SQLite allocation and free. With
+# several connections busy at once (the test suite runs a test per core, each with its own in-memory
+# company) threads spent most of their time waiting on that lock: on a 10-core Mac, 26 tests took
+# 30 s on one thread and 83 s on six. LocalBooks never reads those statistics (no
+# sqlite3_memory_used or heap limits), and SQLite recommends this setting for speed:
+# https://sqlite.org/compile.html#default_memstatus
+LIBSQLITE3_FLAGS = "-DSQLITE_DEFAULT_MEMSTATUS=0"

@@ -2,7 +2,14 @@
 #
 # Not on every push (no `synchronize`): reviewing each push is what used up the Copilot allowance.
 # Runs only for the repository owner's non-draft PRs. Authenticates with the owner's Claude
-# subscription token (secret CLAUDE_CODE_OAUTH_TOKEN, made with `claude setup-token`).
+# subscription token (secret CLAUDE_CODE_OAUTH_TOKEN, made with `claude setup-token`). A review cost
+# $0.05 to $0.33 of usage and took 10 s to 2 min in Nov 2026.
+#
+# The verdict is also a label, so a finding can't be missed by whoever merges or batches the PR:
+#   review:clean     the review found nothing worth fixing
+#   review:problems  the review lists problems; read the comment before merging or batching
+#   review:failed    no review was posted (for example, an unreadable diff); this job then fails
+# The labels are added with this workflow's token, which starts no other workflow runs.
 
 name: Claude Code Review
 
@@ -16,15 +23,27 @@ permissions:
   issues: write
   id-token: write
 
+# Closing and reopening a PR quickly reviews it once, not twice.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     name: Claude Code Review
+    # Batch PRs (`batch/*`) only combine PRs that were each reviewed already, and their diffs are
+    # over GitHub's 300-file limit, so the reviewer can't read them and quits without a comment.
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.user.login == github.repository_owner
+      github.event.pull_request.user.login == github.repository_owner &&
+      !startsWith(github.head_ref, 'batch/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Note the start time
+        id: start
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -45,6 +64,52 @@ jobs:
             `gh pr diff` to read the PR.
 
             Post exactly ONE comment with `gh pr comment`, listing each problem with its file and
-            line and why it matters. If you find nothing worth fixing, say so in one line.
+            line and why it matters. The comment's first line must be exactly one of these, because
+            the workflow labels the PR from it:
+              Claude review: no problems found
+              Claude review: N problems found      (N is how many you list)
+              Claude review: not reviewed          (followed by why, e.g. the diff could not be read)
+            If you find nothing worth fixing, the first line is the whole comment.
           claude_args: >-
             --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      - name: Label the verdict
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SINCE: ${{ steps.start.outputs.at }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create review:clean --repo "$REPO" --force --color 0e8a16 --description "Claude review found nothing worth fixing" >/dev/null
+          gh label create review:problems --repo "$REPO" --force --color d93f0b --description "Claude review lists problems: read its comment before merging or batching" >/dev/null
+          gh label create review:failed --repo "$REPO" --force --color 6a737d --description "No Claude review was posted for this PR" >/dev/null
+
+          # The comments this run posted, and the verdict line of the review (bold, code or
+          # heading markup around it is ignored).
+          mine=".[] | select(.user.login == \"github-actions[bot]\" and .created_at >= \"$SINCE\")"
+          posted=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq "$mine | .id" | wc -l | tr -d " ")
+          line=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq "$mine | .body" |
+            sed -E 's/^[*_#>` ]+//' | tr '[:upper:]' '[:lower:]' | grep -m1 '^claude review:' || true)
+          case "$posted:$line" in
+            0:*) verdict=review:failed ;;
+            *":claude review: no problems found"*) verdict=review:clean ;;
+            *":claude review: not reviewed"*) verdict=review:failed ;;
+            # Problems listed, or a comment without the verdict line: someone should read it.
+            *) verdict=review:problems ;;
+          esac
+
+          for label in review:clean review:problems review:failed; do
+            [ "$label" = "$verdict" ] || gh api -X DELETE "repos/$REPO/issues/$PR/labels/$label" >/dev/null 2>&1 || true
+          done
+          gh api -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=$verdict" >/dev/null
+          echo "Verdict: $verdict" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$verdict" = review:failed ]; then
+            if [ "$posted" -eq 0 ]; then
+              gh pr comment "$PR" --repo "$REPO" --body "Claude review: not reviewed. The review run posted no comment: $RUN_URL"
+            fi
+            echo "::error::No Claude review was posted for #$PR"
+            exit 1
+          fi
