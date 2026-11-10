@@ -1,7 +1,10 @@
 # Encryption at rest for the whole company file (R1)
 
-Status: **design, not built.** Gap R1 in [`docs/gaps.md`](../gaps.md) stays `partial` until the
-phases at the end land. This note is the next step for whoever picks R1 up.
+Status: **being built.** Phases 1 (SQLCipher build), 2 (key header and VFS) and 3a (unlock before
+open) are in; 3b (turning it on, and every copy path) is next. Gap R1 in
+[`docs/gaps.md`](../gaps.md) stays `partial` until 3b lands. Where this note and the code disagree,
+the code (`src-tauri/src/file_cipher*`) and its tests win; the sections below were updated as each
+phase landed.
 
 ## The goal
 
@@ -100,7 +103,15 @@ can't be read from inside it. They must be readable before the database is opene
    leaves the WAL and journal alone) lets SQLite see the database at offset 0. It does no
    cryptography, so it is far smaller and safer than option B: open, read, write, truncate, size
    and sync with an offset, plus lock pass-through. SQLite ships a similar design as its "append"
-   VFS. The header holds:
+   VFS. **Built (phase 2), with two additions:**
+   - **Lock bytes.** SQLite locks bytes just past 1 GiB of the real file and never stores a page
+     there; shifted by the header, a page would land on them once a file passes 1 GiB, and
+     Windows' mandatory locks would refuse the write. The mapping skips 64 KiB at 1 GiB.
+   - **Header I/O on an open file** goes through SQLite's own file handle (a file control in the
+     VFS): on macOS and Linux, closing any other handle to a file drops every lock the process holds
+     on it, SQLite's included.
+
+   The header holds:
    - a magic tag and format version, so LocalBooks (and `wal_guard`) can tell an encrypted file at
      a glance;
    - the SQLCipher page size, so `wal_guard` can still compare it with a WAL's page size (the
@@ -109,28 +120,40 @@ can't be read from inside it. They must be readable before the database is opene
      table can be read), the Argon2id salt and cost, and the sealed key; one recovery-key slot;
    - two copies (A and B) with a sequence number, written alternately, so a crash while a password
      changes leaves the previous copy readable.
-   The `key_slots` table stays inside the database as the authoritative copy; the header mirrors it
-   and is rewritten in the same write path whenever a slot changes.
+   As built (phase 3a), the header's slots are their own set, for the page key (below), not a
+   mirror of `key_slots`, which keeps sealing the field key inside the database.
 2. **A sidecar file** (`localbooks.db.keys`). Simpler, but a company file copied without its
    sidecar can never be opened again, and LocalBooks is built on "a company is one file".
 3. **SQLCipher's plaintext header** (`cipher_plaintext_header_size`) leaves at most the first
    page's SQLite header in clear; there is no room for slots. Not usable.
 
-The page key is **not** the data key itself: it is derived from it with HKDF-SHA256 (label
-`localbooks file key v1`), so field encryption and page encryption never share a key.
+The page key is **not** the data key. As built (phase 3a) it is its own random 256-bit key
+(`file_cipher::keys::PageKey`), so field encryption and page encryption never share a key. The
+first design derived it from the data key with HKDF; a separate random key was simpler, because a
+user who can't see sensitive data has no data-key slot to derive it from.
 
 ## Who can open an encrypted file
 
 Today a user without "can see sensitive data" has no key slot. Page encryption needs a key for
-everyone who can open the books, so with whole-file encryption **every user gets a slot for the page
-key**, and only users allowed sensitive data get the field key as well. Two keys, both from the one
-data key:
+everyone who can open the books, so with whole-file encryption **every user gets a header slot for
+the page key**, and only users allowed sensitive data get the field key as well:
 
-- page key = HKDF(data key, "file"), in every user's slot;
-- field key = the data key itself, only in sensitive-data users' and the recovery slot.
+- page key: random, sealed in the key header once per user (their password) and once for the
+  recovery key, each slot bound to the file's id, its kind and its user;
+- field key: the data key, as today, in `key_slots` inside the database.
 
-Turning whole-file encryption on therefore needs each existing user's password once (the same rule
-as granting sensitive access today), or an Admin sets a temporary password for them.
+How the slots follow users (`file_cipher::user_slots`, phase 3a):
+
+- a new user gets a slot for their temporary password;
+- a new password (a reset, your own change, the recovery key) gets its slot **beside** the old one
+  before the users table changes, and the old one goes once the change is saved, so a crash in
+  between can't lock anyone out;
+- turning a user off removes their slot, so they can't decrypt the file even outside LocalBooks;
+- a new recovery key replaces the recovery slot;
+- **Remove all users** is refused for an encrypted file (see "What the user can lose").
+
+Turning whole-file encryption on (3b) therefore needs each existing user's password once, or an
+Admin sets a temporary password for them.
 
 ## Opening, sign-in and idle sign-out
 
@@ -245,9 +268,18 @@ restore path and the build chain on three platforms, and it changes what users c
    platforms on SQLite 3.45.3, notices regenerated, build-time and size recorded.
 2. **Header and offset VFS.** Header format with A/B copies, the VFS, `wal_guard` reading the
    header, tests that a header-less file still opens and a crafted header is refused.
-3. **Open and sign-in order.** Unlock before open and migrate; idle sign-out closes the pool; the
-   opt-in setting (off by default) with its warning, as decided above.
+3. **Open and sign-in order**, in two pull requests:
+   - **3a (built):** page-key slots in the header; an encrypted file opens **locked** (an empty
+     stand-in database, every command but the sign-in screen's refused) until a password or the
+     recovery key unlocks it, then migrates with an encrypted copy saved first; sign-out and idle
+     sign-out close it again; slots follow users. Only tests can make an encrypted file
+     (`encrypt_into` and the key generator are `#[cfg(test)]`), and plain files behave exactly as
+     before (tested).
+   - **3b:** the opt-in setting (off by default) with its warning, as decided above, together with
+     step 4, because the setting can't ship before every copy of an encrypted file can be restored.
 4. **Turning it on and off; copies.** Export, check and swap; encrypted snapshots, restore, Condense,
-   File Dentist; offering to delete plain backups. The acceptance test (no readable business data in
-   the file, a backup or an attachment by hex dump) lands here.
+   File Repair, offsite; offering to delete plain backups; a test that restores each kind of
+   snapshot (automatic, pre-upgrade, pre-restore, Before condense, offsite) made from an encrypted
+   file. The acceptance test (no readable business data in the file, a backup or an attachment by
+   hex dump) lands here.
 5. **Docs.** `SECURITY.md`, the users guide, Help, the Safeguards Rule guide, the CHANGELOG.

@@ -65,6 +65,10 @@ pub struct HeaderSlot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Header {
+    /// A random id for this encrypted file (shared by its copies and backups), which every slot is
+    /// bound to, so a slot moved from another file doesn't open this one.
+    #[serde(default)]
+    pub file_id: String,
     /// SQLCipher's page size (`cipher_page_size`), which the WAL guard compares with a WAL's.
     pub page_size: u32,
     pub slots: Vec<HeaderSlot>,
@@ -190,6 +194,8 @@ pub fn read(path: &Path) -> Result<Header, String> {
 }
 
 /// Replaces the header of an encrypted file not open in this process.
+// For files not open in this process; turning encryption on and off (phase 3b) uses it.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write(path: &Path, header: &Header) -> Result<(), String> {
     let mut file = OpenOptions::new().read(true).write(true).open(path).map_err(|e| format!("FILE_HEADER: cannot open {}: {e}", path.display()))?;
     write_to(&mut file, header)
