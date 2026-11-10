@@ -115,7 +115,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     let taxable = layout.taxable_cents;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, total);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "EST").await?;
-    let tax_cents = tax.map_or(0, |t| t.cents);
+    let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
     let total = (total - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("EST_AMOUNT_TOO_LARGE: the estimate total must be above zero and in range")?;
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
 
@@ -128,7 +128,7 @@ async fn write_estimate(tx: &mut Transaction<'_, Sqlite>, input: &EstimateInput)
     .bind(input.expiration_date)
     .bind(input.memo.as_deref().map(str::trim).filter(|m| !m.is_empty()))
     .bind(total)
-    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
     .fetch_one(&mut **tx)

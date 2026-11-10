@@ -61,7 +61,8 @@ pub struct PartyDetails {
     pub price_level_id: Option<i64>,
     /// Customers only: the second address; `address` is the billing address.
     pub shipping_address: Option<String>,
-    /// Customers only: the main and second contact, and more ways to reach them.
+    /// Customers only: the invoice contact (or the first one) and the next one, kept from the
+    /// contact list (`party_contacts`); and more ways to reach them.
     pub contact_name: Option<String>,
     pub alt_contact_name: Option<String>,
     pub alt_phone: Option<String>,
@@ -125,10 +126,6 @@ pub struct PartyDetailsInput {
     pub price_level_id: Option<i64>,
     #[serde(default)]
     pub shipping_address: Option<String>,
-    #[serde(default)]
-    pub contact_name: Option<String>,
-    #[serde(default)]
-    pub alt_contact_name: Option<String>,
     #[serde(default)]
     pub alt_phone: Option<String>,
     #[serde(default)]
@@ -250,8 +247,8 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
             "UPDATE customers SET name = ?1, company_name = ?2, email = ?3, phone = ?4, billing_address = ?5, terms_days = ?6, notes = ?7,
                     tax_rate_id = ?8, is_tax_exempt = ?9, tax_exemption = ?10, form_style_id = ?11, sales_rep_id = ?13, price_level_id = ?14,
                     terms_id = ?15, customer_type_id = ?16, job_type_id = ?17, preferred_delivery = ?18, job_status = ?19,
-                    shipping_address = ?20, contact_name = ?21, alt_contact_name = ?22, alt_phone = ?23, fax = ?24, website = ?25,
-                    account_number = ?26, credit_limit_cents = ?27, resale_number = ?28 WHERE id = ?12",
+                    shipping_address = ?20, alt_phone = ?21, fax = ?22, website = ?23,
+                    account_number = ?24, credit_limit_cents = ?25, resale_number = ?26 WHERE id = ?12",
         )
         .bind(name)
         .bind(clean(&input.company_name))
@@ -273,8 +270,6 @@ pub async fn update_party(pool: &SqlitePool, kind: &str, id: i64, input: PartyDe
         .bind(delivery)
         .bind(job_status)
         .bind(clean(&input.shipping_address).map(|a| crate::sales_header::normalize_address(&a)))
-        .bind(clean(&input.contact_name))
-        .bind(clean(&input.alt_contact_name))
         .bind(clean(&input.alt_phone))
         .bind(clean(&input.fax))
         .bind(clean(&input.website))
@@ -463,6 +458,9 @@ pub async fn duplicate_party(pool: &SqlitePool, kind: &str, id: i64, name: &str,
     .execute(&mut *tx)
     .await
     .map_err(db_err)?;
+    if let Err(err) = crate::party_contacts::copy_contacts(&mut tx, kind, id, new_id).await {
+        return Err(crate::ledger::rollback(tx, err).await);
+    }
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
     get_party(pool, kind, new_id, access).await
 }

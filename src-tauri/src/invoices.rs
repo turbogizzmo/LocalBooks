@@ -63,6 +63,37 @@ pub struct InvoiceInput {
     pub details: crate::sales_lists::SalesDetails,
 }
 
+/// A payment taken when the invoice is saved (T21): dated the invoice's date and recorded with it in
+/// one transaction, as an ordinary payment linked to the invoice (Receive Payments lists it, and
+/// voiding it reopens the invoice).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaidNow {
+    pub deposit_account_id: i64,
+    /// In the invoice's currency; at most its total.
+    pub amount_cents: i64,
+    pub payment_method: String,
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
+    pub reference: Option<String>,
+}
+
+impl PaidNow {
+    pub(crate) fn payment_for(&self, invoice_id: i64, date: NaiveDate) -> PaymentInput {
+        PaymentInput {
+            invoice_id,
+            deposit_account_id: self.deposit_account_id,
+            payment_date: date,
+            amount_cents: self.amount_cents,
+            payment_method: self.payment_method.clone(),
+            payment_method_id: self.payment_method_id,
+            reference: self.reference.clone(),
+            exchange_rate_e6: None,
+            discount_cents: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceSummary {
@@ -323,7 +354,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     let discount = crate::sales_tax::document_discount(tx, input.discount_cents, subtotal, input.lines.iter().map(|l| l.class_id), "INV").await?;
     let taxable = crate::sales_tax::taxable_after_discount(taxable, input.discount_cents, subtotal);
     let tax = crate::sales_tax::document_tax(tx, input.tax_rate_id, taxable, "INV").await?;
-    let tax_cents = tax.map_or(0, |t| t.cents);
+    let tax_cents = tax.as_ref().map_or(0, |t| t.cents);
     let total = (subtotal - input.discount_cents).checked_add(tax_cents).filter(|t| *t > 0 && *t <= MAX_LINE_CENTS).ok_or("INV_AMOUNT_TOO_LARGE: the invoice total must be above zero and in range")?;
     let customer = input.customer_name.trim();
     let customer_id = crate::sales::find_or_create_named(tx, crate::sales::Party::Customer, customer).await?;
@@ -350,7 +381,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     lines.extend(credits.into_iter().map(|((account, class), cents)| JournalLine::credit(account, cents).with_class(class)));
     lines.extend(crate::item_types::discount_debits(form, &layout));
     lines.extend(discount.and_then(|d| d.line()));
-    lines.extend(tax.and_then(|t| t.line(false)));
+    lines.extend(tax.as_ref().map(|t| t.lines(false)).unwrap_or_default());
     // Tracked products also move their cost from Inventory Asset to Cost of Goods Sold, in this entry.
     let sold: Vec<(Option<i64>, i64, Option<i64>)> = input.lines.iter().map(|l| (l.product_service_id, l.quantity_e4, l.class_id)).collect();
     let cost = crate::inventory::cost_of_sale(tx, &sold).await?;
@@ -378,7 +409,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     .bind(input.currency.as_ref().map(|c| c.code.as_str()))
     .bind(input.currency.as_ref().map(|c| c.exchange_rate_e6))
     .bind(home_total)
-    .bind(tax.and_then(|t| t.rate_id))
+    .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
     .fetch_one(&mut **tx)
@@ -442,6 +473,10 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
         currency: input.currency.clone(),
     };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::Invoice(invoice_id)).await?;
+    // A combined rate's split by component, for the sales tax return.
+    if let Some(t) = &tax {
+        t.record_parts(tx, entry_id).await?;
+    }
     cost.record(tx, input.issue_date, entry_id).await?;
 
     sqlx::query("UPDATE invoices SET status = 'UNPAID', journal_entry_id = ?1 WHERE id = ?2")
@@ -470,8 +505,39 @@ pub(crate) const DISCOUNT_LINE_MEMO: &str = "Early-payment discount on invoice #
 /// A payment may take its invoice's early-payment discount (Preferences › Payments names the
 /// account it goes to).
 pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Result<usize, String> {
-    if inputs.is_empty() {
+    receive_payment(pool, ReceivePaymentInput { payments: inputs, unapplied: None }).await.map(|r| r.invoice_count)
+}
+
+/// One Receive Payments save: what is applied to invoices, and any amount left over.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivePaymentInput {
+    #[serde(default)]
+    pub payments: Vec<PaymentInput>,
+    /// Money received beyond what is applied to invoices (or all of it, for a customer with no open
+    /// invoice): kept as the customer's credit, refunded or written off.
+    #[serde(default)]
+    pub unapplied: Option<crate::credits::UnappliedPaymentInput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivedPayment {
+    pub invoice_count: usize,
+    /// The customer credit holding the unapplied amount, when there was one.
+    pub credit_id: Option<i64>,
+}
+
+/// Receive Payments: the invoice payments and the unapplied amount post together, or not at all.
+/// The unapplied amount is in the home currency, so a payment against foreign-currency invoices
+/// can't leave one.
+pub async fn receive_payment(pool: &SqlitePool, input: ReceivePaymentInput) -> Result<ReceivedPayment, String> {
+    let inputs = input.payments;
+    if inputs.is_empty() && input.unapplied.is_none() {
         return Err("INV_NOTHING_TO_APPLY: enter an amount for at least one invoice".into());
+    }
+    if input.unapplied.is_some() && inputs.iter().any(|i| i.exchange_rate_e6.is_some()) {
+        return Err("INV_FOREIGN_UNAPPLIED: a foreign-currency payment can't leave an unapplied amount; apply all of it to invoices".into());
     }
     let discount_account = if inputs.iter().any(|i| i.discount_cents != 0) {
         let account = crate::preferences::get(pool, crate::sales_prefs::PAYMENT_DISCOUNT_ACCOUNT)
@@ -489,11 +555,18 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
             return Err(rollback(tx, err).await);
         }
     }
+    let credit_id = match &input.unapplied {
+        Some(extra) => match crate::credits::write_unapplied_payment(&mut tx, extra).await {
+            Ok(id) => Some(id),
+            Err(err) => return Err(rollback(tx, err).await),
+        },
+        None => None,
+    };
     crate::ledger::commit_write(tx).await.map_err(db_err)?;
-    Ok(inputs.len())
+    Ok(ReceivedPayment { invoice_count: inputs.len(), credit_id })
 }
 
-async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {
+pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {
     if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }

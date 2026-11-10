@@ -665,17 +665,30 @@ pub fn format_date(iso: &str) -> String {
 struct Customer {
     company_name: Option<String>,
     billing_address: Option<String>,
+    /// Where the form is emailed: the default contact's email for its use, else the customer's.
     email: Option<String>,
+    /// The statement contact (statements only), printed under the company name.
+    contact: Option<String>,
 }
 
-async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str) -> Result<Customer, String> {
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = match id {
-        Some(id) => sqlx::query_as("SELECT company_name, billing_address, email FROM customers WHERE id = ?1").bind(id).fetch_optional(pool).await,
-        None => sqlx::query_as("SELECT company_name, billing_address, email FROM customers WHERE name = ?1 COLLATE NOCASE").bind(name).fetch_optional(pool).await,
+/// The customer's details for a form. `statement` picks the statement contact rather than the
+/// invoice contact for the email and the name printed.
+async fn customer(pool: &SqlitePool, id: Option<i64>, name: &str, statement: bool) -> Result<Customer, String> {
+    let recipient = crate::party_contacts::recipient_sql(if statement { "statements" } else { "invoices" });
+    let contact = if statement { "(SELECT pc.name FROM party_contacts pc WHERE pc.customer_id = c.id AND pc.for_statements = 1)" } else { "NULL" };
+    let row: Option<(Option<String>, Option<String>, Option<String>, Option<String>)> = match id {
+        Some(id) => sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.id = ?1"))
+            .bind(id)
+            .fetch_optional(pool)
+            .await,
+        None => sqlx::query_as(&format!("SELECT c.company_name, c.billing_address, {recipient}, {contact} FROM customers c WHERE c.name = ?1 COLLATE NOCASE"))
+            .bind(name)
+            .fetch_optional(pool)
+            .await,
     }
     .map_err(db_err)?;
-    let (company_name, billing_address, email) = row.unwrap_or_default();
-    Ok(Customer { company_name, billing_address, email })
+    let (company_name, billing_address, email, contact) = row.unwrap_or_default();
+    Ok(Customer { company_name, billing_address, email, contact })
 }
 
 fn address_lines(text: Option<&str>) -> Vec<String> {
@@ -695,6 +708,9 @@ fn customer_details(name: &str, c: &Customer) -> Vec<String> {
     let mut details = Vec::new();
     if let Some(company) = c.company_name.as_deref().map(str::trim).filter(|s| !s.is_empty() && *s != name) {
         details.push(company.to_string());
+    }
+    if let Some(contact) = c.contact.as_deref().map(str::trim).filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case(name)) {
+        details.push(contact.to_string());
     }
     if let Some(address) = &c.billing_address {
         details.extend(address.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from));
@@ -722,7 +738,7 @@ pub async fn invoice_doc(pool: &SqlitePool, invoice_id: i64, symbol: &str) -> Re
     let inv = &detail.invoice;
     let code = inv.currency_code.as_deref();
     let money = |cents: i64| format_money(cents, code, symbol);
-    let cust = customer(pool, inv.customer_id, &inv.customer_name).await?;
+    let cust = customer(pool, inv.customer_id, &inv.customer_name, false).await?;
     let terms_days = match (chrono::NaiveDate::parse_from_str(&inv.issue_date, "%Y-%m-%d"), chrono::NaiveDate::parse_from_str(&inv.due_date, "%Y-%m-%d")) {
         (Ok(a), Ok(b)) => (b - a).num_days(),
         _ => 0,
@@ -808,7 +824,7 @@ pub async fn estimate_doc(pool: &SqlitePool, estimate_id: i64, symbol: &str) -> 
         .await
         .map_err(db_err)?;
     let money = |cents: i64| format_money(cents, None, symbol);
-    let cust = customer(pool, Some(customer_id), &name).await?;
+    let cust = customer(pool, Some(customer_id), &name, false).await?;
     let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
     let mut meta = vec![("Estimate date".to_string(), format_date(&date), false)];
     if let Some(expires) = &expires {
@@ -940,8 +956,8 @@ pub async fn sales_receipt_doc(pool: &SqlitePool, receipt_id: i64, symbol: &str)
     let name = name.unwrap_or_else(|| "Cash customer".into());
     let sales = crate::sales_lists::document_details(pool, crate::sales_lists::SalesDoc::SalesReceipt, receipt_id).await?;
     let cust = match customer_id {
-        Some(id) => customer(pool, Some(id), &name).await?,
-        None => Customer { company_name: None, billing_address: None, email: None },
+        Some(id) => customer(pool, Some(id), &name, false).await?,
+        None => Customer { company_name: None, billing_address: None, email: None, contact: None },
     };
     let method = PAYMENT_METHODS.iter().find(|(k, _)| *k == method).map_or("Other", |(_, l)| l);
     let paid_by = match reference.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
@@ -1003,7 +1019,7 @@ pub async fn credit_memo_doc(pool: &SqlitePool, credit_id: i64, symbol: &str) ->
     .await
     .map_err(db_err)?;
     let money = |cents: i64| format_money(cents, None, symbol);
-    let cust = customer(pool, Some(customer_id), &name).await?;
+    let cust = customer(pool, Some(customer_id), &name, false).await?;
     let sales = crate::sales_lists::SalesDetailsView { header: crate::sales_header::read(pool, "credit_memos", credit_id).await?, ..Default::default() };
     let title = if refund_account.is_some() { "Refund" } else { "Credit" };
     let mut totals = Vec::new();
@@ -1136,7 +1152,7 @@ pub async fn statement_doc(pool: &SqlitePool, customer_id: i64, period: Period, 
     }
     let s = crate::workflows::customer_statement(pool, customer_id, period.start_date, period.end_date).await?;
     let money = |cents: i64| format_money(cents, None, symbol);
-    let cust = customer(pool, Some(customer_id), &s.customer_name).await?;
+    let cust = customer(pool, Some(customer_id), &s.customer_name, true).await?;
     let iso = |d: NaiveDate| d.format("%Y-%m-%d").to_string();
     let mut rows = vec![[format_date(&iso(period.start_date)), "Balance forward".to_string(), String::new(), String::new(), String::new(), money(s.opening_balance_cents)]];
     for r in &s.rows {

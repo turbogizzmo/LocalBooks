@@ -30,6 +30,7 @@ pub const DEFAULTS: &[(&str, &str)] = &[
     (REPORT_BASIS, "accrual"),
     (crate::report_center::AGING_BASIS, "due"),
     (REPORT_ITEMS_SHOW, "name"),
+    (crate::item_categories::PREF_KEY, "true"),
     (SHOW_ACCOUNT_NUMBERS, "true"),
     (LOWEST_SUBACCOUNT_ONLY, "false"),
     (crate::statements::CASH_FLOW_SECTIONS, ""),
@@ -207,7 +208,7 @@ fn validate(key: &str, value: &str) -> Result<String, String> {
         | "four_digit_years"
         | "class_tracking"
         | "class_prompt"
-        | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY
+        | "sales_tax_enabled" | "finance_charge_on_finance_charges" | crate::fx_rates::PREF_KEY | crate::item_categories::PREF_KEY
         | crate::print_queue::PREF_CHECKS | crate::print_queue::PREF_INVOICES => match v {
             "true" | "false" => Ok(v.to_string()),
             _ => Err("PREF_BAD_FLAG: use true or false".into()),

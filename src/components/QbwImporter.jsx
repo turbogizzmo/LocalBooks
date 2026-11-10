@@ -722,8 +722,24 @@ function LedgerReview({ summary, accounts, busy, run }) {
           {summary.unreadableLines > 0 && `; ${summary.unreadableLines.toLocaleString()} lines could not be read in full (listed below)`}
           {summary.sourceFormat === 'QIF' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} investment transactions were skipped (LocalBooks does not track securities)`}
           {summary.sourceFormat === 'GNUCASH' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (investments, amounts that are not whole cents, or another currency with no home-currency amount; their lines are listed below with the reason)`}
-          {summary.sourceFormat === 'QBMAC' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (amounts that are not whole cents, or no date; their lines are listed below with the reason)`}.
+          {summary.sourceFormat === 'QBMAC' && summary.rejectedLines > 0 && `; ${summary.rejectedLines.toLocaleString()} transactions were not imported (amounts that are not whole cents, or no date; their lines are listed below with the reason)`}
+          {(summary.fractionalAmounts ?? []).length > 0 && `; ${summary.fractionalAmounts.length.toLocaleString()} amount${summary.fractionalAmounts.length === 1 ? ' was' : 's were'} not whole cents and left out (listed below)`}.
         </p>
+        {(summary.fractionalAmounts ?? []).length > 0 && (
+          <details className="border-b border-qb-border" open>
+            <summary className="cursor-pointer px-3 py-1.5 text-xs">
+              <strong>
+                {summary.fractionalAmounts.length} amount{summary.fractionalAmounts.length === 1 ? '' : 's'} not in whole cents
+              </strong>
+              {': LocalBooks keeps money in whole cents, so a stored balance like this counts as zero and a line or applied payment like this is left out. Check these in the original books.'}
+            </summary>
+            <ul className="max-h-[160px] overflow-auto px-6 pb-2 text-xs">
+              {summary.fractionalAmounts.map((text, i) => (
+                <li key={i} className="num">{text}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         {summary.unreadable.length > 0 && (
           <details className="border-b border-qb-border" open={summary.unreadable.some((u) => u.outcome === 'UNREADABLE')}>
             <summary className="cursor-pointer px-3 py-1.5 text-xs">

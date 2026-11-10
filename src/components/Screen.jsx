@@ -2,6 +2,7 @@
 // opened with `intent` (a request for an entry form, a record or a report, as `{ action, data, nonce }`).
 import AllSales from './AllSales.jsx';
 import AuditLog from './AuditLog.jsx';
+import PayoutFeeds from './PayoutFeeds.jsx';
 import BankFeed from './BankFeed.jsx';
 import Bills from './Bills.jsx';
 import Budgets from './Budgets.jsx';
@@ -28,6 +29,7 @@ import DocumentInbox from './DocumentInbox.jsx';
 import BouncedChecks from './BouncedChecks.jsx';
 import PurchaseOrders from './PurchaseOrders.jsx';
 import Approvals from './Approvals.jsx';
+import ItemReceipts from './ItemReceipts.jsx';
 import Reclassify from './Reclassify.jsx';
 import Reconcile from './Reconcile.jsx';
 import Recurring from './Recurring.jsx';
@@ -78,10 +80,12 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'expenses/credits' && <VendorCredits {...props} />}
       {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
       {view === 'expenses/approvals' && <Approvals isAdmin={isAdmin !== false} />}
+      {view === 'expenses/item-receipts' && <ItemReceipts intent={intent} />}
       {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={navigate} />}
       {view === 'employees/time' && <TimeTracking {...props} />}
       {view === 'employees/mileage' && <MileageTracking {...props} />}
       {view === 'banking/feeds' && <BankFeed accounts={list} />}
+      {view === 'banking/payouts' && <PayoutFeeds accounts={list} isAdmin={isAdmin === true} />}
       {view === 'banking/transfers' && <DepositsTransfers {...props} />}
       {view === 'banking/reconcile' && <Reconcile accounts={list} />}
       {view === 'banking/bounced-checks' && <BouncedChecks accounts={list} />}
