@@ -38,3 +38,12 @@ test('a column the saved choice does not know lands after its usual neighbour an
   // Unknown ids in the saved choice are ignored.
   assert.deepEqual(ids(arrangeColumns(defs, { order: ['gone', 'email'], shown: ['email'] })), ['name', 'email', 'phone', 'balance']);
 });
+
+test('a move steps over columns the table does not have', async () => {
+  const { moveColumn } = await import('./columns.js');
+  const arranged = [{ id: 'qty' }, { id: 'class' }, { id: 'rate' }];
+  const offered = (id) => id !== 'class';
+  assert.deepEqual(moveColumn(arranged, 'qty', 1, offered).map((c) => c.id), ['rate', 'class', 'qty']);
+  assert.deepEqual(moveColumn(arranged, 'rate', -1, offered).map((c) => c.id), ['rate', 'class', 'qty']);
+  assert.deepEqual(moveColumn(arranged, 'qty', -1, offered).map((c) => c.id), ['qty', 'class', 'rate'], 'nothing before it');
+});

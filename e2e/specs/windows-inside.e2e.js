@@ -84,9 +84,7 @@ describe('Windows inside LocalBooks', () => {
 
   it('reopens the company with its windows', async () => {
     await openSettingsTab('File & Data Controls');
-    // The windows open inside LocalBooks reach the desktop it saves 120 ms after they last change
-    // (WindowManager's report); a person never closes the company that quickly, a script can.
-    await browser.pause(600);
+    // Straight away: closing the company saves the windows as they are this moment (gaps row A16).
     await click(button('Close Company'));
     // The No Company Open screen lists the company; Open reopens it.
     const row = $('//tr[td[contains(normalize-space(), "No Users Test Co")]]/td[1]');

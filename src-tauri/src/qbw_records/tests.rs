@@ -107,3 +107,13 @@ fn quantities_scale_to_ten_thousandths_rounding_half_away_from_zero() {
     assert_eq!(Value::Float(1e300).as_quantity_e4(), None);
     assert_eq!(Value::Null.as_quantity_e4(), None);
 }
+
+#[test]
+fn a_double_that_is_not_whole_cents_is_named_not_read() {
+    assert_eq!(Value::Float(12.34).as_cents(), Some(1_234));
+    assert_eq!(Value::Float(12.34).fractional_amount(), None);
+    assert_eq!(Value::Float(10.005).as_cents(), None);
+    assert_eq!(Value::Float(10.005).fractional_amount().as_deref(), Some("10.005"));
+    assert_eq!(Value::Float(f64::NAN).fractional_amount(), None);
+    assert_eq!(Value::Int(7).fractional_amount(), None);
+}
