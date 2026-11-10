@@ -37,9 +37,12 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
     if (!prefsLoaded || defaulted) return;
     setDefaulted(true);
     setShipMethodId(defaultShipMethodId);
-    // The usual F.O.B., unless one was typed or a document was loaded meanwhile.
-    setHeader((h) => (h.fob ? h : { ...h, fob: defaultFob }));
+    // The usual F.O.B., unless the box was edited (even cleared) meanwhile; a loaded document sets
+    // `defaulted` itself, so it keeps its own.
+    if (!fobTouched.current) setHeader((h) => ({ ...h, fob: defaultFob ?? '' }));
   }, [prefsLoaded, defaulted, defaultShipMethodId, defaultFob]);
+  // Whether F.O.B. was typed in (or a document loaded), so the usual one doesn't replace it.
+  const fobTouched = useRef(false);
   const [values, setValues] = useState({}); // field id → value
   const [touched, setTouched] = useState(() => new Set()); // field ids the user typed in
   const [header, setHeader] = useState({ billTo: '', shipTo: '', poNumber: '', fob: '' });
@@ -179,6 +182,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       billLabel={billLabel}
       onChange={(key, value) => {
         if (key === 'billTo' || key === 'shipTo') addressTouched.current = { ...addressTouched.current, [key]: true };
+        if (key === 'fob') fobTouched.current = true;
         setHeader((h) => ({ ...h, [key]: value }));
       }}
     />
@@ -215,6 +219,7 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       // A document written before forms kept addresses has none: fill from the customer.
       const has = { billTo: details?.billTo != null, shipTo: details?.shipTo != null };
       addressTouched.current = has;
+      fobTouched.current = true;
       setHeader({ billTo: details?.billTo ?? '', shipTo: details?.shipTo ?? '', poNumber: details?.poNumber ?? '', fob: details?.fob ?? '' });
       if (!has.billTo || !has.shipTo) setRefill((n) => n + 1);
     },
@@ -230,7 +235,8 @@ export function useSalesDetails(customerName, customers, { billLabel = 'Bill To'
       setValues({});
       setTouched(new Set());
       addressTouched.current = { billTo: false, shipTo: false };
-      setHeader({ billTo: '', shipTo: '', poNumber: '', fob: prefsLoaded ? defaultFob : '' });
+      fobTouched.current = false;
+      setHeader({ billTo: '', shipTo: '', poNumber: '', fob: prefsLoaded ? (defaultFob ?? '') : '' });
       setRefill((n) => n + 1);
     },
   };

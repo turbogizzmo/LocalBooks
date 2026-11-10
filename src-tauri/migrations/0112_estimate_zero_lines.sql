@@ -6,11 +6,11 @@
 -- triggers on other tables that read it, are recreated exactly as they were.
 
 
-DROP TRIGGER trg_est_form_lines_frozen_upd;
-DROP TRIGGER trg_est_form_lines_number;
-DROP TRIGGER trg_est_lines_converted_no_delete;
-DROP TRIGGER trg_est_lines_form_number;
-DROP TRIGGER trg_est_lines_frozen_upd;
+DROP TRIGGER IF EXISTS trg_est_form_lines_frozen_upd;
+DROP TRIGGER IF EXISTS trg_est_form_lines_number;
+DROP TRIGGER IF EXISTS trg_est_lines_converted_no_delete;
+DROP TRIGGER IF EXISTS trg_est_lines_form_number;
+DROP TRIGGER IF EXISTS trg_est_lines_frozen_upd;
 
 CREATE TABLE estimate_lines_new (
     id                  INTEGER PRIMARY KEY,
