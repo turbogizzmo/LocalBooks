@@ -20,6 +20,7 @@ import FxRevaluation from './FxRevaluation.jsx';
 import Invoices from './Invoices.jsx';
 import JournalEntries from './JournalEntries.jsx';
 import PartyList from './PartyList.jsx';
+import OtherNames from './OtherNames.jsx';
 import Products from './Products.jsx';
 import { PrintChecks, PrintInvoices } from './PrintForms.jsx';
 import { MailingLabels, PrintBatch } from './PrintBatches.jsx';
@@ -75,6 +76,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'expenses/credits' && <VendorCredits {...props} />}
       {view === 'expenses/purchase-orders' && <PurchaseOrders {...props} />}
       {view === 'expenses/vendors' && <PartyList kind="vendor" navigate={navigate} />}
+      {view === 'expenses/other-names' && <OtherNames />}
       {view === 'employees/time' && <TimeTracking {...props} />}
       {view === 'employees/mileage' && <MileageTracking {...props} />}
       {view === 'banking/feeds' && <BankFeed accounts={list} />}

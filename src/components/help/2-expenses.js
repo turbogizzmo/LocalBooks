@@ -18,6 +18,10 @@ export const screens = {
     help: 'Everyone you buy from, with what you still owe each of them.',
     guide: 'customers-and-products',
   },
+  'expenses/other-names': {
+    help: 'People and businesses who are neither customers nor vendors, such as an owner taking a draw. Checks and expenses can be paid to them.',
+    guide: 'customers-and-products',
+  },
   'expenses/inbox': {
     help: 'Receipts and bills waiting to be entered. Drop files on the window or click Add files…; each shows a preview, and Enter as bill, Expense or Check opens that form filled in from what could be read from the file, with the file attached when it posts.',
     guide: 'attachments',
@@ -37,6 +41,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'other-names', area: 'expenses', views: ['expenses/other-names', 'expenses/expenses'],
+    title: 'Other names: payees who aren’t vendors',
+    body: 'Expenses › Other Names keeps people and businesses who are neither customers nor vendors, such as an owner taking a draw. Add one with New other name; then type or pick the name as the payee on a check or expense and it is paid to them, with no vendor added. Click a name for its panel: what has been paid to them, contact details, notes with Date Stamp and recent transactions.',
+    keywords: 'other names other name list owner draw partner payee not a vendor one-off payee information panel notes',
+    go: { label: 'Go to Other Names', view: 'expenses/other-names' },
+    guide: 'customers-and-products',
+  },
   {
     id: 'document-inbox', area: 'expenses', views: ['expenses/inbox', 'expenses/bills', 'expenses/expenses'],
     title: 'Enter receipts and bills from the Document Inbox',

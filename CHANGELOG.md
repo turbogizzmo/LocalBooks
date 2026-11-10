@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Other Names list.** Expenses › Other Names keeps people and businesses who are neither customers
+  nor vendors, such as an owner taking a draw. A check or expense typed to one is paid to them, and
+  the list has an information panel with what was paid, contact details, notes and recent
+  transactions.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

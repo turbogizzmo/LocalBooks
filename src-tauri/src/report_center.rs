@@ -636,9 +636,9 @@ pub async fn missing_checks(pool: &SqlitePool, account_id: i64, start_date: Opti
         .ok_or("ACCOUNT_NOT_FOUND: that account does not exist")?;
     let all: Vec<CheckRow> = sqlx::query_as(
         "SELECT * FROM (
-            SELECT trim(x.check_number) AS number, x.expense_date AS date, 'Check' AS kind, v.name AS party_name, x.memo,
+            SELECT trim(x.check_number) AS number, x.expense_date AS date, 'Check' AS kind, COALESCE(v.name, o.name) AS party_name, x.memo,
                    x.total_cents AS amount_cents, x.is_voided, x.journal_entry_id
-            FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id
+            FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id
             WHERE x.kind = 'CHECK' AND x.payment_account_id = ?1 AND x.journal_entry_id IS NOT NULL
               AND x.journal_entry_id NOT IN (SELECT old_entry_id FROM transaction_edits)
             UNION ALL

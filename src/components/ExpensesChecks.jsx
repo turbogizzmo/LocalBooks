@@ -44,6 +44,10 @@ const PAY_FROM = {
  * today, and a check takes the next check number.
  */
 function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onCancel, onNew, editing = null, copyOf = null, fromInbox = null, onDuplicate, onOpenSaved, onPrintCheck }) {
+  // The payee box offers vendors and other names (Expenses › Other Names); a check typed to an
+  // other name is paid to them, not to a new vendor.
+  const otherNames = useLedgerQuery(api.listOtherNames).data ?? [];
+  const payees = useMemo(() => [...vendors, ...otherNames.filter((o) => !vendors.some((v) => v.name.toLowerCase() === o.name.toLowerCase()))], [vendors, otherNames]);
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
@@ -293,7 +297,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
         <label>
           <span className="qb-label">Payee</span>
-          <NameField kind="vendor" inputRef={payeeRef} names={vendors} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
+          <NameField kind="vendor" inputRef={payeeRef} names={payees} value={payee} onChange={setPayee} placeholder={isCredit ? 'Who gave the credit?' : 'Who did you pay?'} />
         </label>
         <label>
           <span className="qb-label">{kind === 'CHECK' ? 'Bank account' : isCredit ? 'Credit card' : 'Payment account'}</span>

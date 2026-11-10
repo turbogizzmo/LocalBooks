@@ -120,6 +120,7 @@ const LISTS: &[Entry] = &[
     Entry::Sep,
     page("Customer List", "sales/customers"),
     page("Vendor List", "expenses/vendors"),
+    page("Other Names List", "expenses/other-names"),
     Entry::Sub(
         "Customer & Vendor Profile Lists",
         &[
@@ -406,6 +407,7 @@ const REPORTS: &[Entry] = &[
         report("Customer Contact List", "list:customer-contact"),
         report("Vendor Phone List", "list:vendor-phone"),
         report("Vendor Contact List", "list:vendor-contact"),
+        report("Other Names Phone List", "list:other-phone"),
     ]),
 ];
 

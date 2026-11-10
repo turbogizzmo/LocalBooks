@@ -96,6 +96,7 @@ features![
     merges,
     migration,
     mileage,
+    other_names,
     payroll_import,
     offsite,
     preferences,

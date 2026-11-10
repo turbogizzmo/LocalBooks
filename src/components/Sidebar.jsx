@@ -42,6 +42,7 @@ export const NAV = [
       { id: 'expenses/purchase-orders', label: 'Purchase Orders', whenOn: 'inventory_enabled' },
       { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/vendors', label: 'Vendors' },
+      { id: 'expenses/other-names', label: 'Other Names' },
       { id: 'expenses/print-checks', label: 'Print Checks' },
     ],
   },
