@@ -63,6 +63,37 @@ pub struct InvoiceInput {
     pub details: crate::sales_lists::SalesDetails,
 }
 
+/// A payment taken when the invoice is saved (T21): dated the invoice's date and recorded with it in
+/// one transaction, as an ordinary payment linked to the invoice (Receive Payments lists it, and
+/// voiding it reopens the invoice).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaidNow {
+    pub deposit_account_id: i64,
+    /// In the invoice's currency; at most its total.
+    pub amount_cents: i64,
+    pub payment_method: String,
+    #[serde(default)]
+    pub payment_method_id: Option<i64>,
+    pub reference: Option<String>,
+}
+
+impl PaidNow {
+    pub(crate) fn payment_for(&self, invoice_id: i64, date: NaiveDate) -> PaymentInput {
+        PaymentInput {
+            invoice_id,
+            deposit_account_id: self.deposit_account_id,
+            payment_date: date,
+            amount_cents: self.amount_cents,
+            payment_method: self.payment_method.clone(),
+            payment_method_id: self.payment_method_id,
+            reference: self.reference.clone(),
+            exchange_rate_e6: None,
+            discount_cents: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceSummary {
@@ -493,7 +524,7 @@ pub async fn record_payments(pool: &SqlitePool, inputs: Vec<PaymentInput>) -> Re
     Ok(inputs.len())
 }
 
-async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {
+pub(crate) async fn write_payment(tx: &mut Transaction<'_, Sqlite>, input: &PaymentInput, discount_account: Option<i64>) -> Result<(), String> {
     if input.payment_method_id.is_none() && !PAYMENT_METHODS.contains(&input.payment_method.as_str()) {
         return Err(format!("INV_BAD_METHOD: unknown payment method '{}'", input.payment_method));
     }

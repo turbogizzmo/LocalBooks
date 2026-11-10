@@ -100,6 +100,39 @@ Good to know:
 - **Remove** forgets the connection on this computer. Transactions already fetched stay in Bank
   Feeds. To stop SimpleFIN sharing data, also disable the app connection in SimpleFIN Bridge.
 
+## Payouts from Stripe
+
+If customers pay you by card through Stripe, your bank sees one amount per **payout**: the sales
+less Stripe's fees, refunds and disputes. **Banking › Payout Feeds** brings each payout in as a
+deposit that shows all of it, so your income is the gross sales and the fees are an expense.
+
+**Connect** (Admins): in the Stripe Dashboard, under Developers › API keys, create a **restricted
+key** with **Read** access to **Balance** and **Payouts** (nothing else). In LocalBooks click
+**Connect Stripe…**, paste the key, and choose:
+
+- the **bank account** the payouts arrive in;
+- the account for **sales** (an income account, or a clearing account if you also invoice those
+  customers);
+- the accounts for **processor fees**, **refunds** and **chargebacks**.
+
+LocalBooks checks the key with Stripe, then keeps it in this computer's credential store (the
+Keychain on a Mac), never in the company file. Nothing is fetched until you connect, and then only
+when you click **Get payouts**; LocalBooks talks only to Stripe and sends nothing anywhere else.
+
+**Get payouts** fetches paid payouts from the last 90 days (afterwards, since the last fetch). Each
+shows its sales, fees, refunds, chargebacks and what reached the bank; click it to see each sale,
+refund and dispute. A payout in another currency, or one whose transactions don't add up to what
+was paid out, is listed as not kept, with the reason.
+
+**Record deposit** posts it as a deposit to the bank account dated the day it arrived: a line for
+each sale at its full amount, then the refunds, chargebacks and fees taken out of it, so the
+deposit's bank amount is exactly the payout. When the bank line comes in through Bank Feeds, it
+matches this deposit (see [Match transactions you already entered](#match-transactions-you-already-entered)).
+**Ignore** leaves out a payout you already entered by hand. To undo a recorded payout, void its
+deposit.
+
+PayPal and Shopify Payments aren't connected yet.
+
 ## When LocalBooks asks which columns are which
 
 Most bank CSV files are recognized automatically: a date, a description, and either one amount
