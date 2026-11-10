@@ -47,7 +47,10 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   // The payee box offers vendors and other names (Expenses › Other Names); a check typed to an
   // other name is paid to them, not to a new vendor.
   const otherNames = useLedgerQuery(api.listOtherNames).data ?? [];
-  const payees = useMemo(() => [...vendors, ...otherNames.filter((o) => !vendors.some((v) => v.name.toLowerCase() === o.name.toLowerCase()))], [vendors, otherNames]);
+  const payees = useMemo(
+    () => [...vendors, ...otherNames.filter((o) => o.isActive && !vendors.some((v) => v.name.toLowerCase() === o.name.toLowerCase())).map((o) => ({ ...o, listLabel: 'Other name' }))],
+    [vendors, otherNames],
+  );
   const payFrom = PAY_FROM[kind];
   const isCredit = kind === 'CARD_CREDIT';
   // Checks open on the account chosen in Preferences › Checking (My Preferences), else the first bank.
