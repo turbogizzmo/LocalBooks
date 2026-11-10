@@ -40,7 +40,7 @@ export default [
         {
           assert: 'either',
           depth: 4,
-          controlComponents: ['DateBox', 'AccountSelect', 'NameField', 'ClassSelect', 'TermsSelect', 'PaymentMethodSelect', 'ProfileEntrySelect', 'CheckNumberBox', 'EmployeePicker'],
+          controlComponents: ['DateBox', 'AccountSelect', 'NameField', 'ClassSelect', 'TermsSelect', 'PaymentMethodSelect', 'ProfileEntrySelect', 'CheckNumberBox', 'EmployeePicker', 'CategorySelect'],
         },
       ],
       'jsx-a11y/no-static-element-interactions': ['error', { handlers: ['onClick', 'onMouseDown', 'onMouseUp', 'onKeyPress', 'onKeyUp'] }],
