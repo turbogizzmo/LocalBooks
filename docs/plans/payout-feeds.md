@@ -52,8 +52,30 @@ deposit that doesn't tie to the bank.
    **Ignore** leaves it out (for payouts already entered by hand).
 4. Payouts in a currency other than the company's home currency are listed but refused.
 
+## PayPal
+
+PayPal has no payout object. Its balance collects payments, fees, refunds and chargebacks, and a
+**withdrawal** to the bank (event codes T0400–T0403) takes money out, so each withdrawal is a payout
+here, made of every balance-affecting transaction after the withdrawal before it. They are read
+with PayPal's Transaction Search API (`GET /v1/reporting/transactions`, at most 31 days per
+request, paged), with a token from the app's client id and secret (OAuth client credentials, the
+Transaction Search read scope). Amounts are decimal strings, read to cents without floats.
+
+| Event code | Becomes |
+|---|---|
+| T00xx with money in | a sale, gross; its fee is a processor fee |
+| T01xx, T1108, T1109 | processor fees (or fees given back) |
+| T1107, T1115, T1120 | refunds |
+| T1106, T1201 (and T1202, T1205 back) | chargebacks |
+| anything else (holds and releases, conversions, payments sent) | other, by sign |
+
+Only transactions in the withdrawal's currency count: a payment received in another currency comes in as what its conversion added (an adjustment), never as cents of the wrong currency. The breakdown ties only when a withdrawal took the whole balance; one that took part of it, or whose
+withdrawal before it is outside the history read (the fetch reads a month further back for this), is
+listed as not kept, with the reason. The client id and secret are kept together in the credential
+store; `payout_feeds.account_ref` says whether they are live or sandbox credentials.
+
 ## Limits of this change
 
-Stripe only (PayPal and Shopify stay on the T68 row). No automatic schedule; no matching of a charge
+Stripe first; PayPal came next (above), and Shopify Payments stays on the T68 row. No automatic schedule; no matching of a charge
 to an open invoice (charges post to the sales account; the user applies them to invoices as
 needed). Payout reversals (failed payouts) are not fetched.

@@ -1,6 +1,6 @@
 //! Payout feeds from payment processors (gaps row T68; design in `docs/plans/payout-feeds.md`).
 //!
-//! Stripe first. A processor sends the bank one net amount per payout; this module fetches each
+//! Stripe and PayPal ([`paypal`]). A processor sends the bank one net amount per payout; this module fetches each
 //! payout's balance transactions, works out its gross sales, fees, refunds, chargebacks and other
 //! adjustments, and records it as a Deposit whose lines are the gross charges and whose deductions
 //! are the rest ([`crate::banking::write_deposit`]). The deposit's bank line is the payout's net
@@ -25,6 +25,37 @@ use crate::secrets::SecretStore;
 const KEYCHAIN_SERVICE: &str = "LocalBooks payout feeds";
 const SECRETS_FILE: &str = "payout-feed-keys.json";
 pub const STRIPE_API: &str = "https://api.stripe.com";
+
+/// Where each processor's API is: the real ones, or a loopback server under test.
+#[derive(Debug, Clone)]
+pub struct Apis {
+    pub stripe: String,
+    pub paypal_live: String,
+    pub paypal_sandbox: String,
+}
+
+impl Apis {
+    pub fn live() -> Apis {
+        Apis { stripe: STRIPE_API.into(), paypal_live: paypal::LIVE_API.into(), paypal_sandbox: paypal::SANDBOX_API.into() }
+    }
+
+    /// Every processor at one address (tests).
+    #[cfg(test)]
+    pub fn all(base: &str) -> Apis {
+        Apis { stripe: base.into(), paypal_live: base.into(), paypal_sandbox: base.into() }
+    }
+
+    fn paypal(&self, account_ref: Option<&str>) -> &str {
+        if account_ref == Some("SANDBOX") {
+            &self.paypal_sandbox
+        } else {
+            &self.paypal_live
+        }
+    }
+}
+
+mod paypal;
+pub use paypal::{connect_paypal, PayPalCredentials};
 /// How far back the first fetch reaches, and how much each later fetch overlaps the last.
 const FIRST_DAYS: i64 = 90;
 const OVERLAP_DAYS: i64 = 7;
@@ -62,11 +93,11 @@ pub struct Breakdown {
     pub items: Vec<PayoutItem>,
 }
 
-fn int(v: &Value, key: &str) -> i64 {
+pub(crate) fn int(v: &Value, key: &str) -> i64 {
     v.get(key).and_then(Value::as_i64).unwrap_or(0)
 }
 
-fn text(v: &Value, key: &str) -> String {
+pub(crate) fn text(v: &Value, key: &str) -> String {
     v.get(key).and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
@@ -116,6 +147,14 @@ pub fn stripe_breakdown(payout_amount: i64, transactions: &[Value]) -> Result<Br
     Ok(b)
 }
 
+/// How a processor is named on deposits and the screen.
+pub fn processor_name(processor: &str) -> &'static str {
+    match processor {
+        "PAYPAL" => "PayPal",
+        _ => "Stripe",
+    }
+}
+
 /// The deposit a payout becomes, with the feed's accounts.
 pub fn deposit_for(feed: &PayoutFeed, arrival: NaiveDate, payout_id: &str, b: &Breakdown) -> DepositInput {
     let mut other_lines = Vec::new();
@@ -132,7 +171,7 @@ pub fn deposit_for(feed: &PayoutFeed, arrival: NaiveDate, payout_id: &str, b: &B
             (_, a) => other_lines.push(DepositOtherLine { account_id: feed.chargeback_account_id, amount_cents: -a, memo, class_id: None, customer_id: None, vendor_id: None }),
         }
     }
-    let processor = "Stripe";
+    let processor = processor_name(&feed.processor);
     match b.fee_cents {
         f if f > 0 => deductions.push(DepositDeduction { account_id: feed.fee_account_id, amount_cents: f, memo: Some(format!("{processor} fees")), kind: "FEE".into() }),
         f if f < 0 => other_lines.push(DepositOtherLine { account_id: feed.fee_account_id, amount_cents: -f, memo: Some(format!("{processor} fees returned")), class_id: None, customer_id: None, vendor_id: None }),
@@ -166,6 +205,8 @@ pub struct PayoutFeed {
     pub name: String,
     #[serde(skip)]
     pub secret_key: String,
+    /// PayPal: `LIVE` or `SANDBOX`.
+    pub account_ref: Option<String>,
     pub bank_account_id: i64,
     pub sales_account_id: i64,
     pub fee_account_id: i64,
@@ -186,17 +227,17 @@ pub struct FeedInput {
 }
 
 const FEED_SELECT: &str =
-    "SELECT id, processor, name, secret_key, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at FROM payout_feeds";
+    "SELECT id, processor, name, secret_key, account_ref, bank_account_id, sales_account_id, fee_account_id, refund_account_id, chargeback_account_id, last_fetched_at FROM payout_feeds";
 
 pub async fn feeds(pool: &SqlitePool) -> Result<Vec<PayoutFeed>, String> {
     sqlx::query_as(&format!("{FEED_SELECT} ORDER BY name")).fetch_all(pool).await.map_err(db_err)
 }
 
-async fn feed(pool: &SqlitePool, id: i64) -> Result<PayoutFeed, String> {
+pub(crate) async fn feed(pool: &SqlitePool, id: i64) -> Result<PayoutFeed, String> {
     sqlx::query_as(&format!("{FEED_SELECT} WHERE id = ?1")).bind(id).fetch_optional(pool).await.map_err(db_err)?.ok_or_else(|| "PAYOUT_NO_FEED: that payout feed was removed".into())
 }
 
-async fn check_accounts(pool: &SqlitePool, input: &FeedInput) -> Result<(), String> {
+pub(crate) async fn check_accounts(pool: &SqlitePool, input: &FeedInput) -> Result<(), String> {
     let kind = |id: i64| async move {
         sqlx::query_scalar::<_, String>("SELECT account_type FROM chart_of_accounts WHERE id = ?1 AND is_active = 1").bind(id).fetch_optional(pool).await.map_err(db_err)
     };
@@ -245,7 +286,7 @@ pub async fn connect_stripe(pool: &SqlitePool, store: &SecretStore, api: &str, k
     feed(pool, id).await
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -279,7 +320,7 @@ pub async fn disconnect(pool: &SqlitePool, store: &SecretStore, id: i64) -> Resu
 // ------------------------------------------------------------------------------------------------
 
 /// Only HTTPS, except a loopback server under test.
-fn api_url(api: &str, path: &str) -> Result<reqwest::Url, String> {
+pub(crate) fn api_url(api: &str, path: &str) -> Result<reqwest::Url, String> {
     let url = reqwest::Url::parse(&format!("{}{path}", api.trim_end_matches('/'))).map_err(|_| "PAYOUT_URL: bad processor address".to_string())?;
     let loopback = matches!(url.host_str(), Some("127.0.0.1" | "localhost"));
     if url.scheme() != "https" && !loopback {
@@ -288,7 +329,7 @@ fn api_url(api: &str, path: &str) -> Result<reqwest::Url, String> {
     Ok(url)
 }
 
-fn client() -> Result<reqwest::Client, String> {
+pub(crate) fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| format!("PAYOUT_NETWORK: {e}"))
 }
 
@@ -365,9 +406,9 @@ pub struct FetchResult {
     pub refused: Vec<String>,
 }
 
-/// Fetches paid payouts that arrived since the last fetch (overlapping a week; 90 days the first
-/// time), with their balance transactions, and keeps the ones not seen before.
-pub async fn fetch(pool: &SqlitePool, store: &SecretStore, api: &str, feed_id: i64, now: DateTime<Utc>) -> Result<FetchResult, String> {
+/// Fetches the payouts that arrived since the last fetch (overlapping a week; 90 days the first
+/// time), with what each is made of, and keeps the ones not seen before.
+pub async fn fetch(pool: &SqlitePool, store: &SecretStore, apis: &Apis, feed_id: i64, now: DateTime<Utc>) -> Result<FetchResult, String> {
     let f = feed(pool, feed_id).await?;
     let key = store.get(&f.secret_key).await?.ok_or_else(|| "PAYOUT_KEY_MISSING: this computer doesn't have the feed's key; connect it again".to_string())?;
     let since = f
@@ -375,49 +416,79 @@ pub async fn fetch(pool: &SqlitePool, store: &SecretStore, api: &str, feed_id: i
         .as_deref()
         .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
         .map_or(now - chrono::Duration::days(FIRST_DAYS), |t| t.with_timezone(&Utc) - chrono::Duration::days(OVERLAP_DAYS));
+    let result = match f.processor.as_str() {
+        "PAYPAL" => paypal::fetch(pool, &f, apis.paypal(f.account_ref.as_deref()), &key, since, now).await?,
+        _ => fetch_stripe(pool, &f, &apis.stripe, &key, since, now).await?,
+    };
+    sqlx::query("UPDATE payout_feeds SET last_fetched_at = ?1 WHERE id = ?2").bind(now.to_rfc3339()).bind(feed_id).execute(pool).await.map_err(db_err)?;
+    Ok(result)
+}
+
+/// The company's home currency code.
+pub(crate) async fn home_currency(pool: &SqlitePool) -> Result<String, String> {
+    let home: Option<String> = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_optional(pool).await.map_err(db_err)?;
+    Ok(home.unwrap_or_else(|| "USD".into()).to_uppercase())
+}
+
+/// Whether a payout was already fetched for this feed.
+pub(crate) async fn seen(pool: &SqlitePool, feed_id: i64, payout_id: &str) -> Result<bool, String> {
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payouts WHERE feed_id = ?1 AND processor_payout_id = ?2)").bind(feed_id).bind(payout_id).fetch_one(pool).await.map_err(db_err)
+}
+
+/// Keeps a payout's breakdown, NEW.
+pub(crate) async fn keep(pool: &SqlitePool, feed_id: i64, payout_id: &str, arrival: NaiveDate, currency: &str, b: &Breakdown) -> Result<(), String> {
+    sqlx::query(
+        "INSERT INTO payouts (feed_id, processor_payout_id, arrival_date, currency, net_cents, gross_cents, fee_cents, refund_cents, chargeback_cents, other_cents, details_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+    )
+    .bind(feed_id)
+    .bind(payout_id)
+    .bind(arrival)
+    .bind(currency)
+    .bind(b.net_cents)
+    .bind(b.gross_cents)
+    .bind(b.fee_cents)
+    .bind(b.refund_cents)
+    .bind(b.chargeback_cents)
+    .bind(b.other_cents)
+    .bind(serde_json::to_string(&b.items).map_err(|e| e.to_string())?)
+    .execute(pool)
+    .await
+    .map_err(db_err)
+    .map(|_| ())
+}
+
+/// The reason part of an error ("PAYOUT_MISMATCH: the payout's…" → "the payout's…").
+pub(crate) fn reason(e: &str) -> &str {
+    e.split_once(": ").map_or(e, |(_, m)| m)
+}
+
+async fn fetch_stripe(pool: &SqlitePool, f: &PayoutFeed, api: &str, key: &str, since: DateTime<Utc>, now: DateTime<Utc>) -> Result<FetchResult, String> {
+    let feed_id = f.id;
     let client = client()?;
-    let payouts = stripe_list(&client, api, &key, "/v1/payouts", &[("status", "paid".into()), ("arrival_date[gte]", since.timestamp().to_string())]).await?;
-    let home: String = sqlx::query_scalar("SELECT value FROM system_preferences WHERE key = 'home_currency_code'").fetch_optional(pool).await.map_err(db_err)?.unwrap_or_else(|| "USD".into());
+    let payouts = stripe_list(&client, api, key, "/v1/payouts", &[("status", "paid".into()), ("arrival_date[gte]", since.timestamp().to_string())]).await?;
+    let home = home_currency(pool).await?;
     let mut result = FetchResult { new_payouts: 0, refused: Vec::new() };
     for p in payouts {
         let id = text(&p, "id");
-        let seen: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM payouts WHERE feed_id = ?1 AND processor_payout_id = ?2)").bind(feed_id).bind(&id).fetch_one(pool).await.map_err(db_err)?;
-        if seen {
+        if seen(pool, feed_id, &id).await? {
             continue;
         }
         let currency = text(&p, "currency").to_uppercase();
         let arrival = DateTime::from_timestamp(int(&p, "arrival_date"), 0).map_or_else(|| now.date_naive(), |t| t.date_naive());
-        if currency != home.to_uppercase() {
+        if currency != home {
             result.refused.push(format!("{id}: paid in {currency}, not {home}"));
             continue;
         }
-        let transactions = stripe_list(&client, api, &key, "/v1/balance_transactions", &[("payout", id.clone())]).await?;
+        let transactions = stripe_list(&client, api, key, "/v1/balance_transactions", &[("payout", id.clone())]).await?;
         match stripe_breakdown(int(&p, "amount"), &transactions) {
             Ok(b) => {
-                sqlx::query(
-                    "INSERT INTO payouts (feed_id, processor_payout_id, arrival_date, currency, net_cents, gross_cents, fee_cents, refund_cents, chargeback_cents, other_cents, details_json)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-                )
-                .bind(feed_id)
-                .bind(&id)
-                .bind(arrival)
-                .bind(&currency)
-                .bind(b.net_cents)
-                .bind(b.gross_cents)
-                .bind(b.fee_cents)
-                .bind(b.refund_cents)
-                .bind(b.chargeback_cents)
-                .bind(b.other_cents)
-                .bind(serde_json::to_string(&b.items).map_err(|e| e.to_string())?)
-                .execute(pool)
-                .await
-                .map_err(db_err)?;
+                keep(pool, feed_id, &id, arrival, &currency, &b).await?;
                 result.new_payouts += 1;
             }
-            Err(e) => result.refused.push(format!("{id}: {}", e.split_once(": ").map_or(e.as_str(), |(_, m)| m))),
+            Err(e) => result.refused.push(format!("{id}: {}", reason(&e))),
         }
     }
-    sqlx::query("UPDATE payout_feeds SET last_fetched_at = ?1 WHERE id = ?2").bind(now.to_rfc3339()).bind(feed_id).execute(pool).await.map_err(db_err)?;
     Ok(result)
 }
 

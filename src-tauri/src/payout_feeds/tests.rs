@@ -121,13 +121,13 @@ async fn a_fetched_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
     assert_eq!(in_file, 0, "and not in the company file");
 
     let now = DateTime::parse_from_rfc3339("2026-03-10T12:00:00Z").unwrap().with_timezone(&Utc);
-    let fetched = fetch(&pool, &store, &api, f.id, now).await.unwrap();
+    let fetched = fetch(&pool, &store, &Apis::all(&api), f.id, now).await.unwrap();
     assert_eq!(fetched.new_payouts, 1);
     assert_eq!(fetched.refused.len(), 2, "{:?}", fetched.refused);
     assert!(fetched.refused.iter().any(|r| r.starts_with("po_eur: paid in EUR")));
     assert!(fetched.refused.iter().any(|r| r.starts_with("po_bad: the payout's transactions add up")));
     assert!(requests.lock().unwrap().iter().all(|r| r.contains("/v1/")), "only Stripe's API");
-    assert_eq!(fetch(&pool, &store, &api, f.id, now).await.unwrap().new_payouts, 0, "a payout is kept once");
+    assert_eq!(fetch(&pool, &store, &Apis::all(&api), f.id, now).await.unwrap().new_payouts, 0, "a payout is kept once");
 
     let listed = list_payouts(&pool, f.id).await.unwrap();
     assert_eq!((listed[0].net_cents, listed[0].gross_cents, listed[0].arrival_date), (24_305, 30_000, NaiveDate::from_ymd_opt(2026, 3, 9).unwrap()));
@@ -147,7 +147,7 @@ async fn a_fetched_payout_is_recorded_as_a_gross_deposit_that_lands_at_the_net()
 
     // Without the key on this computer, fetching says so.
     let (other, _) = temp_store("other");
-    assert!(fetch(&pool, &other, &api, f.id, now).await.unwrap_err().starts_with("PAYOUT_KEY_MISSING"));
+    assert!(fetch(&pool, &other, &Apis::all(&api), f.id, now).await.unwrap_err().starts_with("PAYOUT_KEY_MISSING"));
     disconnect(&pool, &store, f.id).await.unwrap();
     assert!(!std::fs::read_to_string(dir.join(SECRETS_FILE)).unwrap().contains("rk_test_good"), "disconnecting forgets the key");
     assert_eq!(balance(&pool, bank).await, 24_305, "recorded deposits stay");
