@@ -383,7 +383,8 @@ const newRequestId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-
  * to use on it. `current` is what is taken now; `onSet` gets `{ discountCents }` or `{ credits }`.
  */
 function AdjustBill({ bill, what, date, current, allCredits, onCancel, onSet }) {
-  const vendorCredits = useLedgerQuery(api.listVendorCredits).data ?? [];
+  // Only Set Credits lists the vendor's credits; Set Discount doesn't ask for them.
+  const vendorCredits = useLedgerQuery(() => (what === 'credits' ? api.listVendorCredits() : Promise.resolve([]))).data ?? [];
   const open = vendorCredits.filter((c) => c.vendorId === bill.vendorId && !c.isVoided && (c.remainingCents > 0 || current.credits.some((u) => u.creditId === c.id)));
   const offered = bill.discountUntil && date <= bill.discountUntil && (bill.amountPaidCents ?? 0) === 0 ? bill.earlyDiscountCents ?? 0 : 0;
   const [discount, setDiscount] = useState(centsToInput(current.discountCents));
@@ -394,10 +395,12 @@ function AdjustBill({ bill, what, date, current, allCredits, onCancel, onSet }) 
     const c = open.find((x) => x.id === creditId);
     return c ? creditLeftFor(c, allCredits, bill.id) : 0;
   };
-  // The other half (credits when setting the discount, and the reverse) still counts toward the balance.
+  // The other half (credits when setting the discount, and the reverse) still counts toward the
+  // balance, and the discount is checked against what the terms offer on today's payment date
+  // either way, so a discount the date no longer allows is caught here, not when paying.
   const problem = overrideProblem(
     what === 'discount' ? { ...change, credits: current.credits } : { discountCents: current.discountCents, ...change },
-    { balanceCents: bill.balanceCents, offeredCents: what === 'discount' ? offered : Math.max(offered, current.discountCents), leftOf },
+    { balanceCents: bill.balanceCents, offeredCents: offered, leftOf },
   );
   const label = `${bill.vendorName}${bill.billNumber ? ` · Bill #${bill.billNumber}` : ''}`;
   return (

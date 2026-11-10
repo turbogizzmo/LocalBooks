@@ -1,6 +1,6 @@
 import { useLineCommands } from '../lib/formFlow.jsx';
 import { pasteLineAt } from '../lib/formKeys.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AccountSelect, { accountLabel } from './AccountSelect.jsx';
 import ClassSelect, { classLabel, showsClassColumn, useClassTracking } from './ClassSelect.jsx';
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
@@ -459,10 +459,14 @@ export default function LineItemGrid({ lines, setLines, accounts, products, defa
   // The middle columns as the person arranged them (Customize Columns), of those this form has.
   const offered = { serviceDate: serviceDates, level: withLevels, class: withClasses };
   const cols = useColumns('sales-lines', LINE_COLUMNS, (id) => offered[id] ?? true);
-  const needsAccount = lines.some((l) => {
-    const state = evaluateLine(l, { allowZeroRate });
-    return !state.blank && Boolean(state.errors.account);
-  });
+  const needsAccount = useMemo(
+    () =>
+      lines.some((l) => {
+        const state = evaluateLine(l, { allowZeroRate });
+        return !state.blank && Boolean(state.errors.account);
+      }),
+    [lines, allowZeroRate],
+  );
   const middle = cols.all.filter((c) => c.visible || (c.id === 'account' && needsAccount));
   // A subtotal's or group heading's one cell spans them.
   const spareColumns = middle.length;
