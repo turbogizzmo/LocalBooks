@@ -34,10 +34,57 @@ import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import DateBox from './DateBox.jsx';
 import { SaveButtons, useFormFlow } from '../lib/formFlow.jsx';
 import { defaultDepositAccount, useCustomerDelivery, useSalesPrefs } from '../lib/salesPrefs.js';
+import { BillablePickerDialog, markupOf, percentText } from './BillablePicker.jsx';
 
 const INITIAL_ROWS = 4;
 
-export const depositFilter = (a) => a.accountType === 'BANK' || (a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
+/**
+ * The invoice lines the chosen billable costs and time become, as `billable_costs.rs` writes them:
+ * one per cost (not taxable), one per time entry (taxable as its service item is), and one Markup
+ * line for the sum of each cost's markup.
+ */
+function billableRows(billable) {
+  if (!billable) return [];
+  const rows = [
+    ...billable.costs.map((c) => ({
+      key: `c${c.source}${c.lineId}`,
+      description: `${c.memo ?? c.accountName} (${formatDate(c.date)}${c.vendorName ? `, ${c.vendorName}` : ''})`,
+      amountCents: c.amountCents,
+      isTaxable: false,
+    })),
+    ...billable.time.map((t) => ({
+      key: `t${t.id}`,
+      description: `${t.description ?? t.serviceName ?? 'Time'} (${formatDate(t.date)}, ${t.employeeName})`,
+      amountCents: t.amountCents,
+      isTaxable: Boolean(t.isTaxable),
+    })),
+  ];
+  const markup = billable.costs.reduce((s, c) => s + markupOf(c.amountCents, billable.milli), 0);
+  if (markup > 0) rows.push({ key: 'markup', description: `Markup (${percentText(billable.milli)}%)`, amountCents: markup, isTaxable: false });
+  return rows;
+}
+
+/**
+ * `null` when the picked costs and time are still unbilled at the amounts picked; otherwise the
+ * choice with what is now true (`next`, or null when nothing is left) and why it changed.
+ */
+async function billableChanged(billable) {
+  const [costs, time] = await Promise.all([api.listUnbilledCosts(billable.customerId), api.listUnbilledTime(billable.customerId)]);
+  const nowCost = new Map(costs.map((c) => [`${c.source}:${c.lineId}`, c]));
+  const nowTime = new Map(time.map((t) => [t.id, t]));
+  const nextCosts = billable.costs.map((c) => nowCost.get(`${c.source}:${c.lineId}`)).filter(Boolean);
+  const nextTime = billable.time.map((t) => nowTime.get(t.id)).filter(Boolean);
+  const gone = billable.costs.length - nextCosts.length + billable.time.length - nextTime.length;
+  const changed =
+    billable.costs.some((c) => nowCost.has(`${c.source}:${c.lineId}`) && nowCost.get(`${c.source}:${c.lineId}`).amountCents !== c.amountCents) ||
+    billable.time.some((t) => nowTime.has(t.id) && nowTime.get(t.id).amountCents !== t.amountCents);
+  if (!gone && !changed) return null;
+  const next = nextCosts.length + nextTime.length > 0 ? { ...billable, costs: nextCosts, time: nextTime } : null;
+  const text = gone ? `${gone} of the billable costs and time ${gone === 1 ? 'was' : 'were'} billed or removed elsewhere and came off the invoice.` : 'A billable cost or time entry was changed since you added it.';
+  return { next, text };
+}
+
+export const depositFilter =(a) => a.accountType === 'BANK' || (a.isSystem && a.accountType === 'OTHER_CURRENT_ASSET');
 // Where an unapplied amount goes when it isn't kept as credit: refunded from a bank or card
 // account, or written off to income.
 const refundFilter = (a) => a.isActive && (a.accountType === 'BANK' || a.accountType === 'CREDIT_CARD');
@@ -947,6 +994,10 @@ export default function Invoices({ accounts, intent }) {
   // Everything the form would save, as loaded; see `snapshot` below.
   const [baseline, setBaseline] = useState(null);
   const [discountText, setDiscountText] = useState('');
+  // Billable costs and time picked with Add billable costs… (`{ customerId, customerName, costs,
+  // time, markup, milli }`), billed when the invoice saves; `picking` opens the picker.
+  const [billable, setBillable] = useState(null);
+  const [picking, setPicking] = useState(false);
   const formClass = useFormClass(accounts);
   const tax = useFormTax(customer, customers.data);
   const sales = useSalesDetails(customer, customers.data);
@@ -1033,14 +1084,18 @@ export default function Invoices({ accounts, intent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerRecord?.id, customerRecord?.termsId, termsList, termsTouched, termsId]);
 
-  const { evaluated, filled, invalidCount, payload, formLines, total: linesTotal, layoutError } = summarizeLines(lines);
+  const { evaluated, filled, invalidCount, payload, formLines, total: ownLinesTotal, layoutError } = summarizeLines(lines);
+  // Billable costs and time added with Add billable costs…: lines after the form's own, billed
+  // when the invoice saves. Counted here as the backend will write them.
+  const billableLines = useMemo(() => billableRows(billable), [billable]);
+  const linesTotal = ownLinesTotal + billableLines.reduce((s, l) => s + l.amountCents, 0);
   // Which posted line takes from which sales order line (`payload` keeps the filled item lines in order).
   const takes = lines
     .filter((_, i) => !evaluated[i].blank && !evaluated[i].form)
     .map((line, k) => (line.orderLineId ? { orderLineId: line.orderLineId, invoiceLine: k } : null))
     .filter(Boolean);
   const discountCents = parseDiscount(discountText, linesTotal);
-  const { tax: taxCents, discount, total } = documentTotals(payload, tax.rate, discountCents ?? 0, formLines);
+  const { tax: taxCents, discount, total } = documentTotals([...payload, ...billableLines], tax.rate, discountCents ?? 0, formLines);
   useWindowContent(editing ? { name: `Invoice ${editing.number} · ${editing.customer}`, action: 'edit', data: { invoiceId: editing.id } } : null);
   // Every field the invoice saves, so changing any of them (dates, terms, currency, rate, discount,
   // tax, rep, ship and custom fields, class, lines and subtotals, discounts, charges, groups) counts as unsaved.
@@ -1064,8 +1119,61 @@ export default function Invoices({ accounts, intent }) {
   // A new invoice counts as changed once it has a customer, a line or a discount.
   const dirty = editing
     ? baseline !== null && snapshot !== baseline
-    : customer.trim() !== '' || payload.length > 0 || formLines.length > 0 || discountText.trim() !== '';
+    : customer.trim() !== '' || payload.length > 0 || formLines.length > 0 || discountText.trim() !== '' || billable !== null;
   useUnsavedChanges('invoice', dirty);
+
+  // Billable costs and time go on a new home-currency invoice written on its own (not one from an
+  // estimate or sales order, which save through their own paths, nor an edit).
+  const billableAllowed = !editing && !fromEstimate && !fromOrder && !currency;
+  // The customer or job on the form, when it is one on the list.
+  const chosenCustomer = useMemo(() => {
+    // "Acme : Kitchen" is the job Acme:Kitchen, as the ledger reads it.
+    const name = customer.trim().split(':').map((p) => p.trim()).join(':').toLowerCase();
+    return name ? (customers.data ?? []).find((c) => c.name.toLowerCase() === name) ?? null : null;
+  }, [customer, customers.data]);
+  const billingDefaults = useLedgerQuery(api.getBillingDefaults).data;
+  // Asked only once the preferences have loaded, so a question turned off never shows.
+  const companyPrefs = useLedgerQuery(api.getPreferences).data;
+  const askAboutBillable = Boolean(companyPrefs) && companyPrefs.billable_prompt_on_invoice !== 'false';
+  // Costs picked for one customer leave the invoice when another is chosen: they can only be
+  // billed to their own customer or job.
+  useEffect(() => {
+    if (!billable) return;
+    if (billable.customerId !== chosenCustomer?.id) {
+      setBillable(null);
+      setNotice({ kind: 'info', text: `The billable costs for ${billable.customerName} were taken off the invoice: they can only be billed to ${billable.customerName}.` });
+    } else if (!billableAllowed) {
+      setBillable(null);
+      setNotice({ kind: 'info', text: 'The billable costs were taken off the invoice: they go on a new invoice in your home currency.' });
+    }
+  }, [billable, chosenCustomer, billableAllowed]);
+  // Preferences › Time & Expenses: choosing a customer or job with unbilled costs or time on a new
+  // invoice offers them, once per customer for this invoice. Waits for typing to stop.
+  const offered = useRef(new Set());
+  useEffect(() => {
+    const id = chosenCustomer?.id;
+    if (!askAboutBillable || !billableAllowed || billable || picking || id == null || offered.current.has(id)) return undefined;
+    let live = true;
+    const timer = setTimeout(async () => {
+      const [costs, time] = await Promise.all([api.listUnbilledCosts(id), api.listUnbilledTime(id)]).catch(() => [[], []]);
+      if (!live || offered.current.has(id)) return;
+      offered.current.add(id);
+      if (costs.length + time.length === 0) return;
+      const what = [costs.length ? `${costs.length} unbilled cost${costs.length === 1 ? '' : 's'}` : null, time.length ? `${time.length} unbilled time entr${time.length === 1 ? 'y' : 'ies'}` : null]
+        .filter(Boolean)
+        .join(' and ');
+      const add = await askConfirm(`${chosenCustomer.name} has ${what}. Add them to this invoice?\n\n(You can turn this question off in Preferences › Time & Expenses.)`, {
+        confirmLabel: 'Add billable costs…',
+        cancelLabel: 'Not now',
+      });
+      // The dialog is modal, so the customer is still the one asked about.
+      if (add) setPicking(true);
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [chosenCustomer, askAboutBillable, billableAllowed, billable, picking]);
   // An invoice chosen in the list opens in a window of its own, as forms do in QuickBooks.
   const openFromList = useOpenFromList();
 
@@ -1150,6 +1258,9 @@ export default function Invoices({ accounts, intent }) {
     setEditing(null);
     setBaseline(null);
     setDiscountText('');
+    setBillable(null);
+    setPicking(false);
+    offered.current.clear();
     setFiles([]);
     setShowAttachments(false);
     formClass.reset();
@@ -1186,7 +1297,16 @@ export default function Invoices({ accounts, intent }) {
   const save = async (mode) => {
     if (locked) return setNotice({ kind: 'error', text: 'This invoice is voided.' });
     if (!customer.trim()) return setNotice({ kind: 'error', text: 'Enter a customer name.' });
-    if (filled.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
+    if (filled.length === 0 && billableLines.length === 0) return setNotice({ kind: 'error', text: 'Add at least one line item.' });
+    // The costs are billed at what they are now: if one was changed or billed elsewhere since it
+    // was picked, show the new amounts before saving.
+    if (billable && mode !== 'memorize') {
+      const stale = await billableChanged(billable).catch(() => null);
+      if (stale) {
+        setBillable(stale.next);
+        return setNotice({ kind: 'error', text: `${stale.text} Check the invoice total, then save again.` });
+      }
+    }
     if (invalidCount > 0) {
       return setNotice({ kind: 'error', text: `${invalidCount} line(s) need an income account, a quantity and a rate above zero.` });
     }
@@ -1256,7 +1376,15 @@ export default function Invoices({ accounts, intent }) {
         ? await api.invoiceFromSalesOrder(fromOrder.id, input, takes)
         : fromEstimate
           ? await api.invoiceFromEstimate(fromEstimate.id, input)
-          : await api.createInvoice(input, printLater.on, takesPayment ? paidNow.payload() : null);
+          : await api.createInvoice(
+              input,
+              printLater.on,
+              takesPayment ? paidNow.payload() : null,
+              // Billed by this invoice as it saves, the same way Sales › Bill Costs bills them.
+              billable
+                ? { costs: billable.costs.map((c) => ({ source: c.source, lineId: c.lineId })), time: billable.time.map((t) => t.id), markupPercent: billable.markup }
+                : null,
+            );
       if ((fromEstimate || fromOrder) && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
       printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
@@ -1291,6 +1419,7 @@ export default function Invoices({ accounts, intent }) {
             (fromOrder ? ` Sales order #${fromOrder.number} is updated with what this invoice shipped.` : '') +
             (takesPayment ? (inv.status === 'PAID' ? ' Payment received: paid in full.' : ` Payment received; ${formatCents(inv.balanceCents)} still open.`) : '') +
             creditNote +
+            (billable ? ' The billable costs and time on it are marked billed.' : '') +
             (queued ? ' Marked Email later.' : '') +
             (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : '') +
             (attachError ? ` ${attachError}` : ''),
@@ -1503,6 +1632,31 @@ export default function Invoices({ accounts, intent }) {
 
         {sales.addresses}
         <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultAccountId} currency={currency || null} withTax={tax.enabled} customer={customer} customers={customers.data} itemTypes serviceDates />
+        {billable && (
+          <div className="border-t border-qb-border px-2 py-1">
+            <div className="flex items-center gap-2">
+              <span className="qb-label">Billable costs and time</span>
+              <span className="text-2xs text-qb-ink-faint">Added after the lines above, and marked billed when the invoice is saved</span>
+              <button type="button" className="qb-btn qb-btn-secondary ml-auto h-row" onClick={() => setPicking(true)}>
+                Change…
+              </button>
+              <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={() => setBillable(null)}>
+                Remove
+              </button>
+            </div>
+            <table className="qb-grid">
+              <tbody>
+                {billableLines.map((l) => (
+                  <tr key={l.key} className="qb-grid-row">
+                    <td className="qb-grid-cell">{l.description}</td>
+                    <td className="qb-grid-cell w-[40px] text-center text-qb-ink-muted">{tax.enabled && l.isTaxable ? 'Tax' : ''}</td>
+                    <td className="qb-grid-cell num w-[120px]">{formatCents(l.amountCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultAccountId)])}>
@@ -1511,6 +1665,17 @@ export default function Invoices({ accounts, intent }) {
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines([blankLine(defaultAccountId)])}>
             Clear all lines
           </button>
+          {billableAllowed && (
+            <button
+              type="button"
+              className="qb-btn qb-btn-secondary"
+              disabled={!chosenCustomer}
+              title={chosenCustomer ? 'Add the customer’s or job’s unbilled costs and time as lines' : 'Choose a customer or job on your list first'}
+              onClick={() => setPicking(true)}
+            >
+              Add billable costs…
+            </button>
+          )}
           {!current && files.length > 0 && <PendingAttachments paths={files} onChange={setFiles} label="Attach another…" />}
           <span className="text-xs text-qb-ink-muted">Click a row to edit · Enter moves to the next line</span>
           <div className="ml-auto flex items-center gap-3">
@@ -1557,6 +1722,20 @@ export default function Invoices({ accounts, intent }) {
       <InvoiceList accounts={accounts} onNotice={setNotice} data={invoices.data} error={invoices.error} onEdit={(inv) => openFromList('sales/invoices', 'edit', { invoiceId: inv.id })}
         onDuplicate={(inv) => openFromList('sales/invoices', 'duplicate', { invoiceId: inv.id })}
       />
+      {/* Outside the form, so its keys (Enter, Esc) don't reach the form's shortcuts. */}
+      {picking && chosenCustomer && (
+        <BillablePickerDialog
+          customerId={chosenCustomer.id}
+          customerName={chosenCustomer.name}
+          defaults={billingDefaults}
+          initial={billable}
+          onClose={() => setPicking(false)}
+          onAdd={(picked) => {
+            setPicking(false);
+            setBillable(picked.costs.length + picked.time.length > 0 ? { ...picked, customerName: chosenCustomer.name } : null);
+          }}
+        />
+      )}
     </div>
   );
 }

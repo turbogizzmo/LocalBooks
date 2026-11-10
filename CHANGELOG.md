@@ -18,6 +18,11 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **Billable costs from the invoice.** The invoice form has **Add billable costs…**: it lists the
+  customer's or job's unbilled time and costs, including credit-card charges marked Bill?, with the
+  same markup and rules as Sales › Bill Costs, and adds the ones you pick as lines. They are marked
+  billed when the invoice is saved. Choosing a customer with unbilled costs or time on a new
+  invoice asks whether to add them; Preferences › Time & Expenses can turn the question off.
 
 ## [0.14.0]
 

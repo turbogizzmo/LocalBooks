@@ -25,14 +25,17 @@ pub async fn create_invoice(
     to_be_printed: Option<bool>,
     confirmed: Option<Vec<String>>,
     paid: Option<invoices::PaidNow>,
+    billable: Option<crate::billable_costs::OnInvoice>,
 ) -> Result<InvoiceSummary, String> {
     let pool = db.pool().await;
     guards::check(&pool, guards::invoice(&input, None), confirmed.as_deref()).await?;
-    // The invoice can wait in the print queue (File › Print Forms › Invoices), and can carry the
-    // payment taken when it was written; both are saved with it.
+    // The invoice can wait in the print queue (File › Print Forms › Invoices), can carry the
+    // payment taken when it was written, and can bill costs and time chosen with Add billable
+    // costs…; all are saved with it.
     let queued = to_be_printed == Some(true);
-    let invoice = if queued || paid.is_some() {
-        crate::print_queue::create_invoice(&pool, input, queued, paid.as_ref()).await?
+    let billable = billable.unwrap_or_default();
+    let invoice = if queued || paid.is_some() || !billable.is_empty() {
+        crate::print_queue::create_invoice(&pool, input, &billable, queued, paid.as_ref()).await?
     } else {
         invoices::create_and_post_invoice(&pool, input).await?
     };

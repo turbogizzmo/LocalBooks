@@ -169,10 +169,17 @@ pub async fn post_expense(pool: &SqlitePool, mut input: ExpenseInput, to_be_prin
 }
 
 /// Creates and posts an invoice, queued for printing when `to_be_printed`, with the payment taken
-/// on it when `paid` is given. One transaction: a payment that can't be recorded saves nothing.
-pub async fn create_invoice(pool: &SqlitePool, input: InvoiceInput, to_be_printed: bool, paid: Option<&PaidNow>) -> Result<InvoiceSummary, String> {
+/// on it when `paid` is given, and billing the costs and time in `billable` (chosen on the form with
+/// Add billable costs…; `billable_costs::write_invoice_with_costs`). One transaction: a payment or
+/// a cost that can't be recorded saves nothing.
+pub async fn create_invoice(pool: &SqlitePool, input: InvoiceInput, billable: &crate::billable_costs::OnInvoice, to_be_printed: bool, paid: Option<&PaidNow>) -> Result<InvoiceSummary, String> {
+    // Read before the write transaction starts.
+    let billing = if billable.is_empty() { None } else { Some(crate::billable_costs::billing_settings(pool, billable.markup_percent.as_deref()).await?) };
     let id = run(pool, async |tx| {
-        let id = crate::invoices::write_invoice(tx, &input).await?;
+        let id = match &billing {
+            Some((settings, markup)) => crate::billable_costs::write_invoice_with_costs(tx, &input, billable, settings, *markup).await?,
+            None => crate::invoices::write_invoice(tx, &input).await?,
+        };
         if to_be_printed {
             set_in_tx(tx, Form::Invoice, id, true).await?;
         }
