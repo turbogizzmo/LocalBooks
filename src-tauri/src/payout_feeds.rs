@@ -1,6 +1,6 @@
 //! Payout feeds from payment processors (gaps row T68; design in `docs/plans/payout-feeds.md`).
 //!
-//! Stripe and PayPal ([`paypal`]). A processor sends the bank one net amount per payout; this module fetches each
+//! Stripe, PayPal ([`paypal`]) and Shopify Payments ([`shopify`]). A processor sends the bank one net amount per payout; this module fetches each
 //! payout's balance transactions, works out its gross sales, fees, refunds, chargebacks and other
 //! adjustments, and records it as a Deposit whose lines are the gross charges and whose deductions
 //! are the rest ([`crate::banking::write_deposit`]). The deposit's bank line is the payout's net
@@ -32,17 +32,19 @@ pub struct Apis {
     pub stripe: String,
     pub paypal_live: String,
     pub paypal_sandbox: String,
+    /// A test server in place of each Shopify store's own address.
+    pub shopify: Option<String>,
 }
 
 impl Apis {
     pub fn live() -> Apis {
-        Apis { stripe: STRIPE_API.into(), paypal_live: paypal::LIVE_API.into(), paypal_sandbox: paypal::SANDBOX_API.into() }
+        Apis { stripe: STRIPE_API.into(), paypal_live: paypal::LIVE_API.into(), paypal_sandbox: paypal::SANDBOX_API.into(), shopify: None }
     }
 
     /// Every processor at one address (tests).
     #[cfg(test)]
     pub fn all(base: &str) -> Apis {
-        Apis { stripe: base.into(), paypal_live: base.into(), paypal_sandbox: base.into() }
+        Apis { stripe: base.into(), paypal_live: base.into(), paypal_sandbox: base.into(), shopify: Some(base.into()) }
     }
 
     fn paypal(&self, account_ref: Option<&str>) -> &str {
@@ -55,7 +57,9 @@ impl Apis {
 }
 
 mod paypal;
+mod shopify;
 pub use paypal::{connect_paypal, PayPalCredentials};
+pub use shopify::connect_shopify;
 /// How far back the first fetch reaches, and how much each later fetch overlaps the last.
 const FIRST_DAYS: i64 = 90;
 const OVERLAP_DAYS: i64 = 7;
@@ -151,6 +155,7 @@ pub fn stripe_breakdown(payout_amount: i64, transactions: &[Value]) -> Result<Br
 pub fn processor_name(processor: &str) -> &'static str {
     match processor {
         "PAYPAL" => "PayPal",
+        "SHOPIFY" => "Shopify Payments",
         _ => "Stripe",
     }
 }
@@ -205,7 +210,7 @@ pub struct PayoutFeed {
     pub name: String,
     #[serde(skip)]
     pub secret_key: String,
-    /// PayPal: `LIVE` or `SANDBOX`.
+    /// PayPal: `LIVE` or `SANDBOX`; Shopify: the store's `….myshopify.com` address.
     pub account_ref: Option<String>,
     pub bank_account_id: i64,
     pub sales_account_id: i64,
@@ -418,6 +423,7 @@ pub async fn fetch(pool: &SqlitePool, store: &SecretStore, apis: &Apis, feed_id:
         .map_or(now - chrono::Duration::days(FIRST_DAYS), |t| t.with_timezone(&Utc) - chrono::Duration::days(OVERLAP_DAYS));
     let result = match f.processor.as_str() {
         "PAYPAL" => paypal::fetch(pool, &f, apis.paypal(f.account_ref.as_deref()), &key, since, now).await?,
+        "SHOPIFY" => shopify::fetch(pool, &f, apis.shopify.as_deref(), &key, since).await?,
         _ => fetch_stripe(pool, &f, &apis.stripe, &key, since, now).await?,
     };
     sqlx::query("UPDATE payout_feeds SET last_fetched_at = ?1 WHERE id = ?2").bind(now.to_rfc3339()).bind(feed_id).execute(pool).await.map_err(db_err)?;

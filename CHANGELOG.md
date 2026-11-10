@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
+  too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
+  of its sales, less Shopify's fees, refunds and chargebacks.
 - **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
   too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
   your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
