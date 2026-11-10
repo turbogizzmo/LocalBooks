@@ -302,6 +302,8 @@ pub(crate) async fn begin_write(pool: &SqlitePool) -> Result<Transaction<'static
 /// Commits a write transaction opened with [`begin_write`]: seals the audit rows it wrote into the
 /// hash chain first (see `audit_chain`), then records the new chain head outside the company file.
 pub(crate) async fn commit_write(mut tx: Transaction<'static, Sqlite>) -> Result<(), sqlx::Error> {
+    // An External Accountant's pass through the closed-period backstop lasts one transaction.
+    sqlx::query("UPDATE closing_exception_in_progress SET value = NULL WHERE value IS NOT NULL").execute(&mut *tx).await?;
     let head = crate::audit_chain::seal(&mut tx).await.map_err(sqlx::Error::Protocol)?;
     // A chain that no longer holds the recorded head keeps the old record, as evidence for verify.
     // The record is best effort: if it can't be read, the write still commits and the record stays put.

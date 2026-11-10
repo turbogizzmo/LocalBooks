@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **External Accountant users and Closing Date Exceptions.** Add your accountant as an External
+  Accountant user: they work like a Standard user, can post adjusting entries dated on or before
+  your closing date without you moving it, and never see sensitive data such as full tax IDs.
+  Under the closing date, Closing Date Exceptions lists everything posted or voided in a closed
+  period, with who did it and when.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

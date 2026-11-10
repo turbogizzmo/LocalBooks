@@ -14,6 +14,7 @@ import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatDate, todayIso } from '../lib/dates.js';
 import { focusNextField } from '../lib/myPreferences.js';
 import DateBox from './DateBox.jsx';
+import ClosingExceptions from './ClosingExceptions.jsx';
 import { JOB_STATUSES } from '../lib/salesPrefs.js';
 
 /** One preference field that commits to the database as soon as the user leaves it or picks a value. */
@@ -144,8 +145,9 @@ function ClosingDate() {
         )}
       </div>
       <p className="border-t border-qb-border px-2 py-1 text-xs text-qb-ink-muted">
-        Entries dated on or before the closing date cannot be posted or voided, from any screen. Changing or removing the date needs
-        the passcode. Every change is kept in the history below.
+        Entries dated on or before the closing date cannot be posted or voided, from any screen, except by an External Accountant
+        user. Changing or removing the date needs the passcode. Every change is kept in the history below, and anything posted or
+        voided in a closed period is listed under Closing Date Exceptions.
       </p>
       {state?.text && (
         <div className="px-2 pb-1">
@@ -163,6 +165,7 @@ function ClosingDate() {
           ))}
         </ul>
       )}
+      <ClosingExceptions />
     </Group>
   );
 }

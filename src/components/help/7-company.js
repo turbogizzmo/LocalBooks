@@ -125,7 +125,7 @@ export const topics = [
   {
     id: 'closing-date', area: 'company', views: ['settings/preferences', 'accounting/journal'],
     title: 'Close a fiscal or tax period',
-    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen. Add a passcode to require it for moving or removing the date; every change is kept in the closing history.',
+    body: 'Set a closing date to lock the books through that date, so nothing dated on or before it can be posted or voided from any screen, except by an External Accountant user. Add a passcode to require it for moving or removing the date; every change is kept in the closing history. Closing Date Exceptions, under the date, lists everything posted or voided in a closed period and who did it.',
     keywords: 'lock close year end period tax password passcode books',
     go: { label: 'Go to the closing date', view: 'settings/preferences', action: 'closing' },
     guide: 'closing-the-books',
@@ -133,7 +133,7 @@ export const topics = [
   {
     id: 'users', area: 'company', views: ['settings/users', 'expenses/vendors'],
     title: 'Users, passwords and sensitive data',
-    body: 'Turn on users so everyone signs in with their own password and a role (Admin, Standard or View only). Vendor tax IDs are then encrypted and shown in full only to users allowed to see sensitive data. Save the recovery key you are given: it is the only way back in if every Admin forgets their password.',
+    body: 'Turn on users so everyone signs in with their own password and a role (Admin, Standard, View only, or External Accountant: your outside accountant, who may post in closed periods and never sees sensitive data). Vendor tax IDs are then encrypted and shown in full only to users allowed to see sensitive data. Save the recovery key you are given: it is the only way back in if every Admin forgets their password.',
     keywords: 'user users password sign in login log in role admin permission security encrypt encryption ssn ein tax id sensitive recovery key forgot lock idle remember',
     go: { label: 'Go to Users & Passwords', view: 'settings/users' },
     guide: 'users-and-passwords',

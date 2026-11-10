@@ -25,3 +25,15 @@ To shrink a file with years of closed history, see
 
 > **Tip:** Keep the passcode with your accountant. It is stored securely and cannot be recovered;
 > without it the closing date can't be moved.
+
+## Let your accountant work in a closed period
+
+Add your accountant as an **External Accountant** user (see
+[Users and passwords](users-and-passwords.md#add-a-user)). They can post and void entries dated
+on or before the closing date without moving it; everyone else still can't.
+
+## Closing Date Exceptions
+
+Under the closing date, **Closing Date Exceptions** lists everything posted or voided in a period
+that was already closed at the time: when, by whom, the entry's date, type, memo and amount, and
+the closing date then in force. Entries made before a closing date was set aren't listed.

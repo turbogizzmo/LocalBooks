@@ -83,3 +83,29 @@ async fn closed_periods_refuse_posts_and_voids_until_reopened_with_the_passcode(
     assert!(set_closing_date(&pool, &lock(Some("2026-01-31"), None, Some("abc"))).await.unwrap_err().starts_with("CLOSE_PASSCODE_SHORT"));
     assert!(set_closing_date(&pool, &lock(None, None, None)).await.unwrap_err().starts_with("CLOSE_UNCHANGED"));
 }
+
+#[tokio::test]
+async fn an_external_accountant_posts_in_a_closed_period_and_it_is_listed_as_an_exception() {
+    let pool = test_pool().await;
+    post(&pool, "2026-02-10").await.unwrap();
+    assert!(exceptions(&pool).await.unwrap().is_empty());
+    set_closing_date(&pool, &lock(Some("2026-03-31"), None, None)).await.unwrap();
+    assert!(exceptions(&pool).await.unwrap().is_empty(), "entries made before the closing date was set aren't exceptions");
+    assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE);
+
+    crate::permissions::set_signed_in_role(Some(crate::users::Role::ExternalAccountant));
+    crate::audit_chain::set_signed_in(Some("cpa".into()));
+    let adjusting = post(&pool, "2026-03-15").await.expect("an External Accountant posts in the closed period");
+    void_transaction(&pool, adjusting).await.unwrap();
+    crate::permissions::set_signed_in_role(None);
+    crate::audit_chain::set_signed_in(None);
+    post(&pool, "2026-04-02").await.unwrap();
+    assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE, "closed again for everyone else");
+
+    let found = exceptions(&pool).await.unwrap();
+    let rows: Vec<(&str, i64, String, i64)> = found.iter().map(|e| (e.action.as_str(), e.journal_entry_id, e.entry_date.to_string(), e.amount_cents)).collect();
+    assert!(rows.contains(&("POST", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
+    assert!(rows.contains(&("VOID", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
+    assert!(found.iter().all(|e| e.made_by.as_deref().is_some_and(|by| by.starts_with("cpa as ")) && e.closing_date.to_string() == "2026-03-31"), "{found:?}");
+    assert!(found.windows(2).all(|w| w[0].audit_id > w[1].audit_id), "newest first");
+}

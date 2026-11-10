@@ -155,7 +155,9 @@ before it cannot be posted, from any screen. Voids are blocked too, because a re
 original date. The ledger checks this before every post, and a database trigger enforces it as a
 backstop. Moving or removing the date requires the passcode, which is stored as a salted
 PBKDF2-HMAC-SHA256 hash. Every change is appended to `closing_locks`, whose rows can't be edited or
-deleted.
+deleted. An External Accountant user may post and void in a closed period (the trigger lets one write
+transaction through, and the ledger clears that before commit), and **Closing Date Exceptions**
+lists every such change with who made it.
 
 ### Online snapshots with `VACUUM INTO`
 
@@ -311,7 +313,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
-| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles (including External Accountant), sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
 | Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
 ### `+ New` quick-create matrix

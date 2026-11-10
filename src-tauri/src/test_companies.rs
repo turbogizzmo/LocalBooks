@@ -4,8 +4,8 @@
 //!
 //! `LOCALBOOKS_SEED_DIR=<folder> cargo test --release -- --ignored seed_test_companies --nocapture`
 //! writes, replacing earlier copies of these names only:
-//! - `Edge Cases.localbooks`: users on (Admin, Standard, View only), encrypted tax IDs, sales tax,
-//!   a foreign-currency invoice, partial payments, credits, a voided entry, a job, unusual names,
+//! - `Edge Cases.localbooks`: users on (Admin, Standard, View only, External Accountant), encrypted
+//!   tax IDs, sales tax, a foreign-currency invoice, partial payments, credits, a voided entry, a job, unusual names,
 //!   leap-day and year-end dates, a closed period;
 //! - `No Users.localbooks`: a small company without users whose vendor has a plain tax ID, for
 //!   turning users on;
@@ -159,6 +159,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
         ("clerk", "Casey Clerk", Role::Standard, false),
         ("bookkeeper", "Billie Books", Role::Standard, true),
         ("viewer", "Vic Viewer", Role::ViewOnly, false),
+        ("accountant", "Ari Accountant", Role::ExternalAccountant, false),
     ] {
         users::add(&pool, &admin, NewUserInput { username: username.into(), display_name: Some(display.into()), role, can_see_sensitive: sensitive, password: format!("{username} temp pw") })
             .await
@@ -311,7 +312,7 @@ async fn seed_test_companies() {
         "Test companies made by `seed_test_companies` (src-tauri/src/test_companies.rs). Test values only.\n\n\
          Edge Cases.localbooks\n  owner / {ADMIN_PASSWORD} (Admin)\n  clerk / clerk temp pw (Standard; must choose a new password)\n  \
          bookkeeper / bookkeeper temp pw (Standard, can see sensitive data; must choose a new password)\n  \
-         viewer / viewer temp pw (View only; must choose a new password)\n  recovery key: {recovery}\n  closing passcode: {CLOSING_PASSCODE}\n\n\
+         viewer / viewer temp pw (View only; must choose a new password)\n  accountant / accountant temp pw (External Accountant; must choose a new password)\n  recovery key: {recovery}\n  closing passcode: {CLOSING_PASSCODE}\n\n\
          No Users.localbooks: no sign-in.\n{}",
         if large { "Five Years.localbooks: no sign-in.\n" } else { "" }
     );

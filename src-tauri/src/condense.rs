@@ -126,6 +126,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "budgets",
     "chart_of_accounts",
     "classes",
+    "closing_exception_in_progress",
     "closing_locks",
     "commented_reports",
     "custom_field_values",
