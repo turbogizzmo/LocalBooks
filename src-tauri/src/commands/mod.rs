@@ -47,6 +47,7 @@ mod prelude;
 features![
     about,
     accountant_reports,
+    accountants_copy,
     accounts,
     ach,
     approvals,

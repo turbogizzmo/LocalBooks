@@ -35,6 +35,9 @@ people using LocalBooks.
 - **Combined sales tax rates and a return per agency.** A combined rate adds up the state, county
   and city rates; a sale at it posts each agency's share to its own account. Sales › Sales Tax shows
   the sales tax return by agency for the period, on accrual or cash.
+- **Accountant's Copy.** Make a copy of the books for your accountant with a dividing date and keep
+  working after it; their journal entries and new accounts come back in a changes file that
+  LocalBooks checks, posts all at once and records.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

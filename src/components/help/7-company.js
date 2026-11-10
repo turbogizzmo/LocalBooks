@@ -162,6 +162,14 @@ export const topics = [
     guide: 'backups-and-company-files',
   },
   {
+    id: 'accountants-copy', area: 'company', views: ['settings/data'],
+    title: 'Let your accountant work on a copy (Accountant’s Copy)',
+    body: 'In File & Data Controls, an Admin chooses a dividing date and clicks Create Accountant’s Copy…. While it is out, nothing can be posted on or before that date, and you keep working after it. The accountant opens the copy, posts journal entries and adds accounts on or before the date, and clicks Export Changes for Client…. Import Accountant’s Changes… checks the file came from your copy, lists the changes, and Apply the changes posts them all at once and ends the copy, keeping a record of who did what and when. Only journal entries and new accounts come back.',
+    keywords: 'accountant copy accountants copy dividing date cpa bookkeeper review adjusting entries changes import export send to accountant',
+    go: { label: 'Go to File & Data Controls', view: 'settings/data' },
+    guide: 'closing-the-books',
+  },
+  {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
     body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',

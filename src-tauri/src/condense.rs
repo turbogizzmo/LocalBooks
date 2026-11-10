@@ -117,6 +117,8 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
 pub const KEPT_TABLES: &[&str] = &[
     "_sqlx_migrations",
     "account_types",
+    "accountants_copies",
+    "accountants_copy_info",
     "ach_originators",
     "approval_requests",
     "approval_rules",

@@ -93,6 +93,10 @@ const ADMIN: &[&str] = &[
     "update_database_directory",
     "export_company_file",
     "import_company_file",
+    // Accountant's Copy: making one, cancelling it, and bringing its changes back.
+    "create_accountants_copy",
+    "cancel_accountants_copy",
+    "import_accountant_changes",
     "set_up_offsite_backup",
     "turn_off_offsite_backup",
     "restore_offsite_backup",
