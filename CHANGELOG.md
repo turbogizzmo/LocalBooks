@@ -9,6 +9,11 @@ people using LocalBooks.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.
+- **More on Company Snapshot, the money bars and Insights.** Company Snapshot can now show income and
+  expense breakdowns, year over year beside the same dates a year earlier, your open to-dos, and a
+  note you type. The bars on All Sales and Bills add Unbilled, Estimates, Purchase orders and Card
+  balances; click one to list its transactions and open them. The Dashboard's Insights tab shows
+  income and expense for the last 12 months.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

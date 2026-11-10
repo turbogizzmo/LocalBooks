@@ -8,7 +8,7 @@ import { useSalesDetails } from './SalesDetails.jsx';
 import { DiscountField, documentTotals, parseDiscount, useFormTax } from './SalesTax.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useEditIntent, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
@@ -255,6 +255,8 @@ function EstimateList({ accounts, intent, navigate }) {
     saved.open(e);
     setComposing(true);
   };
+  // An estimate opened from elsewhere (the sales money bar's Estimates list).
+  useEditIntent(intent, 'estimateId', data, openEstimate, () => setNotice({ kind: 'error', text: 'That estimate is no longer in the books.' }));
   const duplicate = (e) =>
     api.getCopySource('ESTIMATE', e.id).then(
       (copy) => {

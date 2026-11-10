@@ -49,10 +49,8 @@ async fn every_widget_ties_out_to_its_report() {
         .await
         .unwrap();
 
-    for kind in WidgetKind::ALL {
-        if !matches!(kind, WidgetKind::AccountBalances | WidgetKind::WhoOwes | WidgetKind::VendorsToPay | WidgetKind::IncomeExpenseTrend | WidgetKind::TopCustomers) {
-            add(&pool, kind).await.unwrap();
-        }
+    for kind in [WidgetKind::TopItems, WidgetKind::TopVendors] {
+        add(&pool, kind).await.unwrap();
     }
     let today = d(2026, 5, 14);
     let page = snapshot(&pool, today).await.unwrap();
@@ -115,4 +113,75 @@ async fn widgets_are_added_removed_moved_and_given_a_period() {
     let w = snapshot(&pool, today).await.unwrap().into_iter().find(|w| w.id == items).unwrap();
     assert_eq!((w.period, w.start_date, w.end_date), (Period::LastQuarter, d(2026, 1, 1), d(2026, 3, 31)));
     assert!(set_period(&pool, start[1], Period::ThisMonth).await.unwrap_err().starts_with("SNAPSHOT_NO_WIDGET"));
+}
+
+#[tokio::test]
+async fn the_newer_widgets_tie_out_to_the_profit_and_loss_and_the_to_dos() {
+    let pool = test_pool().await;
+    let (checking, services, rent, contractors) = (account(&pool, "1010").await, account(&pool, "4100").await, account(&pool, "6300").await, account(&pool, "6400").await);
+    // Income from seven customers this year and one last year; two kinds of expense this year.
+    for (i, (name, date)) in [("Alder", "2026-03-02"), ("Birch", "2026-03-03"), ("Cedar", "2026-03-04"), ("Dogwood", "2026-03-05"), ("Elm", "2026-03-06"), ("Fir", "2026-03-07"), ("Gum", "2025-03-08")]
+        .iter()
+        .enumerate()
+    {
+        let input: crate::invoices::InvoiceInput = serde_json::from_value(serde_json::json!({
+            "customerName": name, "issueDate": date, "dueDate": date,
+            "lines": [{ "description": "Design", "quantityE4": 10_000, "rateCents": 10_000 * (i as i64 + 1), "incomeAccountId": services }] })).unwrap();
+        crate::invoices::create_and_post_invoice(&pool, input).await.unwrap();
+    }
+    for (account_id, cents, date) in [(rent, 150_000, "2026-04-01"), (contractors, 80_000, "2026-04-02"), (rent, 120_000, "2025-04-01")] {
+        let check: ExpenseInput = serde_json::from_value(serde_json::json!({ "kind": "CHECK", "payeeName": "Harbor Leasing", "paymentAccountId": checking, "expenseDate": date,
+            "checkNumber": null, "paymentMethod": null, "memo": null, "lines": [{ "accountId": account_id, "amountCents": cents, "memo": null }] })).unwrap();
+        crate::expenses::post_expense(&pool, check).await.unwrap();
+    }
+    // Two open to-dos due by May, one later, one undated, one done.
+    let nobody = crate::reminders::Viewer { user_id: None, role: None };
+    let todo = |title: &str, due: Option<NaiveDate>| crate::reminders::TodoInput {
+        title: title.into(), note: String::new(), due_date: due, customer_id: None, vendor_id: None, employee_id: None, link_kind: None, link_id: None, assigned_user_id: None,
+    };
+    for (title, due) in [("Call Alder", Some(d(2026, 5, 2))), ("Order paper", Some(d(2026, 4, 20))), ("Plan party", Some(d(2026, 12, 1))), ("Someday", None)] {
+        crate::reminders::save_todo(&pool, None, &todo(title, due), nobody).await.unwrap();
+    }
+    let done = crate::reminders::save_todo(&pool, None, &todo("Done one", Some(d(2026, 5, 1))), nobody).await.unwrap();
+    crate::reminders::set_done(&pool, done.id, true, nobody).await.unwrap();
+
+    let mut added = Vec::new();
+    for kind in [WidgetKind::Notes, WidgetKind::Todos, WidgetKind::IncomeBreakdown, WidgetKind::ExpenseBreakdown, WidgetKind::YearOverYear] {
+        added.push((kind, add(&pool, kind).await.unwrap()));
+    }
+    let id_of = |k: WidgetKind| added.iter().find(|(kind, _)| *kind == k).unwrap().1;
+    for k in [WidgetKind::IncomeBreakdown, WidgetKind::ExpenseBreakdown, WidgetKind::YearOverYear] {
+        set_period(&pool, id_of(k), Period::ThisFiscalYear).await.unwrap();
+    }
+    set_note(&pool, id_of(WidgetKind::Notes), "  Ask the bank about the loan  ").await.unwrap();
+    assert!(set_note(&pool, id_of(WidgetKind::Todos), "x").await.unwrap_err().starts_with("SNAPSHOT_NO_WIDGET"), "only a note widget takes text");
+
+    let today = d(2026, 5, 14);
+    let page = snapshot(&pool, today).await.unwrap();
+    let widget = |k: WidgetKind| page.iter().find(|w| w.id == id_of(k)).unwrap();
+    assert_eq!(widget(WidgetKind::Notes).note.as_deref(), Some("Ask the bank about the loan"));
+
+    // To-dos: open, due by today (the Today period's end) or undated, soonest first; matches To Do Notes.
+    let todos = widget(WidgetKind::Todos);
+    assert_eq!(todos.lines.iter().map(|l| l.label.as_str()).collect::<Vec<_>>(), ["Order paper", "Call Alder", "Someday"]);
+    assert_eq!((todos.total_cents, todos.report), (3, "list:todo-notes"));
+
+    // Breakdowns: the Profit and Loss for the fiscal year, account by account, top five and the rest.
+    let pl = crate::statements::profit_and_loss_basis(&pool, d(2026, 1, 1), d(2026, 12, 31), None, Basis::Accrual).await.unwrap();
+    let income = widget(WidgetKind::IncomeBreakdown);
+    assert_eq!(income.total_cents, pl.total_revenue_cents);
+    assert_eq!(income.lines.iter().map(|l| l.amount_cents).sum::<i64>() + income.others_cents, pl.total_revenue_cents);
+    let expense = widget(WidgetKind::ExpenseBreakdown);
+    assert_eq!(expense.total_cents, pl.total_expenses_cents);
+    assert_eq!(expense.lines.iter().map(|l| l.amount_cents).sum::<i64>() + expense.others_cents, pl.total_expenses_cents);
+    assert_eq!(expense.lines[0].amount_cents, 150_000, "the largest account first");
+
+    // Year over year: this fiscal year against the one before, each its own Profit and Loss.
+    let before = crate::statements::profit_and_loss_basis(&pool, d(2025, 1, 1), d(2025, 12, 31), None, Basis::Accrual).await.unwrap();
+    let yoy = widget(WidgetKind::YearOverYear);
+    let figure = |label: &str| yoy.lines.iter().find(|l| l.label == label).map(|l| (l.amount_cents, l.previous_cents)).unwrap();
+    assert_eq!(figure("Income"), (pl.total_revenue_cents, Some(before.total_revenue_cents)));
+    assert_eq!(figure("Expenses"), (pl.total_expenses_cents, Some(before.total_expenses_cents)));
+    assert_eq!(figure("Net income"), (pl.net_income_cents, Some(before.net_income_cents)));
+    assert_eq!(before.total_revenue_cents, 70_000, "Gum, last March");
 }

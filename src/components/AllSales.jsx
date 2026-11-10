@@ -271,6 +271,7 @@ export default function AllSales({ accounts, intent }) {
           { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'homeBalanceCents'), count: overdue.length },
           { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'homeTotalCents'), count: paidRecent.length },
         ]}
+        side="SALES"
       />
 
       {composing && viewing ? (

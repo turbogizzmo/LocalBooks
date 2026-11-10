@@ -4,7 +4,7 @@ import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js'
 import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useEditIntent, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
@@ -299,6 +299,8 @@ export default function PurchaseOrders({ accounts, intent }) {
     saved.open(o);
     setComposing(true);
   };
+  // A purchase order opened from elsewhere (the bills money bar's Purchase orders list).
+  useEditIntent(intent, 'purchaseOrderId', data, openOrder, () => setNotice({ kind: 'error', text: 'That purchase order is no longer in the books.' }));
   // Duplicate: the saved order the new one on the form starts from.
   const [copyOf, setCopyOf] = useState(null);
   const [formKey, setFormKey] = useState(0);

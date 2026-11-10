@@ -148,9 +148,17 @@ export const topics = [
   {
     id: 'company-snapshot', area: 'reports', views: ['reports'],
     title: 'See the business at a glance (Company Snapshot)',
-    body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, and top customers, items and vendors. Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
-    keywords: 'company snapshot dashboard widgets overview glance balances who owes vendors to pay trend top customers items vendors insights',
+    body: 'Reports › Company Snapshot is a page of widgets: account balances, who owes you, vendors to pay, the income and expense trend, top customers, items and vendors, income and expense breakdowns, year over year, your open to-dos, and notes you type. Add a widget from the list at the top, remove it with ✕, move it with ↑ and ↓, and give each its own period. Every figure matches its report for the same dates; Open … under a widget shows that report.',
+    keywords: 'company snapshot dashboard widgets overview glance balances who owes vendors to pay trend top customers items vendors insights breakdown year over year to-dos todos notes',
     go: { label: 'Go to Reports', view: 'reports' },
+    guide: 'reports',
+  },
+  {
+    id: 'money-bars', area: 'reports', views: ['sales/all', 'expenses/bills'],
+    title: 'See what is unbilled, quoted, ordered and owed on cards (money bars)',
+    body: 'The bar at the top of All Sales adds Unbilled (costs and time not invoiced yet, as in Bill Costs) and Estimates (pending or accepted, not invoiced). The bar on Bills adds Purchase orders (open ones) and Card balances (what each credit card owes today, as on the Balance Sheet). Click a segment to list its transactions, and click a row to open it.',
+    keywords: 'money bar segments unbilled billable costs time estimates purchase orders po credit card balances click list transactions',
+    go: { label: 'Go to All Sales', view: 'sales/all' },
     guide: 'reports',
   },
   {
