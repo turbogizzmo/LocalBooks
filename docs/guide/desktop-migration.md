@@ -441,7 +441,10 @@ installed? Export from my installed QuickBooks** below the file box instead: see
 2. If the heading says some lines were **not read in full**, open it. Each line is marked
    **Recovered**, **No amount** or **Not read**. Only **Not read** lines can leave something out; if
    their transaction is listed, enter it by hand after posting. Transactions listed as **could not
-   be read completely** are never posted.
+   be read completely** are never posted. If some **amounts were not in whole cents**, open that
+   list too: a few company files store amounts with a fraction of a cent, and LocalBooks keeps money
+   in whole cents, so each such stored balance counts as zero and each such line or applied payment
+   is left out. Check them in the original books.
 3. For each source account, choose a LocalBooks account under **Post to this LocalBooks account**.
    Or click **Match existing accounts and create the rest** to map by name and create what's missing.
    Every account must have a LocalBooks account before you can post.

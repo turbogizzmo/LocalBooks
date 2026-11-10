@@ -27,7 +27,7 @@ pub(super) use crate::secrets::SecretStore;
 pub(super) use crate::guards;
 pub(super) use crate::windows;
 pub(super) use crate::smtp::{self, SmtpSettings, SmtpStatus};
-pub(super) use crate::file_dentist::{self, CheckupReport, RebuildResult};
+pub(super) use crate::file_repair::{self, CheckupReport, RebuildResult};
 pub(super) use crate::forensic::{self, AppliedCorrection, ApplyCorrectionInput, CorrectionProposal};
 pub(super) use crate::{gnucash_import, iif_import, qif_import, report_import};
 pub(super) use crate::db::{Db, RelocateMode, StorageStatus, NO_COMPANY_OPEN};

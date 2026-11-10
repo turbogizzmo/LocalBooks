@@ -10,9 +10,14 @@ export function useCompany() {
   return useContext(CompanyContext);
 }
 
+/** True inside a report's miniature preview (the report center): nothing of it is printed. */
+export const PreviewContext = createContext(false);
+
 /** Renders printable content into #print-root, which is what the system print dialog prints. */
 export function PrintPortal({ children }) {
+  const preview = useContext(PreviewContext);
   const target = document.getElementById('print-root');
+  if (preview) return null;
   return target ? createPortal(children, target) : null;
 }
 

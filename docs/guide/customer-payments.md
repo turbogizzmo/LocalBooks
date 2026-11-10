@@ -20,20 +20,48 @@ taken before you billed the work.
 1. On **Sales › Invoices**, click **Receive Payments** in the toolbar (or use **+ New › Receive
    Payment**).
 2. In **Received from**, choose the customer. Their open invoices are listed, oldest first, and
-   **Customer balance** shows at the top right.
+   **Customer balance** shows at the top right. Every active customer is in the list, including
+   those with nothing open, for a prepayment or a deposit before you bill the work.
 3. Type the **Amount received**. LocalBooks applies it for you: to an invoice whose balance is
    exactly that amount, otherwise to the oldest invoices first. Adjust the **Payment** on any row
    if the customer told you otherwise, or tick and untick invoices in the first column. To spread
    the amount received over the invoices again, click **Auto Apply** in the toolbar. Under the
    invoices, a **Totals** row adds up each column, and beside it **Amount due**, **Applied**,
    **Discounts applied** and **Left due after this payment** show where the payment leaves the
-   customer. If the amount received and the payments applied differ, **Unapplied amount** (or
-   **Applied more than received**) says by how much; make them match before you save.
+   customer. If more was applied than received, **Applied more than received** says by how much;
+   lower a payment before you save. If more was received, see
+   [Overpayments and prepayments](#overpayments-and-prepayments).
 4. Click how you were paid: **Cash**, **Check**, **Card** (credit or debit), **Bank / ACH** (ACH,
    e-check or bank transfer), or **More** for **Wire** and **Other**. The chosen tile is
    highlighted.
 5. Choose **Deposit to** and **Payment date**, then click **Save & Post Payment** (or **Save** in
    the toolbar). **New** in the toolbar clears the form to start over.
+
+### Overpayments and prepayments
+
+When the **Amount received** is more than the payments applied to invoices (or the customer has
+no open invoice at all), the form shows the **Unapplied amount** and asks what to do with it:
+
+- **Leave the credit to use later** (the usual): the customer keeps it as credit. It is listed in
+  **Sales › Credit Memos & Refunds** as an **Unapplied payment**, the customer's balance goes
+  below zero by that much, and the Customer Center shows it as **Unapplied amount** above the
+  customer's transactions. Apply it to a later invoice from its row (or let the invoice offer it
+  when you save), refund it, or write it off, as with a credit memo.
+- **Refund the amount to the customer**: pay it straight back from the bank or credit card account
+  you choose.
+- **Write off the extra amount**: keep it as income, in the income account you choose.
+
+The money goes to **Deposit to** with the rest of the payment; from Undeposited Funds it is listed
+in **Make Deposits** as **Payment (unapplied)**. Everything on the form posts together, or nothing
+does. An unapplied amount is in your home currency, so a payment against invoices in another
+currency must be applied in full.
+
+| What happens | Debit | Credit |
+|---|---|---|
+| Unapplied amount received | Deposit to account | Accounts Receivable |
+| Refunded | Accounts Receivable | Bank or credit card account |
+| Written off | Accounts Receivable | Income account |
+| Applied to an invoice later | nothing posts; both sides are in Accounts Receivable | |
 
 ### How payments are applied (Preferences › Payments)
 

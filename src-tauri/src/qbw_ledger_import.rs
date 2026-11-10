@@ -57,8 +57,8 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO ledger_import_batches
             (source_path, file_name, file_size_bytes, fingerprint, row_pages, decoded_pages, unreadable_lines,
-             rejected_lines, accounts_matching_stored, accounts_with_stored_balance, source_format)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id",
+             rejected_lines, accounts_matching_stored, accounts_with_stored_balance, source_format, fractional_amounts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id",
     )
     .bind(source_path.display().to_string())
     .bind(&file_name)
@@ -71,6 +71,7 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
     .bind(q.accounts_matching_stored as i64)
     .bind(q.accounts_with_stored_balance as i64)
     .bind(format)
+    .bind((!q.fractional_amounts.is_empty()).then(|| serde_json::to_string(&q.fractional_amounts)).transpose().map_err(|e| e.to_string())?)
     .fetch_one(&mut *tx)
     .await
     .map_err(db_err)?;
@@ -328,6 +329,8 @@ pub struct LedgerBatchSummary {
     pub rejected_lines: i64,
     pub accounts_matching_stored: i64,
     pub accounts_with_stored_balance: i64,
+    /// Amounts the file stores with a fraction of a cent, left out of the import, each described.
+    pub fractional_amounts: Vec<String>,
     pub transaction_count: i64,
     pub line_count: i64,
     pub first_date: Option<String>,
@@ -423,6 +426,7 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         mode: String,
         lists_added: i64,
         source_format: Option<String>,
+        fractional_amounts: Option<String>,
     }
     let head: Head = sqlx::query_as("SELECT * FROM ledger_import_batches WHERE id = ?1")
         .bind(batch_id)
@@ -551,6 +555,10 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
         rejected_lines: head.rejected_lines,
         accounts_matching_stored: head.accounts_matching_stored,
         accounts_with_stored_balance: head.accounts_with_stored_balance,
+        fractional_amounts: match head.fractional_amounts.as_deref() {
+            Some(json) => serde_json::from_str(json).map_err(|e| format!("QBW_BAD_BATCH: import #{batch_id}'s list of amounts not in whole cents can't be read: {e}"))?,
+            None => Vec::new(),
+        },
         transaction_count,
         line_count,
         first_date,
