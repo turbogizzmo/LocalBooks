@@ -1116,7 +1116,7 @@ async fn write_approval(tx: &mut Transaction<'_, Sqlite>, transaction_id: i64, a
     // (Dr category / Cr bank), money in becomes a Deposit (Dr bank / Cr category).
     let amount = amount_cents.abs();
     let (entry_id, direction) = if amount_cents < 0 {
-        let expense = ExpenseInput {
+        let expense = ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: "EXPENSE".into(),
             payee_name: payee_name.map(str::to_string),

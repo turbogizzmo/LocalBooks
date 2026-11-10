@@ -15,6 +15,8 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
+import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
+import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { TermsSelect, useTerms } from './ProfileFields.jsx';
 import { StatusBadge } from './Invoices.jsx';
@@ -85,7 +87,6 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   const formClass = useFormClass(accounts);
   // Closing the window (or stepping to another bill) asks first while the bill has entries not
   // yet saved. The due date is left out: it fills in by itself from the date and terms.
-  const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) }, Boolean(copyOf));
 
   useEffect(() => {
     if (defaultCategory === null) return;
@@ -106,7 +107,11 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
   });
 
   const totalCents = parseMoneyToCents(total);
-  const { lines, invalid, total: allocated } = summarizeSplits(rows);
+  const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
+  // Discounts and charges among the split lines (an edited or copied bill starts with its own).
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, source ? { doc: 'BILL', id: source.bill.id } : null);
+  const dirty = useDirtySince('bill', { vendor, billNumber, billDate, total, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched }, Boolean(copyOf));
+  const allocated = laid.error ? splitTotal : laid.total;
   const unallocated = totalCents === null ? null : totalCents - allocated;
 
   // With a single split row, the bill total flows into it until the user allocates manually.
@@ -124,6 +129,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     if (totalCents === null || totalCents <= 0) return setError('Enter the bill total.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Allocate the bill to at least one category.');
+    if (laid.error && formRows.length > 0) return setError(purchaseLineMessage(laid.error));
     if (unallocated !== 0) return setError(`Split rows must add up to the bill total; ${formatCents(unallocated)} is unallocated.`);
     if (dueDate < billDate) return setError('Due date cannot be before the bill date.');
     const postedLines = formClass.apply(
@@ -147,7 +153,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
     }
     setBusy(true);
     try {
-      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId };
+      const input = { vendorName: vendor.trim(), billNumber: billNumber.trim() || null, billDate, dueDate, memo: null, totalCents, lines: postedLines, termsId, formLines: laid.formLines ?? [] };
       if (mode === 'memorize') return setMemorizing({ ...input, billNumber: null });
       let bill;
       try {
@@ -164,6 +170,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         setTermsTouched(false);
         setTermsId(null);
         setRows([blankSplit(defaultCategory)]);
+        setFormRows([]);
         formClass.reset();
         setError(null);
         vendorRef.current?.focus();
@@ -185,6 +192,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
       setTermsTouched(false);
       setTermsId(null);
       setRows([blankSplit(defaultCategory)]);
+      setFormRows([]);
       formClass.reset();
       setError(null);
       vendorRef.current?.focus();
@@ -357,6 +365,7 @@ function NewBill({ accounts, vendors, defaultCategory, vendorRef, onPosted, edit
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={isCategory} defaultAccountId={defaultCategory} withPricing withClasses withJobs stockItems={stockItems.data ?? []} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
       {!editing && (
         <div className="border-t border-qb-border px-2 py-1">
           <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : "Attach the vendor's invoice…"} />

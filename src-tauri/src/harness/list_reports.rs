@@ -74,7 +74,7 @@ async fn company() -> SqlitePool {
     };
     crate::workflows::create_purchase_order(
         p,
-        crate::workflows::PurchaseOrderInput {
+        crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             po_date: d(2025, 12, 5),
             expected_date: Some(d(2025, 12, 19)),
@@ -106,7 +106,7 @@ async fn company() -> SqlitePool {
     };
     let bill = crate::expenses::post_vendor_bill(
         p,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Lakeside Ceramics".into(),
             bill_number: Some("LC-310".into()),

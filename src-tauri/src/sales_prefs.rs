@@ -522,7 +522,7 @@ pub async fn pay_bills_with_credits(
         let (vendor, number): (String, Option<String>) =
             sqlx::query_as("SELECT v.name, b.bill_number FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1").bind(d.bill_id).fetch_one(pool).await.map_err(db_err)?;
         let memo = format!("Early-payment discount{}", number.map(|n| format!(" on bill {n}")).unwrap_or_default());
-        taken.push((d, crate::credits::VendorCreditInput {
+        taken.push((d, crate::credits::VendorCreditInput { form_lines: Vec::new(),
             vendor_name: vendor,
             reference: Some("Discount".into()),
             credit_date: payment_date,

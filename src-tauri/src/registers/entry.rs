@@ -200,7 +200,7 @@ pub async fn post_register_entry(pool: &SqlitePool, input: RegisterEntryInput) -
         });
     }
 
-    let expense = ExpenseInput {
+    let expense = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: input.payee_name.clone(),

@@ -90,6 +90,14 @@ export const topics = [
     guide: 'bills',
   },
   {
+    id: 'purchase-discounts', area: 'expenses', views: ['expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders', 'sales/products'],
+    title: 'Take a discount or add a charge on a bill, check or purchase order',
+    body: 'Under the split lines, click Add a discount or charge, choose the split line it follows, and enter an amount or a percent of that line such as 2%. Picking a Discount or Other Charge item fills in its account and amount. A discount comes off the total and a charge is added. A purchase order\'s discounts and charges carry over to its bill. An Other Charge or Discount item can have its own expense account for bills and checks (Edit the item).',
+    keywords: 'discount charge freight shipping other charge item purchase bill check expense vendor credit purchase order po percent expense account',
+    go: { label: 'Go to Bills', view: 'expenses/bills' },
+    guide: 'bills',
+  },
+  {
     id: 'approvals', area: 'expenses', views: ['expenses/approvals', 'expenses/bills', 'expenses/purchase-orders'],
     title: 'Approve bills and purchase orders',
     body: 'Under Expenses › Approvals an Admin adds rules, such as bills of $1,000 or more, or every bill from one vendor. A bill or purchase order that matches is sent for approval instead of being recorded: a waiting bill isn’t posted and isn’t in Pay Bills, and a waiting order isn’t an open order. An Admin approves it, which records it as entered, or rejects it with a note, which keeps the request and records nothing.',

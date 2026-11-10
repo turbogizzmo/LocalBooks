@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Discounts and charges on bills, checks, vendor credits and purchase orders.** Add a discount or
+  a charge after any split line, as an amount or a percent of that line, from a Discount or Other
+  Charge item or straight to an account. A purchase order's discounts and charges print on it and
+  carry over to its bill. Other Charge and Discount items can have their own expense account for
+  these forms.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

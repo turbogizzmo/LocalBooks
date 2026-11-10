@@ -100,11 +100,14 @@ const ITEM_COLUMNS: &[(&str, &str)] = &[
     ("invoice_form_lines", "product_service_id"),
     ("sales_receipt_form_lines", "product_service_id"),
     ("estimate_form_lines", "product_service_id"),
+    ("purchase_form_lines", "product_service_id"),
     ("item_group_members", "product_id"),
 ];
 /// An account's lists and settings: not postings, so they follow the merge.
 const ACCOUNT_COLUMNS: &[(&str, &str)] = &[
     ("products_services", "income_account_id"),
+    ("products_services", "expense_account_id"),
+    ("purchase_form_lines", "account_id"),
     ("inventory_items", "asset_account_id"),
     ("inventory_items", "cogs_account_id"),
     ("bank_rules", "account_id"),

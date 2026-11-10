@@ -478,6 +478,7 @@ pub async fn update_product(pool: &SqlitePool, id: i64, input: ProductInput) -> 
 pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: Option<crate::sales::ItemKind>) -> Result<ProductView, String> {
     if let Some(kind) = &kind {
         kind.validate()?;
+        kind.check_account(pool).await?;
     }
     let name = input.name.trim();
     if name.is_empty() {
@@ -513,10 +514,11 @@ pub async fn update_item(pool: &SqlitePool, id: i64, input: ProductInput, kind: 
         return Err("PRODUCT_NOT_FOUND: that product does not exist".into());
     }
     if let Some(kind) = kind {
-        sqlx::query("UPDATE products_services SET item_type = ?1, percent_ppm = ?2 WHERE id = ?3")
+        sqlx::query("UPDATE products_services SET item_type = ?1, percent_ppm = ?2, expense_account_id = ?4 WHERE id = ?3")
             .bind(&kind.item_type)
             .bind(kind.percent_ppm)
             .bind(id)
+            .bind(kind.expense_account_id)
             .execute(pool)
             .await
             .map_err(db_err)?;

@@ -75,7 +75,7 @@ async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cen
 async fn bill(pool: &SqlitePool, vendor: &str, number: &str, date: NaiveDate, account_id: i64, cents: i64) -> i64 {
     expenses::post_vendor_bill(
         pool,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: vendor.into(),
             bill_number: Some(number.into()),
@@ -98,7 +98,7 @@ async fn pay_bill(pool: &SqlitePool, bill_id: i64, bank: i64, date: NaiveDate, c
 async fn expense(pool: &SqlitePool, kind: &str, payee: &str, paid_from: i64, date: NaiveDate, account_id: i64, cents: i64) {
     expenses::post_expense(
         pool,
-        ExpenseInput {
+        ExpenseInput { form_lines: Vec::new(),
             payment_method_id: None,
             kind: kind.into(),
             payee_name: Some(payee.into()),

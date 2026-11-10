@@ -302,7 +302,7 @@ async fn collections_lists_overdue_invoices_with_contact_details() {
 async fn open_purchase_orders_leave_out_closed_ones() {
     let pool = test_pool().await;
     let supplies = account(&pool, "6250").await;
-    let po = |vendor: &str, date: NaiveDate, amount: i64| crate::workflows::PurchaseOrderInput {
+    let po = |vendor: &str, date: NaiveDate, amount: i64| crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
         vendor_name: vendor.into(),
         po_date: date,
         expected_date: Some(date + chrono::Days::new(14)),

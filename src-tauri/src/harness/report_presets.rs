@@ -86,7 +86,7 @@ pub(super) async fn company() -> SqlitePool {
 
     let bill = crate::expenses::post_vendor_bill(
         p,
-        BillInput {
+        BillInput { form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),
@@ -105,7 +105,7 @@ pub(super) async fn company() -> SqlitePool {
     .id;
     let credit = crate::credits::create_vendor_credit(
         p,
-        VendorCreditInput {
+        VendorCreditInput { form_lines: Vec::new(),
             vendor_name: "Riverside Print Shop".into(),
             reference: Some("RP-C1".into()),
             credit_date: d(2025, 11, 25),

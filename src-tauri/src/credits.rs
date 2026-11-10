@@ -469,6 +469,9 @@ pub struct VendorCreditInput {
     pub credit_date: NaiveDate,
     pub memo: Option<String>,
     pub lines: Vec<VendorCreditLineInput>,
+    /// Discount and charge lines among the split lines (`purchase_lines`).
+    #[serde(default)]
+    pub form_lines: Vec<crate::purchase_lines::PurchaseFormLineInput>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -522,6 +525,9 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
         }
         total = total.checked_add(line.amount_cents).filter(|t| *t <= MAX_LINE_CENTS).ok_or("VC_TOO_LARGE: the credit is too large")?;
     }
+    let splits: Vec<i64> = input.lines.iter().map(|l| l.amount_cents).collect();
+    let (form_amounts, total) = crate::purchase_lines::lay_out(&splits, &input.form_lines, "VC")?;
+    crate::purchase_lines::check(tx, &input.form_lines, "VC").await?;
     let vendor = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor).await?;
     let credit_id: i64 = sqlx::query_scalar(
@@ -575,6 +581,8 @@ pub(crate) async fn write_vendor_credit(tx: &mut Transaction<'_, Sqlite>, input:
             .map_err(db_err)?;
         lines.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
+    lines.extend(crate::purchase_lines::journal_lines(&input.form_lines, &form_amounts, false));
+    crate::purchase_lines::write(tx, crate::purchase_lines::PurchaseDoc::VendorCredit, credit_id, &input.form_lines, &form_amounts).await?;
     let reference = clean(input.reference.as_deref()).map(|r| format!(" #{r}")).unwrap_or_default();
     let entry = JournalEntry { id: None, date: input.credit_date, description: format!("Vendor credit{reference} - {vendor}"), lines, currency: None };
     let entry_id = post_entry_in_tx(tx, &entry, EntrySource::VendorCredit(credit_id)).await?;
