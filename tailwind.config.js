@@ -256,11 +256,13 @@ export default {
           '&:focus-visible': { outline: 'none', boxShadow: theme('boxShadow.focus') },
           '&:disabled': { opacity: '0.5', cursor: 'not-allowed' },
         },
+        // White text needs a green dark enough to read (WCAG AA 4.5:1): qb.green on white text is
+        // 3.4:1, so filled green buttons and badges use greenActive (6.0:1) and darker (R19).
         '.qb-btn-primary': {
-          backgroundColor: qb.green,
+          backgroundColor: qb.greenActive,
           color: '#ffffff',
-          '&:hover:not(:disabled)': { backgroundColor: qb.greenHover },
-          '&:active:not(:disabled)': { backgroundColor: qb.greenActive },
+          '&:hover:not(:disabled)': { backgroundColor: '#196511' },
+          '&:active:not(:disabled)': { backgroundColor: '#15560e' },
         },
         '.qb-btn-secondary': {
           backgroundColor: qb.surface,

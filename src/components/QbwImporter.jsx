@@ -80,7 +80,7 @@ function ProgressTrack({ progress, seen }) {
 /** A numbered step card. */
 function Step({ number, title, state = 'active', aside, children }) {
   const badge =
-    state === 'done' ? 'bg-qb-green text-white' : state === 'active' ? 'bg-qb-nav text-white' : 'bg-qb-canvas text-qb-ink-faint';
+    state === 'done' ? 'bg-qb-green-active text-white' : state === 'active' ? 'bg-qb-nav text-white' : 'bg-qb-canvas text-qb-ink-faint';
   return (
     <section className={`qb-panel ${state === 'locked' ? 'opacity-60' : ''}`}>
       <div className="flex min-h-[36px] items-center gap-2 border-b border-qb-border px-3 py-1">

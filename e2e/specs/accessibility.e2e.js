@@ -22,7 +22,7 @@ async function violations() {
   return browser.execute(async () => {
     try {
       const r = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] });
-      return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, url: v.helpUrl, nodes: v.nodes.slice(0, 5).map((n) => n.target.join(' ')) }));
+      return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, url: v.helpUrl, nodes: v.nodes.slice(0, 5).map((n) => `${n.target.join(' ')}  ${n.html.slice(0, 120)}`) }));
     } catch (e) {
       return [{ id: 'axe-error', impact: 'critical', help: String(e), url: '', nodes: [] }];
     }

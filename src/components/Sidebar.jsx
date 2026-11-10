@@ -165,7 +165,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
   return (
     <nav className="qb-sidebar no-print flex flex-none flex-col" aria-label="Main">
       <div className="flex h-toolbar items-center gap-2 border-b border-white/10 px-3">
-        <span className="grid h-5 w-5 place-items-center rounded-xs bg-qb-green text-2xs font-bold text-white">LB</span>
+        <span className="grid h-5 w-5 place-items-center rounded-xs bg-qb-green-active text-2xs font-bold text-white">LB</span>
         <span className="truncate text-md font-semibold text-white" title={companyName}>{companyName}</span>
       </div>
       <div className="px-2 py-1.5">
