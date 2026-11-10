@@ -26,7 +26,7 @@ export function Dialog({ title, children, onClose, wide = false }) {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-6" role="dialog" aria-modal="true" aria-label={title}>
       <div ref={ref} className={`qb-panel flex max-h-full w-full flex-col shadow-lg ${wide ? 'max-w-[1000px]' : 'max-w-[620px]'}`}>
         <h2 className="flex-none border-b border-qb-border px-3 py-2 text-md font-semibold">{title}</h2>
-        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">{children}</div>
+        {children}
       </div>
     </div>,
     document.body,

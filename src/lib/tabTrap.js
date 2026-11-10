@@ -16,9 +16,23 @@ export function nextTabStop(count, { after, before }, back) {
   return after ?? 0;
 }
 
-/** The elements Tab stops on inside `root`, in document order: shown, enabled, not inert. */
+/**
+ * The elements Tab stops on inside `root`, in document order: shown, visible, enabled, not inert;
+ * a group of radio buttons is one stop (its checked one, else its first), as the browser has it.
+ */
 export function tabStops(root) {
-  return [...root.querySelectorAll(TABBABLE)].filter((el) => el.tabIndex >= 0 && !el.closest('[inert]') && el.getClientRects().length > 0);
+  const seenGroups = new Set();
+  return [...root.querySelectorAll(TABBABLE)].filter((el) => {
+    if (el.tabIndex < 0 || el.closest('[inert]') || el.getClientRects().length === 0) return false;
+    if (getComputedStyle(el).visibility === 'hidden') return false;
+    if (el instanceof HTMLInputElement && el.type === 'radio' && el.name) {
+      const group = `${el.form?.id ?? ''}|${el.name}`;
+      const checked = root.querySelector(`input[type="radio"][name="${CSS.escape(el.name)}"]:checked`);
+      if (checked ? checked !== el : seenGroups.has(group)) return false;
+      seenGroups.add(group);
+    }
+    return true;
+  });
 }
 
 /**
