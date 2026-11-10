@@ -97,7 +97,10 @@ LocalBooks reads the file like this:
   transaction is listed under **lines not read in full** for you to enter by hand. So is a
   transaction with no date.
 - **Check the totals:** step 2 compares every account's total with the balance QuickBooks stored.
-  On Intuit's two 2012 sample companies, every transaction balances and every account matches.
+  Any account that doesn't match is listed above the accounts with the file's balance, the
+  imported balance and the difference, and stays listed after you post, so you know which
+  accounts to check against QuickBooks' balance sheet. On Intuit's two 2012 sample companies,
+  every transaction balances and every account matches.
 
 QuickBooks for Mac 2013 and later files may be encrypted. If LocalBooks says the file is
 encrypted, use the steps below.

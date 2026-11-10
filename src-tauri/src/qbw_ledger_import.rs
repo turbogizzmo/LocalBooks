@@ -347,6 +347,9 @@ pub struct LedgerBatchSummary {
     pub lists: ListsView,
     /// Present while the pre-import copy exists on disk.
     pub start_over: Option<StartOverPoint>,
+    /// Accounts whose balance as imported differs from the balance the file itself stores,
+    /// largest difference first. Empty when every stored balance matches.
+    pub balance_differences: Vec<BalanceDifference>,
     /// How the batch was last posted: `JOURNAL` or `FULL`.
     pub mode: String,
     /// Sales documents a full import would create, by type (`invoice`, `payment`, ...).
@@ -360,6 +363,39 @@ pub struct LedgerBatchSummary {
     pub lists_only: bool,
     /// A lists-only batch whose lists were added and not reversed since.
     pub lists_added: bool,
+}
+
+/// One account whose imported balance does not match the file's own balance. Amounts are
+/// debit-positive, the way LocalBooks reports balances.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceDifference {
+    pub source_id: i64,
+    pub full_name: String,
+    /// The balance the file stores for the account.
+    pub expected_cents: i64,
+    /// The total of the lines this import brings in (transactions that balance).
+    pub imported_cents: i64,
+    /// `imported_cents - expected_cents`.
+    pub difference_cents: i64,
+}
+
+/// Accounts whose read balance differs from their stored one, largest difference first.
+pub fn balance_differences(accounts: &[SourceAccountView]) -> Result<Vec<BalanceDifference>, String> {
+    let mut out = Vec::new();
+    for a in accounts {
+        let Some(stored) = a.stored_balance_cents else { continue };
+        if stored == a.read_balance_cents {
+            continue;
+        }
+        let overflow = || format!("QBW_OVERFLOW: the balance of {} is too large", a.full_name);
+        let expected = stored.checked_neg().ok_or_else(overflow)?;
+        let imported = a.read_balance_cents.checked_neg().ok_or_else(overflow)?;
+        let difference = imported.checked_sub(expected).ok_or_else(overflow)?;
+        out.push(BalanceDifference { source_id: a.source_id, full_name: a.full_name.clone(), expected_cents: expected, imported_cents: imported, difference_cents: difference });
+    }
+    out.sort_by(|a, b| b.difference_cents.unsigned_abs().cmp(&a.difference_cents.unsigned_abs()).then_with(|| a.full_name.cmp(&b.full_name)));
+    Ok(out)
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -496,7 +532,10 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    // A file of lists only has stored balances but no lines to compare them with.
+    let balance_differences = if transaction_count == 0 { Vec::new() } else { balance_differences(&accounts)? };
     Ok(LedgerBatchSummary {
+        balance_differences,
         lists_only: transaction_count == 0,
         lists_added: head.lists_added != 0,
         mode: head.mode,

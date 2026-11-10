@@ -10,6 +10,11 @@ people using LocalBooks.
   file now brings its paychecks and payroll liability payments, so payroll expense and liability
   accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost
   of what they sold, moving it from Inventory Asset to Cost of Goods Sold as QuickBooks did.
+- **Company-file imports read more of older files, and say which balances don't match.**
+  LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
+  invoices and other transactions on those pages come in. And if an account's imported balance
+  still differs from the balance QuickBooks stored, step 2 of the import lists it with the
+  file's balance, the imported balance and the difference, before and after you post.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
