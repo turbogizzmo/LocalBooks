@@ -157,3 +157,13 @@ export function layoutMessage(code) {
     }[code] ?? 'The lines don’t add up; check the subtotals and discounts.'
   );
 }
+
+/**
+ * A group member's quantity (scaled by 10,000) when the group's quantity on the form goes from
+ * `fromE4` to `toE4`: in proportion, rounded half away from zero, as the ledger rounds. Null when
+ * either group quantity isn't above zero.
+ */
+export function scaleGroupQuantity(memberE4, fromE4, toE4) {
+  if (!(fromE4 > 0) || !(toE4 > 0)) return null;
+  return mulDivRound(memberE4, toE4, fromE4);
+}
