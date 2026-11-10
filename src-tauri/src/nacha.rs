@@ -353,7 +353,7 @@ pub fn validate(text: &str) -> Result<Summary, String> {
     let mut problems: Vec<String> = Vec::new();
     let lines: Vec<&str> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
     let lines: &[&str] = match lines.split_last() {
-        Some((last, rest)) if last.is_empty() => rest,
+        Some((&"", rest)) => rest,
         _ => &lines,
     };
     for (i, line) in lines.iter().enumerate() {

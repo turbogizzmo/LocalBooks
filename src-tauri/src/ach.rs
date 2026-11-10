@@ -38,7 +38,7 @@ fn seal(access: Access, table: &str, column: &str, row_id: i64, plain: &str) -> 
 
 fn open(access: Access, table: &str, column: &str, row_id: i64, stored: &str) -> Result<Option<String>, String> {
     if !crypto::is_encrypted(stored) {
-        return Ok(Some(stored.to_string()).filter(|_| access.can_see()));
+        return Ok(access.can_see().then(|| stored.to_string()));
     }
     match access.key {
         Some(key) => key.decrypt_field(table, column, row_id, stored).map(Some),

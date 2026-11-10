@@ -619,11 +619,7 @@ fn table_from_lines(lines: &[Line]) -> Result<PdfTable, String> {
                         // When a column marks both sides, DR is money out and CR money in. When it
                         // marks only one side, that side is the exception: card statements mark
                         // payments CR, some bank statements mark withdrawals DR.
-                        let negate = match (r.markers[i], markers_used[i]) {
-                            (Some(Marker::Dr), _) => true,
-                            (Some(Marker::Cr), (_, false)) => true,
-                            _ => false,
-                        };
+                        let negate = matches!((r.markers[i], markers_used[i]), (Some(Marker::Dr), _) | (Some(Marker::Cr), (_, false)));
                         if negate && !r.cells[i].is_empty() {
                             r.cells[i] = format!("-{}", r.cells[i].trim_start_matches('+'));
                         }
