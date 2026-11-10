@@ -44,6 +44,17 @@ async fn file_key_id(pool: &sqlx::SqlitePool) -> Result<Option<String>, String> 
     sqlx::query_scalar("SELECT key_id FROM data_key WHERE id = 1").fetch_optional(pool).await.map_err(ledger::db_err)
 }
 
+/// The wait after failed sign-ins (gap R27), kept in this computer's settings folder.
+fn throttle(app: &AppHandle) -> &'static crate::sign_in_throttle::Throttle {
+    static THROTTLE: std::sync::OnceLock<crate::sign_in_throttle::Throttle> = std::sync::OnceLock::new();
+    THROTTLE.get_or_init(|| crate::sign_in_throttle::Throttle::new(crate::data_dirs(app).ok().map(|(_, dir)| dir).as_deref()))
+}
+
+/// Which company file a wait belongs to: its data key's id (shared by its copies).
+async fn throttle_file(pool: &sqlx::SqlitePool) -> String {
+    file_key_id(pool).await.ok().flatten().unwrap_or_else(|| "(no key)".into())
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct RememberedSignIn {
     username: String,
@@ -163,7 +174,8 @@ pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Op
 #[tauri::command]
 pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String, remember: bool) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
-    let session = users::sign_in(&pool, &username, &password).await?;
+    let file = throttle_file(&pool).await;
+    let session = throttle(&app).attempt(&file, &username, |e| e.starts_with("SIGN_IN_FAILED"), users::sign_in(&pool, &username, &password)).await?;
     if let Some(id) = file_key_id(&pool).await? {
         let store = remembered_sign_ins(&app)?;
         if remember {
@@ -233,7 +245,11 @@ pub async fn change_my_password(db: State<'_, Db>, current: String, next: String
 #[tauri::command]
 pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recovery_key: String, username: String, new_password: String) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
-    let session = users::recover(&pool, &recovery_key, &username, &new_password).await?;
+    let file = throttle_file(&pool).await;
+    // Only a wrong key counts: not a typo in its format, nor a right key with another user's name.
+    let session = throttle(&app)
+        .attempt(&file, crate::sign_in_throttle::RECOVERY, |e| e.starts_with("KEY_WRONG_RECOVERY"), users::recover(&pool, &recovery_key, &username, &new_password))
+        .await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;

@@ -115,6 +115,7 @@ mod temp_files;
 #[cfg(test)]
 mod test_companies;
 mod secrets;
+mod sign_in_throttle;
 mod simplefin;
 mod smtp;
 mod statements;
