@@ -20,6 +20,13 @@ people using LocalBooks.
 - **Keyboard and screen-reader fixes.** A list row's ▾ menu now works with the arrow keys, Home
   and End, and Esc returns you to its button. The bank feed's list and every pop-up menu can take
   focus and are named for screen readers.
+- **Set Discount and Set Credits in Pay Bills.** Click a bill to choose the early-payment discount
+  and the vendor credits to use on it, instead of what the automatic preferences would take.
+- **Income account column off by default on sales forms.** The item fills it in; turn it on from
+  **Columns ▾**, and it shows by itself while a line still needs an account.
+- **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
+  and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
+  order.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
@@ -79,6 +86,7 @@ people using LocalBooks.
 - **Duplicate on every form.** Sales receipts, estimates, credit memos, refund receipts, vendor
   credits, purchase orders, deposits and transfers now have **Duplicate** (Ctrl+O) too: open a saved
   one and the copy starts as a new form dated today.
+
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
