@@ -99,6 +99,13 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'invoice-paid-now', area: 'sales', views: ['sales/invoices'],
+    title: 'Take a payment with the invoice',
+    body: 'Tick Payment received next to Save & Post to Ledger when the customer pays as you write the invoice. Enter the amount, method, reference and deposit account; the payment is saved with the invoice, dated the invoice date, and the invoice comes back Paid or Partial. It is an ordinary payment: it shows in Receive Payments and is voided from there.',
+    keywords: 'payment received paid now deposit on invoice payment item cash on delivery partial payment',
+    guide: 'invoices',
+  },
+  {
     id: 'print-form-batches', area: 'sales', views: ['sales/print-forms', 'sales/mailing-labels', 'sales/print-invoices', 'expenses/print-checks'],
     title: 'Print forms in a batch, and mailing labels',
     body: 'File › Print Forms prints sales receipts, credit memos, bill payment stubs and purchase orders in batches: pick a date range, tick the ones to print and print them together, each with its form design. Mailing Labels prints customer or vendor addresses 30 to a Letter sheet, and can start after labels already used on a sheet.',

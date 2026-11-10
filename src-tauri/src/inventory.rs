@@ -296,6 +296,51 @@ impl Receipt {
     }
 }
 
+/// A bill priced differently from the receipt that brought its stock in (T12): of the difference,
+/// the share for units still on hand changes their value (Inventory Asset), and the share for units
+/// already sold goes to Cost of Goods Sold, as the true-up for stock sold before it was bought does.
+pub(crate) struct PriceDifference {
+    /// Journal lines carrying the difference (a positive difference is a debit: the goods cost more).
+    pub lines: Vec<JournalLine>,
+    /// (item, value change) recorded against the bill's entry.
+    movement: Option<(i64, i64)>,
+}
+
+/// Plans how a difference of `diff_cents` on `qty_e4` received units of `product_id` posts; `None`
+/// when the product isn't tracked.
+pub(crate) async fn plan_price_difference(tx: &mut Transaction<'_, Sqlite>, product_id: i64, qty_e4: i64, diff_cents: i64, class_id: Option<i64>) -> Result<Option<PriceDifference>, String> {
+    let Some(item) = item_for_product(tx, product_id).await? else { return Ok(None) };
+    if diff_cents == 0 || qty_e4 <= 0 {
+        return Ok(Some(PriceDifference { lines: Vec::new(), movement: None }));
+    }
+    let on_hand = item.qty_e4.clamp(0, qty_e4);
+    let share = if on_hand == qty_e4 { Some(diff_cents) } else { mul_div_round(diff_cents, on_hand, qty_e4) };
+    let mut to_stock = share.ok_or("STOCK_OVERFLOW: cost out of range")?;
+    // Stock keeps a value that agrees with its quantity: a reduction takes its value down to zero at
+    // most, and what can't go there goes to COGS.
+    if to_stock < 0 {
+        to_stock = to_stock.max(-item.value_cents.max(0));
+    }
+    let to_cogs = diff_cents - to_stock;
+    let side = |account: i64, cents: i64| match cents.signum() {
+        1 => Some(JournalLine::debit(account, cents).with_class(class_id)),
+        -1 => Some(JournalLine::credit(account, -cents).with_class(class_id)),
+        _ => None,
+    };
+    let lines = [side(item.asset_account_id, to_stock), side(item.cogs_account_id, to_cogs)].into_iter().flatten().collect();
+    Ok(Some(PriceDifference { lines, movement: (to_stock != 0).then_some((item.id, to_stock)) }))
+}
+
+impl PriceDifference {
+    /// Records the change in the stock's value against the bill's posted entry.
+    pub async fn record(&self, tx: &mut Transaction<'_, Sqlite>, date: NaiveDate, journal_entry_id: i64) -> Result<(), String> {
+        if let Some((item, value)) = self.movement {
+            record_movement(tx, item, date, "COST_TRUE_UP", 0, value, journal_entry_id, None).await?;
+        }
+        Ok(())
+    }
+}
+
 /// Keeps the latest cost per unit for costing sales beyond what is on hand.
 async fn remember_unit_cost(tx: &mut Transaction<'_, Sqlite>, item_id: i64, qty_e4: i64, cost_cents: i64) -> Result<(), String> {
     let unit = mul_div_round(cost_cents, crate::ledger::QUANTITY_SCALE, qty_e4).ok_or("STOCK_OVERFLOW: cost out of range")?;
