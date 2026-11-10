@@ -10,7 +10,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::ledger::{db_err, mul_div_round, post_entry_in_tx, rollback, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
+use crate::ledger::{db_err, mul_div_round, post_entry_in_tx, rollback, Cents, EntrySource, JournalEntry, JournalLine, MAX_LINE_CENTS};
 
 pub mod combined;
 
@@ -337,7 +337,7 @@ pub struct SalesTaxPaymentInput {
     /// The bank or credit card account it is paid from.
     pub account_id: i64,
     pub payment_date: NaiveDate,
-    pub amount_cents: i64,
+    pub amount_cents: Cents,
     pub reference: Option<String>,
 }
 
@@ -356,7 +356,8 @@ pub struct SalesTaxPaymentView {
 
 /// Pays sales tax to the agency: Dr the liability account / Cr the bank or card account.
 pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Result<i64, String> {
-    if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
+    let amount = input.amount_cents.get();
+    if !(1..=MAX_LINE_CENTS).contains(&amount) {
         return Err("TAX_BAD_AMOUNT: enter the amount paid".into());
     }
     let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
@@ -383,7 +384,7 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
             id: None,
             date: input.payment_date,
             description: format!("Sales tax payment - {to}"),
-            lines: vec![JournalLine::debit(liability, input.amount_cents), JournalLine::credit(input.account_id, input.amount_cents)],
+            lines: vec![JournalLine::debit(liability, amount), JournalLine::credit(input.account_id, amount)],
             currency: None,
         };
         let entry_id = post_entry_in_tx(&mut tx, &entry, EntrySource::Journal).await?;
