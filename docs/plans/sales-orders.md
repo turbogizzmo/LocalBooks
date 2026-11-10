@@ -2,8 +2,8 @@
 
 A customer orders goods or work today that you'll ship and bill later, perhaps in several parts.
 LocalBooks has estimates (a price offered) and invoices (a sale posted), but nothing in between, so
-there is no record of what customers have ordered and not yet received, nothing to invoice from
-piece by piece, and no way to see what stock is already promised. This note sets out sales orders,
+there is no record of what customers have ordered and not yet received, no way to invoice an order
+in parts, and no way to see what stock is already promised. This note sets out sales orders,
 how they turn into invoices, the reports on them, and backorders.
 
 ## What a sales order is
@@ -104,7 +104,8 @@ All run, export and print like other reports, and tie out to the order lines.
   kind of unposted sale, since a sales order covers the same need and keeps every invoice a posted
   one. If testers ask for pending invoices, they get a row of their own.
 
-The reports go in through `ReportBody` once #276 is in main (it moves the report switch there).
+The reports are added to the report screen's list of cases wherever it lives when they're built
+(#276 moves that list into its own component).
 
 ## Screens and the rest
 
