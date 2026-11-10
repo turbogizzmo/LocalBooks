@@ -170,6 +170,33 @@ async fn voiding_an_invoice_reopens_its_quantities_and_an_edit_keeps_them() {
     crate::ledger::void_transaction(&s.pool, entry).await.unwrap();
     let after_void = detail(&s.pool, saved.id).await.unwrap();
     assert_eq!((after_void.lines[0].invoiced_qty_e4, after_void.lines[0].left_qty_e4, after_void.summary.status.as_str()), (0, 50_000, "OPEN"));
+    assert!(after_void.summary.has_invoices, "voided invoices still came from it");
+
+    // An edit that ships fewer, or moves the invoice to another customer, gives the rest back.
+    let (input, takes) = invoice(&s, "Acme", &[(widgets, s.widget, 3)]);
+    let third = invoice_from_order(&s.pool, saved.id, &input, &takes).await.unwrap();
+    let (fewer, _) = invoice(&s, "Acme", &[(widgets, s.widget, 1)]);
+    let fourth = crate::edits::replace_invoice(&s.pool, third.id, fewer).await.unwrap();
+    assert_eq!(detail(&s.pool, saved.id).await.unwrap().lines[0].invoiced_qty_e4, 10_000);
+    let (elsewhere, _) = invoice(&s, "Globex", &[(widgets, s.widget, 1)]);
+    crate::edits::replace_invoice(&s.pool, fourth, elsewhere).await.unwrap();
+    assert_eq!(detail(&s.pool, saved.id).await.unwrap().lines[0].invoiced_qty_e4, 0);
+}
+
+#[tokio::test]
+async fn orders_take_priced_lines_once_each_and_a_tax_rate() {
+    let s = shop().await;
+    assert!(create(&s.pool, &order("Acme", d(2), vec![line(&s, s.widget, 1, 0)])).await.unwrap_err().starts_with("SO_BAD_RATE"), "a 0.00 line could never be invoiced");
+    let rate = crate::sales_tax::create_tax_rate(&s.pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let mut taxed = order("Acme", d(2), vec![SalesOrderLineInput { line: SalesLineInput { is_taxable: true, ..line(&s, s.widget, 2, 2_500).line }, id: None }]);
+    taxed.tax_rate_id = Some(rate.id);
+    let saved = create(&s.pool, &taxed).await.unwrap();
+    let found = detail(&s.pool, saved.id).await.unwrap();
+    assert_eq!((found.tax_rate_id, found.lines[0].is_taxable), (Some(rate.id), true));
+
+    let id = found.lines[0].id;
+    let again = SalesOrderLineInput { id: Some(id), ..line(&s, s.widget, 2, 2_500) };
+    assert!(update(&s.pool, saved.id, &order("Acme", d(2), vec![again.clone(), again])).await.unwrap_err().starts_with("SO_LINE_TWICE"));
 }
 
 #[tokio::test]

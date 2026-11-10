@@ -16,7 +16,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::invoices::{validate_line, InvoiceInput, MAX_QUANTITY_E4};
+use crate::invoices::{validate_line, InvoiceInput};
 use crate::ledger::{db_err, format_cents, rollback, MAX_LINE_CENTS};
 use crate::sales::{find_or_create_named, Party, SalesLineInput};
 use crate::sales_header::SalesHeader;
@@ -73,6 +73,8 @@ pub struct SalesOrderSummary {
     /// What is left to invoice, at the order's rates.
     pub open_cents: i64,
     pub line_count: i64,
+    /// Invoices were made from it (voided ones too), so it can be closed but not deleted.
+    pub has_invoices: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -131,14 +133,14 @@ const SUMMARY_SELECT: &str = "
            CASE WHEN o.is_closed = 1 THEN 0 ELSE
                COALESCE((SELECT SUM((((l.quantity_e4 - l.invoiced_qty_e4 - l.closed_qty_e4) * l.rate_cents) + 5000) / 10000)
                          FROM sales_order_lines l WHERE l.sales_order_id = o.id), 0) END AS open_cents,
-           (SELECT COUNT(*) FROM sales_order_lines l WHERE l.sales_order_id = o.id) AS line_count
+           (SELECT COUNT(*) FROM sales_order_lines l WHERE l.sales_order_id = o.id) AS line_count,
+           EXISTS (SELECT 1 FROM sales_order_invoiced k JOIN sales_order_lines l ON l.id = k.sales_order_line_id WHERE l.sales_order_id = o.id) AS has_invoices
     FROM sales_orders o JOIN customers c ON c.id = o.customer_id";
 
 /// Every sales order, newest first; `open_only` leaves out closed ones.
 pub async fn list(pool: &SqlitePool, open_only: bool) -> Result<Vec<SalesOrderSummary>, String> {
-    let rows: Vec<SalesOrderSummary> =
-        sqlx::query_as(&format!("{SUMMARY_SELECT} ORDER BY o.order_number DESC")).fetch_all(pool).await.map_err(db_err)?;
-    Ok(rows.into_iter().filter(|o| !open_only || o.status != "CLOSED").collect())
+    let filter = if open_only { "WHERE status <> 'CLOSED'" } else { "" };
+    sqlx::query_as(&format!("SELECT * FROM ({SUMMARY_SELECT}) {filter} ORDER BY order_number DESC")).fetch_all(pool).await.map_err(db_err)
 }
 
 async fn summary(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<SalesOrderSummary, String> {
@@ -258,10 +260,8 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
     let mut amounts = Vec::with_capacity(input.lines.len());
     for (idx, l) in input.lines.iter().enumerate() {
         let line = &l.line;
-        let amount = match line.rate_cents {
-            0 if (1..=MAX_QUANTITY_E4).contains(&line.quantity_e4) => 0,
-            _ => validate_line(line.quantity_e4, line.rate_cents, idx + 1, "SO")?,
-        };
+        // Priced above zero, as on invoices: every order line has to be invoiceable.
+        let amount = validate_line(line.quantity_e4, line.rate_cents, idx + 1, "SO")?;
         total = total
             .checked_add(amount)
             .filter(|t| *t <= MAX_LINE_CENTS)
@@ -303,6 +303,9 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, id: i64, input: &SalesOrderInpu
     // Lines: kept ones are updated, dropped ones deleted (a trigger refuses an invoiced one), new
     // ones added. Line numbers move out of the way first so the new order can take them.
     let kept: Vec<i64> = input.lines.iter().filter_map(|l| l.id).collect();
+    if kept.iter().collect::<std::collections::HashSet<_>>().len() != kept.len() {
+        return Err("SO_LINE_TWICE: an order line appears twice".into());
+    }
     for (line_id, invoiced, _, _) in &current {
         if !kept.contains(line_id) {
             if *invoiced > 0 {
@@ -449,16 +452,7 @@ async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, order_id: i64, input: &
         return Err("SO_CLOSED: that sales order is closed".into());
     }
     let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
-    let of_order: bool = sqlx::query_scalar(
-        "WITH RECURSIVE up(id) AS (SELECT ?1 UNION SELECT c.parent_id FROM customers c JOIN up ON c.id = up.id WHERE c.parent_id IS NOT NULL)
-         SELECT EXISTS (SELECT 1 FROM up WHERE id = ?2)",
-    )
-    .bind(customer_id)
-    .bind(order_customer)
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
-    if !of_order {
+    if !customer_of(tx, customer_id, order_customer).await? {
         return Err("SO_OTHER_CUSTOMER: invoice the order's customer, or one of its jobs".into());
     }
     // How much each order line gives, adding up invoice lines that take from the same one.
@@ -512,16 +506,58 @@ async fn write_invoice(tx: &mut Transaction<'_, Sqlite>, order_id: i64, input: &
     Ok(invoice_id)
 }
 
+/// `customer` is `order_customer` or one of its jobs.
+async fn customer_of(tx: &mut Transaction<'_, Sqlite>, customer: i64, order_customer: i64) -> Result<bool, String> {
+    sqlx::query_scalar(
+        "WITH RECURSIVE up(id) AS (SELECT ?1 UNION SELECT c.parent_id FROM customers c JOIN up ON c.id = up.id WHERE c.parent_id IS NOT NULL)
+         SELECT EXISTS (SELECT 1 FROM up WHERE id = ?2)",
+    )
+    .bind(customer)
+    .bind(order_customer)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)
+}
+
 /// An edited invoice (`edits::replace_invoice`) replaces `old` with `new`: the order lines the old
 /// one took from are taken by the new one, with the same quantities. Runs after the old invoice was
 /// voided, which gave the quantities back.
+///
+/// The new invoice keeps a link only as far as it still sells that item to the order's customer
+/// (or one of its jobs): an edit that moves the invoice to someone else, drops the item or ships
+/// fewer leaves the rest open on the order again.
 pub(crate) async fn follow_replaced_invoice(tx: &mut Transaction<'_, Sqlite>, old: i64, new: i64) -> Result<(), String> {
-    let links: Vec<(i64, i64)> = sqlx::query_as("SELECT sales_order_line_id, quantity_e4 FROM sales_order_invoiced WHERE invoice_id = ?1 AND is_reversed = 1")
-        .bind(old)
+    let links: Vec<(i64, i64, Option<i64>, i64)> = sqlx::query_as(
+        "SELECT k.sales_order_line_id, k.quantity_e4, l.product_service_id, o.customer_id
+         FROM sales_order_invoiced k JOIN sales_order_lines l ON l.id = k.sales_order_line_id JOIN sales_orders o ON o.id = l.sales_order_id
+         WHERE k.invoice_id = ?1 AND k.is_reversed = 1 ORDER BY k.id",
+    )
+    .bind(old)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    if links.is_empty() {
+        return Ok(());
+    }
+    let customer: Option<i64> = sqlx::query_scalar("SELECT customer_id FROM invoices WHERE id = ?1").bind(new).fetch_one(&mut **tx).await.map_err(db_err)?;
+    // What the edited invoice sells of each item, handed out to the links in order.
+    let sold: Vec<(Option<i64>, i64)> = sqlx::query_as("SELECT product_service_id, SUM(quantity_e4) FROM invoice_items WHERE invoice_id = ?1 GROUP BY product_service_id")
+        .bind(new)
         .fetch_all(&mut **tx)
         .await
         .map_err(db_err)?;
-    for (line_id, qty) in links {
+    let mut left: HashMap<Option<i64>, i64> = sold.into_iter().collect();
+    for (line_id, qty, product, order_customer) in links {
+        let ours = match customer {
+            Some(c) => customer_of(tx, c, order_customer).await?,
+            None => false,
+        };
+        let available = left.get(&product).copied().unwrap_or(0);
+        let qty = if ours { qty.min(available) } else { 0 };
+        if qty <= 0 {
+            continue;
+        }
+        left.insert(product, available - qty);
         sqlx::query("INSERT INTO sales_order_invoiced (sales_order_line_id, invoice_id, quantity_e4) VALUES (?1, ?2, ?3)")
             .bind(line_id)
             .bind(new)

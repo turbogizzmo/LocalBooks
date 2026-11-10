@@ -64,7 +64,7 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
     setLines((ls) => ls.map((l) => (l.accountId === null ? { ...l, accountId: defaultIncome } : l)));
   }, [defaultIncome]);
 
-  const { evaluated, filled, invalidCount, payload, formLines } = summarizeLines(lines, { allowZeroRate: true });
+  const { evaluated, filled, invalidCount, payload, formLines } = summarizeLines(lines);
   const { tax: taxCents, total } = documentTotals(payload, tax.rate, 0, []);
   // The grid lines behind `payload`, in the same order, to send each kept line's id back.
   const itemLines = lines.filter((_, i) => !evaluated[i].blank && !evaluated[i].form);
@@ -72,7 +72,7 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
   const save = async () => {
     if (!customer.trim()) return setError('Enter a customer.');
     if (filled.length === 0) return setError('Add at least one line.');
-    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a quantity and a rate.`);
+    if (invalidCount > 0) return setError(`${invalidCount} line(s) need an income account, a quantity and a rate above zero.`);
     if (formLines.length > 0) return setError('Subtotals, discounts and group headings go on the invoice; a sales order holds item lines only.');
     if (expected && expected < date) return setError('The expected date is before the order date.');
     setBusy(true);
@@ -124,7 +124,7 @@ function SalesOrderForm({ accounts, order, onSaved, onCancel }) {
           </div>
         </div>
         {sales.addresses}
-        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} allowZeroRate />
+        <LineItemGrid lines={lines} setLines={setLines} accounts={accounts} products={products.data ?? []} defaultAccountId={defaultIncome} withTax={tax.enabled} customer={customer} customers={customers.data} />
         <div className="flex items-center gap-2 px-2 py-1">
           <button type="button" className="qb-btn qb-btn-secondary" onClick={() => setLines((ls) => [...ls, blankLine(defaultIncome)])}>
             Add line
@@ -346,8 +346,8 @@ export default function SalesOrders({ accounts, intent, navigate }) {
                                   },
                               {
                                 label: 'Delete',
-                                disabled: o.status !== 'OPEN',
-                                hint: o.status !== 'OPEN' ? 'Invoices were made from it; close it instead' : undefined,
+                                disabled: o.hasInvoices,
+                                hint: o.hasInvoices ? 'Invoices were made from it; close it instead' : undefined,
                                 confirm: { title: 'Delete this sales order?', body: `Sales order #${o.orderNumber} never posted, so nothing in the books changes.`, confirmLabel: 'Delete' },
                                 onSelect: () => act(() => api.deleteSalesOrder(o.id), `Sales order #${o.orderNumber} deleted.`),
                               },
