@@ -85,6 +85,7 @@ export default function RowMenu({ items, label = 'Actions' }) {
         <div
           ref={menuRef}
           role="menu"
+          aria-label={label}
           tabIndex={-1}
           className="fixed z-40 max-h-[calc(100vh-8px)] min-w-[180px] max-w-[360px] overflow-y-auto rounded-xs border border-qb-border-strong bg-white py-0.5 shadow-popover"
           style={position}
