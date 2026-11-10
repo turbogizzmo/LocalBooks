@@ -318,7 +318,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Sales tax | Sales › Sales Tax | Rates by agency, combined rates split by agency, accrual or cash basis, a filing period and reminder, the liability report and a sales tax return per agency | [guide](docs/guide/getting-started.md#sales-tax-rates-combined-rates-and-the-sales-tax-return) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
-| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, idle sign-out, recovery key, encrypted vendor tax IDs and bank details | [guide](docs/guide/users-and-passwords.md) |
 | FTC Safeguards Rule map | Help › The FTC Safeguards Rule and LocalBooks | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
 | Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
@@ -498,7 +498,9 @@ Security reports: see [SECURITY.md](SECURITY.md).
 | Linux | `~/.local/share/com.localbooks.desktop/localbooks.db` |
 
 - **Automatic and pre-restore backups** go to a `backups/` folder beside the default company file.
-  They stay on the local disk even when the company file lives elsewhere.
+  They stay on the local disk even when the company file lives elsewhere, and like the company file
+  they are not encrypted (only vendor tax IDs and bank details inside them are, once users are on).
+  Offsite copies (*Settings › File & Data Controls › Offsite backup*) are encrypted as a whole.
 - **Custom location:** *Settings › File & Data Controls › Change Company File Location…* points
   LocalBooks at another folder (recorded in `config.json` in the app config directory).
 - **Network drives and synced folders** (SMB/NFS, Dropbox, iCloud Drive, OneDrive, Google Drive)
@@ -516,8 +518,16 @@ Security reports: see [SECURITY.md](SECURITY.md).
 - **One LocalBooks at a time.** If a second launch finds LocalBooks already running, it hands over
   its `.localbooks` file (or just a request to come forward) and exits. The running app opens the
   file and brings its window forward. The handoff uses its own channel: a random loopback port and
-  a per-user secret in `instance.json`, readable by the owner only. It is separate from the
-  read-only MCP server.
+  a secret made fresh at each launch, in `instance.json`, readable by the owner only. It is
+  separate from the read-only MCP server.
+- **Saved credentials** (bank connection, SMTP password, remembered sign-ins, the offsite backup
+  key) are never in the company file. The installed app keeps them in the macOS Keychain or
+  Windows Credential Manager; on Linux and in development builds they are in owner-only files in
+  the app config directory.
+- **What leaves the computer:** only the update check (on by default; Settings › Updates) and the
+  features you set up yourself (bank downloads, SMTP email, exchange-rate lookups). Offsite backups
+  are encrypted before they are written to the folder you pick. [SECURITY.md](SECURITY.md) lists
+  each claim with the code and test behind it.
 
 ## Local AI access (MCP)
 

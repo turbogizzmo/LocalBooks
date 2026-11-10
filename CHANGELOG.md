@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Security claims you can check.** SECURITY.md now points every claim to the code and test
+  behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
+  check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
+  in a file only your account can read rather than a system keychain. **Remember me on this Mac** is
+  now **Remember me on this computer**, since it works on Windows and Linux too.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
