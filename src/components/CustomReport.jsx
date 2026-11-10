@@ -127,7 +127,7 @@ function Builder({ source, custom, navigate, onOpen }) {
     const filters = { ...settings.filters };
     for (const key of ['accountIds', 'names', 'itemIds', 'classIds', 'repIds', 'transactionTypes']) if (d[key].length) filters[key] = d[key];
     setBack({ settings, title, range: [start, end], period });
-    setSettings({ ...settings, mode: 'detail', columns: settings.columns.length ? settings.columns : DRILL_COLUMNS, groupBy: settings.groupBy, columnBy: null, filters });
+    setSettings({ ...settings, mode: 'detail', columns: settings.columns.length ? settings.columns : DRILL_COLUMNS, groupBy: settings.groupBy, columnBy: null, columnByName: null, filters });
     setTitle(`${title}: ${row.cells[0]}`);
     if (d.startDate) {
       setPeriod('custom');
@@ -619,7 +619,9 @@ function CustomizePanel({ settings, title, onTitle, update, updateFilters, onRes
             ))}
           </div>
           {select(detail ? 'Subtotal by' : 'Rows', settings.groupBy, [...(detail ? [['', 'None']] : []), ...GROUPS], (v) => update({ groupBy: v }))}
-          {!detail && select('Columns over time', settings.columnBy, [['', 'Total only'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']], (v) => update({ columnBy: v }))}
+          {!detail && select('Columns over time', settings.columnBy, [['', 'Total only'], ['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year']], (v) => update({ columnBy: v, ...(v ? { columnByName: null } : {}) }))}
+          {!detail &&
+            select('Columns by name', settings.columnByName, [['', 'None'], ['class', 'Class'], ['customer', 'Customer'], ['job', 'Customer:Job'], ['vendor', 'Vendor']], (v) => update({ columnByName: v, ...(v ? { columnBy: null } : {}) }))}
           {select('Amount', settings.sign, [['natural', 'Normal balance side'], ['debit', 'Debits minus credits'], ['credit', 'Credits minus debits']], (v) => update({ sign: v ?? 'natural' }))}
           {detail && settings.groupBy === 'account' && checkbox('Beginning balance for each account', settings.openingBalances, (v) => update({ openingBalances: v }))}
           {detail && checkbox('One row per transaction', settings.perTransaction, (v) => update({ perTransaction: v }))}

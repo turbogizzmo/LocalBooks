@@ -6,6 +6,9 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Report columns by class, customer, job or vendor.** In a customized summary report, Columns by
+  name gives a column for each class, customer, Customer:Job or vendor, with a total, for example a
+  profit and loss by job.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

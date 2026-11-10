@@ -15,7 +15,7 @@
 //! Amounts are on each account's normal side unless the settings ask for debit-minus-credit or
 //! credit-minus-debit. Money is integer cents throughout.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -158,6 +158,20 @@ impl GroupBy {
     }
 }
 
+/// Summary columns by name instead of by period (Profit & Loss by Class or by Job, for example).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NameColumns {
+    /// A column per class on the lines (sub-classes as `Parent:Child`), then Unclassified.
+    Class,
+    /// A column per customer, its jobs added in, then No customer.
+    Customer,
+    /// A column per customer and per job (`Customer:Job`), then No customer.
+    Job,
+    /// A column per vendor, then No vendor.
+    Vendor,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Period {
@@ -257,6 +271,8 @@ pub struct ReportSettings {
     pub group_by: Option<GroupBy>,
     /// Summary: a column per period, plus a total.
     pub column_by: Option<Period>,
+    /// Summary: a column per class, customer, job or vendor, plus a total (instead of periods).
+    pub column_by_name: Option<NameColumns>,
     pub sign: Sign,
     /// Detail grouped by account: start each account at its balance before the start date (income
     /// and expense accounts at their fiscal-year-to-date amount), as the General Ledger does.
@@ -901,9 +917,13 @@ pub async fn run(pool: &SqlitePool, settings: &ReportSettings, today: NaiveDate)
     // As in the General Ledger: an account shows when it has activity or a beginning balance.
     groups.retain(|_, g| !g.lines.is_empty() || g.opening.is_some_and(|o| o != 0));
 
+    let customers = match settings.column_by_name {
+        Some(NameColumns::Customer | NameColumns::Job) => customer_names(pool).await?,
+        _ => HashMap::new(),
+    };
     let (columns, rows) = match settings.mode {
         Mode::Detail => detail(settings, grouped, &groups, end),
-        Mode::Summary => summary(settings, by, &groups, &lines, end),
+        Mode::Summary => summary(settings, by, &groups, &lines, end, &customers),
     };
     Ok(CustomReport { start_date: settings.start_date, end_date: end, columns, rows, line_count: lines.len() })
 }
@@ -1070,11 +1090,54 @@ fn detail(settings: &ReportSettings, grouped: bool, groups: &BTreeMap<GroupKey, 
     (heads, rows)
 }
 
-fn summary(settings: &ReportSettings, by: GroupBy, groups: &BTreeMap<GroupKey, Group<'_>>, lines: &[Line], end: NaiveDate) -> (Vec<ColumnHead>, Vec<ReportRow>) {
+/// Each customer's full name (`Customer:Job`, as a job's name is stored) and the name of the
+/// customer at the top of its tree.
+async fn customer_names(pool: &SqlitePool) -> Result<HashMap<i64, (String, String)>, String> {
+    let rows: Vec<(i64, String, String)> = sqlx::query_as(
+        "WITH RECURSIVE top(id, name) AS (
+            SELECT id, name FROM customers WHERE parent_id IS NULL
+            UNION ALL SELECT c.id, top.name FROM customers c JOIN top ON c.parent_id = top.id)
+         SELECT c.id, c.name, top.name FROM customers c JOIN top ON top.id = c.id",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    Ok(rows.into_iter().map(|(id, full, top)| (id, (full, top))).collect())
+}
+
+/// The column a line's amount goes in when the columns are by name: (sort key, heading). Lines
+/// without one sort last.
+fn name_column(by: NameColumns, l: &Line, customers: &HashMap<i64, (String, String)>) -> ((bool, String), String) {
+    let named = |name: Option<String>, none: &str| match name {
+        Some(n) => ((false, n.to_lowercase()), n),
+        None => ((true, String::new()), none.to_string()),
+    };
+    let customer = || l.party_id.filter(|_| l.party_kind.as_deref() == Some("customer")).and_then(|id| customers.get(&id));
+    match by {
+        NameColumns::Class => named(l.class_name.clone(), "Unclassified"),
+        NameColumns::Customer => named(customer().map(|c| c.1.clone()), "No customer"),
+        NameColumns::Job => named(customer().map(|c| c.0.clone()), "No customer"),
+        NameColumns::Vendor => named(l.name.clone().filter(|_| l.party_kind.as_deref() == Some("vendor")), "No vendor"),
+    }
+}
+
+fn summary(
+    settings: &ReportSettings,
+    by: GroupBy,
+    groups: &BTreeMap<GroupKey, Group<'_>>,
+    lines: &[Line],
+    end: NaiveDate,
+    customers: &HashMap<i64, (String, String)>,
+) -> (Vec<ColumnHead>, Vec<ReportRow>) {
     let amount = |l: &Line| if settings.per_transaction { l.entry_total_cents } else { l.amount(settings.sign) };
     let mut heads = vec![ColumnHead { label: by.label().into(), kind: ColumnKind::Text }];
+    // Columns by name: every name the lines carry, in name order, those without one last.
+    let names: Vec<((bool, String), String)> = match settings.column_by_name {
+        Some(n) => lines.iter().map(|l| name_column(n, l, customers)).collect::<BTreeMap<_, _>>().into_iter().collect(),
+        None => Vec::new(),
+    };
     // Periods from the start date (or the first line) to the end date.
-    let periods: Vec<(i64, String)> = match settings.column_by {
+    let periods: Vec<(i64, String)> = match settings.column_by.filter(|_| settings.column_by_name.is_none()) {
         Some(period) => {
             let mut out: Vec<(i64, String)> = Vec::new();
             let first = settings.start_date.or_else(|| lines.iter().map(|l| l.date).min()).unwrap_or(end);
@@ -1087,22 +1150,29 @@ fn summary(settings: &ReportSettings, by: GroupBy, groups: &BTreeMap<GroupKey, G
         }
         None => Vec::new(),
     };
-    let show_qty = settings.show_qty && settings.column_by.is_none();
+    let show_qty = settings.show_qty && settings.column_by.is_none() && settings.column_by_name.is_none();
     if show_qty {
         heads.push(ColumnHead { label: "Qty".into(), kind: ColumnKind::Quantity });
     }
     heads.extend(periods.iter().map(|(_, label)| ColumnHead { label: label.clone(), kind: ColumnKind::Money }));
-    heads.push(ColumnHead { label: if periods.is_empty() { "Amount".into() } else { "Total".into() }, kind: ColumnKind::Money });
+    heads.extend(names.iter().map(|(_, label)| ColumnHead { label: label.clone(), kind: ColumnKind::Money }));
+    let split = periods.len() + names.len();
+    heads.push(ColumnHead { label: if split == 0 { "Amount".into() } else { "Total".into() }, kind: ColumnKind::Money });
 
     let mut rows = Vec::new();
-    let mut totals = vec![0i64; periods.len() + 1];
+    let mut totals = vec![0i64; split + 1];
     let mut total_qty = 0;
     for group in groups.values() {
-        let mut amounts = vec![0i64; periods.len() + 1];
+        let mut amounts = vec![0i64; split + 1];
         let mut qty = 0;
         for l in &group.lines {
             let a = amount(l);
-            if let Some(period) = settings.column_by {
+            if let Some(n) = settings.column_by_name {
+                let key = name_column(n, l, customers).0;
+                if let Some(i) = names.iter().position(|(k, _)| *k == key) {
+                    amounts[i] += a;
+                }
+            } else if let Some(period) = settings.column_by {
                 let rank = period_key(l.date, period).0;
                 if let Some(i) = periods.iter().position(|(r, _)| *r == rank) {
                     amounts[i] += a;
