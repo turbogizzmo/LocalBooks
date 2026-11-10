@@ -68,8 +68,16 @@ async fn turning_encryption_on_and_off() {
     assert!(header::is_encrypted(&path) && db.is_encrypted().await && !db.is_locked().await);
     assert!(!contains(&std::fs::read(&path).unwrap(), MARKER.as_bytes()), "no plaintext in the company file");
     assert_eq!(company_name(&db).await, MARKER, "the books are all there");
-    let plain: Vec<_> = unencrypted_backups(db.backups_dir()).unwrap().into_iter().map(|b| b.path).collect();
-    assert_eq!(plain, vec![plain_backup.path.clone()], "the backup made before is listed as plain; the swap's own safety copy is gone");
+    // Another company's plain backup in the same backups folder is not this company's to delete.
+    let other_dir = scratch("on-off-other");
+    let other_path = other_dir.join("other.db");
+    let other_pool = crate::db::open(&other_path).await.unwrap();
+    users::turn_on(&other_pool, "zed", None, "zed password 1").await.unwrap();
+    crate::backup::snapshot(&other_pool, &other_path, &db.backups_dir().join("auto-other-company.db")).await.unwrap();
+    crate::db::close_pool(&other_pool).await;
+    let plain: Vec<_> = unencrypted_backups(&db).await.unwrap().into_iter().map(|b| b.path).collect();
+    assert_eq!(plain, vec![plain_backup.path.clone()], "only this company's backup made before is listed; the swap's own safety copy is gone");
+    let _ = std::fs::remove_dir_all(&other_dir);
 
     // Everyone gets back in: Ann with her password, Bob with his temporary one, and the new recovery key.
     db.relock().await;
@@ -186,5 +194,22 @@ async fn attachments_checkup_and_diagnostics_on_an_encrypted_file() {
     assert_eq!(crate::workflows::attachment_content(&db.pool().await, attachment.id).await.unwrap().1, RECEIPT, "the attachment opens as before");
     crate::file_repair::checkup_live(&db).await.unwrap();
     crate::diagnostics::bundle(Some(&db.pool().await), Some(&path), None, "test").await.unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Moving an encrypted company to another folder keeps it open and usable: its copy there opens
+/// with the same key, and backups of it still work afterwards.
+#[tokio::test]
+async fn a_moved_encrypted_company_keeps_working() {
+    let dir = scratch("moved");
+    let (db, ann) = plain_company(&dir, |pool| async { pool }).await;
+    let bob = bob_id(&db).await;
+    encrypt(&db, &ann, turn_on("ann password 1", bob)).await.unwrap();
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    db.relocate(&elsewhere, crate::db::RelocateMode::MoveCurrent).await.unwrap();
+    assert!(db.is_encrypted().await && !db.is_locked().await, "the moved copy opens with the same key");
+    assert!(header::is_encrypted(&db.path().await.unwrap()));
+    crate::backup::backup_now(&db).await.expect("and its key is still known, so it backs up");
     let _ = std::fs::remove_dir_all(&dir);
 }

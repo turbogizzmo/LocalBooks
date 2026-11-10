@@ -303,6 +303,10 @@ fn kind_of(file_name: &str) -> &'static str {
         "PRE_REBUILD"
     } else if file_name.starts_with("pre-condense-") {
         "PRE_CONDENSE"
+    } else if file_name.starts_with("pre-encryption-") {
+        "PRE_ENCRYPTION"
+    } else if file_name.starts_with("pre-decryption-") {
+        "PRE_DECRYPTION"
     } else if file_name.starts_with("archive-") {
         "ARCHIVE"
     } else {

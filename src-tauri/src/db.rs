@@ -277,7 +277,11 @@ impl Db {
             let mut live = self.live.write().await;
             if let Some(current) = live.take() {
                 close_pool(&current.pool).await;
-                forget_key(&current);
+                // A copy of the same company (moved, or a backup opened) still uses its key.
+                let same = current.cipher.as_ref().zip(next.cipher.as_ref()).is_some_and(|(a, b)| a.file_id == b.file_id);
+                if !same {
+                    forget_key(&current);
+                }
             }
             *live = Some(next);
         }
@@ -457,6 +461,11 @@ impl Db {
         let live = self.live.read().await;
         let live = live.as_ref().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
         Ok((live.pool.clone(), live.session.clone()))
+    }
+
+    /// Whether the open company file is in a shared location (network or synced folder).
+    pub async fn is_shared(&self) -> bool {
+        self.live.read().await.as_ref().is_some_and(|live| live.storage.is_shared())
     }
 
     /// Whether the open company file is encrypted (gap R1).

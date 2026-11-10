@@ -55,7 +55,7 @@ pub async fn list_unencrypted_backups(db: State<'_, Db>) -> Result<Vec<crate::ba
     if !db.is_encrypted().await {
         return Ok(Vec::new());
     }
-    whole_file::unencrypted_backups(db.backups_dir())
+    whole_file::unencrypted_backups(&db).await
 }
 
 /// Deletes the backups made before encryption (they hold the books in plain). How many went.
@@ -65,7 +65,7 @@ pub async fn delete_unencrypted_backups(db: State<'_, Db>) -> Result<usize, Stri
         return Err("DECRYPT_NOT_ON: this company file isn't encrypted".into());
     }
     let mut deleted = 0;
-    for backup in whole_file::unencrypted_backups(db.backups_dir())? {
+    for backup in whole_file::unencrypted_backups(&db).await? {
         if std::fs::remove_file(&backup.path).is_ok() {
             deleted += 1;
         }

@@ -47,6 +47,16 @@ pub struct TemporaryPassword {
     pub password: String,
 }
 
+/// The swap refused because the books changed while the copy was made (someone saved in another
+/// window): said in terms of encryption rather than Condense's.
+fn changed_while_copying(e: String) -> String {
+    if e.starts_with("CONDENSE_BOOKS_CHANGED") {
+        "BOOKS_CHANGED: the books changed while the copy was being made, so nothing was changed; try again when nobody is entering anything".into()
+    } else {
+        e
+    }
+}
+
 fn stamp() -> String {
     chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
@@ -100,6 +110,10 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
     if db.is_encrypted().await {
         return Err("ENCRYPT_ALREADY_ON: this company file is already encrypted".into());
     }
+    if db.is_shared().await {
+        // There LocalBooks holds the file exclusively, so it can't read it a second time to copy it.
+        return Err("ENCRYPT_SHARED: move the company file to this computer first (Settings › File & Data Controls › Change Company File Location), encrypt it, then move it back".into());
+    }
     let (pool, _) = db.pool_and_session().await?;
     // The Admin's password, checked like a sign-in: it is what will open the file.
     let fresh = users::sign_in(&pool, &admin.user.username, &input.password).await.map_err(|_| "ENCRYPT_WRONG_PASSWORD: that is not your password".to_string())?;
@@ -117,6 +131,7 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
     remove_with_sidecars(&staged);
     let key = Arc::new(keys::PageKey::generate()?);
     let file_id = keys::new_file_id()?;
+    let digest;
     let recovery = {
         // A recovery key for the new file: replaced in the copy (below), shown once by the caller.
         let mut slots = vec![keys::password_slot(&key, &file_id, admin.user.id, &admin.user.username, &input.password).await?];
@@ -126,6 +141,8 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
         }
         let header = Header { file_id: file_id.clone(), page_size: 4096, slots };
         let _ = sqlx::query("PRAGMA wal_checkpoint(PASSIVE)").execute(&pool).await;
+        // What the books held when they were copied: the swap only happens if nothing changed since.
+        digest = crate::condense::content_digest(&pool).await?;
         encrypt_into(&live_path, &staged, &key, &header).await?;
 
         let prepared = async {
@@ -172,7 +189,7 @@ pub async fn encrypt(db: &Db, admin: &Session, input: EncryptInput) -> Result<(S
     let fallback = db.backups_dir().join(format!("pre-encryption-{}.db", stamp()));
     crate::backup::snapshot(&pool, &live_path, &fallback).await?;
     keyring::register(&file_id, key.clone());
-    let swapped = db.swap_in(&staged, &fallback).await;
+    let swapped = db.swap_in_unchanged(&staged, &fallback, &digest).await.map_err(changed_while_copying);
     if let Err(e) = swapped {
         keyring::forget(&file_id);
         remove_with_sidecars(&staged);
@@ -196,6 +213,7 @@ pub async fn decrypt(db: &Db, admin: &Session, password: &str) -> Result<Session
     let live_path = db.path().await?;
     let staged = beside(&live_path, "decrypting");
     remove_with_sidecars(&staged);
+    let digest = crate::condense::content_digest(&pool).await?;
     let exported = async {
         // On the live connection, which has the key: the attached file is plain (an empty key).
         let mut conn = pool.acquire().await.map_err(|e| e.to_string())?.detach();
@@ -221,14 +239,38 @@ pub async fn decrypt(db: &Db, admin: &Session, password: &str) -> Result<Session
     // The fallback is a copy of the encrypted books, so it stays encrypted; kept like any backup.
     let fallback = db.backups_dir().join(format!("pre-decryption-{}.db", stamp()));
     crate::backup::snapshot(&pool, &live_path, &fallback).await?;
-    db.swap_in(&staged, &fallback).await.map_err(|e| format!("DECRYPT_FAILED: {e}"))?;
+    if let Err(e) = db.swap_in_unchanged(&staged, &fallback, &digest).await.map_err(changed_while_copying) {
+        remove_with_sidecars(&staged);
+        return Err(format!("DECRYPT_FAILED: {e}"));
+    }
     let (pool, _) = db.pool_and_session().await?;
     users::sign_in(&pool, &admin.user.username, password).await
 }
 
-/// Backups in the backups folder that are not encrypted (made before encryption was turned on).
-pub fn unencrypted_backups(db_backups: &Path) -> Result<Vec<crate::backup::BackupFile>, String> {
-    Ok(crate::backup::list_backups(db_backups)?.into_iter().filter(|b| !super::header::is_encrypted(Path::new(&b.path))).collect())
+/// This company's backups in the backups folder that are not encrypted (made before encryption was
+/// turned on). The folder is shared by every company file on this computer, so a plain backup counts
+/// as this company's only if it has the same data key (the key users and tax IDs were set up with,
+/// kept when the file is encrypted); other companies' backups, and backups made before users were
+/// turned on, are left alone.
+pub async fn unencrypted_backups(db: &Db) -> Result<Vec<crate::backup::BackupFile>, String> {
+    let (pool, _) = db.pool_and_session().await?;
+    let mine: Option<String> = sqlx::query_scalar("SELECT key_id FROM data_key WHERE id = 1").fetch_optional(&pool).await.map_err(|e| e.to_string())?;
+    let Some(mine) = mine else { return Ok(Vec::new()) };
+    let mut found = Vec::new();
+    for backup in crate::backup::list_backups(db.backups_dir())? {
+        let path = Path::new(&backup.path);
+        if super::header::is_encrypted(path) {
+            continue;
+        }
+        let options = sqlx::sqlite::SqliteConnectOptions::new().filename(path).read_only(true);
+        let Ok(mut conn) = options.connect().await else { continue };
+        let theirs: Option<String> = sqlx::query_scalar("SELECT key_id FROM data_key WHERE id = 1").fetch_optional(&mut conn).await.ok().flatten();
+        let _ = conn.close().await;
+        if theirs.as_deref() == Some(mine.as_str()) {
+            found.push(backup);
+        }
+    }
+    Ok(found)
 }
 
 #[cfg(test)]
