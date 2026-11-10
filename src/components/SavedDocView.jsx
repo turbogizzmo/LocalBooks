@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
+import FormToolbar, { duplicateButton, fileButtons, navButtons } from './FormToolbar.jsx';
 import Attachments from './Attachments.jsx';
 import Notice from './Notice.jsx';
 import { FormSheet, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
@@ -100,10 +100,11 @@ export function VoucherPreview({ doc }) {
  *   record     { kind, id } for Attach File on a document with no journal entry (estimates and
  *              purchase orders: 'ESTIMATE', 'PURCHASE_ORDER')
  *   void       { onVoid, disabled, hint, confirm }, when it can be voided here
+ *   onDuplicate  starts a new one copied from it, dated today (Duplicate, Ctrl+O)
  *   notes      lines shown above it (status, what is left to apply)
  *   extra      more toolbar groups
  */
-export default function SavedDocView({ label, title, step, onFind, onNew, form, voucher, onPrint, entryId, record = null, void: voiding, notes = [], extra = [], children, onNotice }) {
+export default function SavedDocView({ label, title, step, onFind, onNew, onDuplicate, form, voucher, onPrint, entryId, record = null, void: voiding, notes = [], extra = [], children, onNotice }) {
   const [notice, setNotice] = useState(null);
   const say = onNotice ?? setNotice;
   const [printPortal, forms] = useFormPrinter(say);
@@ -153,6 +154,7 @@ export default function SavedDocView({ label, title, step, onFind, onNew, form, 
       voidHint: voiding?.hint,
       voidConfirm: voiding?.confirm,
     }),
+    onDuplicate ? [duplicateButton({ onDuplicate, saved: true, busy, what: label.toLowerCase() })] : [],
     [
       printItem,
       emailItem,
