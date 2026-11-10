@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Marker, useFigureComments } from './ReportComments.jsx';
+import { reportSnapshot } from '../lib/reportComments.js';
 import Notice from './Notice.jsx';
 import { DocHeader, PrintPortal, useCompany } from './PrintDocuments.jsx';
 import { ExportMenu, PERIODS, longDate, plainAmount, resolvePeriod, saveText, saveXlsx, toCsv } from './ReportParts.jsx';
@@ -372,7 +374,9 @@ export function ReportTable({ company, title, subtitle, report, onRow, pageBreak
     kind === 'section' ? 'font-semibold bg-qb-canvas' : kind === 'subtotal' ? 'font-semibold border-t border-qb-ink' : kind === 'total' ? 'font-semibold border-t-2 border-double border-qb-ink' : '';
   const clickable = (r) => Boolean(r.journalEntryId || r.drill || r.estimateId || (r.kind === 'section' && r.accountId));
   const hint = (r) => (r.journalEntryId ? 'Open this transaction' : r.drill ? 'Show these transactions' : r.estimateId ? 'Open Estimates' : r.accountId ? 'Open the register for this account' : undefined);
-  const cells = (r, cellClass, i = null) =>
+  const comments = useFigureComments({ title, subtitle, snapshot: () => reportSnapshot(report) });
+  // `i`: the row's index on screen (null in print); `ri`: its index in the report, for comments.
+  const cells = (r, cellClass, i = null, ri = i) =>
     r.kind === 'section' ? (
       <td colSpan={columns.length} className={cellClass(0)} style={r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}>
         {i !== null && (
@@ -393,11 +397,22 @@ export function ReportTable({ company, title, subtitle, report, onRow, pageBreak
         {r.cells[0]}
       </td>
     ) : (
-      r.cells.map((v, c) => (
-        <td key={c} className={cellClass(c)} style={c === 0 && r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}>
-          {screenCell(columns[c].kind, v)}
-        </td>
-      ))
+      r.cells.map((v, c) => {
+        // Figures (not the first column) can be commented on; a commented one shows its number.
+        const figure = c > 0 && ri !== null ? comments.cell(ri, c, screenCell(columns[c].kind, v)) : { marker: null, props: {} };
+        const live = i !== null && figure.props['data-commentable'];
+        return (
+          <td
+            key={c}
+            {...(i !== null ? figure.props : {})}
+            className={`${cellClass(c)} ${live ? 'cursor-cell outline-dashed outline-1 outline-qb-border hover:bg-qb-row-hover' : ''}`}
+            style={c === 0 && r.depth ? { paddingLeft: `${6 + r.depth * 12}px` } : undefined}
+          >
+            {screenCell(columns[c].kind, v)}
+            {figure.marker && (i !== null ? <Marker n={figure.marker} /> : <sup>[{figure.marker}]</sup>)}
+          </td>
+        );
+      })
     );
   return (
     <>
@@ -415,7 +430,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, pageBreak
             <tbody>
               {shown.map(([i, r]) => (
                 <tr key={i} className={r.kind === 'section' ? 'doc-line-section' : r.kind === 'detail' ? '' : 'doc-line-total'}>
-                  {cells(r, (c) => (RIGHT.has(columns[c].kind) ? 'doc-num' : ''))}
+                  {cells(r, (c) => (RIGHT.has(columns[c].kind) ? 'doc-num' : ''), null, i)}
                 </tr>
               ))}
             </tbody>
@@ -429,6 +444,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, pageBreak
             <h2 className="text-xl font-semibold">{title}</h2>
             <div className="text-sm text-qb-ink-muted">{subtitle}</div>
           </div>
+          <div className="no-print flex gap-1">{comments.toggle}</div>
           {headings.length > 0 && (
             <div className="no-print flex gap-1">
               <button type="button" className="qb-btn qb-btn-secondary h-row text-xs" onClick={() => setCollapsed(new Set(headings))} disabled={collapsed.size === headings.length}>
@@ -440,6 +456,7 @@ export function ReportTable({ company, title, subtitle, report, onRow, pageBreak
             </div>
           )}
         </header>
+        {comments.editor}
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-qb-border-strong">
