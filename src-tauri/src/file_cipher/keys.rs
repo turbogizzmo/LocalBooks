@@ -138,7 +138,9 @@ pub async fn unlock_with_password(header: &Header, username: &str, password: &st
         }
     }
     if !tried {
-        let _ = crypto::derive_backup_key(password, [0; SALT_LEN], KdfCost::for_new_keys()).await;
+        // Same Argon2id work for an unknown name; the result is thrown away. A random salt, so no
+        // fixed salt appears anywhere in the code.
+        let _ = crypto::derive_backup_key(password, crypto::random::<SALT_LEN>()?, KdfCost::for_new_keys()).await;
     }
     Ok(None)
 }
