@@ -9,6 +9,8 @@ people using LocalBooks.
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.
+- **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
+  job, and the bill entered for the received items carries it, ready to bill to the customer.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

@@ -223,7 +223,7 @@ pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<Bil
 
 /// Whether a line is billable: only with a customer or job, and by the company default when the
 /// form didn't say.
-async fn is_billable(tx: &mut Transaction<'_, Sqlite>, billable: Option<bool>, customer_id: Option<i64>) -> Result<bool, String> {
+pub(crate) async fn is_billable(tx: &mut Transaction<'_, Sqlite>, billable: Option<bool>, customer_id: Option<i64>) -> Result<bool, String> {
     if customer_id.is_none() {
         return Ok(false);
     }

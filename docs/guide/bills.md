@@ -104,6 +104,9 @@ in Items Received Not Billed and puts the bill's total in Accounts Payable. When
 different price, the difference goes to the line's expense account, or for stock to Inventory Asset
 for the units still on hand and to Cost of Goods Sold for any already sold.
 
+A purchase order line's **Customer:Job** shows on the receipt and carries to the bill line, which is
+billable when Preferences › Time & Expenses marks expenses billable, as on a bill entered by hand.
+
 To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
 voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
 receipt isn't edited like other bills: void it and enter it again from the receipt.

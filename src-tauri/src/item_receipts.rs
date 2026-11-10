@@ -98,6 +98,9 @@ pub struct ReceiptLineView {
     pub rate_cents: Option<i64>,
     pub amount_cents: i64,
     pub class_id: Option<i64>,
+    /// The customer or job its purchase order line is for; it carries to the bill.
+    pub customer_id: Option<i64>,
+    pub customer_name: Option<String>,
 }
 
 /// A purchase order line with what live receipts have received of it.
@@ -114,6 +117,8 @@ pub struct OrderLineReceiving {
     pub rate_cents: Option<i64>,
     pub amount_cents: i64,
     pub class_id: Option<i64>,
+    pub customer_id: Option<i64>,
+    pub customer_name: Option<String>,
     pub received_quantity_e4: i64,
     pub received_amount_cents: i64,
 }
@@ -386,8 +391,9 @@ pub async fn list_receipts(pool: &SqlitePool, open_only: bool) -> Result<Vec<Rec
 pub async fn receipt_lines(pool: &SqlitePool, id: i64) -> Result<Vec<ReceiptLineView>, String> {
     sqlx::query_as(
         "SELECT l.id, l.line_number, l.purchase_order_line_id, l.account_id, l.product_service_id, p.name AS product_name, l.description,
-                l.quantity_e4, l.rate_cents, l.amount_cents, l.class_id
+                l.quantity_e4, l.rate_cents, l.amount_cents, l.class_id, o.customer_id, c.name AS customer_name
          FROM item_receipt_lines l LEFT JOIN products_services p ON p.id = l.product_service_id
+         LEFT JOIN purchase_order_lines o ON o.id = l.purchase_order_line_id LEFT JOIN customers c ON c.id = o.customer_id
          WHERE l.item_receipt_id = ?1 ORDER BY l.line_number",
     )
     .bind(id)
@@ -400,8 +406,9 @@ pub async fn receipt_lines(pool: &SqlitePool, id: i64) -> Result<Vec<ReceiptLine
 pub async fn order_receiving(pool: &SqlitePool, purchase_order_id: i64) -> Result<Vec<OrderLineReceiving>, String> {
     sqlx::query_as(&format!(
         "SELECT p.id, p.line_number, p.account_id, p.product_service_id, ps.name AS product_name, p.description, p.quantity_e4, p.rate_cents, p.amount_cents,
-                p.class_id, COALESCE(r.qty, 0) AS received_quantity_e4, COALESCE(r.amount, 0) AS received_amount_cents
+                p.class_id, p.customer_id, c.name AS customer_name, COALESCE(r.qty, 0) AS received_quantity_e4, COALESCE(r.amount, 0) AS received_amount_cents
          FROM purchase_order_lines p LEFT JOIN products_services ps ON ps.id = p.product_service_id
+         LEFT JOIN customers c ON c.id = p.customer_id
          LEFT JOIN ({RECEIVED_BY_LINE}) r ON r.po_line_id = p.id
          WHERE p.purchase_order_id = ?1 ORDER BY p.line_number"
     ))
@@ -489,10 +496,12 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
     if let Some(terms) = input.terms_id {
         crate::profile_lists::check_terms(&mut **tx, terms, None, "BILL").await?;
     }
-    type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>);
+    // A line's customer or job is its purchase order line's (an order with receipts can't be edited).
+    type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>, Option<i64>);
     let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT id, line_number, account_id, product_service_id, description, quantity_e4, amount_cents, class_id
-         FROM item_receipt_lines WHERE item_receipt_id = ?1 ORDER BY line_number",
+        "SELECT l.id, l.line_number, l.account_id, l.product_service_id, l.description, l.quantity_e4, l.amount_cents, l.class_id, o.customer_id
+         FROM item_receipt_lines l LEFT JOIN purchase_order_lines o ON o.id = l.purchase_order_line_id
+         WHERE l.item_receipt_id = ?1 ORDER BY l.line_number",
     )
     .bind(input.item_receipt_id)
     .fetch_all(&mut **tx)
@@ -504,13 +513,13 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
 
     let mut total: i64 = 0;
     let mut billed_lines = Vec::with_capacity(lines.len());
-    for (id, n, account, product, description, quantity, received, class) in &lines {
+    for (id, n, account, product, description, quantity, received, class, customer) in &lines {
         let amount = input.lines.iter().find(|b| b.receipt_line_id == *id).map(|b| b.amount_cents).unwrap_or(*received);
         if !(1..=MAX_LINE_CENTS).contains(&amount) {
             return Err(format!("RECEIPT_BAD_AMOUNT: line {n} needs an amount above zero"));
         }
         total = total.checked_add(amount).filter(|t| *t <= MAX_LINE_CENTS).ok_or("RECEIPT_TOO_LARGE: the bill is too large")?;
-        billed_lines.push((*n, *account, *product, description.clone(), *quantity, *received, amount, *class));
+        billed_lines.push((*n, *account, *product, description.clone(), *quantity, *received, amount, *class, *customer));
     }
 
     let bill_id: i64 = sqlx::query_scalar(
@@ -536,16 +545,18 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
         .ok_or("COA_SYSTEM_ACCOUNT_MISSING: no system Accounts Payable account")?;
     let mut journal = vec![JournalLine::debit(clearing, receipt_total)];
     let mut differences = Vec::new();
-    for (n, account, product, description, quantity, received, amount, class) in &billed_lines {
+    for (n, account, product, description, quantity, received, amount, class, customer) in &billed_lines {
         // The bill line keeps quantity × rate only when the billed amount still equals it.
         let rate = quantity.and_then(|q| mul_div_round(*amount, QUANTITY_SCALE, q)).filter(|r| *r > 0);
         let priced = match (quantity, rate) {
             (Some(q), Some(r)) if mul_div_round(*q, r, QUANTITY_SCALE) == Some(*amount) => Some((*q, r)),
             _ => None,
         };
+        // Billable by the company's preference, as on a bill entered by hand.
+        let billable = crate::expenses::is_billable(tx, None, *customer).await?;
         sqlx::query(
             "INSERT INTO bill_lines (bill_id, line_number, memo, account_id, amount_cents, quantity_e4, rate_cents, product_service_id, class_id, customer_id, is_billable)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, 0)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(bill_id)
         .bind(n)
@@ -556,6 +567,8 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
         .bind(priced.map(|p| p.1))
         .bind(product)
         .bind(class)
+        .bind(customer)
+        .bind(billable)
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;

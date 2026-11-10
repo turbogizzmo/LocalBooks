@@ -169,6 +169,7 @@ function ReceiveForm({ onSaved, onError }) {
   const chosen = planned.filter((p) => !p.skip && !p.error);
   const total = chosen.reduce((s, p) => s + p.amount, 0);
   const invalid = planned.some((p) => p.error);
+  const withJobs = lines.some((l) => l.customerName);
 
   const save = async () => {
     if (!order || chosen.length === 0 || invalid) return;
@@ -236,11 +237,13 @@ function ReceiveForm({ onSaved, onError }) {
         </button>
       </div>
       {order && (
+        // The job each line is for comes from the purchase order and carries to the bill.
         <table className="qb-grid">
           <thead>
             <tr>
               <th className="qb-grid-head">Item</th>
               <th className="qb-grid-head">Description</th>
+              {withJobs && <th className="qb-grid-head">Customer:Job</th>}
               <th className="qb-grid-head text-right">Ordered</th>
               <th className="qb-grid-head text-right">Received</th>
               <th className="qb-grid-head text-right">Receive now</th>
@@ -255,6 +258,7 @@ function ReceiveForm({ onSaved, onError }) {
                 <tr key={l.id} className="qb-grid-row">
                   <td className="qb-grid-cell">{l.productName ?? ''}</td>
                   <td className="qb-grid-cell">{l.description ?? ''}</td>
+                  {withJobs && <td className="qb-grid-cell">{l.customerName ?? ''}</td>}
                   <td className="qb-grid-cell num">{byQty ? formatQuantity(l.quantityE4) : formatCents(l.amountCents)}</td>
                   <td className="qb-grid-cell num">{byQty ? formatQuantity(l.receivedQuantityE4) : formatCents(l.receivedAmountCents)}</td>
                   <td className="qb-grid-cell num">
@@ -301,6 +305,7 @@ function BillForm({ receipt, onCancel, onSaved }) {
 
   const parsed = (lines ?? []).map((l) => ({ line: l, cents: parseMoneyToCents(amounts[l.id] ?? '') }));
   const invalid = parsed.some((p) => p.cents === null || p.cents <= 0);
+  const billJobs = parsed.some((p) => p.line.customerName);
   const total = invalid ? null : parsed.reduce((s, p) => s + p.cents, 0);
   const difference = total === null ? null : total - receipt.totalCents;
 
@@ -366,6 +371,7 @@ function BillForm({ receipt, onCancel, onSaved }) {
             <tr>
               <th className="qb-grid-head">Item</th>
               <th className="qb-grid-head">Description</th>
+              {billJobs && <th className="qb-grid-head">Customer:Job</th>}
               <th className="qb-grid-head text-right">Qty</th>
               <th className="qb-grid-head text-right">Received at</th>
               <th className="qb-grid-head text-right">Billed amount</th>
@@ -376,6 +382,7 @@ function BillForm({ receipt, onCancel, onSaved }) {
               <tr key={l.id} className="qb-grid-row">
                 <td className="qb-grid-cell">{l.productName ?? ''}</td>
                 <td className="qb-grid-cell">{l.description}</td>
+                {billJobs && <td className="qb-grid-cell">{l.customerName ?? ''}</td>}
                 <td className="qb-grid-cell num">{l.quantityE4 !== null ? formatQuantity(l.quantityE4) : ''}</td>
                 <td className="qb-grid-cell num">{formatCents(l.amountCents)}</td>
                 <td className="qb-grid-cell num">
