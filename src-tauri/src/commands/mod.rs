@@ -112,6 +112,7 @@ features![
     party_contacts,
     payroll_import,
     offsite,
+    opening,
     preferences,
     price_levels,
     print_batches,
