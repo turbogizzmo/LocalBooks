@@ -70,7 +70,8 @@ yourself off: another Admin has to.
 After four wrong passwords for a user name, LocalBooks makes each next try wait: 30 seconds, then 1,
 2 and at most 5 minutes. It never locks anyone out for longer, so the only Admin can't be shut out by
 someone else's guessing, and other user names aren't affected. Wrong recovery keys wait the same
-way. A right password clears the count, and the wait lasts across restarts.
+way, and so does a wrong current password under **Change Password**. A right password clears the
+count, and the wait lasts across restarts.
 
 Click **I forgot my password** on the sign-in screen.
 

@@ -12,6 +12,11 @@
 //! - **Kept outside the company file**, in an owner-only file in LocalBooks' settings folder, so a
 //!   restart doesn't reset the count and the sign-in screen still writes nothing to the books. If
 //!   that file can't be written the count still works for this run; it never blocks a sign-in.
+//! - **Saved as hashes.** People sometimes type their password into the user-name box, so names
+//!   are never written in clear: each count is filed under a SHA-256 of what it counts, and at
+//!   most [`MAX_ENTRIES`] counts are kept (the oldest go first).
+//! - **Counted before the check runs**, so tries started at the same moment can't all slip past
+//!   the wait; a try that turns out right, or fails for another reason, gives its count back.
 //! - A try made while a wait is running is refused without checking the password, and doesn't add
 //!   to the count. A successful sign-in clears the user's count; counts untouched for a day expire.
 
@@ -21,6 +26,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Wrong tries allowed before any wait.
 pub const FREE_TRIES: u32 = 4;
@@ -28,8 +34,15 @@ pub const FREE_TRIES: u32 = 4;
 pub const MAX_WAIT: Duration = Duration::from_secs(5 * 60);
 /// A count with no failure for this long starts again from zero.
 const FORGET_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
-/// The count for recovery-key attempts on a file.
-pub const RECOVERY: &str = "(recovery key)";
+/// The most counts kept; enough for every user of a file many times over.
+const MAX_ENTRIES: usize = 500;
+
+/// What a count is for: a user name's sign-ins (and password checks), or the file's recovery key.
+#[derive(Debug, Clone, Copy)]
+pub enum Who<'a> {
+    User(&'a str),
+    RecoveryKey,
+}
 pub const FILE_NAME: &str = "sign-in-waits.json";
 
 /// The wait after `failures` wrong tries: none for the free tries, then 30 s, 1, 2 and 5 minutes.
@@ -68,8 +81,13 @@ impl Throttle {
         Throttle { path, counts: Mutex::new(counts) }
     }
 
-    fn key(file: &str, who: &str) -> String {
-        format!("{file}\n{}", who.trim().to_lowercase())
+    /// A hash, so neither the file's id nor a name (or a password typed as one) is saved in clear.
+    fn key(file: &str, who: Who) -> String {
+        let what = match who {
+            Who::User(name) => format!("user\n{file}\n{}", name.trim().to_lowercase()),
+            Who::RecoveryKey => format!("recovery\n{file}"),
+        };
+        Sha256::digest(what.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
     }
 
     fn save(&self, counts: &BTreeMap<String, Count>) {
@@ -84,7 +102,7 @@ impl Throttle {
     }
 
     /// Ok when `who` may try now; otherwise the error to show, naming how long to wait.
-    pub fn check(&self, file: &str, who: &str, now: SystemTime) -> Result<(), String> {
+    pub fn check(&self, file: &str, who: Who, now: SystemTime) -> Result<(), String> {
         let counts = self.counts.lock().expect("sign-in waits");
         let Some(count) = counts.get(&Self::key(file, who)) else { return Ok(()) };
         // Measured from the last failure and never more than the schedule allows, so a clock set
@@ -100,10 +118,14 @@ impl Throttle {
     }
 
     /// Records a wrong try.
-    pub fn failed(&self, file: &str, who: &str, now: SystemTime) {
+    pub fn failed(&self, file: &str, who: Who, now: SystemTime) {
         let mut counts = self.counts.lock().expect("sign-in waits");
         let now_secs = secs(now);
         counts.retain(|_, c| now_secs.saturating_sub(c.last) < FORGET_AFTER.as_secs());
+        while counts.len() >= MAX_ENTRIES {
+            let Some(oldest) = counts.iter().min_by_key(|(_, c)| c.last).map(|(k, _)| k.clone()) else { break };
+            counts.remove(&oldest);
+        }
         let count = counts.entry(Self::key(file, who)).or_default();
         count.failures = count.failures.saturating_add(1);
         count.last = now_secs;
@@ -111,29 +133,44 @@ impl Throttle {
     }
 
     /// Clears the count after a successful try.
-    pub fn succeeded(&self, file: &str, who: &str) {
+    pub fn succeeded(&self, file: &str, who: Who) {
         let mut counts = self.counts.lock().expect("sign-in waits");
         if counts.remove(&Self::key(file, who)).is_some() {
             self.save(&counts);
         }
     }
 
-    /// Runs `attempt` under the throttle: refused while a wait runs, counted when it fails with an
-    /// error `counts` accepts (a wrong password or key, not a rule about the new password), and
-    /// clearing the count when it succeeds.
-    pub async fn attempt<T, F>(&self, file: &str, who: &str, counts: impl Fn(&str) -> bool, attempt: F) -> Result<T, String>
+    /// Gives back a count taken by [`Self::failed`] for a try that turned out not to be a guess.
+    fn give_back(&self, file: &str, who: Who) {
+        let mut counts = self.counts.lock().expect("sign-in waits");
+        let key = Self::key(file, who);
+        if let Some(count) = counts.get_mut(&key) {
+            count.failures = count.failures.saturating_sub(1);
+            if count.failures == 0 {
+                counts.remove(&key);
+            }
+            self.save(&counts);
+        }
+    }
+
+    /// Runs `attempt` under the throttle: refused while a wait runs; counted as a failure before it
+    /// runs, so simultaneous tries can't all pass the check; cleared when it succeeds; and given
+    /// back when it fails with an error `counts` doesn't accept (a rule about the new password, not
+    /// a wrong password or key).
+    pub async fn attempt<T, F>(&self, file: &str, who: Who<'_>, counts: impl Fn(&str) -> bool, attempt: F) -> Result<T, String>
     where
         F: std::future::Future<Output = Result<T, String>>,
     {
         self.check(file, who, SystemTime::now())?;
+        self.failed(file, who, SystemTime::now());
         match attempt.await {
             Ok(value) => {
                 self.succeeded(file, who);
                 Ok(value)
             }
             Err(e) => {
-                if counts(&e) {
-                    self.failed(file, who, SystemTime::now());
+                if !counts(&e) {
+                    self.give_back(file, who);
                 }
                 Err(e)
             }

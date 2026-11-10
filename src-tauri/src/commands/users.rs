@@ -175,7 +175,7 @@ pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Op
 pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String, remember: bool) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
     let file = throttle_file(&pool).await;
-    let session = throttle(&app).attempt(&file, &username, |e| e.starts_with("SIGN_IN_FAILED"), users::sign_in(&pool, &username, &password)).await?;
+    let session = throttle(&app).attempt(&file, crate::sign_in_throttle::Who::User(&username), |e| e.starts_with("SIGN_IN_FAILED"), users::sign_in(&pool, &username, &password)).await?;
     if let Some(id) = file_key_id(&pool).await? {
         let store = remembered_sign_ins(&app)?;
         if remember {
@@ -229,12 +229,18 @@ pub async fn update_user(db: State<'_, Db>, id: i64, input: UserUpdate) -> Resul
 }
 
 #[tauri::command]
-pub async fn change_my_password(db: State<'_, Db>, current: String, next: String) -> Result<UserView, String> {
+pub async fn change_my_password(app: AppHandle, db: State<'_, Db>, current: String, next: String) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
+    let file = throttle_file(&pool).await;
     let user = {
         let mut guard = slot.lock().await;
         let session = guard.as_mut().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
-        users::change_own_password(&pool, session, &current, &next).await?
+        // The current password is checked with the same wait as sign-in, so an unattended session
+        // can't be used to guess it.
+        let name = session.user.username.clone();
+        throttle(&app)
+            .attempt(&file, crate::sign_in_throttle::Who::User(&name), |e| e.starts_with("PASSWORD_WRONG"), users::change_own_password(&pool, session, &current, &next))
+            .await?
     };
     // A temporary password no longer holds the user at the sign-in screen.
     db.refresh_gate().await;
@@ -248,7 +254,7 @@ pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recove
     let file = throttle_file(&pool).await;
     // Only a wrong key counts: not a typo in its format, nor a right key with another user's name.
     let session = throttle(&app)
-        .attempt(&file, crate::sign_in_throttle::RECOVERY, |e| e.starts_with("KEY_WRONG_RECOVERY"), users::recover(&pool, &recovery_key, &username, &new_password))
+        .attempt(&file, crate::sign_in_throttle::Who::RecoveryKey, |e| e.starts_with("KEY_WRONG_RECOVERY"), users::recover(&pool, &recovery_key, &username, &new_password))
         .await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
