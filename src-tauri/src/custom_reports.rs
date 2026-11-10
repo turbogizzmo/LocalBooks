@@ -1150,6 +1150,8 @@ fn summary(
         }
         None => Vec::new(),
     };
+    // Each name column's position, looked up once per line.
+    let name_index: HashMap<&(bool, String), usize> = names.iter().enumerate().map(|(i, (key, _))| (key, i)).collect();
     let show_qty = settings.show_qty && settings.column_by.is_none() && settings.column_by_name.is_none();
     if show_qty {
         heads.push(ColumnHead { label: "Qty".into(), kind: ColumnKind::Quantity });
@@ -1168,9 +1170,8 @@ fn summary(
         for l in &group.lines {
             let a = amount(l);
             if let Some(n) = settings.column_by_name {
-                let key = name_column(n, l, customers).0;
-                if let Some(i) = names.iter().position(|(k, _)| *k == key) {
-                    amounts[i] += a;
+                if let Some(i) = name_index.get(&name_column(n, l, customers).0) {
+                    amounts[*i] += a;
                 }
             } else if let Some(period) = settings.column_by {
                 let rank = period_key(l.date, period).0;
