@@ -43,9 +43,11 @@ export async function renderPdf(bytes, { scale = 1.5, maxPages = MAX_PAGES, onPa
       const canvas = document.createElement('canvas');
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
+      const canvasContext = canvas.getContext('2d');
+      if (!canvasContext) throw new Error('there is no memory left to draw the page; close other windows and try again');
       // The print intent draws in one go rather than frame by frame, so pages still render while the
       // window is in the background (and, as pictures, are what a printout needs anyway).
-      await page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport, intent: 'print' }).promise;
+      await page.render({ canvas, canvasContext, viewport, intent: 'print' }).promise;
       const shown = { url: canvas.toDataURL('image/png'), width: viewport.width / scale, height: viewport.height / scale };
       pages.push(shown);
       onPage?.(shown, n, doc.numPages);

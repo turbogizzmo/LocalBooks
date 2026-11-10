@@ -317,13 +317,14 @@ export function useFormPrinter(onNotice) {
   const printMany = useCallback(
     async (list) => {
       try {
-        // Each form, followed by the files marked Send with the form (pictures and PDF pages).
-        const rendered = await Promise.all(
-          list.map(async (f) => {
-            const [form, files] = await Promise.all([api.renderForm(f.kind, f.id, f.period ?? null), printFilePages(f.kind, f.id)]);
-            return { ...form, attached: files.pages, skipped: files.skipped };
-          }),
-        );
+        // Each form, followed by the files marked Send with the form (pictures and PDF pages). One
+        // form at a time, so a large batch with many PDF pages doesn't swamp the window.
+        const rendered = [];
+        for (const f of list) {
+          const form = await api.renderForm(f.kind, f.id, f.period ?? null);
+          const files = await printFilePages(f.kind, f.id);
+          rendered.push({ ...form, attached: files.pages, skipped: files.skipped });
+        }
         const skipped = rendered.flatMap((r) => r.skipped);
         if (skipped.length) onNotice({ kind: 'info', text: `Printed without ${skipped.join(', ')}: only pictures and PDFs print with a form. Email sends every file marked Send with the form.` });
         setForms(rendered);

@@ -10,8 +10,20 @@ export default function PdfPreview({ bytes, name = 'PDF', className = 'max-h-[32
     let live = true;
     setPages([]);
     setState({ busy: true, error: null, total: 0 });
-    renderPdf(bytes, { onPage: (p) => live && setPages((ps) => [...ps, p]) }).then(
-      (r) => live && setState({ busy: false, error: null, total: r.pageCount }),
+    // Pages show in groups of four as they are drawn, then all at once at the end, rather than one
+    // render (and one copy of the list) per page.
+    const drawn = [];
+    renderPdf(bytes, {
+      onPage: (p) => {
+        drawn.push(p);
+        if (live && drawn.length % 4 === 0) setPages(drawn.slice());
+      },
+    }).then(
+      (r) => {
+        if (!live) return;
+        setPages(r.pages);
+        setState({ busy: false, error: null, total: r.pageCount });
+      },
       (err) => live && setState({ busy: false, error: err?.message ?? String(err), total: 0 }),
     );
     return () => {

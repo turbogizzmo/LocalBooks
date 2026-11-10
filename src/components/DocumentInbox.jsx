@@ -14,9 +14,10 @@ const canPreview = (media) => media === 'application/pdf' || media.startsWith('i
 
 /** Bytes as a data URL, which the content security policy lets an <img> show (a blob: URL it doesn't). */
 function dataUrl(mediaType, bytes) {
-  let text = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return `data:${mediaType};base64,${btoa(text)}`;
+  // In chunks (a whole file's bytes can't be one call's arguments), joined once at the end.
+  const parts = [];
+  for (let i = 0; i < bytes.length; i += 0x2000) parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 0x2000)));
+  return `data:${mediaType};base64,${btoa(parts.join(''))}`;
 }
 
 /** The selected document: a PDF drawn page by page (PdfPreview), or a picture. */

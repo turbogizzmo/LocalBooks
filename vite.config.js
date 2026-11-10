@@ -17,8 +17,14 @@ function pdfStandardFonts() {
   return {
     name: 'pdf-standard-fonts',
     configureServer(server) {
-      server.middlewares.use(`/${FONTS_URL}`, (req, res, next) => {
-        const name = decodeURIComponent((req.url ?? '').replace(/^\//, '').split('?')[0]);
+      // Under the app's base path, as `import.meta.env.BASE_URL` builds the URL in pdfPages.js.
+      server.middlewares.use(`${server.config.base}${FONTS_URL}`, (req, res, next) => {
+        let name;
+        try {
+          name = decodeURIComponent((req.url ?? '').replace(/^\//, '').split('?')[0]);
+        } catch {
+          return next();
+        }
         if (!files().includes(name)) return next();
         res.setHeader('Content-Type', 'application/octet-stream');
         res.end(readFileSync(join(FONTS_DIR, name)));
