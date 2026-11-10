@@ -17,6 +17,8 @@ people using LocalBooks.
 - **Discounts and charges on bills, checks, vendor credits and purchase orders.** Add a discount or
   a charge after any split line, as an amount or a percent of that line, from a Discount or Other
   Charge item or straight to an account. A purchase order's discounts and charges print on it and
+  carry over to its bill, including bills entered for received items. Other Charge and Discount
+  items can have their own expense account for these forms.
   carry over to its bill. Other Charge and Discount items can have their own expense account for
   these forms.
 - **Discounts come in as discount lines from QuickBooks Desktop files.** A company file's

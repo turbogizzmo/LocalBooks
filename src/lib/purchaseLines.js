@@ -100,3 +100,23 @@ export function fromItem(row, item) {
     value: item.percentPpm ? percentText(item.percentPpm) : item.rateCents > 0 ? centsToInput(item.rateCents) : row.value,
   };
 }
+
+/**
+ * A receipt's bill: the purchase order's discounts and charges (`get_receipt_bill_form_lines`) laid
+ * out against the billed amounts, as the ledger does it. A fixed discount more than its line is held
+ * for a later bill (`purchase_lines::fit_carried`). Returns `layOutPurchase`'s result plus `lines`,
+ * the form lines kept.
+ */
+export function layOutCarried(splitAmounts, formLines) {
+  const kept = (formLines ?? []).filter((f) => !(f.kind === 'DISCOUNT' && f.amountCents !== null && f.amountCents !== undefined && f.amountCents > (splitAmounts[f.afterLine - 1] ?? 0)));
+  const rows = kept.map((f) => ({
+    afterLine: f.afterLine,
+    kind: f.kind,
+    itemId: f.productServiceId ?? null,
+    accountId: f.accountId,
+    classId: f.classId ?? null,
+    description: f.description ?? '',
+    value: f.percentPpm ? percentText(f.percentPpm) : centsToInput(f.amountCents),
+  }));
+  return { ...layOutPurchase(splitAmounts, rows), lines: kept };
+}

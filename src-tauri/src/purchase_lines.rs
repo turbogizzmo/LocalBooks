@@ -266,6 +266,17 @@ pub async fn lines_of(pool: &SqlitePool, doc: PurchaseDoc, id: i64) -> Result<Ve
     .map_err(db_err)
 }
 
+/// Drops the fixed discounts that are more than the split line they follow: a purchase order's
+/// fixed discount, carried to the bill for a part shipment, waits for a bill whose line can take it.
+pub fn fit_carried(form: Vec<PurchaseFormLineInput>, splits: &[i64]) -> Vec<PurchaseFormLineInput> {
+    form.into_iter()
+        .filter(|l| {
+            let base = l.after_line.checked_sub(1).and_then(|i| splits.get(i));
+            !(l.kind == PurchaseLineKind::Discount && l.amount_cents.zip(base).is_some_and(|(amount, base)| amount > *base))
+        })
+        .collect()
+}
+
 /// Stored lines as inputs again (a purchase order's lines carried to its bill).
 pub fn inputs_of(views: &[PurchaseFormLineView]) -> Vec<PurchaseFormLineInput> {
     views

@@ -5,6 +5,8 @@ import { askConfirm } from '../lib/dialogs.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { centsToInput, formatCents, formatQuantity, parseMoneyToCents, parseQuantityE4, quantityAmount } from '../lib/money.js';
 import { addDays, formatDate, todayIso } from '../lib/dates.js';
+import { layOutCarried, purchaseLineMessage } from '../lib/purchaseLines.js';
+import { percentText } from '../lib/itemTypes.js';
 
 /**
  * Vendors › Receive Items and Enter Bill for Received Items (T12).
@@ -288,8 +290,11 @@ function BillForm({ receipt, onCancel, onSaved }) {
   const [dueDate, setDueDate] = useState(addDays(todayIso(), 30));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // The purchase order's discounts and charges this bill takes (T21).
+  const [carried, setCarried] = useState([]);
 
   useEffect(() => {
+    api.getReceiptBillFormLines(receipt.id).then(setCarried, () => setCarried([]));
     api.listItemReceiptLines(receipt.id).then(
       (rows) => {
         setLines(rows);
@@ -301,11 +306,14 @@ function BillForm({ receipt, onCancel, onSaved }) {
 
   const parsed = (lines ?? []).map((l) => ({ line: l, cents: parseMoneyToCents(amounts[l.id] ?? '') }));
   const invalid = parsed.some((p) => p.cents === null || p.cents <= 0);
-  const total = invalid ? null : parsed.reduce((s, p) => s + p.cents, 0);
-  const difference = total === null ? null : total - receipt.totalCents;
+  const laid = invalid ? null : layOutCarried(parsed.map((p) => p.cents), carried);
+  const total = !laid ? null : laid.error ? null : laid.total;
+  // The price difference on the lines themselves, before the order's discounts and charges.
+  const difference = invalid ? null : parsed.reduce((s, p) => s + p.cents, 0) - receipt.totalCents;
 
   const save = async () => {
     if (invalid || !lines) return;
+    if (laid?.error) return setError(purchaseLineMessage(laid.error));
     if (dueDate < billDate) return setError('The due date is before the bill date.');
     setBusy(true);
     try {
@@ -391,9 +399,26 @@ function BillForm({ receipt, onCancel, onSaved }) {
                 </td>
               </tr>
             ))}
+            {laid && !laid.error && laid.lines.map((f, i) => (
+              <tr key={`f${i}`} className="qb-grid-row text-qb-ink-muted">
+                <td className="qb-grid-cell">{f.kind === 'DISCOUNT' ? 'Discount' : 'Charge'}</td>
+                <td className="qb-grid-cell">{f.description}{f.percentPpm ? ` (${percentText(f.percentPpm)} of line ${f.afterLine})` : ''}</td>
+                <td className="qb-grid-cell" />
+                <td className="qb-grid-cell" />
+                <td className="qb-grid-cell num">{formatCents(f.kind === 'DISCOUNT' ? -laid.amounts[i] : laid.amounts[i])}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}
+      {laid && !laid.error && laid.lines.length > 0 && (
+        <p className="px-2 py-1 text-xs text-qb-ink-muted">The purchase order&apos;s discounts and charges come over to this bill.</p>
+      )}
+      {laid && !laid.error && carried.filter((f) => !laid.lines.includes(f)).map((f, i) => (
+        <p key={`h${i}`} className="px-2 py-1 text-xs text-qb-ink-muted">
+          {`${f.description || 'Discount'} (${formatCents(f.amountCents)}) is more than line ${f.afterLine} on this bill, so it waits for a later bill for that order line. If no more is coming, enter it as a vendor credit.`}
+        </p>
+      ))}
     </section>
   );
 }

@@ -161,3 +161,11 @@ async fn items_name_their_purchase_account_and_lines_their_item() {
     assert_eq!(code(crate::expenses::post_vendor_bill(&pool, bill(discount.id, checking)).await.unwrap_err()), "BILL_FORM_LINE_ACCOUNT");
     crate::expenses::post_vendor_bill(&pool, bill(discount.id, services)).await.unwrap();
 }
+
+#[test]
+fn a_fixed_discount_too_big_for_a_part_shipment_waits() {
+    use PurchaseLineKind::{Charge, Discount};
+    let form = vec![line(1, Discount, None, Some(5_000), 9), line(2, Discount, Some(100_000), None, 9), line(3, Charge, None, Some(9_000), 9)];
+    let kept = fit_carried(form, &[3_000, 3_000, 2_000]);
+    assert_eq!(kept.iter().map(|l| l.after_line).collect::<Vec<_>>(), [2, 3], "only the fixed discount over its line is held back");
+}
