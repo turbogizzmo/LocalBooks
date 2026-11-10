@@ -10,6 +10,7 @@ import ClassSelect, { useClassTracking } from './ClassSelect.jsx';
 import { CHARGE_KINDS, reconcileCharges } from '../lib/reconcileCharges.js';
 import { askConfirm, askText } from '../lib/dialogs.jsx';
 import { pickAttachments } from './Attachments.jsx';
+import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
 
 /** The longest undo reason the Audit Log keeps (`reconciliation_undos.reason`, migration 0085). */
 const REASON_MAX = 500;
@@ -27,6 +28,20 @@ const SOURCE_LABEL = {
  * charge and interest earned from the statement: each posts with the reconciliation (Dr expense /
  * Cr the account for a charge, the other way for interest) and is cleared at once.
  */
+/**
+ * The reconcile lines' columns in their usual order (Customize Columns hides and reorders them; the
+ * amounts and the cleared tick always show). `dec` and `inc` are titled by the account's kind.
+ */
+const RECONCILE_COLUMNS = [
+  { id: 'date', label: 'Date', width: 'w-[92px]' },
+  { id: 'type', label: 'Type', width: 'w-[110px]' },
+  { id: 'number', label: 'Ref no.', width: 'w-[64px]' },
+  { id: 'memo', label: 'Memo', width: '' },
+  { id: 'dec', label: 'Payments', width: 'w-[120px]', num: true, required: true },
+  { id: 'inc', label: 'Deposits or charges', width: 'w-[120px]', num: true, required: true },
+  { id: 'cleared', label: 'Cleared', width: 'w-[36px]', required: true },
+];
+
 function StatementForm({ initial, lastDate, onSubmit, busy, submitLabel, onCancel, accounts = null }) {
   const [date, setDate] = useState(initial?.date ?? todayIso());
   const [balance, setBalance] = useState(initial?.balance ?? '');
@@ -245,6 +260,7 @@ export default function Reconcile({ accounts }) {
     { initial: null, storageKey: 'reconcile' },
   );
   const shown = sorter.sorted;
+  const cols = useColumns('reconcile', RECONCILE_COLUMNS);
 
   const clearedLines = eligible.filter((l) => cleared.has(l.lineId));
   const incSum = clearedLines.filter((l) => l.amountCents > 0).reduce((s, l) => s + l.amountCents, 0);
@@ -436,6 +452,7 @@ export default function Reconcile({ accounts }) {
                 {hiddenLater > 0 && ` · ${hiddenLater} dated after the statement hidden`}
               </span>
               <div className="ml-auto flex gap-2">
+                <ColumnsMenu cols={cols} />
                 <button type="button" className="qb-btn qb-btn-secondary h-row" onClick={cancel} disabled={busy}>
                   Cancel reconciliation
                 </button>
@@ -447,46 +464,44 @@ export default function Reconcile({ accounts }) {
             <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
               <table className="qb-grid">
                 <colgroup>
-                  <col className="w-[92px]" />
-                  <col className="w-[110px]" />
-                  <col className="w-[64px]" />
-                  <col />
-                  <col className="w-[120px]" />
-                  <col className="w-[120px]" />
-                  <col className="w-[36px]" />
+                  {cols.columns.map((c) => (
+                    <col key={c.id} className={c.width} />
+                  ))}
                 </colgroup>
                 <thead>
                   <tr>
-                    <SortTh sorter={sorter} col="date">Date</SortTh>
-                    <SortTh sorter={sorter} col="type">Type</SortTh>
-                    <SortTh sorter={sorter} col="number">Ref no.</SortTh>
-                    <SortTh sorter={sorter} col="memo">Memo</SortTh>
-                    <SortTh sorter={sorter} col="dec" className="text-right">{labels.dec}</SortTh>
-                    <SortTh sorter={sorter} col="inc" className="text-right">{labels.inc}</SortTh>
-                    <th className="qb-grid-head text-center">
-                      <button
-                        type="button"
-                        className="mr-0.5 align-middle text-[9px] text-qb-ink-muted hover:text-qb-ink"
-                        onClick={() => sorter.toggle('cleared')}
-                        title="Sort by cleared"
-                        aria-label="Sort by cleared"
-                      >
-                        {sorter.sort?.key === 'cleared' ? (sorter.sort.dir === 'desc' ? '▼' : '▲') : '⇅'}
-                      </button>
-                      <input
-                        type="checkbox"
-                        className="accent-qb-green"
-                        checked={allShownCleared}
-                        onChange={(e) => toggle(shown.filter((l) => cleared.has(l.lineId) !== e.target.checked).map((l) => l.lineId), e.target.checked)}
-                        aria-label="Clear all shown"
-                      />
-                    </th>
+                    {cols.columns.map((c) =>
+                      c.id === 'cleared' ? (
+                        <th key={c.id} className="qb-grid-head text-center">
+                          <button
+                            type="button"
+                            className="mr-0.5 align-middle text-[9px] text-qb-ink-muted hover:text-qb-ink"
+                            onClick={() => sorter.toggle('cleared')}
+                            title="Sort by cleared"
+                            aria-label="Sort by cleared"
+                          >
+                            {sorter.sort?.key === 'cleared' ? (sorter.sort.dir === 'desc' ? '▼' : '▲') : '⇅'}
+                          </button>
+                          <input
+                            type="checkbox"
+                            className="accent-qb-green"
+                            checked={allShownCleared}
+                            onChange={(e) => toggle(shown.filter((l) => cleared.has(l.lineId) !== e.target.checked).map((l) => l.lineId), e.target.checked)}
+                            aria-label="Clear all shown"
+                          />
+                        </th>
+                      ) : (
+                        <SortTh key={c.id} sorter={sorter} col={c.id} className={c.num ? 'text-right' : undefined}>
+                          {c.id === 'dec' ? labels.dec : c.id === 'inc' ? labels.inc : c.label}
+                        </SortTh>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {shown.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="qb-grid-cell text-qb-ink-muted">No unreconciled transactions through {formatDate(rec.statementEndDate)}.</td>
+                      <td colSpan={cols.columns.length} className="qb-grid-cell text-qb-ink-muted">No unreconciled transactions through {formatDate(rec.statementEndDate)}.</td>
                     </tr>
                   )}
                   {shown.map((l) => {
@@ -497,22 +512,39 @@ export default function Reconcile({ accounts }) {
                         className={`qb-grid-row cursor-pointer ${isCleared ? 'bg-qb-green-tint/60' : ''}`}
                         onClick={() => toggle([l.lineId], !isCleared)}
                       >
-                        <td className="qb-grid-cell">{formatDate(l.entryDate)}</td>
-                        <td className="qb-grid-cell">{SOURCE_LABEL[l.sourceType] ?? l.sourceType}</td>
-                        <td className="qb-grid-cell text-qb-ink-muted">{l.entryNumber}</td>
-                        <td className="qb-grid-cell" title={l.memo ?? ''}>{l.memo ?? ''}</td>
-                        <td className="qb-grid-cell num">{l.amountCents < 0 ? formatCents(-l.amountCents) : ''}</td>
-                        <td className="qb-grid-cell num">{l.amountCents > 0 ? formatCents(l.amountCents) : ''}</td>
-                        <td className="qb-grid-cell text-center">
-                          <input
-                            type="checkbox"
-                            className="accent-qb-green"
-                            checked={isCleared}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => toggle([l.lineId], e.target.checked)}
-                            aria-label={`Cleared ${formatDate(l.entryDate)} ${l.memo ?? ''}`}
-                          />
-                        </td>
+                        {cols.columns.map((c) => {
+                          switch (c.id) {
+                            case 'date':
+                              return <td key={c.id} className="qb-grid-cell">{formatDate(l.entryDate)}</td>;
+                            case 'type':
+                              return <td key={c.id} className="qb-grid-cell">{SOURCE_LABEL[l.sourceType] ?? l.sourceType}</td>;
+                            case 'number':
+                              return <td key={c.id} className="qb-grid-cell text-qb-ink-muted">{l.entryNumber}</td>;
+                            case 'memo':
+                              return (
+                                <td key={c.id} className="qb-grid-cell" title={l.memo ?? ''}>
+                                  {l.memo ?? ''}
+                                </td>
+                              );
+                            case 'dec':
+                              return <td key={c.id} className="qb-grid-cell num">{l.amountCents < 0 ? formatCents(-l.amountCents) : ''}</td>;
+                            case 'inc':
+                              return <td key={c.id} className="qb-grid-cell num">{l.amountCents > 0 ? formatCents(l.amountCents) : ''}</td>;
+                            default:
+                              return (
+                                <td key={c.id} className="qb-grid-cell text-center">
+                                  <input
+                                    type="checkbox"
+                                    className="accent-qb-green"
+                                    checked={isCleared}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => toggle([l.lineId], e.target.checked)}
+                                    aria-label={`Cleared ${formatDate(l.entryDate)} ${l.memo ?? ''}`}
+                                  />
+                                </td>
+                              );
+                          }
+                        })}
                       </tr>
                     );
                   })}

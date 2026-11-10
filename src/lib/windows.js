@@ -14,6 +14,8 @@ export const MENU_NAVIGATE = 'menu-navigate';
 export const MENU_COMMAND = 'menu-command';
 /** Sent by the Window menu: 'close-all', 'close', 'cascade', 'tile-vertically', 'tile-horizontally', 'arrange-icons' or 'focus:<id>'. */
 export const WINDOW_COMMAND = 'window-command';
+/** Sent to every LocalBooks window before the desktop is saved: report the windows inside it now. */
+export const WINDOW_REPORT_FLUSH = 'window-report-flush';
 /** Sent to every LocalBooks window when View › One Window / Multiple Windows, Open Window List or the left pane changes. */
 const WINDOW_PREFERENCES_CHANGED = 'window-preferences-changed';
 

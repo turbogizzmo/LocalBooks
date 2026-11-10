@@ -25,9 +25,9 @@ async fn books_balance(pool: &SqlitePool) {
     .await
     .unwrap();
     assert_eq!(unbalanced, 0);
-    let report = crate::file_dentist::checkup(pool, 0).await.unwrap();
+    let report = crate::file_repair::checkup(pool, 0).await.unwrap();
     let totals = report.checks.iter().find(|c| c.id == "TOTALS").expect("totals check");
-    assert_eq!(totals.status, crate::file_dentist::CheckStatus::Pass, "{:?}", totals.details);
+    assert_eq!(totals.status, crate::file_repair::CheckStatus::Pass, "{:?}", totals.details);
 }
 
 fn d(day: u32) -> NaiveDate {
@@ -232,7 +232,7 @@ async fn a_payment_banked_through_a_deposit_bounces_out_of_that_bank() {
 
     let deposit = post_bank_deposit(
         &pool,
-        DepositInput { bank_account_id: savings, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "PAYMENT".into(), id: payment }], other_lines: vec![], cash_back: None },
+        DepositInput { bank_account_id: savings, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "PAYMENT".into(), id: payment }], other_lines: vec![], cash_back: None, deductions: Vec::new() },
     )
     .await
     .unwrap();
@@ -263,6 +263,7 @@ async fn other_funds_on_a_deposit_bounce_back_to_their_account() {
             items: vec![],
             other_lines: vec![DepositOtherLine { account_id: interest, amount_cents: 7_000, memo: Some("Refund check".into()), class_id: None, customer_id: None, vendor_id: None }],
             cash_back: None,
+            deductions: Vec::new(),
         },
     )
     .await
@@ -369,7 +370,7 @@ async fn a_sales_receipt_banked_through_a_deposit_bounces_out_of_that_bank() {
     assert!(candidates(&pool).await.unwrap().is_empty(), "still in Undeposited Funds");
     post_bank_deposit(
         &pool,
-        DepositInput { bank_account_id: checking, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "SALES_RECEIPT".into(), id: receipt }], other_lines: vec![], cash_back: None },
+        DepositInput { bank_account_id: checking, deposit_date: d(6), memo: None, items: vec![DepositItemRef { kind: "SALES_RECEIPT".into(), id: receipt }], other_lines: vec![], cash_back: None, deductions: Vec::new() },
     )
     .await
     .unwrap();

@@ -9,6 +9,70 @@ people using LocalBooks.
 - **A guide to the FTC Safeguards Rule.** Tax preparers and bookkeepers who must keep a security
   program can read, duty by duty, what LocalBooks does to help and what stays their job (Help ›
   The FTC Safeguards Rule and LocalBooks).
+- **Security claims you can check.** SECURITY.md now points every claim to the code and test
+  behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
+  check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
+  in a file only your account can read rather than a system keychain. **Remember me on this Mac** is
+  now **Remember me on this computer**, since it works on Windows and Linux too.
+- **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
+  import file together with a `-wal` log file written for a different file, which could have
+  exposed leftover memory. Move the stray `-wal` file away and open the file again.
+- **Take a payment with the invoice.** Tick **Payment received** on a new invoice to record the money
+  the customer paid as you wrote it. It's saved with the invoice in one step, and the invoice comes
+  back Paid or Partial.
+- **Receive items before the bill.** **Vendors › Receive Items** brings goods from a purchase order
+  into stock when they arrive, even a part shipment, with their cost held in Items Received Not Billed
+  until the bill comes. **Enter Bill for Received Items** then posts the bill at the vendor's prices.
+  A/P Aging Summary shows what's received and not billed under its total.
+- **Says plainly that LocalBooks is for US businesses.** The README, the tester page and Help
+  (search "US") explain what that means: US-style sales tax with no VAT or GST, IRS 1099s,
+  US federal tax features, ACH and check formats, and US date and number formats.
+- **Overpayments and prepayments.** Receive Payments takes more than a customer owes, and payments
+  from a customer with no open invoice. The amount left over can stay as the customer's credit (to
+  use on a later invoice), be refunded straight away, or be written off to income. Credit Memos &
+  Refunds lists it as an unapplied payment, the Customer Center shows the unapplied amount and
+  remaining credit, and Make Deposits picks it up from Undeposited Funds. Any credit left can now
+  also be written off.
+- **List menus and Edit-menu list commands.** The customer, vendor and item lists have New
+  Transactions, Print and Excel menus. The Edit menu's New, Edit, Delete, Make Inactive / Active and
+  Show All act on the list on screen, and a customer, vendor or item that was never used can now be
+  deleted.
+- **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
+  and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
+  order.
+- **Combined sales tax rates and a return per agency.** A combined rate adds up the state, county
+  and city rates; a sale at it posts each agency's share to its own account. Sales › Sales Tax shows
+  the sales tax return by agency for the period, on accrual or cash.
+- **Accountant's Copy.** Make a copy of the books for your accountant with a dividing date and keep
+  working after it; their journal entries and new accounts come back in a changes file that
+  LocalBooks checks, posts all at once and records.
+- **Report previews.** In the report center, rest the pointer on a report to see a small picture
+  of it, from your own books, before you open it.
+- **Any number of contacts.** A customer's or vendor's record lists as many contacts as you need,
+  each with a role, email, phone and mobile. Choose one of a customer's contacts for invoices (named
+  in Bill To and sent emailed invoices, estimates, sales receipts and credit memos) and one for
+  statements (printed on statements and sent them). The contact and alternate contact you had
+  become the first two.
+- **Item categories.** Group products and services into categories and sub-categories. Products &
+  Services shows a category tree beside the items, with Move to a different category on each item;
+  sales forms, Sales by Product/Service Summary and the inventory valuation and stock status
+  reports can show one category's items. Preferences › Items & Inventory turns categories off.
+- **Export lists and addresses.** **File › Utilities › Export** saves the chart of accounts,
+  customers, vendors, items and classes as an IIF file, or every customer's and vendor's address as a
+  text file for mail merges.
+- **Reports › QuickReport** runs the QuickReport (Ctrl+Q) for what is selected in the list or
+  register in front.
+- **A guide to the FTC Safeguards Rule.** Tax preparers and bookkeepers who must keep a security
+  program can read, duty by duty, what LocalBooks does to help and what stays their job (Help ›
+  The FTC Safeguards Rule and LocalBooks).
+- **File Check & Repair.** The company file check-up and rebuild in Settings is now called File
+  Check & Repair; it works as before.
+- **Imports list amounts that aren't whole cents.** When a company file stores an amount with a
+  fraction of a cent, the import review counts and lists each one, instead of leaving it out
+  without saying so.
+- **Duplicate on every form.** Sales receipts, estimates, credit memos, refund receipts, vendor
+  credits, purchase orders, deposits and transfers now have **Duplicate** (Ctrl+O) too: open a saved
+  one and the copy starts as a new form dated today.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
@@ -57,6 +121,12 @@ people using LocalBooks.
 - **Company Snapshot.** Reports › Company Snapshot is a page of widgets you add, move and date:
   account balances, who owes you, vendors to pay, the income and expense trend, and your top
   customers, items and vendors. Each figure matches its report, which opens from the widget.
+- **Stripe payouts with their fees.** Banking › Payout Feeds connects a Stripe account with a
+  read-only key and brings each payout in as a deposit of its gross sales, less Stripe's fees,
+  refunds and chargebacks, so the deposit matches the bank line and fees are an expense.
+- **Fix: the desktop is saved as it is.** Closing the company or quitting right after opening,
+  closing or moving a window now saves that change too; before, it could reopen as it was a moment
+  earlier.
 - **Reorder point and preferred vendor on items.** An item's record now takes a preferred vendor
   and, for tracked stock, a reorder point. Both show on the item's information panel, which says
   when it's time to reorder.
