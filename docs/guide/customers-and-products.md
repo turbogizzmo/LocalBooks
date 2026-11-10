@@ -211,6 +211,26 @@ account. You can still change them on the form.
 
 To keep count of a product you stock, see [Track inventory](inventory.md).
 
+## Item categories
+
+Categories group your products and services, for example *Tools* with the sub-categories *Power*
+and *Hand*. They post nothing; they help you find items.
+
+- On **Sales › Products & Services**, the **Categories** panel on the left lists **All items**,
+  **Uncategorized** and each category, with how many items it holds (counting its
+  sub-categories). Click one to show only its items. **New…** adds a category; a category's
+  **Actions** menu adds a sub-category, renames it, makes it inactive (its items keep it) or
+  deletes it (only once no item or sub-category uses it).
+- To put an item in a category, choose **Move to a different category…** on its **Actions** menu,
+  or pick the **Category** on **Edit…**. An item you add while a category is chosen goes in it.
+- On invoices, sales receipts, estimates and credit memos, the **Product/Service** heading has a
+  category box: choose one to list only its items.
+- **Sales by Product/Service Summary**, **Inventory Valuation Summary** and **Inventory Stock
+  Status by Item** have the same category box, and their totals follow it.
+
+Don't need them? Turn off **Item categories** in **Preferences › Items & Inventory**. That hides
+the panel and the category boxes; items keep their categories for when you turn them on again.
+
 ## Discounts, other charges and groups
 
 Besides services and parts, an item can be a **Discount** or an **Other charge**, and items can be

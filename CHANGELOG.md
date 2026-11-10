@@ -45,6 +45,10 @@ people using LocalBooks.
   in Bill To and sent emailed invoices, estimates, sales receipts and credit memos) and one for
   statements (printed on statements and sent them). The contact and alternate contact you had
   become the first two.
+- **Item categories.** Group products and services into categories and sub-categories. Products &
+  Services shows a category tree beside the items, with Move to a different category on each item;
+  sales forms, Sales by Product/Service Summary and the inventory valuation and stock status
+  reports can show one category's items. Preferences › Items & Inventory turns categories off.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

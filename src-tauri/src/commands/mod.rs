@@ -89,6 +89,7 @@ features![
     inventory,
     invoices,
     item_receipts,
+    item_categories,
     item_groups,
     item_prices,
     job_reports,
