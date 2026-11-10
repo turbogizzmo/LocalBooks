@@ -254,9 +254,10 @@ in either is relaxed.
 ## Out of scope (later work)
 
 - **Sales Tax Item and Tax Group**: with R11, as above.
-- Discounts and charges on bills, checks and purchase orders.
-- Expense accounts on other charges (reimbursable costs) and charges that are a percent of the
-  whole form rather than the line above.
+- Charges that are a percent of the whole form rather than the line above. (Discounts and charges
+  on credit memos are built in #320; on bills, checks and expenses, vendor credits and purchase
+  orders in `purchase_lines.rs`, T21, as described in `docs/guide/bills.md`, where Other Charge and
+  Discount items have an expense account.)
 - Groups inside groups, and discounts inside groups.
 - Decoding the subtotal, discount and group item types in company files.
 

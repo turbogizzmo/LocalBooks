@@ -93,6 +93,7 @@ mod price_levels;
 mod print_batches;
 mod print_queue;
 mod profile_lists;
+mod purchase_lines;
 mod qbmac_import;
 mod qbw_backup;
 mod qbw_company;

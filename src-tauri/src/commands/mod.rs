@@ -115,6 +115,7 @@ features![
     print_batches,
     print_queue,
     profile_lists,
+    purchase_lines,
     purchase_orders,
     reconcile,
     recurring,

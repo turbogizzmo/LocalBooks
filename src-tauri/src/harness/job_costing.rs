@@ -91,7 +91,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     // Twenty oak panels into stock at $150.
     let mut panels = bill_line(stock.asset_account_id, 300_000, "Oak panels", None);
     (panels.product_service_id, panels.quantity_e4, panels.rate_cents) = (Some(oak), Some(200_000), Some(15_000));
-    let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput {
+    let bill = |vendor: &str, number: &str, date, lines: Vec<BillLineInput>| BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
@@ -160,7 +160,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
     .expect("job bill");
 
     let split = |account_id: i64, cents: i64, job: i64| SplitLineInput { account_id, amount_cents: cents, memo: None, class_id: None, customer_id: Some(job), billable: None };
-    let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput {
+    let expense = |kind: &str, payee: &str, from: i64, date, lines| ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: kind.into(),
         payee_name: Some(payee.into()),
@@ -179,7 +179,7 @@ async fn with_jobs(pool: SqlitePool) -> SqlitePool {
 
     crate::credits::create_vendor_credit(
         p,
-        VendorCreditInput {
+        VendorCreditInput { form_lines: Vec::new(),
             vendor_name: "Timberline Supply".into(),
             reference: Some("TS-C9".into()),
             credit_date: d(2025, 11, 25),

@@ -43,6 +43,8 @@ import { ListViewControls, TreeToggle, useListOrder } from './ListOrder.jsx';
 import { parentByName } from '../lib/listOrder.js';
 
 const incomeOnly = (a) => a.classification === 'INCOME';
+/** An Other Charge or Discount item's account on purchase forms: any income or expense account. */
+const purchaseAccount = (a) => !a.isSystem && (a.classification === 'INCOME' || a.classification === 'EXPENSE');
 
 /** The kinds of item, as the Type box offers them (see docs/plans/item-types.md). */
 export const ITEM_TYPES = [
@@ -78,6 +80,7 @@ function ProductDialog({ product, accounts, categories, onClose, onSaved }) {
   const [itemType, setItemType] = useState(product.itemType || 'ITEM');
   const [rate, setRate] = useState(product.percentPpm ? percentText(product.percentPpm) : product.rateCents ? (product.rateCents / 100).toFixed(2) : '');
   const [accountId, setAccountId] = useState(product.incomeAccountId);
+  const [purchaseAccountId, setPurchaseAccountId] = useState(product.expenseAccountId ?? null);
   const [taxable, setTaxable] = useState(product.isTaxable !== false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -112,7 +115,7 @@ function ProductDialog({ product, accounts, categories, onClose, onSaved }) {
     try {
       if (await mergeOffer.check(name)) return setBusy(false);
       const input = { name, description: description.trim() || null, rateCents: read.rateCents, incomeAccountId: accountId, isTaxable: taxable };
-      const saved = await api.updateProduct(product.id, input, read.kind);
+      const saved = await api.updateProduct(product.id, input, { ...read.kind, expenseAccountId: itemType === 'ITEM' ? null : purchaseAccountId });
       if (categories && categoryId !== (product.categoryId ?? null)) await api.moveItemsToCategory([product.id], categoryId);
       if (fields.length > 0) await api.saveCustomValues('ITEM', product.id, fields.map(({ fieldId, value }) => ({ fieldId, value })));
       const reorderE4 = tracked ? reorderRead.e4 : null;
@@ -160,6 +163,12 @@ function ProductDialog({ product, accounts, categories, onClose, onSaved }) {
             <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Discount account (debited)' : 'Income account'}</span>
             <AccountSelect accounts={accounts} filter={incomeOnly} value={accountId} onChange={setAccountId} />
           </label>
+          {itemType !== 'ITEM' && (
+            <label className="col-span-2 flex flex-col gap-0.5">
+              <span className="font-semibold text-qb-ink-muted">{itemType === 'DISCOUNT' ? 'Account on bills and checks (credited)' : 'Expense account on bills and checks'}</span>
+              <AccountSelect accounts={accounts} filter={purchaseAccount} value={purchaseAccountId} onChange={setPurchaseAccountId} placeholder="Same as above" />
+            </label>
+          )}
           <label className="col-span-2 flex items-center gap-1.5 text-sm">
             <input type="checkbox" className="accent-qb-green" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} />
             {itemType === 'DISCOUNT' ? 'Taxable: the discount lowers the taxable amount' : 'Taxable: charge sales tax when this is sold'}

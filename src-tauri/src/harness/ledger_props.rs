@@ -766,7 +766,7 @@ async fn post_bill(
     replacing: Replacing<'_>,
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
-    let input = BillInput {
+    let input = BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: vendor.into(),
         bill_number: None,
@@ -824,7 +824,7 @@ async fn post_expense(
     replacing: Replacing<'_>,
 ) -> Result<(), String> {
     let total: i64 = lines.iter().map(|l| l.1).sum();
-    let input = ExpenseInput {
+    let input = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: if check { "CHECK" } else { "EXPENSE" }.into(),
         payee_name: Some("Payee".into()),

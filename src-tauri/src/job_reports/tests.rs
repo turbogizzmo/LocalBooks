@@ -14,7 +14,7 @@ async fn account_id(pool: &SqlitePool, number: &str) -> i64 {
 }
 
 fn bill(lines: Vec<(i64, i64, Option<i64>)>) -> BillInput {
-    BillInput {
+    BillInput { form_lines: Vec::new(),
         terms_id: None,
         vendor_name: "Timberline Supply".into(),
         bill_number: None,
@@ -47,7 +47,7 @@ async fn an_unknown_job_is_refused() {
     let supplies = account_id(&pool, "6250").await;
     let err = crate::expenses::post_vendor_bill(&pool, bill(vec![(supplies, 1_000, Some(9_999))])).await.unwrap_err();
     assert!(err.starts_with("BILL_UNKNOWN_JOB"), "{err}");
-    let input = ExpenseInput {
+    let input = ExpenseInput { form_lines: Vec::new(),
         payment_method_id: None,
         kind: "EXPENSE".into(),
         payee_name: None,

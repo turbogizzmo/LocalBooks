@@ -92,6 +92,7 @@ pub const TRANSACTION_TABLES: &[(&str, &[&str])] = &[
     ("legacy_status_voids", &[]),
     ("payroll_import_entries", &[]),
     ("payroll_imports", &[]),
+    ("purchase_form_lines", &[]),
     ("purchase_order_lines", &[]),
     ("purchase_orders", &["po_date"]),
     ("qbw_posted_invoices", &[]),

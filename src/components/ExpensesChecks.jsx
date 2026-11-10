@@ -11,6 +11,8 @@ import RowMenu, { voidItem } from './RowMenu.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
 import { useTransactionReports } from './TransactionHistory.jsx';
 import SplitGrid, { blankSplit, splitRowsFrom, summarizeSplits } from './SplitGrid.jsx';
+import PurchaseFormLines, { usePurchaseFormLines } from './PurchaseFormLines.jsx';
+import { purchaseLineMessage } from '../lib/purchaseLines.js';
 import { useFormClass } from './ClassSelect.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { PaymentMethodSelect, usePaymentMethodChoice } from './ProfileFields.jsx';
@@ -91,7 +93,6 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
   // A new check can wait in File › Print Forms › Checks; it gets its number when it prints.
   const printLater = usePrintLater('CHECK', kind === 'CHECK' && !editing);
   // Closing the window asks first while the entry has amounts or a payee not yet saved.
-  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]) }, Boolean(copyOf));
 
   useEffect(() => payeeRef.current?.focus(), [kind]);
   // My Preferences › General › recall: a known payee's last check or expense fills the rows.
@@ -132,7 +133,11 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     if (current && !payFrom(current)) setAccountId(defaultPayFrom);
   }, [kind, accountId, accounts, defaultPayFrom, payFrom]);
 
-  const { lines, invalid, total } = summarizeSplits(rows);
+  const { lines, invalid, total: splitTotal } = summarizeSplits(rows);
+  // Discounts and charges among the split lines (an edited or copied one starts with its own).
+  const [formRows, setFormRows, laid, formTouched] = usePurchaseFormLines(lines, from ? { doc: 'EXPENSE', id: from.id } : null);
+  const dirty = useDirtySince('expense', { payee, date, memo, rows: rows.map((r) => [r.memo, r.amount, r.qty, r.rate]), formTouched }, Boolean(copyOf));
+  const total = laid.error ? splitTotal : laid.total;
 
   const [memorizing, setMemorizing] = useState(null);
   const save = async (mode) => {
@@ -140,6 +145,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       return setError(kind === 'CHECK' ? 'Choose the bank account the check is drawn on.' : isCredit ? 'Choose the credit card the credit goes to.' : 'Choose the payment account.');
     if (invalid > 0) return setError(`${invalid} split row(s) need a category and an amount above zero.`);
     if (lines.length === 0) return setError('Add at least one split row with an amount.');
+    if (laid.error && formRows.length > 0) return setError(purchaseLineMessage(laid.error));
     if (lines.some((l) => l.accountId === accountId)) return setError(`A split row cannot use the ${isCredit ? 'card' : 'payment account'} itself.`);
     if (currency && rateE6 === null) return setError(`Enter the ${currency} to ${homeCurrency} exchange rate.`);
     const postedLines = formClass.apply(lines);
@@ -156,6 +162,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         ...(kind === 'EXPENSE' ? method.payload() : { paymentMethod: null, paymentMethodId: null }),
         memo: memo.trim() || null,
         lines: postedLines,
+        formLines: laid.formLines ?? [],
         currency: currency ? { code: currency, exchangeRateE6: rateE6 } : null,
       };
       if (mode === 'memorize') return setMemorizing({ ...input, checkNumber: null });
@@ -177,6 +184,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
       setPayee('');
       setMemo('');
       setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+      setFormRows([]);
       formClass.reset();
       setError(attachError);
       payeeRef.current?.focus();
@@ -196,6 +204,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
     setPayee('');
     setMemo('');
     setRows([blankSplit(defaultCategory), blankSplit(defaultCategory)]);
+    setFormRows([]);
     formClass.reset();
     setError(null);
     payeeRef.current?.focus();
@@ -331,6 +340,7 @@ function ExpenseForm({ kind, setKind, accounts, vendors, expenses, onPosted, onC
         </div>
       </div>
       <SplitGrid rows={rows} setRows={setRows} accounts={accounts} filter={(a) => isSplitAccount(a) && a.id !== accountId} defaultAccountId={defaultCategory} withClasses withJobs currency={currency || null} />
+      <PurchaseFormLines rows={formRows} setRows={setFormRows} laid={laid} lines={lines} accounts={accounts} />
       {!editing && (
         <div className="border-t border-qb-border px-2 py-1">
           <PendingAttachments paths={files} onChange={setFiles} label={files.length ? 'Attach another…' : 'Attach a receipt…'} />

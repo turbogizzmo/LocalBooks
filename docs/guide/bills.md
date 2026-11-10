@@ -21,6 +21,30 @@ pay it.
 
 The **Bills tracker** lists every bill with its due date, open balance and status.
 
+## Discounts and charges on bills, checks, credits and orders
+
+Bills, checks and expenses, vendor credits and purchase orders can take a discount or a charge
+after any split line, such as 2% off the parts or a freight charge on top:
+
+1. Under the split lines, click **Add a discount or charge**.
+2. Choose **Discount** or **Charge**, and the split line it follows (it applies to that line).
+3. Pick a Discount or Other Charge **item** to fill in the account, text and amount, or choose the
+   **Account** yourself. A discount or charge posts to an income or expense account.
+4. Enter an amount, or a percent of the line above such as `2%` (rounded to the cent).
+
+A discount comes off the total and a charge is added to it, so on a bill the split lines, less the
+discounts, plus the charges, must add up to the bill total. On a bill or check a discount is
+credited to its account and a charge is debited, like the split lines; on a vendor credit or a card
+credit both post the other way round. Only one discount or charge can follow each split line, and a
+discount can't be more than its line.
+
+A purchase order's discounts and charges print on the order and carry over to the bill made from it
+with **Create Bill**. A bill entered from received items (**Enter Bill for Received Items**) doesn't
+take them yet; add them on that bill.
+To give an Other Charge or Discount item its own account on purchase forms (for example a freight
+expense account, while its income account is used on invoices), open the item in **Products and
+Services** and choose **Expense account on bills and checks**.
+
 ## Attach the vendor's invoice
 
 Keep the vendor's invoice (a PDF, a scan or a photo, up to 25 MB) with the bill:

@@ -413,7 +413,7 @@ async fn discount_items_cannot_be_stocked_or_price_levelled() {
     let bad = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Odd".into(), description: None, rate_cents: 0, income_account_id: discounts, is_taxable: false },
-        crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5) },
+        crate::sales::ItemKind { item_type: "ITEM".into(), percent_ppm: Some(5), expense_account_id: None },
     )
     .await
     .unwrap_err();
@@ -439,14 +439,14 @@ async fn fixed_and_percent_charges_post_balanced_and_carry_from_an_estimate() {
     let shipping = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Shipping".into(), description: None, rate_cents: 1_500, income_account_id: services, is_taxable: false },
-        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: None, expense_account_id: None },
     )
     .await
     .unwrap();
     let handling = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Handling 3%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: false },
-        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000) },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(30_000), expense_account_id: None },
     )
     .await
     .unwrap();

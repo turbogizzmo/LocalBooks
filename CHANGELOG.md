@@ -14,6 +14,11 @@ people using LocalBooks.
   note you type. The bars on All Sales and Bills add Unbilled, Estimates, Purchase orders and Card
   balances; click one to list its transactions and open them. The Dashboard's Insights tab shows
   income and expense for the last 12 months.
+- **Discounts and charges on bills, checks, vendor credits and purchase orders.** Add a discount or
+  a charge after any split line, as an amount or a percent of that line, from a Discount or Other
+  Charge item or straight to an account. A purchase order's discounts and charges print on it and
+  carry over to its bill. Other Charge and Discount items can have their own expense account for
+  these forms.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

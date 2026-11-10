@@ -63,7 +63,7 @@ async fn unapplied_credits_are_listed_beside_open_documents_and_applied_oldest_f
     let bill = crate::expenses::post_vendor_bill(&pool, bill).await.unwrap().id;
     let vendor_credit = crate::credits::create_vendor_credit(
         &pool,
-        crate::credits::VendorCreditInput {
+        crate::credits::VendorCreditInput { form_lines: Vec::new(),
             vendor_name: "Paper Co".into(),
             reference: Some("RMA 7".into()),
             credit_date: d("2026-02-10"),

@@ -202,7 +202,7 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
             .fetch_all(&mut **tx)
             .await
             .map_err(db_err)?;
-    Ok(Some(ExpenseInput {
+    Ok(Some(ExpenseInput { form_lines: Vec::new(),
         kind,
         payee_name,
         payment_account_id,
