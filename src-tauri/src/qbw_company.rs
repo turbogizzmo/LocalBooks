@@ -465,7 +465,7 @@ fn read_accounts(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceAccount>
                 active: !hidden,
                 stored_balance_cents: stored.get(&id).copied(),
                 // QuickBooks numbers its tax lines; 0 is unassigned. The file has no names for them.
-                tax_line: r.get("tax_line_id_num").as_int().filter(|n| *n > 0).map(|n| crate::accountant_reports::quickbooks_tax_line(n)),
+                tax_line: r.get("tax_line_id_num").as_int().filter(|n| *n > 0).map(crate::accountant_reports::quickbooks_tax_line),
             },
         );
     }
@@ -758,7 +758,7 @@ fn read_parties(pages: &[LogicalPage], catalog: &Catalog, vendor: bool) -> Vec<S
             custom_fields: r.get(abm_col).as_text().and_then(|a| custom.get(&a).cloned()).unwrap_or_default(),
         });
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 
@@ -813,7 +813,7 @@ fn read_items(pages: &[LogicalPage], catalog: &Catalog) -> Vec<SourceItem> {
             })
         })
         .collect();
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 

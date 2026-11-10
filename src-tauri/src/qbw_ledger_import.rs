@@ -52,7 +52,7 @@ pub async fn stage(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, 
 /// (`"SHEET"`: a spreadsheet the user laid out).
 pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i64, ledger: &Ledger, format: Option<&str>) -> Result<i64, String> {
     let q = &ledger.quality;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let file_name = source_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let batch_id: i64 = sqlx::query_scalar(
         "INSERT INTO ledger_import_batches
@@ -731,7 +731,7 @@ pub async fn auto_map_accounts(pool: &SqlitePool, batch_id: i64) -> Result<AutoM
     order.sort_by_key(|s| (depth(s), s.full_name.to_lowercase()));
 
     let mut result = AutoMapResult::default();
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let mut mapped: HashMap<i64, i64> = sources.iter().filter_map(|s| Some((s.source_id, s.account_id?))).collect();
     for s in order {
         if mapped.contains_key(&s.source_id) {
@@ -910,7 +910,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
     .await
     .map_err(db_err)?;
     let mut result = ImportListsResult::default();
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     // Reps and shipping methods first, so customers can name their rep. Existing ones are matched
     // by initials or name; ones the file has hidden come in inactive.
     let sales_lists: Vec<(String, String, i64)> = sqlx::query_as("SELECT kind, name, is_active FROM ledger_import_sales_lists WHERE batch_id = ?1 ORDER BY kind, name")
@@ -1525,7 +1525,7 @@ pub async fn post_batch(pool: &SqlitePool, input: &PostLedgerInput) -> Result<Po
         return Err("QBW_FULL_AFTER_POST: this import is already posted as journal entries; use Start over before a full import".into());
     }
 
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let classes = match bring_in_classes(&mut tx, batch_id).await {
         Ok(classes) => classes,
         Err(err) => return Err(ledger::rollback(tx, err).await),
@@ -1761,7 +1761,7 @@ pub async fn discard_batch(pool: &SqlitePool, batch_id: i64) -> Result<(), Strin
     if live > 0 {
         return Err("QBW_POSTED: reverse this import's posted entries before deleting it".into());
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     for sql in [
         "DELETE FROM ledger_import_lines WHERE batch_id = ?1",
         "DELETE FROM ledger_import_unreadable WHERE batch_id = ?1",

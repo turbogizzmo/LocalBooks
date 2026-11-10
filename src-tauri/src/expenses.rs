@@ -217,7 +217,7 @@ fn sum_split_lines(amounts: impl Iterator<Item = i64>, code: &str) -> Result<i64
 
 /// Records a vendor bill: Dr each expense category / Cr Accounts Payable, atomically.
 pub async fn post_vendor_bill(pool: &SqlitePool, input: BillInput) -> Result<BillSummary, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let bill_id = match write_bill(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
@@ -292,7 +292,7 @@ pub(crate) async fn write_bill_carrying(tx: &mut Transaction<'_, Sqlite>, input:
     let vendor_name = input.vendor_name.trim();
     let vendor_id = find_or_create_named(tx, Party::Vendor, vendor_name).await?;
     if let Some(terms) = input.terms_id {
-        crate::profile_lists::check_terms(&mut **tx, terms, carried_terms, "BILL").await?;
+        crate::profile_lists::check_terms(tx, terms, carried_terms, "BILL").await?;
     }
 
     let bill_id: i64 = sqlx::query_scalar(
@@ -405,7 +405,7 @@ pub async fn pay_vendor_bills(pool: &SqlitePool, inputs: Vec<BillPaymentInput>) 
     if inputs.is_empty() {
         return Err("BILL_NOTHING_TO_PAY: select at least one bill".into());
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let mut queued = Vec::new();
     for input in &inputs {
         match write_bill_payment(&mut tx, input, "STANDARD").await {
@@ -657,7 +657,7 @@ const EXPENSE_SELECT: &str = "
 /// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
 /// (Dr the card / Cr each split account), atomically.
 pub async fn post_expense(pool: &SqlitePool, input: ExpenseInput) -> Result<ExpenseView, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let (id, _) = match write_expense(&mut tx, &input).await {
         Ok(ids) => ids,
         Err(err) => return Err(rollback(tx, err).await),
@@ -705,7 +705,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     }
     // The payee: a vendor by that name, else an other name (`other_names`), else a new vendor.
     let other_name_id = match clean(input.payee_name.as_deref()) {
-        Some(name) => crate::other_names::payee(&mut **tx, name).await?,
+        Some(name) => crate::other_names::payee(tx, name).await?,
         None => None,
     };
     let vendor_id = match (clean(input.payee_name.as_deref()), other_name_id) {
@@ -713,7 +713,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         _ => None,
     };
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
-    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
     let memo = match clean(input.memo.as_deref()) {
         Some(memo) => Some(memo.to_string()),
         None if kind == "CHECK" => check_memo(tx, vendor_id).await?,

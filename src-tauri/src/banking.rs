@@ -171,7 +171,7 @@ pub async fn list_undeposited(pool: &SqlitePool) -> Result<Vec<UndepositedItem>,
 }
 
 pub async fn post_bank_deposit(pool: &SqlitePool, input: DepositInput) -> Result<i64, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write_deposit(&mut tx, &input).await {
         Ok((deposit_id, _)) => {
             crate::ledger::commit_write(tx).await.map_err(db_err)?;
@@ -373,7 +373,7 @@ pub async fn post_transfer(pool: &SqlitePool, input: TransferInput) -> Result<i6
     if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
         return Err("XFER_BAD_AMOUNT: transfer amount must be greater than zero".into());
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let transfer_id: i64 = sqlx::query_scalar(
             "INSERT INTO transfers (transfer_date, from_account_id, to_account_id, amount_cents, memo)

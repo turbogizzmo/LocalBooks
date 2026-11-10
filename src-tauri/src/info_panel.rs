@@ -154,7 +154,7 @@ pub async fn set_item_purchasing(pool: &SqlitePool, product_id: i64, reorder_poi
             Some(true) => {}
         }
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = sqlx::query("UPDATE products_services SET reorder_point_e4 = ?1, preferred_vendor_id = ?2 WHERE id = ?3")
         .bind(reorder_point_e4)
         .bind(preferred_vendor_id)
@@ -184,7 +184,7 @@ pub async fn set_notes(pool: &SqlitePool, kind: &str, id: i64, notes: &str) -> R
     if notes.chars().count() > NOTES_MAX {
         return Err(format!("PARTY_NOTES_LONG: keep notes to {NOTES_MAX} characters"));
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = sqlx::query(&format!("UPDATE {table} SET notes = ?1 WHERE id = ?2"))
         .bind((!notes.is_empty()).then_some(notes))
         .bind(id)

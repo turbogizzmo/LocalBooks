@@ -417,7 +417,7 @@ fn yearless_month(text: &str) -> Option<u32> {
         }
         let candidate = with_year(&format!("{sep}2000"));
         let (a, b): (u32, u32) = (parts[0].parse().ok()?, parts[1].parse().ok()?);
-        return parses_as_date(&candidate).then(|| if a <= 12 { a } else { b });
+        return parses_as_date(&candidate).then_some(if a <= 12 { a } else { b });
     }
     let date = parse_date_ordered(&with_year(" 2000"), DateOrder::Mdy).or_else(|_| parse_date_ordered(&with_year(", 2000"), DateOrder::Mdy)).ok()?;
     t.chars().any(|c| c.is_ascii_alphabetic()).then(|| date.month())

@@ -324,7 +324,7 @@ pub fn list_backups(dir: &Path) -> Result<Vec<BackupFile>, String> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
-    let mut files: Vec<BackupFile> = std::fs::read_dir(&dir)
+    let mut files: Vec<BackupFile> = std::fs::read_dir(dir)
         .map_err(|e| format!("BACKUP_DIR: {e}"))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())

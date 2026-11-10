@@ -487,7 +487,7 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
         return Err(format!("RECEIPT_BILLED: item receipt #{number} already has its bill"));
     }
     if let Some(terms) = input.terms_id {
-        crate::profile_lists::check_terms(&mut **tx, terms, None, "BILL").await?;
+        crate::profile_lists::check_terms(tx, terms, None, "BILL").await?;
     }
     type LineRow = (i64, i64, i64, Option<i64>, String, Option<i64>, i64, Option<i64>, Option<i64>);
     let lines: Vec<LineRow> = sqlx::query_as(

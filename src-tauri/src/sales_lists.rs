@@ -370,10 +370,10 @@ pub(crate) async fn write_details_carrying(tx: &mut Transaction<'_, Sqlite>, doc
         if doc != SalesDoc::Invoice {
             return Err(format!("{code}_NO_TERMS: only invoices have terms"));
         }
-        crate::profile_lists::check_terms(&mut **tx, terms, carried.terms_id, code).await?;
+        crate::profile_lists::check_terms(tx, terms, carried.terms_id, code).await?;
     }
     if let Some(message) = details.customer_message_id {
-        crate::profile_lists::check_entry(&mut **tx, crate::profile_lists::ProfileList::CustomerMessage, message, carried.customer_message_id, code).await?;
+        crate::profile_lists::check_entry(tx, crate::profile_lists::ProfileList::CustomerMessage, message, carried.customer_message_id, code).await?;
     }
     write_columns(tx, doc, id, details).await?;
     let carried_fields: Vec<i64> = carried.custom_fields.iter().map(|f| f.field_id).collect();

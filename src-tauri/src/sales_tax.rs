@@ -116,7 +116,7 @@ fn unique(err: sqlx::Error, name: &str) -> String {
 
 pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<TaxRateView, String> {
     let name = validate_rate(&input)?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let account = liability_account(&mut tx, input.liability_account_id).await?;
         let vendor = agency(&mut tx, &input.agency_name).await?;
@@ -142,7 +142,7 @@ pub async fn create_tax_rate(pool: &SqlitePool, input: TaxRateInput) -> Result<T
 /// Changes a rate for documents from now on; documents already posted keep the tax they posted.
 pub async fn update_tax_rate(pool: &SqlitePool, id: i64, input: TaxRateInput) -> Result<TaxRateView, String> {
     let name = validate_rate(&input)?;
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let group: bool = sqlx::query_scalar("SELECT is_group FROM tax_rates WHERE id = ?1").bind(id).fetch_optional(&mut *tx).await.map_err(db_err)?.unwrap_or(false);
         if group {
@@ -252,7 +252,7 @@ pub(crate) async fn document_tax(tx: &mut Transaction<'_, Sqlite>, rate_id: Opti
     if !group {
         return Ok(Some(DocumentTax { rate_id: Some(rate_id), cents, parts: vec![TaxPart { rate_id, name, liability_account_id: account, cents }], combined: false }));
     }
-    let components = combined::components(&mut **tx, rate_id).await?;
+    let components = combined::components(tx, rate_id).await?;
     if let Some(off) = components.iter().find(|c| !c.is_active) {
         return Err(format!("{code}_INACTIVE_TAX: '{}' in this combined rate is inactive", off.name));
     }
@@ -359,7 +359,7 @@ pub async fn pay_sales_tax(pool: &SqlitePool, input: SalesTaxPaymentInput) -> Re
     if !(1..=MAX_LINE_CENTS).contains(&input.amount_cents) {
         return Err("TAX_BAD_AMOUNT: enter the amount paid".into());
     }
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
         let rate: Option<(String, i64, Option<String>)> = match input.tax_rate_id {
             Some(id) => sqlx::query_as("SELECT r.name, r.liability_account_id, v.name FROM tax_rates r LEFT JOIN vendors v ON v.id = r.agency_vendor_id WHERE r.id = ?1")
@@ -606,7 +606,7 @@ pub async fn tax_liability_on(pool: &SqlitePool, start_date: NaiveDate, end_date
             }
         })
         .collect();
-    rows.sort_by(|a, b| (a.tax_rate_id.is_none(), a.name.to_lowercase()).cmp(&(b.tax_rate_id.is_none(), b.name.to_lowercase())));
+    rows.sort_by_key(|a| (a.tax_rate_id.is_none(), a.name.to_lowercase()));
 
     let paid: i64 = sqlx::query_scalar(
         "SELECT COALESCE(SUM(p.amount_cents), 0) FROM sales_tax_payments p JOIN journal_entries e ON e.id = p.journal_entry_id

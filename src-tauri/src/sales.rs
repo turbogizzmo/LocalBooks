@@ -311,7 +311,7 @@ pub(crate) async fn create_party(pool: &SqlitePool, party: Party, name: &str, em
         return Err("PARTY_NO_NAME: enter a name".into());
     }
     let full = if matches!(party, Party::Customer) { job_name(name)? } else { name.to_string() };
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     // A job's customer is created first if needed.
     let parent = match full.rsplit_once(':').filter(|_| matches!(party, Party::Customer)) {
         Some((above, _)) => Some(customer_path(&mut tx, above).await?),
@@ -419,7 +419,7 @@ pub fn validate_sales_receipt(input: &SalesReceiptInput) -> Result<i64, String> 
 
 /// Records a cash sale: Dr deposit account / Cr each line's income account, atomically.
 pub async fn post_sales_receipt(pool: &SqlitePool, input: SalesReceiptInput) -> Result<SalesReceiptSummary, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let id = match write_sales_receipt(&mut tx, &input).await {
         Ok(id) => id,
         Err(err) => return Err(rollback(tx, err).await),
@@ -457,7 +457,7 @@ async fn write_sales_receipt(tx: &mut Transaction<'_, Sqlite>, input: &SalesRece
         Some(name) => Some(find_or_create_named(tx, Party::Customer, name).await?),
         None => None,
     };
-    let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, Some(&input.payment_method), "SR").await?;
+    let (method_id, method) = crate::profile_lists::resolve_payment_method(tx, input.payment_method_id, Some(&input.payment_method), "SR").await?;
 
     let (receipt_id, receipt_number): (i64, i64) = sqlx::query_as(
         "INSERT INTO sales_receipts (receipt_number, customer_id, receipt_date, deposit_account_id, payment_method, reference, memo, total_cents, tax_rate_id, tax_cents, discount_cents, payment_method_id)
