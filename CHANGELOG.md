@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Bills from purchase orders use the vendor's terms.** Create Bill on a purchase order now gives
+  the bill the vendor's terms, so its due date follows them and Pay Bills offers the early-payment
+  discount. It also gets the same checks as Enter Bills: a repeated vendor bill number or an
+  unusual date asks before saving, and approval rules for bills hold it for approval.
+
 ## [0.14.1]
 
 - **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a

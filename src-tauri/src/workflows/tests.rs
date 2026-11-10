@@ -182,3 +182,27 @@ async fn the_1099_report_follows_the_account_mapping_and_the_threshold_by_year()
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", r#"{"999999":"NEC-1"}"#).await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNT"));
     assert!(crate::preferences::set(&pool, "tax_1099_accounts", "not json").await.unwrap_err().starts_with("PREF_BAD_1099_ACCOUNTS"));
 }
+
+#[tokio::test]
+async fn a_bill_from_a_purchase_order_takes_the_vendors_terms_and_the_bill_checks() {
+    let pool = test_pool().await;
+    let supplies = account(&pool, "6250").await;
+    let terms: i64 = sqlx::query_scalar("INSERT INTO terms (name, net_days, discount_ppm, discount_days) VALUES ('2% 10 Net 30', 30, 20000, 10) RETURNING id").fetch_one(&pool).await.unwrap();
+    let order = |pool: SqlitePool| async move {
+        create_purchase_order(&pool, PurchaseOrderInput { form_lines: Vec::new(), vendor_name: "Staples".into(), po_date: d(5, 1), expected_date: None, memo: None,
+            lines: vec![PurchaseOrderLineInput { account_id: supplies, product_service_id: None, description: Some("Paper".into()), quantity_e4: Some(10_000), rate_cents: Some(10_000), amount_cents: 10_000, class_id: None, customer_id: None }] }).await.unwrap()
+    };
+    let po = order(pool.clone()).await;
+    sqlx::query("UPDATE vendors SET terms_id = ?1 WHERE name = 'Staples'").bind(terms).execute(&pool).await.unwrap();
+
+    let bill = bill_purchase_order(&pool, po, d(5, 9), d(6, 8), Some("123".into())).await.unwrap();
+    let kept: Option<i64> = sqlx::query_scalar("SELECT terms_id FROM bills WHERE id = ?1").bind(bill).fetch_one(&pool).await.unwrap();
+    assert_eq!(kept, Some(terms), "the bill carries the vendor's terms, so Pay Bills offers the discount");
+
+    // A second order billed with the same vendor bill number is caught like Enter Bills catches it.
+    let again = order(pool.clone()).await;
+    let input = purchase_order_bill(&pool, again, d(5, 10), d(6, 9), Some("123".into())).await.unwrap();
+    assert_eq!(input.terms_id, Some(terms));
+    let warned = crate::guards::check(&pool, crate::guards::bill(&input, None), None).await.unwrap_err();
+    assert!(warned.starts_with("NEEDS_CONFIRMATION"), "{warned}");
+}

@@ -717,51 +717,69 @@ pub async fn set_purchase_order_closed(pool: &SqlitePool, id: i64, closed: bool)
     Ok(())
 }
 
-/// Turns an open purchase order into a posted bill with the same lines; returns the bill id.
-pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
+/// The bill an open purchase order becomes, with the same lines, discounts and charges, and the
+/// vendor's terms (so Pay Bills offers its early-payment discount). Nothing is written: the screen's
+/// command runs the bill checks and approval rules on it first, as Enter Bills does.
+pub async fn purchase_order_bill(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<BillInput, String> {
+    let head: Option<(String, i64, String, Option<String>, i64, Option<i64>)> = sqlx::query_as(
+        "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number, v.terms_id FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (vendor, total, status, memo, number, terms_id) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+    if status != "OPEN" {
+        return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
+    }
     let lines = purchase_order_lines(pool, id).await?;
     // Its discounts and charges come over too, so the bill totals what the order did.
     let form_lines = crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(pool, crate::purchase_lines::PurchaseDoc::PurchaseOrder, id).await?);
+    Ok(BillInput {
+        terms_id,
+        vendor_name: vendor,
+        bill_number: clean(bill_number.as_deref()).map(str::to_string),
+        bill_date,
+        due_date,
+        memo: Some(memo.unwrap_or_else(|| format!("PO #{number}"))),
+        total_cents: total,
+        lines: lines
+            .iter()
+            .map(|l| BillLineInput {
+                account_id: l.account_id,
+                amount_cents: l.amount_cents,
+                memo: l.description.clone(),
+                quantity_e4: l.quantity_e4,
+                rate_cents: l.rate_cents,
+                product_service_id: l.product_service_id,
+                class_id: l.class_id,
+                customer_id: l.customer_id,
+                billable: None,
+            })
+            .collect(),
+        form_lines,
+    })
+}
+
+/// Turns an open purchase order into a posted bill with the same lines; returns the bill id.
+pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDate, due_date: NaiveDate, bill_number: Option<String>) -> Result<i64, String> {
+    let bill = purchase_order_bill(pool, id, bill_date, due_date, bill_number).await?;
+    post_purchase_order_bill(pool, id, &bill).await
+}
+
+/// Posts `bill` (from [`purchase_order_bill`]) and marks the order billed, if it is still open
+/// with nothing received.
+pub async fn post_purchase_order_bill(pool: &SqlitePool, id: i64, bill: &BillInput) -> Result<i64, String> {
     run(pool, async |tx| {
-        let head: Option<(String, i64, String, Option<String>, i64)> = sqlx::query_as(
-            "SELECT v.name, o.total_cents, o.status, o.memo, o.po_number FROM purchase_orders o JOIN vendors v ON v.id = o.vendor_id WHERE o.id = ?1",
-        )
-        .bind(id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(db_err)?;
-        let (vendor, total, status, memo, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
+        let head: Option<(String, i64)> = sqlx::query_as("SELECT status, po_number FROM purchase_orders WHERE id = ?1").bind(id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+        let (status, number) = head.ok_or("PO_NOT_FOUND: that purchase order does not exist")?;
         if status != "OPEN" {
             return Err("PO_NOT_OPEN: only an open purchase order can be billed".into());
         }
         if crate::item_receipts::order_has_receipts(tx, id).await? {
             return Err(format!("PO_HAS_RECEIPTS: items on purchase order #{number} have been received; enter the bill from Enter Bill for Received Items"));
         }
-        let bill = BillInput {
-            terms_id: None,
-            vendor_name: vendor,
-            bill_number: clean(bill_number.as_deref()).map(str::to_string),
-            bill_date,
-            due_date,
-            memo: Some(memo.unwrap_or_else(|| format!("PO #{number}"))),
-            total_cents: total,
-            lines: lines
-                .iter()
-                .map(|l| BillLineInput {
-                    account_id: l.account_id,
-                    amount_cents: l.amount_cents,
-                    memo: l.description.clone(),
-                    quantity_e4: l.quantity_e4,
-                    rate_cents: l.rate_cents,
-                    product_service_id: l.product_service_id,
-                    class_id: l.class_id,
-                    customer_id: l.customer_id,
-                    billable: None,
-                })
-                .collect(),
-            form_lines: form_lines.clone(),
-        };
-        let bill_id = crate::expenses::write_bill(tx, &bill).await?;
+        let bill_id = crate::expenses::write_bill(tx, bill).await?;
         sqlx::query("UPDATE purchase_orders SET status = 'BILLED', bill_id = ?1 WHERE id = ?2").bind(bill_id).bind(id).execute(&mut **tx).await.map_err(db_err)?;
         Ok(bill_id)
     })
