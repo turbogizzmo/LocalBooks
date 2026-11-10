@@ -155,6 +155,7 @@ Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?
     crate::sales_orders::create(
         p,
         &crate::sales_orders::SalesOrderInput {
+            order_number: None,
             customer_name: "Brightwater Cafe".into(),
             order_date: d(2025, 12, 8),
             expected_date: Some(d(2026, 1, 15)),
@@ -471,6 +472,7 @@ async fn t49_reports_tie_out_to_the_ledger() {
     crate::invoices::create_and_post_invoice(
         p,
         crate::invoices::InvoiceInput {
+            invoice_number: None,
             customer_name: "Brightwater Cafe".into(),
             issue_date: d(2025, 12, 15),
             due_date: d(2025, 12, 30),

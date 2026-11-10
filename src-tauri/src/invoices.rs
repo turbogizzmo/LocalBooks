@@ -46,6 +46,9 @@ pub struct InvoiceLineInput {
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceInput {
     pub customer_name: String,
+    /// The number typed in the form's number box; `None` takes the next one (`doc_numbers`).
+    #[serde(default)]
+    pub invoice_number: Option<i64>,
     pub issue_date: NaiveDate,
     pub due_date: NaiveDate,
     pub lines: Vec<InvoiceLineInput>,
@@ -394,11 +397,12 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
         None => None,
     };
 
+    let number = crate::doc_numbers::take_number(tx, crate::doc_numbers::DocKind::Invoice, input.invoice_number).await?;
     let (invoice_id, invoice_number): (i64, i64) = sqlx::query_as(
         "INSERT INTO invoices
             (invoice_number, customer_name, issue_date, due_date, total_cents, status, customer_id,
              currency_code, exchange_rate_e6, home_total_cents, tax_rate_id, tax_cents, discount_cents)
-         VALUES ((SELECT COALESCE(MAX(invoice_number), 1000) + 1 FROM invoices), ?1, ?2, ?3, ?4, 'DRAFT', ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         VALUES (?12, ?1, ?2, ?3, ?4, 'DRAFT', ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          RETURNING id, invoice_number",
     )
     .bind(customer)
@@ -412,6 +416,7 @@ pub(crate) async fn write_invoice_reimbursing(tx: &mut Transaction<'_, Sqlite>, 
     .bind(tax.as_ref().and_then(|t| t.rate_id))
     .bind(tax_cents)
     .bind(input.discount_cents)
+    .bind(number)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

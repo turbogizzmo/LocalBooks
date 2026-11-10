@@ -18,6 +18,11 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **Invoice # on the invoice form.** A new invoice shows the number it will get before you save,
+  and you can type another. If that number is already used, LocalBooks says which invoice has it
+  and offers the next free number. Estimates, sales receipts, credit memos and sales orders have
+  the same box (Estimate #, Sale #, Credit #, Order #). Duplicate still gives the copy the next
+  number.
 
 ## [0.14.0]
 

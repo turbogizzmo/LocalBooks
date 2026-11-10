@@ -60,7 +60,7 @@ fn line(description: &str, quantity_e4: i64, rate_cents: i64, income: i64, taxab
 }
 
 fn invoice(customer: &str, date: NaiveDate, lines: Vec<InvoiceLineInput>) -> InvoiceInput {
-    InvoiceInput { customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: 0, details: Default::default() }
+    InvoiceInput { invoice_number: None, customer_name: customer.into(), issue_date: date, due_date: date + chrono::Days::new(30), lines, currency: None, tax_rate_id: None, discount_cents: 0, details: Default::default() }
 }
 
 async fn pay(pool: &SqlitePool, invoice_id: i64, bank: i64, date: NaiveDate, cents: i64, method: &str) {
@@ -207,7 +207,7 @@ pub(crate) async fn edge_cases(path: &Path) -> String {
     let credited = invoices::create_and_post_invoice(&pool, invoice("Zed's 50% Off <Outlet>", d(2025, 5, 5), vec![line("Clearance", 20_000, 5_000, sales_acct, false)])).await.expect("invoice to credit");
     let credit = credits::create_credit_memo(
         &pool,
-        CreditMemoInput { form_lines: Vec::new(),
+        CreditMemoInput { credit_number: None, form_lines: Vec::new(),
             customer_name: "Zed's 50% Off <Outlet>".into(),
             credit_date: d(2025, 5, 20),
             memo: Some("Damaged goods".into()),

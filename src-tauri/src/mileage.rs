@@ -497,6 +497,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillTripsInput)
     }
 
     let invoice = InvoiceInput {
+        invoice_number: None,
         customer_name: customer,
         issue_date: input.issue_date,
         due_date: input.due_date,

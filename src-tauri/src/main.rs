@@ -36,6 +36,7 @@ mod customer_groups;
 mod db;
 mod desktop;
 mod diagnostics;
+mod doc_numbers;
 mod document_inbox;
 mod duplicates;
 mod edits;

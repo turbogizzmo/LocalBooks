@@ -35,6 +35,7 @@ async fn check(pool: &SqlitePool, payee: &str, number: Option<&str>, cents: i64,
 
 fn invoice_input(pool_services: i64) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme".into(),
         issue_date: d(1),
         due_date: d(31),

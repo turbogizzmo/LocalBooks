@@ -100,6 +100,7 @@ async fn a_credit_memo_at_a_combined_rate_takes_back_each_part() {
     crate::credits::create_credit_memo(
         &pool,
         crate::credits::CreditMemoInput {
+            credit_number: None,
             customer_name: "Acme".into(),
             credit_date: d(7, 3),
             memo: None,

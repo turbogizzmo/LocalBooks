@@ -412,6 +412,7 @@ async fn write(tx: &mut Transaction<'_, Sqlite>, input: &BounceInput) -> Result<
         service_date: None,
     };
     let invoice_for = |customer: &str, lines: Vec<InvoiceLineInput>| InvoiceInput {
+        invoice_number: None,
         customer_name: customer.to_string(),
         issue_date: input.bounce_date,
         due_date: input.bounce_date,

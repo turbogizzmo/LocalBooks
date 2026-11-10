@@ -695,6 +695,7 @@ async fn post_invoice(
     replacing: Replacing<'_>,
 ) -> Result<(), String> {
     let input = InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: date(day),
         due_date: date(day) + Days::new(u64::from(due_in)),

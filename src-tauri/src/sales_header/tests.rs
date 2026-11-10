@@ -16,6 +16,7 @@ async fn services(pool: &SqlitePool) -> i64 {
 
 fn invoice(customer: &str, account: i64, cents: i64, header: SalesHeader) -> InvoiceInput {
     InvoiceInput {
+        invoice_number: None,
         customer_name: customer.into(),
         issue_date: d(1),
         due_date: d(31),
@@ -152,6 +153,7 @@ async fn an_edited_invoice_and_an_estimate_turned_invoice_keep_the_copy() {
     let estimate = crate::estimates::create_estimate(
         &pool,
         crate::estimates::EstimateInput {
+            estimate_number: None,
             customer_name: "Acme".into(),
             estimate_date: d(1),
             expiration_date: None,

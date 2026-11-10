@@ -149,6 +149,7 @@ async fn billing_trips_posts_an_invoice_and_marks_them_billed() {
 
     // Editing the invoice keeps the trips on the edited invoice.
     let mut edited = InvoiceInput {
+        invoice_number: None,
         customer_name: "Acme:Kitchen".into(),
         issue_date: d(3, 31),
         due_date: d(5, 15),

@@ -75,6 +75,7 @@ features![
     deposits,
     desktop,
     diagnostics,
+    doc_numbers,
     document_inbox,
     duplicates,
     editing,

@@ -305,6 +305,7 @@ async fn write_charges(tx: &mut Transaction<'_, Sqlite>, input: &AssessInput, se
             return Err(format!("FC_BAD_AMOUNT: the finance charge for {name} must be more than zero"));
         }
         let invoice = InvoiceInput {
+            invoice_number: None,
             customer_name: name.to_string(),
             issue_date: input.as_of,
             due_date: input.as_of,

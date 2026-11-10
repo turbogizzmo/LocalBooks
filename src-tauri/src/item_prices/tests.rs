@@ -133,6 +133,7 @@ async fn applying_sets_prices_records_the_audit_trail_and_leaves_documents_alone
     let invoice = crate::invoices::create_and_post_invoice(
         &c.pool,
         crate::invoices::InvoiceInput {
+            invoice_number: None,
             customer_name: "Acme".into(),
             issue_date: "2026-10-02".parse().unwrap(),
             due_date: "2026-11-01".parse().unwrap(),
