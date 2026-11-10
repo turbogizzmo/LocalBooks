@@ -11,6 +11,19 @@ people using LocalBooks.
   import keeps an invoice's or sales receipt's subtotal and discount lines where they were, instead
   of folding the discount into one amount off the whole form. Subtotal, group, payment and sales
   tax items are no longer added to your item list as things to sell.
+- **Payroll and cost of goods sold come in from QuickBooks Desktop files.** Importing a company
+  file now brings its paychecks and payroll liability payments, so payroll expense and liability
+  accounts match QuickBooks. Invoices and sales receipts that sold inventory also bring the cost
+  of what they sold, moving it from Inventory Asset to Cost of Goods Sold as QuickBooks did.
+- **Company-file imports read more of older files, and say which balances don't match.**
+  LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
+  invoices and other transactions on those pages come in. And if an account's imported balance
+  still differs from the balance QuickBooks stored, step 2 of the import lists it with the
+  file's balance, the imported balance and the difference, before and after you post.
+- **More check lines come in from older company files.** When the part of a QuickBooks
+  Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
+  some tables' rows at all, such as the check lines of a file upgraded from an older version.
+  LocalBooks now repairs that part first, so those transactions import.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

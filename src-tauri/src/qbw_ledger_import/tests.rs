@@ -1107,3 +1107,97 @@ async fn the_summary_lists_amounts_that_are_not_whole_cents() {
     let clean = stage(&pool, std::path::Path::new("/books/Clean.qbw"), 1, &ledger()).await.unwrap();
     assert!(batch_summary(&pool, clean).await.unwrap().fractional_amounts.is_empty());
 }
+
+/// Forms that sold inventory carry its cost (cost of goods sold debit, inventory credit) in the
+/// same transaction. A full import still makes them an invoice and a sales receipt, and their
+/// entries move the cost.
+#[tokio::test]
+async fn sold_inventory_cost_stays_with_its_invoice_and_sales_receipt() {
+    use crate::qbw_documents::{DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-03-01", lines) };
+    let sold = vec![DocumentLine { item_id: None, description: Some("Tile".into()), quantity_e4: 10_000, rate_cents: 9_000, cents: 9_000, account_id: 6, class: None, subtotal: false }];
+    let mut l = ledger();
+    l.accounts.extend([
+        account(6, "Materials Income", "INCOME", None),
+        account(30, "Cost of Goods Sold", "COST_OF_GOODS_SOLD", None),
+        account(31, "Inventory Asset", "OTHER_CURRENT_ASSET", None),
+    ]);
+    l.unbalanced.clear();
+    l.unreadable.clear();
+    l.transactions = vec![
+        doc(40, "Invoice", &[(4, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::Invoice {
+            customer_id: 100,
+            number: Some("7".into()),
+            due_date: None,
+            lines: sold.clone(),
+            sales: Default::default(),
+        }),
+        doc(41, "Sales receipt", &[(1, -9_000), (6, 9_000), (30, -5_500), (31, 5_500)], SourceDocument::SalesReceipt {
+            customer_id: Some(100),
+            number: Some("8".into()),
+            method: "CASH".into(),
+            lines: sold,
+            sales: Default::default(),
+        }),
+    ];
+    l.customers = vec![SourceParty {
+        id: 100,
+        name: "Hillside Builders".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: None,
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.invoices, full.sales_receipts, full.fell_back), (1, 1, 0), "{full:?}");
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    let mapped = |name: &str| summary.accounts.iter().find(|a| a.full_name == name).and_then(|a| a.account_id).unwrap();
+    assert_eq!(balance(&pool, mapped("Cost of Goods Sold")).await, 11_000);
+    assert_eq!(balance(&pool, mapped("Inventory Asset")).await, -11_000);
+    assert_eq!(balance(&pool, mapped("Riverside Bank")).await, 9_000, "the receipt's money went to the bank");
+}
+
+/// An account the file says holds more than its transactions add up to (here a transaction that
+/// could not be read completely) is listed with its expected and imported balance, not hidden.
+#[tokio::test]
+async fn balances_that_differ_from_the_file_are_listed() {
+    let pool = test_pool().await;
+    let mut l = ledger();
+    // Stored balances are credit-positive, as in the file. Riverside Bank and Hosting match;
+    // Domain Names also has the unbalanced 7.00 the import leaves out; Unused has a balance
+    // with no transactions behind it.
+    for (name, stored) in [("Riverside Bank", 12_500), ("Domain Names", -12_700), ("Unused", -4_000), ("Hosting", 0)] {
+        l.accounts.iter_mut().find(|a| a.full_name == name).unwrap().stored_balance_cents = Some(stored);
+    }
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    let rows: Vec<(&str, i64, i64, i64)> =
+        summary.balance_differences.iter().map(|d| (d.full_name.as_str(), d.expected_cents, d.imported_cents, d.difference_cents)).collect();
+    assert_eq!(rows, [("Unused", 4_000, 0, -4_000), ("Domain Names", 12_700, 12_000, -700)]);
+
+    l.accounts.iter_mut().for_each(|a| a.stored_balance_cents = None);
+    let batch = stage(&pool, Path::new("/books/Other.qbw"), 1, &l).await.unwrap();
+    assert!(batch_summary(&pool, batch).await.unwrap().balance_differences.is_empty(), "no stored balance, nothing to compare");
+
+    // A file of lists only has balances but nothing to post: nothing is listed as differing.
+    let mut lists = ledger();
+    lists.transactions.clear();
+    lists.unbalanced.clear();
+    lists.unreadable.clear();
+    lists.accounts[0].stored_balance_cents = Some(-9_900);
+    let batch = stage(&pool, Path::new("/books/Lists.qbw"), 1, &lists).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    assert!(summary.lists_only && summary.balance_differences.is_empty());
+}
