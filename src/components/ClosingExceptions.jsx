@@ -1,9 +1,14 @@
+import { useState } from 'react';
+import { ExportMenu, plainAmount, saveText, saveXlsx, tableSheet, toCsv } from './ReportParts.jsx';
+import { useCompany } from './PrintDocuments.jsx';
 import { api, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
 import Notice from './Notice.jsx';
 
 const MADE_AT = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+const COLUMNS = ['Made', 'By', 'Action', 'Dated', 'Type', 'Memo', 'Amount', 'Closed through'].map((label) => ({ label, align: label === 'Amount' ? 'right' : undefined }));
+const TITLE = 'Closing Date Exceptions';
 const label = (source) => source.toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 /**
@@ -12,11 +17,25 @@ const label = (source) => source.toLowerCase().replace(/_/g, ' ').replace(/^./, 
  */
 export default function ClosingExceptions() {
   const { data, error } = useLedgerQuery(api.getClosingExceptions);
+  const company = useCompany();
+  const [notice, setNotice] = useState(null);
   if (error) return <Notice kind="error" text={error} />;
   if (!data) return null;
+  const plainRows = () =>
+    data.map((x) => [x.madeAt, x.madeBy ?? '', x.action === 'VOID' ? 'Voided' : 'Posted', x.entryDate, label(x.sourceType), x.memo ?? '', plainAmount(x.amountCents), x.closingDate]);
+  const csv = () => saveText(toCsv([[company.name], [TITLE], [], COLUMNS.map((c) => c.label), ...plainRows()]), 'Closing-Date-Exceptions.csv', setNotice);
+  const xlsx = () => saveXlsx(tableSheet({ company: company.name, title: TITLE, columns: COLUMNS, rows: plainRows() }), 'Closing-Date-Exceptions.xlsx', setNotice);
   return (
-    <section className="border-t border-qb-border" aria-label="Closing Date Exceptions">
-      <h3 className="px-2 pt-1 text-xs font-semibold">Closing Date Exceptions</h3>
+    <section className="border-t border-qb-border" aria-label={TITLE}>
+      <div className="flex items-center gap-2 px-2 pt-1">
+        <h3 className="text-xs font-semibold">{TITLE}</h3>
+        {data.length > 0 && (
+          <div className="ml-auto">
+            <ExportMenu onNotice={setNotice} onCsv={csv} onXlsx={xlsx} printable={false} />
+          </div>
+        )}
+      </div>
+      {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}
       {data.length === 0 ? (
         <p className="px-2 pb-1 text-xs text-qb-ink-muted">Nothing has been posted or voided in a closed period.</p>
       ) : (

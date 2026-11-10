@@ -146,7 +146,8 @@ pub struct ClosingException {
     pub closing_date: NaiveDate,
 }
 
-/// Closing Date Exceptions: every posting or void, newest first, dated on or before the closing
+/// Closing Date Exceptions: every posting or void, newest first (a void once, not again for its
+/// reversing entry), dated on or before the closing
 /// date in force when it was made (an External Accountant's work, or a closing date moved back to
 /// let a change in). Entries made before a closing date was set later aren't exceptions.
 pub async fn exceptions(pool: &SqlitePool) -> Result<Vec<ClosingException>, String> {
@@ -154,7 +155,12 @@ pub async fn exceptions(pool: &SqlitePool) -> Result<Vec<ClosingException>, Stri
         "WITH made AS (
              SELECT a.id AS audit_id, a.action_type AS action, a.timestamp AS made_at, a.actor AS made_by, a.target_entity_id AS journal_entry_id,
                     (SELECT c.lock_date FROM closing_locks c WHERE c.set_at <= a.timestamp ORDER BY c.id DESC LIMIT 1) AS closing_date
-             FROM ledger_audit_log a WHERE a.action_type IN ('POST', 'VOID'))
+             FROM ledger_audit_log a JOIN journal_entries j ON j.id = a.target_entity_id
+             -- Only entries dated on or before some closing date can be exceptions; a void's
+             -- reversing entry is the VOID row of the entry it reverses, not a posting of its own.
+             WHERE a.action_type IN ('POST', 'VOID')
+               AND j.entry_date <= (SELECT MAX(lock_date) FROM closing_locks)
+               AND NOT (a.action_type = 'POST' AND j.reverses_entry_id IS NOT NULL))
          SELECT m.audit_id, m.action, m.made_at, m.made_by, m.journal_entry_id, e.entry_date, e.source_type, e.memo,
                 COALESCE((SELECT SUM(l.debit_cents) FROM journal_lines l WHERE l.journal_entry_id = e.id), 0) AS amount_cents,
                 m.closing_date

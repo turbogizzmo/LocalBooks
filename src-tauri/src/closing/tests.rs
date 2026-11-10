@@ -102,10 +102,18 @@ async fn an_external_accountant_posts_in_a_closed_period_and_it_is_listed_as_an_
     post(&pool, "2026-04-02").await.unwrap();
     assert_eq!(post(&pool, "2026-03-15").await.unwrap_err(), CLOSED_MESSAGE, "closed again for everyone else");
 
+    // The database backstop is back for everyone once that transaction committed.
+    let flag: Option<i64> = sqlx::query_scalar("SELECT value FROM closing_exception_in_progress").fetch_one(&pool).await.unwrap();
+    assert_eq!(flag, None, "commit_write clears the pass");
+    let draft: i64 = sqlx::query_scalar("INSERT INTO journal_entries (entry_number, entry_date) VALUES (98, '2026-03-20') RETURNING id").fetch_one(&pool).await.unwrap();
+    let refused = sqlx::query("UPDATE journal_entries SET status = 'POSTED' WHERE id = ?1").bind(draft).execute(&pool).await.unwrap_err().to_string();
+    assert!(refused.contains("PERIOD_CLOSED"), "{refused}");
+
     let found = exceptions(&pool).await.unwrap();
     let rows: Vec<(&str, i64, String, i64)> = found.iter().map(|e| (e.action.as_str(), e.journal_entry_id, e.entry_date.to_string(), e.amount_cents)).collect();
     assert!(rows.contains(&("POST", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
     assert!(rows.contains(&("VOID", adjusting, "2026-03-15".into(), 100)), "{rows:?}");
+    assert_eq!(rows.len(), 2, "the void is listed once, not again for its reversing entry: {rows:?}");
     assert!(found.iter().all(|e| e.made_by.as_deref().is_some_and(|by| by.starts_with("cpa as ")) && e.closing_date.to_string() == "2026-03-31"), "{found:?}");
     assert!(found.windows(2).all(|w| w[0].audit_id > w[1].audit_id), "newest first");
 }
