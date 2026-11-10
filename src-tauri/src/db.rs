@@ -954,21 +954,50 @@ async fn record_migrations(conn: &mut sqlx::SqliteConnection) -> Result<(), Stri
     .map_err(|e| format!("cannot record migrations in the audit trail: {e}"))
 }
 
+/// A fresh in-memory company database with every migration applied.
+///
+/// Applying all the migrations took most of a small test's time (about 1.3 s of 1.4 s in a debug
+/// build, Nov 2026), so they run once per test binary: each call gets its own copy of that migrated
+/// database's bytes. The copy is the same file a fresh `migrate` would write, audit trail included,
+/// except that every copy shares one `ledger_chain.file_id`.
 #[cfg(test)]
 pub(crate) async fn test_pool() -> SqlitePool {
+    static MIGRATED: tokio::sync::OnceCell<Vec<u8>> = tokio::sync::OnceCell::const_new();
+    let bytes = MIGRATED
+        .get_or_init(|| async {
+            let pool = empty_test_pool().await;
+            migrate(&pool).await.expect("apply migrations");
+            let mut conn = pool.acquire().await.expect("acquire");
+            let bytes = conn.serialize(None).await.expect("serialize migrated database").to_vec();
+            drop(conn);
+            pool.close().await;
+            bytes
+        })
+        .await;
+    let pool = empty_test_pool().await;
+    let data = sqlx::sqlite::SqliteOwnedBuf::try_from(bytes.as_slice()).expect("copy migrated database");
+    pool.acquire()
+        .await
+        .expect("acquire")
+        .deserialize(None, data, false)
+        .await
+        .expect("load migrated database");
+    pool
+}
+
+#[cfg(test)]
+async fn empty_test_pool() -> SqlitePool {
     use std::str::FromStr;
 
     // One connection: every connection to `sqlite::memory:` would otherwise be its own database.
     let options = SqliteConnectOptions::from_str("sqlite::memory:")
         .expect("valid sqlite url")
         .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
+    SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
         .await
-        .expect("open in-memory database");
-    migrate(&pool).await.expect("apply migrations");
-    pool
+        .expect("open in-memory database")
 }
 
 #[cfg(test)]
