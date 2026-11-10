@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { runListCommand } from './lib/listCommands.js';
 import Sidebar, { canOpen, findNav, openableInstead, resolveView } from './components/Sidebar.jsx';
 import QuickCreateModal from './components/QuickCreateModal.jsx';
 import { UpdateBanner } from './components/Updates.jsx';
@@ -16,11 +17,33 @@ import Notice from './components/Notice.jsx';
 import { CompanyContext } from './components/PrintDocuments.jsx';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { api, COMPANY_FILE_CHANGED, useLedgerQuery } from './lib/api.js';
+import { api, COMPANY_FILE_CHANGED, errorText, useLedgerQuery } from './lib/api.js';
+import { tellUser } from './lib/dialogs.jsx';
 import { formatDate, setFourDigitYears } from './lib/dates.js';
 import { setCurrencySymbol, setHoursFormat } from './lib/money.js';
 import * as cw from './lib/childWindows.js';
 import { runFormCommand } from './lib/formFlow.jsx';
+
+/**
+ * Reports › QuickReport: the Ctrl+Q of the list or register in front, for what is selected in it
+ * (an account, a customer or vendor, an item). Says how to use it when nothing there takes it.
+ */
+function runQuickReport() {
+  const target = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+  const key = new KeyboardEvent('keydown', { key: 'q', code: 'KeyQ', ctrlKey: true, bubbles: true, cancelable: true });
+  if (target && !target.dispatchEvent(key)) return;
+  tellUser('Select an account in the Chart of Accounts or a register, a customer or vendor in its list, or an item in the Item List, then choose QuickReport (or press Ctrl+Q).');
+}
+
+/** File › Utilities › Export: saves the file, then says where. */
+async function runExport(save, what) {
+  try {
+    const path = await save();
+    if (path) tellUser(`${what} saved to ${path}.`);
+  } catch (err) {
+    tellUser(errorText(err));
+  }
+}
 import { changeTextSize, useMyPreferences } from './lib/myPreferences.js';
 import { KIND_LABEL, NORMAL_TEXT_SIZE, textSizeFor, textSizeStepForKey, windowKind } from './lib/textSize.js';
 import { runPrintCommand } from './lib/printCommand.js';
@@ -184,8 +207,13 @@ export default function App() {
     keep(win.listen(MENU_NAVIGATE, ({ payload }) => select(payload.view, payload.action, payload.data)));
     keep(win.listen(MENU_COMMAND, ({ payload }) => {
       if (payload === 'help') setHelpOpen(true);
+      if (payload === 'quick-report') runQuickReport();
+      if (payload === 'export-lists-iif') runExport(api.exportListsIif, 'The lists');
+      if (payload === 'export-addresses') runExport(api.exportAddressesText, 'The names and addresses');
       // Edit › Delete or Void Transaction, Memorize, Insert Line, Delete Line: the open form's (formFlow.jsx).
       if (typeof payload === 'string' && payload.startsWith('form:')) runFormCommand(payload.slice(5));
+      // Edit › New, Edit, Delete, Make Inactive and Show All: the open list's (listCommands.js).
+      if (typeof payload === 'string' && payload.startsWith('list:')) runListCommand(payload.slice(5));
       // File › Print…: the open form's Print, else the screen's own printout (a register prints its
       // rows), else the window.
       if (payload === 'print' && !runFormCommand('print')) runPrintCommand();

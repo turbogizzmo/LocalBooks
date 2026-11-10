@@ -7,10 +7,11 @@ import { formatDate, todayIso } from '../lib/dates.js';
 import { UpdatesPanel } from './Updates.jsx';
 import FormDesigner from './FormDesigner.jsx';
 import EmailSettings from './EmailSettings.jsx';
-import FileDentist from './FileDentist.jsx';
+import FileRepair from './FileRepair.jsx';
 import CondenseData, { openArchive } from './CondenseData.jsx';
 import { isQuickBooksFile, migrateQuickBooksFile, NewCompanyDialog, openOrRestoreCompany, QUICKBOOKS_FILTER_EXTENSIONS } from './CompanyFiles.jsx';
 import { UsersSettings } from './Users.jsx';
+import AccountantsCopy from './AccountantsCopy.jsx';
 import QbwImporter from './QbwImporter.jsx';
 import OffsiteBackup from './OffsiteBackup.jsx';
 import { canOpen, findNav } from './Sidebar.jsx';
@@ -364,8 +365,9 @@ function FileAndData({ companyName, isAdmin, navigate }) {
         {pending && <RestoreConfirm info={pending.info} busy={busy} onConfirm={restore} onCancel={() => setPending(null)} />}
         {creatingCompany && <NewCompanyDialog onClose={() => setCreatingCompany(false)} />}
       </Group>
-      <FileDentist onRebuilt={backups.reload} />
+      <FileRepair onRebuilt={backups.reload} />
       <CondenseData isAdmin={isAdmin} onDone={backups.reload} />
+      <AccountantsCopy isAdmin={isAdmin} />
       <CompanyFileLocation />
       <OffsiteBackup isAdmin={isAdmin} onRestored={backups.reload} />
       {notice && <Notice kind={notice.kind} text={notice.text} onDismiss={() => setNotice(null)} />}

@@ -3,6 +3,9 @@
 **Local-first, double-entry accounting for small businesses.** A classic-style desktop accounting app whose
 books live in a single SQLite file on your own machine: no account, no cloud, no telemetry.
 
+**United States only.** Sales tax, 1099s, the tax calendar, TXF export, ACH files, check printing
+and date and number formats follow US rules; see [Known limitations](#known-limitations).
+
 Built with **Rust + SQLite (SQLx)** for the accounting engine and **Tauri v2 + React + Tailwind CSS**
 for a high-density, keyboard-friendly interface.
 
@@ -254,6 +257,7 @@ under [`docs/guide/`](docs/guide/README.md).
 | Feature | Where | What you can do | Guide |
 |---|---|---|---|
 | Accountant & Taxes reports | Reports | Adjusting Journal Entries, previous reconciliation detail and summary, reconciliation discrepancy, income tax summary and detail by tax line, TXF export of Schedule C for tax software, collections, open purchase orders, audit trail | [guide](docs/guide/reports.md#accountant--taxes-reports) |
+| Accountant's Copy | Settings › File & Data Controls | A copy for your accountant with a dividing date; their journal entries and new accounts come back in a changes file, checked and posted with a record | [guide](docs/guide/closing-the-books.md#work-with-your-accountant-at-the-same-time-accountants-copy) |
 | 1099s | Reports › 1099 Summary, 1099-NEC and 1096; W-9… on a vendor | W-9 and TIN on each contractor, 1099 totals by box, the year's 1099-NEC forms with what's missing, the 1096 totals, and printed recipient copies | [guide](docs/guide/getting-started.md#w-9s-1099-nec-forms-and-the-1096) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
@@ -311,9 +315,11 @@ under [`docs/guide/`](docs/guide/README.md).
 | Credit limits | Customers › Edit… | A customer's credit limit, contacts, shipping address and account details; invoices over the limit ask before saving | [guide](docs/guide/customers-and-products.md) |
 | QuickReport | Ctrl+Q in a register or the account, name and item lists; Ctrl+H, Ctrl+Y | A report of the selected account's, name's or item's transactions; Transaction History and Transaction Journal for one transaction | [guide](docs/guide/reports.md#quickreport-transaction-history-and-transaction-journal) |
 | QuickZoom | Reports | Click a Profit and Loss or Balance Sheet amount, an aging name or a summary line to see the transactions behind it | [guide](docs/guide/reports.md#see-the-transactions-behind-a-number-quickzoom) |
+| Sales tax | Sales › Sales Tax | Rates by agency, combined rates split by agency, accrual or cash basis, a filing period and reminder, the liability report and a sales tax return per agency | [guide](docs/guide/getting-started.md#sales-tax-rates-combined-rates-and-the-sales-tax-return) |
 | Sortable lists | Any list, account registers, Reconcile | Click a column heading to sort by it; click again to reverse; transactions start newest first and each list remembers its order; double-click a register row to open its transaction | [guide](docs/guide/getting-started.md#sort-a-list) |
 | Time tracking | Employees › Time Tracking | Single activities and weekly timesheets (billable hours, rates) | [guide](docs/guide/time-tracking.md) |
-| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, recovery key, encrypted vendor tax IDs | [guide](docs/guide/users-and-passwords.md) |
+| Users & passwords | Settings › Users & Passwords | Optional users with roles, sign-in, idle sign-out, recovery key, encrypted vendor tax IDs and bank details | [guide](docs/guide/users-and-passwords.md) |
+| FTC Safeguards Rule map | Help › The FTC Safeguards Rule and LocalBooks | Each Safeguards Rule duty mapped to a LocalBooks feature or a stated limit, for tax preparers and bookkeepers | [guide](docs/guide/safeguards-rule.md) |
 | Windows & saved desktop | Window and View menus; Edit › Preferences › Desktop View | QuickBooks-style windows inside LocalBooks (move, resize, minimize, maximize), One Window or Multiple Windows, Close All, Cascade, Tile, Open Window List, Ctrl+F6, and the windows you had reopening with the company | [guide](docs/guide/getting-started.md#work-in-more-than-one-window) |
 
 ### `+ New` quick-create matrix
@@ -338,6 +344,8 @@ its entry form with focus in the first field.
 | Invoice | Accounts Receivable | Income (per line's account) |
 | Finance charge (an invoice per customer, from Assess Finance Charges) | Accounts Receivable | The finance charge income account |
 | Receive payment | Bank or Undeposited Funds | Accounts Receivable |
+| Unapplied payment (overpayment or prepayment kept as credit) | Bank or Undeposited Funds | Accounts Receivable |
+| Unapplied payment written off | Accounts Receivable | Income account |
 | Sales receipt | Bank or Undeposited Funds | Income |
 | Bill | Expense / asset (one debit per distinct split account) | Accounts Payable |
 | Payment on a foreign invoice | Bank (at payment rate) + Exchange **loss** | A/R (at booked rate) + Exchange **gain** |
@@ -493,7 +501,9 @@ Security reports: see [SECURITY.md](SECURITY.md).
 | Linux | `~/.local/share/com.localbooks.desktop/localbooks.db` |
 
 - **Automatic and pre-restore backups** go to a `backups/` folder beside the default company file.
-  They stay on the local disk even when the company file lives elsewhere.
+  They stay on the local disk even when the company file lives elsewhere, and like the company file
+  they are not encrypted (only vendor tax IDs and bank details inside them are, once users are on).
+  Offsite copies (*Settings › File & Data Controls › Offsite backup*) are encrypted as a whole.
 - **Custom location:** *Settings › File & Data Controls › Change Company File Location…* points
   LocalBooks at another folder (recorded in `config.json` in the app config directory).
 - **Network drives and synced folders** (SMB/NFS, Dropbox, iCloud Drive, OneDrive, Google Drive)
@@ -511,8 +521,16 @@ Security reports: see [SECURITY.md](SECURITY.md).
 - **One LocalBooks at a time.** If a second launch finds LocalBooks already running, it hands over
   its `.localbooks` file (or just a request to come forward) and exits. The running app opens the
   file and brings its window forward. The handoff uses its own channel: a random loopback port and
-  a per-user secret in `instance.json`, readable by the owner only. It is separate from the
-  read-only MCP server.
+  a secret made fresh at each launch, in `instance.json`, readable by the owner only. It is
+  separate from the read-only MCP server.
+- **Saved credentials** (bank connection, SMTP password, remembered sign-ins, the offsite backup
+  key) are never in the company file. The installed app keeps them in the macOS Keychain or
+  Windows Credential Manager; on Linux and in development builds they are in owner-only files in
+  the app config directory.
+- **What leaves the computer:** only the update check (on by default; Settings › Updates) and the
+  features you set up yourself (bank downloads, SMTP email, exchange-rate lookups). Offsite backups
+  are encrypted before they are written to the folder you pick. [SECURITY.md](SECURITY.md) lists
+  each claim with the code and test behind it.
 
 ## Local AI access (MCP)
 
@@ -608,6 +626,12 @@ error messages, sync windows, duplicate-free re-syncs, and reconnecting on anoth
 
 ## Known limitations
 
+- **United States only.** Sales tax is US-style (a rate and agency per document, added on top), with
+  no VAT or GST. 1099-NEC/1096, W-9s, the tax calendar, tax-line mapping and TXF export cover US
+  federal filings only. ACH files are NACHA with US routing numbers, and checks print in US layouts.
+  Dates show as MM/DD/YYYY and amounts as 1,234.56, with no other formats, and the screens are in
+  English. A non-US business can keep plain double-entry books in another home currency, but none of
+  its tax rules are built in. See [Made for US businesses](docs/guide/getting-started.md#made-for-us-businesses).
 - **No payroll.** Employees exist for time tracking only; there are no paychecks, withholding, or
   payroll tax filings.
 - **Job costing** doesn't cost time: time activities have a billing rate but no cost rate. Estimates
