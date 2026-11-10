@@ -162,9 +162,16 @@ fn s7_source(x: usize, r7: usize) -> usize {
     if natural < S7_LEN {
         return natural;
     }
-    // Displaced data bytes in stored order, and the free positions in stored order.
+    // How many displaced data bytes come before this one in stored order; it takes the free
+    // position of the same rank. Both sets have at most 16 members, so no allocation.
     let displaced = (S7_LEN..natural).filter(|&n| (n + SECTOR - r7) % SECTOR < S7_LEN).count();
-    let mut free: Vec<usize> = (0..SECTOR - S7_LEN).map(|k| (S7_LEN + k + r7) % SECTOR).filter(|&n| n < S7_LEN).collect();
+    let mut free = [usize::MAX; SECTOR - S7_LEN];
+    for (k, f) in free.iter_mut().enumerate() {
+        let n = (S7_LEN + k + r7) % SECTOR;
+        if n < S7_LEN {
+            *f = n;
+        }
+    }
     free.sort_unstable();
     free[displaced]
 }

@@ -6,7 +6,8 @@ amounts from the sample files are left out on purpose; only counts are given.
 
 ## How to run it
 
-The sample files live outside the repository and are never committed (see `research-samples/README.md`).
+The sample files live outside the repository, on the developer's own disk, and are never committed
+(`AGENTS.md`, clean-room rules).
 Two ignored tests do the work; build them once with `cargo test --release --no-run`, then:
 
 - `LOCALBOOKS_QBW_CHECK=<file> cargo test --release -- --ignored reads_the_ledger_of_a_real --nocapture`
