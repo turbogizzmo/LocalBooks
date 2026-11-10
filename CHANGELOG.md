@@ -6,6 +6,8 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+## [0.14.0]
+
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
   job carries over to the bill, and Open Purchase Orders by Job lists what is still on order for
   each job.
@@ -133,9 +135,6 @@ people using LocalBooks.
   what is already on order, and Vendors › Inventory Activities gathers the inventory screens:
   the item list, Adjust Quantity/Value on Hand, Change Item Prices, purchase orders and the stock
   reports.
-- **Slower password guessing.** After four wrong passwords for a user name, each next sign-in try
-  waits a little longer (30 seconds up to 5 minutes). Wrong recovery keys wait the same way. Nobody
-  is ever locked out, and other users can still sign in.
 - **Backup safety.** File & Data Controls shows when a backup was last copied off this computer
   and last test-restored. Reminders lists either one when it hasn't been done in 30 days, and Test
   beside a snapshot (or Test restore a backup…) checks a backup without replacing your books.
@@ -143,15 +142,6 @@ people using LocalBooks.
   a double-click does.
 - **Easier-to-read green buttons.** Save buttons and other green buttons and badges are a darker
   green, so their white text has enough contrast to read comfortably.
-- **Shopify Payments payouts with their fees.** Banking › Payout Feeds connects a Shopify store
-  too, with a custom app that can only read payouts. Each payout to your bank comes in as a deposit
-  of its sales, less Shopify's fees, refunds and chargebacks.
-- **PayPal payouts with their fees.** Banking › Payout Feeds now connects a PayPal business account
-  too, with a PayPal app's client id and secret that only read your transactions. Each withdrawal to
-  your bank comes in as a deposit of the payments it carried, less PayPal's fees, refunds and
-  chargebacks, so it matches the bank line.
-- **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
-  Closing Date Exceptions are in the Reports menu and the Report Center.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
@@ -175,9 +165,6 @@ people using LocalBooks.
   Transactions, Print and Excel menus. The Edit menu's New, Edit, Delete, Make Inactive / Active and
   Show All act on the list on screen, and a customer, vendor or item that was never used can now be
   deleted.
-- **Customize Columns on Reconcile and form lines.** Reconcile and the line grids on sales, purchase
-  and banking forms now have **Columns ▾** to hide columns you don't use and put the rest in your own
-  order.
 - **Combined sales tax rates and a return per agency.** A combined rate adds up the state, county
   and city rates; a sale at it posts each agency's share to its own account. Sales › Sales Tax shows
   the sales tax return by agency for the period, on accrual or cash.
