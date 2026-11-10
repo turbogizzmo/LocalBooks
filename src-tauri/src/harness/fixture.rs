@@ -279,7 +279,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
         let waiting: Vec<DepositItemRef> =
             crate::banking::list_undeposited(p).await.unwrap().into_iter().map(|i| DepositItemRef { kind: i.kind, id: i.id }).collect();
         if !waiting.is_empty() && month < 12 {
-            crate::banking::post_bank_deposit(p, DepositInput { bank_account_id: c.checking, deposit_date: month_end(month), memo: None, items: waiting, other_lines: Vec::new(), cash_back: None })
+            crate::banking::post_bank_deposit(p, DepositInput { bank_account_id: c.checking, deposit_date: month_end(month), memo: None, items: waiting, other_lines: Vec::new(), cash_back: None, deductions: Vec::new() })
                 .await
                 .expect("deposit");
         }
