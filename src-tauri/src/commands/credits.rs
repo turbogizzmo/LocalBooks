@@ -25,7 +25,9 @@ pub async fn list_credit_memos(db: State<'_, Db>) -> Result<Vec<CreditMemoSummar
 
 #[tauri::command]
 pub async fn create_credit_memo(app: AppHandle, db: State<'_, Db>, input: CreditMemoInput) -> Result<CreditMemoSummary, String> {
-    let memo = credits::create_credit_memo(&db.pool().await, input).await?;
+    let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Customer, &input.customer_name).await?;
+    let memo = credits::create_credit_memo(&pool, input).await?;
     notify(&app);
     Ok(memo)
 }
@@ -70,7 +72,9 @@ pub async fn list_vendor_credits(db: State<'_, Db>) -> Result<Vec<VendorCreditSu
 
 #[tauri::command]
 pub async fn create_vendor_credit(app: AppHandle, db: State<'_, Db>, input: VendorCreditInput) -> Result<VendorCreditSummary, String> {
-    let credit = credits::create_vendor_credit(&db.pool().await, input).await?;
+    let pool = db.pool().await;
+    crate::sales::require_listed(&pool, crate::sales::Party::Vendor, &input.vendor_name).await?;
+    let credit = credits::create_vendor_credit(&pool, input).await?;
     notify(&app);
     Ok(credit)
 }

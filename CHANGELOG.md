@@ -18,6 +18,12 @@ people using LocalBooks.
   now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
   same amount as the original. Before, the copy left them out and credited the full amount of the
   item lines.
+- **No more surprise customers and vendors.** A name typed on a form that isn't on your list is no
+  longer added silently when you save. LocalBooks stops and asks "*name* isn't on your customer
+  list." with **Quick add**, **Set up…** (add it and open its record) and **Cancel** (back to the
+  name box, nothing saved), when you leave the name box or save. This covers invoices, sales
+  receipts, estimates, credit memos, sales orders, bills, checks, expenses, purchase orders, vendor
+  credits and payees typed in a register. Imports still add the names they bring in.
 
 ## [0.14.0]
 

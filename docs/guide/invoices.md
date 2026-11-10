@@ -9,7 +9,8 @@ Receivable** (what customers owe you) and to the income account on each line.
    top of the screen.
 2. In **Customer**, type the customer's name. Matching customers are listed as you type. For a new
    name, choose **Add as a new customer** (or **Add with details…** to fill in the address and
-   terms first); a name you type and post without choosing is added too.
+   terms first). A name that isn't on the list is never added without asking: see
+   [Adding a name while you enter a transaction](customers-and-products.md#adding-a-name-while-you-enter-a-transaction).
 3. Check **Invoice date**, then pick **Terms** (Due on receipt, Net 15, Net 30 or Net 60). The
    **Due date** fills in for you; change it to use custom terms.
 4. Fill in the line items:

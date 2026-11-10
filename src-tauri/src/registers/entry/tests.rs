@@ -31,10 +31,11 @@ fn row(account_id: i64, side: RegisterSide, payee: Option<&str>, number: Option<
 async fn a_bank_payment_is_recorded_as_a_check_and_shows_in_the_register() {
     let pool = test_pool().await;
     let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    crate::expenses::create_vendor(&pool, "Landlord LLC", None).await.unwrap();
     let posted = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), Some("1042"), vec![split(rent, 120_000)])).await.unwrap();
     assert_eq!(posted.source_type, "CHECK");
 
-    // It is an ordinary check: the Write Checks list has it, with its number and a new vendor.
+    // It is an ordinary check: the Write Checks list has it, with its number and its vendor.
     let checks = crate::expenses::list_expenses(&pool).await.unwrap();
     let check = checks.iter().find(|x| x.id == posted.source_id).unwrap();
     assert_eq!((check.kind.as_str(), check.check_number.as_deref(), check.payee_name.as_deref(), check.total_cents), ("CHECK", Some("1042"), Some("Landlord LLC"), 120_000));
@@ -135,6 +136,7 @@ async fn a_deposit_whose_lines_name_different_people_has_no_payee_and_unknown_na
 async fn card_charges_and_credits_post_as_card_expenses_and_card_credits() {
     let pool = test_pool().await;
     let (card, rent) = (account(&pool, "2100").await, account(&pool, "6300").await);
+    crate::expenses::create_vendor(&pool, "Office Depot", None).await.unwrap();
     let charge = post_register_entry(&pool, row(card, RegisterSide::Charge, Some("Office Depot"), Some("ignored"), vec![split(rent, 8_000)])).await.unwrap();
     let credit = post_register_entry(&pool, row(card, RegisterSide::Credit, Some("Office Depot"), None, vec![split(rent, 3_000)])).await.unwrap();
     assert_eq!((charge.source_type.as_str(), credit.source_type.as_str()), ("EXPENSE", "CARD_CREDIT"));
@@ -149,6 +151,7 @@ async fn card_charges_and_credits_post_as_card_expenses_and_card_credits() {
 async fn a_split_row_posts_every_account() {
     let pool = test_pool().await;
     let (checking, rent, card) = (account(&pool, "1010").await, account(&pool, "6300").await, account(&pool, "2100").await);
+    crate::expenses::create_vendor(&pool, "Landlord LLC", None).await.unwrap();
     let posted = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlord LLC"), None, vec![split(rent, 1_000), split(card, 2_500)])).await.unwrap();
     let reg = account_register(&pool, checking, None, None, false).await.unwrap();
     let r = reg.rows.iter().find(|r| r.journal_entry_id == posted.journal_entry_id).unwrap();
@@ -283,4 +286,18 @@ async fn an_undeposited_funds_deposit_in_the_entry_row_banks_the_waiting_payment
     assert!(crate::banking::list_undeposited(&pool).await.unwrap().is_empty());
     let reg = account_register(&pool, checking, None, None, false).await.unwrap();
     assert_eq!(reg.ending_balance_cents, 12_500);
+}
+
+#[tokio::test]
+async fn a_payment_to_a_name_not_on_the_list_is_refused_not_added() {
+    let pool = test_pool().await;
+    let (checking, rent) = (account(&pool, "1010").await, account(&pool, "6300").await);
+    let err = post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("Landlrod LLC"), None, vec![split(rent, 1_000)])).await.unwrap_err();
+    assert!(err.starts_with(crate::sales::NAME_NOT_ON_LIST), "{err}");
+    let vendors: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vendors WHERE name = 'Landlrod LLC'").fetch_one(&pool).await.unwrap();
+    assert_eq!(vendors, 0, "the typo did not become a vendor");
+
+    // An other name (Expenses › Other Names) is on the list too.
+    sqlx::query("INSERT INTO other_names (name) VALUES ('Petty Cash Fund')").execute(&pool).await.unwrap();
+    post_register_entry(&pool, row(checking, RegisterSide::Payment, Some("petty cash fund"), None, vec![split(rent, 1_000)])).await.unwrap();
 }

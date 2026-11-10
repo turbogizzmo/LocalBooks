@@ -128,8 +128,8 @@ export const topics = [
   {
     id: 'vendors', area: 'expenses', views: ['expenses/vendors'],
     title: 'Add and review vendors',
-    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check or expense, type a name that isn’t on the list and choose Add as a new vendor.',
-    keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add center',
+    body: 'Add a vendor with a name and optional email, and see what you still owe each one. Click a vendor to see all of its transactions under the list, and double-click one to open it. On a bill, check, expense, purchase order or vendor credit, or a register’s payee, type a name that isn’t on the list and choose Add as a new vendor. A name is never added without asking: leave the box or save with a name that isn’t on the list and LocalBooks asks first, with Quick add, Set up… (add it and open its record) or Cancel (back to the name box, nothing saved).',
+    keywords: 'vendor supplier payee contact payable balance transactions history add new vendor quick add set up not on list typo center',
     go: { label: 'Go to Vendors', view: 'expenses/vendors' },
     guide: 'customers-and-products',
   },
