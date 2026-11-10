@@ -83,6 +83,7 @@ features![
     estimates,
     expenses,
     finance_charges,
+    file_encryption,
     form_1099,
     forms,
     graphs,

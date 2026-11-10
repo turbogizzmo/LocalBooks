@@ -42,7 +42,24 @@ struct Cipher {
     /// The key header's file id, read before the file was opened (it names the file for remembered
     /// sign-ins and the sign-in wait, which can't read the locked database).
     file_id: String,
-    page_key: Option<crate::file_cipher::keys::PageKey>,
+    page_key: Option<std::sync::Arc<crate::file_cipher::keys::PageKey>>,
+}
+
+/// Forgets a closed file's page key, unless the file that replaces it is a copy with the same key.
+fn forget_key(live: &Live) {
+    if let Some(cipher) = live.cipher.as_ref() {
+        crate::file_cipher::keyring::forget(&cipher.file_id);
+    }
+}
+
+/// The encrypted state of the file at `path` as it is about to be (re)opened: None for a plain
+/// file; for an encrypted one, its id and its key from the keyring (an error if it isn't unlocked
+/// here, since the books being replaced were). Reads the header by path: the pool must be closed.
+fn cipher_for(path: &Path) -> Result<Option<Cipher>, String> {
+    match crate::file_cipher::options_for(path)?.1 {
+        None => Ok(None),
+        Some((file_id, key)) => Ok(Some(Cipher { file_id, page_key: Some(key) })),
+    }
 }
 
 /// The stand-in database of a locked encrypted file: empty, in memory, refusing writes.
@@ -88,11 +105,6 @@ pub struct Db {
     /// One change to an encrypted file's key header at a time, so none is lost.
     header_changes: tokio::sync::Mutex<()>,
 }
-
-/// Restoring, condensing or moving an encrypted company file (gap R1) arrives with phase 3b, which
-/// teaches every copy path about the key header; until then those are refused rather than reopening
-/// the file without its key.
-pub const ENCRYPTED_NOT_YET: &str = "FILE_ENCRYPTED_NOT_YET: restoring, condensing or moving an encrypted company file isn't available yet";
 
 /// Returned by operations that need an open company file while none is.
 pub const NO_COMPANY_OPEN: &str = "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
@@ -152,7 +164,11 @@ async fn open_live(path: &Path, backups: Option<&Path>) -> Result<Live, String> 
     let (pool, cipher) = if crate::file_cipher::header::is_encrypted(path) {
         crate::wal_guard::check(path)?;
         let header = crate::file_cipher::header::read(path)?;
-        (locked_pool(), Some(Cipher { file_id: header.file_id, page_key: None }))
+        match crate::file_cipher::keyring::get(&header.file_id) {
+            // A copy of the company unlocked here (the file was moved): it opens unlocked.
+            Some(key) => (open_for(path, &storage, backups, Some(&key)).await?, Some(Cipher { file_id: header.file_id, page_key: Some(key) })),
+            None => (locked_pool(), Some(Cipher { file_id: header.file_id, page_key: None })),
+        }
     } else {
         (open_for(path, &storage, backups, None).await?, None)
     };
@@ -261,6 +277,7 @@ impl Db {
             let mut live = self.live.write().await;
             if let Some(current) = live.take() {
                 close_pool(&current.pool).await;
+                forget_key(&current);
             }
             *live = Some(next);
         }
@@ -310,6 +327,7 @@ impl Db {
         match closed {
             Some(live) => {
                 close_pool(&live.pool).await;
+                forget_key(&live);
                 let path = live.path.clone();
                 drop(live); // releases the shared-location lock, if any
                 checkpoint_closed(&path).await;
@@ -482,11 +500,12 @@ impl Db {
         }
         // Locked, so no connection to the file is open in this process: reading by path is safe.
         let header = crate::file_cipher::header::read(&live.path)?;
-        let key = open_key(header).await?.ok_or_else(|| wrong.to_string())?;
+        let key = std::sync::Arc::new(open_key(header).await?.ok_or_else(|| wrong.to_string())?);
         let pool = open_for(&live.path, &live.storage, Some(&self.config.backups_dir), Some(&key)).await?;
         let stand_in = std::mem::replace(&mut live.pool, pool);
         stand_in.close().await;
         if let Some(cipher) = live.cipher.as_mut() {
+            crate::file_cipher::keyring::register(&cipher.file_id, key.clone());
             cipher.page_key = Some(key);
         }
         Ok(())
@@ -501,6 +520,7 @@ impl Db {
         if cipher.page_key.take().is_none() {
             return;
         }
+        crate::file_cipher::keyring::forget(&cipher.file_id);
         let open = std::mem::replace(&mut live.pool, locked_pool());
         *live.session.lock().await = None;
         close_pool(&open).await;
@@ -612,9 +632,6 @@ impl Db {
     async fn swap_in_file(&self, staged: &Path, fallback: &Path, unchanged: Option<&str>) -> Result<(), String> {
         let mut guard = self.live.write().await;
         let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
-        if live.cipher.is_some() {
-            return Err(ENCRYPTED_NOT_YET.into());
-        }
         if let Some(expected) = unchanged {
             if crate::condense::content_digest(&live.pool).await? != expected {
                 return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
@@ -626,17 +643,31 @@ impl Db {
         close_pool(&live.pool).await;
         let path = live.path.clone();
         let storage = live.storage.clone();
+        // An encrypted file (gap R1) reopens with its key; the replacement may be plain or
+        // encrypted (a backup of these books, with the same key) whatever the books were.
+        let previous = live.cipher.take();
+        let reopen = |path: PathBuf, storage: StorageInfo| async move {
+            let cipher = cipher_for(&path)?;
+            let pool = open_for(&path, &storage, None, cipher.as_ref().and_then(|c| c.page_key.as_deref())).await?;
+            Ok::<_, String>((pool, cipher))
+        };
         let aside = match put_in_place(staged, &path).await {
             Ok(aside) => aside,
             Err(e) => {
                 // Nothing was moved: reopen the books as they were.
-                live.pool = open_for(&path, &storage, None, None).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
+                let (pool, cipher) = reopen(path.clone(), storage.clone()).await.map_err(|open| format!("RESTORE_FAILED: {e}; reopening your books failed: {open}"))?;
+                live.pool = pool;
+                live.cipher = cipher;
                 return Err(format!("RESTORE_SWAP: {e}; your current books were left in place"));
             }
         };
-        match open_for(&path, &storage, None, None).await {
-            Ok(pool) => {
+        match reopen(path.clone(), storage.clone()).await {
+            Ok((pool, cipher)) => {
+                if let Some(old) = previous.as_ref().filter(|old| cipher.as_ref().is_none_or(|new| new.file_id != old.file_id)) {
+                    crate::file_cipher::keyring::forget(&old.file_id);
+                }
                 live.pool = pool;
+                live.cipher = cipher;
                 // The restored file has its own users; whoever was signed in signs in again.
                 live.session = SessionSlot::default();
                 remove_replaced(&aside).await;
@@ -654,7 +685,9 @@ impl Db {
                     while_in_use(|| std::fs::copy(fallback, &path).map(|_| ())).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; putting the previous books back also failed: {e}"))?;
                 }
                 remove_sidecars(&path).await?;
-                live.pool = open_for(&path, &storage, None, None).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
+                let (pool, cipher) = reopen(path.clone(), storage.clone()).await.map_err(|e| format!("RESTORE_FAILED: {open_err}; reopening the previous books failed: {e}"))?;
+                live.pool = pool;
+                live.cipher = cipher;
                 Err(format!("RESTORE_FAILED: {open_err}; your previous books were put back"))
             }
         }
@@ -664,9 +697,6 @@ impl Db {
     /// An existing file there must pass the same checks as a restore; the new file is fully opened
     /// before the old one is closed, so a failure leaves the current books in use.
     pub async fn relocate(&self, new_dir: &Path, mode: RelocateMode) -> Result<StorageStatus, String> {
-        if self.is_encrypted().await {
-            return Err(ENCRYPTED_NOT_YET.into());
-        }
         let resolved = storage::resolve_network_path(new_dir);
         let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;
@@ -753,7 +783,8 @@ const WRITE_LOCK_WAIT: Duration = Duration::from_secs(30);
 /// next [`open_for`] switches a local file back to WAL.
 async fn leave_wal(path: &Path) -> Result<(), String> {
     crate::wal_guard::check(path)?;
-    let options = SqliteConnectOptions::new().filename(path).create_if_missing(false).busy_timeout(Duration::from_secs(5));
+    // An encrypted replacement (gap R1) opens with its key from the keyring.
+    let options = crate::file_cipher::options_for(path)?.0.create_if_missing(false).busy_timeout(Duration::from_secs(5));
     let mut conn = sqlx::SqliteConnection::connect_with(&options).await.map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     let mode: Result<String, _> = sqlx::query_scalar("PRAGMA journal_mode = DELETE").fetch_one(&mut conn).await;
     let _ = conn.close().await;
@@ -956,7 +987,8 @@ async fn open_for(path: &Path, storage: &StorageInfo, backups: Option<&Path>, pa
     // set before anything else; a plain file opens as it always has.
     let start = match page_key {
         Some(key) => crate::file_cipher::open_options(path, Some(key))?,
-        None => SqliteConnectOptions::new().filename(path),
+        // A plain file as always; a copy of a company unlocked here with its key.
+        None => crate::file_cipher::options_for(path)?.0,
     };
     let base = start
         .create_if_missing(true)

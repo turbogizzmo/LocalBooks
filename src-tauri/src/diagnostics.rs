@@ -97,7 +97,7 @@ pub async fn bundle(pool: Option<&SqlitePool>, company_file: Option<&Path>, log_
             }
             let check: Vec<String> = sqlx::query_scalar("PRAGMA quick_check").fetch_all(pool).await.map_err(db_err)?;
             db.push_str(&format!("Integrity (quick check): {}\n", check.join("; ")));
-            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), (SELECT page_size FROM pragma_page_size)")
+            let (pages, page_size): (i64, i64) = sqlx::query_as("SELECT (SELECT page_count FROM pragma_page_count), CAST((SELECT page_size FROM pragma_page_size) AS INTEGER)")
                 .fetch_one(pool)
                 .await
                 .map_err(db_err)?;
