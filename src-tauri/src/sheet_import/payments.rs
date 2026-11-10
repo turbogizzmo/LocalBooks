@@ -251,7 +251,16 @@ pub async fn post(pool: &SqlitePool, kind: SheetKind, sheet: &Sheet, mapping: &M
     if rows.is_empty() {
         return Err("SHEET_EMPTY: the spreadsheet has no rows to import".into());
     }
-    let resolved = resolve(pool, kind, &rows, &mut Vec::new()).await?;
+    // Resolved again for posting: a row that stopped resolving since the check (paid meanwhile) must
+    // stop the post, or the rows and their documents would pair up wrongly.
+    let mut late = Vec::new();
+    let resolved = resolve(pool, kind, &rows, &mut late).await?;
+    if let Some(first) = late.first() {
+        return Err(format!("SHEET_PROBLEMS: the books changed since the check; row {}: {}", first.row, first.message));
+    }
+    if resolved.len() != rows.len() {
+        return Err("SHEET_PROBLEMS: the books changed since the check; check the sheet again".into());
+    }
     let total_cents = rows.iter().try_fold(0i64, |t, r| t.checked_add(r.amount_cents)).ok_or("SHEET_TOO_LARGE: the payments add up to more than LocalBooks can hold")?;
     if kind == SheetKind::CustomerPayments {
         let inputs: Vec<crate::invoices::PaymentInput> = rows
