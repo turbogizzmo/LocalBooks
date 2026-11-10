@@ -170,6 +170,13 @@ export const topics = [
     guide: 'closing-the-books',
   },
   {
+    id: 'export-lists', area: 'company', views: ['settings/data', 'settings/import'],
+    title: 'Export lists to an IIF file, or addresses to a text file',
+    body: 'File › Utilities › Export › Lists to IIF Files saves the chart of accounts, customers and jobs, vendors, items and classes as an IIF file, which Import / Convert (and the desktop products) read, to start another company with the same lists. Addresses to Text File saves each active customer’s and vendor’s name, address, phone and email as tab-separated text for mail merges and labels.',
+    keywords: 'export lists iif file utilities chart of accounts customers vendors items addresses text file mail merge labels tab delimited',
+    guide: 'backups-and-company-files',
+  },
+  {
     id: 'condense', area: 'company', views: ['settings/data'],
     title: 'Condense data: archive closed years',
     body: 'Condense data in File & Data Controls replaces closed transactions up to a cut-off with one summary entry per month, keeping anything still open (unpaid invoices and bills, unused credits, undeposited payments, uncleared bank lines). It first saves a verified archive of the full history, which opens read-only for reports, and a Before condense backup to undo with. The condensed file is checked against the archive before LocalBooks switches to it. Set a closing date and reconcile through the cut-off first.',

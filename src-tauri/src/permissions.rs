@@ -152,6 +152,9 @@ const READ: &[&str] = &[
     "report_csv",
     "save_report_to_disk",
     "save_txf_export",
+    // File › Utilities › Export: lists and addresses written to a file the user picks.
+    "export_lists_iif",
+    "export_addresses_text",
     "save_xlsx",
     "read_import_sheet",
     "check_import_sheet",

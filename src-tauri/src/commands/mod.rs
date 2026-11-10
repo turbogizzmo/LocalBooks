@@ -95,6 +95,7 @@ features![
     job_reports,
     journal,
     list_delete,
+    list_export,
     list_order,
     list_reports,
     lists,

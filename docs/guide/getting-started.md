@@ -655,7 +655,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 
 | Menu | What's in it |
 |---|---|
-| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard) and Condense Data; print and send forms |
+| **File** | New, open, close and back up company files; **Utilities › Import / Convert…** (the Desktop Migration Wizard), **Utilities › Export** (lists to an IIF file, names and addresses to a text file) and Condense Data; print and send forms |
 | **Edit** | Undo, cut, copy and paste; **Delete or Void Transaction**, **Memorize Transaction**, **Insert Line**, **Delete Line**, **Copy Line**, **Paste Line**, **Go To Transfer** and **Duplicate Transaction** on the open form; Use Register; **Find…** (Find Transactions); Preferences |
 | **View** | Show or hide the left icon bar (the left pane); Open Window List; One Window or Multiple Windows |
 | **Lists** | Chart of Accounts, Item List, Sales Tax Codes, Classes, customers and vendors, the profile lists (sales reps, types, terms, messages, payment methods, Ship Via), price levels, vehicles, **Currency List** (the home currency and exchange rates, in Preferences › Multiple Currencies), form templates, memorized (recurring) transactions |
@@ -664,7 +664,7 @@ them. Each one opens the screen, and often the form, in a window inside LocalBoo
 | **Vendors** | Vendor Center, enter and pay bills, vendor credits, sales tax, purchase orders, 1099s |
 | **Employees** | Weekly timesheet and single time activity |
 | **Banking** | Write checks, credit card charges, registers, deposits, transfers, reconcile, bank feeds |
-| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
+| **Reports** | Report Center and each report, grouped as in QuickBooks: Company & Financial, Customers & Receivables, Sales, Jobs, Vendors & Payables, Purchases, Inventory, Banking, Accountant & Taxes, Budgets, List; **Memorized Reports** (the Report Center's list, and Process Multiple Reports); **QuickReport** for the account, name or item selected in the list or register in front; **Transaction History** and **Transaction Journal** for the transaction open on a form. Every report in the Report Center is on this menu |
 
 The classic shortcuts work from anywhere:
 

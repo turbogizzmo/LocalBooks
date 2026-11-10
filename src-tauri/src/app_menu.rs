@@ -52,7 +52,14 @@ const CHART_OF_ACCOUNTS: Entry = page("Chart of Accounts", "accounting/chart-of-
 const FILE: &[Entry] = &[
     Entry::Sub("Back Up Company", &[form("Create Local Backup…", "settings", "data")]),
     // Import / Convert… opens the Desktop Migration Wizard (Settings › Import & Migration).
-    Entry::Sub("Utilities", &[page("Import / Convert…", "settings/import"), form("Condense Data…", "settings", "data")]),
+    Entry::Sub(
+        "Utilities",
+        &[
+            page("Import / Convert…", "settings/import"),
+            Entry::Sub("Export", &[form_cmd("Lists to IIF Files…", "export-lists-iif"), form_cmd("Addresses to Text File…", "export-addresses")]),
+            form("Condense Data…", "settings", "data"),
+        ],
+    ),
     Entry::Sep,
     Entry::Sub(
         "Print Forms",
@@ -233,6 +240,8 @@ const REPORTS: &[Entry] = &[
     // Memorized reports are listed in the Report Center, which the first item opens.
     Entry::Sub("Memorized Reports", &[page("Memorized Report List", "reports"), report("Process Multiple Reports…", "process-multiple")]),
     // Act on the transaction open on a form (its toolbar's History and Journal, formFlow.jsx).
+    // Acts on the account, name or item selected in the list or register in front (its Ctrl+Q).
+    form_cmd("QuickReport (Ctrl+Q)", "quick-report"),
     form_cmd("Transaction History (Ctrl+H)", "form:history"),
     form_cmd("Transaction Journal (Ctrl+Y)", "form:journal"),
     Entry::Sep,

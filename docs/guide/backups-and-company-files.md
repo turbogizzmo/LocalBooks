@@ -140,6 +140,22 @@ snapshot of each summarized transaction, plus one record that names the archive 
 monthly entry replaced. **Verify ledger integrity** checks that the summarized transactions add up
 to their summaries. You can condense again later with a later cut-off.
 
+## Export lists and addresses
+
+**File › Utilities › Export** saves the company's lists for use somewhere else:
+
+- **Lists to IIF Files…** writes the chart of accounts, customers and jobs, vendors, items and
+  classes to an `.iif` file, the tab-delimited list format that LocalBooks' **Import / Convert**
+  reads and that the QuickBooks Desktop products import. Use it to start another company file with
+  the same lists. Sub-accounts, jobs and subclasses keep their full names (`Utilities:Electric`);
+  inactive entries are marked hidden. Transactions aren't included; to copy a whole company, make a
+  backup instead.
+- **Addresses to Text File…** writes each active customer's and vendor's name, company, address (up
+  to five lines), phone and email as tab-separated text with a header row, for a mail merge or
+  labels in a word processor or spreadsheet.
+
+Both ask where to save the file and write nothing anywhere else.
+
 ## Open another company file
 
 - Double-click a `.localbooks` file, or click **Open Company File…** and choose one.
