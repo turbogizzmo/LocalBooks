@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Encrypt the whole company file.** An Admin can now encrypt the whole company file, its
+  attachments and every backup made from it (Settings › Users & Passwords). It is off unless you turn
+  it on. With it on, a copy that leaves your computer shows nothing readable without a password or
+  the recovery key, the file opens on the sign-in screen, and signing out closes it again. **Read the
+  warning first:** if every Admin forgets their password and the recovery key is lost, nobody can
+  open those books or their backups.
 - **Discounts and charges on credit memos.** Credit memos and refund receipts take subtotals,
   discount lines, percentage charges and groups, as invoices do. They print in their places, and a
   discount lowers the credit and the sales tax given back.

@@ -164,16 +164,27 @@ async fn another_companys_encrypted_backup_asks_to_be_opened_and_signed_in_to() 
     let _ = std::fs::remove_dir_all(&elsewhere);
 }
 
-/// File Repair's checkup and the diagnostics bundle read an encrypted file as they read a plain one
-/// (SQLCipher answers some pragmas, such as `page_size`, as text).
+/// R1's acceptance test: an attachment in an encrypted company file shows nothing readable in the
+/// file or its backup, and opens as before. Also, File Repair's checkup and the diagnostics bundle
+/// read an encrypted file as they read a plain one (SQLCipher answers `page_size` as text).
 #[tokio::test]
-async fn checkup_and_diagnostics_work_on_an_encrypted_file() {
+async fn attachments_checkup_and_diagnostics_on_an_encrypted_file() {
+    const RECEIPT: &[u8] = b"%PDF-1.4 Plaintext receipt for invoice 4471, paid by card";
     let dir = scratch("checkup");
     let (db, ann) = plain_company(&dir, |pool| async { crate::harness::fixture::harbor_lane_in(pool).await }).await;
+    let entry: i64 = sqlx::query_scalar("SELECT MIN(id) FROM journal_entries").fetch_one(&db.pool().await).await.unwrap();
+    let attachment = crate::workflows::add_attachment(&db.pool().await, entry, "receipt.pdf", RECEIPT).await.unwrap();
+    assert!(contains(&std::fs::read(db.path().await.unwrap()).unwrap(), RECEIPT) || contains(&std::fs::read(crate::wal_guard::wal_path(&db.path().await.unwrap())).unwrap_or_default(), RECEIPT), "plain before");
     let bob = bob_id(&db).await;
     encrypt(&db, &ann, turn_on("ann password 1", bob)).await.unwrap();
-    crate::file_repair::checkup_live(&db).await.unwrap();
     let path = db.path().await.unwrap();
+    let backup = crate::backup::backup_now(&db).await.unwrap();
+    for file in [path.clone(), PathBuf::from(&backup.path)] {
+        let bytes = std::fs::read(&file).unwrap();
+        assert!(!contains(&bytes, RECEIPT) && !contains(&bytes, b"receipt.pdf"), "no readable attachment in {}", file.display());
+    }
+    assert_eq!(crate::workflows::attachment_content(&db.pool().await, attachment.id).await.unwrap().1, RECEIPT, "the attachment opens as before");
+    crate::file_repair::checkup_live(&db).await.unwrap();
     crate::diagnostics::bundle(Some(&db.pool().await), Some(&path), None, "test").await.unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
