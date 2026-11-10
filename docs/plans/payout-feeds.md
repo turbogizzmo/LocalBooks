@@ -69,7 +69,7 @@ Transaction Search read scope). Amounts are decimal strings, read to cents witho
 | T1106, T1201 (and T1202, T1205 back) | chargebacks |
 | anything else (holds and releases, conversions, payments sent) | other, by sign |
 
-The breakdown ties only when a withdrawal took the whole balance; one that took part of it, or whose
+Only transactions in the withdrawal's currency count: a payment received in another currency comes in as what its conversion added (an adjustment), never as cents of the wrong currency. The breakdown ties only when a withdrawal took the whole balance; one that took part of it, or whose
 withdrawal before it is outside the history read (the fetch reads a month further back for this), is
 listed as not kept, with the reason. The client id and secret are kept together in the credential
 store; `payout_feeds.account_ref` says whether they are live or sandbox credentials.

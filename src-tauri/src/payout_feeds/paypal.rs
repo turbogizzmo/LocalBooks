@@ -30,8 +30,8 @@ const PAGE_SIZE: usize = 500;
 /// Most pages read for one window (250,000 transactions); past that the fetch is refused.
 const MAX_PAGES: i64 = 500;
 
-/// A PayPal REST app's credentials, as the user pastes them.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A PayPal REST app's credentials, as the user pastes them. Its `Debug` hides the secret.
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayPalCredentials {
     pub client_id: String,
@@ -39,6 +39,12 @@ pub struct PayPalCredentials {
     /// Sandbox app credentials (for trying it out) rather than live ones.
     #[serde(default)]
     pub sandbox: bool,
+}
+
+impl std::fmt::Debug for PayPalCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PayPalCredentials").field("client_id", &self.client_id).field("secret", &"…").field("sandbox", &self.sandbox).finish()
+    }
 }
 
 impl Drop for PayPalCredentials {
@@ -170,7 +176,8 @@ pub struct Withdrawal {
 
 /// Splits time-ordered transactions at each withdrawal.
 pub fn withdrawals(mut txns: Vec<PayPalTxn>) -> Vec<Withdrawal> {
-    txns.sort_by_key(|t| t.at);
+    // In the same second as a withdrawal, the other transactions come first: they are what it took.
+    txns.sort_by_key(|t| (t.at, is_withdrawal(t)));
     let mut out = Vec::new();
     let mut since_last: Vec<PayPalTxn> = Vec::new();
     let mut seen_one = false;
@@ -245,7 +252,9 @@ async fn transactions(http: &reqwest::Client, api: &str, token: &str, start: Dat
         loop {
             let body = search(http, api, token, from, to, page).await?;
             for d in body.get("transaction_details").and_then(Value::as_array).cloned().unwrap_or_default() {
-                if let Some(t) = read_txn(&d)? {
+                // One LocalBooks can't read is left out: the withdrawal it belongs to then doesn't
+                // add up and is refused, while the others still come in.
+                if let Ok(Some(t)) = read_txn(&d) {
                     out.push(t);
                 }
             }
@@ -261,7 +270,7 @@ async fn transactions(http: &reqwest::Client, api: &str, token: &str, start: Dat
         from = to;
     }
     // A transaction on a window's edge can come back twice.
-    out.sort_by(|a, b| (a.at, &a.id).cmp(&(b.at, &b.id)));
+    out.sort_by(|a, b| (a.at, &a.id, &a.code).cmp(&(b.at, &b.id, &b.code)));
     out.dedup_by(|a, b| a.id == b.id && a.code == b.code && !a.id.is_empty());
     Ok(out)
 }
@@ -326,6 +335,9 @@ pub(super) async fn fetch(pool: &SqlitePool, f: &PayoutFeed, api: &str, stored: 
             result.refused.push(format!("{id}: the withdrawal before it is more than a month earlier, so what it carried isn't known; enter it by hand"));
             continue;
         };
+        // Only what moved the withdrawal's own currency: a payment in another currency counts as
+        // what its conversion brought in (an adjustment), never as cents of a different currency.
+        carried.retain(|t| t.currency == w.txn.currency);
         // The bank gets what was withdrawn; a fee PayPal took for the withdrawal is one more fee.
         let net = -w.txn.amount_cents;
         if w.txn.fee_cents != 0 {

@@ -72,6 +72,22 @@ fn a_withdrawal_breaks_down_into_what_came_in_since_the_last_one() {
     assert!(paypal_breakdown(10_000, &carried).unwrap_err().starts_with("PAYOUT_MISMATCH"), "part of the balance can't be broken down");
 }
 
+#[test]
+fn a_transaction_in_the_withdrawals_second_belongs_to_it() {
+    let mut d = vec![
+        detail("W0", "T0400", "2026-02-01T09:00:00+0000", "-1.00", None, ""),
+        // Listed after the withdrawal, in the same second.
+        detail("W1", "T0400", "2026-02-02T09:00:00+0000", "-10.00", None, ""),
+        detail("P1", "T0006", "2026-02-02T09:00:00+0000", "10.00", None, "Order"),
+    ];
+    d.push(detail("X", "T0006", "2026-02-02T08:00:00+0000", "1.234", None, "unreadable"));
+    let txns: Vec<PayPalTxn> = d.iter().filter_map(|v| read_txn(v).ok().flatten()).collect();
+    let found = withdrawals(txns);
+    assert_eq!(found[1].carried.as_ref().unwrap().iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["P1"]);
+    assert!(format!("{:?}", PayPalCredentials { client_id: "id".into(), secret: "s3cret".into(), sandbox: false }).contains("…"));
+    assert!(!format!("{:?}", PayPalCredentials { client_id: "id".into(), secret: "s3cret".into(), sandbox: false }).contains("s3cret"), "Debug hides the secret");
+}
+
 // ---- a mock PayPal on 127.0.0.1 ----------------------------------------------------------------
 
 const BASIC_GOOD: &str = "Basic YXBwLWlkOmFwcC1zZWNyZXQ="; // app-id:app-secret
@@ -100,8 +116,10 @@ async fn mock_paypal(requests: Arc<Mutex<Vec<String>>>, details: Vec<Value>) -> 
                 } else if !lower.contains("authorization: bearer a21-token") {
                     (401, json!({ "name": "AUTHENTICATION_FAILURE", "message": "Authentication failed" }))
                 } else if line.starts_with("GET /v1/reporting/transactions") {
-                    // Every window gets the whole month; LocalBooks drops the repeats.
-                    (200, json!({ "transaction_details": details, "total_pages": 1, "page": 1 }))
+                    // Every window gets the whole month, over two pages; LocalBooks drops the repeats.
+                    let second = line.contains("&page=2");
+                    let (a, b) = details.split_at(details.len() / 2);
+                    (200, json!({ "transaction_details": if second { b } else { a }, "total_pages": 2, "page": if second { 2 } else { 1 } }))
                 } else {
                     (404, json!({ "name": "NOT_FOUND" }))
                 };
