@@ -41,7 +41,8 @@ form without posting, it stays open. **Convert to invoice now** skips the form: 
 estimate unchanged, dated today and due in 30 days. See [Create and send an invoice](invoices.md).
 
 Invoicing an estimate in parts (progress invoicing) isn't available yet: an estimate becomes one
-invoice.
+invoice. To ship and bill an accepted estimate in parts, make it a sales order instead: choose
+**Create sales order** in its menu (see [Sales orders](sales-orders.md#from-an-estimate)).
 
 ### Turn estimates off
 

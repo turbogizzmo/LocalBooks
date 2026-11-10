@@ -145,6 +145,29 @@ Harbor Lane, OR 97001' WHERE id = (SELECT id FROM invoices WHERE customer_id = ?
         .execute(p)
         .await
         .unwrap();
+    // A sales order for twenty mugs, more than are on hand, and a logo package: open for the sales
+    // order reports, with part of it backordered.
+    let so_line = |item, description: &str, qty: i64, rate: i64| crate::sales_orders::SalesOrderLineInput {
+        id: None,
+        line: crate::sales::SalesLineInput { product_service_id: Some(item), description: description.into(), quantity_e4: qty, rate_cents: rate, income_account_id: sales, class_id: None, is_taxable: false, service_date: None },
+    };
+    crate::sales_orders::create(
+        p,
+        &crate::sales_orders::SalesOrderInput {
+            customer_name: "Brightwater Cafe".into(),
+            order_date: d(2025, 12, 8),
+            expected_date: Some(d(2026, 1, 15)),
+            memo: Some("Holiday mugs".into()),
+            lines: vec![so_line(mugs, "Logo mugs", 200_000, 1_800), so_line(logo, "Logo refresh", 10_000, 45_000)],
+            tax_rate_id: None,
+            sales_rep_id: None,
+            ship_method_id: None,
+            customer_message_id: None,
+            header: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
     pool
 }
 

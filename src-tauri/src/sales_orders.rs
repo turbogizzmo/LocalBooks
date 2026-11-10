@@ -176,6 +176,33 @@ pub async fn detail(pool: &SqlitePool, id: i64) -> Result<SalesOrderDetail, Stri
     Ok(SalesOrderDetail { summary, tax_rate_id, sales_rep_id, ship_method_id, customer_message_id, header: SalesHeader { bill_to, ship_to, po_number, fob }, lines, invoices })
 }
 
+/// The order's rep, ship via, message and addresses, as a form prints them.
+pub async fn details_view(pool: &SqlitePool, id: i64) -> Result<crate::sales_lists::SalesDetailsView, String> {
+    type Row = (Option<i64>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>);
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT o.sales_rep_id, r.initials, r.name, o.ship_method_id, s.name, o.customer_message_id, m.name
+         FROM sales_orders o LEFT JOIN sales_reps r ON r.id = o.sales_rep_id LEFT JOIN ship_methods s ON s.id = o.ship_method_id
+         LEFT JOIN profile_entries m ON m.id = o.customer_message_id WHERE o.id = ?1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err)?;
+    let (sales_rep_id, sales_rep_initials, sales_rep_name, ship_method_id, ship_method_name, customer_message_id, customer_message) =
+        row.ok_or("SO_NOT_FOUND: that sales order does not exist")?;
+    Ok(crate::sales_lists::SalesDetailsView {
+        sales_rep_id,
+        sales_rep_initials,
+        sales_rep_name,
+        ship_method_id,
+        ship_method_name,
+        customer_message_id,
+        customer_message,
+        header: crate::sales_header::read(pool, "sales_orders", id).await?,
+        ..Default::default()
+    })
+}
+
 async fn order_lines(conn: &mut sqlx::SqliteConnection, id: i64) -> Result<Vec<SalesOrderLine>, String> {
     sqlx::query_as(
         "SELECT l.id, l.line_number, l.product_service_id, p.name AS item_name, l.description, l.quantity_e4, l.rate_cents, l.amount_cents,
@@ -207,6 +234,110 @@ pub async fn create(pool: &SqlitePool, input: &SalesOrderInput) -> Result<SalesO
         Ok(id)
     })
     .await
+}
+
+/// A sales order made from an estimate, and what of the estimate it couldn't hold.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrderFromEstimate {
+    pub order: SalesOrderSummary,
+    /// Lines left on the estimate: a discount, percent charges, subtotals and lines priced at 0.00
+    /// go on the invoice instead.
+    pub left_out: Vec<String>,
+}
+
+/// Makes a sales order from an estimate that is pending or accepted and hasn't become an invoice
+/// or another order: its customer, item lines, tax rate, rep, ship via, message and addresses.
+/// The order keeps the estimate it came from (`estimate_id`), and the estimate can then only be
+/// invoiced through the order.
+pub async fn create_from_estimate(pool: &SqlitePool, estimate_id: i64, order_date: NaiveDate) -> Result<OrderFromEstimate, String> {
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
+    match write_from_estimate(&mut tx, estimate_id, order_date).await {
+        Ok((id, left_out)) => {
+            crate::ledger::commit_write(tx).await.map_err(db_err)?;
+            let mut conn = pool.acquire().await.map_err(db_err)?;
+            Ok(OrderFromEstimate { order: summary(&mut conn, id).await?, left_out })
+        }
+        Err(err) => Err(rollback(tx, err).await),
+    }
+}
+
+async fn write_from_estimate(tx: &mut Transaction<'_, Sqlite>, estimate_id: i64, order_date: NaiveDate) -> Result<(i64, Vec<String>), String> {
+    type Head = (String, String, Option<String>, Option<i64>, i64);
+    let head: Option<Head> = sqlx::query_as(
+        "SELECT c.name, e.status, e.memo, e.tax_rate_id, e.discount_cents FROM estimates e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?1",
+    )
+    .bind(estimate_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let (customer_name, status, memo, tax_rate_id, discount_cents) = head.ok_or("EST_NOT_FOUND: that estimate does not exist")?;
+    match status.as_str() {
+        "CONVERTED" => return Err("EST_CONVERTED: this estimate has already become an invoice".into()),
+        "REJECTED" => return Err("EST_REJECTED: a rejected estimate can't become an order; mark it pending or accepted first".into()),
+        _ => {}
+    }
+    let ordered: Option<i64> = sqlx::query_scalar("SELECT order_number FROM sales_orders WHERE estimate_id = ?1").bind(estimate_id).fetch_optional(&mut **tx).await.map_err(db_err)?;
+    if let Some(number) = ordered {
+        return Err(format!("EST_ORDERED: this estimate is already sales order #{number}"));
+    }
+    type Line = (Option<i64>, String, i64, i64, i64, Option<i64>, bool, Option<i64>, i64);
+    let rows: Vec<Line> = sqlx::query_as(
+        "SELECT product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable, percent_ppm, line_number
+         FROM estimate_lines WHERE estimate_id = ?1 ORDER BY line_number",
+    )
+    .bind(estimate_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    let mut left_out = Vec::new();
+    let mut lines = Vec::new();
+    for (product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable, percent, number) in rows {
+        if percent.is_some() || rate_cents <= 0 {
+            left_out.push(format!("line {number} ({})", if percent.is_some() { "a percent charge" } else { "priced at 0.00" }));
+            continue;
+        }
+        lines.push(SalesOrderLineInput {
+            id: None,
+            line: SalesLineInput { product_service_id, description, quantity_e4, rate_cents, income_account_id, class_id, is_taxable, service_date: None },
+        });
+    }
+    let form = crate::item_types::form_lines_of(&mut **tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    if !form.is_empty() {
+        left_out.push(format!("{} subtotal or other form line{}", form.len(), if form.len() == 1 { "" } else { "s" }));
+    }
+    if discount_cents > 0 {
+        left_out.push(format!("the {} discount", format_cents(discount_cents)));
+    }
+    if lines.is_empty() {
+        return Err("SO_NO_LINES: the estimate has no item lines priced above zero to order".into());
+    }
+    let details = crate::sales_lists::details_in_tx(tx, crate::sales_lists::SalesDoc::Estimate, estimate_id).await?;
+    let input = SalesOrderInput {
+        customer_name,
+        order_date,
+        expected_date: None,
+        memo,
+        lines,
+        tax_rate_id,
+        sales_rep_id: details.sales_rep_id,
+        ship_method_id: details.ship_method_id,
+        customer_message_id: details.customer_message_id,
+        header: details.header,
+    };
+    let customer_id = find_or_create_named(tx, Party::Customer, &input.customer_name).await?;
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO sales_orders (order_number, customer_id, order_date, estimate_id)
+         VALUES ((SELECT COALESCE(MAX(order_number), 0) + 1 FROM sales_orders), ?1, ?2, ?3) RETURNING id",
+    )
+    .bind(customer_id)
+    .bind(order_date)
+    .bind(estimate_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_err)?;
+    write(tx, id, &input).await?;
+    Ok((id, left_out))
 }
 
 /// Changes a sales order. Lines already invoiced stay (with at least what was invoiced); an order

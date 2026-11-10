@@ -22,6 +22,7 @@ use crate::statements::LineKind;
 
 mod more_reports;
 mod profitability;
+mod sales_orders;
 
 // ------------------------------------------------------------------------------------------------
 // Catalog
@@ -66,6 +67,9 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("invoice-profit-detail", "Invoice Profitability Detail", "Sales and customers", Range, "fiscalYearToDate"),
         r("unpaid-bills-job", "Unpaid Bills by Job", "What you owe", AsOf, ""),
         r("open-po-detail", "Open Purchase Orders Detail", "Expenses and vendors", AsOf, ""),
+        r("open-so-customer", "Open Sales Orders by Customer", "Sales and customers", Now, ""),
+        r("open-so-item", "Open Sales Orders by Item", "Sales and customers", Now, ""),
+        r("pending-sales", "Pending Sales", "Sales and customers", Now, ""),
         r("time-job-summary", "Time by Job Summary", "Jobs", Range, "thisMonth"),
         r("time-job-detail", "Time by Job Detail", "Jobs", Range, "thisMonth"),
         r("time-name", "Time by Name", "Jobs", Range, "thisMonth"),
@@ -108,6 +112,9 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "invoice-profit-detail" => profitability::invoice_profitability_detail(pool, start, end).await,
         "unpaid-bills-job" => unpaid_bills_by_job(pool, end).await,
         "open-po-detail" => open_po_detail(pool, end).await,
+        "open-so-customer" => sales_orders::open_by_customer(pool, today).await,
+        "open-so-item" => sales_orders::open_by_item(pool, today).await,
+        "pending-sales" => sales_orders::pending(pool, today).await,
         "time-job-summary" => time_summary(pool, TimeBy::Job, start, end).await,
         "time-job-detail" => time_by_job_detail(pool, start, end).await,
         "time-name" => time_summary(pool, TimeBy::Name, start, end).await,

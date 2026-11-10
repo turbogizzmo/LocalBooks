@@ -696,7 +696,11 @@ function SalesCompany({ field }) {
         {field({ label: 'Open invoices', prefKey: 'warn_customer_open_invoices', hint: 'Asks before saving a new sales receipt for a customer (or job) with invoices still open: a receipt doesn’t pay them, Receive Payments does', children: flag('Warn before a sales receipt from a customer with open invoices') })}
       </Group>
       {/* Estimates to invoices › Zero-amount lines (`estimate_drop_zero_lines`) shows once estimates take 0.00 lines (#151). */}
-      <Nothing>Sales orders and the Collections Center are not part of LocalBooks, so their options are not here.</Nothing>
+      <Group title="Sales orders">
+        {field({ label: 'Sales orders', prefKey: 'sales_orders_enabled', hint: 'Off hides Sales Orders from the menus and the side bar; orders already saved are kept, and invoices made from them are unchanged', children: flag('Use sales orders') })}
+        <Always label="Sales order numbers">Each sales order gets the next number, so no two share one.</Always>
+      </Group>
+      <Nothing>The Collections Center is not part of LocalBooks, so its options are not here.</Nothing>
     </>
   );
 }

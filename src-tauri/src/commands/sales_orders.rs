@@ -1,7 +1,7 @@
 //! Sales orders, invoicing them in parts, and the open-orders reports (`sales_orders.rs`).
 
 use super::prelude::*;
-use crate::sales_orders::{self, OpenSalesOrders, PendingSales, SalesOrderDetail, SalesOrderInput, SalesOrderSummary, Take};
+use crate::sales_orders::{self, OrderFromEstimate, SalesOrderDetail, SalesOrderInput, SalesOrderSummary, Take};
 
 handlers![
     list_sales_orders,
@@ -12,8 +12,7 @@ handlers![
     reopen_sales_order,
     delete_sales_order,
     invoice_from_sales_order,
-    get_open_sales_orders,
-    get_pending_sales,
+    create_sales_order_from_estimate,
 ];
 
 #[tauri::command]
@@ -71,12 +70,10 @@ pub async fn invoice_from_sales_order(app: AppHandle, db: State<'_, Db>, id: i64
     Ok(invoice)
 }
 
+/// Makes a sales order from an estimate, dated `order_date`.
 #[tauri::command]
-pub async fn get_open_sales_orders(db: State<'_, Db>) -> Result<OpenSalesOrders, String> {
-    sales_orders::open_lines(&db.pool().await).await
-}
-
-#[tauri::command]
-pub async fn get_pending_sales(db: State<'_, Db>) -> Result<PendingSales, String> {
-    sales_orders::pending_sales(&db.pool().await).await
+pub async fn create_sales_order_from_estimate(app: AppHandle, db: State<'_, Db>, estimate_id: i64, order_date: NaiveDate) -> Result<OrderFromEstimate, String> {
+    let order = sales_orders::create_from_estimate(&db.pool().await, estimate_id, order_date).await?;
+    notify(&app);
+    Ok(order)
 }

@@ -11,6 +11,10 @@ people using LocalBooks.
   it keeps track of what is left. Voiding one of its invoices puts the quantities back. Stock Status
   and an item's information panel now show what is on sales orders and what is available, and the
   Open by customer, Open by item and Pending sales reports list what is still to ship.
+- **Print, email and estimate sales orders.** A sales order prints, saves as a PDF and emails like
+  an invoice, with its own design in Settings › Custom Forms. An accepted estimate becomes a sales
+  order with **Create sales order**. Open Sales Orders by Customer and by Item and Pending Sales are
+  in Reports › Sales, and Preferences › Sales & Customers can turn sales orders off.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

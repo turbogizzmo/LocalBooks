@@ -14,7 +14,24 @@ invoice an order all at once or in parts, as you ship.
    out again on each invoice.
 4. Click **Save sales order**.
 
-A sales order holds item lines only; add subtotals, discounts and other charges on the invoice.
+A sales order holds item lines priced above zero; add subtotals, discounts and other charges on the
+invoice.
+
+### From an estimate
+
+When a customer accepts an estimate and you'll ship it over time, open the estimate's menu in
+**Sales › Estimates** and choose **Create sales order**. The order takes the estimate's customer,
+item lines, sales tax, rep, ship via and addresses, dated today. A discount, percent charges,
+subtotals and lines priced at 0.00 stay on the estimate (the message lists them): add them on the
+invoice. The estimate then shows its sales order number, and you invoice it through the order, not
+from the estimate.
+
+### Print, save or email an order
+
+From an order's **▾** menu: **Print…**, **Save as PDF…**, **Print Envelope…**, **Email…** or
+**Email later** (sent with others from **Sales › Send Forms**). Sales tax shows at the order's rate;
+each invoice works it out again for what it ships. Change the order's look in **Settings › Custom
+Forms › Sales order**.
 
 ## Invoice an order
 
@@ -59,11 +76,18 @@ the reports below.
 
 ## Reports
 
-The tabs at the top of **Sales › Sales Orders**:
+In **Reports › Sales** and the Report Center, and as tabs at the top of **Sales › Sales Orders**:
 
 - **Open by customer**: every open line under its customer: ordered, invoiced, left, backordered
   and the open amount, with subtotals.
 - **Open by item**: the same lines under each item, with on hand, on sales orders and available.
 - **Pending sales**: by customer, what has been ordered and not yet invoiced.
 
-Each one prints and exports to CSV or Excel like any report.
+Each one prints and exports like any report.
+
+## Turn sales orders off
+
+A business that never takes orders can untick **Use sales orders** in **Preferences › Sales &
+Customers › Company Preferences**. Sales Orders then leaves the side bar, and **Customers › Create
+Sales Orders** is greyed out. Orders already saved are kept, and invoices made from them don't
+change.

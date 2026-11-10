@@ -222,3 +222,64 @@ async fn editing_a_partly_invoiced_order_keeps_what_was_invoiced() {
     let pending = pending_sales(&s.pool).await.unwrap();
     assert_eq!((pending.rows.len(), pending.rows[0].orders, pending.total_cents), (1, 1, 22_500));
 }
+
+#[tokio::test]
+async fn an_order_prints_queues_for_email_and_has_its_reports() {
+    let s = shop().await;
+    let rate = crate::sales_tax::create_tax_rate(&s.pool, crate::sales_tax::TaxRateInput { name: "State".into(), rate_ppm: 50_000, agency_name: None, liability_account_id: None }).await.unwrap();
+    let mut taxed = order("Acme", d(2), vec![SalesOrderLineInput { line: SalesLineInput { is_taxable: true, ..line(&s, s.widget, 10, 2_500).line }, id: None }, line(&s, s.service, 1, 10_000)]);
+    taxed.tax_rate_id = Some(rate.id);
+    taxed.header.po_number = Some("PO-77".into());
+    let saved = create(&s.pool, &taxed).await.unwrap();
+
+    // The form: lines as ordered, sales tax at the order's rate on the taxable line.
+    let doc = crate::forms::document(&s.pool, crate::forms::FormKind::SalesOrder, Some(saved.id), None, "$").await.unwrap();
+    assert_eq!((doc.number.as_str(), doc.lines.len(), doc.total.as_str()), ("1", 2, "$362.50"));
+    assert!(doc.totals.iter().any(|t| t.label == "Sales tax (State)" && t.value == "$12.50"), "{:?}", doc.totals);
+    crate::forms::render(&s.pool, crate::forms::FormKind::SalesOrder, Some(saved.id), None, None, false).await.expect("renders a PDF");
+    crate::email_log::set_queued(&s.pool, crate::forms::FormKind::SalesOrder, saved.id, true).await.unwrap();
+    let queued = crate::email_log::queue(&s.pool).await.unwrap();
+    assert_eq!((queued.len(), queued[0].kind, queued[0].number, queued[0].total_cents), (1, crate::forms::FormKind::SalesOrder, 1, 36_250), "the total the form prints, tax included");
+
+    // The Report Center's three reports add up to what is left to invoice.
+    let today = d(20);
+    for id in ["open-so-customer", "open-so-item", "pending-sales"] {
+        let report = crate::list_reports::run(&s.pool, id, None, None, today).await.unwrap();
+        let total = report.report.rows.last().unwrap().cells.last().unwrap().as_i64().unwrap();
+        assert_eq!(total, 35_000, "{id}");
+    }
+    let by_item = crate::list_reports::run(&s.pool, "open-so-item", None, None, today).await.unwrap();
+    let heading = by_item.report.rows.iter().find_map(|r| r.cells[0].as_str().filter(|t| t.starts_with("Widget"))).unwrap();
+    assert_eq!(heading, "Widget · on hand 7 · on sales orders 10 · available -3");
+}
+
+#[tokio::test]
+async fn an_estimate_becomes_an_order_once_and_is_then_invoiced_through_it() {
+    let s = shop().await;
+    let est_line = |product, qty: i64, rate| SalesLineInput { product_service_id: Some(product), description: "quoted".into(), quantity_e4: qty * 10_000, rate_cents: rate, income_account_id: s.sales, class_id: None, is_taxable: false, service_date: None };
+    let estimate = crate::estimates::create_estimate(
+        &s.pool,
+        crate::estimates::EstimateInput {
+            customer_name: "Acme".into(),
+            estimate_date: d(1),
+            expiration_date: None,
+            memo: Some("Spring order".into()),
+            lines: vec![est_line(s.widget, 4, 2_500), est_line(s.service, 1, 10_000)],
+            tax_rate_id: None,
+            discount_cents: 1_000,
+            details: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+    let made = create_from_estimate(&s.pool, estimate.id, d(3)).await.unwrap();
+    assert_eq!((made.order.customer_name.as_str(), made.order.total_cents, made.order.memo.as_deref()), ("Acme", 20_000, Some("Spring order")));
+    assert_eq!(made.left_out, vec!["the $10.00 discount".to_string()]);
+    let lines = detail(&s.pool, made.order.id).await.unwrap().lines;
+    assert_eq!(lines.iter().map(|l| (l.product_service_id, l.quantity_e4)).collect::<Vec<_>>(), vec![(Some(s.widget), 40_000), (Some(s.service), 10_000)]);
+
+    assert!(create_from_estimate(&s.pool, estimate.id, d(3)).await.unwrap_err().starts_with("EST_ORDERED"));
+    assert!(crate::estimates::convert_to_invoice(&s.pool, estimate.id, d(5), d(30)).await.unwrap_err().starts_with("EST_ORDERED"));
+    let listed = crate::estimates::list_estimates(&s.pool).await.unwrap();
+    assert_eq!(listed[0].sales_order_number, Some(made.order.order_number));
+}

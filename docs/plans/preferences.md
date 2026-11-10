@@ -70,7 +70,7 @@ as in `docs/gaps.md`.
 | Sales | Price levels on or off | has (T3 batch 4) | – |
 | Sales | Warn before selling to a customer with overdue invoices | has (T3 batch 4: new invoices and sales receipts, the customer and its jobs) | – |
 | Sales | Billable time and costs: ask, add, or don't add | missing | M |
-| Sales | Sales orders on or off, with their own duplicate-number warning and packing-slip template *(tour)* | left out (LocalBooks has no sales orders; the option comes with them) | L |
+| Sales | Sales orders on or off, with their own duplicate-number warning and packing-slip template *(tour)* | built (T69): on or off; numbers are always the next one, so no duplicate warning; no packing slip yet | L |
 | Sales | Don't print lines with a zero amount when an estimate or order becomes an invoice *(tour)* | in progress (T3 batch 4: the rule and its preference are built; estimates accepting 0.00 lines waits on #151's changes to estimate lines) | S |
 | Sales | Collections Center on or off *(tour)* | left out (no Collections Center; the overdue warning and A/R aging cover the same ground) | M |
 

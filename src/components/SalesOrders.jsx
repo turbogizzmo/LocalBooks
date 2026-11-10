@@ -10,10 +10,12 @@ import { SortTh, useSort } from './SortHead.jsx';
 import NameField from './NameField.jsx';
 import DateBox from './DateBox.jsx';
 import { FormInfoPanel } from './InfoPanel.jsx';
-import { OpenSalesOrdersByCustomer, OpenSalesOrdersByItem, PendingSalesReport } from './SalesOrderReports.jsx';
+import { EmailMarks, formMenuItems, useEmailStatuses, useFormPrinter } from './FormPages.jsx';
+import ListReport, { useListReports } from './ListReports.jsx';
 import { api, errorText, useLedgerQuery } from '../lib/api.js';
 import { formatCents, formatQuantity, parseQuantityE4 } from '../lib/money.js';
 import { formatDate } from '../lib/dates.js';
+import { useSalesPrefs } from '../lib/salesPrefs.js';
 
 const STATUS = {
   OPEN: { label: '○ Open', className: 'text-qb-ink' },
@@ -21,11 +23,12 @@ const STATUS = {
   CLOSED: { label: '● Closed', className: 'text-qb-ink-faint' },
 };
 
+/** The orders, and the Report Center's sales order reports (`list_reports/sales_orders.rs`). */
 const TABS = [
   ['orders', 'Sales orders'],
-  ['by-customer', 'Open by customer'],
-  ['by-item', 'Open by item'],
-  ['pending', 'Pending sales'],
+  ['list:open-so-customer', 'Open by customer'],
+  ['list:open-so-item', 'Open by item'],
+  ['list:pending-sales', 'Pending sales'],
 ];
 
 /** A new sales order, or an existing one (`order`, its detail) being changed. */
@@ -202,7 +205,19 @@ function InvoicePartDialog({ order, onClose, onInvoice }) {
   );
 }
 
-export default function SalesOrders({ accounts, intent, navigate }) {
+export default function SalesOrders(props) {
+  const { salesOrders, loaded } = useSalesPrefs();
+  if (loaded && !salesOrders) {
+    return (
+      <div className="p-2">
+        <Notice kind="info" text="Sales orders are turned off for this company. An Admin can turn them on in Preferences › Sales & Customers; orders already saved are kept." />
+      </div>
+    );
+  }
+  return <SalesOrderList {...props} />;
+}
+
+function SalesOrderList({ accounts, intent, navigate }) {
   const [openOnly, setOpenOnly] = useState(true);
   const { data, error, reload } = useLedgerQuery(() => api.listSalesOrders(openOnly));
   useEffect(() => {
@@ -212,6 +227,9 @@ export default function SalesOrders({ accounts, intent, navigate }) {
   const [editing, setEditing] = useState(intent?.action === 'sales-order' ? 'new' : null);
   const [partOf, setPartOf] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [printPortal, forms] = useFormPrinter(setNotice);
+  const catalog = useListReports();
+  const emailed = useEmailStatuses('SALES_ORDER');
 
   useEffect(() => {
     if (intent?.action === 'sales-order') {
@@ -249,6 +267,7 @@ export default function SalesOrders({ accounts, intent, navigate }) {
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {printPortal}
       <div className="flex flex-none gap-1" role="tablist" aria-label="Sales orders">
         {TABS.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={`qb-btn h-row ${tab === id ? 'qb-btn-primary' : 'qb-btn-secondary'}`} onClick={() => setTab(id)}>
@@ -256,9 +275,7 @@ export default function SalesOrders({ accounts, intent, navigate }) {
           </button>
         ))}
       </div>
-      {tab === 'by-customer' && <OpenSalesOrdersByCustomer />}
-      {tab === 'by-item' && <OpenSalesOrdersByItem />}
-      {tab === 'pending' && <PendingSalesReport />}
+      {tab !== 'orders' && <ListReport report={tab} catalog={catalog} navigate={navigate} />}
       {tab === 'orders' && (
         <>
           {editing && (
@@ -323,7 +340,10 @@ export default function SalesOrders({ accounts, intent, navigate }) {
                     const closed = o.status === 'CLOSED';
                     return (
                       <tr key={o.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openOrder(o)}>
-                        <td className="qb-grid-cell">{o.orderNumber}</td>
+                        <td className="qb-grid-cell">
+                          {o.orderNumber}
+                          <EmailMarks status={emailed.get(o.id)} />
+                        </td>
                         <td className="qb-grid-cell font-semibold">{o.customerName}</td>
                         <td className="qb-grid-cell">{formatDate(o.orderDate)}</td>
                         <td className="qb-grid-cell">{o.expectedDate ? formatDate(o.expectedDate) : ''}</td>
@@ -334,6 +354,7 @@ export default function SalesOrders({ accounts, intent, navigate }) {
                           <RowMenu
                             items={[
                               { label: 'Open', disabled: o.isClosed, hint: o.isClosed ? 'Reopen it to change it' : undefined, onSelect: () => openOrder(o) },
+                              ...formMenuItems('SALES_ORDER', o.id, forms, emailed.get(o.id)),
                               { label: 'Create invoice for all that is left', disabled: closed, onSelect: () => invoiceAll(o) },
                               { label: 'Create invoice for part…', disabled: closed, onSelect: () => invoicePart(o) },
                               o.isClosed

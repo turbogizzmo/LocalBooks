@@ -26,6 +26,8 @@ use crate::preferences;
 
 pub const PRICE_LEVELS: &str = "price_levels_enabled";
 pub const ESTIMATES: &str = "estimates_enabled";
+/// Sales orders on or off (Preferences › Sales & Customers); off hides them, and keeps those saved.
+pub const SALES_ORDERS: &str = "sales_orders_enabled";
 pub const DEFAULT_SHIP_METHOD: &str = "default_ship_method_id";
 pub const DEFAULT_FOB: &str = "default_fob";
 pub const DEFAULT_MARKUP: &str = "default_markup_percent";
@@ -66,7 +68,7 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         _ => Err("PREF_BAD_FLAG: use true or false".to_string()),
     };
     Some(match key {
-        PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
+        PRICE_LEVELS | ESTIMATES | SALES_ORDERS | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
         | PAYMENT_AUTO_DISCOUNTS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
         // An expense (or asset) account, checked in `check_discount_account`; blank means none.
         BILL_DISCOUNT_ACCOUNT => match v {

@@ -91,6 +91,11 @@ export default function App() {
   useEffect(() => {
     if (estimatesOn !== null) api.setMenuViewEnabled('sales/estimates', estimatesOn).catch(() => {});
   }, [estimatesOn]);
+  // And Customers › Create Sales Orders while sales orders are off.
+  const salesOrdersOn = prefs.data ? prefs.data.sales_orders_enabled !== 'false' : null;
+  useEffect(() => {
+    if (salesOrdersOn !== null) api.setMenuViewEnabled('sales/orders', salesOrdersOn).catch(() => {});
+  }, [salesOrdersOn]);
   const companyName = prefs.data?.company_name ?? 'LocalBooks';
   // Which company is open, as the window title shows it: its name, or the file's name until it is named.
   const openCompany = storage.data?.companyName ?? null;
