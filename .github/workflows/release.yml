@@ -108,7 +108,7 @@ jobs:
     # No matrix: with one, GitHub appends "(macos-latest)" to the name and it no longer matches the
     # required check "Test (macos-latest)".
     runs-on: macos-latest
-    # The macOS runners take about 41 minutes for the full suite (Nov 2026), so 45 left no room.
+    # The full suite took about 70 minutes on the macOS runner in Nov 2026, so 75 left no room.
     timeout-minutes: 110
     steps:
       - name: Checkout
