@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Month-end schedules stay at month end.** A recurring transaction that repeats monthly,
+  quarterly or yearly from the 29th, 30th or 31st now falls on the last day of shorter months and
+  goes back to its own day after them (January 31, February 28, March 31). Before, it moved to the
+  28th for good after February. Schedules already set up pick this up from their next date on.
+- In Memorize, changing **Repeat every** now moves the **Next date** too.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the

@@ -2,7 +2,7 @@
 //! report, recurring (memorized) transactions, purchase orders, finding transactions, and files
 //! attached to transactions.
 
-use chrono::{Months, NaiveDate};
+use chrono::{Datelike, Months, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
@@ -364,16 +364,23 @@ pub struct RecurringView {
     pub payload: String,
 }
 
-/// The date after `date` on a schedule.
-pub fn advance(date: NaiveDate, frequency: &str, every: i64) -> Option<NaiveDate> {
+/// The date after `date` on a schedule. A monthly, quarterly or yearly schedule falls on its
+/// `anchor_day` (the day of the month it started on), or on the last day of a shorter month: from
+/// January 31 it goes to February 28 and then back to March 31, never staying on the 28th.
+pub fn advance(date: NaiveDate, frequency: &str, every: i64, anchor_day: Option<u32>) -> Option<NaiveDate> {
     let n = u32::try_from(every).ok()?;
-    match frequency {
-        "WEEKLY" => date.checked_add_days(chrono::Days::new(7 * u64::from(n))),
-        "MONTHLY" => date.checked_add_months(Months::new(n)),
-        "QUARTERLY" => date.checked_add_months(Months::new(3 * n)),
-        "YEARLY" => date.checked_add_months(Months::new(12 * n)),
-        _ => None,
-    }
+    let months = match frequency {
+        "WEEKLY" => return date.checked_add_days(chrono::Days::new(7 * u64::from(n))),
+        "MONTHLY" => n,
+        "QUARTERLY" => n.checked_mul(3)?,
+        "YEARLY" => n.checked_mul(12)?,
+        _ => return None,
+    };
+    let moved = date.checked_add_months(Months::new(months))?;
+    let Some(day) = anchor_day else { return Some(moved) };
+    let first = moved.with_day(1)?;
+    let last = first.checked_add_months(Months::new(1))?.pred_opt()?.day();
+    first.with_day(day.clamp(1, last))
 }
 
 fn shift(date: NaiveDate, from: NaiveDate, to: NaiveDate) -> NaiveDate {
@@ -453,17 +460,21 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
     if name.is_empty() {
         return Err("REC_NAME_REQUIRED: name the recurring transaction".into());
     }
-    if advance(input.next_date, &input.frequency, input.every).is_none() {
+    if advance(input.next_date, &input.frequency, input.every, None).is_none() {
         return Err("REC_BAD_SCHEDULE: choose weekly, monthly, quarterly or yearly".into());
     }
     let payload = input.payload.to_string();
     dated(&input.kind, &payload, input.next_date)?;
+    // Later dates fall on the next date's day of the month (or the month's last day). Saving a
+    // template without moving its next date keeps the day it already has (a schedule from the 31st
+    // sitting on February 28 stays a month-end schedule).
+    let anchor = i64::from(input.next_date.day());
     let unique = |e: sqlx::Error| {
         let msg = db_err(e);
         if msg.contains("UNIQUE") { format!("REC_DUPLICATE: there is already a recurring transaction named '{name}'") } else { msg }
     };
     match id {
-        None => sqlx::query_scalar("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id")
+        None => sqlx::query_scalar("INSERT INTO recurring_templates (name, kind, payload, frequency, every, next_date, end_date, anchor_day) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id")
             .bind(name)
             .bind(&input.kind)
             .bind(&payload)
@@ -471,10 +482,12 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
             .bind(input.every)
             .bind(input.next_date)
             .bind(input.end_date)
+            .bind(anchor)
             .fetch_one(pool)
             .await
             .map_err(unique),
-        Some(id) => sqlx::query("UPDATE recurring_templates SET name = ?1, kind = ?2, payload = ?3, frequency = ?4, every = ?5, next_date = ?6, end_date = ?7 WHERE id = ?8")
+        Some(id) => sqlx::query("UPDATE recurring_templates SET name = ?1, kind = ?2, payload = ?3, frequency = ?4, every = ?5, next_date = ?6, end_date = ?7,
+                    anchor_day = CASE WHEN next_date = ?6 AND anchor_day IS NOT NULL THEN anchor_day ELSE ?9 END WHERE id = ?8")
             .bind(name)
             .bind(&input.kind)
             .bind(&payload)
@@ -483,6 +496,7 @@ pub async fn save_recurring(pool: &SqlitePool, id: Option<i64>, input: Recurring
             .bind(input.next_date)
             .bind(input.end_date)
             .bind(id)
+            .bind(anchor)
             .execute(pool)
             .await
             .map(|_| id)
@@ -515,12 +529,15 @@ async fn post_occurrence(tx: &mut Transaction<'_, Sqlite>, kind: &str, payload: 
     }
 }
 
+/// A template that may be due: id, kind, payload, frequency, every, next date, end date, anchor day.
+type DueTemplate = (i64, String, String, String, i64, NaiveDate, Option<NaiveDate>, Option<i64>);
+
 /// Enters every occurrence that is due on or before `as_of` for active templates (at most 120 in
 /// one go), moving each template's next date along its schedule. Returns how many were entered.
 pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -> Result<usize, String> {
     run(pool, async |tx| {
-        let templates: Vec<(i64, String, String, String, i64, NaiveDate, Option<NaiveDate>)> = sqlx::query_as(
-            "SELECT id, kind, payload, frequency, every, next_date, end_date FROM recurring_templates
+        let templates: Vec<DueTemplate> = sqlx::query_as(
+            "SELECT id, kind, payload, frequency, every, next_date, end_date, anchor_day FROM recurring_templates
              WHERE is_active = 1 AND next_date <= ?1 AND (?2 IS NULL OR id = ?2)",
         )
         .bind(as_of)
@@ -529,12 +546,13 @@ pub async fn enter_due(pool: &SqlitePool, as_of: NaiveDate, only: Option<i64>) -
         .await
         .map_err(db_err)?;
         let mut entered = 0;
-        for (id, kind, payload, frequency, every, mut next, end) in templates {
+        for (id, kind, payload, frequency, every, mut next, end, anchor) in templates {
+            let anchor = anchor.and_then(|d| u32::try_from(d).ok());
             while next <= as_of && end.is_none_or(|e| next <= e) && entered < 120 {
                 let entry = post_occurrence(tx, &kind, &payload, next).await?;
                 sqlx::query("INSERT INTO recurring_runs (template_id, run_date, journal_entry_id) VALUES (?1, ?2, ?3)").bind(id).bind(next).bind(entry).execute(&mut **tx).await.map_err(db_err)?;
                 entered += 1;
-                next = advance(next, &frequency, every).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
+                next = advance(next, &frequency, every, anchor).ok_or("REC_BAD_SCHEDULE: the schedule cannot advance")?;
             }
             let finished = end.is_some_and(|e| next > e);
             sqlx::query("UPDATE recurring_templates SET next_date = ?1, is_active = CASE WHEN ?2 THEN 0 ELSE is_active END WHERE id = ?3")
