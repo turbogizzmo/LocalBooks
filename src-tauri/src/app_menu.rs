@@ -205,6 +205,8 @@ const VENDORS: &[Entry] = &[
             report("Inventory Valuation Summary", "inv-val"),
         ],
     ),
+    page("Receive Items", "expenses/item-receipts"),
+    form("Enter Bill for Received Items", "expenses/item-receipts", "bill-received"),
     Entry::Sep,
     Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099"), report("1099-NEC and 1096", "1099-nec")]),
     ITEM_LIST,
