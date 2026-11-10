@@ -687,17 +687,18 @@ pub fn backup_due(newest_backup: Option<NaiveDate>, as_of: NaiveDate, days: i64)
     vec![ReminderItem { id: None, label: "Back up the company file".into(), detail, date, amount_cents: None, entry_id: None }]
 }
 
-/// The reminders the viewer's settings ask for, as of `as_of`; categories with nothing in them are
-/// left out. `newest_backup` is the day of the newest backup in the backups folder.
 /// Active tracked items whose quantity on hand is at or below their reorder point, with what is
-/// already on open purchase orders (Inventory to reorder). None while inventory is turned off.
+/// still to come on open purchase orders, less what item receipts have received (Inventory to reorder). None while inventory is turned off.
 pub async fn inventory_to_reorder(pool: &SqlitePool) -> Result<Vec<ReminderItem>, String> {
     if crate::preferences::get(pool, "inventory_enabled").await.unwrap_or_default() == "false" {
         return Ok(Vec::new());
     }
     let rows: Vec<(i64, String, i64, i64, i64)> = sqlx::query_as(
         "SELECT p.id, p.name, i.qty_on_hand_e4, p.reorder_point_e4,
-                COALESCE((SELECT SUM(l.quantity_e4) FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id
+                COALESCE((SELECT SUM(MAX(l.quantity_e4 - COALESCE((SELECT SUM(rl.quantity_e4) FROM item_receipt_lines rl
+                                     JOIN item_receipts r ON r.id = rl.item_receipt_id JOIN journal_entries e ON e.id = r.journal_entry_id
+                                     WHERE e.is_voided = 0 AND rl.purchase_order_line_id = l.id), 0), 0))
+                          FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id
                           WHERE o.status = 'OPEN' AND l.product_service_id = p.id), 0)
          FROM products_services p JOIN inventory_items i ON i.product_id = p.id
          WHERE p.is_active = 1 AND p.reorder_point_e4 IS NOT NULL AND i.qty_on_hand_e4 <= p.reorder_point_e4
@@ -723,6 +724,8 @@ pub async fn inventory_to_reorder(pool: &SqlitePool) -> Result<Vec<ReminderItem>
         .collect())
 }
 
+/// The reminders the viewer's settings ask for, as of `as_of`; categories with nothing in them are
+/// left out. `newest_backup` is the day of the newest backup in the backups folder.
 pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newest_backup: Option<NaiveDate>) -> Result<Vec<ReminderGroup>, String> {
     let s = settings(pool, viewer).await?;
     let mut groups = Vec::new();
