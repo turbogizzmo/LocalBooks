@@ -499,8 +499,9 @@ next and open it with one click.
 - **Balances** lists your bank, credit card, receivable and payable accounts with their balances.
   Click one to open its register.
 
-The **Insights** tab has the totals, the assets and liabilities chart, the trial balance and
-Reminders. LocalBooks remembers which tab you last chose.
+The **Insights** tab has the totals, income and expense for the last 12 months (by month, on the
+basis set in Preferences, the same figures as the Income and Expense Graph), the cash forecast, the
+assets and liabilities chart, the trial balance and Reminders. LocalBooks remembers which tab you last chose.
 
 ## Use the toolbar on a form
 

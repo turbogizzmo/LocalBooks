@@ -81,6 +81,11 @@ page of widgets you choose, each a summary of one report:
 | Top customers | The five largest by income, then Others | Sales by Customer Summary |
 | Top items | The five best-selling products and services, then Others | Sales by Product/Service Summary |
 | Top vendors | The five you spent most with, then Others | Expenses by Vendor Summary |
+| Income breakdown | The five largest income accounts, then Others; the total is all income | Profit and Loss |
+| Expense breakdown | The five largest cost of sales and expense accounts, then Others | Profit and Loss |
+| Year over year | Income, expenses and net income, beside the same dates a year earlier and the change | Profit and Loss for each period |
+| To-dos | Open to-dos due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
+| Note | Text you type and keep on the page (it saves when you click away) | — |
 
 - **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
 - Each widget has its own period: today (the balance widgets show balances as of the period's
@@ -91,6 +96,23 @@ page of widgets you choose, each a summary of one report:
 The figures are worked out exactly as their reports work them out (the same calculation, dates and
 basis), so a widget's total always matches the report's. The page is kept in the company file, so
 everyone who opens it sees the same widgets.
+
+## Money bars on Sales and Bills
+
+The bar at the top of **Sales › All Sales** shows open invoices, overdue and paid in the last 30
+days, then two more segments:
+
+- **Unbilled**: billable costs and time not on an invoice yet, the same as **Sales › Bill Costs**.
+- **Estimates**: estimates still pending or accepted and not turned into an invoice.
+
+The bar on **Vendors › Bills** adds:
+
+- **Purchase orders**: open purchase orders.
+- **Card balances**: what each credit card account owes today, as on the Balance Sheet.
+
+Click a segment to list its transactions under the bar; click it again to close the list. Click a
+row (or press Enter on it) to open it: unbilled costs open Bill Costs on that customer, an estimate
+or purchase order opens on its form, and a card opens its register.
 
 ## Profit and Loss
 

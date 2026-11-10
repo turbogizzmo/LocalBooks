@@ -99,6 +99,7 @@ features![
     merges,
     migration,
     mileage,
+    money_bars,
     payout_feeds,
     payroll_import,
     offsite,

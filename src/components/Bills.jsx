@@ -984,6 +984,7 @@ export default function Bills({ accounts, intent }) {
           { label: 'Overdue', icon: '⚠', color: '#d03b3b', cents: sum(overdue, 'balanceCents'), count: overdue.length },
           { label: 'Paid last 30 days', icon: '✓', color: '#0ca30c', cents: sum(paidRecent, 'amountPaidCents'), count: paidRecent.length },
         ]}
+        side="BILLS"
       />
       {paying ? (
         <PayBills

@@ -3,7 +3,7 @@ import { newTransactionDate, useTransactionDate } from '../lib/myPreferences.js'
 import NameField from './NameField.jsx';
 import Notice from './Notice.jsx';
 import FormToolbar, { fileButtons, navButtons } from './FormToolbar.jsx';
-import { useDirtySince, useOpenFromList } from '../lib/windows.js';
+import { useDirtySince, useEditIntent, useOpenFromList } from '../lib/windows.js';
 import SavedDocView, { useSavedDoc } from './SavedDocView.jsx';
 import { byDateThenNumber } from '../lib/formStep.js';
 import RowMenu from './RowMenu.jsx';
@@ -297,6 +297,8 @@ export default function PurchaseOrders({ accounts, intent }) {
     saved.open(o);
     setComposing(true);
   };
+  // A purchase order opened from elsewhere (the bills money bar's Purchase orders list).
+  useEditIntent(intent, 'purchaseOrderId', data, openOrder, () => setNotice({ kind: 'error', text: 'That purchase order is no longer in the books.' }));
   return (
     <div className="flex h-full flex-col gap-2 p-2">
       {!inventoryOn && <Notice kind="info" text="Inventory and purchase orders are turned off in Preferences › Items & Inventory. Existing purchase orders stay here; new ones can't be made." />}

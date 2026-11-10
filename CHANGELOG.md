@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **More on Company Snapshot, the money bars and Insights.** Company Snapshot can now show income and
+  expense breakdowns, year over year beside the same dates a year earlier, your open to-dos, and a
+  note you type. The bars on All Sales and Bills add Unbilled, Estimates, Purchase orders and Card
+  balances; click one to list its transactions and open them. The Dashboard's Insights tab shows
+  income and expense for the last 12 months.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

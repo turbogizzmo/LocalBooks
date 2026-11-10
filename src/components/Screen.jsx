@@ -66,7 +66,7 @@ export default function Screen({ view: chosenView, intent, navigate, accounts, i
       {view === 'sales/tax' && <SalesTax accounts={list} intent={intent} />}
       {view === 'sales/statements' && <Statements intent={intent} />}
       {view === 'sales/finance-charges' && <FinanceCharges accounts={list} navigate={navigate} />}
-      {view === 'sales/bill-costs' && <BillCosts navigate={navigate} />}
+      {view === 'sales/bill-costs' && <BillCosts navigate={navigate} intent={intent} />}
       {view === 'sales/send-forms' && <SendForms />}
       {view === 'sales/print-invoices' && <PrintInvoices />}
       {view === 'sales/print-forms' && <PrintBatch key={intent?.action ?? 'credit-memos'} action={intent?.action} accounts={list} />}

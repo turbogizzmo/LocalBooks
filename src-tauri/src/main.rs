@@ -79,6 +79,7 @@ mod pdf;
 mod mcp_server;
 mod merges;
 mod mileage;
+mod money_bars;
 mod nacha;
 mod preferences;
 mod price_levels;
