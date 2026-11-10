@@ -50,9 +50,19 @@ fn throttle(app: &AppHandle) -> &'static crate::sign_in_throttle::Throttle {
     THROTTLE.get_or_init(|| crate::sign_in_throttle::Throttle::new(crate::data_dirs(app).ok().map(|(_, dir)| dir).as_deref()))
 }
 
-/// Which company file a wait belongs to: its data key's id (shared by its copies).
-async fn throttle_file(pool: &sqlx::SqlitePool) -> String {
-    file_key_id(pool).await.ok().flatten().unwrap_or_else(|| "(no key)".into())
+/// What names the open company file for remembered sign-ins and the sign-in wait: an encrypted
+/// file's id from its key header (readable while it is locked), else its data key's id. Both are
+/// shared by the file's copies.
+async fn file_identity(db: &Db, pool: &sqlx::SqlitePool) -> Result<Option<String>, String> {
+    match db.encrypted_file_id().await {
+        Some(id) => Ok(Some(id)),
+        None => file_key_id(pool).await,
+    }
+}
+
+/// Which company file a wait belongs to.
+async fn throttle_file(db: &Db, pool: &sqlx::SqlitePool) -> String {
+    file_identity(db, pool).await.ok().flatten().unwrap_or_else(|| "(no key)".into())
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -70,10 +80,18 @@ fn signed_in_changed(app: &AppHandle) {
 #[tauri::command]
 pub async fn get_sign_in_state(app: AppHandle, db: State<'_, Db>) -> Result<Option<SignInState>, String> {
     let Ok((pool, session)) = db.pool_and_session().await else { return Ok(None) };
+    // A locked encrypted file has users (that is how it is unlocked) and nothing readable yet.
+    if db.is_locked().await {
+        let remembered_here = match db.encrypted_file_id().await {
+            Some(id) => remembered_sign_ins(&app)?.get(&id).await.ok().flatten().is_some(),
+            None => false,
+        };
+        return Ok(Some(SignInState { users_enabled: true, user: None, auto_lock_minutes: users::DEFAULT_AUTO_LOCK_MINUTES, remembered_here }));
+    }
     let users_enabled = users::users_enabled(&pool).await?;
     let user = session.lock().await.as_ref().map(|s| s.user.clone());
     let auto_lock_minutes = if users_enabled { users::auto_lock_minutes(&pool).await } else { 0 };
-    let remembered_here = match file_key_id(&pool).await? {
+    let remembered_here = match file_identity(&db, &pool).await? {
         Some(id) if users_enabled => remembered_sign_ins(&app)?.get(&id).await.ok().flatten().is_some(),
         _ => false,
     };
@@ -89,17 +107,22 @@ pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Opt
         return Ok(None);
     }
     let (pool, slot) = db.pool_and_session().await?;
-    let Some(id) = file_key_id(&pool).await? else { return Ok(None) };
+    let Some(id) = file_identity(&db, &pool).await? else { return Ok(None) };
     let store = remembered_sign_ins(&app)?;
     let Some(saved) = store.get(&id).await?.and_then(|json| serde_json::from_str::<RememberedSignIn>(&json).ok()) else { return Ok(None) };
-    match users::sign_in(&pool, &saved.username, &saved.password).await {
+    match crate::file_cipher::user_slots::sign_in(&db, &saved.username, &saved.password).await {
         Ok(session) if !session.user.must_change_password => {
             let user = session.user.clone();
             *slot.lock().await = Some(session);
             db.refresh_gate().await;
             Ok(Some(user))
         }
-        _ => {
+        Ok(_) => {
+            db.relock().await;
+            store.delete(&id).await?;
+            Ok(None)
+        }
+        Err(_) => {
             store.delete(&id).await?;
             Ok(None)
         }
@@ -110,7 +133,7 @@ pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Opt
 #[tauri::command]
 pub async fn forget_remembered_sign_in(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     let (pool, _) = db.pool_and_session().await?;
-    if let Some(id) = file_key_id(&pool).await? {
+    if let Some(id) = file_identity(&db, &pool).await? {
         remembered_sign_ins(&app)?.delete(&id).await?;
     }
     Ok(())
@@ -144,6 +167,8 @@ pub async fn sign_out_after_idle(app: &AppHandle) {
         return; // another command got here first
     }
     db.forbid_remembered_sign_in().await;
+    // An encrypted file closes again, so its page key leaves memory.
+    db.relock().await;
     db.refresh_gate().await;
     signed_in_changed(app);
 }
@@ -159,7 +184,7 @@ pub struct UsersTurnedOn {
 #[tauri::command]
 pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Option<String>, password: String) -> Result<UsersTurnedOn, String> {
     let (pool, slot) = db.pool_and_session().await?;
-    let (session, recovery) = users::turn_on(&pool, &username, display_name.as_deref(), &password).await?;
+    let (session, recovery) = crate::file_cipher::user_slots::turn_on(&db, &username, display_name.as_deref(), &password).await?;
     // The tax IDs it just encrypted may still sit in plain in free pages and the journal.
     if let Err(err) = crate::db::compact(&pool).await {
         eprintln!("LocalBooks: could not compact the company file after turning on users: {err}");
@@ -173,10 +198,14 @@ pub async fn turn_on_users(db: State<'_, Db>, username: String, display_name: Op
 
 #[tauri::command]
 pub async fn sign_in(app: AppHandle, db: State<'_, Db>, username: String, password: String, remember: bool) -> Result<UserView, String> {
+    let (pool, _) = db.pool_and_session().await?;
+    let file = throttle_file(&db, &pool).await;
+    let session = throttle(&app)
+        .attempt(&file, crate::sign_in_throttle::Who::User(&username), |e| e.starts_with("SIGN_IN_FAILED"), crate::file_cipher::user_slots::sign_in(&db, &username, &password))
+        .await?;
+    // The pool changes when an encrypted file is unlocked.
     let (pool, slot) = db.pool_and_session().await?;
-    let file = throttle_file(&pool).await;
-    let session = throttle(&app).attempt(&file, crate::sign_in_throttle::Who::User(&username), |e| e.starts_with("SIGN_IN_FAILED"), users::sign_in(&pool, &username, &password)).await?;
-    if let Some(id) = file_key_id(&pool).await? {
+    if let Some(id) = file_identity(&db, &pool).await? {
         let store = remembered_sign_ins(&app)?;
         if remember {
             let saved = RememberedSignIn { username: session.user.username.clone(), password };
@@ -202,6 +231,7 @@ pub async fn sign_out(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     *slot.lock().await = None;
     // Signing out means someone else may sign in next: no automatic sign-in until the file reopens.
     db.forbid_remembered_sign_in().await;
+    db.relock().await;
     db.refresh_gate().await;
     signed_in_changed(&app);
     Ok(())
@@ -217,21 +247,23 @@ pub async fn list_users(db: State<'_, Db>) -> Result<Vec<UserView>, String> {
 #[tauri::command]
 pub async fn add_user(db: State<'_, Db>, input: NewUserInput) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
+    let _ = pool;
     let guard = slot.lock().await;
-    users::add(&pool, Session::require_admin(guard.as_ref())?, input).await
+    crate::file_cipher::user_slots::add_user(&db, Session::require_admin(guard.as_ref())?, input).await
 }
 
 #[tauri::command]
 pub async fn update_user(db: State<'_, Db>, id: i64, input: UserUpdate) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
+    let _ = pool;
     let guard = slot.lock().await;
-    users::update(&pool, Session::require_admin(guard.as_ref())?, id, input).await
+    crate::file_cipher::user_slots::update_user(&db, Session::require_admin(guard.as_ref())?, id, input).await
 }
 
 #[tauri::command]
 pub async fn change_my_password(app: AppHandle, db: State<'_, Db>, current: String, next: String) -> Result<UserView, String> {
     let (pool, slot) = db.pool_and_session().await?;
-    let file = throttle_file(&pool).await;
+    let file = throttle_file(&db, &pool).await;
     let user = {
         let mut guard = slot.lock().await;
         let session = guard.as_mut().ok_or_else(|| users::SIGN_IN_REQUIRED.to_string())?;
@@ -239,7 +271,7 @@ pub async fn change_my_password(app: AppHandle, db: State<'_, Db>, current: Stri
         // can't be used to guess it.
         let name = session.user.username.clone();
         throttle(&app)
-            .attempt(&file, crate::sign_in_throttle::Who::User(&name), |e| e.starts_with("PASSWORD_WRONG"), users::change_own_password(&pool, session, &current, &next))
+            .attempt(&file, crate::sign_in_throttle::Who::User(&name), |e| e.starts_with("PASSWORD_WRONG"), crate::file_cipher::user_slots::change_own_password(&db, session, &current, &next))
             .await?
     };
     // A temporary password no longer holds the user at the sign-in screen.
@@ -250,12 +282,13 @@ pub async fn change_my_password(app: AppHandle, db: State<'_, Db>, current: Stri
 /// A forgotten Admin password: the recovery key sets a new one and signs that Admin in.
 #[tauri::command]
 pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recovery_key: String, username: String, new_password: String) -> Result<UserView, String> {
-    let (pool, slot) = db.pool_and_session().await?;
-    let file = throttle_file(&pool).await;
+    let (pool, _) = db.pool_and_session().await?;
+    let file = throttle_file(&db, &pool).await;
     // Only a wrong key counts: not a typo in its format, nor a right key with another user's name.
     let session = throttle(&app)
-        .attempt(&file, crate::sign_in_throttle::Who::RecoveryKey, |e| e.starts_with("KEY_WRONG_RECOVERY"), users::recover(&pool, &recovery_key, &username, &new_password))
+        .attempt(&file, crate::sign_in_throttle::Who::RecoveryKey, |e| e.starts_with("KEY_WRONG_RECOVERY"), crate::file_cipher::user_slots::recover(&db, &recovery_key, &username, &new_password))
         .await?;
+    let (_, slot) = db.pool_and_session().await?;
     let user = session.user.clone();
     *slot.lock().await = Some(session);
     db.refresh_gate().await;
@@ -267,15 +300,16 @@ pub async fn recover_with_recovery_key(app: AppHandle, db: State<'_, Db>, recove
 pub async fn replace_recovery_key(db: State<'_, Db>) -> Result<String, String> {
     let (pool, slot) = db.pool_and_session().await?;
     let guard = slot.lock().await;
-    let recovery = users::replace_recovery_key(&pool, Session::require_admin(guard.as_ref())?).await?;
+    let _ = pool;
+    let recovery = crate::file_cipher::user_slots::replace_recovery_key(&db, Session::require_admin(guard.as_ref())?).await?;
     Ok(recovery.as_str().to_string())
 }
 
 /// The last resort on the sign-in screen when no Admin password or recovery key is left.
 #[tauri::command]
 pub async fn remove_all_users(app: AppHandle, db: State<'_, Db>, confirmation: String) -> Result<(), String> {
-    let (pool, slot) = db.pool_and_session().await?;
-    users::remove_all_users(&pool, &confirmation).await?;
+    let (_, slot) = db.pool_and_session().await?;
+    crate::file_cipher::user_slots::remove_all_users(&db, &confirmation).await?;
     *slot.lock().await = None;
     db.refresh_gate().await;
     signed_in_changed(&app);

@@ -135,7 +135,7 @@ impl Session {
 }
 
 pub const SIGN_IN_REQUIRED: &str = "SIGN_IN_REQUIRED: sign in to this company file first";
-const SIGN_IN_FAILED: &str = "SIGN_IN_FAILED: the user name or password is not correct";
+pub const SIGN_IN_FAILED: &str = "SIGN_IN_FAILED: the user name or password is not correct";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

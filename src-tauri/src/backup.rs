@@ -107,6 +107,30 @@ pub async fn snapshot(pool: &SqlitePool, live_path: &Path, destination: &Path) -
 
 async fn write_verified_snapshot(pool: &SqlitePool, tmp: &Path, destination: &Path) -> Result<u64, String> {
     let tmp_name: String = tmp.to_string_lossy().into_owned();
+    // An encrypted company file (gap R1) is copied with its key header in front: the header first,
+    // then the pages through the file's own VFS and key, then a check of the copy on the same
+    // connection (an attached database takes the main one's key).
+    let mut conn = pool.acquire().await.map_err(|e| format!("BACKUP_FAILED: {e}"))?;
+    match crate::file_cipher::header::read_open(&mut conn).await {
+        Ok(header) => {
+            crate::file_cipher::header::create(tmp, &header).map_err(|e| format!("BACKUP_FAILED: {e}"))?;
+            sqlx::query("VACUUM INTO ?1").bind(&tmp_name).execute(&mut *conn).await.map_err(|e| format!("BACKUP_FAILED: {e}"))?;
+            sqlx::query("ATTACH DATABASE ?1 AS snapshot").bind(&tmp_name).execute(&mut *conn).await.map_err(|e| format!("BACKUP_VERIFY: {e}"))?;
+            let check: Result<String, _> = sqlx::query_scalar("PRAGMA snapshot.quick_check").fetch_one(&mut *conn).await;
+            let _ = sqlx::query("DETACH DATABASE snapshot").execute(&mut *conn).await;
+            match check {
+                Ok(result) if result == "ok" => {}
+                Ok(result) => return Err(format!("BACKUP_VERIFY: the snapshot failed verification (integrity check reported: {result})")),
+                Err(e) => return Err(format!("BACKUP_VERIFY: the snapshot failed verification ({e})")),
+            }
+            drop(conn);
+            std::fs::rename(tmp, destination).map_err(|e| format!("BACKUP_WRITE: cannot write {}: {e}", destination.display()))?;
+            return std::fs::metadata(destination).map(|m| m.len()).map_err(|e| e.to_string());
+        }
+        Err(e) if e.starts_with("FILE_NOT_ENCRYPTED") => {}
+        Err(e) => return Err(format!("BACKUP_FAILED: {e}")),
+    }
+    drop(conn);
     sqlx::query("VACUUM INTO ?1").bind(tmp_name).execute(pool).await.map_err(|e| format!("BACKUP_FAILED: {e}"))?;
     let check = open_read_only(tmp).await?;
     let verified = quick_check(&check).await;
