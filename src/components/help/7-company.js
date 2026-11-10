@@ -225,8 +225,8 @@ export const topics = [
   {
     id: 'qbw-import', area: 'company', views: ['settings/import'],
     title: 'Import a desktop company file (.qbw)',
-    body: 'Choose a .qbw file: LocalBooks reads it without changing it and brings in invoice line amounts only, because customers, payments and account names cannot be read from .qbw files yet. Map each line type to an income account, compare the total with the original program, then post.',
-    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor',
+    body: 'Choose a .qbw company file or .qbb backup: LocalBooks reads it without changing it and brings in its accounts, lists and transactions. Step 2 compares each account’s total with the balance the file stores, and lists any account that does not match with the file’s balance, the imported balance and the difference; the list stays after you post. Choose a LocalBooks account for each, then post.',
+    keywords: 'qbw qbb qbm migrate migration wizard desktop company file convert move import extractor balance differs difference match',
     go: { label: 'Go to the Desktop Migration Wizard', view: 'settings/import' },
     guide: 'desktop-migration',
   },

@@ -19,6 +19,11 @@ people using LocalBooks.
   Charge item or straight to an account. A purchase order's discounts and charges print on it and
   carry over to its bill. Other Charge and Discount items can have their own expense account for
   these forms.
+- **Company-file imports read more of older files, and say which balances don't match.**
+  LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
+  invoices and other transactions on those pages come in. And if an account's imported balance
+  still differs from the balance QuickBooks stored, step 2 of the import lists it with the
+  file's balance, the imported balance and the difference, before and after you post.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
