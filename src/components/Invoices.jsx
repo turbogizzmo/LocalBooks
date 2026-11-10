@@ -585,6 +585,67 @@ function ReceivePaymentPanel({ invoices, accounts, onDone, onCancel, onFind }) {
   );
 }
 
+/**
+ * Payment received with the invoice (T21): money taken when the invoice is written, saved with it in
+ * one step as an ordinary payment dated the invoice's date. Home-currency new invoices only.
+ */
+function usePaidNow(accounts) {
+  const { undepositedDefault } = useSalesPrefs();
+  const [on, setOn] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [accountId, setAccountId] = useState(null);
+  const method = usePaymentMethodChoice('CHECK');
+  const depositTo = accountId ?? defaultDepositAccount(accounts, undepositedDefault);
+  return {
+    on,
+    toggle: (next, total) => {
+      setOn(next);
+      if (next && !amount) setAmount(centsToInput(total));
+    },
+    reset: () => {
+      setOn(false);
+      setAmount('');
+      setReference('');
+      setAccountId(null);
+      method.reset();
+    },
+    /** Why the payment can't be saved with an invoice of `total`, or null. */
+    error: (total) => {
+      if (!on) return null;
+      const cents = parseMoneyToCents(amount);
+      if (cents === null || cents <= 0) return 'Enter the payment received, or untick Payment received.';
+      if (cents > total) return `The payment received, ${formatCents(cents)}, is more than the invoice total, ${formatCents(total)}.`;
+      if (depositTo === null) return 'Choose the account the payment is deposited to.';
+      return null;
+    },
+    payload: () =>
+      on ? { depositAccountId: depositTo, amountCents: parseMoneyToCents(amount), ...method.payload(), reference: reference.trim() || null } : null,
+    fields: (
+      <div className="flex flex-wrap items-end gap-2 border-t border-qb-border px-2 py-1.5" role="group" aria-label="Payment received">
+        <span className="self-center text-sm font-semibold">Payment received</span>
+        <label>
+          <span className="qb-label">Amount</span>
+          <input className="qb-input num w-[110px]" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" data-money />
+        </label>
+        <label>
+          <span className="qb-label">Method</span>
+          <PaymentMethodSelect value={method.id} onChange={method.set} className="qb-input w-[140px]" />
+        </label>
+        <label>
+          <span className="qb-label">Reference no.</span>
+          <input className="qb-input w-[100px]" value={reference} onChange={(e) => setReference(e.target.value)} />
+        </label>
+        <label>
+          <span className="qb-label">Deposit to</span>
+          <AccountSelect accounts={accounts} filter={depositFilter} value={depositTo} onChange={setAccountId} className="qb-input w-[190px]" />
+        </label>
+        <span className="self-center text-xs text-qb-ink-muted">Recorded with the invoice, on its date. Void it from Receive Payments if it bounces.</span>
+      </div>
+    ),
+  };
+}
+
 function InvoiceList({ accounts, onNotice, data, error, onEdit, onDuplicate }) {
   const { homeCurrency } = useCompany();
   const [activeId, setActiveId] = useState(null);
@@ -983,11 +1044,13 @@ export default function Invoices({ accounts, intent }) {
     formClass.reset();
     tax.reset();
     sales.reset();
+    paidNow.reset();
   };
 
   const [memorizing, setMemorizing] = useState(null);
   const [emailLater, setEmailLater] = useState(false);
   const printLater = usePrintLater('INVOICE', !editing);
+  const paidNow = usePaidNow(accounts);
   useCustomerDelivery(customer, customers.data, { enabled: !editing, setEmailLater, printLater });
   // Files picked for an invoice not posted yet; attached once it posts.
   const [files, setFiles] = useState([]);
@@ -1020,6 +1083,9 @@ export default function Invoices({ accounts, intent }) {
     if (currency && parseRateE6(rate) === null) return setNotice({ kind: 'error', text: `Enter the ${currency} to ${homeCurrency} exchange rate.` });
     if (layoutError) return setNotice({ kind: 'error', text: layoutMessage(layoutError) });
     if (discountCents === null) return setNotice({ kind: 'error', text: 'Enter the discount as an amount or a percentage such as 10%.' });
+    const takesPayment = paidNow.on && !editing && !fromEstimate && !currency;
+    const paidError = takesPayment ? paidNow.error(total) : null;
+    if (paidError) return setNotice({ kind: 'error', text: paidError });
     // The product travels with each line: tracked stock records its cost of goods sold.
     const postedLines = formClass.apply(
       payload.map(({ productServiceId, description, quantityE4, rateCents, incomeAccountId, classId, isTaxable }) => ({
@@ -1075,7 +1141,7 @@ export default function Invoices({ accounts, intent }) {
         reset();
         return true;
       }
-      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on);
+      const inv = fromEstimate ? await api.invoiceFromEstimate(fromEstimate.id, input) : await api.createInvoice(input, printLater.on, takesPayment ? paidNow.payload() : null);
       if (fromEstimate && printLater.on) await api.setToBePrinted('INVOICE', inv.id, true).catch(() => {});
       printLater.remember(printLater.on);
       const queued = emailLater && (await api.setEmailLater('INVOICE', inv.id, true).then(() => true, () => false));
@@ -1083,8 +1149,8 @@ export default function Invoices({ accounts, intent }) {
       // Credits apply to home-currency invoices only; the offer comes before printing or emailing,
       // so the form shows the balance after them.
       let creditNote = '';
-      if (!inv.currencyCode && openCreditCents > 0) {
-        const use = Math.min(openCreditCents, inv.totalCents);
+      if (!inv.currencyCode && openCreditCents > 0 && inv.balanceCents > 0) {
+        const use = Math.min(openCreditCents, inv.balanceCents);
         if (
           await askConfirm(
             `${inv.customerName} has ${formatCents(openCreditCents)} in available credits. Apply ${formatCents(use)} to invoice #${inv.invoiceNumber} now?`,
@@ -1107,6 +1173,7 @@ export default function Invoices({ accounts, intent }) {
           ? `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: ${formatMoney(inv.totalCents, inv.currencyCode)} booked as Dr Accounts Receivable ${formatCents(inv.homeTotalCents)}.`
           : `Invoice #${inv.invoiceNumber} for ${inv.customerName} posted: Dr Accounts Receivable ${formatCents(inv.totalCents)} / Cr income.` +
             (fromEstimate ? ` Estimate #${fromEstimate.number} is marked converted.` : '') +
+            (takesPayment ? (inv.status === 'PAID' ? ' Payment received: paid in full.' : ` Payment received; ${formatCents(inv.balanceCents)} still open.`) : '') +
             creditNote +
             (queued ? ' Marked Email later.' : '') +
             (printLater.on ? ' Waiting in File › Print Forms › Invoices.' : '') +
@@ -1334,10 +1401,17 @@ export default function Invoices({ accounts, intent }) {
                 Email later
               </label>
             )}
+            {!editing && !fromEstimate && !currency && (
+              <label className="flex items-center gap-1 text-xs" title="Record the money received with the invoice, dated the invoice date">
+                <input type="checkbox" checked={paidNow.on} onChange={(e) => paidNow.toggle(e.target.checked, total)} />
+                Payment received
+              </label>
+            )}
             {!editing && <PrintLaterBox printLater={printLater} />}
             <SaveButtons flow={flow} busyLabel="Posting…" />
           </div>
         </div>
+        {paidNow.on && !editing && !fromEstimate && !currency && paidNow.fields}
         {memorizing && (
           <MemorizeDialog
             kind="INVOICE"
