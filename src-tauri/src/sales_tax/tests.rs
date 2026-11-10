@@ -80,7 +80,7 @@ async fn sales_tax_is_charged_reported_and_paid() {
     assert_eq!((row.taxable_sales_cents, row.non_taxable_sales_cents, row.tax_collected_cents), (10_000 + 2_000 - 1_000 + 4_000, 5_000, 825 + 165 - 83 + 330));
     assert_eq!(report.owed_cents, 1_237);
 
-    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(rate.id), liability_account_id: None, account_id: checking, payment_date: d(31), amount_cents: 1_237, reference: Some("Q3".into()) }).await.unwrap();
+    pay_sales_tax(&pool, SalesTaxPaymentInput { tax_rate_id: Some(rate.id), liability_account_id: None, account_id: checking, payment_date: d(31), amount_cents: Cents::from(1_237), reference: Some("Q3".into()) }).await.unwrap();
     let after = tax_liability(&pool, d(1), d(31)).await.unwrap();
     assert_eq!((after.paid_cents, after.owed_cents), (1_237, 0));
     assert!(crate::ledger::verify_ledger_audit(&pool).await.unwrap().intact);
@@ -208,4 +208,12 @@ async fn cash_basis_counts_a_credit_applied_to_an_invoice_as_settling_it() {
     let year = tax_liability(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap()).await.unwrap();
     assert_eq!((tax(&year), year.owed_cents), (0, 0), "nothing owed either way");
     assert_eq!(tax_liability_on(&pool, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(), NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), Basis::Accrual).await.unwrap().owed_cents, 0);
+}
+
+#[test]
+fn a_tax_payment_amount_arrives_as_a_bare_integer() {
+    let input: SalesTaxPaymentInput =
+        serde_json::from_str(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":1237,"reference":null}"#).unwrap();
+    assert_eq!(input.amount_cents, Cents::from(1_237));
+    assert!(serde_json::from_str::<SalesTaxPaymentInput>(r#"{"accountId":3,"paymentDate":"2025-07-31","amountCents":12.37,"reference":null}"#).is_err());
 }
