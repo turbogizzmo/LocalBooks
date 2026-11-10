@@ -289,6 +289,18 @@ fn main() {
                 }
             });
 
+            // Idle sign-out even when no window asks: once a minute, so an encrypted company file
+            // (gap R1) is closed, and its key leaves memory, soon after the idle limit passes.
+            let idle_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    if idle_handle.state::<db::Db>().idle_expired() {
+                        commands::sign_out_after_idle(&idle_handle).await;
+                    }
+                }
+            });
+
             // Daily automatic backup, off the startup path.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

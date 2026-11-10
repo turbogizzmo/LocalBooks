@@ -85,7 +85,14 @@ pub struct Db {
     refreshing: tokio::sync::Mutex<()>,
     /// The open file is an archive left by condensing (see `condense`): it opens read-only.
     archive: std::sync::atomic::AtomicBool,
+    /// One change to an encrypted file's key header at a time, so none is lost.
+    header_changes: tokio::sync::Mutex<()>,
 }
+
+/// Restoring, condensing or moving an encrypted company file (gap R1) arrives with phase 3b, which
+/// teaches every copy path about the key header; until then those are refused rather than reopening
+/// the file without its key.
+pub const ENCRYPTED_NOT_YET: &str = "FILE_ENCRYPTED_NOT_YET: restoring, condensing or moving an encrypted company file isn't available yet";
 
 /// Returned by operations that need an open company file while none is.
 pub const NO_COMPANY_OPEN: &str = "NO_COMPANY_OPEN: no company file is open. Open or create one from the File menu.";
@@ -166,6 +173,7 @@ impl Db {
             idle: std::sync::Mutex::new(Idle { last: std::time::SystemTime::now(), limit: None }),
             refreshing: tokio::sync::Mutex::new(()),
             archive: std::sync::atomic::AtomicBool::new(false),
+            header_changes: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -519,6 +527,7 @@ impl Db {
     /// own file handle (so SQLite's locks stay in place). Nothing to do for a plain file; refused
     /// while the file is locked. Nothing is written when `change` leaves the header as it was.
     pub async fn update_key_header(&self, change: impl FnOnce(crate::file_cipher::header::Header) -> crate::file_cipher::header::Header) -> Result<(), String> {
+        let _one_at_a_time = self.header_changes.lock().await;
         let guard = self.live.read().await;
         let Some(live) = guard.as_ref() else { return Err(NO_COMPANY_OPEN.into()) };
         let Some(cipher) = live.cipher.as_ref() else { return Ok(()) };
@@ -590,6 +599,9 @@ impl Db {
     async fn swap_in_file(&self, staged: &Path, fallback: &Path, unchanged: Option<&str>) -> Result<(), String> {
         let mut guard = self.live.write().await;
         let live = guard.as_mut().ok_or_else(|| NO_COMPANY_OPEN.to_string())?;
+        if live.cipher.is_some() {
+            return Err(ENCRYPTED_NOT_YET.into());
+        }
         if let Some(expected) = unchanged {
             if crate::condense::content_digest(&live.pool).await? != expected {
                 return Err("CONDENSE_BOOKS_CHANGED: the books changed while the condensed file was being made, so they were left as they were; run Condense Data again".into());
@@ -639,6 +651,9 @@ impl Db {
     /// An existing file there must pass the same checks as a restore; the new file is fully opened
     /// before the old one is closed, so a failure leaves the current books in use.
     pub async fn relocate(&self, new_dir: &Path, mode: RelocateMode) -> Result<StorageStatus, String> {
+        if self.is_encrypted().await {
+            return Err(ENCRYPTED_NOT_YET.into());
+        }
         let resolved = storage::resolve_network_path(new_dir);
         let new_dir = resolved.as_path();
         storage::check_writable_dir(new_dir)?;

@@ -131,6 +131,13 @@ pub async fn add_user(db: &Db, admin: &Session, input: NewUserInput) -> Result<U
 pub async fn update_user(db: &Db, admin: &Session, id: i64, input: UserUpdate) -> Result<UserView, String> {
     let (pool, _) = db.pool_and_session().await?;
     let turning_off = !input.is_active;
+    if db.is_encrypted().await && input.is_active && input.new_password.is_none() {
+        // A user turned off lost their slot; turning them back on needs a password to give them one.
+        let was_off = users::list(&pool).await?.iter().any(|u| u.id == id && !u.is_active);
+        if was_off {
+            return Err("USER_NEEDS_PASSWORD: set a temporary password to turn this user back on: the encrypted company file needs one to let them in".into());
+        }
+    }
     let user = match input.new_password.clone() {
         Some(password) if input.is_active => {
             let username = users::list(&pool).await?.into_iter().find(|u| u.id == id).map(|u| u.username).ok_or_else(|| "USER_NOT_FOUND: no such user".to_string())?;

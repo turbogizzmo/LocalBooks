@@ -104,6 +104,15 @@ async fn slots_follow_users_and_passwords() {
     relock(&db).await;
     assert_eq!(sign_in(&db, "carol", "carol temp 1").await.unwrap_err(), users::SIGN_IN_FAILED);
 
+    // Turning her back on needs a temporary password, which gives her a slot again.
+    let ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
+    let back = UserUpdate { display_name: "carol".into(), role: Role::Standard, can_see_sensitive: false, is_active: true, new_password: None };
+    assert!(update_user(&db, &ann, carol.id, back.clone()).await.unwrap_err().starts_with("USER_NEEDS_PASSWORD"));
+    update_user(&db, &ann, carol.id, UserUpdate { new_password: Some("carol again 1".into()), ..back }).await.unwrap();
+    relock(&db).await;
+    sign_in(&db, "carol", "carol again 1").await.unwrap();
+    relock(&db).await;
+
     // An Admin's reset gives Bob a new slot and retires the old one.
     let ann = sign_in(&db, "ann", "ann password 1").await.unwrap();
     let reset = UserUpdate { display_name: "bob".into(), role: Role::ViewOnly, can_see_sensitive: false, is_active: true, new_password: Some("bob reset 1".into()) };
@@ -217,6 +226,14 @@ async fn a_locked_file_refuses_every_command_except_unlock() {
     assert!(remove_all_users(&db, "REMOVE ALL USERS").await.unwrap_err().starts_with("FILE_ENCRYPTED_NO_RESET"));
     assert!(db.update_key_header(|h| h).await.unwrap_err().starts_with("SIGN_IN_REQUIRED"), "the header can't change while locked");
     assert!(db.is_locked().await, "and none of that unlocked it");
+
+    // Replacing or moving the file waits for phase 3b, locked or not.
+    sign_in(&db, "ann", "ann password 1").await.unwrap();
+    let elsewhere_dir = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere_dir).unwrap();
+    assert_eq!(db.relocate(&elsewhere_dir, crate::db::RelocateMode::MoveCurrent).await.unwrap_err(), crate::db::ENCRYPTED_NOT_YET);
+    assert_eq!(db.swap_in(&dir.join("nothing.db"), &dir.join("nothing.db")).await.unwrap_err(), crate::db::ENCRYPTED_NOT_YET);
+    assert!(path.exists() && header::is_encrypted(&path), "the books stayed where they were");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
