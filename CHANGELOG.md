@@ -28,6 +28,7 @@ people using LocalBooks.
   Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
   some tables' rows at all, such as the check lines of a file upgraded from an older version.
   LocalBooks now repairs that part first, so those transactions import.
+
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept
@@ -146,6 +147,7 @@ people using LocalBooks.
 - **Duplicate on every form.** Sales receipts, estimates, credit memos, refund receipts, vendor
   credits, purchase orders, deposits and transfers now have **Duplicate** (Ctrl+O) too: open a saved
   one and the copy starts as a new form dated today.
+
 
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
