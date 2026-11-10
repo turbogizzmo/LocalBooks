@@ -65,7 +65,7 @@ pub struct CopySource {
     pub cash_back_cents: i64,
     pub cash_back_memo: Option<String>,
     pub lines: Vec<CopyLine>,
-    /// Subtotals, discounts, charges and groups (sales receipts and estimates).
+    /// Subtotals, discounts, charges and groups (sales receipts, estimates and credit memos).
     pub form_lines: Vec<FormLineView>,
     /// Rep, shipping and the printed customer fields (sales receipts and estimates).
     pub details: Option<SalesDetailsView>,
@@ -136,7 +136,10 @@ pub async fn copy_source(pool: &SqlitePool, kind: &str, id: i64) -> Result<CopyS
             copy.tax_rate_id = head.3;
             // A refund receipt: the account the refund was paid from.
             copy.account_id = head.4;
-            copy.lines = lines(format!("SELECT {SALES_LINE}, NULL AS percent_ppm FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number")).await?;
+            // Its subtotals, discounts and groups come too, and a percent charge stays a percent, so the
+            // copy credits what the original did.
+            copy.lines = lines(format!("SELECT {SALES_LINE}, percent_ppm FROM credit_memo_lines WHERE credit_memo_id = ?1 ORDER BY line_number")).await?;
+            copy.form_lines = crate::item_types::form_lines_of(pool, crate::item_types::CREDIT_MEMO_LINES, id).await?;
         }
         "VENDOR_CREDIT" => {
             let head: (String, Option<String>, Option<String>) =

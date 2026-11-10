@@ -6,6 +6,17 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Paying a combined sales tax rate pays each agency.** Paying sales tax for a combined rate (a
+  state rate plus a city rate, say) now splits the payment among its rates, in proportion to their
+  percentages, and pays down each rate's own liability account in one entry. The sales tax return
+  lists the payment under each agency instead of "No agency". A payment for a combined rate
+  recorded in 0.14.0 went entirely to its first rate's account; the return now lists it under that
+  rate's agency. To spread it across the agencies, void it and record it again.
+- **Duplicating a credit memo keeps its discounts.** Duplicate on a credit memo or refund receipt
+  now copies its subtotals, discount lines, percentage charges and groups, so the copy credits the
+  same amount as the original. Before, the copy left them out and credited the full amount of the
+  item lines.
+
 ## [0.14.0]
 
 - **Jobs on purchase orders.** A purchase order line can name the customer or job it is for; the
