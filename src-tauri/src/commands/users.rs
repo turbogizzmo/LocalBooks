@@ -29,11 +29,11 @@ pub struct SignInState {
     pub user: Option<UserView>,
     /// Minutes without activity before signing out (0 = never), when users are on.
     pub auto_lock_minutes: u32,
-    /// This Mac remembers a sign-in for this company file.
+    /// This computer remembers a sign-in for this company file.
     pub remembered_here: bool,
 }
 
-/// Sign-ins remembered on this computer ("Remember me on this Mac"), one per company file, keyed by
+/// Sign-ins remembered on this computer ("Remember me on this computer"), one per company file, keyed by
 /// the file's data-key id: `{"username": …, "password": …}` in the operating system's credential store.
 fn remembered_sign_ins(app: &AppHandle) -> Result<SecretStore, String> {
     let (_, dir) = crate::data_dirs(app).map_err(|e| format!("SIGN_IN_CONFIG: {e}"))?;
@@ -80,7 +80,7 @@ pub async fn get_sign_in_state(app: AppHandle, db: State<'_, Db>) -> Result<Opti
     Ok(Some(SignInState { users_enabled, user, auto_lock_minutes, remembered_here }))
 }
 
-/// Startup with users on: signs in with the sign-in this Mac remembers for the file, once per
+/// Startup with users on: signs in with the sign-in this computer remembers for the file, once per
 /// opening (never after a sign-out or idle lock). A remembered password that no longer works is
 /// forgotten. Whether someone was signed in.
 #[tauri::command]
@@ -106,7 +106,7 @@ pub async fn sign_in_remembered(app: AppHandle, db: State<'_, Db>) -> Result<Opt
     }
 }
 
-/// Settings › Users & Passwords: stop remembering the sign-in on this Mac.
+/// Settings › Users & Passwords: stop remembering the sign-in on this computer.
 #[tauri::command]
 pub async fn forget_remembered_sign_in(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
     let (pool, _) = db.pool_and_session().await?;
