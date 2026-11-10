@@ -90,7 +90,7 @@ async fn an_overpayment_is_kept_as_credit_deposited_and_used_on_a_later_invoice(
     let kinds: Vec<(&str, i64)> = waiting.iter().map(|i| (i.kind.as_str(), i.amount_cents)).collect();
     assert_eq!(kinds, vec![("CREDIT", 10_000), ("PAYMENT", 50_000)]);
     let items = waiting.iter().map(|i| DepositItemRef { kind: i.kind.clone(), id: i.id }).collect();
-    post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d(11), memo: None, items, other_lines: vec![], cash_back: None })
+    post_bank_deposit(&pool, DepositInput { bank_account_id: checking, deposit_date: d(11), memo: None, items, other_lines: vec![], cash_back: None, deductions: vec![] })
         .await
         .unwrap();
     assert_eq!((balance(&pool, undeposited).await, balance(&pool, checking).await), (0, 60_000));
