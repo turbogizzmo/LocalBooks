@@ -19,7 +19,7 @@ pub fn decode(bytes: &[u8]) -> String {
     }
     for (bom, little) in [(b"\xFF\xFE", true), (b"\xFE\xFF", false)] {
         if let Some(rest) = bytes.strip_prefix(bom) {
-            let units = rest.chunks_exact(2).map(|c| if little { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) });
+            let units = rest.as_chunks::<2>().0.iter().map(|c| if little { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) });
             return char::decode_utf16(units).map(|c| c.unwrap_or('\u{fffd}')).collect();
         }
     }
@@ -173,7 +173,7 @@ pub fn terms_days(terms: &str) -> Option<i64> {
     if lower.contains("receipt") {
         return Some(0);
     }
-    lower.split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty()).next_back()?.parse().ok()
+    lower.split(|c: char| !c.is_ascii_digit()).rfind(|s| !s.is_empty())?.parse().ok()
 }
 
 #[cfg(test)]

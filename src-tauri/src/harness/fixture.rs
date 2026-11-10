@@ -349,7 +349,7 @@ pub(crate) async fn harbor_lane_in(pool: SqlitePool) -> SqlitePool {
             .unwrap();
             crate::sales_tax::pay_sales_tax(
                 p,
-                crate::sales_tax::SalesTaxPaymentInput { tax_rate_id: Some(tax), liability_account_id: None, account_id: c.checking, payment_date: d(2025, month, 20), amount_cents: owed, reference: None },
+                crate::sales_tax::SalesTaxPaymentInput { tax_rate_id: Some(tax), liability_account_id: None, account_id: c.checking, payment_date: d(2025, month, 20), amount_cents: owed.into(), reference: None },
             )
             .await
             .expect("sales tax payment");

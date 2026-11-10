@@ -11,7 +11,7 @@ use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, format_cents, post_entry_in_tx, rollback, EntrySource, JournalEntry, DISPLAY_SOURCE_TYPE, MAX_LINE_CENTS};
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match work(&mut tx).await {
         Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
@@ -568,6 +568,9 @@ pub struct PurchaseOrderLineInput {
     pub amount_cents: i64,
     #[serde(default)]
     pub class_id: Option<i64>,
+    /// The customer or job the line is for; it carries over to the bill.
+    #[serde(default)]
+    pub customer_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -609,6 +612,7 @@ pub struct PurchaseOrderLineView {
     pub rate_cents: Option<i64>,
     pub amount_cents: i64,
     pub class_id: Option<i64>,
+    pub customer_id: Option<i64>,
 }
 
 const PO_SELECT: &str = "SELECT o.id, o.po_number, o.vendor_id, v.name AS vendor_name, o.po_date, o.expected_date, o.memo, o.total_cents, o.status, o.bill_id
@@ -620,7 +624,7 @@ pub async fn list_purchase_orders(pool: &SqlitePool) -> Result<Vec<PurchaseOrder
 
 pub async fn purchase_order_lines(pool: &SqlitePool, id: i64) -> Result<Vec<PurchaseOrderLineView>, String> {
     sqlx::query_as::<_, PurchaseOrderLineView>(
-        "SELECT account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id FROM purchase_order_lines WHERE purchase_order_id = ?1 ORDER BY line_number",
+        "SELECT account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id, customer_id FROM purchase_order_lines WHERE purchase_order_id = ?1 ORDER BY line_number",
     )
     .bind(id)
     .fetch_all(pool)
@@ -676,8 +680,8 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
         .map_err(db_err)?;
         for (idx, line) in input.lines.iter().enumerate() {
             sqlx::query(
-                "INSERT INTO purchase_order_lines (purchase_order_id, line_number, account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO purchase_order_lines (purchase_order_id, line_number, account_id, product_service_id, description, quantity_e4, rate_cents, amount_cents, class_id, customer_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )
             .bind(id)
             .bind(idx as i64 + 1)
@@ -688,6 +692,7 @@ pub(crate) async fn write_purchase_order(tx: &mut Transaction<'_, Sqlite>, input
             .bind(line.rate_cents)
             .bind(line.amount_cents)
             .bind(line.class_id)
+            .bind(line.customer_id)
             .execute(&mut **tx)
             .await
             .map_err(db_err)?;
@@ -750,7 +755,7 @@ pub async fn bill_purchase_order(pool: &SqlitePool, id: i64, bill_date: NaiveDat
                     rate_cents: l.rate_cents,
                     product_service_id: l.product_service_id,
                     class_id: l.class_id,
-                    customer_id: None,
+                    customer_id: l.customer_id,
                     billable: None,
                 })
                 .collect(),

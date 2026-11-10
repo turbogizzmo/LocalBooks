@@ -230,7 +230,7 @@ pub fn format_money(cents: i64, symbol: &str) -> String {
     let dollars = (abs / 100).to_string();
     let mut grouped = String::with_capacity(dollars.len() + dollars.len() / 3);
     for (i, ch) in dollars.chars().enumerate() {
-        if i > 0 && (dollars.len() - i) % 3 == 0 {
+        if i > 0 && (dollars.len() - i).is_multiple_of(3) {
             grouped.push(',');
         }
         grouped.push(ch);
@@ -341,7 +341,7 @@ pub async fn post_journal_entry(pool: &SqlitePool, entry: JournalEntry) -> Resul
 /// Posts a manual journal entry, marked as an adjusting entry when `adjusting` is set (the flag is
 /// part of the posted header, so it is fixed once posted).
 pub async fn post_journal_entry_flagged(pool: &SqlitePool, entry: JournalEntry, adjusting: bool) -> Result<i64, String> {
-    let mut tx = begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = begin_write(pool).await.map_err(db_err)?;
 
     match post_entry_in_tx_flagged(&mut tx, &entry, EntrySource::Journal, adjusting).await {
         Ok(id) => commit_write(tx).await.map(|()| id).map_err(db_err),
@@ -506,7 +506,7 @@ async fn write_entry(
 /// marked void. Refused when any line is reconciled or ticked in a reconciliation, when an invoice
 /// or bill still has payments, or when a payment has already been banked in a deposit.
 pub async fn void_transaction(pool: &SqlitePool, journal_entry_id: i64) -> Result<(), String> {
-    let mut tx = begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = begin_write(pool).await.map_err(db_err)?;
     match void_in_tx(&mut tx, journal_entry_id).await {
         Ok(()) => commit_write(tx).await.map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),

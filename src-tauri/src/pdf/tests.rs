@@ -84,11 +84,11 @@ fn a_protected_pdf_opens_only_with_its_password() {
     assert!(!raw.contains("LocalBooks") && !raw.contains("Profit"), "the title and producer are encrypted too");
 
     // A reader opens it with the password and sees the text.
-    let doc = lopdf::Document::load_mem_with_password(&pdf, "c0rrect horse").expect("opens with the password");
+    let doc = lopdf::Document::load_mem_with_options(&pdf, lopdf::LoadOptions::with_password("c0rrect horse")).expect("opens with the password");
     assert_eq!(doc.get_pages().len(), 2);
     assert!(doc.extract_text(&[1]).unwrap().contains("Profit and Loss 2026"));
     // And not without it, or with the wrong one.
-    assert!(lopdf::Document::load_mem_with_password(&pdf, "wrong").is_err());
+    assert!(lopdf::Document::load_mem_with_options(&pdf, lopdf::LoadOptions::with_password("wrong")).is_err());
     let locked = lopdf::Document::load_mem(&pdf);
     assert!(locked.is_err() || locked.unwrap().extract_text(&[1]).map_or(true, |t| !t.contains("Profit")));
     assert!(write_protected_pdf(&[], None, "x", Some(String::new().as_str())).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));

@@ -38,7 +38,7 @@ fn seal(access: Access, table: &str, column: &str, row_id: i64, plain: &str) -> 
 
 fn open(access: Access, table: &str, column: &str, row_id: i64, stored: &str) -> Result<Option<String>, String> {
     if !crypto::is_encrypted(stored) {
-        return Ok(Some(stored.to_string()).filter(|_| access.can_see()));
+        return Ok(access.can_see().then(|| stored.to_string()));
     }
     match access.key {
         Some(key) => key.decrypt_field(table, column, row_id, stored).map(Some),
@@ -410,7 +410,7 @@ pub async fn pay_bills_by_ach(pool: &SqlitePool, input: AchPaymentInput, access:
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let existing: Option<i64> = sqlx::query_scalar("SELECT id FROM ach_files WHERE request_id = ?1").bind(request_id).fetch_optional(&mut *tx).await.map_err(db_err)?;
     if let Some(id) = existing {
-        let view = file_view(&mut *tx, id).await;
+        let view = file_view(&mut tx, id).await;
         let _ = tx.rollback().await;
         return view;
     }
@@ -683,7 +683,7 @@ pub async fn save_ach_file(pool: &SqlitePool, id: i64, path: &Path, access: Acce
 
     let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     let result = async {
-        let view = file_view(&mut *tx, id).await?;
+        let view = file_view(&mut tx, id).await?;
         let entries: Vec<serde_json::Value> = view
             .entries
             .iter()

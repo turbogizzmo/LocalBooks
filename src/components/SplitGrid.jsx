@@ -113,11 +113,12 @@ const SPLIT_COLUMNS = [
  * Category / description / amount split rows with an "Add split row" link. Every cell is an input
  * (data-entry grid), sized to the row so editing causes no layout shift. `withClasses` adds a Class
  * column (once the company has classes) for documents whose lines carry one. `withJobs` adds a
- * Customer:Job column (once the company has customers): the job a cost is for, for job costing.
+ * Customer:Job column (once the company has customers): the job a cost is for, for job costing,
+ * with a Bill? box unless `withBillable` is off (a purchase order line isn't a cost yet).
  * `withReceivedFrom` adds a Received From column (deposits): the customer or vendor the money
  * came from, kept as the row's `customerId` or `vendorId`.
  */
-export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, withReceivedFrom = false, currency = null, stockItems = [] }) {
+export default function SplitGrid({ rows, setRows, accounts, filter, categoryLabel = 'Category', defaultAccountId = null, footer, withPricing = false, withClasses: classesAllowed = false, withJobs: jobsAllowed = false, withBillable = true, withReceivedFrom = false, currency = null, stockItems = [] }) {
   const tracking = useClassTracking();
   const { classes } = tracking;
   const withClasses = classesAllowed && showsClassColumn(tracking, rows);
@@ -155,7 +156,7 @@ export default function SplitGrid({ rows, setRows, accounts, filter, categoryLab
 
   // The columns between # and Amount as the person arranged them (Customize Columns), of those
   // this form has.
-  const offered = { stock: withStock, from: withReceivedFrom, job: withJobs, bill: withJobs, class: withClasses, qty: withPricing, rate: withPricing };
+  const offered = { stock: withStock, from: withReceivedFrom, job: withJobs, bill: withJobs && withBillable, class: withClasses, qty: withPricing, rate: withPricing };
   const cols = useColumns('split-lines', SPLIT_COLUMNS, (id) => offered[id] ?? true);
   const middle = cols.columns;
   const headLabel = (c) => (c.id === 'category' ? categoryLabel : c.label);

@@ -184,7 +184,7 @@ async fn paying_by_ach_records_one_entry_per_vendor_and_writes_a_valid_file() {
     assert_eq!((summary.batch_count, summary.entry_addenda_count, summary.total_credit_cents), (2, 3, 159_999));
     assert_eq!(summary.entries[0].addenda.as_deref(), Some("BILLS 1001, 1002"));
     assert!(text.lines().nth(2).unwrap().starts_with("622021000021123456789        0000129999V"));
-    assert!(text.lines().all(|l| l.len() == 94) && text.lines().count() % 10 == 0);
+    assert!(text.lines().all(|l| l.len() == 94) && text.lines().count().is_multiple_of(10));
 
     // The audit trail records the file without any account number.
     let payload: String = sqlx::query_scalar("SELECT payload_snapshot FROM ledger_audit_log WHERE action_type = 'ACH_FILE'").fetch_one(&pool).await.unwrap();

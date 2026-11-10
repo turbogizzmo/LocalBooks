@@ -27,9 +27,10 @@ async fn one_of_each(pool: &SqlitePool) -> Vec<(&'static str, i64)> {
         "lines": [{ "accountId": expense, "amountCents": 4_000, "memo": "Damaged reams" }]
     })).unwrap();
     crate::preferences::set(pool, crate::preferences::tax_time::INVENTORY, "true").await.unwrap();
+    let job: i64 = sqlx::query_scalar("INSERT INTO customers (name) VALUES ('Harbor Office Refit') RETURNING id").fetch_one(pool).await.unwrap();
     let order: crate::workflows::PurchaseOrderInput = serde_json::from_value(json!({
         "vendorName": "Paper Co", "poDate": "2025-06-02", "memo": "Restock",
-        "lines": [{ "accountId": expense, "description": "Paper", "quantityE4": 50_000, "rateCents": 900, "amountCents": 4_500 }]
+        "lines": [{ "accountId": expense, "description": "Paper", "quantityE4": 50_000, "rateCents": 900, "amountCents": 4_500, "customerId": job }]
     })).unwrap();
     vec![
         ("SALES_RECEIPT", crate::sales::post_sales_receipt(pool, receipt).await.unwrap().id),
@@ -70,6 +71,8 @@ async fn each_kind_copies_its_header_and_lines() {
     assert_eq!((vendor_credit.reference.as_deref(), vendor_credit.lines[0].description.as_str(), vendor_credit.lines[0].amount_cents), (Some("CR-9"), "Damaged reams", 4_000));
     let order = copy("PURCHASE_ORDER").await;
     assert_eq!((order.memo.as_deref(), order.lines[0].quantity_e4, order.lines[0].rate_cents), (Some("Restock"), Some(50_000), Some(900)));
+    let job: Option<i64> = sqlx::query_scalar("SELECT id FROM customers WHERE name = 'Harbor Office Refit'").fetch_optional(&pool).await.unwrap();
+    assert_eq!(order.lines[0].customer_id, job, "the order line's job comes with the copy");
 
     assert!(copy_source(&pool, "INVOICE", 1).await.unwrap_err().starts_with("DUP_BAD_KIND"));
     assert!(copy_source(&pool, "ESTIMATE", 99_999).await.unwrap_err().starts_with("DUP_NOT_FOUND"));

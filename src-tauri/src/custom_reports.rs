@@ -708,7 +708,7 @@ impl LineFilter<'_> {
         match (f.paid_status, l.open_cents) {
             (None, _) => {}
             (Some(_), None) => return false,
-            (Some(PaidStatus::Open), Some(open)) if open == 0 => return false,
+            (Some(PaidStatus::Open), Some(0)) => return false,
             (Some(PaidStatus::Paid), Some(open)) if open != 0 => return false,
             _ => {}
         }

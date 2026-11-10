@@ -171,7 +171,7 @@ pub async fn copy_source(pool: &SqlitePool, kind: &str, id: i64) -> Result<CopyS
             copy.memo = head.2;
             copy.lines = lines(
                 "SELECT line_number, product_service_id, COALESCE(description, '') AS description, quantity_e4, rate_cents, amount_cents,
-                        account_id, account_id AS income_account_id, class_id, 0 AS is_taxable, NULL AS percent_ppm, NULL AS customer_id, NULL AS vendor_id
+                        account_id, account_id AS income_account_id, class_id, 0 AS is_taxable, NULL AS percent_ppm, customer_id, NULL AS vendor_id
                  FROM purchase_order_lines WHERE purchase_order_id = ?1 ORDER BY line_number"
                     .into(),
             )

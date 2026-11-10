@@ -14,7 +14,7 @@ handlers![
 
 /// The purchase order's discounts and charges the receipt's bill will take (T21).
 #[tauri::command]
-pub async fn get_receipt_bill_form_lines(db: State<'_, Db>, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::PurchaseFormLineInput>, String> {
+pub async fn get_receipt_bill_form_lines(db: State<'_, Db>, item_receipt_id: i64) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     receipts::receipt_bill_form_lines(&db.pool().await, item_receipt_id).await
 }
 

@@ -349,6 +349,7 @@ const REPORTS: &[Entry] = &[
             report("Progress Invoices vs. Estimates", "progress"),
             Entry::Sep,
             report("Unbilled Costs by Job", "list:unbilled-costs-job"),
+            report("Open Purchase Orders by Job", "list:open-po-job"),
             report("Time by Job Summary", "list:time-job-summary"),
             report("Time by Job Detail", "list:time-job-detail"),
             report("Time by Name", "list:time-name"),

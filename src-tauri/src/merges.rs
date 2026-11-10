@@ -77,6 +77,7 @@ const CUSTOMER_COLUMNS: &[(&str, &str)] = &[
     ("time_activities", "customer_id"),
     ("mileage_trips", "customer_id"),
     ("todos", "customer_id"),
+    ("purchase_order_lines", "customer_id"),
 ];
 const VENDOR_COLUMNS: &[(&str, &str)] = &[
     ("bills", "vendor_id"),
@@ -222,7 +223,7 @@ async fn repoint_memorized(tx: &mut Transaction<'_, Sqlite>, kind: MergeKind, fr
 
 /// Merges `from_id` into `to_id`; the entry kept keeps its name and details.
 pub async fn merge(pool: &SqlitePool, kind: MergeKind, from_id: i64, to_id: i64, today: NaiveDate) -> Result<MergeResult, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match write(&mut tx, kind, from_id, to_id, today).await {
         Ok(result) => crate::ledger::commit_write(tx).await.map(|()| result).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),

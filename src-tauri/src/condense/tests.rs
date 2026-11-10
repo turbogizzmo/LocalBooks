@@ -495,7 +495,7 @@ async fn a_file_on_a_purchase_order_keeps_it() {
     let pool = db.pool().await;
     let vendor: String = sqlx::query_scalar("SELECT name FROM vendors ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
     let expense = account(&pool, "6300").await;
-    let line = crate::workflows::PurchaseOrderLineInput { account_id: expense, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: 4_000, class_id: None };
+    let line = crate::workflows::PurchaseOrderLineInput { account_id: expense, product_service_id: None, description: Some("Paper".into()), quantity_e4: None, rate_cents: None, amount_cents: 4_000, class_id: None, customer_id: None };
     let po = crate::workflows::create_purchase_order(&pool, crate::workflows::PurchaseOrderInput { form_lines: Vec::new(), vendor_name: vendor, po_date: d(2025, 2, 3), expected_date: None, memo: None, lines: vec![line] })
         .await
         .unwrap();

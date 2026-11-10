@@ -212,6 +212,7 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
             rate_cents: Some(1_000),
             amount_cents: 12_000,
             class_id: None,
+            customer_id: None,
         }],
     };
     crate::workflows::create_purchase_order(&pool, po).await.unwrap();

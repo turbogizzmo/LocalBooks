@@ -17,7 +17,7 @@ use crate::invoices::InvoiceInput;
 use crate::ledger::{db_err, format_cents, post_entry_in_tx_flagged, rollback, void_in_tx, AppliedTo, EntrySource, JournalEntry, Relinked};
 
 async fn run<T>(pool: &SqlitePool, work: impl for<'t> AsyncFnOnce(&mut Transaction<'t, Sqlite>) -> Result<T, String>) -> Result<T, String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     match work(&mut tx).await {
         Ok(value) => crate::ledger::commit_write(tx).await.map(|()| value).map_err(db_err),
         Err(err) => Err(rollback(tx, err).await),
@@ -203,7 +203,11 @@ pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expens
             .fetch_all(&mut **tx)
             .await
             .map_err(db_err)?;
-    Ok(Some(ExpenseInput { form_lines: Vec::new(),
+    // The discount and charge lines go with it: they live in `purchase_form_lines`, not
+    // `expense_lines`, so the split lines above are counted once.
+    let form_lines = crate::purchase_lines::inputs_of(&crate::purchase_lines::lines_of(&mut **tx, crate::purchase_lines::PurchaseDoc::Expense, expense_id).await?);
+    Ok(Some(ExpenseInput {
+        form_lines,
         kind,
         payee_name,
         payment_account_id,

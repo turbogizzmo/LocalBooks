@@ -174,9 +174,9 @@ mod tests {
 
     #[test]
     fn the_password_must_be_given_and_not_too_long() {
-        assert!(Protection::check_password(&String::new()).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));
-        // Letters made up at run time, 128 then 127 of them.
+        // Letters made up at run time, none, then 128, then 127 of them (no fixed password in code).
         let letters: String = random::<128>().unwrap().iter().map(|b| char::from(b'a' + b % 26)).collect();
+        assert!(Protection::check_password(&letters[..0]).unwrap_err().starts_with("PDF_PASSWORD_EMPTY"));
         assert!(Protection::new(&letters).err().unwrap().starts_with("PDF_PASSWORD_TOO_LONG"));
         let p = Protection::new(&letters[..127]).unwrap();
         assert!(p.dictionary.contains("/V 5 /R 6") && p.dictionary.contains("/AESV3"));

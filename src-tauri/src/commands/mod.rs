@@ -91,6 +91,7 @@ features![
     info_panel,
     inventory,
     invoices,
+    item_details,
     item_receipts,
     item_categories,
     item_groups,

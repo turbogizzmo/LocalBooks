@@ -149,6 +149,8 @@ async fn a_full_import_recreates_invoices_payments_and_deposits() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            purchase_description: None,
+            purchase_cost_cents: None,
             percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
@@ -544,6 +546,8 @@ async fn a_full_import_brings_transfers_estimates_and_purchase_orders() {
             taxable: true,
             active: true,
             custom_fields: Vec::new(),
+            purchase_description: None,
+            purchase_cost_cents: None,
             percent_ppm: None,
         }],
         quality: LedgerQuality::default(),
@@ -825,6 +829,8 @@ async fn lists_are_matched_by_name_or_created_with_their_details() {
         taxable: false,
         active: true,
         custom_fields: Vec::new(),
+        purchase_description: None,
+        purchase_cost_cents: None,
         percent_ppm: None,
     };
     books.accounts.push(account(6, "Consulting Income", "INCOME", None));
@@ -1025,6 +1031,8 @@ async fn discount_and_subtotal_items_become_form_lines() {
         taxable: false,
         active: true,
         custom_fields: Vec::new(),
+        purchase_description: None,
+        purchase_cost_cents: None,
         percent_ppm,
     };
     let mut l = ledger();
@@ -1200,4 +1208,134 @@ async fn balances_that_differ_from_the_file_are_listed() {
     let batch = stage(&pool, Path::new("/books/Lists.qbw"), 1, &lists).await.unwrap();
     let summary = batch_summary(&pool, batch).await.unwrap();
     assert!(summary.lists_only && summary.balance_differences.is_empty());
+}
+
+/// The cases a full import keeps as they were, pinned: a receipt whose cost pair runs the other
+/// way (a debit to Inventory Asset beside Undeposited Funds) is still a receipt; a receipt split
+/// between Undeposited Funds and a bank falls back to a journal entry; a discount item that posts
+/// to an expense account comes off the whole invoice, while the invoice keeps its subtotal.
+#[tokio::test]
+async fn receipts_and_discounts_the_form_cannot_show_as_they_were() {
+    use crate::qbw_documents::{DocumentLine, SourceDocument};
+    let pool = test_pool().await;
+    let line = |item_id: i64, cents: i64, account_id: i64| DocumentLine {
+        item_id: Some(item_id),
+        description: None,
+        quantity_e4: 10_000,
+        rate_cents: cents.abs(),
+        cents,
+        account_id,
+        class: None,
+        subtotal: false,
+    };
+    let subtotal = DocumentLine { subtotal: true, quantity_e4: 0, rate_cents: 0, account_id: 0, ..line(300, 0, 0) };
+    let item = |id: i64, name: &str, kind: &'static str, account: i64| SourceItem {
+        id,
+        name: name.into(),
+        description: None,
+        rate_cents: 0,
+        income_account_id: Some(account),
+        kind,
+        taxable: false,
+        active: true,
+        custom_fields: Vec::new(),
+        percent_ppm: None,
+        purchase_description: None,
+        purchase_cost_cents: None,
+    };
+    let mut l = ledger();
+    l.accounts.extend([
+        account(6, "Design Income", "INCOME", None),
+        account(7, "Undeposited Funds", "OTHER_CURRENT_ASSET", None),
+        account(11, "Promotions", "EXPENSE", None),
+        account(12, "Discounts Given", "INCOME", None),
+        account(30, "Cost of Goods Sold", "COST_OF_GOODS_SOLD", None),
+        account(31, "Inventory Asset", "OTHER_CURRENT_ASSET", None),
+    ]);
+    l.unbalanced.clear();
+    l.unreadable.clear();
+    l.items = vec![item(200, "Design", "Service", 6), item(301, "Loyal Customer", "Discount", 12), item(302, "Promo", "Discount", 11)];
+    l.customers = vec![SourceParty {
+        id: 100,
+        name: "Hillside Builders".into(),
+        parent_id: None,
+        company_name: None,
+        email: None,
+        phone: None,
+        address: None,
+        terms_days: None,
+        tax_id: None,
+        is_1099: false,
+        active: true,
+        balance_cents: None,
+        notes: None,
+        sales_rep: None,
+        custom_fields: Vec::new(),
+    }];
+    let receipt = |lines: Vec<DocumentLine>| SourceDocument::SalesReceipt { customer_id: Some(100), number: None, method: "CASH".into(), lines, sales: Default::default() };
+    let doc = |id: i64, kind: &'static str, lines: &[(i64, i64)], document: SourceDocument| SourceTransaction { kind, document: Some(document), ..txn(id, "2024-05-01", lines) };
+    l.transactions = vec![
+        doc(60, "Sales receipt", &[(7, -9_000), (6, 9_000), (31, -500), (30, 500)], receipt(vec![line(200, 9_000, 6)])),
+        doc(
+            61,
+            "Sales receipt",
+            &[(7, -5_000), (1, -3_000), (6, 9_000), (12, -1_000)],
+            receipt(vec![line(200, 9_000, 6), subtotal.clone(), line(301, -1_000, 12)]),
+        ),
+        doc(
+            62,
+            "Invoice",
+            &[(4, -9_000), (6, 10_000), (11, -1_000)],
+            SourceDocument::Invoice { customer_id: 100, number: Some("20".into()), due_date: None, lines: vec![line(200, 10_000, 6), subtotal, line(302, -1_000, 11)], sales: Default::default() },
+        ),
+    ];
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    auto_map_accounts(&pool, batch).await.unwrap();
+    let full = post_batch(&pool, &PostLedgerInput { batch_id: batch, mode: ImportMode::Full }).await.unwrap().full.unwrap();
+    assert_eq!((full.invoices, full.sales_receipts, full.fell_back), (1, 1, 1), "{full:?}");
+    let fallbacks = batch_summary(&pool, batch).await.unwrap().fallbacks;
+    assert_eq!(fallbacks.iter().map(|f| f.reason.as_str()).collect::<Vec<_>>(), ["the money went into more than one account"]);
+
+    let (total, discount): (i64, i64) = sqlx::query_as("SELECT total_cents, discount_cents FROM invoices").fetch_one(&pool).await.unwrap();
+    assert_eq!((total, discount), (9_000, 1_000), "an expense-account discount comes off the whole invoice");
+    let kinds: Vec<String> = sqlx::query_scalar("SELECT kind FROM invoice_form_lines ORDER BY line_number").fetch_all(&pool).await.unwrap();
+    assert_eq!(kinds, ["SUBTOTAL"]);
+}
+
+/// Migration 0151 relabels the fixed asset items that desktop company file batches staged by the
+/// older reader (before migration 0150) labelled "Other charge". Batches the corrected reader
+/// staged, where "Other charge" is a real other charge, and other formats are left alone.
+#[tokio::test]
+async fn older_desktop_batches_get_their_fixed_assets_back() {
+    let pool = test_pool().await;
+    let mut l = ledger();
+    l.items = vec![SourceItem {
+        id: 700,
+        name: "Delivery van".into(),
+        description: None,
+        rate_cents: 0,
+        income_account_id: None,
+        kind: "Other charge",
+        taxable: false,
+        active: true,
+        custom_fields: Vec::new(),
+        percent_ppm: None,
+        purchase_description: None,
+        purchase_cost_cents: None,
+    }];
+    let desktop = stage(&pool, Path::new("/books/Old.QBB"), 1, &l).await.unwrap();
+    let iif = stage(&pool, Path::new("/books/Lists.iif"), 1, &l).await.unwrap();
+    let newer = stage(&pool, Path::new("/books/New.qbw"), 1, &l).await.unwrap();
+    for batch in [desktop, iif] {
+        sqlx::query("UPDATE ledger_import_batches SET imported_at = '2020-01-01T00:00:00.000Z' WHERE id = ?1").bind(batch).execute(&pool).await.unwrap();
+    }
+    sqlx::raw_sql(include_str!("../../migrations/0151_staged_item_kinds.sql")).execute(&pool).await.unwrap();
+    let kind = |batch: i64| {
+        let pool = pool.clone();
+        async move { sqlx::query_scalar::<_, String>("SELECT item_kind FROM ledger_import_items WHERE batch_id = ?1").bind(batch).fetch_one(&pool).await.unwrap() }
+    };
+    assert_eq!(
+        (kind(desktop).await.as_str(), kind(iif).await.as_str(), kind(newer).await.as_str()),
+        ("Fixed asset", "Other charge", "Other charge")
+    );
 }

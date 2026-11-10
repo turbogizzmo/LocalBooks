@@ -40,7 +40,7 @@ pub struct SentRecord {
 
 /// Records a send and takes the form off the "Email later" queue.
 pub async fn record(pool: &SqlitePool, kind: FormKind, document_id: i64, recipients: &[String], method: Method, subject: &str) -> Result<(), String> {
-    let mut tx = crate::ledger::begin_write(&pool).await.map_err(db_err)?;
+    let mut tx = crate::ledger::begin_write(pool).await.map_err(db_err)?;
     sqlx::query("INSERT INTO form_email_log (form_type, document_id, recipients, method, subject) VALUES (?1, ?2, ?3, ?4, ?5)")
         .bind(kind.key())
         .bind(document_id)

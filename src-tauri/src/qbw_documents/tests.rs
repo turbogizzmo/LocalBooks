@@ -231,3 +231,27 @@ fn explores_transfers_estimates_and_orders() {
         println!("{name} ({} rows): {}", rows.len(), cols.join(", "));
     }
 }
+
+/// A form line too large for the books is left out of the form and counted, so the import's
+/// quality counts report it as rejected instead of the form quietly coming up short.
+#[test]
+fn form_lines_too_large_for_the_books_are_counted() {
+    let row = |order: i64, cents: i64| crate::qbw_records::Row {
+        values: [
+            ("txn_line_order".to_string(), crate::qbw_records::Value::Int(order)),
+            ("account_id".to_string(), crate::qbw_records::Value::Int(40)),
+            (
+                "amount_amt".to_string(),
+                crate::qbw_records::Value::Numeric(crate::qbw_records::Numeric { coefficient: cents.unsigned_abs() as u128, exponent: -1, negative: cents < 0 }),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    };
+    let rows = [row(1, 2_500), row(2, crate::ledger::MAX_LINE_CENTS + 1), row(3, 0), row(4, -crate::ledger::MAX_LINE_CENTS)];
+    let refs: Vec<&crate::qbw_records::Row> = rows.iter().collect();
+    let too_large = Cell::new(0);
+    let lines = form_lines(&too_large, &refs, &|_| false, &HashMap::new(), &HashSet::new());
+    assert_eq!(lines.iter().map(|l| l.cents).collect::<Vec<_>>(), [2_500, -crate::ledger::MAX_LINE_CENTS]);
+    assert_eq!(too_large.get(), 1, "the zero line adds nothing and is not a rejection");
+}

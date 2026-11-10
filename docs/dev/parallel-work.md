@@ -62,13 +62,22 @@ A feature PR isn't done until people can find out how to use it. In the same PR:
 
 ## Merging
 
-- **Merge only when the branch is 0 commits behind `main` and CI is green on that exact head
-  commit.** A green run on an older base proves nothing about the merge result. If `main` moved,
-  rebase (or merge `main` in), push, and wait for CI on the new head.
-- **Merge each feature as soon as it is green.** Don't hold finished features back to land them
-  together for a release: a batch makes every branch in it rebase onto every other one. A release
-  is cut from whatever is on `main`.
-- Merge one PR at a time. After each merge, the next branch in line updates to the new `main` and
-  goes green before it merges.
+Feature PRs reach `main` through batch PRs, which the coordinating session builds and merges.
+
+- **A feature PR is ready for a batch when** its checks are green (Rust tests on Linux and Windows,
+  end-to-end, Clippy, JS unit tests) and its Claude review is in. `review:problems` means read the
+  review comment and fix or answer each point first; `review:failed` means no review was posted
+  (close and reopen the PR to run it again, or review it by hand).
+- **The batch:** the green feature branches are merged into `batch/N`, which gets one PR. That PR
+  runs everything, macOS and CodeQL included, and is squash-merged (through the REST API) only when
+  it is 0 commits behind `main` and every check is green on its head commit. The feature PRs are
+  then closed. A green run on an older base proves nothing about the merge result: if `main`
+  moved, the batch rebases (or merges `main` in) and waits for CI on the new head.
+- **Push a feature branch as few times as you can.** Every push re-runs about ten jobs on the shared
+  runners (GitHub Free runs 20 jobs at once, 5 of them macOS), and in Nov 2026 half of all pull
+  request runs were cancelled by a newer push. Don't merge `main` into a feature branch only to keep
+  it current; the batch does that once. Do it to fix a conflict.
+- Merge one batch at a time. After it lands, the next batch updates to the new `main` and goes
+  green before it merges.
 - Keep a branch to one feature. Moving shared code around, like this layout, is its own PR, landed
   when no feature PRs are open.

@@ -7,7 +7,8 @@ handlers![get_company_snapshot, add_snapshot_widget, remove_snapshot_widget, set
 
 #[tauri::command]
 pub async fn get_company_snapshot(db: State<'_, Db>) -> Result<Vec<Widget>, String> {
-    company_snapshot::snapshot(&db.pool().await, Local::now().date_naive()).await
+    let (pool, viewer) = super::reminders::viewer(&db).await?;
+    company_snapshot::snapshot(&pool, Local::now().date_naive(), viewer).await
 }
 
 #[tauri::command]

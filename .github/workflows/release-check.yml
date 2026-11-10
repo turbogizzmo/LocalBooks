@@ -62,6 +62,8 @@ jobs:
     # Published latest releases are past the gate; check test builds (pre-releases) and drafts.
     if: github.event_name != 'release' || github.event.release.prerelease || github.event.release.draft
     runs-on: ubuntu-latest
+    # A few API calls; the only job in the repository that had no timeout.
+    timeout-minutes: 5
     # Lists draft releases; runs no repository code.
     permissions:
       contents: write

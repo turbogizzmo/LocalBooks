@@ -298,7 +298,7 @@ fn inventory_cost_joins_the_form_it_was_sold_on() {
         SourceLine { account_id: 6, cents: 7_350, memo: None, class: Some("Remodel".into()) },
     ]);
     assert_eq!(quality.rejected_lines, 4);
-    assert_eq!(quality.rejected_by_reason["inventory cost does not net to zero"], 2);
+    assert_eq!(quality.rejected_by_reason["inventory cost is not pairs that net to zero"], 2);
     assert_eq!(quality.rejected_by_reason["inventory cost of a form line that was not read"], 2);
 }
 
@@ -369,4 +369,84 @@ mod catalog_repair {
         let row = walk_row(&data, cols).expect("the table's row now reads");
         assert_eq!((row["widget_id"].as_int(), row["size_id"].as_int()), (Some(41), Some(7)));
     }
+}
+
+/// A cost row with its record id and kind, as a real file stores them.
+fn cost_record(record: i64, target_type: i64, target: i64, account: i64, cents: i64) -> Row {
+    let mut row = cost_row(target, account, cents);
+    row.values.insert("inventory_record_id".to_string(), Value::Int(record));
+    row.values.insert("target_type".to_string(), Value::Int(target_type));
+    row
+}
+
+#[test]
+fn inventory_cost_rows_are_counted_once_and_summed_with_checks() {
+    let mut txns: BTreeMap<i64, SourceTransaction> = [(1, txn(1, vec![line(4, -12_000), line(26, 12_000)]))].into_iter().collect();
+    let form_lines: HashMap<i64, (i64, Option<String>)> = [601, 602, 603, 604, 605].into_iter().map(|t| (t, (1, None))).collect();
+    let known: HashSet<i64> = [4, 26, 30, 6].into_iter().collect();
+    let rows = [
+        // Line 601's pair, then the same two records again (read twice from a re-solved page).
+        cost_record(11, 2, 601, 30, -2_000),
+        cost_record(11, 1, 601, 6, 2_000),
+        cost_record(11, 2, 601, 30, -2_000),
+        cost_record(11, 1, 601, 6, 2_000),
+        // Line 602 drew on two purchases: two pairs, both kept.
+        cost_record(12, 2, 602, 30, -300),
+        cost_record(12, 1, 602, 6, 300),
+        cost_record(13, 2, 602, 30, -450),
+        cost_record(13, 1, 602, 6, 450),
+        // Line 603's amounts would overflow when added: rejected, not wrapped to zero.
+        cost_record(14, 2, 603, 30, i64::MAX),
+        cost_record(15, 2, 603, 30, i64::MAX),
+        cost_record(14, 1, 603, 6, -1),
+        cost_record(15, 1, 603, 6, -1),
+        // Line 604 has one debit and two credits: not pairs, rejected though it nets to zero.
+        cost_record(16, 2, 604, 30, -100),
+        cost_record(16, 1, 604, 6, 50),
+        cost_record(17, 1, 604, 6, 50),
+        // Line 605 drew the same cost twice; its rows carry no record id, so nothing says they are
+        // one row read twice and all four are kept.
+        cost_row(605, 30, -500),
+        cost_row(605, 6, 500),
+        cost_row(605, 30, -500),
+        cost_row(605, 6, 500),
+    ];
+    let mut quality = LedgerQuality::default();
+    add_inventory_cost(&mut txns, &form_lines, &rows, &known, &mut quality);
+
+    let cents: Vec<i64> = txns[&1].lines[2..].iter().map(|l| l.cents).collect();
+    assert_eq!(cents, [-2_000, 2_000, -300, 300, -450, 450, -500, 500, -500, 500]);
+    assert_eq!(txns[&1].imbalance_cents(), 0);
+    assert_eq!((quality.rejected_lines, quality.rejected_by_reason["inventory cost is not pairs that net to zero"]), (7, 7));
+}
+
+#[test]
+fn an_imbalance_that_overflows_is_never_zero() {
+    assert_eq!(txn(1, vec![line(4, i64::MAX), line(26, 1)]).imbalance_cents(), i64::MAX);
+    assert_eq!(txn(2, vec![line(4, i64::MAX), line(26, -i64::MAX)]).imbalance_cents(), 0);
+    assert_eq!(checked_total([i64::MIN, -1]), None);
+}
+
+#[test]
+fn item_type_codes_map_to_kinds_and_the_rest_are_left_off() {
+    let kinds: Vec<Option<&str>> = (0..=12).map(|c| item_kind(Some(c))).collect();
+    assert_eq!(
+        kinds,
+        [
+            Some("Service"),
+            Some("Inventory part"),
+            Some("Inventory part"), // an assembly
+            Some("Non-inventory part"),
+            Some("Fixed asset"),
+            Some("Other charge"),
+            None, // subtotal: a form line, not an item
+            None, // group
+            Some("Discount"),
+            None, // payment
+            None, // sales tax item
+            None, // sales tax group
+            Some("Item"), // a code this reader does not know
+        ]
+    );
+    assert_eq!(item_kind(None), Some("Item"));
 }

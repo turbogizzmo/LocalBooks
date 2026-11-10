@@ -2,6 +2,7 @@ use super::*;
 use crate::db::test_pool;
 use crate::expenses::ExpenseInput;
 use crate::ledger::{post_journal_entry, JournalEntry, JournalLine};
+use crate::reminders::Viewer;
 
 fn d(y: i32, m: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, day).unwrap()
@@ -53,7 +54,7 @@ async fn every_widget_ties_out_to_its_report() {
         add(&pool, kind).await.unwrap();
     }
     let today = d(2026, 5, 14);
-    let page = snapshot(&pool, today).await.unwrap();
+    let page = snapshot(&pool, today, Viewer::default()).await.unwrap();
     assert_eq!(page.len(), 7, "the starting page and the two added");
     let widget = |k: WidgetKind| page.iter().find(|w| w.kind == k).unwrap();
 
@@ -97,20 +98,20 @@ async fn every_widget_ties_out_to_its_report() {
 async fn widgets_are_added_removed_moved_and_given_a_period() {
     let pool = test_pool().await;
     let today = d(2026, 5, 14);
-    let start: Vec<i64> = snapshot(&pool, today).await.unwrap().iter().map(|w| w.id).collect();
+    let start: Vec<i64> = snapshot(&pool, today, Viewer::default()).await.unwrap().iter().map(|w| w.id).collect();
     assert_eq!(start.len(), 5);
     let items = add(&pool, WidgetKind::TopItems).await.unwrap();
     remove(&pool, start[1]).await.unwrap();
-    let mut order: Vec<i64> = snapshot(&pool, today).await.unwrap().iter().map(|w| w.id).collect();
+    let mut order: Vec<i64> = snapshot(&pool, today, Viewer::default()).await.unwrap().iter().map(|w| w.id).collect();
     order.reverse();
     arrange(&pool, &order).await.unwrap();
-    let page = snapshot(&pool, today).await.unwrap();
+    let page = snapshot(&pool, today, Viewer::default()).await.unwrap();
     assert_eq!(page.iter().map(|w| w.id).collect::<Vec<_>>(), order);
     assert_eq!(page[0].id, items);
     assert!(arrange(&pool, &order[1..]).await.unwrap_err().starts_with("SNAPSHOT_ORDER"), "every widget, once");
 
     set_period(&pool, items, Period::LastQuarter).await.unwrap();
-    let w = snapshot(&pool, today).await.unwrap().into_iter().find(|w| w.id == items).unwrap();
+    let w = snapshot(&pool, today, Viewer::default()).await.unwrap().into_iter().find(|w| w.id == items).unwrap();
     assert_eq!((w.period, w.start_date, w.end_date), (Period::LastQuarter, d(2026, 1, 1), d(2026, 3, 31)));
     assert!(set_period(&pool, start[1], Period::ThisMonth).await.unwrap_err().starts_with("SNAPSHOT_NO_WIDGET"));
 }
@@ -157,7 +158,7 @@ async fn the_newer_widgets_tie_out_to_the_profit_and_loss_and_the_to_dos() {
     assert!(set_note(&pool, id_of(WidgetKind::Todos), "x").await.unwrap_err().starts_with("SNAPSHOT_NO_WIDGET"), "only a note widget takes text");
 
     let today = d(2026, 5, 14);
-    let page = snapshot(&pool, today).await.unwrap();
+    let page = snapshot(&pool, today, Viewer::default()).await.unwrap();
     let widget = |k: WidgetKind| page.iter().find(|w| w.id == id_of(k)).unwrap();
     assert_eq!(widget(WidgetKind::Notes).note.as_deref(), Some("Ask the bank about the loan"));
 
@@ -184,4 +185,39 @@ async fn the_newer_widgets_tie_out_to_the_profit_and_loss_and_the_to_dos() {
     assert_eq!(figure("Expenses"), (pl.total_expenses_cents, Some(before.total_expenses_cents)));
     assert_eq!(figure("Net income"), (pl.net_income_cents, Some(before.net_income_cents)));
     assert_eq!(before.total_revenue_cents, 70_000, "Gum, last March");
+}
+
+/// The to-dos widget lists the signed-in user's own and unassigned to-dos, as reminders do.
+#[tokio::test]
+async fn the_to_dos_widget_hides_other_users_to_dos() {
+    let pool = test_pool().await;
+    let user = |name: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("INSERT INTO users (username, display_name, role, can_see_sensitive, password_verifier) VALUES (?1, ?1, 'STANDARD', 0, 'argon2id$test') RETURNING id")
+                .bind(name)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    let (ann, bob) = (user("ann").await, user("bob").await);
+    let todo = |title: &str, assigned: Option<i64>| crate::reminders::TodoInput {
+        title: title.into(), note: String::new(), due_date: None, customer_id: None, vendor_id: None, employee_id: None, link_kind: None, link_id: None, assigned_user_id: assigned,
+    };
+    for (title, assigned) in [("Ann's", Some(ann)), ("Bob's", Some(bob)), ("Anyone's", None)] {
+        crate::reminders::save_todo(&pool, None, &todo(title, assigned), Viewer::default()).await.unwrap();
+    }
+    let id = add(&pool, WidgetKind::Todos).await.unwrap();
+    let titles = |viewer: Viewer| {
+        let pool = pool.clone();
+        async move {
+            let w = snapshot(&pool, d(2026, 5, 14), viewer).await.unwrap().into_iter().find(|w| w.id == id).unwrap();
+            (w.lines.into_iter().map(|l| l.label).collect::<Vec<_>>(), w.total_cents)
+        }
+    };
+    let as_ann = Viewer { user_id: Some(ann), role: Some(crate::users::Role::Standard) };
+    assert_eq!(titles(as_ann).await, (vec!["Ann's".to_string(), "Anyone's".to_string()], 2));
+    // A file without users shows every open to-do.
+    assert_eq!(titles(Viewer::default()).await.1, 3);
 }
