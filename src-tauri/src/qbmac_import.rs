@@ -147,6 +147,7 @@ open the file in QuickBooks and choose File › Export › To QuickBooks for Win
                 .into())
         }
     }
+    crate::wal_guard::check(&file)?;
     let options = SqliteConnectOptions::new().filename(&file).read_only(true).immutable(true).disable_statement_logging();
     let mut conn = SqliteConnection::connect_with(&options).await.map_err(|e| format!("QBMAC_UNREADABLE: {}: {e}", file.display()))?;
     let book = read_connection(&mut conn).await;
