@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import { useVendorRecall } from '../lib/recall.js';
 import NameField from './NameField.jsx';
@@ -525,7 +526,7 @@ export default function ExpensesChecks({ accounts, intent }) {
                 <tr
                   className={`qb-grid-row cursor-pointer ${x.isVoided ? 'text-qb-ink-faint' : ''}`}
                   // Double-click opens it to edit, as Edit… in its menu does.
-                  onDoubleClick={() => (x.isVoided ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' }) : openExpense(x))}
+                  {...rowKeys({ first: x === sorter.sorted[0], open: () => (x.isVoided ? setNotice({ kind: 'info', text: 'That entry is voided, so it can’t be edited.' }) : openExpense(x)) })}
                   title="Double-click to edit"
                 >
                   <td className="qb-grid-cell">{formatDate(x.expenseDate)}</td>

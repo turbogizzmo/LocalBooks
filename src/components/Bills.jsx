@@ -1,5 +1,6 @@
 import { PrintLaterBox, usePrintLater } from './PrintLater.jsx';
 import { creditLeftFor, offeredDiscount, overrideProblem, withOverrides } from '../lib/payBillsAdjust.js';
+import { rowKeys } from '../lib/rowKeys.js';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMyPreferences, useTransactionDate } from '../lib/myPreferences.js';
 import NameField from './NameField.jsx';
@@ -1237,11 +1238,10 @@ export default function Bills({ accounts, intent }) {
                     <tr
                       className={`qb-grid-row cursor-pointer ${b.isVoided ? 'text-qb-ink-faint' : ''}`}
                       // Double-click opens the bill to edit, as Edit… in its menu does.
-                      onDoubleClick={() =>
+                      {...rowKeys({ first: b === sorter.sorted[0], open: () =>
                         b.isVoided
                           ? setNotice({ kind: 'info', text: `That bill from ${b.vendorName} is voided, so it can't be edited.` })
-                          : openBill(b)
-                      }
+                          : openBill(b) })}
                       title="Double-click to edit"
                     >
                       <td className="qb-grid-cell font-semibold" title={b.vendorName}>{b.vendorName}</td>

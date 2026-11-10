@@ -54,6 +54,10 @@ people using LocalBooks.
 - **Backup safety.** File & Data Controls shows when a backup was last copied off this computer
   and last test-restored. Reminders lists either one when it hasn't been done in 30 days, and Test
   beside a snapshot (or Test restore a backup…) checks a backup without replacing your books.
+- **Lists from the keyboard.** Tab to a list, move with ↑ and ↓, and press Enter to open a row, as
+  a double-click does.
+- **Easier-to-read green buttons.** Save buttons and other green buttons and badges are a darker
+  green, so their white text has enough contrast to read comfortably.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

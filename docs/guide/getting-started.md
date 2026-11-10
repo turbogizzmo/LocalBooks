@@ -405,6 +405,14 @@ who opens it sees the same order.
 Rows can't be dragged while you are searching a list or have sorted it by a column heading; click
 the sorted heading until the arrow goes away to get back to your own order.
 
+## Move around a list from the keyboard
+
+In a list (invoices, bills, customers, vendors, items, accounts, a register and the others), press
+**Tab** to reach the first row, **↑** and **↓** to move between rows (**Home** and **End** for the
+first and last), and **Enter** to open the row, as a double-click does. On the customer, vendor,
+item and account lists, the row with focus is also the selected one, so **Ctrl+Q** and the
+information panel follow it. The row's **▾** button is one more **Tab** away.
+
 ## Choose a list's columns
 
 The customer and vendor lists, the item list, the chart of accounts and account registers (one

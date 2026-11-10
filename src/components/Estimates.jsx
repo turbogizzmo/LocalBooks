@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { rowKeys } from '../lib/rowKeys.js';
 import { layoutMessage } from '../lib/itemTypes.js';
 import { useTransactionDate } from '../lib/myPreferences.js';
 import LineItemGrid, { blankLine, linesFromDocument, summarizeLines } from './LineItemGrid.jsx';
@@ -364,7 +365,7 @@ function EstimateList({ accounts, intent, navigate }) {
                 const expired = e.status !== 'CONVERTED' && e.expirationDate && e.expirationDate < today;
                 const open = e.status !== 'CONVERTED';
                 return (
-                  <tr key={e.id} className="qb-grid-row cursor-pointer" onDoubleClick={() => openEstimate(e)}>
+                  <tr key={e.id} className="qb-grid-row cursor-pointer" {...rowKeys({ first: e === shown[0], open: () => openEstimate(e) })}>
                     <td className="qb-grid-cell">
                       {e.estimateNumber}
                       <EmailMarks status={emailed.get(e.id)} />
