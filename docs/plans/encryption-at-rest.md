@@ -180,8 +180,12 @@ Today, with no Admin password and no recovery key, **Remove all users** keeps th
 only the encrypted tax IDs and bank details. With whole-file encryption there is nothing to keep:
 **losing every Admin password and the recovery key loses the books and every encrypted backup.**
 That is a different promise, so whole-file encryption must be a separate, opt-in setting (default
-off) with that warning, and the recovery key screen must say so. This needs the owner's decision
-before phase 3 ships.
+off) with that warning, and the recovery key screen must say so.
+
+**Decided (2026-11-09, by the project owner):** whole-file encryption is a choice, off by default.
+Turning it on shows the plain warning that losing every Admin password and the recovery key loses
+the books and every encrypted backup, and the recovery key screen says the same while it is on.
+Files with users but without whole-file encryption keep today's **Remove all users** way back.
 
 ## Performance
 
@@ -234,7 +238,7 @@ The design holds up **without swapping the database layer**: sqlx, every query a
 stay as they are; only the SQLite library under sqlx and a small VFS change. It is still several
 pull requests of work that change the file format, the startup and sign-in order, every backup and
 restore path and the build chain on three platforms, and it changes what users can lose. So R1 stays
-`partial` with this design as its next step, built in this order:
+`partial` with this design as its next step, built in this order (the owner has asked for all five):
 
 1. **Build chain.** Turn on SQLCipher (CommonCrypto on macOS, vendored OpenSSL on Windows and Linux);
    no behaviour change, since files without a key open as plain SQLite. Full suite on all three CI
@@ -242,7 +246,7 @@ restore path and the build chain on three platforms, and it changes what users c
 2. **Header and offset VFS.** Header format with A/B copies, the VFS, `wal_guard` reading the
    header, tests that a header-less file still opens and a crafted header is refused.
 3. **Open and sign-in order.** Unlock before open and migrate; idle sign-out closes the pool; the
-   opt-in setting with its warning (after the owner's decision on the loss model).
+   opt-in setting (off by default) with its warning, as decided above.
 4. **Turning it on and off; copies.** Export, check and swap; encrypted snapshots, restore, Condense,
    File Dentist; offering to delete plain backups. The acceptance test (no readable business data in
    the file, a backup or an attachment by hex dump) lands here.
