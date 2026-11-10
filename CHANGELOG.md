@@ -54,6 +54,9 @@ people using LocalBooks.
   text file for mail merges.
 - **Reports › QuickReport** runs the QuickReport (Ctrl+Q) for what is selected in the list or
   register in front.
+- **A guide to the FTC Safeguards Rule.** Tax preparers and bookkeepers who must keep a security
+  program can read, duty by duty, what LocalBooks does to help and what stays their job (Help ›
+  The FTC Safeguards Rule and LocalBooks).
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one
