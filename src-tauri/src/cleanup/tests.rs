@@ -161,6 +161,7 @@ async fn double_deposit(pool: &SqlitePool) -> (i64, i64, i64) {
             crate::banking::DepositOtherLine { account_id: services, amount_cents: 500, memo: Some("Interest".into()), class_id: None, customer_id: None, vendor_id: None },
         ],
         cash_back: None,
+        deductions: Vec::new(),
     };
     let deposit = crate::banking::post_bank_deposit(pool, deposit).await.unwrap();
     let payment: i64 = sqlx::query_scalar("SELECT id FROM invoice_payments WHERE invoice_id = ?1").bind(inv).fetch_one(pool).await.unwrap();
@@ -203,6 +204,7 @@ async fn a_payment_deposited_twice_is_matched_to_the_deposit_and_leaves_undeposi
         items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: payment }],
         other_lines: vec![],
         cash_back: None,
+        deductions: Vec::new(),
     };
     assert!(crate::banking::post_bank_deposit(&pool, redeposit).await.unwrap_err().starts_with("DEP_ALREADY_DEPOSITED"));
     let deposit_entry: i64 = sqlx::query_scalar("SELECT journal_entry_id FROM deposits WHERE id = ?1").bind(deposit).fetch_one(&pool).await.unwrap();

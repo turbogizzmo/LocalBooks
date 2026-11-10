@@ -12,6 +12,7 @@ Linux only. CI runs them on every pull request (`.github/workflows/e2e.yml`).
 | --- | --- | --- |
 | `users-from-scratch` | `No Users` | Post an invoice without signing in; turn users on and save the recovery key; add a View only user; sign in as them and choose a new password; their vendor tax ID shows masked (`***-**-4321`) and read-only, and saving is refused ("view only"); Settings shows only Users & Passwords and Updates; sign out and recover the Admin with the recovery key. |
 | `seeded-users` | `Edge Cases` | The seeded View only user sees `***-**-6789`, read-only, and cannot save; the Admin sees the full tax ID with Show. |
+| `windows-inside` | `No Users` | Open Invoices and Journal Entries in windows inside LocalBooks; Ctrl+F6 moves to the other window and back; Window › Tile Vertically puts them side by side (the spec sends the menu's `window-command` event, as WebDriver can't open the OS menu bar); closing Journal Entries with a memo typed asks first, Cancel keeps it, Close without saving closes it; Close Company and reopening it from the list brings back the Invoices window. |
 
 The rules underneath (roles, encryption, the ledger) are covered by `cargo test`; these specs check
 that the screens and the role check in front of every command (`guarded` in `src-tauri/src/main.rs`)
