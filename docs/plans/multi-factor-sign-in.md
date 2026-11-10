@@ -113,11 +113,16 @@ External Accountant working on a copy. Rejected.
 A `user_factors` table, one row per user and factor, `STRICT`:
 
 - `user_id`, `kind` (`TOTP`), `enrolled_at`;
-- the TOTP secret **sealed with a key derived from the user's password** (Argon2id with its own
-  salt, the same slot format as `key_slots`), so it can't be read from the file without the
-  password. That limits a stolen file plus a phished code to that one sign-in; it does not protect
-  against someone who has the file and the password (they don't need LocalBooks at all);
-- `last_step`, the last 30-second step accepted, so a code can't be used twice;
+- the TOTP secret **sealed with a key derived from the user's password** (AES-256-GCM, the same
+  sealed format as `key_slots`). What that buys: the file alone, without the password, can't be
+  used to generate codes. It does not protect against someone who has the file and the password
+  (they don't need LocalBooks at all). The factor key comes from the same Argon2id run that checks
+  the password (a second output via HKDF with its own label and salt), so sign-in doesn't pay for
+  another 64 MiB derivation;
+- `last_step`, the last 30-second step accepted, so a code can't be used twice **on this file**. A
+  restored backup or a second copy of the file has its own `last_step`, so a code could be reused
+  against another copy within its 90-second window; that is accepted, since the copy already gives
+  its holder the books;
 - the backup codes as salted SHA-256 hashes (each code has 50 bits of randomness, so a slow hash
   adds nothing), each with a `used_at`.
 
@@ -127,13 +132,20 @@ enrol), `ALL`.
 ### Sign-in
 
 1. User name and password, as today. A wrong password stops here, with the same answer and timing
-   as now.
+   as now. Asking for the code only after a right password tells someone at the sign-in screen
+   that their guess was right, so **passwords are throttled too** (the same growing delay after
+   five wrong tries, per user name), which today they aren't. Asking for the code first instead
+   was considered: it hides nothing, because the code check needs the secret, which is sealed
+   under the password.
 2. If the user has a factor: **Enter the 6-digit code from your authenticator app** (or **Use a
    backup code**). LocalBooks derives the factor key from the password it just checked, opens the
    secret and accepts the current step or one step either side (clock drift), never a step at or
    before `last_step`.
 3. Wrong codes: five tries, then a growing delay (30 s, 1 min, 5 min) kept in memory and in the
-   file. Recorded as `MFA_FAILED` after the fifth, so the audit trail shows guessing.
+   file (a restored backup starts the count again). After the fifth, an `MFA_FAILED` event goes
+   into the audit trail so it shows guessing. Nobody is signed in yet, so its actor is the user
+   name tried plus the computer's user, the same "<user> as <os user>" form ledger rows use, and
+   it is the only write the sign-in screen makes.
 4. If the policy requires a factor and the user has none, they sign in and go straight to
    enrolment; nothing else works until they finish, like `must_change_password` today.
 
@@ -153,6 +165,9 @@ enrol), `ALL`.
 - **Lost phone, the user is the only Admin:** a backup code signs in once. Without one, the
   existing **Use the recovery key** path resets the Admin's password **and** removes their factor,
   so the recovery key stays the way back for everything, as R26's acceptance test asks.
+- **Changing your own password** re-seals the factor under the new password in the same
+  transaction, as the key slot is re-sealed today; the old password and the current secret are
+  both at hand there.
 - **A temporary password set by an Admin:** the secret is sealed under the user's old password,
   which the Admin doesn't know, so it can't be re-sealed. A password reset **also resets the
   factor**, and the user enrols again at their next sign-in. The reset screen says so.
