@@ -6,6 +6,11 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Company-file imports read more of older files, and say which balances don't match.**
+  LocalBooks now reads pages it used to skip in some QuickBooks Desktop company files, so
+  invoices and other transactions on those pages come in. And if an account's imported balance
+  still differs from the balance QuickBooks stored, step 2 of the import lists it with the
+  file's balance, the imported balance and the difference, before and after you post.
 - **Merge duplicate customers, vendors, items and accounts.** Rename one to the other's name and
   LocalBooks offers to merge them. A customer's, vendor's or item's transactions move to the one
   kept, so its history and balances show under one name. An account's balance moves with one

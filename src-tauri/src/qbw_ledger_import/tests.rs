@@ -993,3 +993,26 @@ async fn a_lists_only_file_adds_its_lists_once_and_reverses() {
     reverse_batch(&pool, batch).await.unwrap();
     discard_batch(&pool, batch).await.unwrap();
 }
+
+/// An account the file says holds more than its transactions add up to (here a transaction that
+/// could not be read completely) is listed with its expected and imported balance, not hidden.
+#[tokio::test]
+async fn balances_that_differ_from_the_file_are_listed() {
+    let pool = test_pool().await;
+    let mut l = ledger();
+    // Stored balances are credit-positive, as in the file. Riverside Bank and Hosting match;
+    // Domain Names also has the unbalanced 7.00 the import leaves out; Unused has a balance
+    // with no transactions behind it.
+    for (name, stored) in [("Riverside Bank", 12_500), ("Domain Names", -12_700), ("Unused", -4_000), ("Hosting", 0)] {
+        l.accounts.iter_mut().find(|a| a.full_name == name).unwrap().stored_balance_cents = Some(stored);
+    }
+    let batch = stage(&pool, Path::new("/books/Books.qbw"), 1, &l).await.unwrap();
+    let summary = batch_summary(&pool, batch).await.unwrap();
+    let rows: Vec<(&str, i64, i64, i64)> =
+        summary.balance_differences.iter().map(|d| (d.full_name.as_str(), d.expected_cents, d.imported_cents, d.difference_cents)).collect();
+    assert_eq!(rows, [("Unused", 4_000, 0, -4_000), ("Domain Names", 12_700, 12_000, -700)]);
+
+    l.accounts.iter_mut().for_each(|a| a.stored_balance_cents = None);
+    let batch = stage(&pool, Path::new("/books/Other.qbw"), 1, &l).await.unwrap();
+    assert!(batch_summary(&pool, batch).await.unwrap().balance_differences.is_empty(), "no stored balance, nothing to compare");
+}

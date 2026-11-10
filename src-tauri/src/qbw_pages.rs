@@ -151,19 +151,22 @@ fn inverse_mod_256(d: u8) -> u8 {
     x
 }
 
-/// Stored sector-7 byte that logical sector-7 offset `x` (0..496) comes from. In the rotated
-/// 512-byte unit (496 data bytes then the 16-byte trailer) the trailer occupies 16 slots; the 16
-/// data bytes it displaced were moved to the end of the unit and belong in those slots.
+/// Stored sector-7 byte that logical sector-7 offset `x` (0..496) comes from. The 496 data bytes
+/// and a 16-byte trailer slot form a 512-byte unit that is rotated by `r7`, but the stored
+/// trailer always occupies bytes 496..512. Data bytes the rotation would put there move, in
+/// order, to the stored bytes below 496 that the rotated trailer slot lands on. Usually that
+/// is the 16 bytes just below `r7`; when `r7` is within 16 of a sector boundary the slot wraps
+/// and only part of it is below 496, matched by as many displaced data bytes.
 fn s7_source(x: usize, r7: usize) -> usize {
-    let t = (S7_LEN + SECTOR - r7) % SECTOR;
-    let j = if x < t { x } else if x < t + 16 { S7_LEN + (x - t) } else { x };
-    (j + r7) % SECTOR
-}
-
-/// Trailer window position in the rotated sector; above 480 the window wraps and the page is
-/// left unsolved (rare).
-fn s7_solvable(r7: usize) -> bool {
-    (S7_LEN + SECTOR - r7) % SECTOR <= 480
+    let natural = (x + r7) % SECTOR;
+    if natural < S7_LEN {
+        return natural;
+    }
+    // Displaced data bytes in stored order, and the free positions in stored order.
+    let displaced = (S7_LEN..natural).filter(|&n| (n + SECTOR - r7) % SECTOR < S7_LEN).count();
+    let mut free: Vec<usize> = (0..SECTOR - S7_LEN).map(|k| (S7_LEN + k + r7) % SECTOR).filter(|&n| n < S7_LEN).collect();
+    free.sort_unstable();
+    free[displaced]
 }
 
 /// Builds the logical sector 7 from a decoded (cipher-free) stored sector.
@@ -238,61 +241,14 @@ impl PageDecoder {
             Some(bv) => deobfuscate_with_bv(&raw, pn, bv),
             None => self.model.deobfuscate_with_store(&raw, pn, &self.store),
         };
-        let base = raw[0].wrapping_sub(dec[0]);
-        let mut steps = [0u8; 7];
-        for (s, step) in steps.iter_mut().enumerate() {
-            let k0 = raw[s * SECTOR].wrapping_sub(dec[s * SECTOR]);
-            let k1 = raw[s * SECTOR + 1].wrapping_sub(dec[s * SECTOR + 1]);
-            *step = k1.wrapping_sub(k0);
-        }
-
-        // The page number anchors sector 0's rotation. A row can hold the same four bytes (a row
-        // id equal to the page number), so every odd position is a candidate; the one whose
-        // header validates and whose rows chain best wins below.
-        let anchor = (pn as u32).to_le_bytes();
-        let find_anchors = |dec: &[u8]| -> Vec<usize> {
-            (1..SECTOR).step_by(2).filter(|&i| (0..4).all(|k| dec[(i + k) % SECTOR] == anchor[k])).collect()
-        };
-        let model_anchors = find_anchors(&dec);
-        let (dec, base, steps, anchors) = if model_anchors.is_empty() {
-            let (base, steps, dec, r0) = recover_cipher(pn, &raw)?;
-            (dec, base, steps, vec![r0])
-        } else {
-            (dec, base, steps, model_anchors)
-        };
-
-        // Sectors in a pair share their step, so the step pattern usually gives the phase.
-        let pairs0 = [(0, 1), (2, 3), (4, 5)].iter().filter(|(a, b)| steps[*a] == steps[*b]).count();
-        let pairs1 = [(1, 2), (3, 4), (5, 6)].iter().filter(|(a, b)| steps[*a] == steps[*b]).count();
-        let phases: &[usize] = match pairs0.cmp(&pairs1) {
-            std::cmp::Ordering::Greater => &[0],
-            std::cmp::Ordering::Less => &[1],
-            std::cmp::Ordering::Equal => &[0, 1],
-        };
-
-        let mut best: Option<(i64, Prepared)> = None;
-        for (&r0, &q) in anchors.iter().flat_map(|r| phases.iter().map(move |q| (r, q))) {
-            let mut p = Prepared { number: pn, raw: raw.clone(), base7: base.wrapping_add(7), steps, r0, q, rots: [0; 7], head: Vec::with_capacity(S7_START) };
-            for s in 0..7 {
-                p.rots[s] = p.rot(s);
-                let sec = &dec[s * SECTOR..(s + 1) * SECTOR];
-                p.head.extend_from_slice(&sec[p.rots[s]..]);
-                p.head.extend_from_slice(&sec[..p.rots[s]]);
-            }
-            repair_rotations(&mut p, &dec);
-            let score = head_score(&p);
-            if best.as_ref().is_none_or(|(b, _)| score > *b) {
-                best = Some((score, p));
-            }
-        }
-        best.and_then(|(score, p)| (score >= 0).then_some(p))
+        lay_out(pn, raw, dec)
     }
 
     /// Learns exact correction rows from pages whose sector 7 decodes to all zeros.
     fn learn_exact_rows(&mut self, prepared: &[Prepared]) {
         for p in prepared {
             let r7 = p.r7();
-            if self.c_rows.get(&r7).is_some_and(|(_, exact)| *exact) || !s7_solvable(r7) {
+            if self.c_rows.get(&r7).is_some_and(|(_, exact)| *exact) {
                 continue;
             }
             'steps: for step7 in p.step7_candidates() {
@@ -318,7 +274,7 @@ impl PageDecoder {
         let mut groups: HashMap<usize, Vec<&Prepared>> = HashMap::new();
         for p in prepared {
             let r7 = p.r7();
-            if !self.c_rows.contains_key(&r7) && s7_solvable(r7) {
+            if !self.c_rows.contains_key(&r7) {
                 groups.entry(r7).or_default().push(p);
             }
         }
@@ -362,9 +318,6 @@ impl PageDecoder {
         for (delta, bonus) in [(0, 50), (SECTOR - 2, 0), (2, 0), (SECTOR - 4, 0), (4, 0), (256, 0)] {
             let rv = (r7 + delta) % SECTOR;
             let Some((c_row, exact)) = self.c_rows.get(&rv) else { continue };
-            if !s7_solvable(rv) {
-                continue;
-            }
             if let Some(sol) = solve_s7(p, rv, c_row) {
                 let score = sol.score + bonus;
                 if best.as_ref().is_none_or(|(b, ..)| score > *b) {
@@ -414,52 +367,7 @@ impl PageDecoder {
     /// `score` rates highest wins (ties: the assumed base, then the most plausible bytes), and is
     /// returned when it beats the current decode.
     pub fn refine(&self, page: &LogicalPage, score: &dyn Fn(&LogicalPage) -> usize) -> Option<LogicalPage> {
-        let p = self.prepare(page.number)?;
-        let r7 = p.r7();
-        let raw7 = &p.raw[S7_START..S7_START + S7_LEN];
-        let current = score(page);
-        let mut best: Option<((usize, bool, i32), LogicalPage)> = None;
-        let mut seen: std::collections::HashSet<[u8; S7_LEN]> = std::collections::HashSet::new();
-        for delta in [0, SECTOR - 2, 2, SECTOR - 4, 4, 256, 254, 258] {
-            let rv = (r7 + delta) % SECTOR;
-            if !s7_solvable(rv) {
-                continue;
-            }
-            let known = s7_known(&p, rv);
-            let Some(&(i0, b0)) = known.first() else { continue };
-            for step7 in p.step7_candidates() {
-                for (c_row, _) in self.c_rows.values() {
-                    for d in (1..=255u8).step_by(2) {
-                        let base7 = raw7[i0].wrapping_sub((i0 as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i0])).wrapping_sub(b0);
-                        let byte = |i: usize| {
-                            raw7[i].wrapping_sub(base7).wrapping_sub((i as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i]))
-                        };
-                        if !known.iter().all(|(i, b)| byte(*i) == *b) {
-                            continue;
-                        }
-                        let mut plain = [0u8; S7_LEN];
-                        for (i, b) in plain.iter_mut().enumerate() {
-                            *b = byte(i);
-                        }
-                        let logical = s7_logical(&plain, rv);
-                        if !seen.insert(logical) {
-                            continue;
-                        }
-                        let mut candidate = page.clone();
-                        candidate.bytes[S7_START..S7_START + S7_LEN].copy_from_slice(&logical);
-                        for r in candidate.rows.iter_mut() {
-                            r.chained = u16le(&candidate.bytes, r.start as usize) == r.len;
-                        }
-                        let rank = (score(&candidate), base7 == p.base7, plausibility(&logical));
-                        if rank.0 > current && best.as_ref().is_none_or(|(b, _)| rank > *b) {
-                            candidate.r7 = rv as u16;
-                            best = Some((rank, candidate));
-                        }
-                    }
-                }
-            }
-        }
-        best.map(|(_, page)| page)
+        refine_sector7(&self.prepare(page.number)?, &self.c_rows, page, score)
     }
 
     /// Decodes every row page. Blocking and CPU-bound.
@@ -505,6 +413,111 @@ impl PageDecoder {
         stats.timings.push(("finish", t.elapsed().as_secs_f32()));
         (pages, stats)
     }
+}
+
+/// `PageDecoder::refine` for a prepared page and the learned correction rows.
+fn refine_sector7(
+    p: &Prepared,
+    c_rows: &HashMap<usize, (Vec<u8>, bool)>,
+    page: &LogicalPage,
+    score: &dyn Fn(&LogicalPage) -> usize,
+) -> Option<LogicalPage> {
+    let r7 = p.r7();
+    let raw7 = &p.raw[S7_START..S7_START + S7_LEN];
+    let current = score(page);
+    let mut best: Option<((usize, bool, i32), LogicalPage)> = None;
+    let mut seen: std::collections::HashSet<[u8; S7_LEN]> = std::collections::HashSet::new();
+    for delta in [0, SECTOR - 2, 2, SECTOR - 4, 4, 256, 254, 258] {
+        let rv = (r7 + delta) % SECTOR;
+        let known = s7_known(p, rv);
+        let Some(&(i0, b0)) = known.first() else { continue };
+        for step7 in p.step7_candidates() {
+            for (c_row, _) in c_rows.values() {
+                for d in (1..=255u8).step_by(2) {
+                    let base7 = raw7[i0].wrapping_sub((i0 as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i0])).wrapping_sub(b0);
+                    let byte = |i: usize| {
+                        raw7[i].wrapping_sub(base7).wrapping_sub((i as u8).wrapping_mul(step7)).wrapping_sub(d.wrapping_mul(c_row[i]))
+                    };
+                    if !known.iter().all(|(i, b)| byte(*i) == *b) {
+                        continue;
+                    }
+                    let mut plain = [0u8; S7_LEN];
+                    for (i, b) in plain.iter_mut().enumerate() {
+                        *b = byte(i);
+                    }
+                    let logical = s7_logical(&plain, rv);
+                    if !seen.insert(logical) {
+                        continue;
+                    }
+                    let mut candidate = page.clone();
+                    candidate.bytes[S7_START..S7_START + S7_LEN].copy_from_slice(&logical);
+                    for r in candidate.rows.iter_mut() {
+                        r.chained = u16le(&candidate.bytes, r.start as usize) == r.len;
+                    }
+                    let rank = (score(&candidate), base7 == p.base7, plausibility(&logical));
+                    if rank.0 > current && best.as_ref().is_none_or(|(b, _)| rank > *b) {
+                        candidate.r7 = rv as u16;
+                        best = Some((rank, candidate));
+                    }
+                }
+            }
+        }
+    }
+    best.map(|(_, page)| page)
+}
+
+/// Lays out sectors 0..6 of a page from its stored bytes `raw` and the page-wide model's decode
+/// `dec`: finds the rotation anchor (or recovers the cipher when the model got it wrong) and the
+/// pairing phase, and keeps the candidate whose header validates and whose rows chain best.
+fn lay_out(pn: u64, raw: Vec<u8>, dec: Vec<u8>) -> Option<Prepared> {
+    let base = raw[0].wrapping_sub(dec[0]);
+    let mut steps = [0u8; 7];
+    for (s, step) in steps.iter_mut().enumerate() {
+        let k0 = raw[s * SECTOR].wrapping_sub(dec[s * SECTOR]);
+        let k1 = raw[s * SECTOR + 1].wrapping_sub(dec[s * SECTOR + 1]);
+        *step = k1.wrapping_sub(k0);
+    }
+
+    // The page number anchors sector 0's rotation. A row can hold the same four bytes (a row
+    // id equal to the page number), so every odd position is a candidate; the one whose
+    // header validates and whose rows chain best wins below.
+    let anchor = (pn as u32).to_le_bytes();
+    let find_anchors = |dec: &[u8]| -> Vec<usize> {
+        (1..SECTOR).step_by(2).filter(|&i| (0..4).all(|k| dec[(i + k) % SECTOR] == anchor[k])).collect()
+    };
+    let model_anchors = find_anchors(&dec);
+    let (dec, base, steps, anchors) = if model_anchors.is_empty() {
+        let (base, steps, dec, r0) = recover_cipher(pn, &raw)?;
+        (dec, base, steps, vec![r0])
+    } else {
+        (dec, base, steps, model_anchors)
+    };
+
+    // Sectors in a pair share their step, so the step pattern usually gives the phase.
+    let pairs0 = [(0, 1), (2, 3), (4, 5)].iter().filter(|(a, b)| steps[*a] == steps[*b]).count();
+    let pairs1 = [(1, 2), (3, 4), (5, 6)].iter().filter(|(a, b)| steps[*a] == steps[*b]).count();
+    let phases: &[usize] = match pairs0.cmp(&pairs1) {
+        std::cmp::Ordering::Greater => &[0],
+        std::cmp::Ordering::Less => &[1],
+        std::cmp::Ordering::Equal => &[0, 1],
+    };
+
+    let mut best: Option<(i64, Prepared)> = None;
+    for (&r0, &q) in anchors.iter().flat_map(|r| phases.iter().map(move |q| (r, q))) {
+        let mut p = Prepared { number: pn, raw: raw.clone(), base7: base.wrapping_add(7), steps, r0, q, rots: [0; 7], head: Vec::with_capacity(S7_START) };
+        for s in 0..7 {
+            p.rots[s] = p.rot(s);
+            let sec = &dec[s * SECTOR..(s + 1) * SECTOR];
+            p.head.extend_from_slice(&sec[p.rots[s]..]);
+            p.head.extend_from_slice(&sec[..p.rots[s]]);
+        }
+        repair_rotations(&mut p, &dec);
+        let score = head_score(&p);
+        if best.as_ref().is_none_or(|(b, _)| score > *b) {
+            best = Some((score, p));
+        }
+    }
+    best.and_then(|(score, p)| (score >= 0).then_some(p))
 }
 
 /// Maps `f` over `items` on all cores, keeping order. Page work is independent and CPU-bound
