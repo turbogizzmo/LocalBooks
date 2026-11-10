@@ -465,6 +465,7 @@ async fn receive_payments_takes_a_customers_early_payment_discount_in_the_same_e
         items: vec![crate::banking::DepositItemRef { kind: "PAYMENT".into(), id: item.id }],
         other_lines: Vec::new(),
         cash_back: None,
+        deductions: Vec::new(),
     };
     let deposit_id = crate::banking::post_bank_deposit(&pool, deposit).await.unwrap();
     assert_eq!(net_cents(&pool, undeposited).await, 5_000, "only the part payment is still waiting");

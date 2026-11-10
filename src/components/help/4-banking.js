@@ -36,6 +36,14 @@ export const topics = [
     guide: 'bank-feeds',
   },
   {
+    id: 'payout-feeds', area: 'banking', views: ['banking/payouts', 'banking/feeds'],
+    title: 'Bring in Stripe payouts with their fees',
+    body: 'Banking › Payout Feeds: an Admin connects a Stripe account with a restricted, read-only key (read access to Balance and Payouts) and chooses the bank, sales, fees, refunds and chargebacks accounts. The key stays in this computer’s credential store. Get payouts fetches paid payouts; Record deposit posts each one as a deposit of its gross sales, less fees, refunds and chargebacks, so the bank amount is the payout and the bank line matches it.',
+    keywords: 'stripe payout payouts processor card fees merchant refunds chargebacks disputes gross net deposit restricted key',
+    go: { label: 'Go to Payout Feeds', view: 'banking/payouts' },
+    guide: 'bank-feeds',
+  },
+  {
     id: 'deposit', area: 'banking', views: ['banking/transfers', 'sales/invoices'],
     title: 'Make a bank deposit',
     body: 'Choose the customer payments waiting in Undeposited Funds that went into the bank together, and add any other money in the same deposit, with the customer or vendor it was received from. Cash back takes part of it out as cash to an account such as Petty Cash. The deposit total then matches the single line on your bank statement.',
