@@ -130,6 +130,14 @@ export const topics = [
     guide: 'customer-payments',
   },
   {
+    id: 'overpayments', area: 'sales', views: ['sales/invoices', 'sales/credits', 'sales/customers', 'banking/transfers'],
+    title: 'Overpayments, prepayments and unapplied payments',
+    body: 'Receive Payments takes more than the invoices are owed, and payments from a customer with no open invoice. The amount left over is shown as the Unapplied amount, with a choice: leave it as the customer’s credit, refund it from a bank or card account, or write it off to an income account. Kept as credit, it is listed in Credit Memos & Refunds as an Unapplied payment, and the Customer Center shows the Unapplied amount and Remaining credit; apply it to a later invoice, refund it or write it off from there. Deposited to Undeposited Funds, it waits in Make Deposits as Payment (unapplied).',
+    keywords: 'overpayment overpaid prepayment prepaid deposit retainer advance unapplied amount payment credit remaining credit refund write off extra too much paid',
+    go: { label: 'Receive a payment', view: 'sales/invoices', action: 'receive-payment' },
+    guide: 'customer-payments',
+  },
+  {
     id: 'early-payment-discount', area: 'sales', views: ['sales/invoices'],
     title: 'Take a customer’s early-payment discount',
     body: 'For an invoice on terms such as 2% 10 Net 30, choose a Discount account (an income account such as Sales Discounts) in Preferences › Payments, and tick Take customers’ early-payment discounts automatically if you want it filled in. Receive Payments then shows a Discount column: an invoice paid in full by the discount’s last day takes the discount on its open balance (what is left of a part-paid one) and the payment is the rest. Change or clear the discount on the row. One entry posts the money to the deposit account and the discount to the discount account, both off Accounts Receivable; voiding the payment, or recording it as a bounced check, reverses both. An invoice in another currency takes its discount in that currency, at the invoice’s own exchange rate.',
@@ -168,6 +176,14 @@ export const topics = [
     keywords: 'quote proposal bid estimate convert accept',
     go: { label: 'New estimate', view: 'sales/estimates', action: 'estimate' },
     guide: 'sales-receipts-and-estimates',
+  },
+  {
+    id: 'list-menus', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/products'],
+    title: 'New Transactions, Print, Excel and the Edit menu on lists',
+    body: 'Over the customer, vendor and item lists, New Transactions opens their forms (an invoice from the customer list starts with the customer you clicked), Print prints the list or opens the phone, contact and item list reports, and Excel saves the list as a workbook or CSV. The Edit menu acts on the list on screen: New in List, Edit in List, Delete from List, Make Inactive / Active and Show All. Only a name or item that was never used can be deleted; make anything else inactive.',
+    keywords: 'edit menu new edit delete make inactive show all list new transactions print excel export delete customer delete vendor delete item remove',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
   },
   {
     id: 'duplicate-name', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'accounting/chart-of-accounts'],
@@ -234,6 +250,14 @@ export const topics = [
     guide: 'invoices',
   },
   {
+    id: 'customer-contacts', area: 'sales', views: ['sales/customers', 'expenses/vendors', 'sales/statements'],
+    title: 'Contacts on a customer or vendor',
+    body: 'Edit… on a customer or vendor lists their contacts: as many as you need, each with a role, email, phone and mobile; Add contact adds one, and the arrows put them in order. Tick Invoices on one of a customer’s contacts to name them in Bill To on new sales forms and send them emailed invoices, estimates, sales receipts and credit memos; tick Statements on one to print them on statements and email statements to them. Without an email of their own, the customer’s email is used. A vendor’s contacts have a Main contact.',
+    keywords: 'contact contacts person people role billing accounts payable main contact alternate contact email phone mobile default invoice contact statement contact',
+    go: { label: 'Go to Customers', view: 'sales/customers' },
+    guide: 'customers-and-products',
+  },
+  {
     id: 'credit-limit', area: 'sales', views: ['sales/invoices', 'sales/customers'],
     title: 'Customer credit limits',
     body: 'Set a Credit limit on a customer’s record (Edit…). When an invoice would take what they owe, including their jobs’ invoices less unused credits, over the limit, LocalBooks shows the balance now and after, and asks before saving; it never blocks the sale.',
@@ -246,6 +270,14 @@ export const topics = [
     title: 'Set up products and services',
     body: 'Add each product or service with its rate and the income account it belongs to. Picking it on an invoice or sales receipt then fills in the description, rate and account for you. To add one without leaving the form, choose ＋ Add new item… at the end of the Product/Service list. Edit… on an item sets Subitem of, the description on purchase forms and the cost. Above the list, Look for searches by field; tick items to make several inactive at once; Add/Edit Multiple… adds or changes items from rows pasted from a spreadsheet. On a form, Find & Select Items… in the item box adds several items at once.',
     keywords: 'item service product price rate catalog add new item quick add subitem sub-item purchase description cost search find tick multiple paste excel add edit multiple items find and select items',
+    go: { label: 'Go to Products & Services', view: 'sales/products' },
+    guide: 'customers-and-products',
+  },
+  {
+    id: 'item-categories', area: 'sales', views: ['sales/products', 'sales/invoices', 'reports'],
+    title: 'Item categories',
+    body: 'Products & Services has a Categories panel: All items, Uncategorized and your categories and sub-categories, each with its item count; click one to see its items. New… adds a category, and its Actions menu adds a sub-category, renames, makes inactive or deletes it. Move to a different category… on an item’s Actions menu (or Category on Edit…) files it. The Product/Service heading on sales forms, and Sales by Product/Service Summary, Inventory Valuation Summary and Inventory Stock Status by Item, have a category box to show one category’s items. Preferences › Items & Inventory turns categories off.',
+    keywords: 'category categories item category sub-category subcategory group items folder uncategorized move item filter items by category',
     go: { label: 'Go to Products & Services', view: 'sales/products' },
     guide: 'customers-and-products',
   },
@@ -302,9 +334,10 @@ export const topics = [
   {
     id: 'sales-tax', area: 'sales', views: ['sales/tax', 'sales/invoices', 'sales/all', 'sales/products', 'sales/customers'],
     title: 'Charge and pay sales tax',
-    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (from the customer, or none if they are exempt); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed.',
-    keywords: 'sales tax vat gst tax rate taxable exempt pay sales tax liability agency',
+    body: 'Turn on Charge sales tax under Sales › Sales Tax and add your rates. Sales forms then show a Tax column (filled from each product’s Taxable setting) and a tax rate (from the customer, or none if they are exempt); the tax goes to Sales Tax Payable. Pay sales tax records what you send the agency, and Reports › Sales Tax Liability shows taxable sales and tax owed. Where several agencies tax one sale, add each rate with its agency, then New combined rate… to add them up; a sale at it posts each agency’s share to its own account, and the sales tax return by agency lists each agency’s taxable sales, tax and payments for the period, on accrual or cash.',
+    keywords: 'sales tax vat gst tax rate taxable exempt pay sales tax liability agency combined rate state county city jurisdiction return filing',
     go: { label: 'Go to Sales Tax', view: 'sales/tax' },
+    guide: 'getting-started',
   },
   {
     id: 'credit-memo', area: 'sales', views: ['sales/credits', 'sales/invoices', 'sales/customers'],

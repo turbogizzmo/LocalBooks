@@ -60,9 +60,9 @@ in the folder.
 > the backup was taken isn't kept. To undo just one desktop migration import, use **Reverse posted
 > entries** on the import screen instead.
 
-## Check and repair the file (File Dentist)
+## Check and repair the file (File Check & Repair)
 
-**File Dentist** checks the company file for damage and repairs what can be repaired safely.
+**File Check & Repair** checks the company file for damage and repairs what can be repaired safely.
 
 1. Click **Run Check-up**. It only reads, so it's safe any time. It checks:
    - the file structure
@@ -105,7 +105,7 @@ Before you start:
    - saves a verified **archive** of the books as they are (Archive (read-only) in the snapshot
      list) and a plain **Before condense** backup;
    - builds the condensed file off to the side;
-   - checks the condensed file against the archive: File Dentist's check-up, both audit trails, the
+   - checks the condensed file against the archive: the file check-up, both audit trails, the
      trial balance at the cut-off, balances by account, class and month, A/R and A/P aging and
      inventory valuation at the cut-off and today, cleared balances and uncleared lines, and every
      list;
@@ -139,6 +139,22 @@ The audit trail stays verifiable. The condensed file keeps every audit record, i
 snapshot of each summarized transaction, plus one record that names the archive and lists what each
 monthly entry replaced. **Verify ledger integrity** checks that the summarized transactions add up
 to their summaries. You can condense again later with a later cut-off.
+
+## Export lists and addresses
+
+**File › Utilities › Export** saves the company's lists for use somewhere else:
+
+- **Lists to IIF Files…** writes the chart of accounts, customers and jobs, vendors, items and
+  classes to an `.iif` file, the tab-delimited list format that LocalBooks' **Import / Convert**
+  reads and that the QuickBooks Desktop products import. Use it to start another company file with
+  the same lists. Sub-accounts, jobs and subclasses keep their full names (`Utilities:Electric`);
+  inactive entries are marked hidden. Transactions aren't included; to copy a whole company, make a
+  backup instead.
+- **Addresses to Text File…** writes each active customer's and vendor's name, company, address (up
+  to five lines), phone and email as tab-separated text with a header row, for a mail merge or
+  labels in a word processor or spreadsheet.
+
+Both ask where to save the file and write nothing anywhere else.
 
 ## Open another company file
 

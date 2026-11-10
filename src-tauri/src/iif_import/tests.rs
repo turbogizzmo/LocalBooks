@@ -1,46 +1,49 @@
 use super::*;
 
-/// Intuit's sample files (IIF Import Kit), trimmed to the columns they use, joined into one file.
+/// Synthetic books written for these tests (a small landscaping business), laid out the way an IIF
+/// export lays out lists and transactions: accounts with a sub-account, an item and an inventory
+/// part, a customer and a 1099 vendor, then an invoice, its part payment and deposit, a bill and its
+/// payment, a journal entry and an estimate.
 const SAMPLE: &str = "!ACCNT\tNAME\tACCNTTYPE\tDESC\tACCNUM\tEXTRA\r
 ACCNT\tAccounts Receivable\tAR\t\t1200\t\r
 ACCNT\tUndeposited Funds\tOCASSET\t\t1400\tUNDEPOSIT\r
 ACCNT\tChecking\tBANK\t\t\t\r
 ACCNT\tAccounts Payable\tAP\t\t2000\t\r
-ACCNT\tConstruction:Labor\tINC\t\t4100\t\r
-ACCNT\tConstruction:Materials\tINC\t\t4200\t\r
-ACCNT\tRepairs\tEXP\t\t6100\t\r
+ACCNT\tLandscaping:Labor\tINC\t\t4100\t\r
+ACCNT\tLandscaping:Plants\tINC\t\t4200\t\r
+ACCNT\tEquipment Repair\tEXP\t\t6100\t\r
 ACCNT\tEstimates\tNONPOSTING\t\t\t\r
 !INVITEM\tNAME\tINVITEMTYPE\tDESC\tACCNT\tPRICE\tTAXABLE\r
-INVITEM\tFraming\tSERV\tFraming labor\tConstruction:Labor\t55\tN\r
-INVITEM\tWood Door:Exterior\tINVENTORY\tExterior wood door\tConstruction:Materials\t120\tY\r
+INVITEM\tMowing\tSERV\tLawn mowing\tLandscaping:Labor\t55\tN\r
+INVITEM\tShrub:Boxwood\tINVENTORY\tBoxwood shrub\tLandscaping:Plants\t120\tY\r
 !CUST\tNAME\tBADDR1\tBADDR2\tBADDR3\tPHONE1\tTERMS\tCOMPANYNAME\tFIRSTNAME\tLASTNAME\r
-CUST\tCustomer\tJoe Customer\t444 Road Rd\t\"Anywhere, AZ 85740\"\t5554443333\tNet 30\t\tJoe\tCustomer\r
+CUST\tMaple Court\tMaple Court HOA\t18 Elm Way\t\"Springfield, OR 97477\"\t5550102030\tNet 30\t\tDana\tRuiz\r
 !VEND\tNAME\tADDR1\tTAXID\t1099\r
-VEND\tVendor\tJon Vendor\t12-3456789\tY\r
+VEND\tGreen Supply\tPat Green\t98-7654321\tY\r
 !TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\tDUEDATE\r
 !SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\tQNTY\tPRICE\tINVITEM\r
 !ENDTRNS\r
-TRNS\t\tINVOICE\t7/16/98\tAccounts Receivable\tCustomer\t\t175\t1\t\t8/15/98\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\t\t-55\t\tFraming labor\t\t55\tFraming\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Materials\t\t\t-120\t\tExterior wood door\t-1\t120\tWood Door:Exterior\r
+TRNS\t\tINVOICE\t3/16/25\tAccounts Receivable\tMaple Court\t\t175\t1\t\t4/15/25\r
+SPL\t\tINVOICE\t3/16/25\tLandscaping:Labor\t\t\t-55\t\tLawn mowing\t\t55\tMowing\r
+SPL\t\tINVOICE\t3/16/25\tLandscaping:Plants\t\t\t-120\t\tBoxwood shrub\t-1\t120\tShrub:Boxwood\r
 ENDTRNS\r
-TRNS\t\tPAYMENT\t7/20/98\tUndeposited Funds\tCustomer\t\t100\t\t\t\r
-SPL\t\tPAYMENT\t7/20/98\tAccounts Receivable\tCustomer\t\t-100\t\t\t\r
+TRNS\t\tPAYMENT\t3/20/25\tUndeposited Funds\tMaple Court\t\t100\t\t\t\r
+SPL\t\tPAYMENT\t3/20/25\tAccounts Receivable\tMaple Court\t\t-100\t\t\t\r
 ENDTRNS\r
-TRNS\t\tDEPOSIT\t7/21/98\tChecking\t\t\t100\t\t\t\r
-SPL\t\tDEPOSIT\t7/21/98\tUndeposited Funds\tCustomer\t\t-100\t\t\t\r
+TRNS\t\tDEPOSIT\t3/21/25\tChecking\t\t\t100\t\t\t\r
+SPL\t\tDEPOSIT\t3/21/25\tUndeposited Funds\tMaple Court\t\t-100\t\t\t\r
 ENDTRNS\r
-TRNS\t\tBILL\t7/10/98\tAccounts Payable\tVendor\t\t-35\t88\t\t\r
-SPL\t\tBILL\t7/10/98\tRepairs\t\t\t35\t\tFix door\t\r
+TRNS\t\tBILL\t3/10/25\tAccounts Payable\tGreen Supply\t\t-35\t88\t\t\r
+SPL\t\tBILL\t3/10/25\tEquipment Repair\t\t\t35\t\tSharpen blades\t\r
 ENDTRNS\r
-TRNS\t\tBILLPMT\t7/16/1998\tChecking\tVendor\t\t-35\t\tTest Memo\t\r
-SPL\t\tBILLPMT\t7/16/1998\tAccounts Payable\tVendor\t\t35\t\t\t\r
+TRNS\t\tBILLPMT\t3/16/2025\tChecking\tGreen Supply\t\t-35\t\tCheck 1042\t\r
+SPL\t\tBILLPMT\t3/16/2025\tAccounts Payable\tGreen Supply\t\t35\t\t\t\r
 ENDTRNS\r
-TRNS\t\tGENERAL JOURNAL\t7/1/98\tChecking\t\t\t650\t\t\t\r
-SPL\t\tGENERAL JOURNAL\t7/1/98\tConstruction:Labor\t\t\t-650\t\t\t\r
+TRNS\t\tGENERAL JOURNAL\t3/1/25\tChecking\t\t\t650\t\t\t\r
+SPL\t\tGENERAL JOURNAL\t3/1/25\tLandscaping:Labor\t\t\t-650\t\t\t\r
 ENDTRNS\r
-TRNS\t\tESTIMATES\t7/2/98\tEstimates\tCustomer\t\t55\t7\t\t\r
-SPL\t\tESTIMATES\t7/2/98\tEstimates\t\t\t-55\t\tFraming labor\t1\t55\tFraming\r
+TRNS\t\tESTIMATES\t3/2/25\tEstimates\tMaple Court\t\t55\t7\t\t\r
+SPL\t\tESTIMATES\t3/2/25\tEstimates\t\t\t-55\t\tLawn mowing\t1\t55\tMowing\r
 ENDTRNS\r
 ";
 
@@ -49,25 +52,25 @@ fn by_kind<'a>(ledger: &'a Ledger, kind: &str) -> &'a SourceTransaction {
 }
 
 #[test]
-fn reads_intuits_sample_lists() {
+fn reads_the_sample_lists() {
     let ledger = read(SAMPLE.as_bytes()).unwrap();
-    let labor = ledger.accounts.iter().find(|a| a.full_name == "Construction:Labor").unwrap();
+    let labor = ledger.accounts.iter().find(|a| a.full_name == "Landscaping:Labor").unwrap();
     assert_eq!(labor.account_type, "INCOME");
-    let parent = ledger.accounts.iter().find(|a| a.full_name == "Construction").unwrap();
+    let parent = ledger.accounts.iter().find(|a| a.full_name == "Landscaping").unwrap();
     assert_eq!(labor.parent_id, Some(parent.id));
     assert!(!ledger.accounts.iter().any(|a| a.name == "Estimates"), "non-posting accounts are not imported");
     assert_eq!(ledger.accounts.iter().find(|a| a.name == "Undeposited Funds").unwrap().account_type, "OTHER_CURRENT_ASSET");
 
     let customer = &ledger.customers[0];
-    assert_eq!(customer.name, "Customer");
-    assert_eq!(customer.address.as_deref(), Some("Joe Customer\n444 Road Rd\nAnywhere, AZ 85740"));
-    assert_eq!(customer.company_name.as_deref(), Some("Joe Customer"));
+    assert_eq!(customer.name, "Maple Court");
+    assert_eq!(customer.address.as_deref(), Some("Maple Court HOA\n18 Elm Way\nSpringfield, OR 97477"));
+    assert_eq!(customer.company_name.as_deref(), Some("Dana Ruiz"), "no company name: the contact's first and last name");
     assert_eq!(customer.terms_days, Some(30));
     let vendor = &ledger.vendors[0];
-    assert_eq!((vendor.tax_id.as_deref(), vendor.is_1099), (Some("12-3456789"), true));
+    assert_eq!((vendor.tax_id.as_deref(), vendor.is_1099), (Some("98-7654321"), true));
 
-    let door = ledger.items.iter().find(|i| i.name == "Wood Door:Exterior").unwrap();
-    assert_eq!((door.kind, door.rate_cents, door.taxable), ("Inventory part", 12_000, true));
+    let shrub = ledger.items.iter().find(|i| i.name == "Shrub:Boxwood").unwrap();
+    assert_eq!((shrub.kind, shrub.rate_cents, shrub.taxable), ("Inventory part", 12_000, true));
 }
 
 #[test]
@@ -76,10 +79,10 @@ fn transactions_balance_with_ledger_signs() {
     assert!(ledger.unbalanced.is_empty());
     assert_eq!(ledger.transactions.len(), 7);
     let journal = by_kind(&ledger, "Journal entry");
-    assert_eq!(journal.date, NaiveDate::from_ymd_opt(1998, 7, 1).unwrap());
+    assert_eq!(journal.date, NaiveDate::from_ymd_opt(2025, 3, 1).unwrap());
     // 650 debited to Checking is -650 in the ledger's sign.
     assert_eq!(journal.lines[0].cents, -65_000);
-    assert_eq!(by_kind(&ledger, "Bill payment").date, NaiveDate::from_ymd_opt(1998, 7, 16).unwrap());
+    assert_eq!(by_kind(&ledger, "Bill payment").date, NaiveDate::from_ymd_opt(2025, 3, 16).unwrap());
 }
 
 #[test]
@@ -88,12 +91,12 @@ fn invoices_keep_their_form_lines() {
     let invoice = by_kind(&ledger, "Invoice");
     let Some(SourceDocument::Invoice { number, due_date, lines, .. }) = &invoice.document else { panic!("{:?}", invoice.document) };
     assert_eq!(number.as_deref(), Some("1"));
-    assert_eq!(*due_date, NaiveDate::from_ymd_opt(1998, 8, 15));
+    assert_eq!(*due_date, NaiveDate::from_ymd_opt(2025, 4, 15));
     assert_eq!(lines.len(), 2);
-    let door = &lines[1];
-    assert_eq!((door.quantity_e4, door.rate_cents, door.cents), (10_000, 12_000, 12_000));
-    assert!(door.item_id.is_some());
-    assert_eq!(door.description.as_deref(), Some("Exterior wood door"));
+    let shrub = &lines[1];
+    assert_eq!((shrub.quantity_e4, shrub.rate_cents, shrub.cents), (10_000, 12_000, 12_000));
+    assert!(shrub.item_id.is_some());
+    assert_eq!(shrub.description.as_deref(), Some("Boxwood shrub"));
 }
 
 #[test]
@@ -224,7 +227,8 @@ ENDTRNS\r
     assert_eq!(debits, credits, "the books balance");
 }
 
-/// Reads every IIF sample in Intuit's import kit: set LOCALBOOKS_IIF_DIR to the unpacked kit.
+/// Reads every IIF sample in Intuit's import kit, which stays outside the repository: set
+/// LOCALBOOKS_IIF_DIR to the unpacked kit. Opt-in (`--ignored`); nothing from the kit is copied here.
 /// Each must read with every transaction balanced, no line unreadable, and every transaction
 /// of a known kind, or hold nothing LocalBooks imports.
 #[test]
@@ -421,23 +425,23 @@ async fn an_import_brings_in_price_levels_and_sets_customer_defaults() {
 const CLASSES_IIF: &str = "!ACCNT\tNAME\tACCNTTYPE\r
 ACCNT\tAccounts Receivable\tAR\r
 ACCNT\tChecking\tBANK\r
-ACCNT\tConstruction:Labor\tINC\r
-ACCNT\tRepairs\tEXP\r
+ACCNT\tServices:Labor\tINC\r
+ACCNT\tUpkeep\tEXP\r
 !CLASS\tNAME\tHIDDEN\r
 CLASS\tRemodel\tN\r
 CLASS\tRemodel:Kitchen\tN\r
 CLASS\tOld Jobs\tY\r
 !CUST\tNAME\r
-CUST\tCustomer\r
+CUST\tHarbor Cafe\r
 !TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\r
 !SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tCLASS\tAMOUNT\tDOCNUM\tMEMO\r
 !ENDTRNS\r
-TRNS\t\tINVOICE\t7/16/98\tAccounts Receivable\tCustomer\t\t175\t1\t\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\tRemodel : Kitchen\t-100\t\tCabinets\r
-SPL\t\tINVOICE\t7/16/98\tConstruction:Labor\t\tOld Jobs\t-75\t\tOld work\r
+TRNS\t\tINVOICE\t6/2/25\tAccounts Receivable\tHarbor Cafe\t\t175\t1\t\r
+SPL\t\tINVOICE\t6/2/25\tServices:Labor\t\tRemodel : Kitchen\t-100\t\tShelving\r
+SPL\t\tINVOICE\t6/2/25\tServices:Labor\t\tOld Jobs\t-75\t\tOld work\r
 ENDTRNS\r
-TRNS\t\tGENERAL JOURNAL\t7/20/98\tChecking\t\t\t-40\t\t\r
-SPL\t\tGENERAL JOURNAL\t7/20/98\tRepairs\t\tNew Build\t40\t\tDoor\r
+TRNS\t\tGENERAL JOURNAL\t6/9/25\tChecking\t\t\t-40\t\t\r
+SPL\t\tGENERAL JOURNAL\t6/9/25\tUpkeep\t\tNew Build\t40\t\tGate\r
 ENDTRNS\r
 ";
 
