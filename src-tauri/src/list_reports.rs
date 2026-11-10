@@ -20,6 +20,7 @@ use crate::ledger::{db_err, mul_div_round, QUANTITY_SCALE};
 use crate::preferences::{fiscal_start_month, fiscal_year_bounds};
 use crate::statements::LineKind;
 
+mod more_reports;
 mod profitability;
 
 // ------------------------------------------------------------------------------------------------
@@ -79,6 +80,13 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("other-phone", "Other Names Phone List", LISTS, Now, ""),
         r("item-listing", "Item Listing", LISTS, Now, ""),
         r("account-listing", "Account Listing", LISTS, Now, ""),
+        r("todo-notes", "To Do Notes", LISTS, Now, ""),
+        r("budget-overview", "Budget Overview", "Budgets", AsOf, ""),
+        r("sales-ship-to", "Sales by Ship To Address", "Sales and customers", Range, "fiscalYearToDate"),
+        r("sales-tax-revenue", "Sales Tax Revenue Summary", "What you owe", Range, "fiscalQuarter"),
+        r("memorized-transactions", "Memorized Transaction Listing", custom_reports::ACCOUNTANT, Now, ""),
+        r("realized-gains", "Realized Gains & Losses", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
+        r("unrealized-gains", "Unrealized Gains & Losses", custom_reports::ACCOUNTANT, Range, "fiscalYearToDate"),
     ]
 }
 
@@ -115,6 +123,13 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "other-phone" => phone_list(pool, NameKind::Other, today).await,
         "item-listing" => item_listing(pool, today).await,
         "account-listing" => account_listing(pool, today).await,
+        "todo-notes" => more_reports::todo_notes(pool, today).await,
+        "budget-overview" => more_reports::budget_overview(pool, end).await,
+        "sales-ship-to" => more_reports::sales_by_ship_to(pool, start, end).await,
+        "sales-tax-revenue" => more_reports::sales_tax_revenue(pool, start, end).await,
+        "memorized-transactions" => more_reports::memorized_transactions(pool, today).await,
+        "realized-gains" => more_reports::currency_gains(pool, start, end, false).await,
+        "unrealized-gains" => more_reports::currency_gains(pool, start, end, true).await,
         _ => Err(format!("RPT_UNKNOWN: no report named {id}")),
     }
 }
