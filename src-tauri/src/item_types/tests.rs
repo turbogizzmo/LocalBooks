@@ -721,7 +721,7 @@ async fn a_credit_memo_with_a_discount_a_charge_and_a_subtotal_posts_balanced_an
     let handling = crate::sales::create_item(
         &pool,
         crate::sales::ProductInput { name: "Handling 5%".into(), description: None, rate_cents: 0, income_account_id: services, is_taxable: true },
-        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(50_000) },
+        crate::sales::ItemKind { item_type: "OTHER_CHARGE".into(), percent_ppm: Some(50_000), expense_account_id: None },
     )
     .await
     .unwrap();

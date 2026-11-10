@@ -575,6 +575,7 @@ async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
     crate::expenses::post_vendor_bill(
         p,
         BillInput {
+            form_lines: Vec::new(),
             terms_id: None,
             vendor_name: "Riverside Print Shop".into(),
             bill_number: Some("RP-77".into()),
