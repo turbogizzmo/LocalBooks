@@ -301,27 +301,47 @@ impl Ledger {
 pub fn read_pages(path: &Path) -> Result<(Vec<LogicalPage>, Catalog, DecodeStats, usize), String> {
     let mut decoder = PageDecoder::open(path)?;
     let (mut pages, stats) = decoder.decode_all();
-    let catalog = read_catalog(&pages);
+    let (catalog, refined) = repair_pages(&mut pages, &|page, score| decoder.refine(page, score));
+    Ok((pages, catalog, stats, refined))
+}
+
+/// Re-solves the last sector of pages whose rows do not read, and reads the catalog. Catalog
+/// pages go first, scored by the catalog rows they yield: a column definition lost to a few
+/// wrong bytes would otherwise leave its table's rows unreadable. Then each table page whose
+/// rows in sector 7 do not walk, scored by the rows that walk. `refine` returns a better
+/// decode of a page, or `None`. Returns the catalog and how many pages were re-solved.
+pub(crate) fn repair_pages(pages: &mut [LogicalPage], refine: &Refine) -> (Catalog, usize) {
     let mut refined = 0;
+    let ends_in_s7 = |r: &crate::qbw_pages::RowSpan| (r.start + r.len) as usize > S7_START;
+    for page in pages.iter_mut().filter(|p| crate::qbw_records::is_catalog_page(p)) {
+        let score = crate::qbw_records::catalog_rows_read;
+        if page.rows.iter().any(|r| ends_in_s7(r) && !crate::qbw_records::catalog_row_reads(page, r)) {
+            if let Some(better) = refine(page, &score) {
+                *page = better;
+                refined += 1;
+            }
+        }
+    }
+    let catalog = read_catalog(pages);
     for page in pages.iter_mut() {
         let Some(cols) = catalog.columns.get(&page.owner) else { continue };
         if page.owner < 3 || CHUNK_KINDS.contains(&page.kind) {
             continue;
         }
         let walks = |p: &LogicalPage| p.rows.iter().filter(|r| r.chained && walk_row(p.row(r), cols).is_some()).count();
-        let failing_in_s7 = page
-            .rows
-            .iter()
-            .any(|r| (r.start + r.len) as usize > S7_START && !(r.chained && walk_row(page.row(r), cols).is_some()));
+        let failing_in_s7 = page.rows.iter().any(|r| ends_in_s7(r) && !(r.chained && walk_row(page.row(r), cols).is_some()));
         if failing_in_s7 {
-            if let Some(better) = decoder.refine(page, &walks) {
+            if let Some(better) = refine(page, &walks) {
                 *page = better;
                 refined += 1;
             }
         }
     }
-    Ok((pages, catalog, stats, refined))
+    (catalog, refined)
 }
+
+/// Re-solves one page's last sector for a score (see `PageDecoder::refine`).
+pub(crate) type Refine<'a> = dyn Fn(&LogicalPage, &dyn Fn(&LogicalPage) -> usize) -> Option<LogicalPage> + 'a;
 
 pub(crate) fn text(row: &Row, column: &str) -> Option<String> {
     row.get(column).as_text().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())

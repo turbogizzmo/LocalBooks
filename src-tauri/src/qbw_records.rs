@@ -185,33 +185,66 @@ fn epoch() -> NaiveDateTime {
     NaiveDate::from_ymd_opt(1600, 2, 29).expect("valid epoch").and_hms_opt(0, 0, 0).expect("valid time")
 }
 
+/// One catalog row: a table's name, or one column's definition (name, domain, nullable, width)
+/// with the object id that orders competing definitions.
+enum CatalogEntry {
+    Table(u32, String),
+    Column { table: u32, id: u32, def: (String, u16, bool, u32), object_id: u64 },
+}
+
+/// Reads a row of a catalog page (owner 1: tables, owner 2: columns); `None` when the row is
+/// not a well-formed catalog row, as when its page decoded with a few wrong bytes.
+fn catalog_entry(owner: u32, row: &[u8]) -> Option<CatalogEntry> {
+    let row = strip_extra(row);
+    if owner == 1 {
+        let len = *row.get(54)? as usize;
+        let name = row.get(55..55 + len).filter(|n| is_identifier(n))?;
+        Some(CatalogEntry::Table(u32le(&row, 4), String::from_utf8_lossy(name).into_owned()))
+    } else {
+        if row.len() < 40 || row[14] != 1 || !matches!(row[15], b'Y' | b'N') {
+            return None;
+        }
+        let len = row[38] as usize;
+        let name = row.get(39..39 + len).filter(|n| is_identifier(n))?;
+        let def = (String::from_utf8_lossy(name).into_owned(), u16le(&row, 12), row[15] == b'Y', u32le(&row, 16));
+        let object_id = u64::from_le_bytes(row[22..30].try_into().expect("8 bytes"));
+        Some(CatalogEntry::Column { table: u32le(&row, 4), id: u32le(&row, 8), def, object_id })
+    }
+}
+
+/// Catalog pages are those of tables 1 (table names) and 2 (column definitions).
+pub fn is_catalog_page(page: &LogicalPage) -> bool {
+    matches!(page.owner, 1 | 2)
+}
+
+/// Rows of a catalog page that chain and read as catalog rows: the score a re-solved page
+/// must improve on.
+pub fn catalog_rows_read(page: &LogicalPage) -> usize {
+    page.rows.iter().filter(|r| catalog_row_reads(page, r)).count()
+}
+
+/// The row chains and reads as a catalog row.
+pub fn catalog_row_reads(page: &LogicalPage, span: &crate::qbw_pages::RowSpan) -> bool {
+    span.chained && catalog_entry(page.owner, page.row(span)).is_some()
+}
+
 /// Reads the catalog from the decoded pages of tables 1 and 2. A column can be defined more than
 /// once (upgrades append newer definitions); the most frequent definition wins, then the newest.
 pub fn read_catalog(pages: &[LogicalPage]) -> Catalog {
     let mut names = HashMap::new();
     let mut defs: HashMap<(u32, u32), HashMap<(String, u16, bool, u32), (u32, u64)>> = HashMap::new();
-    for page in pages.iter().filter(|p| p.owner == 1 || p.owner == 2) {
+    for page in pages.iter().filter(|p| is_catalog_page(p)) {
         for span in page.rows.iter().filter(|r| r.chained) {
-            let row = strip_extra(page.row(span));
-            if page.owner == 1 {
-                if row.len() < 56 {
-                    continue;
+            match catalog_entry(page.owner, page.row(span)) {
+                Some(CatalogEntry::Table(id, name)) => {
+                    names.insert(id, name);
                 }
-                let len = row[54] as usize;
-                if let Some(name) = row.get(55..55 + len).filter(|n| is_identifier(n)) {
-                    names.insert(u32le(&row, 4), String::from_utf8_lossy(name).into_owned());
+                Some(CatalogEntry::Column { table, id, def, object_id }) => {
+                    let entry = defs.entry((table, id)).or_default().entry(def).or_default();
+                    entry.0 += 1;
+                    entry.1 = entry.1.max(object_id);
                 }
-            } else {
-                if row.len() < 40 || row[14] != 1 || !matches!(row[15], b'Y' | b'N') {
-                    continue;
-                }
-                let len = row[38] as usize;
-                let Some(name) = row.get(39..39 + len).filter(|n| is_identifier(n)) else { continue };
-                let key = (String::from_utf8_lossy(name).into_owned(), u16le(&row, 12), row[15] == b'Y', u32le(&row, 16));
-                let object_id = u64::from_le_bytes(row[22..30].try_into().expect("8 bytes"));
-                let entry = defs.entry((u32le(&row, 4), u32le(&row, 8))).or_default().entry(key).or_default();
-                entry.0 += 1;
-                entry.1 = entry.1.max(object_id);
+                None => {}
             }
         }
     }

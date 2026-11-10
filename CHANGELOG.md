@@ -6,6 +6,10 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **More check lines come in from older company files.** When the part of a QuickBooks
+  Desktop file that describes its tables was itself slightly damaged, LocalBooks couldn't read
+  some tables' rows at all, such as the check lines of a file upgraded from an older version.
+  LocalBooks now repairs that part first, so those transactions import.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
