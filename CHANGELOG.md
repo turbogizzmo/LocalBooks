@@ -42,6 +42,8 @@ people using LocalBooks.
 - **PDF previews, and attachments on printouts and mail-app emails.** The Attachments Library and
   the Document Inbox show PDFs page by page. Files marked Send with the form now print after the
   form and go with it when the email opens in your mail app, not only when LocalBooks sends it.
+- **A group's quantity on the form.** The heading of an item group on an invoice, sales receipt or
+  estimate has a Qty: change it and every item in the group changes in proportion.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

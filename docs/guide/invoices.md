@@ -113,8 +113,10 @@ The **Product/Service** list on invoices, sales receipts and estimates also offe
 - An **other charge** with a percentage: works out its percentage of the line above (an amount
   charge is an ordinary line).
 - **Group: …**: fills in a heading and a line for each of the group's items, at the customer's
-  prices. Change or remove the items as you need; tick **Print as one line** on the heading to print
-  the group as one line with its total. A discount right under a group comes off the whole group.
+  prices. Change or remove the items as you need. **Qty** on the heading is how many of the group:
+  change it and every item's quantity changes in proportion (2 of a group of 3 widgets and an hour
+  is 6 widgets and 2 hours). Tick **Print as one line** on the heading to print the group as one
+  line with its total and that quantity. A discount right under a group comes off the whole group.
 
 The **Discount** box next to the total still works as before: it comes off everything, after the
 line discounts and before tax. A taxable discount line lowers the taxable amount; a non-taxable one

@@ -254,8 +254,6 @@ in either is relaxed.
 - Expense accounts on other charges (reimbursable costs) and charges that are a percent of the
   whole form rather than the line above.
 - Groups inside groups, and discounts inside groups.
-- A group's quantity on the form (a group drops on at its own quantities; each item's quantity can
-  be changed on the form).
 - Decoding the subtotal, discount and group item types in company files.
 
 ## Building it
