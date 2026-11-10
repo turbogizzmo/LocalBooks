@@ -598,8 +598,9 @@ async fn write_receipt_bill(tx: &mut Transaction<'_, Sqlite>, input: &ReceiptBil
 
 /// The purchase order's discounts and charges a receipt's bill takes, placed after the receipt lines
 /// received from their order lines (`po_lines`, in receipt line order). A percent line applies to
-/// every bill's line for that order line; a fixed amount goes on the first live bill that has the
-/// order line (and [`crate::purchase_lines::fit_carried`] holds back a fixed discount the line can't take).
+/// every bill's line for that order line. A fixed amount not yet on a live bill is placed after each
+/// receipt line from its order line, tagged with its `source`; [`crate::purchase_lines::fit_carried`]
+/// keeps it once, after the first line that can take it, or holds it back for a later bill.
 async fn carried_form_lines(tx: &mut Transaction<'_, Sqlite>, order: Option<i64>, po_lines: &[Option<i64>]) -> Result<Vec<crate::purchase_lines::CarriedLine>, String> {
     let Some(order) = order else { return Ok(Vec::new()) };
     let views: Vec<crate::purchase_lines::PurchaseFormLineView> = sqlx::query_as(
