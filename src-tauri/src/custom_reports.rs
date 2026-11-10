@@ -204,6 +204,8 @@ pub enum Cleared {
 pub enum NameKind {
     Customer,
     Vendor,
+    /// The Other Names list (`other_names`).
+    Other,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -436,6 +438,7 @@ impl Line {
     fn party(&self) -> Option<NameRef> {
         let kind = match self.party_kind.as_deref()? {
             "customer" => NameKind::Customer,
+            "other" => NameKind::Other,
             _ => NameKind::Vendor,
         };
         Some(NameRef { kind, id: self.party_id? })
@@ -505,14 +508,15 @@ const ENTRY_JOINS: &str = "
     LEFT JOIN v_deposit_party dpp ON COALESCE(ro.source_type, e.source_type) = 'DEPOSIT' AND dpp.deposit_id = COALESCE(ro.source_id, e.source_id)
     LEFT JOIN customers pc ON pc.id = COALESCE(inv.customer_id, ipi.customer_id, sr.customer_id, cm.customer_id, crm.customer_id, dpp.customer_id)
     LEFT JOIN vendors pv ON pv.id = COALESCE(bl.vendor_id, bpb.vendor_id, vc.vendor_id, x.vendor_id, vrc.vendor_id, dpp.vendor_id)
+    LEFT JOIN other_names po ON po.id = x.other_name_id
     LEFT JOIN sales_reps rep ON rep.id = COALESCE(inv.sales_rep_id, sr.sales_rep_id)";
 
 /// Open balances use the same arithmetic as `report_center::aging`; only the document's current
 /// entry carries one (an edited document's earlier entries show zero).
 const ENTRY_COLUMNS: &str = "
-    CASE WHEN pc.id IS NOT NULL THEN 'customer' WHEN pv.id IS NOT NULL THEN 'vendor' END AS party_kind,
-    COALESCE(pc.id, pv.id) AS party_id,
-    COALESCE(pc.name, pv.name) AS name,
+    CASE WHEN pc.id IS NOT NULL THEN 'customer' WHEN pv.id IS NOT NULL THEN 'vendor' WHEN po.id IS NOT NULL THEN 'other' END AS party_kind,
+    COALESCE(pc.id, pv.id, po.id) AS party_id,
+    COALESCE(pc.name, pv.name, po.name) AS name,
     COALESCE(pv.is_1099, 0) AS is_1099,
     COALESCE(CAST(inv.invoice_number AS TEXT), ip.reference, CAST(sr.receipt_number AS TEXT), CAST(cm.credit_number AS TEXT),
              bl.bill_number, bp.reference, vc.reference, x.check_number,

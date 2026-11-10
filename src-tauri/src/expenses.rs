@@ -645,14 +645,14 @@ pub struct ExpenseView {
 }
 
 const EXPENSE_SELECT: &str = "
-    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, v.name AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
+    SELECT x.id, CASE WHEN x.is_credit = 1 THEN 'CARD_CREDIT' ELSE x.kind END AS kind, COALESCE(v.name, o.name) AS payee_name, x.payment_account_id, x.expense_date, x.check_number,
            x.payment_method, x.payment_method_id, x.memo, x.total_cents, x.currency_code, x.exchange_rate_e6,
            COALESCE(x.home_total_cents, x.total_cents) AS home_total_cents,
            (SELECT COUNT(*) FROM expense_lines WHERE expense_id = x.id) AS line_count,
            (SELECT CASE WHEN COUNT(DISTINCT account_id) = 1 THEN MAX(account_id) END
             FROM expense_lines WHERE expense_id = x.id) AS category_account_id,
            x.journal_entry_id, x.is_voided, x.to_be_printed
-    FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id";
+    FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id";
 
 /// Records an expense or check (Dr each split account / Cr the payment account) or a card credit
 /// (Dr the card / Cr each split account), atomically.
@@ -703,9 +703,14 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
         (_, true, _) => return Err("EXP_BAD_PAYMENT_ACCOUNT: a card credit goes to a Credit Card account".into()),
         _ => return Err("EXP_BAD_PAYMENT_ACCOUNT: pay expenses from a Bank or Credit Card account".into()),
     }
-    let vendor_id = match clean(input.payee_name.as_deref()) {
-        Some(name) => Some(find_or_create_named(tx, Party::Vendor, name).await?),
+    // The payee: a vendor by that name, else an other name (`other_names`), else a new vendor.
+    let other_name_id = match clean(input.payee_name.as_deref()) {
+        Some(name) => crate::other_names::payee(&mut **tx, name).await?,
         None => None,
+    };
+    let vendor_id = match (clean(input.payee_name.as_deref()), other_name_id) {
+        (Some(name), None) => Some(find_or_create_named(tx, Party::Vendor, name).await?),
+        _ => None,
     };
     let check_number = if kind == "CHECK" { clean(input.check_number.as_deref()) } else { None };
     let (method_id, method) = crate::profile_lists::resolve_payment_method(&mut **tx, input.payment_method_id, clean(input.payment_method.as_deref()), "EXP").await?;
@@ -734,8 +739,8 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     let expense_id: i64 = sqlx::query_scalar(
         "INSERT INTO expenses
             (kind, vendor_id, payment_account_id, expense_date, check_number, payment_method, memo, total_cents,
-             currency_code, exchange_rate_e6, home_total_cents, is_credit, payment_method_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id",
+             currency_code, exchange_rate_e6, home_total_cents, is_credit, payment_method_id, other_name_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) RETURNING id",
     )
     .bind(kind)
     .bind(vendor_id)
@@ -750,6 +755,7 @@ pub(crate) async fn write_expense(tx: &mut Transaction<'_, Sqlite>, input: &Expe
     .bind(home_total)
     .bind(is_credit)
     .bind(method_id)
+    .bind(other_name_id)
     .fetch_one(&mut **tx)
     .await
     .map_err(db_err)?;

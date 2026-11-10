@@ -76,6 +76,10 @@ people using LocalBooks.
 - **Billable costs in other currencies.** Sales › Bill Costs lists costs on expenses in another
   currency and bills them at their home amount, at the expense's own exchange rate. Editing an
   invoice that billed costs can move a reimbursed line to another expense account.
+- **Other Names list.** Expenses › Other Names keeps people and businesses who are neither customers
+  nor vendors, such as an owner taking a draw. A check or expense typed to one is paid to them, and
+  the list has an information panel with what was paid, contact details, notes and recent
+  transactions.
 - **Security claims you can check.** SECURITY.md now points every claim to the code and test
   behind it, and corrects a few: vendors' bank details are encrypted along with tax IDs, the update
   check runs by default (turn it off in Settings › Updates), and on Linux saved passwords are kept

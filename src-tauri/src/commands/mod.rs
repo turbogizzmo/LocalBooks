@@ -106,6 +106,7 @@ features![
     migration,
     mileage,
     money_bars,
+    other_names,
     payout_feeds,
     party_contacts,
     payroll_import,

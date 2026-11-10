@@ -186,8 +186,8 @@ pub(crate) async fn replace_expense_in_tx(tx: &mut Transaction<'_, Sqlite>, expe
 pub(crate) async fn expense_input_in_tx(tx: &mut Transaction<'_, Sqlite>, expense_id: i64, date: chrono::NaiveDate) -> Result<Option<ExpenseInput>, String> {
     type Row = (String, Option<String>, i64, Option<String>, Option<String>, Option<String>, bool, Option<i64>);
     let row: Option<Row> = sqlx::query_as(
-        "SELECT x.kind, v.name, x.payment_account_id, x.check_number, x.payment_method, x.memo, x.currency_code IS NOT NULL OR x.is_credit = 1, x.payment_method_id
-         FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id WHERE x.id = ?1",
+        "SELECT x.kind, COALESCE(v.name, o.name), x.payment_account_id, x.check_number, x.payment_method, x.memo, x.currency_code IS NOT NULL OR x.is_credit = 1, x.payment_method_id
+         FROM expenses x LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id WHERE x.id = ?1",
     )
     .bind(expense_id)
     .fetch_optional(&mut **tx)

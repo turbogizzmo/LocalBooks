@@ -85,6 +85,7 @@ pub fn catalog() -> Vec<ListReportInfo> {
         r("customer-contact", "Customer Contact List", LISTS, Now, ""),
         r("vendor-phone", "Vendor Phone List", LISTS, Now, ""),
         r("vendor-contact", "Vendor Contact List", LISTS, Now, ""),
+        r("other-phone", "Other Names Phone List", LISTS, Now, ""),
         r("item-listing", "Item Listing", LISTS, Now, ""),
         r("account-listing", "Account Listing", LISTS, Now, ""),
         r("todo-notes", "To Do Notes", LISTS, Now, ""),
@@ -131,6 +132,7 @@ pub async fn run(pool: &SqlitePool, id: &str, start: Option<NaiveDate>, end: Opt
         "customer-contact" => contact_list(pool, NameKind::Customer, today).await,
         "vendor-phone" => phone_list(pool, NameKind::Vendor, today).await,
         "vendor-contact" => contact_list(pool, NameKind::Vendor, today).await,
+        "other-phone" => phone_list(pool, NameKind::Other, today).await,
         "item-listing" => item_listing(pool, today).await,
         "account-listing" => account_listing(pool, today).await,
         "todo-notes" => more_reports::todo_notes(pool, today).await,
@@ -230,6 +232,9 @@ async fn parties(pool: &SqlitePool, kind: NameKind) -> Result<Vec<Party>, String
         NameKind::Vendor => "SELECT id, name, company_name, phone, email, address, terms_days, is_1099
                              FROM vendors WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
             .to_string(),
+        NameKind::Other => "SELECT id, name, company_name, phone, email, address, NULL AS terms_days, 0 AS is_1099
+                            FROM other_names WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id"
+            .to_string(),
     };
     sqlx::query_as(&sql).fetch_all(pool).await.map_err(db_err)
 }
@@ -238,6 +243,7 @@ fn noun(kind: NameKind) -> (&'static str, &'static str) {
     match kind {
         NameKind::Customer => ("Customer", "customers"),
         NameKind::Vendor => ("Vendor", "vendors"),
+        NameKind::Other => ("Other name", "other names"),
     }
 }
 
@@ -255,6 +261,8 @@ async fn balances(pool: &SqlitePool, kind: NameKind, as_of: NaiveDate) -> Result
     let id = match kind {
         NameKind::Customer => "customer-balance-summary",
         NameKind::Vendor => "vendor-balance-summary",
+        // Other names have no balance: nothing is owed to or by them on account.
+        NameKind::Other => return Ok((BTreeMap::new(), 0)),
     };
     let mut settings = custom_reports::presets().into_iter().find(|p| p.id == id).ok_or("RPT_UNKNOWN: balance summary")?.settings;
     settings.end_date = Some(as_of);

@@ -45,6 +45,7 @@ export const NAV = [
       { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/approvals', label: 'Approvals' },
       { id: 'expenses/vendors', label: 'Vendors' },
+      { id: 'expenses/other-names', label: 'Other Names' },
       { id: 'expenses/print-checks', label: 'Print Checks' },
     ],
   },

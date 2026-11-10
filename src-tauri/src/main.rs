@@ -78,6 +78,7 @@ mod list_reports;
 mod money;
 mod mail_app;
 mod offsite;
+mod other_names;
 mod parties;
 mod party_contacts;
 mod payroll_import;

@@ -205,6 +205,9 @@ fn details(report: &AccountantReport) -> impl Iterator<Item = &ReportRow> {
 #[tokio::test]
 async fn list_reports() {
     let pool = company().await;
+    // The fixture's books have no other names; one gives the Other Names Phone List a line.
+    let owner = crate::other_names::OtherNameInput { name: "Dana Hart".into(), phone: Some("555-0142".into()), ..Default::default() };
+    crate::other_names::create(&pool, &owner).await.unwrap();
     for info in list_reports::catalog() {
         let report = run(&pool, info.id).await;
         assert!(excel(info.title, &report.report).starts_with(b"PK"), "{} exports to Excel", info.id);

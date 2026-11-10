@@ -179,6 +179,8 @@ const READ: &[&str] = &[
     "report_sheet",
     "list_statement_charges",
     "get_list_order",
+    "list_other_names",
+    "get_other_name",
     "get_customer_credit",
     "list_party_contacts",
     "list_item_categories",

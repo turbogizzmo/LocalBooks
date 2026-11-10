@@ -170,6 +170,7 @@ pub const KEPT_TABLES: &[&str] = &[
     "mileage_trips",
     "name_merges",
     "offsite_backup",
+    "other_names",
     "party_contacts",
     "payment_methods",
     "payout_feeds",

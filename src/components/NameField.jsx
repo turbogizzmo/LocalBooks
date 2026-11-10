@@ -141,7 +141,12 @@ export default function NameField({ kind, names, value, onChange, inputRef, clas
                 choose(row);
               }}
             >
-              {row.name ? row.name.name : row.add === 'quick' ? <>＋ Add “{typed}” as a new {noun}</> : 'Add with details…'}
+              {row.name ? (
+                <>
+                  {row.name.name}
+                  {row.name.listLabel && <span className="ml-1 text-2xs text-qb-ink-muted">· {row.name.listLabel}</span>}
+                </>
+              ) : row.add === 'quick' ? <>＋ Add “{typed}” as a new {noun}</> : 'Add with details…'}
             </li>
           ))}
         </ul>
