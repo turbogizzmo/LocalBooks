@@ -93,7 +93,8 @@ jobs:
         run: cargo test --locked
 
   test-macos:
-    name: Test (${{ matrix.platform }})
+    # A fixed name, so a skipped run still reports as "Test (macos-latest)" for required checks.
+    name: Test (macos-latest)
     # macOS runners are few and slow (about 41 minutes for the suite), and a queue of per-PR runs
     # held batch PRs for hours. So on a pull request the macOS suite runs only for batch branches
     # (`batch/*`, which merge every feature PR) or a PR labelled `macos`. Pushes to main, tags and
