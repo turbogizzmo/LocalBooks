@@ -46,10 +46,6 @@ pub async fn reinstall_previous_release(app: AppHandle) -> Result<String, String
     if let Some(reason) = plan.blocked {
         return Err(reason);
     }
-    let backup = match pool {
-        Some(_) => Some(crate::backup::backup_now(&app.state::<Db>()).await?),
-        None => None,
-    };
     let url = tauri::Url::parse(&rollback::manifest_url(&previous.tag)).map_err(|e| format!("ROLLBACK_UPDATE: {e}"))?;
     let wanted = previous.version.clone();
     let updater = app
@@ -65,6 +61,11 @@ pub async fn reinstall_previous_release(app: AppHandle) -> Result<String, String
         .await
         .map_err(|e| format!("ROLLBACK_UPDATE: {e}"))?
         .ok_or_else(|| format!("ROLLBACK_UPDATE: LocalBooks {} has no installer for this computer", previous.version))?;
+    // The release is there for this computer: back the books up before anything is installed.
+    let backup = match pool {
+        Some(_) => Some(crate::backup::backup_now(&app.state::<Db>()).await?),
+        None => None,
+    };
     // Downloads it, checks its signature against the key built into this app, and installs it.
     update.download_and_install(|_, _| {}, || {}).await.map_err(|e| format!("ROLLBACK_UPDATE: the download couldn't be installed ({e}). Nothing was changed"))?;
     let saved = backup.map(|b| format!(" Your books were backed up first as {}.", b.file_name)).unwrap_or_default();
