@@ -33,6 +33,9 @@ people using LocalBooks.
   estimates.
 - **Four more reports.** Terms Listing, Unbilled Costs by Job, Inventory Stock Status by Vendor and
   Closing Date Exceptions are in the Reports menu and the Report Center.
+- **Report columns by class, customer, job or vendor.** In a customized summary report, Columns by
+  name gives a column for each class, customer, Customer:Job or vendor, with a total, for example a
+  profit and loss by job.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.

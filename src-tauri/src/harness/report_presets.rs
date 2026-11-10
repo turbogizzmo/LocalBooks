@@ -614,3 +614,70 @@ async fn net_income_and_rep_details_tie_out() {
     assert_eq!(got, want);
     assert_eq!(cents(&report.rows.last().unwrap().cells[amount]), summary.total_cents);
 }
+
+/// Columns by name (gap T9): a summary's columns can be classes, customers, jobs or vendors. Each
+/// row's columns add up to its Total, and that Total is the same report's amount without them.
+#[tokio::test]
+async fn columns_by_class_customer_job_and_vendor_tie_out() {
+    let pool = company().await;
+    let p = &pool;
+    // A job under a customer (created by the invoice, as `Customer:Job`), so Customer and
+    // Customer:Job differ.
+    let sales = account(p, "4000").await;
+    crate::invoices::create_and_post_invoice(
+        p,
+        InvoiceInput {
+            customer_name: "Brightwater Cafe:Patio Menu".into(),
+            issue_date: d(2025, 12, 3),
+            due_date: d(2025, 12, 17),
+            lines: vec![InvoiceLineInput { description: "Patio menu design".into(), quantity_e4: 10_000, rate_cents: 42_000, income_account_id: sales, product_service_id: None, class_id: None, is_taxable: false, service_date: None }],
+            currency: None,
+            tax_rate_id: None,
+            discount_cents: 0,
+            details: Default::default(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let pl = |columns| {
+        year(ReportSettings {
+            mode: Mode::Summary,
+            group_by: Some(GroupBy::Account),
+            filters: Filters { classifications: vec!["INCOME".into(), "EXPENSE".into()], ..Filters::default() },
+            sign: custom_reports::Sign::Credit,
+            column_by_name: columns,
+            ..ReportSettings::default()
+        })
+    };
+    let plain = run(p, &pl(None)).await;
+    let amount_of = |r: &CustomReport| -> BTreeMap<String, i64> { r.rows.iter().filter(|x| x.kind == RowKind::Detail).map(|x| (text(&x.cells[0]), cents(x.cells.last().unwrap()))).collect() };
+    let expected = amount_of(&plain);
+    for by in [custom_reports::NameColumns::Class, custom_reports::NameColumns::Customer, custom_reports::NameColumns::Job, custom_reports::NameColumns::Vendor] {
+        let report = run(p, &pl(Some(by))).await;
+        assert_eq!(amount_of(&report), expected, "{by:?}: each row's Total is the plain amount");
+        assert_eq!(report.columns.last().unwrap().label, "Total");
+        for row in report.rows.iter().filter(|r| r.kind != RowKind::Section) {
+            let split: i64 = row.cells[1..row.cells.len() - 1].iter().map(cents).sum();
+            assert_eq!(split, cents(row.cells.last().unwrap()), "{by:?}: {} adds up", text(&row.cells[0]));
+        }
+        let heads: Vec<&str> = report.columns.iter().map(|c| c.label.as_str()).collect();
+        match by {
+            custom_reports::NameColumns::Class => assert!(heads.contains(&"Studio") && heads[heads.len() - 2] == "Unclassified", "{heads:?}"),
+            custom_reports::NameColumns::Vendor => assert_eq!(heads[heads.len() - 2], "No vendor"),
+            _ => assert_eq!(heads[heads.len() - 2], "No customer"),
+        }
+        if by == custom_reports::NameColumns::Job {
+            assert!(heads.contains(&"Brightwater Cafe:Patio Menu") && heads.contains(&"Brightwater Cafe"), "{heads:?}");
+        }
+    }
+    // A customer's column is its own and its jobs' together.
+    let col = |r: &CustomReport, name: &str| -> i64 {
+        let i = r.columns.iter().position(|c| c.label == name).unwrap_or_else(|| panic!("{name}"));
+        cents(&r.rows.iter().find(|x| x.kind == RowKind::Total).unwrap().cells[i])
+    };
+    let by_customer = run(p, &pl(Some(custom_reports::NameColumns::Customer))).await;
+    let by_job = run(p, &pl(Some(custom_reports::NameColumns::Job))).await;
+    assert_eq!(col(&by_customer, "Brightwater Cafe"), col(&by_job, "Brightwater Cafe") + col(&by_job, "Brightwater Cafe:Patio Menu"));
+    assert_eq!(col(&by_job, "Brightwater Cafe:Patio Menu"), 42_000);
+}

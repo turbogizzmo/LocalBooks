@@ -515,6 +515,12 @@ follows the report when you change its dates or options, and it is never printed
    - **Subtotal by** (or **Rows**, in a summary): account, name, product or service, class,
      transaction type, rep, transaction, month, quarter, year or aging period.
    - **Columns over time** (summary only): a column for each month, quarter or year, and a total.
+   - **Columns by name** (summary only, instead of columns over time): a column for each **Class**,
+     **Customer** (its jobs added in), **Customer:Job** or **Vendor** the lines carry, then one for
+     lines without one (*Unclassified*, *No customer*, *No vendor*), and a total. For example, a
+     summary by account of income and expense accounts with columns by Customer:Job is a profit and
+     loss by job. The customer or vendor is the transaction's (the invoice's customer, the bill's
+     vendor). Each row's columns add up to its total.
    - **Columns, in order**: tick the columns to show (Type, Date, Num, Name, Memo, Account, Split,
      Class, Item, Qty, Rate, Debit, Credit, Amount, Balance, Open Balance, Due Date, Aging, Rep) and
      move them with the arrows.
