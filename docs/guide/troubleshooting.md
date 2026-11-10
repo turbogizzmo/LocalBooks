@@ -23,6 +23,16 @@ The screen says what usually causes the problem and what to do:
    saved in `startup-error.log` next to the company file.
 4. To go back to a backup, look in the `backups` folder next to the company file.
 
+### "has a log file next to it that doesn't belong to it"
+
+SQLite keeps recent changes in a log file named after the company file with `-wal` on the end
+(`Books.localbooks-wal`). If a log next to a file was written for a different file, LocalBooks
+won't open the pair, because reading them together could show leftover memory instead of your
+data. This only happens with a leftover or tampered log, for example when files were copied
+between folders one at a time. Move the `-wal` file out of that folder (keep it until you're sure),
+then open the company file again. The same check covers backups you restore and GnuCash or
+QuickBooks for Mac files you import.
+
 ## The books are in use on another computer
 
 When the company file is on a network or synced drive, only one computer can open it at a time.

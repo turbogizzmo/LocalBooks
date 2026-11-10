@@ -325,6 +325,10 @@ export function AgingReport({ payable, initial = null }) {
           ...(opened.has(r.partyName) ? itemRows(r.partyName) : []),
         ]),
         { kind: 'grand', cells: ['TOTAL', ...data.totalsCents.map(formatCents), formatCents(data.totalCents)] },
+        // Goods received before their bills (Vendors › Receive Items): owed, but not in A/P yet.
+        ...(payable && data.receivedNotBilledCents
+          ? [{ cells: [<span key="rnb" className="text-qb-ink-muted">Items received, not billed</span>, '', '', '', '', '', formatCents(data.receivedNotBilledCents)] }]
+          : []),
       ]
     : [];
   return (
@@ -336,7 +340,11 @@ export function AgingReport({ payable, initial = null }) {
       error={error}
       toolbar={<AsOf value={asOf} onChange={setAsOf} />}
       footer={`${data?.basis === 'TRANSACTION' ? 'Days since the transaction date' : 'Days past due'} (Preferences › Reports & Graphs) · balances as of the report date · credit not yet used is negative · click a name for its open documents`}
-      onCsvRows={() => [...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]), ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)]]}
+      onCsvRows={() => [
+        ...data.rows.map((r) => [r.partyName, ...r.bucketsCents.map(plainAmount), plainAmount(r.totalCents)]),
+        ['TOTAL', ...data.totalsCents.map(plainAmount), plainAmount(data.totalCents)],
+        ...(payable && data.receivedNotBilledCents ? [['Items received, not billed', '', '', '', '', '', plainAmount(data.receivedNotBilledCents)]] : []),
+      ]}
     />
   );
 }

@@ -191,6 +191,8 @@ const VENDORS: &[Entry] = &[
     Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),
     Entry::Sep,
     form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
+    page("Receive Items", "expenses/item-receipts"),
+    form("Enter Bill for Received Items", "expenses/item-receipts", "bill-received"),
     Entry::Sep,
     Entry::Sub("Print/E-file 1099s", &[report("1099 Summary", "1099"), report("1099-NEC and 1096", "1099-nec")]),
     ITEM_LIST,

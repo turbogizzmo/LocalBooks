@@ -66,6 +66,21 @@ pub struct DepositInput {
     /// Part of the deposit kept as cash rather than banked.
     #[serde(default)]
     pub cash_back: Option<CashBack>,
+    /// Amounts taken out before the money reaches the bank (a processor's fees, refunds and
+    /// chargebacks on a payout): each a debit to its account, out of what the bank gets.
+    #[serde(default)]
+    pub deductions: Vec<DepositDeduction>,
+}
+
+/// A deduction from a deposit: `amount_cents` debited to `account_id`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositDeduction {
+    pub account_id: i64,
+    pub amount_cents: i64,
+    pub memo: Option<String>,
+    /// `FEE`, `REFUND`, `CHARGEBACK` or `OTHER`.
+    pub kind: String,
 }
 
 /// Cash back on a deposit: posted to `account_id` (petty cash, say), out of what the bank gets.
@@ -206,6 +221,24 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         _ => None,
     };
     let cash_back_cents = cash_back.map_or(0, |c| c.amount_cents);
+    // Deductions also come out of what the bank gets, which must stay above zero.
+    let mut deducted: i64 = 0;
+    for (idx, d) in input.deductions.iter().enumerate() {
+        if !(1..=MAX_LINE_CENTS).contains(&d.amount_cents) {
+            return Err(format!("DEP_BAD_DEDUCTION: deduction {} must be more than zero", idx + 1));
+        }
+        if d.account_id == input.bank_account_id {
+            return Err("DEP_DEDUCTION_ACCOUNT: a deduction goes to an account other than the bank".into());
+        }
+        if !matches!(d.kind.as_str(), "FEE" | "REFUND" | "CHARGEBACK" | "OTHER") {
+            return Err(format!("DEP_BAD_DEDUCTION: unknown deduction kind '{}'", d.kind));
+        }
+        deducted = deducted.checked_add(d.amount_cents).ok_or_else(|| "DEP_AMOUNT_TOO_LARGE: the deductions are out of range".to_string())?;
+    }
+    let banked = total - cash_back_cents - deducted;
+    if banked <= 0 {
+        return Err(format!("DEP_NOTHING_BANKED: cash back and deductions must leave the bank more than zero of the {} deposited", format_cents(total)));
+    }
 
     let deposit_id: i64 = sqlx::query_scalar(
         "INSERT INTO deposits (bank_account_id, deposit_date, memo, total_cents, cash_back_account_id, cash_back_cents, cash_back_memo)
@@ -268,9 +301,22 @@ pub(crate) async fn write_deposit(tx: &mut Transaction<'_, Sqlite>, input: &Depo
         credits.push(JournalLine::credit(line.account_id, line.amount_cents).with_memo(line.memo.as_deref()).with_class(line.class_id));
     }
 
-    let mut lines = vec![JournalLine::debit(input.bank_account_id, total - cash_back_cents)];
+    let mut lines = vec![JournalLine::debit(input.bank_account_id, banked)];
     if let Some(c) = cash_back {
         lines.push(JournalLine::debit(c.account_id, c.amount_cents).with_memo(Some(clean(c.memo.as_deref()).unwrap_or("Cash back"))));
+    }
+    for (idx, d) in input.deductions.iter().enumerate() {
+        sqlx::query("INSERT INTO deposit_deductions (deposit_id, line_number, account_id, amount_cents, memo, kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind(deposit_id)
+            .bind(idx as i64 + 1)
+            .bind(d.account_id)
+            .bind(d.amount_cents)
+            .bind(clean(d.memo.as_deref()))
+            .bind(&d.kind)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_err)?;
+        lines.push(JournalLine::debit(d.account_id, d.amount_cents).with_memo(clean(d.memo.as_deref())));
     }
     lines.extend(credits);
     let description = clean(input.memo.as_deref()).map_or_else(|| "Deposit".to_string(), |m| format!("Deposit: {m}"));
