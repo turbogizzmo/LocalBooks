@@ -50,10 +50,17 @@ async fn record(pool: &SqlitePool, key: &str, at: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A stored time: `YYYY-MM-DDTHH:MM:SS`, with or without fractional seconds and a trailing `Z`, or
+/// with a space for the `T` (the forms LocalBooks writes).
+fn parse_at(text: &str) -> Option<NaiveDateTime> {
+    let t = text.trim().trim_end_matches('Z');
+    NaiveDateTime::parse_from_str(t, "%Y-%m-%dT%H:%M:%S%.f").or_else(|_| NaiveDateTime::parse_from_str(t, "%Y-%m-%d %H:%M:%S%.f")).ok()
+}
+
+/// The later of two stored times, compared as times (a time that doesn't parse loses).
 fn newest(a: Option<String>, b: Option<String>) -> Option<String> {
-    // Both are `YYYY-MM-DDTHH:MM:SS`, so the later one sorts last.
     match (a, b) {
-        (Some(a), Some(b)) => Some(a.max(b)),
+        (Some(a), Some(b)) => Some(if parse_at(&b) > parse_at(&a) { b } else { a }),
         (a, b) => a.or(b),
     }
 }
@@ -120,7 +127,7 @@ pub async fn test_restore(pool: Option<&SqlitePool>, path: &Path) -> Result<Comp
 }
 
 fn day_of(at: &Option<String>) -> Option<NaiveDate> {
-    at.as_deref().and_then(|s| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").ok()).map(|t| t.date())
+    at.as_deref().and_then(parse_at).map(|t| t.date())
 }
 
 fn days_word(n: i64) -> String {
@@ -172,6 +179,19 @@ mod tests {
         assert_eq!(items[0].label, "Test-restore a backup");
         assert_eq!(items[0].detail, "The last test restore was 69 days ago");
         assert_eq!(items[0].date.as_deref(), Some("2026-09-01"));
+    }
+
+    #[test]
+    fn stored_times_compare_as_times_whatever_their_form() {
+        assert_eq!(parse_at("2026-10-05T08:00:00").map(|t| t.date()), Some(d("2026-10-05")));
+        assert_eq!(parse_at("2026-10-05T08:00:00.123Z").map(|t| t.date()), Some(d("2026-10-05")));
+        assert_eq!(parse_at("2026-10-05 08:00:00").map(|t| t.date()), Some(d("2026-10-05")));
+        assert_eq!(parse_at("soon"), None);
+        // Lexically "2026-10-05T09…" < "2026-10-05T10…Z" either way, but a fraction or Z must not
+        // decide it: the later time wins.
+        assert_eq!(newest(Some("2026-10-05T10:00:00.500Z".into()), Some("2026-10-05T09:59:59".into())).as_deref(), Some("2026-10-05T10:00:00.500Z"));
+        assert_eq!(newest(Some("2026-10-05T09:00:00".into()), Some("2026-10-06 08:00:00".into())).as_deref(), Some("2026-10-06 08:00:00"));
+        assert_eq!(newest(None, Some("2026-10-05T09:00:00".into())).as_deref(), Some("2026-10-05T09:00:00"));
     }
 
     #[test]

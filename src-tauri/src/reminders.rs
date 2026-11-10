@@ -111,8 +111,11 @@ impl ReminderSettings {
                 return Err(format!("REMINDER_BAD_DAYS: days for {name} must be 0 to {MAX_DAYS}"));
             }
         }
-        if self.backup.days < 1 || self.backup_safety.days < 1 {
+        if self.backup.days < 1 {
             return Err("REMINDER_BAD_DAYS: a backup is due after at least 1 day".into());
+        }
+        if self.backup_safety.days < 1 {
+            return Err("REMINDER_BAD_DAYS: backup safety (a copy off this computer, a test restore) is due after at least 1 day".into());
         }
         Ok(())
     }
