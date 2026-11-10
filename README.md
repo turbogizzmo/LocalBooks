@@ -257,16 +257,19 @@ under [`docs/guide/`](docs/guide/README.md).
 | 1099s | Reports › 1099 Summary, 1099-NEC and 1096; W-9… on a vendor | W-9 and TIN on each contractor, 1099 totals by box, the year's 1099-NEC forms with what's missing, the 1096 totals, and printed recipient copies | [guide](docs/guide/getting-started.md#w-9s-1099-nec-forms-and-the-1096) |
 | ACH bill payments | Expenses › Bills | Pay bills with a NACHA ACH file for your bank to upload | [guide](docs/guide/bills.md) |
 | AI access (MCP) | Settings › AI Access (MCP) | Local, read-only access to your books for an AI assistant | [guide](docs/guide/ai-assistant.md) |
+| Approvals | Expenses › Approvals | Rules hold bills and purchase orders over an amount or from a vendor until an Admin approves them; rejections are kept with a note | [guide](docs/guide/bills.md#approvals-for-bills-and-purchase-orders) |
 | Attachments | Bills, expenses & checks, invoices, sales, deposits, journal entries | Keep receipts and vendor invoices (up to 25 MB each) in the company file; 📎 marks rows with files; kept through edits | [guide](docs/guide/attachments.md) |
 | Audit log | Accounting › Audit Log | Read-only trail of every posting, void and account change, with integrity checks | [guide](docs/guide/ledger-integrity.md) |
 | Backups & company files | Settings › File & Data Controls | Backups and restore, encrypted offsite copies to a folder you pick, open or create a company file, move its location | [guide](docs/guide/backups-and-company-files.md) |
 | Bank feeds | Banking › Bank Feeds | CSV/OFX and PDF statement import (with a balance check) and SimpleFIN bank connections, with rule learning | [guide](docs/guide/bank-feeds.md) |
 | Bills & Pay Bills | Expenses › Bills | Split-line bills with total validation; pay several at once, with one numbered, printable check per vendor | [guide](docs/guide/bills.md) |
+| Receive Items | Vendors › Receive Items | Receive goods from a purchase order before the bill (part shipments too), held in Items Received Not Billed; enter the bill for them at the vendor's prices later | [guide](docs/guide/bills.md#receive-items-before-the-bill) |
 | Bounced checks | Banking › Record Bounced Check… | Reopens the invoice a returned check paid, takes the check and bank fee out of the bank, and invoices a returned-check fee | [guide](docs/guide/customer-payments.md#record-a-bounced-check) |
 | Budgets & comparisons | Reports | Budget vs. Actual and previous-year comparisons for the P&L and Balance Sheet | [guide](docs/guide/reports.md) |
 | Change Item Prices | Sales › Products & Services | Bulk price changes by percentage or amount, recorded in the audit trail | [guide](docs/guide/customers-and-products.md) |
 | Class tracking | Settings › Preferences; Accounting › Classes | A Class column on every form once tracking is on, with ＋ Add new class… in each class list | [guide](docs/guide/getting-started.md#track-classes) |
 | Clean Up Books | Accounting › Clean Up Books | Client Data Review tools: apply unapplied credits, clear Undeposited Funds, write off invoices, review list changes, compare inventory | [guide](docs/guide/cleaning-up-books.md) |
+| Company Snapshot | Reports › Company Snapshot | Widgets you add, order and date: balances, who owes, vendors to pay, income and expense trend, top customers, items and vendors; each ties to its report | [guide](docs/guide/reports.md#company-snapshot) |
 | Condense Data | Settings › File & Data Controls | Replace closed years with monthly summary entries, keeping open items, with a verified read-only archive of the full history | [guide](docs/guide/backups-and-company-files.md#condense-data-archive-closed-years) |
 | Credit card credits | Expenses › Expenses & Checks | Vendor refunds onto a card | [guide](docs/guide/expenses-and-checks.md) |
 | Currency revaluation | Accounting › Currency Revaluation | Unrealized exchange gains and losses on foreign balances; optional daily ECB rates | [guide](docs/guide/currency-revaluation.md) |
@@ -293,12 +296,14 @@ under [`docs/guide/`](docs/guide/README.md).
 | Journal entries | Accounting › Journal Entries | Balanced manual entries; register with void/reversal pairs | [guide](docs/guide/journal-entries-and-voids.md) |
 | New Company setup | File › New Company… | QuickBooks-style setup: 33 industries with suggested charts of accounts, equity by tax form, sales tax and inventory | [guide](docs/guide/getting-started.md#create-a-new-company) |
 | Account registers | Accounting › Account Registers; Ctrl+R | Running balance, a blank row to type checks, deposits, card charges and credits (Record / Restore, Splits), Go To, date filter, one- or two-line view | [guide](docs/guide/expenses-and-checks.md#type-a-check-or-deposit-into-a-register) |
+| Payout feeds | Banking › Payout Feeds | Stripe payouts as deposits of their gross sales, less fees, refunds and chargebacks, with a read-only key in the OS credential store | [guide](docs/guide/bank-feeds.md#payouts-from-stripe) |
 | Price levels | Sales › Products & Services · Customers; Reports | Fixed % and per-item price levels, a default level per customer that fills in sales form rates, the Item Price List, imported from IIF and QuickBooks files | [guide](docs/guide/customers-and-products.md#price-levels) |
 | Print later | File › Print Forms › Checks… · Invoices… | Queue checks and invoices to print in a batch; checks are numbered in order as they print, after you confirm they all printed | [guide](docs/guide/expenses-and-checks.md#print-checks-later-in-a-batch) |
 | Profile lists | Lists › Customer & Vendor Profile Lists | Terms (with early-payment discounts) that set due dates, payment methods, customer / vendor / job types and customer messages printed on sales forms | [guide](docs/guide/customers-and-products.md#customer--vendor-profile-lists) |
 | Preferences | Settings › Preferences Console (Edit › Preferences) | Categories with My and Company tabs; company details, logo, fiscal year, currencies, tax calendar; warnings before saving (duplicate check and bill numbers, far-off dates, Retained Earnings) with Save anyway; typing amounts without a decimal point; report defaults (cash or accrual, aging basis, item names, account numbers, Statement of Cash Flows sections); defaults for sales forms, payments, bills and sending forms | [guide](docs/guide/getting-started.md#find-your-way-around-preferences) |
 | Reconcile | Banking › Reconcile | Statement reconciliation that locks matched history | [guide](docs/guide/reconciling.md) |
 | Reminders & To Do list | Dashboard; Accounting › To Do List; + New › To Do | What needs attention today (overdue invoices, bills due, to-dos, recurring, Email later, tax dates, backup), and tasks with due dates and assignees | [guide](docs/guide/reminders-and-todos.md) |
+| Report comments | Any report › Comment; Reports › Commented Reports | Comment on a figure; the report is kept as shown, listed, and prints with its numbered comments | [guide](docs/guide/reports.md#comment-on-a-figure) |
 | Reports | Reports | P&L, Balance Sheet, cash flows, aging, summaries, Missing Checks, trial balance, general ledger, phone and contact lists, item and account listings, time and inventory worksheets; collapse and expand headings; accrual or cash; Excel, CSV and PDF | [guide](docs/guide/reports.md) |
 | Sales receipts | Sales › All Sales | Sales paid at the time of sale | [guide](docs/guide/sales-receipts-and-estimates.md) |
 | Sales reps & Ship Via | Sales › Reps, Ship Via & Fields | Optional sales reps, shipping methods and ship dates on sales forms | [guide](docs/guide/customers-and-products.md) |
@@ -345,6 +350,8 @@ its entry form with focus in the first field.
 | Imported (.qbw) invoice | Offset account (e.g. Opening Balance Equity) | Mapped income account(s) |
 | Sale of a tracked product (added to the invoice or sales receipt entry) | Cost of Goods Sold, at moving average cost | Inventory Asset |
 | Bill line for a tracked product | Inventory Asset (quantity and value added) | Accounts Payable |
+| Item receipt line for a tracked product | Inventory Asset (quantity and value added) | Items Received Not Billed |
+| Bill entered for an item receipt | Items Received Not Billed (the receipt's amount), and any price difference to Inventory Asset or Cost of Goods Sold | Accounts Payable (the bill's amount) |
 | Inventory adjustment | Inventory Asset (added) or the chosen expense (removed) | The chosen account (added) or Inventory Asset (removed) |
 | Currency revaluation (reversed the next day) | A/R (gain) or Unrealized Exchange Gain or Loss (loss) | The other |
 | Write-off (Clean Up Books: a credit memo applied to the invoice) | The chosen bad debt (expense) or discount (income) account | Accounts Receivable |

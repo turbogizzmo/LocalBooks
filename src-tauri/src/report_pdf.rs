@@ -155,6 +155,11 @@ pub fn to_pdf(sheet: &Sheet, symbol: &str) -> Vec<u8> {
     pdf::write_pdf(&layout(sheet, symbol), None, sheet.title.trim())
 }
 
+/// The sheet as PDF bytes that open only with `password`, when one is given.
+pub fn to_protected_pdf(sheet: &Sheet, symbol: &str, password: Option<&str>) -> Result<Vec<u8>, String> {
+    pdf::write_protected_pdf(&layout(sheet, symbol), None, sheet.title.trim(), password)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -27,7 +27,11 @@ export const screens = {
     guide: 'expenses-and-checks',
   },
   'expenses/purchase-orders': {
-    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step.',
+    help: 'Orders you send vendors. A purchase order does not touch your books; when the goods or bill arrive, turn it into a bill with the same lines in one step, or receive the goods first with Receive Items.',
+  },
+  'expenses/item-receipts': {
+    help: 'Goods received from a purchase order before the vendor’s bill: the stock is on hand, and its cost waits in Items Received Not Billed until you enter the bill here.',
+    guide: 'bills',
   },
 };
 
@@ -37,6 +41,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'receive-items', area: 'expenses', views: ['expenses/item-receipts', 'expenses/purchase-orders'],
+    title: 'Receive items before the bill',
+    body: 'Vendors › Receive Items brings goods from an open purchase order into stock before the bill comes; their cost waits in Items Received Not Billed, not Accounts Payable. When the bill arrives, Enter Bill for Received Items posts it at the vendor’s prices, and any price difference goes to the stock, Cost of Goods Sold or the line’s expense account.',
+    keywords: 'item receipt receive items received not billed packing slip partial shipment enter bill for received items purchase order',
+    go: { label: 'Go to Receive Items', view: 'expenses/item-receipts' },
+    guide: 'bills',
+  },
   {
     id: 'document-inbox', area: 'expenses', views: ['expenses/inbox', 'expenses/bills', 'expenses/expenses'],
     title: 'Enter receipts and bills from the Document Inbox',
@@ -75,6 +87,14 @@ export const topics = [
     body: 'Choose New bill, pick the vendor and split the total across expense accounts, by amount or by quantity × rate; it must add up to the bill total. The bill sits in Accounts Payable until you pay it. With a discount term (such as 2% 10 Net 30), Discount date shows the last day to pay and take the discount.',
     keywords: 'vendor payable ap supplier invoice split owe',
     go: { label: 'New bill', view: 'expenses/bills', action: 'bill' },
+    guide: 'bills',
+  },
+  {
+    id: 'approvals', area: 'expenses', views: ['expenses/approvals', 'expenses/bills', 'expenses/purchase-orders'],
+    title: 'Approve bills and purchase orders',
+    body: 'Under Expenses › Approvals an Admin adds rules, such as bills of $1,000 or more, or every bill from one vendor. A bill or purchase order that matches is sent for approval instead of being recorded: a waiting bill isn’t posted and isn’t in Pay Bills, and a waiting order isn’t an open order. An Admin approves it, which records it as entered, or rejects it with a note, which keeps the request and records nothing.',
+    keywords: 'approval approve reject rule authorize authorise sign off manager bill purchase order po pending waiting threshold',
+    go: { label: 'Go to Approvals', view: 'expenses/approvals' },
     guide: 'bills',
   },
   {

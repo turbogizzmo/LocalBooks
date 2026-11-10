@@ -36,6 +36,33 @@ the company file, so they're in your backups, and they stay with the bill if you
 Expenses, checks, invoices, sales receipts, deposits and journal entries take attachments the same
 way.
 
+## Approvals for bills and purchase orders
+
+A company can have bills and purchase orders approved before they count. Under **Expenses ›
+Approvals**, an Admin adds **rules**: for example "Approve bills of $1,000.00 or more", "Approve
+bills from Harbor Leasing" (every one, any amount), or "Approve purchase orders of $500.00 or more".
+
+When you save a bill or purchase order that matches a rule, LocalBooks doesn't record it. It says
+**Sent for approval** and the document waits under **Expenses › Approvals**. A waiting bill isn't
+posted: it isn't in Accounts Payable, the aging or **Pay Bills**. A waiting purchase order isn't
+an open order, so it can't be received or billed.
+
+An Admin then opens **Approvals** and, for each one:
+
+- **Approve** records it as entered: the bill is posted (Dr expense, Cr Accounts Payable) and can
+  be paid; the purchase order becomes an open order. If it can't be recorded any more (for example
+  its date is now before the closing date), it stays waiting and the reason is shown.
+- **Reject…** asks why and keeps the request with that note. Nothing is recorded. Enter it again,
+  corrected, if it should go ahead.
+
+**Waiting**, **Approved**, **Rejected** and **All** show the record of every request, who asked,
+who decided and when. Approving and rejecting are Admin tasks (see [Users and
+passwords](users-and-passwords.md)); in a company file without users, everyone is an Admin, so
+approval is a second look rather than a control.
+
+Only bills and orders entered on their forms are held. Imports, bills made from an approved
+purchase order, and edits to a bill that was already approved are recorded straight away.
+
 ## Fix a mistake on a bill
 
 Double-click the bill in the list (or choose **Edit…** in its **Actions** menu), make your changes
@@ -47,6 +74,32 @@ how much is applied, and saving asks once more: the payments and vendor credits 
 corrected bill, and the checks or ACH payments themselves don't change. The edit is refused if the
 new total is less than what's applied (void a payment or remove a credit first) or if the vendor
 changes. A voided bill, or one in a closed period, can't be edited.
+
+## Receive items before the bill
+
+When goods arrive from a purchase order before the vendor's bill, receive them so the stock is on
+hand and can be sold. Choose **Vendors › Receive Items** (with inventory turned on in Preferences ›
+Items & Inventory), pick the open purchase order, and enter what came in: **Receive now** starts at
+what's still to come on each line, and you can change it for a short or split shipment. Enter the
+date and the packing slip number and click **Receive**.
+
+The receipt posts the goods' cost to the item's Inventory Asset account (or a line's expense account,
+for freight or a service) against **Items Received Not Billed**, a liability LocalBooks adds the first
+time you receive items. It doesn't post to Accounts Payable, so **Pay Bills** doesn't offer it and
+the vendor's balance doesn't change until the bill is entered; **A/P Aging Summary** shows the total
+as **Items received, not billed** under its own total. The purchase order shows what has been
+received, and closes once every line has come in. Receiving more than was ordered asks first.
+
+When the bill arrives, choose **Vendors › Enter Bill for Received Items** (or **Enter Bill** beside
+the receipt), enter the vendor's reference number, bill date and due date, and check each line's
+**Billed amount** against the vendor's prices. Saving posts the bill: it clears what the receipt put
+in Items Received Not Billed and puts the bill's total in Accounts Payable. When the vendor billed a
+different price, the difference goes to the line's expense account, or for stock to Inventory Asset
+for the units still on hand and to Cost of Goods Sold for any already sold.
+
+To undo a receipt, click **Void** beside it: its stock leaves inventory. A billed receipt can't be
+voided; void its bill first, which makes the receipt wait for a bill again. A bill entered for a
+receipt isn't edited like other bills: void it and enter it again from the receipt.
 
 ## Pay one or more bills
 

@@ -68,3 +68,33 @@ that account / Cr A/P. A/P then only ever holds real bills.
   line; Inventory Valuation is unchanged.
 - Tests: balanced and voidable postings, partial receipts closing a PO, price differences with and
   without units sold in between, refusals.
+
+## What was built (T12)
+
+Each open decision above took its recommended default:
+
+1. **The clearing account.** Receipts credit **Items Received Not Billed**, a system current
+   liability created on first use. A/P, Pay Bills and vendor balances don't change, and A/P Aging
+   Summary shows "Items received, not billed" under its total (`item_receipts::received_not_billed`).
+2. **Price differences** go through `inventory::plan_price_difference`. For tracked stock, the share
+   for units still on hand goes to Inventory Asset (a `COST_TRUE_UP` movement on the bill's entry, so
+   voiding the bill reverses it) and the share for units sold goes to COGS. For other lines the
+   difference goes to the line's own account.
+3. **The bill is posted alongside the receipt** and linked to it in `item_receipt_bills`. A receipt
+   counts as billed while that bill's entry stands. Voiding the bill reopens the receipt, and a
+   receipt's bill can't be edited (`EDIT_RECEIPT_BILL`), because an edit would bring its stock in a
+   second time.
+4. **Partial receiving.** Receipt lines point at PO lines. What was received is a query over live
+   receipts, not a stored counter. The order closes once every line has been received in full, and
+   reopens if a receipt is voided. Receiving more than was ordered is allowed after a warning on the
+   screen. An order with receipts is billed through them (`PO_HAS_RECEIPTS`).
+5. **Voiding** a receipt goes through its journal entry (`ledger::void_entry` calls
+   `item_receipts::before_void`). It is refused while a live bill uses the receipt
+   (`VOID_RECEIPT_BILLED`). Otherwise the receipt's stock moves back under the usual stock rules,
+   which allow stock below zero when some of it was already sold, just as voiding a bill does.
+6. **Non-stock lines** (freight, a service) post to their expense account against the same clearing
+   account.
+
+The receipt's entry is a `JOURNAL` entry named by `item_receipts.journal_entry_id`, and the
+journal-entry editor refuses it. Migration 0118. The screen receives against open purchase orders;
+the engine also takes receipts without one, but no screen offers that yet.
