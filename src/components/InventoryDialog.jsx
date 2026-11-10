@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
 import { api, errorText } from '../lib/api.js';
@@ -8,6 +9,11 @@ import DateBox from './DateBox.jsx';
 
 const KIND = { PURCHASE: 'Purchase', SALE: 'Sale', ADJUSTMENT: 'Adjustment', COST_TRUE_UP: 'Cost true-up', VOID: 'Void' };
 
+/**
+ * A record or task dialog (Edit vendor, Track stock, …), over the whole LocalBooks window. It is
+ * drawn on the page body, not inside the window it was opened from: inside, the window's own layer
+ * kept the program's toolbar over the dialog's top rows, and the window's edges clipped it.
+ */
 export function Dialog({ title, children, onClose, wide = false }) {
   const ref = useRef(null);
   useEffect(() => {
@@ -16,13 +22,14 @@ export function Dialog({ title, children, onClose, wide = false }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-6" role="dialog" aria-modal="true" aria-label={title}>
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-6" role="dialog" aria-modal="true" aria-label={title}>
       <div ref={ref} className={`qb-panel flex max-h-full w-full flex-col shadow-lg ${wide ? 'max-w-[1000px]' : 'max-w-[620px]'}`}>
-        <h2 className="border-b border-qb-border px-3 py-2 text-md font-semibold">{title}</h2>
-        {children}
+        <h2 className="flex-none border-b border-qb-border px-3 py-2 text-md font-semibold">{title}</h2>
+        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -64,6 +64,31 @@ describe('Windows inside LocalBooks', () => {
     await expect($(win('Journal Entries'))).toBeDisplayed();
   });
 
+  it('keeps Tab inside the active window', async () => {
+    // Focus the last field or button of the Invoices window (which brings it to the front), then
+    // press Tab: focus wraps to its first stop instead of moving into the Journal Entries window
+    // beside it, and Invoices stays the active window (A17).
+    const lastStop = (xpath) =>
+      browser.execute((x) => {
+        const root = document.evaluate(x, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        const stops = [...root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]')].filter(
+          (el) => el.tabIndex >= 0 && el.getClientRects().length > 0,
+        );
+        stops[stops.length - 1].focus();
+        return stops.length;
+      }, xpath);
+    expect(await lastStop(win('Invoices'))).toBeGreaterThan(1);
+    await browser.waitUntil(async () => (await activeTitle()) === 'Invoices', { timeoutMsg: 'Invoices did not come to the front' });
+    await browser.keys('Tab');
+    await browser.keys('Tab');
+    const inside = await browser.execute((x) => {
+      const root = document.evaluate(x, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      return root.contains(document.activeElement);
+    }, win('Invoices'));
+    expect(inside).toBe(true);
+    expect(await activeTitle()).toBe('Invoices');
+  });
+
   it('asks before closing a window with unsaved entries', async () => {
     const journal = win('Journal Entries');
     await click(button('New journal entry', journal));

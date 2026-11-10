@@ -6,6 +6,12 @@ people using LocalBooks.
 
 ## [Unreleased]
 
+- **Tab stays in the window you're working in.** Pressing Tab past the last field of a form (for
+  example Billed amount in Receive Items) used to bring another window to the front. Tab now goes
+  round the active window's own fields, as in the desktop program, and windows hidden behind a
+  maximized one can't take focus.
+- **Edit dialogs are shown whole.** The vendor and customer Edit dialog and the other record dialogs
+  no longer open with their title row hidden under the toolbar.
 - **Safer opening of company files from others.** LocalBooks won't open a company file, backup or
   import file together with a `-wal` log file written for a different file, which could have
   exposed leftover memory. Move the stray `-wal` file away and open the file again.
