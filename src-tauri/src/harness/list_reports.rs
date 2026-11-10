@@ -31,7 +31,7 @@ async fn company() -> SqlitePool {
         .execute(p)
         .await
         .unwrap();
-    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Patio Menu', ?1, '555-0143') RETURNING id").bind(cafe).fetch_one(p).await.unwrap();
+    let patio: i64 = sqlx::query_scalar("INSERT INTO customers (name, parent_id, phone) VALUES ('Brightwater Cafe:Patio Menu', ?1, '555-0143') RETURNING id").bind(cafe).fetch_one(p).await.unwrap();
     sqlx::query("UPDATE vendors SET phone = '555-0190', email = 'orders@riverside.example', terms_days = 30, is_1099 = 1 WHERE name = 'Riverside Print Shop'").execute(p).await.unwrap();
 
     // Time in November: billable design for the cafe, unbilled work on its patio menu job, and an
@@ -537,7 +537,7 @@ async fn t9_terms_unbilled_stock_and_closing_exceptions_tie_out() {
         let p = p.clone();
         async move { sqlx::query_scalar::<_, i64>("SELECT id FROM customers WHERE name = ?1").bind(name).fetch_one(&p).await.unwrap() }
     };
-    let (cafe, patio) = (job("Brightwater Cafe").await, job("Patio Menu").await);
+    let (cafe, patio) = (job("Brightwater Cafe").await, job("Brightwater Cafe:Patio Menu").await);
     let billable = |amount_cents, memo: &str, customer_id| BillLineInput {
         account_id: office,
         amount_cents,

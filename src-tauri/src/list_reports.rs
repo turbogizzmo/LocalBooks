@@ -192,10 +192,9 @@ fn one_line(text: Option<&str>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(", "))
 }
 
-/// Customers with jobs shown as `Customer:Job`, as the customer list does.
-const CUSTOMER_NAMES: &str = "WITH RECURSIVE cn(id, full_name) AS (
-        SELECT id, name FROM customers WHERE parent_id IS NULL
-        UNION ALL SELECT c.id, cn.full_name || ':' || c.name FROM customers c JOIN cn ON c.parent_id = cn.id)";
+/// Customers with jobs shown as `Customer:Job`, as the customer list does. That is how a job's
+/// name is stored (`sales::customer_path`), so it is used as it is, not built again from parents.
+const CUSTOMER_NAMES: &str = "WITH cn(id, full_name) AS (SELECT id, name FROM customers)";
 
 // ------------------------------------------------------------------------------------------------
 // Lists

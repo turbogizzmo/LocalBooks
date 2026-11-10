@@ -237,7 +237,8 @@ pub(super) async fn closing_date_exceptions(pool: &SqlitePool, start: NaiveDate,
     let columns = vec![
         head("Date", ColumnKind::Date),
         head("Type", ColumnKind::Text),
-        head("Num", ColumnKind::Number),
+        // The journal entry's number; each row opens its transaction (invoice, check, bill...).
+        head("Entry No.", ColumnKind::Number),
         head("Memo", ColumnKind::Text),
         head("Entered", ColumnKind::Text),
         head("Date Closed Since", ColumnKind::Text),
