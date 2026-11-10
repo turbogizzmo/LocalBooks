@@ -19,7 +19,12 @@
 //!
 //! `billed_costs` records which invoice billed each cost; rows are only ever inserted. A cost
 //! whose invoice is voided can be billed again, and an edited invoice or expense carries its
-//! links to the replacement. Home-currency costs only.
+//! links to the replacement.
+//!
+//! A cost on an expense in another currency is billed at its home-currency amount, converted at the
+//! expense's own exchange rate as its entry was (`ledger::to_home_cents`), so the reimbursement
+//! takes off what the expense put on; the list shows the original amount beside it. Invoices are in
+//! the home currency.
 
 use serde::{Deserialize, Serialize};
 use sqlx::{Sqlite, SqlitePool, Transaction};
@@ -42,21 +47,37 @@ pub struct UnbilledCost {
     pub account_id: i64,
     pub account_name: String,
     pub memo: Option<String>,
+    /// In the home currency (converted for a cost in another currency).
     pub amount_cents: i64,
     pub customer_id: i64,
     pub customer_name: String,
+    /// For a cost in another currency: its currency, rate and amount in that currency.
+    pub currency_code: Option<String>,
+    pub exchange_rate_e6: Option<i64>,
+    #[sqlx(default)]
+    pub foreign_amount_cents: Option<i64>,
 }
 
-/// Billable lines of live, home-currency expenses and bills, not on a live invoice.
+/// A cost in another currency at its home amount, converted as its expense's entry was.
+fn in_home_currency(mut cost: UnbilledCost) -> Result<UnbilledCost, String> {
+    if let (Some(_), Some(rate)) = (&cost.currency_code, cost.exchange_rate_e6) {
+        let home = crate::ledger::to_home_cents(cost.amount_cents, rate).filter(|h| *h > 0).ok_or("COST_FX: the cost doesn't convert to the home currency")?;
+        cost.foreign_amount_cents = Some(cost.amount_cents);
+        cost.amount_cents = home;
+    }
+    Ok(cost)
+}
+
+/// Billable lines of live expenses (in any currency) and bills, not on a live invoice.
 const UNBILLED: &str = "
     SELECT 'EXPENSE' AS source, l.id AS line_id, x.expense_date AS date, v.name AS vendor_name, l.account_id, a.full_name AS account_name,
-           NULLIF(l.memo, '') AS memo, l.amount_cents, l.customer_id, c.name AS customer_name
+           NULLIF(l.memo, '') AS memo, l.amount_cents, l.customer_id, c.name AS customer_name, x.currency_code, x.exchange_rate_e6
     FROM expense_lines l JOIN expenses x ON x.id = l.expense_id JOIN journal_entries e ON e.id = x.journal_entry_id
     JOIN v_chart_of_accounts a ON a.id = l.account_id JOIN customers c ON c.id = l.customer_id LEFT JOIN vendors v ON v.id = x.vendor_id
-    WHERE l.is_billable = 1 AND e.is_voided = 0 AND x.is_credit = 0 AND x.currency_code IS NULL
+    WHERE l.is_billable = 1 AND e.is_voided = 0 AND x.is_credit = 0
       AND NOT EXISTS (SELECT 1 FROM billed_costs b JOIN invoices i ON i.id = b.invoice_id WHERE b.expense_line_id = l.id AND i.is_voided = 0)
     UNION ALL
-    SELECT 'BILL', l.id, b.bill_date, v.name, l.account_id, a.full_name, NULLIF(l.memo, ''), l.amount_cents, l.customer_id, c.name
+    SELECT 'BILL', l.id, b.bill_date, v.name, l.account_id, a.full_name, NULLIF(l.memo, ''), l.amount_cents, l.customer_id, c.name, NULL, NULL
     FROM bill_lines l JOIN bills b ON b.id = l.bill_id JOIN journal_entries e ON e.id = b.journal_entry_id
     JOIN v_chart_of_accounts a ON a.id = l.account_id JOIN customers c ON c.id = l.customer_id JOIN vendors v ON v.id = b.vendor_id
     WHERE l.is_billable = 1 AND e.is_voided = 0
@@ -144,7 +165,10 @@ pub async fn list_unbilled(pool: &SqlitePool, customer_id: Option<i64>) -> Resul
         .bind(customer_id)
         .fetch_all(pool)
         .await
-        .map_err(db_err)
+        .map_err(db_err)?
+        .into_iter()
+        .map(in_home_currency)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -252,6 +276,12 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
         let Some(found) = found else {
             return Err(format!("COST_NOT_BILLABLE: cost {} is not billable, or is already on an invoice", n + 1));
         };
+        let found = in_home_currency(found)?;
+        // A cost in another currency says what it was in that currency.
+        let foreign = match (&found.currency_code, found.foreign_amount_cents) {
+            (Some(code), Some(amount)) => format!(", {code} {}", crate::export_engine::plain_amount(amount)),
+            _ => String::new(),
+        };
         if found.customer_id != input.customer_id {
             return Err(format!("COST_OTHER_CUSTOMER: the cost dated {} is for a different customer or job", found.date));
         }
@@ -266,7 +296,7 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
             found.account_id
         };
         lines.push(InvoiceLineInput {
-            description: format!("{what} ({}{from})", found.date),
+            description: format!("{what} ({}{from}{foreign})", found.date),
             quantity_e4: QUANTITY_SCALE,
             rate_cents: found.amount_cents,
             income_account_id: account,
@@ -352,10 +382,14 @@ async fn write_billing(tx: &mut Transaction<'_, Sqlite>, input: &BillCostsInput,
 }
 
 /// Expense accounts an invoice credits for reimbursed costs, so an edit of it may keep them.
+/// The expense accounts an edited invoice's lines may credit: for an invoice that billed costs,
+/// any active expense account (a reimbursed line can be moved to another expense account, say to
+/// correct where the cost was booked); for any other invoice, none.
 pub(crate) async fn reimbursed_accounts(tx: &mut Transaction<'_, Sqlite>, invoice_id: i64) -> Result<Vec<i64>, String> {
     sqlx::query_scalar(
-        "SELECT l.account_id FROM billed_costs b JOIN expense_lines l ON l.id = b.expense_line_id WHERE b.invoice_id = ?1
-         UNION SELECT l.account_id FROM billed_costs b JOIN bill_lines l ON l.id = b.bill_line_id WHERE b.invoice_id = ?1",
+        "SELECT a.id FROM chart_of_accounts a JOIN account_types t ON t.code = a.account_type
+         WHERE t.classification = 'EXPENSE' AND a.is_active = 1
+           AND EXISTS (SELECT 1 FROM billed_costs b WHERE b.invoice_id = ?1)",
     )
     .bind(invoice_id)
     .fetch_all(&mut **tx)

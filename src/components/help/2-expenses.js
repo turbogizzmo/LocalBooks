@@ -18,6 +18,10 @@ export const screens = {
     help: 'Everyone you buy from, with what you still owe each of them.',
     guide: 'customers-and-products',
   },
+  'expenses/other-names': {
+    help: 'People and businesses who are neither customers nor vendors, such as an owner taking a draw. Checks and expenses can be paid to them.',
+    guide: 'customers-and-products',
+  },
   'expenses/inbox': {
     help: 'Receipts and bills waiting to be entered. Drop files on the window or click Add files…; each shows a preview, and Enter as bill, Expense or Check opens that form filled in from what could be read from the file, with the file attached when it posts.',
     guide: 'attachments',
@@ -41,6 +45,14 @@ export const screens = {
  * optional `action` (open a form, a Settings tab or section); `guide` is its step-by-step guide.
  */
 export const topics = [
+  {
+    id: 'other-names', area: 'expenses', views: ['expenses/other-names', 'expenses/expenses'],
+    title: 'Other names: payees who aren’t vendors',
+    body: 'Expenses › Other Names keeps people and businesses who are neither customers nor vendors, such as an owner taking a draw. Add one with New other name; then type or pick the name as the payee on a check or expense and it is paid to them, with no vendor added. Click a name for its panel: what has been paid to them, contact details, notes with Date Stamp and recent transactions.',
+    keywords: 'other names other name list owner draw partner payee not a vendor one-off payee information panel notes',
+    go: { label: 'Go to Other Names', view: 'expenses/other-names' },
+    guide: 'customers-and-products',
+  },
   {
     id: 'receive-items', area: 'expenses', views: ['expenses/item-receipts', 'expenses/purchase-orders'],
     title: 'Receive items before the bill',
@@ -87,6 +99,14 @@ export const topics = [
     body: 'Choose New bill, pick the vendor and split the total across expense accounts, by amount or by quantity × rate; it must add up to the bill total. The bill sits in Accounts Payable until you pay it. With a discount term (such as 2% 10 Net 30), Discount date shows the last day to pay and take the discount.',
     keywords: 'vendor payable ap supplier invoice split owe',
     go: { label: 'New bill', view: 'expenses/bills', action: 'bill' },
+    guide: 'bills',
+  },
+  {
+    id: 'purchase-discounts', area: 'expenses', views: ['expenses/bills', 'expenses/expenses', 'expenses/credits', 'expenses/purchase-orders', 'sales/products'],
+    title: 'Take a discount or add a charge on a bill, check or purchase order',
+    body: 'Under the split lines, click Add a discount or charge, choose the split line it follows, and enter an amount or a percent of that line such as 2%. Picking a Discount or Other Charge item fills in its account and amount. A discount comes off the total and a charge is added. A purchase order\'s discounts and charges carry over to its bill. An Other Charge or Discount item can have its own expense account for bills and checks (Edit the item).',
+    keywords: 'discount charge freight shipping other charge item purchase bill check expense vendor credit purchase order po percent expense account',
+    go: { label: 'Go to Bills', view: 'expenses/bills' },
     guide: 'bills',
   },
   {

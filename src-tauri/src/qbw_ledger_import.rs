@@ -162,8 +162,8 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
     for item in &ledger.items {
         sqlx::query(
             "INSERT INTO ledger_import_items
-                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (batch_id, source_id, name, description, rate_cents, income_source_account_id, item_kind, is_taxable, is_active, custom_fields, percent_ppm)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(batch_id)
         .bind(item.id)
@@ -175,6 +175,7 @@ pub async fn stage_as(pool: &SqlitePool, source_path: &Path, file_size_bytes: i6
         .bind(item.taxable as i64)
         .bind(item.active as i64)
         .bind(custom_json(&item.custom_fields))
+        .bind(item.percent_ppm)
         .execute(&mut *tx)
         .await
         .map_err(db_err)?;
@@ -347,6 +348,9 @@ pub struct LedgerBatchSummary {
     pub lists: ListsView,
     /// Present while the pre-import copy exists on disk.
     pub start_over: Option<StartOverPoint>,
+    /// Accounts whose balance as imported differs from the balance the file itself stores,
+    /// largest difference first. Empty when every stored balance matches.
+    pub balance_differences: Vec<BalanceDifference>,
     /// How the batch was last posted: `JOURNAL` or `FULL`.
     pub mode: String,
     /// Sales documents a full import would create, by type (`invoice`, `payment`, ...).
@@ -360,6 +364,39 @@ pub struct LedgerBatchSummary {
     pub lists_only: bool,
     /// A lists-only batch whose lists were added and not reversed since.
     pub lists_added: bool,
+}
+
+/// One account whose imported balance does not match the file's own balance. Amounts are
+/// debit-positive, the way LocalBooks reports balances.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceDifference {
+    pub source_id: i64,
+    pub full_name: String,
+    /// The balance the file stores for the account.
+    pub expected_cents: i64,
+    /// The total of the lines this import brings in (transactions that balance).
+    pub imported_cents: i64,
+    /// `imported_cents - expected_cents`.
+    pub difference_cents: i64,
+}
+
+/// Accounts whose read balance differs from their stored one, largest difference first.
+pub fn balance_differences(accounts: &[SourceAccountView]) -> Result<Vec<BalanceDifference>, String> {
+    let mut out = Vec::new();
+    for a in accounts {
+        let Some(stored) = a.stored_balance_cents else { continue };
+        if stored == a.read_balance_cents {
+            continue;
+        }
+        let overflow = || format!("QBW_OVERFLOW: the balance of {} is too large", a.full_name);
+        let expected = stored.checked_neg().ok_or_else(overflow)?;
+        let imported = a.read_balance_cents.checked_neg().ok_or_else(overflow)?;
+        let difference = imported.checked_sub(expected).ok_or_else(overflow)?;
+        out.push(BalanceDifference { source_id: a.source_id, full_name: a.full_name.clone(), expected_cents: expected, imported_cents: imported, difference_cents: difference });
+    }
+    out.sort_by(|a, b| b.difference_cents.unsigned_abs().cmp(&a.difference_cents.unsigned_abs()).then_with(|| a.full_name.cmp(&b.full_name)));
+    Ok(out)
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -496,7 +533,10 @@ pub async fn batch_summary(pool: &SqlitePool, batch_id: i64) -> Result<LedgerBat
     .fetch_all(pool)
     .await
     .map_err(db_err)?;
+    // A file of lists only has stored balances but no lines to compare them with.
+    let balance_differences = if transaction_count == 0 { Vec::new() } else { balance_differences(&accounts)? };
     Ok(LedgerBatchSummary {
+        balance_differences,
         lists_only: transaction_count == 0,
         lists_added: head.lists_added != 0,
         mode: head.mode,
@@ -1013,6 +1053,8 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         is_taxable: i64,
         is_active: i64,
         custom_fields: Option<String>,
+        item_kind: String,
+        percent_ppm: Option<i64>,
     }
     // LocalBooks items post to income accounts only; the desktop program also allows expense and
     // cost accounts (for example a "Parts" item). Those items use the fallback income account,
@@ -1021,7 +1063,7 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
         "SELECT i.source_id, i.name, i.description, i.rate_cents,
                 CASE WHEN t.classification = 'INCOME' THEN a.account_id END AS mapped_account,
                 CASE WHEN a.account_id IS NULL OR t.classification <> 'INCOME' THEN a.full_name END AS other_account,
-                i.is_taxable, i.is_active, i.custom_fields
+                i.is_taxable, i.is_active, i.custom_fields, i.item_kind, i.percent_ppm
          FROM ledger_import_items i
          LEFT JOIN ledger_import_accounts a ON a.batch_id = i.batch_id AND a.source_id = i.income_source_account_id
          LEFT JOIN chart_of_accounts c ON c.id = a.account_id
@@ -1063,16 +1105,25 @@ pub async fn import_lists(pool: &SqlitePool, batch_id: i64) -> Result<ImportList
                 if item.mapped_account.is_none() {
                     result.items_on_fallback_account += 1;
                 }
+                // Discounts and other charges keep their type, and a percent one its percent.
+                let item_type = match item.item_kind.as_str() {
+                    "Discount" => "DISCOUNT",
+                    "Other charge" => "OTHER_CHARGE",
+                    _ => "ITEM",
+                };
+                let percent = item.percent_ppm.filter(|_| item_type != "ITEM");
                 let inserted = sqlx::query_scalar(
-                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+                    "INSERT INTO products_services (name, description, rate_cents, income_account_id, is_taxable, is_active, item_type, percent_ppm)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
                 )
                 .bind(&item.name)
                 .bind(&description)
-                .bind(item.rate_cents.clamp(0, crate::ledger::MAX_LINE_CENTS))
+                .bind(if percent.is_some() { 0 } else { item.rate_cents.clamp(0, crate::ledger::MAX_LINE_CENTS) })
                 .bind(account)
                 .bind(item.is_taxable)
                 .bind(item.is_active)
+                .bind(item_type)
+                .bind(percent)
                 .fetch_one(&mut *tx)
                 .await;
                 let inserted = match inserted {
@@ -1142,7 +1193,11 @@ async fn import_price_levels(tx: &mut sqlx::SqliteConnection, batch_id: i64, res
             None => {
                 let mut level_items = Vec::new();
                 for item in serde_json::from_str::<Vec<LevelItem>>(&items).unwrap_or_default() {
-                    let product: Option<i64> = sqlx::query_scalar("SELECT product_id FROM ledger_import_items WHERE batch_id = ?1 AND source_id = ?2")
+                    let product: Option<i64> = sqlx::query_scalar(
+                        // Price levels do not apply to discounts.
+                        "SELECT i.product_id FROM ledger_import_items i JOIN products_services p ON p.id = i.product_id
+                         WHERE i.batch_id = ?1 AND i.source_id = ?2 AND p.item_type <> 'DISCOUNT'",
+                    )
                         .bind(batch_id)
                         .bind(item.product_id)
                         .fetch_optional(&mut *tx)

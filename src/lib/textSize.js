@@ -14,6 +14,7 @@ export const KIND_LABEL = Object.freeze({ list: 'lists', register: 'registers', 
 const FORM_VIEWS = new Set([
   'sales/invoices',
   'sales/estimates',
+  'sales/orders',
   'sales/credits',
   'expenses/expenses',
   'expenses/bills',

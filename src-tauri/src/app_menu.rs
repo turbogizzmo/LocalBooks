@@ -134,6 +134,7 @@ const LISTS: &[Entry] = &[
     Entry::Sep,
     page("Customer List", "sales/customers"),
     page("Vendor List", "expenses/vendors"),
+    page("Other Names List", "expenses/other-names"),
     Entry::Sub(
         "Customer & Vendor Profile Lists",
         &[
@@ -181,6 +182,7 @@ const CUSTOMERS: &[Entry] = &[
     keyed("Customer Center", "sales/customers", None, "CmdOrCtrl+J"),
     Entry::Sep,
     form("Create Estimates", "sales/estimates", "estimate"),
+    form("Create Sales Orders", "sales/orders", "sales-order"),
     keyed("Create Invoices", "sales/invoices", Some("invoice"), "CmdOrCtrl+I"),
     form("Enter Sales Receipts", "sales/all", "sales-receipt"),
     page("Create Statements…", "sales/statements"),
@@ -205,6 +207,20 @@ const VENDORS: &[Entry] = &[
     Entry::Sub("Sales Tax", &[page("Manage Sales Tax…", "sales/tax"), form("Pay Sales Tax…", "sales/tax", "pay-sales-tax"), report("Sales Tax Liability", "sales-tax")]),
     Entry::Sep,
     form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
+    Entry::Sub(
+        "Inventory Activities",
+        &[
+            page("Inventory Center", "sales/products"),
+            form("Adjust Quantity/Value on Hand…", "sales/products", "adjust-stock"),
+            form("Change Item Prices", "sales/products", "change-prices"),
+            Entry::Sep,
+            form("Create Purchase Orders", "expenses/purchase-orders", "purchase-order"),
+            page("Inventory to Reorder", "dashboard"),
+            Entry::Sep,
+            report("Inventory Stock Status by Item", "stock-status"),
+            report("Inventory Valuation Summary", "inv-val"),
+        ],
+    ),
     page("Receive Items", "expenses/item-receipts"),
     form("Enter Bill for Received Items", "expenses/item-receipts", "bill-received"),
     Entry::Sep,
@@ -309,6 +325,11 @@ const REPORTS: &[Entry] = &[
             Entry::Sep,
             report("Item Price List", "item-price-list"),
             report("Sales by Ship To Address", "list:sales-ship-to"),
+            Entry::Sep,
+            report("Open Sales Orders by Customer", "list:open-so-customer"),
+            report("Open Sales Orders by Item", "list:open-so-item"),
+            report("Pending Sales", "list:pending-sales"),
+            Entry::Sep,
             report("Sales Graph", "graph-sales"),
         ],
     ),
@@ -327,6 +348,7 @@ const REPORTS: &[Entry] = &[
             report("Estimates by Job", "est-by-job"),
             report("Progress Invoices vs. Estimates", "progress"),
             Entry::Sep,
+            report("Unbilled Costs by Job", "list:unbilled-costs-job"),
             report("Time by Job Summary", "list:time-job-summary"),
             report("Time by Job Detail", "list:time-job-detail"),
             report("Time by Name", "list:time-name"),
@@ -382,6 +404,7 @@ const REPORTS: &[Entry] = &[
             report("Inventory Valuation Summary", "inv-val"),
             report("Inventory Valuation Detail", "inv-detail"),
             report("Inventory Stock Status by Item", "stock-status"),
+            report("Inventory Stock Status by Vendor", "list:stock-status-vendor"),
             Entry::Sep,
             report("Physical Inventory Worksheet", "list:physical-inventory"),
             report("Inventory Turnover by Item", "list:inventory-turnover"),
@@ -409,6 +432,7 @@ const REPORTS: &[Entry] = &[
             report("Journal", "preset:journal"),
             Entry::Sep,
             report("Audit Trail", "list:audit-trail"),
+            report("Closing Date Exceptions", "list:closing-date-exceptions"),
             report("Voided Transactions", "preset:voided-transactions"),
             Entry::Sep,
             report("Transaction List by Date", "preset:transaction-list-date"),
@@ -427,19 +451,25 @@ const REPORTS: &[Entry] = &[
     Entry::Sub("List", &[
         report("Account Listing", "list:account-listing"),
         report("Item Listing", "list:item-listing"),
+        report("Terms Listing", "list:terms-listing"),
         report("Item Price List", "item-price-list"),
         Entry::Sep,
         report("Customer Phone List", "list:customer-phone"),
         report("Customer Contact List", "list:customer-contact"),
         report("Vendor Phone List", "list:vendor-phone"),
         report("Vendor Contact List", "list:vendor-contact"),
+        report("Other Names Phone List", "list:other-phone"),
         Entry::Sep,
         report("To Do Notes", "list:todo-notes"),
     ]),
 ];
 
 /// Added to Help below LocalBooks Help.
-const HELP: &[Entry] = &[page("Check for Updates…", "settings/updates"), page("Save Diagnostics…", "settings/diagnostics")];
+const HELP: &[Entry] = &[
+    page("Check for Updates…", "settings/updates"),
+    page("Reinstall Previous Version…", "settings/updates"),
+    page("Save Diagnostics…", "settings/diagnostics"),
+];
 
 /// Menus added between View and Window, with the classic Alt-key mnemonics.
 const MENUS: &[(&str, &[Entry])] =

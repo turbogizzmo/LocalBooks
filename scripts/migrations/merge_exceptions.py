@@ -35,6 +35,7 @@ REPOINT = {
     'invoice_form_lines': {'product_service_id': 'ITEM'},
     'sales_receipt_form_lines': {'product_service_id': 'ITEM'},
     'estimate_form_lines': {'product_service_id': 'ITEM', 'account_id': 'ACCOUNT'},
+    # credit_memo_form_lines (0114, after 0099) carries its own merge exception.
 }
 tables = {r[0] for r in db.execute("select name from sqlite_master where type='table'")}
 out = []

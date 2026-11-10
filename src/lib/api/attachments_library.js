@@ -7,6 +7,8 @@ export default {
   listRecordAttachments: (recordKind, recordId) => invoke('list_record_attachments', { recordKind, recordId }),
   listAttachmentLibrary: (query = null, includeDeleted = false) => invoke('list_attachment_library', { query, includeDeleted }),
   getAttachmentPreview: (file) => invoke('get_attachment_preview', { file }),
+  /** The files marked Send with the form for a form being printed: [{ fileName, mediaType, dataBase64 }]. */
+  getFormPrintFiles: (kind, id) => invoke('get_form_print_files', { kind, id }),
   saveLibraryAttachment: (file) => invoke('save_library_attachment', { file }),
   setAttachmentDetails: (file, keywords, sendWithForm) => invoke('set_attachment_details', { file, keywords, sendWithForm }),
   deleteLibraryAttachment: (file) => invoke('delete_library_attachment', { file }),

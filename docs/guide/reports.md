@@ -85,6 +85,11 @@ page of widgets you choose, each a summary of one report:
 | Top customers | The five largest by income, then Others | Sales by Customer Summary |
 | Top items | The five best-selling products and services, then Others | Sales by Product/Service Summary |
 | Top vendors | The five you spent most with, then Others | Expenses by Vendor Summary |
+| Income breakdown | The five largest income accounts, then Others; the total is all income | Profit and Loss |
+| Expense breakdown | The five largest cost of sales and expense accounts, then Others | Profit and Loss |
+| Year over year | Income, expenses and net income, beside the same dates a year earlier and the change | Profit and Loss for each period |
+| To-dos | Open to-dos due by the period's end, and those with no date, soonest first; the total is how many | To Do Notes |
+| Note | Text you type and keep on the page (it saves when you click away) | — |
 
 - **Add a widget…** puts it at the end of the page; **✕** removes it; **↑** and **↓** move it.
 - Each widget has its own period: today (the balance widgets show balances as of the period's
@@ -95,6 +100,23 @@ page of widgets you choose, each a summary of one report:
 The figures are worked out exactly as their reports work them out (the same calculation, dates and
 basis), so a widget's total always matches the report's. The page is kept in the company file, so
 everyone who opens it sees the same widgets.
+
+## Money bars on Sales and Bills
+
+The bar at the top of **Sales › All Sales** shows open invoices, overdue and paid in the last 30
+days, then two more segments:
+
+- **Unbilled**: billable costs and time not on an invoice yet, the same as **Sales › Bill Costs**.
+- **Estimates**: estimates still pending or accepted and not turned into an invoice.
+
+The bar on **Vendors › Bills** adds:
+
+- **Purchase orders**: open purchase orders.
+- **Card balances**: what each credit card account owes today, as on the Balance Sheet.
+
+Click a segment to list its transactions under the bar; click it again to close the list. Click a
+row (or press Enter on it) to open it: unbilled costs open Bill Costs on that customer, an estimate
+or purchase order opens on its form, and a card opens its register.
 
 ## Profit and Loss
 
@@ -448,11 +470,14 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Average Days to Pay Summary** | Who owes you | For each customer, the invoices paid off in the period and the average days from the invoice date to the payment or credit that paid each one off |
 | **Unpaid Bills by Job** | What you owe | Bills with a balance as of a date, under the customer or job on their lines. A bill for several jobs is split by its lines' amounts; lines with no job are under **No customer or job** |
 | **Open Purchase Orders Detail** | Expenses and vendors | Every line of the purchase orders still open, by vendor (the **Open Purchase Orders** report has one row per order) |
+| **Unbilled Costs by Job** | Jobs | Billable lines of checks, expenses and bills not yet on an invoice, under each customer or job, with a total per job (**Customers › Bill Costs** puts them on an invoice) |
 | **Time by Job Summary** and **Detail** · **Time by Name** · **Time by Item** | Jobs | Hours from the timesheet in the period, by customer or job, by employee or by service item, with the billable hours |
 | **Physical Inventory Worksheet** | Inventory | Every tracked item with today's quantity on hand and a blank **Physical Count** column to print and fill in |
+| **Inventory Stock Status by Vendor** | Inventory | Each tracked item under its preferred vendor, with its reorder point, quantity on hand and quantity on open purchase orders; **Order** marks the items at or below the reorder point even counting what is on order |
 | **Inventory Turnover by Item** | Inventory | For each tracked item over the period: inventory value at the start and end, their average, the cost of goods sold, how many times the average stock **turned over** (cost of goods sold ÷ average value) and the **days on hand** that implies. The ending values match Inventory Valuation |
 | **Invoice Profitability by Customer** and **Detail** | Sales and customers | Each customer's invoices (or each invoice, under its customer): the income it posted, the cost of goods it sold, gross profit and margin. The totals tie out to the income and Cost of Goods Sold those invoices posted. A product or service whose stock isn't tracked carries no cost here |
 | **Audit Trail** | Accountant & Taxes | Every record of the audit trail made in the period: when, which user, what was posted, voided or changed, and the amount. The note under it says whether the trail's chain checks out |
+| **Closing Date Exceptions** | Accountant & Taxes | Entries dated on or before the closing date that were entered after their date was closed: made while the closing date was moved back, with when each was entered and since when its date had been closed |
 | **Customer Phone List** · **Vendor Phone List** | Lists | Each active customer (jobs as *Customer:Job*) or vendor with their phone number |
 | **Customer Contact List** · **Vendor Contact List** | Lists | Company, address, phone, email, terms (and 1099 for vendors) with today's balance; the balances add up to Accounts Receivable (or Payable) |
 | **Item Listing** | Lists | Each active product or service with its description, type, SKU, income account, price and quantity on hand |
@@ -464,6 +489,7 @@ the others, and a click on a line opens its transaction or account where it has 
 | **Memorized Transaction Listing** | Accountant & Taxes | Every memorized (recurring) transaction: its type, how often, the next date, when it ends and whether it is paused |
 | **Realized Gains & Losses** | Accountant & Taxes | Gains and losses from paying foreign-currency invoices and bills, by transaction, as posted to **Exchange Gain or Loss** |
 | **Unrealized Gains & Losses** | Accountant & Taxes | Home currency adjustments (**Accounting › Currency Revaluation**) and their reversals, as posted to **Unrealized Exchange Gain or Loss** |
+| **Terms Listing** | Lists | Every term in the Terms List with its days until due, its early-payment discount and whether it's active |
 
 These reports can't be customized or memorized.
 
@@ -511,6 +537,12 @@ follows the report when you change its dates or options, and it is never printed
    - **Subtotal by** (or **Rows**, in a summary): account, name, product or service, class,
      transaction type, rep, transaction, month, quarter, year or aging period.
    - **Columns over time** (summary only): a column for each month, quarter or year, and a total.
+   - **Columns by name** (summary only, instead of columns over time): a column for each **Class**,
+     **Customer** (its jobs added in), **Customer:Job** or **Vendor** the lines carry, then one for
+     lines without one (*Unclassified*, *No customer*, *No vendor*), and a total. For example, a
+     summary by account of income and expense accounts with columns by Customer:Job is a profit and
+     loss by job. The customer or vendor is the transaction's (the invoice's customer, the bill's
+     vendor). Each row's columns add up to its total.
    - **Columns, in order**: tick the columns to show (Type, Date, Num, Name, Memo, Account, Split,
      Class, Item, Qty, Rate, Debit, Credit, Amount, Balance, Open Balance, Due Date, Aging, Rep) and
      move them with the arrows.

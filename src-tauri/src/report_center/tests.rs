@@ -199,7 +199,7 @@ async fn inventory_valuation_and_stock_status_follow_the_stock_ledger() {
     assert_eq!((item.closing_qty_e4, item.closing_value_cents, detail.total_value_cents), (90_000, 9_900, 9_900));
     assert!(inventory_valuation_detail(&pool, d(4, 1), d(4, 30)).await.unwrap().items.len() == 1, "stock on hand keeps the item in a quiet period");
 
-    let po = crate::workflows::PurchaseOrderInput {
+    let po = crate::workflows::PurchaseOrderInput { form_lines: Vec::new(),
         vendor_name: "Supplier".into(),
         po_date: d(3, 25),
         expected_date: Some(d(4, 15)),

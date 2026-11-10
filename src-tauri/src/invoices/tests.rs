@@ -257,7 +257,7 @@ async fn fractional_quantities_post_rounded_amounts() {
     let detail = invoice_detail(&pool, invoice.id).await.unwrap();
     assert_eq!(detail.items.iter().map(|i| i.quantity_e4).collect::<Vec<_>>(), vec![15_000, 27_500]);
     // The database enforces the rounding rule independently.
-    let err = sqlx::query("UPDATE invoice_items SET amount_cents = 9_165 WHERE invoice_id = ?1 AND line_number = 2")
+    let err = sqlx::query("UPDATE invoice_items SET amount_cents = 9165 WHERE invoice_id = ?1 AND line_number = 2")
         .bind(invoice.id)
         .execute(&pool)
         .await

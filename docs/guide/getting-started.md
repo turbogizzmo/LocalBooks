@@ -299,7 +299,14 @@ default.
 3. Click **Create invoice**. Each cost becomes a line, crediting its expense account back (or the
    income account, if reimbursed expenses count as income), with one **Markup** line on top.
 
-Voiding that invoice puts the costs back on the list; editing it keeps them billed.
+Voiding that invoice puts the costs back on the list; editing it keeps them billed. When you edit
+it, a reimbursed line can move to another expense account (to correct where the cost was booked),
+but not to a bank, asset or liability account.
+
+A cost on an expense or check in another currency is billed in your home currency, at the
+exchange rate the expense was entered with, so the reimbursement takes off exactly what the expense
+put on. **Bill Costs** shows the original amount under the home amount, and the invoice line says
+it (for example *EUR 200.00*).
 
 When reimbursed expenses count as income, each expense account can send its reimbursements to an
 income account of its own: open the expense account in the **Chart of Accounts** and choose it
@@ -405,6 +412,14 @@ who opens it sees the same order.
 Rows can't be dragged while you are searching a list or have sorted it by a column heading; click
 the sorted heading until the arrow goes away to get back to your own order.
 
+## Move around a list from the keyboard
+
+In a list (invoices, bills, customers, vendors, items, accounts, a register and the others), press
+**Tab** to reach the first row, **↑** and **↓** to move between rows (**Home** and **End** for the
+first and last), and **Enter** to open the row, as a double-click does. On the customer, vendor,
+item and account lists, the row with focus is also the selected one, so **Ctrl+Q** and the
+information panel follow it. The row's **▾** button is one more **Tab** away.
+
 ## Choose a list's columns
 
 The customer and vendor lists, the item list, the chart of accounts and account registers (one
@@ -417,7 +432,8 @@ the customer list. The first column (the name, the account or the date) always s
 **Reconcile** has the same button above its lines (the amounts and the cleared tick always show).
 The line grids on forms have a smaller **Columns ▾** link: in the **Description** heading on
 invoices, sales receipts, estimates and credit memos, where it hides or reorders **Service Date**,
-**Price level**, **Class** and **Income account** and moves **Qty** and **Rate** among them (the item
+**Price level**, **Class** and **Income account** (off until you turn it on) and moves **Qty** and
+**Rate** among them (the item
 and description stay first and the amount last, so subtotals and groups line up); and beside
 **＋ Add split row** on bills, checks, expenses, vendor credits, purchase orders and deposits, for
 every column before the amount. A hidden column still keeps what was in it; show it again to
@@ -456,6 +472,7 @@ entering, all in one program window. The menus use QuickBooks' names.
 
 | Keys | What they do |
 |---|---|
+| **Tab** and **Shift+Tab** | Move through the active window's fields and buttons; past the last one, back to its first (they don't move into another window) |
 | **Ctrl+F6** or **Ctrl+Tab** | Go to the next window (add **Shift** for the one before) |
 | **Esc** or **Ctrl+F4** | Close the active window (⌘W on a Mac) |
 
@@ -547,8 +564,9 @@ next and open it with one click.
 - **Balances** lists your bank, credit card, receivable and payable accounts with their balances.
   Click one to open its register.
 
-The **Insights** tab has the totals, the assets and liabilities chart, the trial balance and
-Reminders. LocalBooks remembers which tab you last chose.
+The **Insights** tab has the totals, income and expense for the last 12 months (by month, on the
+basis set in Preferences, the same figures as the Income and Expense Graph), the cash forecast, the
+assets and liabilities chart, the trial balance and Reminders. LocalBooks remembers which tab you last chose.
 
 ## Use the toolbar on a form
 
@@ -571,6 +589,15 @@ is greyed out, and hovering over it (or moving to it with the keyboard) says why
 
 Press **Tab** to move through the buttons, or the **Left** and **Right** arrow keys to move along the
 row. On **Print ▾** and **Email ▾**, press **Enter** or **Down** to open the menu.
+
+## Work without a mouse
+
+Every list, form and dialog can be used from the keyboard. **Tab** moves through a form's fields
+and buttons in reading order, and through a line grid's columns in the order you chose (see
+"Choose a list's columns"). In a list, each row's **▾** button opens its menu (**Open**,
+**Edit…**, **Void**, **QuickReport** and the rest): Tab to it and press **Enter** or **Space**,
+then use **↑** and **↓** (or **Home** and **End**) to choose and **Enter** to do it. **Esc** closes
+a menu and puts you back on its button. The toolbar's menus (Print, Email, More) work the same way.
 
 ## Save a form and type faster with the keyboard
 

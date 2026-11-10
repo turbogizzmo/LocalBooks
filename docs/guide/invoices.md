@@ -19,9 +19,11 @@ Receivable** (what customers owe you) and to the income account on each line.
      the line.
    - Enter **Qty** and **Rate**. Decimals are fine (for example 1.5 hours). **Amount** calculates
      itself.
-   - Check the **Income account** for each line. The columns run Product/Service, Description,
-     Qty, Rate, Class, then the income account (filled in from the item), Amount and Tax, as on
-     the desktop sales forms; the same order is on sales receipts, estimates and credit memos.
+   - The columns run Product/Service, Description, Qty, Rate, Class, Amount and Tax, as on the
+     desktop sales forms; the same order is on sales receipts, estimates and credit memos. Each
+     line's income account comes from its item, so its column is off until you turn it on
+     (**Columns ▾** in the Description heading); it appears by itself while a line still needs one.
+     A line without an item goes to the form's first income account.
    - Press **Enter** to move to the next line, or click **Add line**.
 5. If you use sales reps, shipping methods or customer custom fields, fill in **Rep**, **Ship
    date**, **Ship via** and the custom fields at the top. The rep and custom fields fill in from
@@ -101,7 +103,8 @@ Settings › Custom Forms.
 
 ## Subtotals, discounts, charges and groups
 
-The **Product/Service** list on invoices, sales receipts and estimates also offers:
+The **Product/Service** list on invoices, sales receipts, estimates, credit memos and refund
+receipts also offers:
 
 - **Subtotal**: adds up the lines above it, back to the previous subtotal. It posts nothing.
 - A **discount item**: takes its amount or percentage off the line right above it. Put a
@@ -111,13 +114,18 @@ The **Product/Service** list on invoices, sales receipts and estimates also offe
 - An **other charge** with a percentage: works out its percentage of the line above (an amount
   charge is an ordinary line).
 - **Group: …**: fills in a heading and a line for each of the group's items, at the customer's
-  prices. Change or remove the items as you need; tick **Print as one line** on the heading to print
-  the group as one line with its total. A discount right under a group comes off the whole group.
+  prices. Change or remove the items as you need. **Qty** on the heading is how many of the group:
+  change it and every item's quantity changes in proportion (2 of a group of 3 widgets and an hour
+  is 6 widgets and 2 hours). Tick **Print as one line** on the heading to print the group as one
+  line with its total and that quantity. A discount right under a group comes off the whole group.
 
 The **Discount** box next to the total still works as before: it comes off everything, after the
 line discounts and before tax. A taxable discount line lowers the taxable amount; a non-taxable one
 doesn't. Subtotals, discounts, charges and group headings print in their places and come back when
 you edit the invoice or turn an estimate into an invoice.
+
+On a credit memo or refund receipt, a discount line lowers the credit: its account is credited
+back, the reverse of the same line on an invoice. The credit has to stay above zero.
 
 ## Invoice in another currency
 

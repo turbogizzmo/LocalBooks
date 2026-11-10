@@ -7,6 +7,7 @@ import * as cw from '../lib/childWindows.js';
 import { ChildContext, confirmClose, forgetUnsaved, WINDOW_COMMAND, WINDOW_REPORT_FLUSH } from '../lib/windows.js';
 import { useMyPreferences } from '../lib/myPreferences.js';
 import { NORMAL_TEXT_SIZE, textSizeFor, windowKind } from '../lib/textSize.js';
+import { trapTab } from '../lib/tabTrap.js';
 
 /**
  * Windows inside the LocalBooks window, the way QuickBooks Desktop for Windows shows forms,
@@ -230,6 +231,8 @@ export default function WindowManager({ manager, windowMode, renderScreen, backg
       {state.windows.every((w) => w.minimized) && background}
       {state.windows.map((w) => {
         const hidden = w.minimized || (one && w.id !== state.activeId);
+        // Under a maximized active window a window can't be seen, so it can't take focus either.
+        const covered = w.id !== state.activeId && !!state.windows.find((x) => x.id === state.activeId && !x.minimized && x.maximized);
         return (
           <ChildFrame
             key={w.id}
@@ -238,6 +241,7 @@ export default function WindowManager({ manager, windowMode, renderScreen, backg
             active={w.id === state.activeId}
             maximized={one || w.maximized}
             hidden={hidden}
+            covered={covered}
             z={z.get(w.id) ?? 1}
             manager={manager}
           >
@@ -284,8 +288,13 @@ function dragged(start, edges, dx, dy) {
   return { x, y, width, height };
 }
 
-/** One window inside LocalBooks: its frame, title bar and buttons around a screen. */
-function ChildFrame({ win, name, active, maximized, hidden, z, manager, children }) {
+/**
+ * One window inside LocalBooks: its frame, title bar and buttons around a screen. While it is the
+ * active window, Tab and Shift+Tab stay inside it (wrapping round at its ends, as in the desktop
+ * program); a window that is hidden or covered by a maximized one is `inert`, out of the Tab order.
+ */
+function ChildFrame({ win, name, active, maximized, hidden, covered = false, z, manager, children }) {
+  const frameRef = useRef(null);
   // While a title bar or edge is dragged, the window follows the pointer; the place is kept on release.
   const [draft, setDraft] = useState(null);
   const drag = useRef(null);
@@ -317,8 +326,11 @@ function ChildFrame({ win, name, active, maximized, hidden, z, manager, children
       style={style}
       aria-label={name}
       aria-hidden={hidden || undefined}
+      ref={frameRef}
+      {...(hidden || covered ? { inert: '' } : {})}
       onPointerDownCapture={() => !active && manager.focus(win.id)}
       onFocusCapture={() => !active && manager.focus(win.id)}
+      onKeyDown={(e) => active && trapTab(e, frameRef.current)}
     >
       {!maximized && (
         <div

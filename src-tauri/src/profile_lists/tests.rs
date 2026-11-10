@@ -177,7 +177,7 @@ async fn an_invoice_and_a_bill_keep_their_term_and_early_payment_discount() {
     assert!(post_sales_receipt(&pool, receipt).await.unwrap_err().starts_with("SR_NO_TERMS"));
 
     let expense = account_of_type(&pool, "EXPENSE").await;
-    let bill = |terms_id| BillInput {
+    let bill = |terms_id| BillInput { form_lines: Vec::new(),
         vendor_name: "Staples".into(),
         bill_number: None,
         bill_date: d(10, 1),

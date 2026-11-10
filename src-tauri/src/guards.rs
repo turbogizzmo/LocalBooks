@@ -105,9 +105,9 @@ pub async fn duplicate_check_warning(pool: &SqlitePool, payment_account_id: i64,
         return Ok(None);
     }
     let used: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT x.expense_date, v.name FROM expenses x
+        "SELECT x.expense_date, COALESCE(v.name, o.name) FROM expenses x
          JOIN journal_entries e ON e.id = x.journal_entry_id
-         LEFT JOIN vendors v ON v.id = x.vendor_id
+         LEFT JOIN vendors v ON v.id = x.vendor_id LEFT JOIN other_names o ON o.id = x.other_name_id
          WHERE x.kind = 'CHECK' AND x.payment_account_id = ?1 AND trim(x.check_number) = ?2
            AND e.is_voided = 0 AND x.id IS NOT ?3
          ORDER BY x.expense_date LIMIT 1",

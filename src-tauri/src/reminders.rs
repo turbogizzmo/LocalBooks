@@ -71,6 +71,10 @@ pub struct ReminderSettings {
     pub email_queue: Category,
     pub tax_dates: Category,
     pub backup: Category,
+    /// Tracked items at or below their reorder point (its days are not used).
+    pub inventory_reorder: Category,
+    /// A backup copied off this computer and a test restore (`backup_safety`): days before each is due.
+    pub backup_safety: Category,
 }
 
 impl Default for ReminderSettings {
@@ -84,12 +88,14 @@ impl Default for ReminderSettings {
             email_queue: shown(0),
             tax_dates: shown(30),
             backup: shown(7),
+            inventory_reorder: shown(0),
+            backup_safety: shown(30),
         }
     }
 }
 
 impl ReminderSettings {
-    fn categories(&self) -> [(&'static str, Category); 7] {
+    fn categories(&self) -> [(&'static str, Category); 9] {
         [
             ("overdue invoices", self.overdue_invoices),
             ("bills due", self.bills_due),
@@ -98,6 +104,8 @@ impl ReminderSettings {
             ("email later", self.email_queue),
             ("tax dates", self.tax_dates),
             ("backup", self.backup),
+            ("inventory to reorder", self.inventory_reorder),
+            ("backup safety", self.backup_safety),
         ]
     }
 
@@ -109,6 +117,9 @@ impl ReminderSettings {
         }
         if self.backup.days < 1 {
             return Err("REMINDER_BAD_DAYS: a backup is due after at least 1 day".into());
+        }
+        if self.backup_safety.days < 1 {
+            return Err("REMINDER_BAD_DAYS: backup safety (a copy off this computer, a test restore) is due after at least 1 day".into());
         }
         Ok(())
     }
@@ -456,7 +467,7 @@ pub struct ReminderItem {
 #[serde(rename_all = "camelCase")]
 pub struct ReminderGroup {
     /// `OVERDUE_INVOICES`, `BILLS_DUE`, `TODOS`, `RECURRING`, `EMAIL_QUEUE`, `GROUP_STATEMENTS`, `PAYMENT_REMINDERS`,
-    /// `TAX_DATES` or `BACKUP`.
+    /// `TAX_DATES`, `INVENTORY_REORDER` or `BACKUP`.
     pub key: &'static str,
     pub label: String,
     /// The items' amounts added up, for groups with amounts.
@@ -619,6 +630,7 @@ pub async fn email_queue(pool: &SqlitePool) -> Result<Vec<ReminderItem>, String>
                 crate::forms::FormKind::Invoice => "Invoice",
                 crate::forms::FormKind::CreditMemo => "Credit memo",
                 crate::forms::FormKind::BillPayment => "Bill payment",
+                crate::forms::FormKind::SalesOrder => "Sales order",
             };
             ReminderItem {
                 id: Some(q.document_id),
@@ -683,6 +695,43 @@ pub fn backup_due(newest_backup: Option<NaiveDate>, as_of: NaiveDate, days: i64)
     vec![ReminderItem { id: None, label: "Back up the company file".into(), detail, date, amount_cents: None, entry_id: None }]
 }
 
+/// Active tracked items whose quantity on hand is at or below their reorder point, with what is
+/// still to come on open purchase orders, less what item receipts have received (Inventory to reorder). None while inventory is turned off.
+pub async fn inventory_to_reorder(pool: &SqlitePool) -> Result<Vec<ReminderItem>, String> {
+    if crate::preferences::get(pool, "inventory_enabled").await.unwrap_or_default() == "false" {
+        return Ok(Vec::new());
+    }
+    let rows: Vec<(i64, String, i64, i64, i64)> = sqlx::query_as(
+        "SELECT p.id, p.name, i.qty_on_hand_e4, p.reorder_point_e4,
+                COALESCE((SELECT SUM(MAX(l.quantity_e4 - COALESCE((SELECT SUM(rl.quantity_e4) FROM item_receipt_lines rl
+                                     JOIN item_receipts r ON r.id = rl.item_receipt_id JOIN journal_entries e ON e.id = r.journal_entry_id
+                                     WHERE e.is_voided = 0 AND rl.purchase_order_line_id = l.id), 0), 0))
+                          FROM purchase_order_lines l JOIN purchase_orders o ON o.id = l.purchase_order_id
+                          WHERE o.status = 'OPEN' AND l.product_service_id = p.id), 0)
+         FROM products_services p JOIN inventory_items i ON i.product_id = p.id
+         WHERE p.is_active = 1 AND p.reorder_point_e4 IS NOT NULL AND i.qty_on_hand_e4 <= p.reorder_point_e4
+         ORDER BY p.name COLLATE NOCASE",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(db_err)?;
+    let qty = crate::forms::format_quantity;
+    Ok(rows
+        .into_iter()
+        .map(|(id, name, on_hand, reorder, on_order)| {
+            let ordered = if on_order > 0 { format!(" · {} on order", qty(on_order)) } else { String::new() };
+            ReminderItem {
+                id: Some(id),
+                label: name,
+                detail: format!("{} on hand, reorder at {}{ordered}", qty(on_hand), qty(reorder)),
+                date: None,
+                amount_cents: None,
+                entry_id: None,
+            }
+        })
+        .collect())
+}
+
 /// The reminders the viewer's settings ask for, as of `as_of`; categories with nothing in them are
 /// left out. `newest_backup` is the day of the newest backup in the backups folder.
 pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newest_backup: Option<NaiveDate>) -> Result<Vec<ReminderGroup>, String> {
@@ -734,8 +783,15 @@ pub async fn reminders(pool: &SqlitePool, as_of: NaiveDate, viewer: Viewer, newe
     if s.tax_dates.show {
         groups.push(group("TAX_DATES", format!("Tax dates (next {})", days_word(s.tax_dates.days)), tax_dates(pool, as_of, s.tax_dates.days).await?));
     }
+    if s.inventory_reorder.show {
+        groups.push(group("INVENTORY_REORDER", "Inventory to reorder".into(), inventory_to_reorder(pool).await?));
+    }
     if s.backup.show {
         groups.push(group("BACKUP", "Backup".into(), backup_due(newest_backup, as_of, s.backup.days)));
+    }
+    if s.backup_safety.show {
+        let safety = crate::backup_safety::status(pool).await?;
+        groups.push(group("BACKUP_SAFETY", "Backup safety".into(), crate::backup_safety::due(&safety, as_of, s.backup_safety.days)));
     }
     groups.retain(|g| !g.items.is_empty());
     Ok(groups)

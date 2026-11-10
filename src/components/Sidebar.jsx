@@ -15,6 +15,7 @@ export const NAV = [
       { id: 'sales/all', label: 'All Sales' },
       { id: 'sales/invoices', label: 'Invoices' },
       { id: 'sales/estimates', label: 'Estimates' },
+      { id: 'sales/orders', label: 'Sales Orders' },
       { id: 'sales/credits', label: 'Credit Memos & Refunds' },
       { id: 'sales/customers', label: 'Customers' },
       { id: 'sales/products', label: 'Products & Services' },
@@ -44,6 +45,7 @@ export const NAV = [
       { id: 'expenses/credits', label: 'Vendor Credits' },
       { id: 'expenses/approvals', label: 'Approvals' },
       { id: 'expenses/vendors', label: 'Vendors' },
+      { id: 'expenses/other-names', label: 'Other Names' },
       { id: 'expenses/print-checks', label: 'Print Checks' },
     ],
   },
@@ -165,7 +167,7 @@ export default function Sidebar({ current, onSelect, onNew, companyName, storage
   return (
     <nav className="qb-sidebar no-print flex flex-none flex-col" aria-label="Main">
       <div className="flex h-toolbar items-center gap-2 border-b border-white/10 px-3">
-        <span className="grid h-5 w-5 place-items-center rounded-xs bg-qb-green text-2xs font-bold text-white">LB</span>
+        <span className="grid h-5 w-5 place-items-center rounded-xs bg-qb-green-active text-2xs font-bold text-white">LB</span>
         <span className="truncate text-md font-semibold text-white" title={companyName}>{companyName}</span>
       </div>
       <div className="px-2 py-1.5">

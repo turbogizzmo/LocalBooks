@@ -26,6 +26,8 @@ use crate::preferences;
 
 pub const PRICE_LEVELS: &str = "price_levels_enabled";
 pub const ESTIMATES: &str = "estimates_enabled";
+/// Sales orders on or off (Preferences › Sales & Customers); off hides them, and keeps those saved.
+pub const SALES_ORDERS: &str = "sales_orders_enabled";
 pub const DEFAULT_SHIP_METHOD: &str = "default_ship_method_id";
 pub const DEFAULT_FOB: &str = "default_fob";
 pub const DEFAULT_MARKUP: &str = "default_markup_percent";
@@ -40,8 +42,9 @@ pub const BILL_DISCOUNT_ACCOUNT: &str = "bill_discount_account_id";
 pub const PAYMENT_AUTO_DISCOUNTS: &str = "payment_auto_apply_discounts";
 pub const PAYMENT_DISCOUNT_ACCOUNT: &str = "payment_discount_account_id";
 pub const DEFAULT_DELIVERY: &str = "default_delivery_method";
-/// The F.O.B. text printed on a sales form, as the schema allows it.
-pub const MAX_FOB_CHARS: usize = 30;
+/// The longest usual F.O.B.: what a sales form's F.O.B. box takes (`sales_header`), so the default
+/// it fills in can always be saved.
+pub const MAX_FOB_CHARS: usize = crate::sales_header::MAX_SHORT_FIELD;
 /// Most days a bill can be due after its date, as for vendor terms.
 pub const MAX_BILL_DUE_DAYS: u32 = 365;
 /// A markup above 1,000% is almost certainly a typing slip.
@@ -66,7 +69,7 @@ pub fn validate(key: &str, value: &str) -> Option<Result<String, String>> {
         _ => Err("PREF_BAD_FLAG: use true or false".to_string()),
     };
     Some(match key {
-        PRICE_LEVELS | ESTIMATES | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
+        PRICE_LEVELS | ESTIMATES | SALES_ORDERS | DROP_ZERO_LINES | AUTO_CALCULATE | UNDEPOSITED_DEFAULT | BILL_AUTO_CREDITS | BILL_AUTO_DISCOUNTS
         | PAYMENT_AUTO_DISCOUNTS | crate::guards::WARN_OVERDUE_CUSTOMER => flag(),
         // An expense (or asset) account, checked in `check_discount_account`; blank means none.
         BILL_DISCOUNT_ACCOUNT => match v {
@@ -522,7 +525,7 @@ pub async fn pay_bills_with_credits(
         let (vendor, number): (String, Option<String>) =
             sqlx::query_as("SELECT v.name, b.bill_number FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.id = ?1").bind(d.bill_id).fetch_one(pool).await.map_err(db_err)?;
         let memo = format!("Early-payment discount{}", number.map(|n| format!(" on bill {n}")).unwrap_or_default());
-        taken.push((d, crate::credits::VendorCreditInput {
+        taken.push((d, crate::credits::VendorCreditInput { form_lines: Vec::new(),
             vendor_name: vendor,
             reference: Some("Discount".into()),
             credit_date: payment_date,

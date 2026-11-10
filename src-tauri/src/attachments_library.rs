@@ -219,7 +219,7 @@ pub async fn content(pool: &SqlitePool, file: FileRef) -> Result<(String, String
 pub async fn preview(pool: &SqlitePool, file: FileRef, text_bytes: i64) -> Result<(String, String, Option<Vec<u8>>), String> {
     sqlx::query_as(&format!(
         "SELECT file_name, media_type,
-                CASE WHEN media_type LIKE 'image/%' THEN content
+                CASE WHEN media_type LIKE 'image/%' OR media_type = 'application/pdf' THEN content
                      WHEN media_type LIKE 'text/%' THEN substr(content, 1, ?2) END
          FROM {} WHERE id = ?1",
         file.source.table()
@@ -317,6 +317,11 @@ pub async fn files_to_send(pool: &SqlitePool, kind: crate::forms::FormKind, docu
         FormKind::Statement => {
             "SELECT file_name, content FROM record_attachments
              WHERE record_kind = 'CUSTOMER' AND record_id = ?1 AND send_with_form = 1 AND deleted_at IS NULL ORDER BY id"
+        }
+        // A sales order posts nothing; its files are the customer's marked for forms.
+        FormKind::SalesOrder => {
+            "SELECT r.file_name, r.content FROM record_attachments r JOIN sales_orders o ON o.customer_id = r.record_id
+             WHERE r.record_kind = 'CUSTOMER' AND o.id = ?1 AND r.send_with_form = 1 AND r.deleted_at IS NULL ORDER BY r.id"
         }
         // A bill payment stub: the files on the payment's own transaction.
         FormKind::BillPayment => {

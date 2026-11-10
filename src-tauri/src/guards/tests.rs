@@ -12,7 +12,7 @@ fn d(y: i32, m: u32, day: u32) -> NaiveDate {
 }
 
 fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput {
-    ExpenseInput {
+    ExpenseInput { form_lines: Vec::new(),
         kind: "CHECK".into(),
         payee_name: Some("Harbor Hardware".into()),
         payment_account_id: account,
@@ -27,7 +27,7 @@ fn check(account: i64, rent: i64, number: &str, date: NaiveDate) -> ExpenseInput
 }
 
 fn bill(vendor: &str, number: &str, expense: i64, date: NaiveDate) -> BillInput {
-    BillInput {
+    BillInput { form_lines: Vec::new(),
         vendor_name: vendor.into(),
         bill_number: Some(number.into()),
         bill_date: date,

@@ -42,7 +42,7 @@ before tax; inventory, price levels and classes work on the lines that are items
 - the last line of a group: the group's total (a group is one block);
 - a discount or a percent charge: not allowed (QuickBooks allows it and the result surprises
   people; we refuse it with `<doc>_DISCOUNT_NEEDS_BASE` or `<doc>_CHARGE_NEEDS_BASE` and say to put
-  a subtotal above). `<doc>` is the document's code: `INV`, `SR` or `EST`.
+  a subtotal above). `<doc>` is the document's code: `INV`, `SR`, `EST` or `CM`.
 
 A **subtotal** is the sum of every line since the previous subtotal (or the top of the form):
 items, charges and discounts. Discounts are negative, so a subtotal below a discount is net of it.
@@ -238,24 +238,27 @@ in either is relaxed.
   not decoded yet. IIF and QIF imports are unchanged.
 - **Recurring invoices, finance charges, statements.** Recurring templates store the input JSON,
   which now may hold `formLines`; finance charges and statements don't add form lines.
-- **Credit memos and purchase forms.** Not in this step. The item column offers the new kinds only on
-  invoices, sales receipts and estimates.
+- **Purchase forms.** Not in this step. The item column offers the new kinds on invoices, sales
+  receipts, estimates and credit memos.
 
 ## Built after this step
 
 - **Payment item** (a payment taken on the invoice itself). It mixes a receipt into an invoice; in
   LocalBooks a payment is its own record linked to the invoice, so it is done as **Payment received**
   on the invoice form, writing an `invoice_payments` row in the same transaction (T21, #262).
+- **Credit memos and refund receipts** take subtotals, discounts, percent charges and groups
+  (migration 0114: `credit_memo_form_lines` and `credit_memo_lines.percent_ppm`). Layout, checks
+  and tax are the invoice's, with the code `CM`; the entry is the invoice's reversed, so a discount
+  line *credits* its account. `item_types::LineTables` names each document's two line tables.
 
 ## Out of scope (later work)
 
 - **Sales Tax Item and Tax Group**: with R11, as above.
-- Discounts and charges on credit memos, bills, checks and purchase orders.
-- Expense accounts on other charges (reimbursable costs) and charges that are a percent of the
-  whole form rather than the line above.
+- Charges that are a percent of the whole form rather than the line above. (Discounts and charges
+  on credit memos are built in #320; on bills, checks and expenses, vendor credits and purchase
+  orders in `purchase_lines.rs`, T21, as described in `docs/guide/bills.md`, where Other Charge and
+  Discount items have an expense account.)
 - Groups inside groups, and discounts inside groups.
-- A group's quantity on the form (a group drops on at its own quantities; each item's quantity can
-  be changed on the form).
 - Decoding the subtotal, discount and group item types in company files.
 
 ## Building it

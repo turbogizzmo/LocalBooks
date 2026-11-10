@@ -5,6 +5,7 @@ export default {
   getCompanySnapshot: () => invoke('get_company_snapshot'),
   addSnapshotWidget: (kind) => invoke('add_snapshot_widget', { kind }),
   removeSnapshotWidget: (id) => invoke('remove_snapshot_widget', { id }),
+  setSnapshotWidgetNote: (id, note) => invoke('set_snapshot_widget_note', { id, note }),
   setSnapshotWidgetPeriod: (id, period) => invoke('set_snapshot_widget_period', { id, period }),
   arrangeSnapshotWidgets: (order) => invoke('arrange_snapshot_widgets', { order }),
 };

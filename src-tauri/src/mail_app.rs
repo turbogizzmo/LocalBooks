@@ -24,6 +24,15 @@ pub struct Compose {
     pub subject: String,
     pub body: String,
     pub attachment: PathBuf,
+    /// More files to attach after it (the files marked Send with the form).
+    pub more: Vec<PathBuf>,
+}
+
+impl Compose {
+    /// Every file to attach: the form's PDF first.
+    pub fn files(&self) -> Vec<&Path> {
+        std::iter::once(self.attachment.as_path()).chain(self.more.iter().map(PathBuf::as_path)).collect()
+    }
 }
 
 /// What happened, for the confirmation shown to the user.
@@ -120,18 +129,20 @@ mod platform {
         var url = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.URLWithString('mailto:someone@example.com')); \
         url.isNil() ? '' : ObjC.unwrap($.NSBundle.bundleWithURL(url).bundleIdentifier);";
 
-    // Arguments: subject, body, attachment path, then one argument per recipient.
+    // Arguments: subject, body, how many files, the files' paths, then one argument per recipient.
     const APPLE_MAIL: &str = r#"on run argv
     set theSubject to item 1 of argv
     set theBody to item 2 of argv
-    set thePath to item 3 of argv
+    set fileCount to (item 3 of argv) as integer
     tell application "Mail"
         set msg to make new outgoing message with properties {subject:theSubject, content:theBody & return & return, visible:true}
         tell msg
-            repeat with i from 4 to count of argv
+            repeat with i from (4 + fileCount) to count of argv
                 make new to recipient at end of to recipients with properties {address:(item i of argv)}
             end repeat
-            make new attachment with properties {file name:(POSIX file thePath)} at after the last paragraph
+            repeat with i from 4 to (3 + fileCount)
+                make new attachment with properties {file name:(POSIX file (item i of argv))} at after the last paragraph
+            end repeat
         end tell
         activate
     end tell
@@ -140,13 +151,15 @@ end run"#;
     const OUTLOOK: &str = r#"on run argv
     set theSubject to item 1 of argv
     set theBody to item 2 of argv
-    set thePath to item 3 of argv
+    set fileCount to (item 3 of argv) as integer
     tell application "Microsoft Outlook"
         set msg to make new outgoing message with properties {subject:theSubject, plain text content:theBody}
-        repeat with i from 4 to count of argv
+        repeat with i from (4 + fileCount) to count of argv
             make new to recipient at msg with properties {email address:{address:(item i of argv)}}
         end repeat
-        make new attachment at msg with properties {file:(POSIX file thePath)}
+        repeat with i from 4 to (3 + fileCount)
+            make new attachment at msg with properties {file:(POSIX file (item i of argv))}
+        end repeat
         open msg
         activate
     end tell
@@ -161,7 +174,8 @@ end run"#;
         };
         let mut command = Command::new("osascript");
         // "--" ends osascript's options, so a subject such as "-e" is passed through as text.
-        command.args(["-e", script, "--", &message.subject, &message.body]).arg(&message.attachment).args(&message.to);
+        let files = message.files();
+        command.args(["-e", script, "--", &message.subject, &message.body, &files.len().to_string()]).args(&files).args(&message.to);
         run(&mut command)?;
         Ok(name.to_string())
     }
@@ -194,8 +208,9 @@ mod platform {
     fn send_mail(message: &Compose) -> Result<(), String> {
         let mut subject = wide(&message.subject);
         let mut body = wide(&message.body.replace("\r\n", "\n").replace('\n', "\r\n"));
-        let mut path = wide(&message.attachment.display().to_string());
-        let mut file_name = wide(&message.attachment.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+        let files = message.files();
+        let mut paths: Vec<Vec<u16>> = files.iter().map(|f| wide(&f.display().to_string())).collect();
+        let mut file_names: Vec<Vec<u16>> = files.iter().map(|f| wide(&f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())).collect();
         let mut addresses: Vec<Vec<u16>> = message.to.iter().map(|a| wide(&format!("SMTP:{a}"))).collect();
         let mut names: Vec<Vec<u16>> = message.to.iter().map(|a| wide(a)).collect();
         let mut recipients: Vec<MapiRecipDescW> = addresses
@@ -203,14 +218,18 @@ mod platform {
             .zip(names.iter_mut())
             .map(|(address, name)| MapiRecipDescW { ulRecipClass: MAPI_TO, lpszName: name.as_mut_ptr(), lpszAddress: address.as_mut_ptr(), ..Default::default() })
             .collect();
-        let mut file = MapiFileDescW { nPosition: u32::MAX, lpszPathName: path.as_mut_ptr(), lpszFileName: file_name.as_mut_ptr(), ..Default::default() };
+        let mut descs: Vec<MapiFileDescW> = paths
+            .iter_mut()
+            .zip(file_names.iter_mut())
+            .map(|(path, name)| MapiFileDescW { nPosition: u32::MAX, lpszPathName: path.as_mut_ptr(), lpszFileName: name.as_mut_ptr(), ..Default::default() })
+            .collect();
         let mapi = MapiMessageW {
             lpszSubject: subject.as_mut_ptr(),
             lpszNoteText: body.as_mut_ptr(),
             nRecipCount: recipients.len() as u32,
             lpRecips: recipients.as_mut_ptr(),
-            nFileCount: 1,
-            lpFiles: &mut file,
+            nFileCount: descs.len() as u32,
+            lpFiles: descs.as_mut_ptr(),
             ..Default::default()
         };
         // MAPISendMailW is exported by the mapi32.dll stub (which forwards to the default mail
@@ -275,7 +294,11 @@ mod platform {
 
     pub fn attach(message: &Compose) -> Result<String, String> {
         let mut command = Command::new("xdg-email");
-        command.args(["--subject", &message.subject, "--body", &message.body, "--attach"]).arg(&message.attachment).args(&message.to);
+        command.args(["--subject", &message.subject, "--body", &message.body]);
+        for file in message.files() {
+            command.arg("--attach").arg(file);
+        }
+        command.args(&message.to);
         run(&mut command)?;
         Ok("your mail app".to_string())
     }
@@ -294,14 +317,33 @@ mod platform {
 /// returns its path. Older folders are removed: once a message is sent the mail app has its own
 /// copy, and these are only ever regenerated.
 pub fn stage_attachment(outgoing_dir: &Path, file_name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+    let mut staged = stage_files(outgoing_dir, &[(file_name, bytes)])?;
+    Ok(staged.remove(0))
+}
+
+/// Stages several files for one message in one fresh folder, as [`stage_attachment`] does. A name
+/// already used in the folder gets " (2)", " (3)" and so on before its extension.
+pub fn stage_files(outgoing_dir: &Path, files: &[(&str, &[u8])]) -> Result<Vec<PathBuf>, String> {
     // Earlier staged copies the mail app has had time to read go first (temp_files.rs).
     crate::temp_files::sweep_outgoing(outgoing_dir, crate::temp_files::KEEP, std::time::SystemTime::now());
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or_default();
     let dir = outgoing_dir.join(stamp.to_string());
     std::fs::create_dir_all(&dir).map_err(|e| format!("MAIL_STAGE: cannot create {}: {e}", dir.display()))?;
-    let path = dir.join(file_name);
-    std::fs::write(&path, bytes).map_err(|e| format!("MAIL_STAGE: cannot write {}: {e}", path.display()))?;
-    Ok(path)
+    let mut paths: Vec<PathBuf> = Vec::with_capacity(files.len());
+    for (name, bytes) in files {
+        let mut path = dir.join(name);
+        let mut n = 2;
+        while paths.contains(&path) {
+            let p = Path::new(name);
+            let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+            path = dir.join(format!("{stem} ({n}){ext}"));
+            n += 1;
+        }
+        std::fs::write(&path, bytes).map_err(|e| format!("MAIL_STAGE: cannot write {}: {e}", path.display()))?;
+        paths.push(path);
+    }
+    Ok(paths)
 }
 
 #[cfg(test)]

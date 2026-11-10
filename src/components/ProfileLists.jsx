@@ -346,7 +346,7 @@ export default function ProfileLists({ intent }) {
             type="button"
             role="tab"
             aria-selected={tab === l.key}
-            className={`px-2 py-0.5 text-xs ${tab === l.key ? 'bg-qb-green text-white' : 'bg-white hover:bg-qb-canvas'}`}
+            className={`px-2 py-0.5 text-xs ${tab === l.key ? 'bg-qb-green-active text-white' : 'bg-white hover:bg-qb-canvas'}`}
             onClick={() => setTab(l.key)}
           >
             {l.label}

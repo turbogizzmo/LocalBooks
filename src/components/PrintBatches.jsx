@@ -5,7 +5,7 @@ import Notice from './Notice.jsx';
 import DateBox from './DateBox.jsx';
 import { FormSheet, useFormPrinter } from './FormPages.jsx';
 import { PrintPortal, useCompany } from './PrintDocuments.jsx';
-import { PurchaseOrderDocument } from './PurchaseOrders.jsx';
+import { PurchaseOrderDocument, purchaseOrderPrintLines } from './PurchaseOrders.jsx';
 import { api, errorText, printDocument, useLedgerQuery } from '../lib/api.js';
 import { formatCents } from '../lib/money.js';
 import { formatDate, periodRange } from '../lib/dates.js';
@@ -55,16 +55,16 @@ function usePurchaseOrderPrinter(onNotice, accounts) {
     try {
       const all = await api.listPurchaseOrders();
       const chosen = ids.map((id) => all.find((o) => o.id === id)).filter(Boolean);
-      setOrders(await Promise.all(chosen.map(async (order) => ({ order, lines: await api.getPurchaseOrderLines(order.id) }))));
+      setOrders(await Promise.all(chosen.map(async (order) => ({ order, ...(await purchaseOrderPrintLines(order.id)) }))));
     } catch (err) {
       onNotice({ kind: 'error', text: errorText(err) });
     }
   };
   const portal = orders && (
     <PrintPortal>
-      {orders.map(({ order, lines }, i) => (
+      {orders.map(({ order, lines, formLines }, i) => (
         <div key={order.id} style={i ? { breakBefore: 'page' } : undefined}>
-          <PurchaseOrderDocument company={company} order={order} lines={lines} accounts={accounts} />
+          <PurchaseOrderDocument company={company} order={order} lines={lines} formLines={formLines} accounts={accounts} />
         </div>
       ))}
     </PrintPortal>

@@ -1,4 +1,5 @@
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
+import { rowKeys } from '../lib/rowKeys.js';
 import { useEffect, useMemo, useState } from 'react';
 import { quickReport, reportShortcut, useReportOpener } from '../lib/quickReport.js';
 import Notice from './Notice.jsx';
@@ -255,6 +256,15 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
     }
   };
 
+  // The first account shown (by section): the list's Tab stop.
+  let firstAccountId = null;
+  for (const section of SECTIONS) {
+    const hit = shown.find((x) => x.row.classification === section.id && matches(x.row));
+    if (hit) {
+      firstAccountId = hit.row.id;
+      break;
+    }
+  }
   return (
     <div className="flex h-full flex-col gap-2 p-2 outline-none" tabIndex={-1} onKeyDown={onKeyDown}>
       {dialog && (
@@ -332,7 +342,7 @@ export default function ChartOfAccounts({ accounts, intent, navigate }) {
                       className={`qb-grid-row ${a.id === selected ? 'is-active' : ''} ${a.isActive ? '' : 'text-qb-ink-faint'}`}
                       aria-selected={a.id === selected}
                       onClick={() => setSelected(a.id)}
-                      onDoubleClick={() => navigate('accounting/register', 'open', { accountId: a.id })}
+                      {...rowKeys({ first: a.id === firstAccountId, open: () => navigate('accounting/register', 'open', { accountId: a.id }), select: () => setSelected(a.id) })}
                     >
                       {cols.columns.map((c) => {
                         switch (c.id) {

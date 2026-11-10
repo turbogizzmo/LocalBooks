@@ -1,4 +1,5 @@
 import ColumnsMenu, { useColumns } from './ColumnsMenu.jsx';
+import { rowKeys } from '../lib/rowKeys.js';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import AccountSelect from './AccountSelect.jsx';
 import Notice from './Notice.jsx';
@@ -613,8 +614,8 @@ export default function Register({ accounts, intent }) {
                       setSelected(r.journalEntryId);
                       setExpanded(expanded === r.journalEntryId ? null : r.journalEntryId);
                     },
-                    onDoubleClick: () => openTransaction(r),
-                    title: `Double-click: ${openLabel(r).toLowerCase()}`,
+                    ...rowKeys({ first: r === sorter.sorted[0], open: () => openTransaction(r) }),
+                    title: `Double-click or Enter: ${openLabel(r).toLowerCase()}`,
                   };
                   const otherAccount = (
                     <>
@@ -697,7 +698,7 @@ export default function Register({ accounts, intent }) {
                             <td className="qb-grid-cell" />
                             {amounts}
                           </tr>
-                          <tr {...rowProps} data-entry={undefined}>
+                          <tr {...rowProps} data-entry={undefined} data-row-nav={undefined} tabIndex={undefined} onKeyDown={undefined}>
                             <td className="qb-grid-cell text-qb-ink-muted">{typeLabel(r)}</td>
                             <td className="qb-grid-cell" />
                             <td className="qb-grid-cell" title={r.split ?? ''}>
