@@ -11,6 +11,10 @@ people using LocalBooks.
   each job.
 - **Jobs on received items.** Receiving items from a purchase order keeps each line's customer or
   job, and the bill entered for the received items carries it, ready to bill to the customer.
+- **Safer company-file imports.** Amounts read from a damaged QuickBooks Desktop file are now
+  added with overflow checks, a cost row read twice counts once, and a sales receipt that also
+  moves inventory finds the account its money went into. Batches staged by an earlier version
+  label their fixed asset items correctly when you bring in their lists.
 - **More on items.** An item's record takes Subitem of, a description for purchase forms and a cost
   (also brought in from IIF files). The item list has a search row, tick boxes to make several
   items inactive or active at once, and Add/Edit Multiple for rows pasted from a spreadsheet. The

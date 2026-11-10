@@ -117,3 +117,19 @@ fn a_double_that_is_not_whole_cents_is_named_not_read() {
     assert_eq!(Value::Float(f64::NAN).fractional_amount(), None);
     assert_eq!(Value::Int(7).fractional_amount(), None);
 }
+
+/// Item percentages are stored as the percent itself (10 for 10%), base-100 NUMERIC like other
+/// amounts; a sales tax item stores its rate negative.
+#[test]
+fn percentages_read_as_parts_per_million() {
+    let n = |coefficient: u128, exponent: i32, negative: bool| Value::Numeric(Numeric { coefficient, exponent, negative });
+    assert_eq!(n(10, 0, false).as_percent_ppm(), Some(100_000), "10%");
+    assert_eq!(n(805, -1, true).as_percent_ppm(), Some(80_500), "8.05%, sign ignored");
+    assert_eq!(n(1_250, -2, false).as_percent_ppm(), Some(1_250), "0.125%");
+    assert_eq!(n(1, 1, false).as_percent_ppm(), Some(1_000_000), "100%");
+    assert_eq!(n(101, 0, false).as_percent_ppm(), None, "over 100%");
+    assert_eq!(n(5, -3, false).as_percent_ppm(), None, "finer than a millionth");
+    assert_eq!(n(0, 0, false).as_percent_ppm(), None, "zero is no percent");
+    assert_eq!(Value::Float(10.0).as_percent_ppm(), None);
+    assert_eq!(Value::Null.as_percent_ppm(), None);
+}

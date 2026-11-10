@@ -106,9 +106,17 @@ pub struct SourceTransaction {
 }
 
 impl SourceTransaction {
+    /// The sum of the lines, zero when the transaction balances. Lines come from a file that may
+    /// be damaged, so the sum is checked; one that overflows is `i64::MAX`, which is never zero,
+    /// so such a transaction counts as unbalanced and is never posted.
     pub fn imbalance_cents(&self) -> i64 {
-        self.lines.iter().map(|l| l.cents).sum()
+        checked_total(self.lines.iter().map(|l| l.cents)).unwrap_or(i64::MAX)
     }
+}
+
+/// The checked sum of some amounts, or `None` when it overflows.
+pub(crate) fn checked_total(amounts: impl IntoIterator<Item = i64>) -> Option<i64> {
+    amounts.into_iter().try_fold(0i64, |sum, c| sum.checked_add(c))
 }
 
 /// Counts that say how complete the read was.
@@ -348,8 +356,9 @@ impl Ledger {
 }
 
 /// Adds the cost of inventory sold to the forms it was sold on. `form_lines` maps a form line's
-/// `target_id` to its transaction and class. A line's cost rows are used only together and only
-/// when they net to zero, so they never unbalance their transaction; others are rejected.
+/// `target_id` to its transaction and class. A row read twice counts once. A line's cost rows are
+/// used only together, and only as pairs (as many debits as credits) that net to zero, so they
+/// never unbalance their transaction; others are rejected.
 fn add_inventory_cost(
     transactions: &mut BTreeMap<i64, SourceTransaction>,
     form_lines: &HashMap<i64, (i64, Option<String>)>,
@@ -357,18 +366,29 @@ fn add_inventory_cost(
     known_accounts: &HashSet<i64>,
     quality: &mut LedgerQuality,
 ) {
+    // A row read twice (the same record from a re-solved page) is one row, not two. Only rows
+    // that carry their record id can be told to be the same; rows without one are all kept.
+    let mut seen: HashSet<(i64, Option<i64>, i64, i64, i64)> = HashSet::new();
     let mut by_line: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
     for r in cost_rows {
         let (Some(target), Some(account_id), Some(cents)) = (r.get("target_id").as_int(), r.get("account_id").as_int(), r.get("amount_amt").as_cents()) else {
             continue;
         };
-        if cents != 0 {
+        let first = match r.get("inventory_record_id").as_int() {
+            Some(record) => seen.insert((record, r.get("target_type").as_int(), target, account_id, cents)),
+            None => true,
+        };
+        if cents != 0 && first {
             by_line.entry(target).or_default().push((account_id, cents));
         }
     }
     for (target, rows) in by_line {
-        let reason = if rows.iter().map(|(_, c)| *c).sum::<i64>() != 0 {
-            "inventory cost does not net to zero"
+        // A sold line's cost comes in pairs (a debit and a credit), more than one when it drew on
+        // several purchases; together they net to zero.
+        let debits = rows.iter().filter(|(_, c)| *c < 0).count();
+        let pairs = debits * 2 == rows.len() && checked_total(rows.iter().map(|(_, c)| *c)) == Some(0);
+        let reason = if !pairs {
+            "inventory cost is not pairs that net to zero"
         } else if rows.iter().any(|(a, _)| !known_accounts.contains(a)) {
             "unknown account"
         } else {
@@ -513,7 +533,7 @@ fn recover_damaged_lines(
         }
         let recovered: Vec<SourceLine> = match candidates.iter().position(|l| l.cents == missing) {
             Some(i) => vec![candidates[i].clone()],
-            None if candidates.iter().map(|l| l.cents).sum::<i64>() == missing => candidates,
+            None if checked_total(candidates.iter().map(|l| l.cents)) == Some(missing) => candidates,
             None => continue,
         };
         used.extend(recovered.iter().map(|l| (tid, l.clone())));
@@ -918,6 +938,11 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
                     Value::Null => 0,
                     v => v.as_cents().ok_or("amount not in cents")?,
                 };
+                // Larger than any amount the books can hold: a damaged value, kept out so later
+                // totals cannot overflow.
+                if cents.unsigned_abs() > crate::ledger::MAX_LINE_CENTS.unsigned_abs() {
+                    return Err("amount too large");
+                }
                 // Text and subtotal lines carry no account and no amount.
                 let account_id = match r.get("account_id").as_int() {
                     Some(a) => a,
@@ -1011,7 +1036,11 @@ pub fn read_ledger(path: &Path) -> Result<Ledger, String> {
     unbalanced.sort_by_key(|t| (t.date, t.id));
     let arap: HashSet<i64> =
         accounts.iter().filter(|a| matches!(a.account_type, "ACCOUNTS_RECEIVABLE" | "ACCOUNTS_PAYABLE")).map(|a| a.id).collect();
-    let mut documents = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
+    let (mut documents, too_large) = crate::qbw_documents::read_documents(&pages, &catalog, &|a| arap.contains(&a), &class_paths);
+    if too_large > 0 {
+        quality.rejected_lines += too_large;
+        *quality.rejected_by_reason.entry("form line amount too large").or_default() += too_large;
+    }
     for t in &mut balanced {
         t.document = documents.remove(&t.id);
     }
